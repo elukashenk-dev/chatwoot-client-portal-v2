@@ -199,4 +199,115 @@ describe('ChatPage', () => {
       }),
     )
   })
+
+  it('keeps the visible transcript when older history loading fails', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          createReadySnapshot({
+            hasMoreOlder: true,
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                content: 'Текущее сообщение остается на экране.',
+                contentType: 'text',
+                createdAt: '2026-04-21T10:00:00.000Z',
+                direction: 'incoming',
+                id: 205,
+                status: 'sent',
+              },
+            ],
+            nextOlderCursor: 205,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: 'invalid_history_cursor',
+              message: 'History cursor is invalid.',
+            },
+          },
+          400,
+        ),
+      )
+
+    renderChatRoute()
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Загрузить более ранние сообщения',
+      }),
+    )
+
+    expect(
+      await screen.findByText('Текущее сообщение остается на экране.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('does not merge a non-ready older history response into the ready transcript', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          createReadySnapshot({
+            hasMoreOlder: true,
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                content: 'Готовая история остается видимой.',
+                contentType: 'text',
+                createdAt: '2026-04-21T10:00:00.000Z',
+                direction: 'incoming',
+                id: 205,
+                status: 'sent',
+              },
+            ],
+            nextOlderCursor: 205,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          createReadySnapshot({
+            hasMoreOlder: false,
+            messages: [],
+            nextOlderCursor: null,
+            primaryConversation: null,
+            reason: 'primary_conversation_missing',
+            result: 'not_ready',
+          }),
+        ),
+      )
+
+    renderChatRoute()
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Загрузить более ранние сообщения',
+      }),
+    )
+
+    expect(
+      await screen.findByText('Готовая история остается видимой.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

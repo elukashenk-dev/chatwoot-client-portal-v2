@@ -46,9 +46,13 @@ export function ChatPage() {
     snapshot: null,
     status: 'loading',
   })
+  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
+    null,
+  )
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
 
   const loadInitialChat = useCallback(async () => {
+    setHistoryErrorMessage(null)
     setPageState((currentState) => ({
       snapshot: currentState.snapshot,
       status: 'loading',
@@ -91,6 +95,7 @@ export function ChatPage() {
     }
 
     setIsLoadingOlder(true)
+    setHistoryErrorMessage(null)
 
     try {
       const olderSnapshot = await getChatMessages({
@@ -99,6 +104,14 @@ export function ChatPage() {
       })
 
       if (!isMountedRef.current) {
+        return
+      }
+
+      if (olderSnapshot.result !== 'ready') {
+        setHistoryErrorMessage(
+          'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
+        )
+
         return
       }
 
@@ -117,18 +130,9 @@ export function ChatPage() {
         return
       }
 
-      setPageState((currentState) => {
-        if (currentState.status !== 'ready') {
-          return currentState
-        }
-
-        return {
-          errorMessage:
-            'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
-          snapshot: currentState.snapshot,
-          status: 'error',
-        }
-      })
+      setHistoryErrorMessage(
+        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
+      )
     } finally {
       if (isMountedRef.current) {
         setIsLoadingOlder(false)
@@ -187,6 +191,7 @@ export function ChatPage() {
         pageState.snapshot.result === 'ready' ? (
           <ChatTranscript
             hasMoreOlder={pageState.snapshot.hasMoreOlder}
+            historyErrorMessage={historyErrorMessage}
             isLoadingOlder={isLoadingOlder}
             messages={pageState.snapshot.messages}
             onLoadOlder={() => {

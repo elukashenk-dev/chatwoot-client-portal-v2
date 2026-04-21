@@ -7,6 +7,7 @@ import {
 
 type ChatTranscriptProps = {
   hasMoreOlder: boolean
+  historyErrorMessage: string | null
   isLoadingOlder: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
@@ -131,6 +132,7 @@ function shouldRenderDateDivider(messages: ChatMessage[], index: number) {
 
 export function ChatTranscript({
   hasMoreOlder,
+  historyErrorMessage,
   isLoadingOlder,
   messages,
   onLoadOlder,
@@ -158,7 +160,7 @@ export function ChatTranscript({
       <section className="chat-scroll flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
         <div className="mx-auto flex w-full max-w-[620px] flex-col gap-4">
           {hasMoreOlder ? (
-            <div className="self-center">
+            <div className="flex flex-col items-center gap-2 self-center">
               <button
                 className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
                 disabled={isLoadingOlder}
@@ -170,6 +172,11 @@ export function ChatTranscript({
                   ? 'Загружаем...'
                   : 'Загрузить более ранние сообщения'}
               </button>
+              {historyErrorMessage ? (
+                <div className="max-w-[340px] rounded-[0.8rem] border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800">
+                  {historyErrorMessage}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

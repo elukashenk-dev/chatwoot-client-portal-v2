@@ -2,6 +2,8 @@ import type { AppEnv } from '../../config/env.js'
 import { normalizeEmail } from '../../lib/email.js'
 
 const PORTAL_CONVERSATION_CHANNEL_TYPE = 'Channel::Api'
+const CONTACT_CONVERSATIONS_PAGE_LIMIT = 20
+const ACCOUNT_CONVERSATIONS_LOOKUP_MAX_PAGES = 5
 const MESSAGE_PAGE_SIZE = 20
 
 type ChatwootContactSearchPayload = {
@@ -15,6 +17,15 @@ type ChatwootContactSearchResponse = {
 }
 
 type ChatwootContactConversationsResponse = {
+  payload: unknown[]
+}
+
+type ChatwootContactDetailsResponse = {
+  payload: unknown
+}
+
+type ChatwootAccountConversationsResponse = {
+  allCount: number
   payload: unknown[]
 }
 
@@ -36,6 +47,12 @@ export type ChatwootConversation = {
   inboxId: number
   lastActivityAt: number | null
   status: string
+}
+
+export type ChatwootPortalInboxRouting = {
+  channelType: string | null
+  id: number
+  lockToSingleConversation: boolean
 }
 
 export type ChatwootMessageAttachment = {
@@ -156,6 +173,67 @@ function parseContactConversationsResponse(
 
   return {
     payload: payload.payload,
+  }
+}
+
+function parseContactDetailsResponse(
+  payload: unknown,
+): ChatwootContactDetailsResponse {
+  if (!isPlainObject(payload) || !isPlainObject(payload.payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact lookup returned an unexpected response shape.',
+    )
+  }
+
+  return {
+    payload: payload.payload,
+  }
+}
+
+function parseAccountConversationsResponse(
+  payload: unknown,
+): ChatwootAccountConversationsResponse {
+  const data = isPlainObject(payload) ? readObject(payload.data) : null
+  const meta = readObject(data?.meta)
+  const allCount = readInteger(meta?.all_count)
+  const rawPayload = data?.payload
+
+  if (allCount === null || !Array.isArray(rawPayload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot account conversations lookup returned an unexpected response shape.',
+    )
+  }
+
+  return {
+    allCount,
+    payload: rawPayload,
+  }
+}
+
+function mapPortalInboxRouting(payload: unknown): ChatwootPortalInboxRouting {
+  if (!isPlainObject(payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot inbox lookup returned an unexpected response shape.',
+    )
+  }
+
+  const id = readInteger(payload.id)
+  const channelType = readString(payload.channel_type)
+  const lockToSingleConversation =
+    typeof payload.lock_to_single_conversation === 'boolean'
+      ? payload.lock_to_single_conversation
+      : null
+
+  if (id === null || lockToSingleConversation === null) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot inbox lookup returned an invalid inbox payload.',
+    )
+  }
+
+  return {
+    channelType,
+    id,
+    lockToSingleConversation,
   }
 }
 
@@ -361,6 +439,41 @@ function isPortalConversation(
   )
 }
 
+function collectPortalContactSourceIds(
+  contactPayload: unknown,
+  portalInboxId: number,
+) {
+  if (!isPlainObject(contactPayload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact lookup returned an invalid contact payload.',
+    )
+  }
+
+  if (!Array.isArray(contactPayload.contact_inboxes)) {
+    return []
+  }
+
+  return [
+    ...new Set(
+      contactPayload.contact_inboxes
+        .map((rawContactInbox) => {
+          const contactInbox = readObject(rawContactInbox)
+          const inbox = readObject(contactInbox?.inbox)
+          const inboxId =
+            readInteger(inbox?.id) ?? readInteger(contactInbox?.inbox_id)
+          const sourceId = readString(contactInbox?.source_id)?.trim()
+
+          if (inboxId !== portalInboxId || !sourceId) {
+            return null
+          }
+
+          return sourceId
+        })
+        .filter((sourceId): sourceId is string => sourceId !== null),
+    ),
+  ]
+}
+
 export function createChatwootClient({
   env,
   fetchFn = fetch,
@@ -377,27 +490,47 @@ export function createChatwootClient({
         }
       : null
 
-  function assertConfigured() {
+  function assertConfigured(): {
+    accountId: number
+    apiAccessToken: string
+    baseUrl: string
+    portalInboxId: number
+  } {
     if (!config || !config.portalInboxId) {
       throw new ChatwootClientConfigurationError()
     }
 
-    return config
+    return {
+      accountId: config.accountId,
+      apiAccessToken: config.apiAccessToken,
+      baseUrl: config.baseUrl,
+      portalInboxId: config.portalInboxId,
+    }
   }
 
   async function requestJson(
     requestUrl: URL,
     unavailableMessage: string,
+    {
+      body,
+      method = 'GET',
+    }: {
+      body?: unknown
+      method?: 'GET' | 'PATCH'
+    } = {},
   ): Promise<unknown> {
+    const resolvedConfig = assertConfigured()
     let response: Response
 
     try {
       response = await fetchFn(requestUrl, {
         headers: {
           Accept: 'application/json',
-          api_access_token: assertConfigured().apiAccessToken,
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          api_access_token: resolvedConfig.apiAccessToken,
         },
-        method: 'GET',
+        method,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       })
     } catch {
       throw new ChatwootClientRequestError(unavailableMessage)
@@ -416,6 +549,111 @@ export function createChatwootClient({
         'Chatwoot returned an invalid JSON response.',
       )
     }
+  }
+
+  async function fetchContactDetails(contactId: number) {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/contacts/${contactId}`,
+      resolvedConfig.baseUrl,
+    )
+
+    requestUrl.searchParams.set('include_contact_inboxes', 'true')
+
+    const payload = await requestJson(
+      requestUrl,
+      'Chatwoot contact lookup is unavailable.',
+    )
+
+    return parseContactDetailsResponse(payload).payload
+  }
+
+  async function fetchAccountConversationsBySourceId({
+    page,
+    sourceId,
+  }: {
+    page: number
+    sourceId: string
+  }) {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/conversations`,
+      resolvedConfig.baseUrl,
+    )
+
+    requestUrl.searchParams.set('status', 'all')
+    requestUrl.searchParams.set('source_id', sourceId)
+    requestUrl.searchParams.set('page', String(page))
+
+    const payload = await requestJson(
+      requestUrl,
+      'Chatwoot account conversations lookup is unavailable.',
+    )
+    const parsed = parseAccountConversationsResponse(payload)
+
+    return {
+      allCount: parsed.allCount,
+      conversations: parsed.payload.map(mapConversation),
+    }
+  }
+
+  async function fetchAllAccountConversationsBySourceId(sourceId: string) {
+    let currentPage = 1
+    let pageSize: number | null = null
+    let totalPages = 1
+    const conversations: ChatwootConversation[] = []
+
+    while (currentPage <= totalPages) {
+      if (currentPage > ACCOUNT_CONVERSATIONS_LOOKUP_MAX_PAGES) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot account conversations lookup exceeded the pagination safety cap.',
+        )
+      }
+
+      const pageResult = await fetchAccountConversationsBySourceId({
+        page: currentPage,
+        sourceId,
+      })
+
+      if (currentPage === 1) {
+        if (
+          pageResult.conversations.length === 0 ||
+          pageResult.allCount === 0
+        ) {
+          return []
+        }
+
+        pageSize = pageResult.conversations.length
+        totalPages = Math.ceil(pageResult.allCount / pageSize)
+      }
+
+      conversations.push(...pageResult.conversations)
+
+      if (
+        pageResult.conversations.length <
+        (pageSize ?? pageResult.conversations.length)
+      ) {
+        break
+      }
+
+      currentPage += 1
+    }
+
+    return conversations
+  }
+
+  async function getPortalInboxRouting() {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/inboxes/${resolvedConfig.portalInboxId}`,
+      resolvedConfig.baseUrl,
+    )
+    const payload = await requestJson(
+      requestUrl,
+      'Chatwoot portal inbox lookup is unavailable.',
+    )
+
+    return mapPortalInboxRouting(payload)
   }
 
   async function fetchConversationMessages({
@@ -509,6 +747,54 @@ export function createChatwootClient({
   }
 
   return {
+    async ensurePortalInboxSingleConversationRouting() {
+      const resolvedConfig = assertConfigured()
+      const currentRouting = await getPortalInboxRouting()
+
+      if (
+        currentRouting.id !== resolvedConfig.portalInboxId ||
+        currentRouting.channelType !== PORTAL_CONVERSATION_CHANNEL_TYPE
+      ) {
+        throw new ChatwootClientRequestError(
+          'Configured Chatwoot portal inbox is not a Channel::Api inbox.',
+        )
+      }
+
+      if (currentRouting.lockToSingleConversation) {
+        return {
+          ...currentRouting,
+          updated: false,
+        }
+      }
+
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/inboxes/${resolvedConfig.portalInboxId}`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot portal inbox routing update is unavailable.',
+        {
+          body: {
+            lock_to_single_conversation: true,
+          },
+          method: 'PATCH',
+        },
+      )
+      const updatedRouting = mapPortalInboxRouting(payload)
+
+      if (!updatedRouting.lockToSingleConversation) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot portal inbox routing update did not enable single-conversation mode.',
+        )
+      }
+
+      return {
+        ...updatedRouting,
+        updated: true,
+      }
+    },
+
     async findContactByEmail(email: string): Promise<ChatwootContact | null> {
       if (!config) {
         throw new ChatwootClientConfigurationError()
@@ -572,11 +858,35 @@ export function createChatwootClient({
         'Chatwoot contact conversations lookup is unavailable.',
       )
 
-      return parseContactConversationsResponse(payload)
-        .payload.map(mapConversation)
-        .filter((conversation) =>
-          isPortalConversation(conversation, resolvedConfig.portalInboxId),
+      const contactConversations =
+        parseContactConversationsResponse(payload).payload.map(mapConversation)
+      const conversationsById = new Map(
+        contactConversations.map((conversation) => [
+          conversation.id,
+          conversation,
+        ]),
+      )
+
+      if (contactConversations.length >= CONTACT_CONVERSATIONS_PAGE_LIMIT) {
+        const contact = await fetchContactDetails(contactId)
+        const sourceIds = collectPortalContactSourceIds(
+          contact,
+          resolvedConfig.portalInboxId,
         )
+
+        for (const sourceId of sourceIds) {
+          const sourceConversations =
+            await fetchAllAccountConversationsBySourceId(sourceId)
+
+          for (const conversation of sourceConversations) {
+            conversationsById.set(conversation.id, conversation)
+          }
+        }
+      }
+
+      return [...conversationsById.values()].filter((conversation) =>
+        isPortalConversation(conversation, resolvedConfig.portalInboxId),
+      )
     },
 
     async listConversationMessages(

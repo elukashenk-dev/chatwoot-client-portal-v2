@@ -158,6 +158,9 @@
 - `chat-context` backend module;
 - linked contact resolution;
 - authoritative primary conversation resolution;
+- `Channel::Api` portal inbox routing expectation: `Reopen same conversation`;
+- deploy-time portal inbox routing setup command;
+- anomaly-triggered portal inbox routing auto-fix;
 - `GET /api/chat/context`;
 - `GET /api/chat/messages`;
 - transcript rendering;
@@ -180,17 +183,21 @@
 
 - text composer;
 - `POST /api/chat/messages`;
-- first conversation bootstrap;
+- first conversation bootstrap only when no authoritative portal conversation exists;
 - authoritative conversation mapping persistence;
+- send through mapped conversation even if it was resolved in Chatwoot;
+- if multiple portal conversations exist and no valid mapping exists, choose newest active conversation, else newest resolved conversation;
+- no multi-conversation synthetic transcript in this phase;
 - send ledger;
 - retry semantics;
 - tests на first-send и false-negative recovery.
 
 ### Exit Criteria
 
-- первый message может bootstrap-нуть conversation там, где это разрешено моделью;
+- первый message может bootstrap-нуть conversation только там, где это разрешено моделью;
 - обычный send работает через backend;
-- duplicate/retry path не создает дубли.
+- duplicate/retry path не создает дубли;
+- resolved primary conversation переиспользуется, а не заменяется новым conversation.
 
 ## Phase 7. Attachment Send
 

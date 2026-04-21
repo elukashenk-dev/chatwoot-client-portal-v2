@@ -103,3 +103,19 @@
   `chatwoot-client-portal-v2` инициализирован и ведется как отдельный git repository с собственным `main`, историей и feature branches
 - причина:
   `v2` является новым отдельным проектом, а не продолжением git history старого `chatwoot-client-portal`; отдельный repository boundary защищает `v2` от смешивания с большим dirty-state старого портала и делает baseline нового проекта явным
+
+## D-014. Portal chat использует один вечный Chatwoot conversation
+
+- дата: `2026-04-21`
+- решение:
+  клиентский чат портала строится как один вечный `primary conversation` на `portal_user/contact` внутри выделенного `Channel::Api` inbox. Portal inbox в Chatwoot должен быть настроен как `Conversation Routing -> Reopen same conversation` (`lock_to_single_conversation = true`). Если Chatwoot уже содержит несколько portal conversations для этого contact/inbox из-за старой настройки или ручных/API-действий, это считается legacy/config/data anomaly: backend выбирает authoritative primary conversation и дальше работает через persisted mapping, а не делает synthetic transcript из нескольких Chatwoot conversations
+- причина:
+  для клиента портал должен вести себя как обычный мессенджер с одной непрерывной лентой, а не как CRM с несколькими тикетами. Для операторов Chatwoot может показывать previous conversations в своем интерфейсе, но это не становится клиентской моделью портала. Один authoritative conversation упрощает send, pagination, realtime, idempotency и восстановление после retry
+
+## D-015. Portal inbox routing enforcement
+
+- дата: `2026-04-21`
+- решение:
+  после первого deploy portal backend должен один раз принудительно проверить и включить `lock_to_single_conversation = true` для configured `CHATWOOT_PORTAL_INBOX_ID`. В обычной работе backend не проверяет эту настройку на каждом запросе. Повторная runtime-проверка и auto-fix выполняются только если chat read model обнаруживает anomaly: больше одного portal conversation для одного linked contact в выделенном inbox. При recovery valid persisted mapping остается главным; если mapping нет или он невалиден, backend выбирает canonical conversation по правилу: самый свежий active conversation, иначе самый свежий resolved conversation
+- причина:
+  это защищает портал от случайной админской смены `Conversation Routing -> Create new conversations`, но не добавляет лишний Chatwoot roundtrip на каждый chat request. Anomaly-driven recovery чинит настройку ровно тогда, когда неправильная конфигурация уже проявилась в данных

@@ -42,6 +42,10 @@ async function waitForBackgroundTasks() {
   await Promise.resolve()
 }
 
+function minutesFromNow(minutes: number) {
+  return new Date(Date.now() + minutes * 60_000)
+}
+
 describe('buildApp', () => {
   let app: ReturnType<typeof buildApp>
   let database: DatabaseClient
@@ -373,13 +377,13 @@ describe('buildApp', () => {
       chatwootContactId: 44,
       codeHash: await hashPassword('123456'),
       email: 'name@company.ru',
-      expiresAt: new Date('2026-04-21T13:00:00.000Z'),
+      expiresAt: minutesFromNow(15),
       fullName: 'Portal User',
-      lastSentAt: new Date('2026-04-21T12:00:00.000Z'),
+      lastSentAt: minutesFromNow(-1),
       maxAttempts: 5,
       purpose: 'registration',
       resendCount: 0,
-      resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+      resendNotBefore: minutesFromNow(1),
       status: 'pending',
     })
 
@@ -411,20 +415,20 @@ describe('buildApp', () => {
       attemptsCount: 0,
       chatwootContactId: 44,
       codeHash: await hashPassword('123456'),
-      continuationTokenExpiresAt: new Date('2026-04-21T13:00:00.000Z'),
+      continuationTokenExpiresAt: minutesFromNow(15),
       continuationTokenHash: createHash('sha256')
         .update('continuation-token-for-registration-completion')
         .digest('hex'),
       email: 'name@company.ru',
-      expiresAt: new Date('2026-04-21T13:00:00.000Z'),
+      expiresAt: minutesFromNow(15),
       fullName: 'Portal User',
-      lastSentAt: new Date('2026-04-21T12:00:00.000Z'),
+      lastSentAt: minutesFromNow(-1),
       maxAttempts: 5,
       purpose: 'registration',
       resendCount: 0,
-      resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+      resendNotBefore: minutesFromNow(1),
       status: 'verified',
-      verifiedAt: new Date('2026-04-21T12:10:00.000Z'),
+      verifiedAt: minutesFromNow(-1),
     })
 
     const response = await app.inject({
@@ -550,13 +554,13 @@ describe('buildApp', () => {
       attemptsCount: 0,
       codeHash: await hashPassword('123456'),
       email: 'name@company.ru',
-      expiresAt: new Date('2026-04-21T13:00:00.000Z'),
-      lastSentAt: new Date('2026-04-21T12:00:00.000Z'),
+      expiresAt: minutesFromNow(15),
+      lastSentAt: minutesFromNow(-1),
       maxAttempts: 5,
       portalUserId: 1,
       purpose: 'password_reset',
       resendCount: 0,
-      resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+      resendNotBefore: minutesFromNow(1),
       status: 'pending',
     })
 

@@ -45,7 +45,10 @@ type CreateChatContextServiceOptions = {
     | 'findConversationMappingByUserId'
     | 'upsertConversationMapping'
   >
-  chatwootClient: Pick<ChatwootClient, 'listContactConversations'>
+  chatwootClient: Pick<
+    ChatwootClient,
+    'ensurePortalInboxSingleConversationRouting' | 'listContactConversations'
+  >
   now?: () => Date
 }
 
@@ -83,16 +86,73 @@ function mapPrimaryConversation(
 function selectAuthoritativePrimaryConversation(
   conversations: ChatwootConversation[],
 ) {
-  return [...conversations].sort((left, right) => {
+  const activeConversations = conversations.filter(
+    (conversation) => conversation.status !== 'resolved',
+  )
+  const candidates =
+    activeConversations.length > 0 ? activeConversations : conversations
+
+  return [...candidates].sort((left, right) => {
+    const leftLastActivityAt = left.lastActivityAt ?? left.createdAt ?? left.id
+    const rightLastActivityAt =
+      right.lastActivityAt ?? right.createdAt ?? right.id
+
+    if (leftLastActivityAt !== rightLastActivityAt) {
+      return rightLastActivityAt - leftLastActivityAt
+    }
+
     const leftCreatedAt = left.createdAt ?? left.id
     const rightCreatedAt = right.createdAt ?? right.id
 
     if (leftCreatedAt !== rightCreatedAt) {
-      return leftCreatedAt - rightCreatedAt
+      return rightCreatedAt - leftCreatedAt
     }
 
-    return left.id - right.id
+    return right.id - left.id
   })[0]
+}
+
+function findMappedConversation(
+  conversations: ChatwootConversation[],
+  mapping: {
+    chatwootContactId: number
+    chatwootConversationId: number
+    chatwootInboxId: number
+  } | null,
+  linkedContact: ChatContextLinkedContact,
+) {
+  if (!mapping || mapping.chatwootContactId !== linkedContact.id) {
+    return null
+  }
+
+  return (
+    conversations.find(
+      (conversation) =>
+        conversation.id === mapping.chatwootConversationId &&
+        conversation.inboxId === mapping.chatwootInboxId,
+    ) ?? null
+  )
+}
+
+function shouldPersistConversationMapping({
+  mapping,
+  primaryConversation,
+  linkedContact,
+}: {
+  linkedContact: ChatContextLinkedContact
+  mapping: {
+    chatwootContactId: number
+    chatwootConversationId: number
+    chatwootInboxId: number
+  } | null
+  primaryConversation: ChatwootConversation
+}) {
+  return (
+    !mapping ||
+    mapping.chatwootContactId !== linkedContact.id ||
+    mapping.chatwootConversationId !== primaryConversation.id ||
+    mapping.chatwootInboxId !== primaryConversation.inboxId
+  )
 }
 
 function isChatwootUnavailableError(error: unknown) {
@@ -155,7 +215,52 @@ export function createChatContextService({
         throw error
       }
 
+      if (conversations.length > 1) {
+        try {
+          await chatwootClient.ensurePortalInboxSingleConversationRouting()
+        } catch (error) {
+          if (error instanceof ChatwootClientConfigurationError) {
+            return buildSnapshot({
+              linkedContact,
+              primaryConversation: null,
+              reason: 'chatwoot_not_configured',
+              result: 'unavailable',
+            })
+          }
+
+          if (isChatwootUnavailableError(error)) {
+            return buildSnapshot({
+              linkedContact,
+              primaryConversation: null,
+              reason: 'chatwoot_unavailable',
+              result: 'unavailable',
+            })
+          }
+
+          throw error
+        }
+      }
+
+      let mapping: {
+        chatwootContactId: number
+        chatwootConversationId: number
+        chatwootInboxId: number
+      } | null
+
+      try {
+        mapping =
+          await chatContextRepository.findConversationMappingByUserId(userId)
+      } catch {
+        return buildSnapshot({
+          linkedContact,
+          primaryConversation: null,
+          reason: 'conversation_mapping_unavailable',
+          result: 'unavailable',
+        })
+      }
+
       const primaryConversation =
+        findMappedConversation(conversations, mapping, linkedContact) ??
         selectAuthoritativePrimaryConversation(conversations)
 
       if (!primaryConversation) {
@@ -179,21 +284,29 @@ export function createChatContextService({
         })
       }
 
-      try {
-        await chatContextRepository.upsertConversationMapping({
-          chatwootContactId: linkedContact.id,
-          chatwootConversationId: primaryConversation.id,
-          chatwootInboxId: primaryConversation.inboxId,
-          now: now(),
-          userId,
-        })
-      } catch {
-        return buildSnapshot({
+      if (
+        shouldPersistConversationMapping({
           linkedContact,
-          primaryConversation: null,
-          reason: 'conversation_mapping_unavailable',
-          result: 'unavailable',
+          mapping,
+          primaryConversation,
         })
+      ) {
+        try {
+          await chatContextRepository.upsertConversationMapping({
+            chatwootContactId: linkedContact.id,
+            chatwootConversationId: primaryConversation.id,
+            chatwootInboxId: primaryConversation.inboxId,
+            now: now(),
+            userId,
+          })
+        } catch {
+          return buildSnapshot({
+            linkedContact,
+            primaryConversation: null,
+            reason: 'conversation_mapping_unavailable',
+            result: 'unavailable',
+          })
+        }
       }
 
       return buildSnapshot({

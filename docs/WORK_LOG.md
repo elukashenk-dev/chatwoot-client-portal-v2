@@ -26,7 +26,13 @@
 - Реализован `Phase 5. Chat Read Model`: backend-owned `GET /api/chat/context`, `GET /api/chat/messages`, Chatwoot linked contact/primary conversation resolution, durable conversation mapping и bounded older-history pagination.
 - `/app/chat` переведен с placeholder на controlled chat states: loading, not_ready/unavailable и ready transcript с последними 20 сообщениями, attachment cards, disabled future composer и кнопкой загрузки старой истории.
 - Phase 5 покрыт backend route/service/client tests, frontend chat/auth route tests и Playwright chat read model e2e; full validation пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
+- Принято финальное chat-routing решение: портал использует один вечный primary Chatwoot conversation; portal inbox должен быть настроен как `Reopen same conversation`, а несколько Chatwoot conversations для одного portal contact считаются anomaly, не клиентской transcript-моделью.
+- Принято routing enforcement правило: первый deploy выполняет backend setup-check для portal inbox, а runtime auto-fix запускается только при anomaly `>1 portal conversation`; canonical fallback без valid mapping выбирает самый свежий active conversation, иначе самый свежий resolved conversation.
+- Закрыты Phase 5 review findings `F-CHAT-001`, `F-CHAT-003`: добавлены Chatwoot portal inbox routing setup/auto-fix, capped contact conversations recovery через source_id, valid persisted mapping authority и canonical fallback active/newest-resolved.
+- Закрыт Phase 5 review finding `F-CHAT-002`: older-history failure теперь остается локальной retryable ошибкой у Load Older и не скрывает уже видимый transcript.
+- Устранена хрупкость backend integration tests по фиксированной дате verification/reset records: app-level tests теперь используют relative future timestamps.
+- Validation после review fixes: targeted chat tests, targeted ChatPage test, `pnpm test`, `pnpm lint`, `pnpm build`, `git diff --check`; setup-check `pnpm --dir backend chatwoot:ensure-portal-inbox` подтвердил `lockToSingleConversation: true` для inbox `6`.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `Phase 5. Chat Read Model`, затем переходить к `Phase 6. Text Send And First Conversation Bootstrap`.
+- Сделать checkpoint commit для Phase 5 review fixes и chat routing decision, затем переходить к `Phase 6. Text Send And First Conversation Bootstrap`.

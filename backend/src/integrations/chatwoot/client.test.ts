@@ -149,6 +149,162 @@ describe('createChatwootClient', () => {
     )
   })
 
+  it('recovers configured API inbox conversations when the contact conversation page is capped', async () => {
+    const cappedConversations = Array.from({ length: 20 }, (_, index) => ({
+      created_at: 100 + index,
+      id: 100 + index,
+      inbox_id: 10,
+      last_activity_at: 200 + index,
+      meta: {
+        channel: 'Channel::Api',
+      },
+      status: 'resolved',
+    }))
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          payload: cappedConversations,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          payload: {
+            contact_inboxes: [
+              {
+                inbox: {
+                  id: 9,
+                },
+                source_id: 'portal-contact-source',
+              },
+            ],
+            id: 7,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          data: {
+            meta: {
+              all_count: 1,
+            },
+            payload: [
+              {
+                created_at: 50,
+                id: 77,
+                inbox_id: 9,
+                last_activity_at: 75,
+                meta: {
+                  channel: 'Channel::Api',
+                },
+                status: 'resolved',
+              },
+            ],
+          },
+        }),
+      )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(client.listContactConversations(7)).resolves.toEqual([
+      {
+        assigneeName: null,
+        channelType: 'Channel::Api',
+        createdAt: 50,
+        id: 77,
+        inboxId: 9,
+        lastActivityAt: 75,
+        status: 'resolved',
+      },
+    ])
+    expect(String(fetchFn.mock.calls[2]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/conversations?status=all&source_id=portal-contact-source&page=1',
+    )
+  })
+
+  it('keeps portal inbox routing unchanged when it already reopens the same conversation', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        channel_type: 'Channel::Api',
+        id: 9,
+        lock_to_single_conversation: true,
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.ensurePortalInboxSingleConversationRouting(),
+    ).resolves.toEqual({
+      channelType: 'Channel::Api',
+      id: 9,
+      lockToSingleConversation: true,
+      updated: false,
+    })
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('enables portal inbox routing when it was changed to create new conversations', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          channel_type: 'Channel::Api',
+          id: 9,
+          lock_to_single_conversation: false,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          channel_type: 'Channel::Api',
+          id: 9,
+          lock_to_single_conversation: true,
+        }),
+      )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.ensurePortalInboxSingleConversationRouting(),
+    ).resolves.toEqual({
+      channelType: 'Channel::Api',
+      id: 9,
+      lockToSingleConversation: true,
+      updated: true,
+    })
+    expect(fetchFn).toHaveBeenNthCalledWith(
+      2,
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          lock_to_single_conversation: true,
+        }),
+        method: 'PATCH',
+      }),
+    )
+  })
+
   it('lists bounded conversation messages with internal-message filtering', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       createJsonResponse({
