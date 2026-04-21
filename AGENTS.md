@@ -52,6 +52,22 @@
 - Агент должен предлагать checkpoint commit после завершения каждой фазы, slice, finding fix или docs-only governance update.
 - WIP commit допустим только по явной просьбе пользователя и должен называться как WIP; по умолчанию WIP не коммитить.
 
+## Phase Checkpoint Flow
+
+- Перед переходом к новой phase или крупному feature-slice агент должен остановиться и проверить, достаточно ли текущий baseline защищен тестами.
+- Если следующая phase опирается на уже готовые auth/session/runtime/backend boundaries, сначала закрыть недостающую regression safety net, а не начинать новый функционал поверх непроверенной основы.
+- Regression safety net подбирается по риску:
+  - browser/runtime flows проверять через Playwright e2e;
+  - backend authority, session, persistence и security invariants проверять backend unit/integration tests;
+  - frontend route/state/error handling проверять frontend unit tests.
+- Для phase checkpoint агент должен кратко объяснить пользователю:
+  - что именно покрываем;
+  - зачем это нужно перед следующей phase;
+  - какие проверки будут считаться достаточными.
+- Phase checkpoint закрывается тем же closure flow: implementation, review, fixes, targeted checks, required auto-tests, `docs/WORK_LOG.md` update.
+- После зеленого phase checkpoint агент должен предложить обычный checkpoint commit и только затем переходить к следующей feature phase.
+- Если дополнительная regression coverage объективно не нужна, агент должен явно сказать почему и предложить переход к следующей phase без тестового pre-step.
+
 ## How To Enter A Task
 
 Читать в таком порядке:
