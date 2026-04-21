@@ -42,7 +42,12 @@
 - Исправлен bug first-message bootstrap: linked contact без dialog и contact с удаленным mapped conversation больше не блокируют composer; backend умеет восстановить contact link по exact email match и bootstrap-нуть replacement conversation, если в portal inbox не осталось conversations.
 - Внесены chat UI polish fixes по прототипу: day dividers, bubble colors, author labels, composer autoresize/focus styling и transcript scroll behavior для initial bottom, append auto-follow и older-prepend anchor preservation.
 - Исправлено отображение agent multiline сообщений: Chatwoot escaped line breaks нормализуются в обычные переносы до отдачи transcript на frontend.
+- Checkpoint commit создан: `9fb185e feat: add text send and conversation bootstrap`.
+- Реализован `Phase 7. Attachment Send`: добавлен single-file composer flow, `POST /api/chat/messages/attachment`, multipart parsing через backend, отправка в Chatwoot account API как customer-authored incoming attachment и отображение вложения в transcript.
+- Attachment send использует тот же durable send ledger с отдельным `messageKind = attachment`, payload hash по file name/type/size/content, confirmed replay и false-negative recovery через `source_id`, чтобы retry не создавал duplicate attachments.
+- Backend валидирует attachment upload: один файл, multipart-only request, limit 40 МБ и allowlist/prefix validation для поддерживаемых document/media MIME types.
+- Phase 7 покрыт backend app/client/service tests, frontend ChatPage multipart/draft-retention test и Playwright chat attachment send contract; validation пройдена: `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:e2e -- chat-read-model.spec.ts`, `git diff --check`, targeted Prettier check.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `Phase 6`; после commit переходить к `Phase 7. Attachment Send`.
+- Сделать checkpoint commit для `Phase 7`; после commit переходить к `Phase 8. Realtime`.

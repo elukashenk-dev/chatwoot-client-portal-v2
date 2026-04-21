@@ -401,6 +401,89 @@ describe('ChatPage', () => {
     })
   })
 
+  it('sends one attachment through multipart without clearing draft text', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 9,
+            lastActivityAt: 1776763650,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [
+              {
+                fileSize: 1024,
+                fileType: 'file',
+                id: 77,
+                name: 'signed-act.pdf',
+                thumbUrl: '',
+                url: 'https://files.example.test/signed-act.pdf',
+              },
+            ],
+            authorName: 'Вы',
+            content: null,
+            contentType: 'text',
+            createdAt: '2026-04-21T09:35:00.000Z',
+            direction: 'outgoing',
+            id: 601,
+            status: 'sent',
+          },
+        }),
+      )
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const file = new File(['pdf-content'], 'signed-act.pdf', {
+      type: 'application/pdf',
+    })
+
+    await user.type(textarea, 'Черновик остается')
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(await screen.findByText('signed-act.pdf')).toBeInTheDocument()
+    expect(textarea).toHaveValue('Черновик остается')
+
+    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const formData = requestOptions?.body as FormData
+    const attachment = formData.get('attachment') as File
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/chat/messages/attachment',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    expect(requestOptions?.headers).toBeUndefined()
+    expect(formData.get('clientMessageKey')).toEqual(
+      expect.stringMatching(/^portal-send:/),
+    )
+    expect(formData.get('primaryConversationId')).toBe('77')
+    expect(attachment.name).toBe('signed-act.pdf')
+    expect(attachment.type).toBe('application/pdf')
+  })
+
   it('retries a failed send with the same client message key while the draft is unchanged', async () => {
     const user = userEvent.setup()
 

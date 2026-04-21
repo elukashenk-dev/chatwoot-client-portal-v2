@@ -89,6 +89,12 @@ export type ChatwootMessage = {
   status: string
 }
 
+export type ChatwootAttachmentUpload = {
+  data: Uint8Array
+  fileName: string
+  mimeType: string
+}
+
 export type ChatwootContactInbox = {
   inboxId: number
   sourceId: string
@@ -747,6 +753,14 @@ export function createChatwootClient({
     return sortMessages(parseMessagesResponse(payload).payload.map(mapMessage))
   }
 
+  function createAttachmentBlob(attachment: ChatwootAttachmentUpload) {
+    const data = attachment.data.slice()
+
+    return new Blob([data], {
+      type: attachment.mimeType,
+    })
+  }
+
   async function requestConversationMessageCreate({
     content,
     conversationId,
@@ -806,6 +820,78 @@ export function createChatwootClient({
 
       throw new ChatwootClientRequestError(
         'Chatwoot message send returned invalid JSON.',
+      )
+    }
+  }
+
+  async function requestConversationAttachmentMessageCreate({
+    attachment,
+    conversationId,
+    sourceId,
+  }: {
+    attachment: ChatwootAttachmentUpload
+    conversationId: number
+    sourceId: string | null
+  }) {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/conversations/${conversationId}/messages`,
+      resolvedConfig.baseUrl,
+    )
+    const formData = new FormData()
+
+    formData.append('content', '')
+    formData.append('content_attributes', '{}')
+    formData.append('content_type', 'text')
+    formData.append('message_type', 'incoming')
+    formData.append('private', 'false')
+
+    if (sourceId) {
+      formData.append('source_id', sourceId)
+    }
+
+    formData.append(
+      'attachments[]',
+      createAttachmentBlob(attachment),
+      attachment.fileName,
+    )
+
+    let response: Response
+
+    try {
+      response = await fetchFn(requestUrl, {
+        body: formData,
+        headers: {
+          Accept: 'application/json',
+          api_access_token: resolvedConfig.apiAccessToken,
+        },
+        method: 'POST',
+      })
+    } catch {
+      throw new ChatwootClientRequestError(
+        'Chatwoot attachment send is unavailable.',
+      )
+    }
+
+    if (response.status === 404) {
+      return null
+    }
+
+    if (!response.ok) {
+      throw new ChatwootClientRequestError(
+        `Chatwoot attachment send failed with status ${response.status}.`,
+      )
+    }
+
+    try {
+      return mapMessage(await response.json())
+    } catch (error) {
+      if (error instanceof ChatwootClientRequestError) {
+        throw error
+      }
+
+      throw new ChatwootClientRequestError(
+        'Chatwoot attachment send returned invalid JSON.',
       )
     }
   }
@@ -1133,6 +1219,52 @@ export function createChatwootClient({
 
       return requestConversationMessageCreate({
         content: content.trim(),
+        conversationId,
+        sourceId: sourceId?.trim() || null,
+      })
+    },
+
+    async createConversationIncomingAttachmentMessage({
+      attachment,
+      conversationId,
+      sourceId = null,
+    }: {
+      attachment: ChatwootAttachmentUpload
+      conversationId: number
+      sourceId?: string | null
+    }) {
+      assertConfigured()
+
+      if (!Number.isInteger(conversationId) || conversationId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send requires a valid conversation id.',
+        )
+      }
+
+      if (!attachment.fileName.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send requires a file name.',
+        )
+      }
+
+      if (!attachment.mimeType.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send requires a file type.',
+        )
+      }
+
+      if (attachment.data.byteLength <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send requires file data.',
+        )
+      }
+
+      return requestConversationAttachmentMessageCreate({
+        attachment: {
+          data: attachment.data,
+          fileName: attachment.fileName.trim(),
+          mimeType: attachment.mimeType.trim().toLowerCase(),
+        },
         conversationId,
         sourceId: sourceId?.trim() || null,
       })

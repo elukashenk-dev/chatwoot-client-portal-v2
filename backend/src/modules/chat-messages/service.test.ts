@@ -37,6 +37,35 @@ const sentChatwootMessage = {
   status: 'sent',
 }
 
+const sentAttachmentChatwootMessage = {
+  attachments: [
+    {
+      extension: 'pdf',
+      fileSize: 1024,
+      fileType: 'file',
+      id: 77,
+      messageId: 601,
+      name: 'invoice.pdf',
+      thumbUrl: '',
+      url: 'https://files.example.test/invoice.pdf',
+    },
+  ],
+  content: null,
+  contentAttributes: {},
+  contentType: 'text',
+  createdAt: 1_776_000_020,
+  id: 601,
+  messageType: 0,
+  private: false,
+  sender: {
+    id: 44,
+    name: 'Portal User',
+    type: 'contact',
+  },
+  sourceId: 'portal-send:attachment-key',
+  status: 'sent',
+}
+
 function createChatContextServiceStub({
   writableContext = readyContext,
 }: {
@@ -56,6 +85,9 @@ function createChatwootClientStub(
   > = {},
 ): Parameters<typeof createChatMessagesService>[0]['chatwootClient'] {
   return {
+    createConversationIncomingAttachmentMessage: vi
+      .fn()
+      .mockResolvedValue(sentAttachmentChatwootMessage),
     createConversationIncomingMessage: vi
       .fn()
       .mockResolvedValue(sentChatwootMessage),
@@ -433,5 +465,169 @@ describe('createChatMessagesService', () => {
     expect(
       chatMessagesRepository.markSendLedgerEntryFailed,
     ).not.toHaveBeenCalled()
+  })
+
+  it('sends an attachment through the writable conversation and confirms the ledger', async () => {
+    const chatMessagesRepository = createChatMessagesRepositoryStub()
+    const createConversationIncomingAttachmentMessage = vi
+      .fn()
+      .mockResolvedValue(sentAttachmentChatwootMessage)
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository,
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingAttachmentMessage,
+      }),
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+    })
+    const data = Buffer.from('%PDF-1.7\n')
+
+    await expect(
+      service.sendCurrentUserAttachmentMessage({
+        attachment: {
+          data,
+          fileName: ' invoice.pdf ',
+          mimeType: 'Application/PDF',
+          size: data.byteLength,
+        },
+        clientMessageKey: 'portal-send:attachment-key',
+        primaryConversationId: 101,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      reason: 'none',
+      result: 'ready',
+      sentMessage: {
+        attachments: [
+          {
+            name: 'invoice.pdf',
+            url: 'https://files.example.test/invoice.pdf',
+          },
+        ],
+        authorName: 'Вы',
+        content: null,
+        direction: 'outgoing',
+        id: 601,
+      },
+    })
+
+    const createArgs =
+      createConversationIncomingAttachmentMessage.mock.calls[0]?.[0]
+
+    expect(createArgs).toMatchObject({
+      attachment: {
+        fileName: 'invoice.pdf',
+        mimeType: 'application/pdf',
+        size: data.byteLength,
+      },
+      conversationId: 101,
+      sourceId: 'portal-send:attachment-key',
+    })
+    expect(
+      Buffer.compare(createArgs?.attachment.data ?? Buffer.alloc(0), data),
+    ).toBe(0)
+    expect(chatMessagesRepository.acquireSendLedgerEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientMessageKey: 'portal-send:attachment-key',
+        messageKind: 'attachment',
+        payloadSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+        primaryConversationId: 101,
+        userId: 7,
+      }),
+    )
+    expect(
+      chatMessagesRepository.markSendLedgerEntryConfirmed,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatwootMessageId: 601,
+        clientMessageKey: 'portal-send:attachment-key',
+        primaryConversationId: 101,
+        userId: 7,
+      }),
+    )
+  })
+
+  it('rejects unsupported attachment types before calling Chatwoot', async () => {
+    const createConversationIncomingAttachmentMessage = vi.fn()
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository: createChatMessagesRepositoryStub(),
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingAttachmentMessage,
+      }),
+    })
+
+    await expect(
+      service.sendCurrentUserAttachmentMessage({
+        attachment: {
+          data: Buffer.from('echo nope'),
+          fileName: 'script.sh',
+          mimeType: 'application/x-sh',
+          size: 9,
+        },
+        clientMessageKey: 'portal-send:attachment-key',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_type_not_allowed',
+      statusCode: 415,
+    })
+    expect(createConversationIncomingAttachmentMessage).not.toHaveBeenCalled()
+  })
+
+  it('replays a confirmed attachment ledger entry without duplicate upload', async () => {
+    const createConversationIncomingAttachmentMessage = vi.fn()
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository: createChatMessagesRepositoryStub({
+        acquireSendLedgerEntry: vi.fn().mockResolvedValue({
+          entry: {
+            attemptsCount: 1,
+            chatwootMessageId: 601,
+            clientMessageKey: 'portal-send:attachment-key',
+            confirmedAt: new Date('2026-04-21T12:00:00.000Z'),
+            createdAt: new Date('2026-04-21T12:00:00.000Z'),
+            failedAt: null,
+            messageKind: 'attachment',
+            payloadSha256: 'hash',
+            primaryConversationId: 101,
+            processingToken: null,
+            status: 'confirmed',
+            updatedAt: new Date('2026-04-21T12:00:00.000Z'),
+            userId: 7,
+          },
+          outcome: 'confirmed',
+        }),
+      }),
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingAttachmentMessage,
+        findConversationMessageById: vi
+          .fn()
+          .mockResolvedValue(sentAttachmentChatwootMessage),
+      }),
+    })
+
+    await expect(
+      service.sendCurrentUserAttachmentMessage({
+        attachment: {
+          data: Buffer.from('pdf'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+          size: 3,
+        },
+        clientMessageKey: 'portal-send:attachment-key',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      sentMessage: {
+        attachments: [
+          {
+            name: 'invoice.pdf',
+          },
+        ],
+        id: 601,
+      },
+    })
+    expect(createConversationIncomingAttachmentMessage).not.toHaveBeenCalled()
   })
 })

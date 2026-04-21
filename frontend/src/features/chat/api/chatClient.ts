@@ -50,10 +50,12 @@ async function request<TResponse>(
   path: string,
   {
     body,
+    formData,
     method = 'GET',
     networkErrorMessage = NETWORK_ERROR_MESSAGE,
   }: {
     body?: unknown
+    formData?: FormData
     method?: 'GET' | 'POST'
     networkErrorMessage?: string
   } = {},
@@ -64,13 +66,17 @@ async function request<TResponse>(
     response = await fetch(`${API_BASE_URL}${path}`, {
       credentials: 'include',
       headers:
-        body === undefined
+        body === undefined || formData !== undefined
           ? undefined
           : {
               'Content-Type': 'application/json',
             },
       method,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(formData !== undefined
+        ? { body: formData }
+        : body === undefined
+          ? {}
+          : { body: JSON.stringify(body) }),
     })
   } catch {
     throw new ChatApiClientError({
@@ -139,5 +145,31 @@ export async function sendChatMessage({
     },
     method: 'POST',
     networkErrorMessage: 'Не удалось отправить сообщение. Попробуйте еще раз.',
+  })
+}
+
+export async function sendChatAttachment({
+  clientMessageKey,
+  file,
+  primaryConversationId,
+}: {
+  clientMessageKey: string
+  file: File
+  primaryConversationId?: number | null
+}) {
+  const formData = new FormData()
+
+  formData.append('clientMessageKey', clientMessageKey)
+
+  if (primaryConversationId) {
+    formData.append('primaryConversationId', String(primaryConversationId))
+  }
+
+  formData.append('attachment', file, file.name)
+
+  return request<ChatSendResult>('/chat/messages/attachment', {
+    formData,
+    method: 'POST',
+    networkErrorMessage: 'Не удалось отправить файл. Попробуйте еще раз.',
   })
 }

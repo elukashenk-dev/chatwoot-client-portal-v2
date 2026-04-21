@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getChatMessages, sendChatMessage } from '../api/chatClient'
+import {
+  getChatMessages,
+  sendChatAttachment,
+  sendChatMessage,
+} from '../api/chatClient'
 import type {
   ChatMessage,
   ChatMessagesSnapshot,
@@ -251,6 +255,70 @@ export function ChatPage() {
     }
   }
 
+  async function handleSendAttachment({
+    clientMessageKey,
+    file,
+  }: {
+    clientMessageKey: string
+    file: File
+  }) {
+    if (pageState.status !== 'ready') {
+      return false
+    }
+
+    setIsSending(true)
+    setSendErrorMessage(null)
+
+    try {
+      const sendResult = await sendChatAttachment({
+        clientMessageKey,
+        file,
+        primaryConversationId:
+          pageState.snapshot.primaryConversation?.id ?? null,
+      })
+
+      if (!isMountedRef.current) {
+        return false
+      }
+
+      if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
+        setSendErrorMessage('Не удалось отправить файл. Попробуйте еще раз.')
+        return false
+      }
+
+      setPageState((currentState) => {
+        const currentSnapshot =
+          currentState.status === 'ready' ? currentState.snapshot : null
+
+        return {
+          snapshot: buildSnapshotFromSendResult({
+            currentSnapshot,
+            sendResult,
+          }),
+          status: 'ready',
+        }
+      })
+
+      return true
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return false
+      }
+
+      setSendErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось отправить файл. Попробуйте еще раз.',
+      )
+
+      return false
+    } finally {
+      if (isMountedRef.current) {
+        setIsSending(false)
+      }
+    }
+  }
+
   useEffect(() => {
     isMountedRef.current = true
     const bootstrapTimerId = window.setTimeout(() => {
@@ -323,6 +391,7 @@ export function ChatPage() {
           errorMessage={sendErrorMessage}
           isSending={isSending}
           onSend={handleSendMessage}
+          onSendAttachment={handleSendAttachment}
         />
       </div>
     </>

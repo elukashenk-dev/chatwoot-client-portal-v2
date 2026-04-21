@@ -46,6 +46,49 @@ function minutesFromNow(minutes: number) {
   return new Date(Date.now() + minutes * 60_000)
 }
 
+function createMultipartAttachmentPayload({
+  clientMessageKey,
+  fileContent,
+  fileName,
+  mimeType,
+  primaryConversationId,
+}: {
+  clientMessageKey: string
+  fileContent: Buffer
+  fileName: string
+  mimeType: string
+  primaryConversationId?: number
+}) {
+  const boundary = '----portal-test-boundary'
+  const chunks: Buffer[] = []
+  const appendField = (name: string, value: string) => {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+      ),
+    )
+  }
+
+  appendField('clientMessageKey', clientMessageKey)
+
+  if (primaryConversationId !== undefined) {
+    appendField('primaryConversationId', String(primaryConversationId))
+  }
+
+  chunks.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="attachment"; filename="${fileName}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    ),
+  )
+  chunks.push(fileContent)
+  chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`))
+
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    payload: Buffer.concat(chunks),
+  }
+}
+
 describe('buildApp', () => {
   let app: ReturnType<typeof buildApp>
   let database: DatabaseClient
@@ -252,6 +295,56 @@ describe('buildApp', () => {
         content: 'Здравствуйте',
       },
       url: '/api/chat/messages',
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      linkedContact: null,
+      primaryConversation: null,
+      reason: 'contact_link_missing',
+      result: 'not_ready',
+      sentMessage: null,
+    })
+  })
+
+  it('returns a controlled attachment send state for an authenticated user without a Chatwoot contact link', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'Name@Company.RU',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+    const multipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:attachment-key',
+      fileContent: Buffer.from('%PDF-1.7\n'),
+      fileName: 'invoice.pdf',
+      mimeType: 'application/pdf',
+    })
+
+    const response = await app.inject({
+      headers: {
+        'content-type': multipart.contentType,
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/chat/messages/attachment',
     })
 
     expect(response.statusCode).toBe(200)

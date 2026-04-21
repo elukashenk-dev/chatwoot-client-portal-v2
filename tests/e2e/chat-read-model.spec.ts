@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+
 import { expect, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
@@ -42,7 +44,7 @@ test('renders the ready chat transcript and loads older history through the back
 }) => {
   const chatMessageRequests: string[] = []
 
-  await page.route('**/api/chat/messages*', async (route) => {
+  await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
 
     chatMessageRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
@@ -152,7 +154,7 @@ test('sends text through the backend chat contract and renders the canonical res
     path: string
   }> = []
 
-  await page.route('**/api/chat/messages*', async (route) => {
+  await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
     const method = request.method()
@@ -233,4 +235,107 @@ test('sends text through the backend chat contract and renders the canonical res
     method: 'POST',
     path: '/api/chat/messages',
   })
+})
+
+test('sends an attachment through the backend chat contract and renders the canonical response', async ({
+  page,
+}) => {
+  const chatMessageRequests: Array<{
+    contentType: string | null
+    method: string
+    path: string
+  }> = []
+
+  await page.route('**/api/chat/messages**', async (route) => {
+    const request = route.request()
+    const requestUrl = new URL(request.url())
+    const method = request.method()
+    const path = `${requestUrl.pathname}${requestUrl.search}`
+
+    chatMessageRequests.push({
+      contentType: request.headers()['content-type'] ?? null,
+      method,
+      path,
+    })
+
+    if (method === 'POST' && requestUrl.pathname.endsWith('/attachment')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 6,
+            lastActivityAt: 1_777_000_200,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [
+              {
+                fileSize: 1024,
+                fileType: 'file',
+                id: 77,
+                name: 'signed-act.pdf',
+                thumbUrl: '',
+                url: 'https://files.example.test/signed-act.pdf',
+              },
+            ],
+            authorName: 'Вы',
+            content: null,
+            contentType: 'text',
+            createdAt: '2026-04-21T10:12:00.000Z',
+            direction: 'outgoing',
+            id: 601,
+            status: 'sent',
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await page.locator('input[type="file"]').setInputFiles({
+    buffer: Buffer.from('%PDF-1.7\n'),
+    mimeType: 'application/pdf',
+    name: 'signed-act.pdf',
+  })
+  await page.getByRole('button', { name: 'Отправить файл' }).click()
+
+  await expect.poll(() => chatMessageRequests.length).toBe(2)
+  await expect(page.getByText('signed-act.pdf')).toBeVisible()
+  expect(chatMessageRequests).toEqual([
+    {
+      contentType: null,
+      method: 'GET',
+      path: '/api/chat/messages',
+    },
+    {
+      contentType: expect.stringContaining('multipart/form-data'),
+      method: 'POST',
+      path: '/api/chat/messages/attachment',
+    },
+  ])
 })

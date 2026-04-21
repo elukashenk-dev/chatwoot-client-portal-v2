@@ -20,8 +20,29 @@ import type {
 } from './repository.js'
 
 const SEND_LEDGER_MESSAGE_KIND_TEXT = 'text'
+const SEND_LEDGER_MESSAGE_KIND_ATTACHMENT = 'attachment'
 const SEND_LEDGER_STALE_PROCESSING_MS = 2 * 60 * 1000
 const CLIENT_MESSAGE_KEY_MAX_LENGTH = 200
+export const CHAT_ATTACHMENT_MAX_BYTES = 40 * 1024 * 1024
+const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
+const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
+  'application/json',
+  'application/msword',
+  'application/pdf',
+  'application/rtf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/x-7z-compressed',
+  'application/x-tar',
+  'application/zip',
+  'text/csv',
+  'text/plain',
+  'text/rtf',
+])
 
 export type PortalChatAttachment = {
   fileSize: number | null
@@ -30,6 +51,13 @@ export type PortalChatAttachment = {
   name: string
   thumbUrl: string
   url: string
+}
+
+export type PortalAttachmentUpload = {
+  data: Buffer
+  fileName: string
+  mimeType: string
+  size: number
 }
 
 export type PortalChatMessage = {
@@ -61,6 +89,7 @@ type CreateChatMessagesServiceOptions = {
   chatMessagesRepository?: ChatMessagesRepository | null
   chatwootClient: Pick<
     ChatwootClient,
+    | 'createConversationIncomingAttachmentMessage'
     | 'createConversationIncomingMessage'
     | 'findConversationMessageById'
     | 'findConversationMessageBySourceId'
@@ -209,9 +238,79 @@ function normalizeClientMessageKey(clientMessageKey: string) {
   return normalizedClientMessageKey
 }
 
+function isAllowedAttachmentMimeType(mimeType: string) {
+  return (
+    mimeType.startsWith('image/') ||
+    mimeType.startsWith('video/') ||
+    mimeType.startsWith('audio/') ||
+    CHAT_ATTACHMENT_ALLOWED_MIME_TYPES.has(mimeType)
+  )
+}
+
+function normalizeAttachmentUpload(
+  attachment: PortalAttachmentUpload,
+): PortalAttachmentUpload {
+  const fileName = attachment.fileName.trim()
+  const mimeType = attachment.mimeType.trim().toLowerCase()
+  const data = Buffer.from(attachment.data)
+  const size = data.byteLength
+
+  if (!fileName) {
+    throw new ApiError(
+      400,
+      'attachment_file_name_required',
+      'Имя файла обязательно.',
+    )
+  }
+
+  if (fileName.length > CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH) {
+    throw new ApiError(
+      400,
+      'attachment_file_name_too_long',
+      'Имя файла слишком длинное.',
+    )
+  }
+
+  if (size <= 0) {
+    throw new ApiError(400, 'attachment_empty', 'Файл пустой.')
+  }
+
+  if (size > CHAT_ATTACHMENT_MAX_BYTES) {
+    throw new ApiError(
+      413,
+      'attachment_too_large',
+      'Файл больше допустимого размера 40 МБ.',
+    )
+  }
+
+  if (!mimeType || !isAllowedAttachmentMimeType(mimeType)) {
+    throw new ApiError(
+      415,
+      'attachment_type_not_allowed',
+      'Этот тип файла нельзя отправить.',
+    )
+  }
+
+  return {
+    data,
+    fileName,
+    mimeType,
+    size,
+  }
+}
+
 function createTextPayloadSha256(content: string) {
   return createHash('sha256')
     .update(`${SEND_LEDGER_MESSAGE_KIND_TEXT}\0${content}`)
+    .digest('hex')
+}
+
+function createAttachmentPayloadSha256(attachment: PortalAttachmentUpload) {
+  return createHash('sha256')
+    .update(
+      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0`,
+    )
+    .update(attachment.data)
     .digest('hex')
 }
 
@@ -338,18 +437,15 @@ async function resolveConfirmedLedgerMessage({
   return recoveredMessage
 }
 
-async function createOrReplayCanonicalTextMessageViaChatwoot({
+async function createOrReplayCanonicalMessageViaChatwoot({
   chatwootClient,
   clientMessageKey,
-  content,
+  createChatwootMessage,
   primaryConversationId,
 }: {
-  chatwootClient: Pick<
-    ChatwootClient,
-    'createConversationIncomingMessage' | 'findConversationMessageBySourceId'
-  >
+  chatwootClient: Pick<ChatwootClient, 'findConversationMessageBySourceId'>
   clientMessageKey: string
-  content: string
+  createChatwootMessage: () => Promise<ChatwootMessage | null>
   primaryConversationId: number
 }) {
   const existingMessage = await findCanonicalMessageByClientKey({
@@ -363,11 +459,7 @@ async function createOrReplayCanonicalTextMessageViaChatwoot({
   }
 
   try {
-    return await chatwootClient.createConversationIncomingMessage({
-      content,
-      conversationId: primaryConversationId,
-      sourceId: clientMessageKey,
-    })
+    return await createChatwootMessage()
   } catch (error) {
     const recoveredMessage = await findCanonicalMessageByClientKey({
       chatwootClient,
@@ -383,25 +475,29 @@ async function createOrReplayCanonicalTextMessageViaChatwoot({
   }
 }
 
-async function createOrReplayCanonicalTextMessageViaLedger({
+async function createOrReplayCanonicalMessageViaLedger({
   chatMessagesRepository,
   chatwootClient,
   clientMessageKey,
-  content,
+  createChatwootMessage,
+  messageKind,
   now,
+  payloadMismatchMessage,
+  payloadSha256,
   primaryConversationId,
   userId,
 }: {
   chatMessagesRepository: ChatMessagesRepository
   chatwootClient: Pick<
     ChatwootClient,
-    | 'createConversationIncomingMessage'
-    | 'findConversationMessageById'
-    | 'findConversationMessageBySourceId'
+    'findConversationMessageById' | 'findConversationMessageBySourceId'
   >
   clientMessageKey: string
-  content: string
+  createChatwootMessage: () => Promise<ChatwootMessage | null>
+  messageKind: string
   now: () => Date
+  payloadMismatchMessage: string
+  payloadSha256: string
   primaryConversationId: number
   userId: number
 }) {
@@ -409,9 +505,9 @@ async function createOrReplayCanonicalTextMessageViaLedger({
   const processingToken = randomUUID()
   const acquireResult = await chatMessagesRepository.acquireSendLedgerEntry({
     clientMessageKey,
-    messageKind: SEND_LEDGER_MESSAGE_KIND_TEXT,
+    messageKind,
     now: acquiredAt,
-    payloadSha256: createTextPayloadSha256(content),
+    payloadSha256,
     primaryConversationId,
     processingToken,
     staleProcessingBefore: new Date(
@@ -424,7 +520,7 @@ async function createOrReplayCanonicalTextMessageViaLedger({
     throw new ApiError(
       409,
       'client_message_key_conflict',
-      'Повторная отправка использует другой текст для того же ключа.',
+      payloadMismatchMessage,
     )
   }
 
@@ -509,12 +605,7 @@ async function createOrReplayCanonicalTextMessageViaLedger({
   }
 
   try {
-    const createdMessage =
-      await chatwootClient.createConversationIncomingMessage({
-        content,
-        conversationId: primaryConversationId,
-        sourceId: clientMessageKey,
-      })
+    const createdMessage = await createChatwootMessage()
 
     if (createdMessage === null) {
       await markSendLedgerEntryFailed({
@@ -589,43 +680,50 @@ async function createOrReplayCanonicalTextMessageViaLedger({
   }
 }
 
-async function createOrReplayCanonicalTextMessage({
+async function createOrReplayCanonicalMessage({
   chatMessagesRepository,
   chatwootClient,
   clientMessageKey,
-  content,
+  createChatwootMessage,
+  messageKind,
   now,
+  payloadMismatchMessage,
+  payloadSha256,
   primaryConversationId,
   userId,
 }: {
   chatMessagesRepository?: ChatMessagesRepository | null
   chatwootClient: Pick<
     ChatwootClient,
-    | 'createConversationIncomingMessage'
-    | 'findConversationMessageById'
-    | 'findConversationMessageBySourceId'
+    'findConversationMessageById' | 'findConversationMessageBySourceId'
   >
   clientMessageKey: string
-  content: string
+  createChatwootMessage: () => Promise<ChatwootMessage | null>
+  messageKind: string
   now: () => Date
+  payloadMismatchMessage: string
+  payloadSha256: string
   primaryConversationId: number
   userId: number
 }) {
   if (!chatMessagesRepository) {
-    return createOrReplayCanonicalTextMessageViaChatwoot({
+    return createOrReplayCanonicalMessageViaChatwoot({
       chatwootClient,
       clientMessageKey,
-      content,
+      createChatwootMessage,
       primaryConversationId,
     })
   }
 
-  return createOrReplayCanonicalTextMessageViaLedger({
+  return createOrReplayCanonicalMessageViaLedger({
     chatMessagesRepository,
     chatwootClient,
     clientMessageKey,
-    content,
+    createChatwootMessage,
+    messageKind,
     now,
+    payloadMismatchMessage,
+    payloadSha256,
     primaryConversationId,
     userId,
   })
@@ -726,15 +824,107 @@ export function createChatMessagesService({
       const normalizedContent = normalizeContent(content)
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
+      const resolvedPrimaryConversationId = context.primaryConversation.id
 
       try {
-        const sentMessage = await createOrReplayCanonicalTextMessage({
+        const sentMessage = await createOrReplayCanonicalMessage({
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
-          content: normalizedContent,
+          createChatwootMessage: () =>
+            chatwootClient.createConversationIncomingMessage({
+              content: normalizedContent,
+              conversationId: resolvedPrimaryConversationId,
+              sourceId: normalizedClientMessageKey,
+            }),
+          messageKind: SEND_LEDGER_MESSAGE_KIND_TEXT,
           now,
-          primaryConversationId: context.primaryConversation.id,
+          payloadMismatchMessage:
+            'Повторная отправка использует другой текст для того же ключа.',
+          payloadSha256: createTextPayloadSha256(normalizedContent),
+          primaryConversationId: resolvedPrimaryConversationId,
+          userId,
+        })
+
+        if (sentMessage === null) {
+          return buildSendResult({
+            ...context,
+            primaryConversation: null,
+            reason: 'primary_conversation_missing',
+            result: 'not_ready',
+          })
+        }
+
+        const portalMessage = mapPortalMessage(sentMessage)
+
+        if (!portalMessage) {
+          throw new ApiError(
+            503,
+            'chat_send_unavailable',
+            'Chatwoot не вернул клиентское сообщение.',
+          )
+        }
+
+        return buildSendResult(context, portalMessage)
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error
+        }
+
+        if (
+          error instanceof ChatwootClientConfigurationError ||
+          error instanceof ChatwootClientRequestError
+        ) {
+          return createChatSendUnavailableResult(context)
+        }
+
+        throw error
+      }
+    },
+
+    async sendCurrentUserAttachmentMessage({
+      attachment,
+      clientMessageKey,
+      primaryConversationId = null,
+      userId,
+    }: {
+      attachment: PortalAttachmentUpload
+      clientMessageKey: string
+      primaryConversationId?: number | null
+      userId: number
+    }): Promise<ChatSendResult> {
+      const context =
+        await chatContextService.ensureCurrentUserWritableChatContext({
+          selectedPrimaryConversationId: primaryConversationId,
+          userId,
+        })
+
+      if (context.result !== 'ready' || !context.primaryConversation) {
+        return buildSendResult(context)
+      }
+
+      const normalizedAttachment = normalizeAttachmentUpload(attachment)
+      const normalizedClientMessageKey =
+        normalizeClientMessageKey(clientMessageKey)
+      const resolvedPrimaryConversationId = context.primaryConversation.id
+
+      try {
+        const sentMessage = await createOrReplayCanonicalMessage({
+          chatMessagesRepository,
+          chatwootClient,
+          clientMessageKey: normalizedClientMessageKey,
+          createChatwootMessage: () =>
+            chatwootClient.createConversationIncomingAttachmentMessage({
+              attachment: normalizedAttachment,
+              conversationId: resolvedPrimaryConversationId,
+              sourceId: normalizedClientMessageKey,
+            }),
+          messageKind: SEND_LEDGER_MESSAGE_KIND_ATTACHMENT,
+          now,
+          payloadMismatchMessage:
+            'Повторная отправка использует другой файл для того же ключа.',
+          payloadSha256: createAttachmentPayloadSha256(normalizedAttachment),
+          primaryConversationId: resolvedPrimaryConversationId,
           userId,
         })
 

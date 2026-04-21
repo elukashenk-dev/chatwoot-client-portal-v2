@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie'
+import multipart from '@fastify/multipart'
 import Fastify from 'fastify'
 
 import type { AppEnv } from './config/env.js'
@@ -13,7 +14,10 @@ import { registerChatContextRoutes } from './modules/chat-context/routes.js'
 import { createChatContextService } from './modules/chat-context/service.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
-import { createChatMessagesService } from './modules/chat-messages/service.js'
+import {
+  CHAT_ATTACHMENT_MAX_BYTES,
+  createChatMessagesService,
+} from './modules/chat-messages/service.js'
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { createPasswordResetRepository } from './modules/password-reset/repository.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
@@ -41,6 +45,14 @@ export function buildApp({ database, env }: BuildAppOptions) {
   app.register(cookie, {
     hook: 'onRequest',
     secret: env.SESSION_SECRET,
+  })
+  app.register(multipart, {
+    limits: {
+      fields: 4,
+      fileSize: CHAT_ATTACHMENT_MAX_BYTES,
+      files: 1,
+      parts: 5,
+    },
   })
 
   app.addHook('onClose', async () => {
