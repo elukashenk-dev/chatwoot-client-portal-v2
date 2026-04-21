@@ -69,6 +69,34 @@ async function findMailpitMessage({
   )
 }
 
+export async function expectNoMailpitMessage({
+  sentAfter,
+  subject,
+  timeoutMs = 2_000,
+  to,
+}: {
+  sentAfter: Date
+  subject: string
+  timeoutMs?: number
+  to: string
+}) {
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    const message = await findMailpitMessage({
+      sentAfter,
+      subject,
+      to,
+    })
+
+    if (message?.ID) {
+      throw new Error(`Unexpected Mailpit message ${message.ID} for ${to}.`)
+    }
+
+    await sleep(250)
+  }
+}
+
 export async function waitForMailpitCode({
   sentAfter,
   subject,

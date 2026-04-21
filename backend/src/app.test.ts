@@ -6,6 +6,7 @@ import { buildApp } from './app.js'
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
 import {
+  portalSessions,
   portalUserContactLinks,
   portalUsers,
   verificationRecords,
@@ -148,6 +149,109 @@ describe('buildApp', () => {
 
     expect(meAfterLogoutResponse.statusCode).toBe(401)
     expect(meAfterLogoutResponse.json()).toEqual({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Требуется вход.',
+      },
+    })
+  })
+
+  it('returns unauthorized for a tampered session cookie', async () => {
+    const response = await app.inject({
+      headers: {
+        cookie: `${testEnv.SESSION_COOKIE_NAME}=not-a-valid-signed-cookie`,
+      },
+      method: 'GET',
+      url: '/api/auth/me',
+    })
+
+    expect(response.statusCode).toBe(401)
+    expect(response.json()).toEqual({
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Требуется вход.',
+      },
+    })
+  })
+
+  it('allows logout without an existing session', async () => {
+    const response = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      url: '/api/auth/logout',
+    })
+
+    expect(response.statusCode).toBe(204)
+  })
+
+  it('rejects inactive portal users during login', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'inactive@company.ru',
+      isActive: false,
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const response = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'inactive@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+
+    expect(response.statusCode).toBe(401)
+    expect(response.cookies).toHaveLength(0)
+    expect(response.json()).toEqual({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: 'Неверный email или пароль.',
+      },
+    })
+  })
+
+  it('rejects an otherwise valid session after the stored session expires', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+
+    await database.db.update(portalSessions).set({
+      expiresAt: new Date(Date.now() - 1000),
+    })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/auth/me',
+    })
+
+    expect(response.statusCode).toBe(401)
+    expect(response.json()).toEqual({
       error: {
         code: 'UNAUTHORIZED',
         message: 'Требуется вход.',
@@ -365,6 +469,25 @@ describe('buildApp', () => {
       passwordHash: await hashPassword('OldPass123'),
     })
 
+    const preResetLoginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        password: 'OldPass123',
+      },
+      url: '/api/auth/login',
+    })
+    const preResetSessionCookie = preResetLoginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const preResetCookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${preResetSessionCookie?.value ?? ''}`
+
+    expect(preResetLoginResponse.statusCode).toBe(200)
+    expect(preResetSessionCookie).toBeDefined()
+
     await database.db.insert(verificationRecords).values({
       attemptsCount: 0,
       codeHash: await hashPassword('123456'),
@@ -421,6 +544,18 @@ describe('buildApp', () => {
       purpose: 'password_reset',
       result: 'password_reset_completed',
     })
+
+    const oldSessionResponse = await app.inject({
+      headers: {
+        cookie: preResetCookieHeader,
+      },
+      method: 'GET',
+      url: '/api/auth/me',
+    })
+    const remainingSessions = await database.db.select().from(portalSessions)
+
+    expect(oldSessionResponse.statusCode).toBe(401)
+    expect(remainingSessions).toHaveLength(0)
 
     const oldPasswordLoginResponse = await app.inject({
       headers: {
