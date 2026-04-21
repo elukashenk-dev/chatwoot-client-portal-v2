@@ -100,6 +100,44 @@ export const portalUserContactLinks = pgTable(
   ],
 )
 
+export const portalUserChatwootConversations = pgTable(
+  'portal_user_chatwoot_conversations',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => portalUsers.id, {
+        onDelete: 'cascade',
+      }),
+    chatwootContactId: integer('chatwoot_contact_id').notNull(),
+    chatwootConversationId: integer('chatwoot_conversation_id').notNull(),
+    chatwootInboxId: integer('chatwoot_inbox_id').notNull(),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_user_chatwoot_conversations_user_id_unique').on(
+      table.userId,
+    ),
+    uniqueIndex('portal_user_chatwoot_conversations_conversation_id_unique').on(
+      table.chatwootConversationId,
+    ),
+    index('portal_user_chatwoot_conversations_contact_id_idx').on(
+      table.chatwootContactId,
+    ),
+  ],
+)
+
 export const verificationRecords = pgTable(
   'verification_records',
   {

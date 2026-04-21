@@ -24,5 +24,5 @@ test('redirects unauthenticated app chat visits to login', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Клиентский чат' }),
   ).toHaveCount(0)
-  await expect(page.getByText('Чат пока готовится')).toHaveCount(0)
+  await expect(page.getByText('Чат не подключен')).toHaveCount(0)
 })

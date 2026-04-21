@@ -19,8 +19,8 @@
 :root {
   color: #0f172a;
   font-family:
-    'Segoe UI Variable', 'Segoe UI', 'Helvetica Neue', Arial, BlinkMacSystemFont,
-    system-ui, sans-serif;
+    'Segoe UI Variable', 'Segoe UI', 'Helvetica Neue', Arial,
+    BlinkMacSystemFont, system-ui, sans-serif;
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
@@ -204,7 +204,26 @@ button:not(:disabled),
   width: 88px;
   height: 88px;
   opacity: 0.3;
-  background-image: radial-gradient(circle, rgba(35, 71, 118, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(
+    circle,
+    rgba(35, 71, 118, 0.12) 1px,
+    transparent 1px
+  );
   background-size: 12px 12px;
   pointer-events: none;
+}
+
+.chat-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
 }

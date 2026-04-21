@@ -23,7 +23,7 @@ async function expectProtectedChatShell(page: Page) {
   ).toBeVisible()
   await expect(page.getByText(E2E_PORTAL_USER.email)).toBeVisible()
   await expect(page.getByText('Защищенная сессия')).toBeVisible()
-  await expect(page.getByText('Чат пока готовится')).toBeVisible()
+  await expect(page.getByText('Чат не подключен')).toBeVisible()
 }
 
 test('rejects invalid credentials without opening the protected shell', async ({
@@ -40,7 +40,7 @@ test('rejects invalid credentials without opening the protected shell', async ({
   await expect(
     page.getByRole('heading', { name: 'Клиентский чат' }),
   ).toHaveCount(0)
-  await expect(page.getByText('Чат пока готовится')).toHaveCount(0)
+  await expect(page.getByText('Чат не подключен')).toHaveCount(0)
 })
 
 test('logs in with the seeded portal user and opens the protected app shell', async ({

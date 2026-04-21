@@ -4,22 +4,17 @@ function SkeletonLine({ className }: { className: string }) {
   return <div className={`app-skeleton ${className}`} />
 }
 
-export function ChatPlaceholderPage() {
+export function ChatLoadingState() {
   return (
     <>
       <div className="border-b border-slate-200/70 px-5 py-3 sm:px-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[0.7rem] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-400"
-            disabled
-            type="button"
-          >
+        <div className="flex items-center justify-between gap-3">
+          <div className="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-400">
             <CalendarIcon />
             Календарь сообщений
-          </button>
-
+          </div>
           <span className="rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700">
-            Переписка не подключена
+            Загружаем последние 20 сообщений
           </span>
         </div>
       </div>
@@ -28,16 +23,16 @@ export function ChatPlaceholderPage() {
         <div className="mx-auto flex h-full w-full max-w-[620px] flex-col">
           <div className="mb-6 rounded-[1rem] border border-slate-200 bg-slate-50/90 px-5 py-5">
             <div className="flex items-start gap-4">
-              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] bg-brand-100 text-brand-800">
+              <div className="inline-flex h-11 w-11 shrink-0 animate-pulse items-center justify-center rounded-[0.8rem] bg-brand-100 text-brand-800">
                 <ClockIcon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-[16px] font-semibold text-slate-800">
-                  Чат пока готовится
+                  Загружаем переписку...
                 </h2>
                 <p className="mt-1 text-[14px] leading-6 text-slate-500">
-                  Вход выполнен. Переписка появится здесь, когда обращение будет
-                  подключено к клиентскому порталу.
+                  Вход выполнен успешно. Сейчас подтягиваем историю сообщений и
+                  состояние текущего обращения.
                 </p>
               </div>
             </div>
@@ -69,20 +64,6 @@ export function ChatPlaceholderPage() {
           </div>
         </div>
       </section>
-
-      <footer className="border-t border-slate-200/90 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
-        <div className="mx-auto w-full max-w-[620px]">
-          <div className="rounded-[1rem] border border-slate-200 bg-slate-50/90 p-2">
-            <div className="flex items-end gap-2">
-              <div className="h-11 w-11 shrink-0 rounded-[0.7rem] bg-slate-200/70" />
-              <div className="flex h-11 flex-1 items-center rounded-[0.8rem] border border-slate-200 bg-white px-3 text-[13px] text-slate-400">
-                Сообщения станут доступны после подключения чата
-              </div>
-              <div className="h-11 w-11 shrink-0 rounded-[0.7rem] bg-slate-200/70" />
-            </div>
-          </div>
-        </div>
-      </footer>
     </>
   )
 }

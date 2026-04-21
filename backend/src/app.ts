@@ -8,6 +8,11 @@ import { createSmtpEmailDelivery } from './integrations/email/smtp.js'
 import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
+import { createChatContextRepository } from './modules/chat-context/repository.js'
+import { registerChatContextRoutes } from './modules/chat-context/routes.js'
+import { createChatContextService } from './modules/chat-context/service.js'
+import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
+import { createChatMessagesService } from './modules/chat-messages/service.js'
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { createPasswordResetRepository } from './modules/password-reset/repository.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
@@ -43,18 +48,25 @@ export function buildApp({ database, env }: BuildAppOptions) {
 
   registerApiErrorHandler(app)
 
+  const authService = createAuthService({
+    db: database.db,
+    env,
+  })
+  const chatwootClient = createChatwootClient({ env })
+  const chatContextService = createChatContextService({
+    chatContextRepository: createChatContextRepository(database.db),
+    chatwootClient,
+  })
+
   registerHealthRoutes(app, { env })
   registerAuthRoutes(app, {
-    authService: createAuthService({
-      db: database.db,
-      env,
-    }),
+    authService,
     env,
   })
   registerRegistrationRoutes(app, {
     env,
     registrationService: createRegistrationService({
-      chatwootClient: createChatwootClient({ env }),
+      chatwootClient,
       emailDelivery: createSmtpEmailDelivery({ env }),
       portalUsersRepository: createPortalUsersRepository(database.db),
       registrationRepository: createRegistrationRepository(database.db),
@@ -66,6 +78,19 @@ export function buildApp({ database, env }: BuildAppOptions) {
       emailDelivery: createSmtpEmailDelivery({ env }),
       passwordResetRepository: createPasswordResetRepository(database.db),
     }),
+  })
+  registerChatContextRoutes(app, {
+    authService,
+    chatContextService,
+    env,
+  })
+  registerChatMessagesRoutes(app, {
+    authService,
+    chatMessagesService: createChatMessagesService({
+      chatContextService,
+      chatwootClient,
+    }),
+    env,
   })
 
   return app

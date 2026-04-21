@@ -15,6 +15,21 @@ function createJsonResponse(body: unknown, status: number) {
   })
 }
 
+function createChatNotReadyResponse() {
+  return createJsonResponse(
+    {
+      hasMoreOlder: false,
+      linkedContact: null,
+      messages: [],
+      nextOlderCursor: null,
+      primaryConversation: null,
+      reason: 'contact_link_missing',
+      result: 'not_ready',
+    },
+    200,
+  )
+}
+
 function renderAuthRoutes(initialEntries: string[]) {
   renderWithRouter(
     <AuthSessionProvider>
@@ -55,10 +70,9 @@ describe('LoginPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Клиентский портал' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Забыли пароль?' })).toHaveAttribute(
-      'href',
-      '/auth/password-reset/request',
-    )
+    expect(
+      screen.getByRole('link', { name: 'Забыли пароль?' }),
+    ).toHaveAttribute('href', '/auth/password-reset/request')
     expect(screen.getByRole('link', { name: 'Новый аккаунт' })).toHaveAttribute(
       'href',
       '/auth/register',
@@ -92,6 +106,7 @@ describe('LoginPage', () => {
           200,
         ),
       )
+      .mockResolvedValueOnce(createChatNotReadyResponse())
 
     renderAuthRoutes(['/auth/login'])
 
@@ -130,7 +145,7 @@ describe('LoginPage', () => {
       await screen.findByRole('heading', { name: 'Клиентский чат' }),
     ).toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
-    expect(screen.getByText('Чат пока готовится')).toBeInTheDocument()
+    expect(await screen.findByText('Чат не подключен')).toBeInTheDocument()
   })
 
   it('loads existing session into the app shell and returns to login after logout', async () => {
@@ -149,6 +164,7 @@ describe('LoginPage', () => {
           200,
         ),
       )
+      .mockResolvedValueOnce(createChatNotReadyResponse())
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
 
     renderAuthRoutes(['/auth/login'])
@@ -160,7 +176,7 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/auth/logout',
       expect.objectContaining({
         credentials: 'include',
@@ -209,6 +225,7 @@ describe('LoginPage', () => {
           200,
         ),
       )
+      fetchMock.mockResolvedValueOnce(createChatNotReadyResponse())
 
       renderAuthRoutes([initialEntry])
 

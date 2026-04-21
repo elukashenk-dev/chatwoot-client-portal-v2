@@ -8,7 +8,7 @@ import { PasswordResetVerifyPage } from '../features/auth/pages/PasswordResetVer
 import { RegisterRequestPage } from '../features/auth/pages/RegisterRequestPage'
 import { RegisterSetPasswordPage } from '../features/auth/pages/RegisterSetPasswordPage'
 import { RegisterVerifyPage } from '../features/auth/pages/RegisterVerifyPage'
-import { ChatPlaceholderPage } from '../features/chat/pages/ChatPlaceholderPage'
+import { ChatPage } from '../features/chat/pages/ChatPage'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
@@ -49,7 +49,7 @@ export function AppRoutes() {
             index
             element={<Navigate replace to={routePaths.app.chat} />}
           />
-          <Route path="chat" element={<ChatPlaceholderPage />} />
+          <Route path="chat" element={<ChatPage />} />
         </Route>
       </Route>
 

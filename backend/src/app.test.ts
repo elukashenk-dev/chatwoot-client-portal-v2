@@ -19,6 +19,7 @@ const testEnv: AppEnv = {
   CHATWOOT_ACCOUNT_ID: undefined,
   CHATWOOT_API_ACCESS_TOKEN: undefined,
   CHATWOOT_BASE_URL: undefined,
+  CHATWOOT_PORTAL_INBOX_ID: undefined,
   DATABASE_URL:
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
   NODE_ENV: 'test',
@@ -153,6 +154,63 @@ describe('buildApp', () => {
         code: 'UNAUTHORIZED',
         message: 'Требуется вход.',
       },
+    })
+  })
+
+  it('returns controlled chat read states for an authenticated user without a Chatwoot contact link', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'Name@Company.RU',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+
+    const contextResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/context',
+    })
+    const messagesResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/messages',
+    })
+
+    expect(contextResponse.statusCode).toBe(200)
+    expect(contextResponse.json()).toEqual({
+      linkedContact: null,
+      primaryConversation: null,
+      reason: 'contact_link_missing',
+      result: 'not_ready',
+    })
+    expect(messagesResponse.statusCode).toBe(200)
+    expect(messagesResponse.json()).toEqual({
+      hasMoreOlder: false,
+      linkedContact: null,
+      messages: [],
+      nextOlderCursor: null,
+      primaryConversation: null,
+      reason: 'contact_link_missing',
+      result: 'not_ready',
     })
   })
 

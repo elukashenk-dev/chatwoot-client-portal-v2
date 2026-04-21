@@ -32,13 +32,18 @@ async function loginAs(page: Page, email: string, password: string) {
   await page.getByRole('button', { name: 'Войти' }).click()
 }
 
-async function expectProtectedChatShell(page: Page, email: string) {
+async function expectProtectedChatShell(
+  page: Page,
+  email: string,
+  expectedChatState: string,
+) {
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(
     page.getByRole('heading', { name: 'Клиентский чат' }),
   ).toBeVisible()
   await expect(page.getByText(email)).toBeVisible()
   await expect(page.getByText('Защищенная сессия')).toBeVisible()
+  await expect(page.getByText(expectedChatState)).toBeVisible()
 }
 
 test('registers an eligible Chatwoot contact through Mailpit verification', async ({
@@ -94,7 +99,7 @@ test('registers an eligible Chatwoot contact through Mailpit verification', asyn
 
   await page.getByRole('link', { name: 'Перейти ко входу' }).first().click()
   await loginAs(page, email, password)
-  await expectProtectedChatShell(page, email)
+  await expectProtectedChatShell(page, email, 'Переписка пока не создана')
 })
 
 test('resets a portal user password through Mailpit and rejects the old password', async ({
@@ -150,5 +155,5 @@ test('resets a portal user password through Mailpit and rejects the old password
 
   await page.getByRole('textbox', { name: 'Пароль' }).fill(newPassword)
   await page.getByRole('button', { name: 'Войти' }).click()
-  await expectProtectedChatShell(page, email)
+  await expectProtectedChatShell(page, email, 'Чат не подключен')
 })

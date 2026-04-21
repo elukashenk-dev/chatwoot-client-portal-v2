@@ -23,7 +23,10 @@
 - Добавлено правило `Phase Checkpoint Flow`: перед новой phase агент должен оценить regression safety net, закрыть недостающие тесты по риску и только затем предлагать checkpoint commit.
 - Добавлен pre-Phase-5 regression baseline: Playwright auth guard/negative flows и PWA/runtime smoke, backend auth/session invariants, frontend invalid-code/state guard tests.
 - Full validation для regression baseline пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
+- Реализован `Phase 5. Chat Read Model`: backend-owned `GET /api/chat/context`, `GET /api/chat/messages`, Chatwoot linked contact/primary conversation resolution, durable conversation mapping и bounded older-history pagination.
+- `/app/chat` переведен с placeholder на controlled chat states: loading, not_ready/unavailable и ready transcript с последними 20 сообщениями, attachment cards, disabled future composer и кнопкой загрузки старой истории.
+- Phase 5 покрыт backend route/service/client tests, frontend chat/auth route tests и Playwright chat read model e2e; full validation пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
 
 ## Recommended Next Step
 
-- Начать `Phase 5. Chat Read Model` с backend-owned `GET /api/chat/context` и controlled `/app/chat` states.
+- Сделать checkpoint commit для `Phase 5. Chat Read Model`, затем переходить к `Phase 6. Text Send And First Conversation Bootstrap`.
