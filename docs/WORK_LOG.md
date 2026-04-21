@@ -21,6 +21,8 @@
 - Инициализирован отдельный git repository для `chatwoot-client-portal-v2`; в `AGENTS.md` добавлены правила git boundary, feature branches и intake/closure для нового функционала.
 - Добавлено правило `Commit Advisory Rule`: агент должен сам подсказывать удачные моменты для git commit, предупреждать когда commit рано делать и предлагать checkpoint после завершенных фаз, slices, findings и docs-only governance updates.
 - Добавлено правило `Phase Checkpoint Flow`: перед новой phase агент должен оценить regression safety net, закрыть недостающие тесты по риску и только затем предлагать checkpoint commit.
+- Добавлен pre-Phase-5 regression baseline: Playwright auth guard/negative flows и PWA/runtime smoke, backend auth/session invariants, frontend invalid-code/state guard tests.
+- Full validation для regression baseline пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
 
 ## Recommended Next Step
 

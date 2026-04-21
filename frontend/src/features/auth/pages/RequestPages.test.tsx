@@ -114,7 +114,10 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/register'])
 
-    await user.type(await screen.findByLabelText(/Имя и фамилия/), 'Portal User')
+    await user.type(
+      await screen.findByLabelText(/Имя и фамилия/),
+      'Portal User',
+    )
     await user.type(screen.getByLabelText(/Email/), 'name@company.ru')
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))
 
@@ -184,7 +187,9 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/register/verify'])
 
-    const submitButton = await screen.findByRole('button', { name: 'Продолжить' })
+    const submitButton = await screen.findByRole('button', {
+      name: 'Продолжить',
+    })
 
     expect(submitButton).toBeDisabled()
     expect(
@@ -217,6 +222,46 @@ describe('Auth flow pages', () => {
       await screen.findByRole('heading', { name: 'Создание пароля' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/Требования к паролю/)).toBeInTheDocument()
+  })
+
+  it('shows the registration invalid-code backend error without opening set-password', async () => {
+    const user = userEvent.setup()
+
+    saveRegistrationRequest({
+      email: 'name@company.ru',
+      expiresInSeconds: 900,
+      fullName: 'Portal User',
+      resendAvailableInSeconds: 60,
+    })
+
+    mockUnauthenticatedSession()
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          error: {
+            code: 'REGISTRATION_VERIFICATION_INVALID_CODE',
+            message:
+              'Неверный код подтверждения. Проверьте код и попробуйте еще раз.',
+          },
+        },
+        400,
+      ),
+    )
+
+    renderAuthRoutes(['/auth/register/verify'])
+
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('000000')
+    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+
+    expect(
+      await screen.findByText(
+        'Неверный код подтверждения. Проверьте код и попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Создание пароля' }),
+    ).not.toBeInTheDocument()
   })
 
   it('uses existing-pending copy when registration resend did not send a new email', async () => {
@@ -288,7 +333,10 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/register/set-password'])
 
-    await user.type(await screen.findByLabelText(/Новый пароль/), 'PortalPass123')
+    await user.type(
+      await screen.findByLabelText(/Новый пароль/),
+      'PortalPass123',
+    )
     await user.type(
       screen.getByLabelText(/Подтвердите пароль/),
       'PortalPass123',
@@ -314,6 +362,20 @@ describe('Auth flow pages', () => {
     expect(
       await screen.findByText(/Пароль сохранен для name@company.ru/),
     ).toBeInTheDocument()
+  })
+
+  it('guards registration set-password when verification state is missing', async () => {
+    mockUnauthenticatedSession()
+    renderAuthRoutes(['/auth/register/set-password'])
+
+    expect(
+      await screen.findByText(
+        'Сначала подтвердите email, чтобы открыть шаг установки пароля.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Вернуться к подтверждению' }),
+    ).toHaveAttribute('href', '/auth/register/verify')
   })
 
   it('keeps registration set-password disabled for a space-padded short password', async () => {
@@ -488,7 +550,9 @@ describe('Auth flow pages', () => {
     expect(
       screen.getByRole('link', { name: 'Перейти к восстановлению' }),
     ).toHaveAttribute('href', '/auth/password-reset/request')
-    expect(window.sessionStorage.getItem('portal.password-reset-flow')).toBeNull()
+    expect(
+      window.sessionStorage.getItem('portal.password-reset-flow'),
+    ).toBeNull()
   })
 
   it('submits the password reset code and opens the set-password step route', async () => {
@@ -517,7 +581,9 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/password-reset/verify'])
 
-    const submitButton = await screen.findByRole('button', { name: 'Продолжить' })
+    const submitButton = await screen.findByRole('button', {
+      name: 'Продолжить',
+    })
 
     expect(submitButton).toBeDisabled()
 
@@ -543,6 +609,45 @@ describe('Auth flow pages', () => {
     expect(
       await screen.findByRole('heading', { name: 'Создание пароля' }),
     ).toBeInTheDocument()
+  })
+
+  it('shows the password reset invalid-code backend error without opening set-password', async () => {
+    const user = userEvent.setup()
+
+    savePasswordResetRequest({
+      email: 'name@company.ru',
+      expiresInSeconds: 900,
+      resendAvailableInSeconds: 60,
+    })
+
+    mockUnauthenticatedSession()
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          error: {
+            code: 'PASSWORD_RESET_INVALID_CODE',
+            message:
+              'Неверный код восстановления. Проверьте код и попробуйте еще раз.',
+          },
+        },
+        400,
+      ),
+    )
+
+    renderAuthRoutes(['/auth/password-reset/verify'])
+
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('000000')
+    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+
+    expect(
+      await screen.findByText(
+        'Неверный код восстановления. Проверьте код и попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Создание пароля' }),
+    ).not.toBeInTheDocument()
   })
 
   it('completes password reset set-password and shows success feedback', async () => {
@@ -599,6 +704,20 @@ describe('Auth flow pages', () => {
     ).toBeInTheDocument()
   })
 
+  it('guards password reset set-password when verification state is missing', async () => {
+    mockUnauthenticatedSession()
+    renderAuthRoutes(['/auth/password-reset/set-password'])
+
+    expect(
+      await screen.findByText(
+        'Сначала подтвердите email, чтобы открыть шаг установки пароля.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Вернуться к подтверждению' }),
+    ).toHaveAttribute('href', '/auth/password-reset/verify')
+  })
+
   it('clears expired password reset verification state before set-password step render', async () => {
     mockUnauthenticatedSession()
     window.sessionStorage.setItem(
@@ -629,9 +748,9 @@ describe('Auth flow pages', () => {
     expect(
       screen.getByRole('link', { name: 'Вернуться к подтверждению' }),
     ).toHaveAttribute('href', '/auth/password-reset/verify')
-    expect(window.sessionStorage.getItem('portal.password-reset-flow')).toContain(
-      '"verification":null',
-    )
+    expect(
+      window.sessionStorage.getItem('portal.password-reset-flow'),
+    ).toContain('"verification":null')
   })
 
   it('keeps password reset set-password disabled for a space-padded short password', async () => {
