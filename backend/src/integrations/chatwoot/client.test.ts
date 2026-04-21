@@ -376,4 +376,144 @@ describe('createChatwootClient', () => {
       (requestUrl as URL).searchParams.get('filter_internal_messages'),
     ).toBe('true')
   })
+
+  it('creates a contact inbox in the configured portal inbox', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        inbox: {
+          id: 9,
+        },
+        source_id: 'portal-contact-source',
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.createContactInbox({
+        contactId: 7,
+        sourceId: 'portal-contact-source',
+      }),
+    ).resolves.toEqual({
+      inboxId: 9,
+      sourceId: 'portal-contact-source',
+    })
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          inbox_id: 9,
+          source_id: 'portal-contact-source',
+        }),
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('creates a portal conversation from a contact inbox source id', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        id: 301,
+        inbox_id: 9,
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.createConversation({
+        contactId: 7,
+        sourceId: 'portal-contact-source',
+      }),
+    ).resolves.toMatchObject({
+      channelType: 'Channel::Api',
+      id: 301,
+      inboxId: 9,
+      status: 'open',
+    })
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          contact_id: 7,
+          inbox_id: 9,
+          source_id: 'portal-contact-source',
+          status: 'open',
+        }),
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('creates an incoming customer-authored message with a source id', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        attachments: [],
+        content: 'Portal text',
+        content_attributes: {},
+        content_type: 'text',
+        created_at: 1_776_000_010,
+        id: 501,
+        message_type: 0,
+        private: false,
+        sender: {
+          id: 7,
+          name: 'Portal User',
+          type: 'contact',
+        },
+        source_id: 'portal-send:test-key',
+        status: 'sent',
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.createConversationIncomingMessage({
+        content: ' Portal text ',
+        conversationId: 101,
+        sourceId: 'portal-send:test-key',
+      }),
+    ).resolves.toMatchObject({
+      content: 'Portal text',
+      id: 501,
+      messageType: 0,
+      sourceId: 'portal-send:test-key',
+    })
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: 'Portal text',
+          content_attributes: {},
+          content_type: 'text',
+          message_type: 'incoming',
+          private: false,
+          source_id: 'portal-send:test-key',
+        }),
+        method: 'POST',
+      }),
+    )
+  })
 })

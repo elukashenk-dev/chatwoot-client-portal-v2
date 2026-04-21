@@ -184,6 +184,8 @@
 - text composer;
 - `POST /api/chat/messages`;
 - first conversation bootstrap only when no authoritative portal conversation exists;
+- replacement bootstrap when the mapped primary was deleted and no portal conversations remain;
+- backend contact-link recovery by exact authenticated user email -> Chatwoot contact match;
 - authoritative conversation mapping persistence;
 - send through mapped conversation even if it was resolved in Chatwoot;
 - if multiple portal conversations exist and no valid mapping exists, choose newest active conversation, else newest resolved conversation;

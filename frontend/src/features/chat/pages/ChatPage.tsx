@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getChatMessages } from '../api/chatClient'
-import type { ChatMessagesSnapshot } from '../types'
+import { getChatMessages, sendChatMessage } from '../api/chatClient'
+import type {
+  ChatMessage,
+  ChatMessagesSnapshot,
+  ChatSendResult,
+} from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
-import { ChatReadOnlyComposer } from '../components/ChatReadOnlyComposer'
 import { ChatTranscript } from '../components/ChatTranscript'
+import { MessageComposer } from '../components/MessageComposer'
 
 type ChatPageState =
   | {
@@ -40,6 +44,45 @@ function mergeOlderMessages(
   }
 }
 
+function appendSentMessage(messages: ChatMessage[], sentMessage: ChatMessage) {
+  if (messages.some((message) => message.id === sentMessage.id)) {
+    return messages
+  }
+
+  return [...messages, sentMessage]
+}
+
+function isFirstConversationBootstrapReady(snapshot: ChatMessagesSnapshot) {
+  return (
+    snapshot.result === 'not_ready' &&
+    snapshot.reason === 'conversation_missing' &&
+    snapshot.linkedContact !== null
+  )
+}
+
+function buildSnapshotFromSendResult({
+  currentSnapshot,
+  sendResult,
+}: {
+  currentSnapshot: ChatMessagesSnapshot | null
+  sendResult: ChatSendResult
+}): ChatMessagesSnapshot {
+  return {
+    hasMoreOlder: currentSnapshot?.hasMoreOlder ?? false,
+    linkedContact: sendResult.linkedContact,
+    messages: sendResult.sentMessage
+      ? appendSentMessage(
+          currentSnapshot?.messages ?? [],
+          sendResult.sentMessage,
+        )
+      : (currentSnapshot?.messages ?? []),
+    nextOlderCursor: currentSnapshot?.nextOlderCursor ?? null,
+    primaryConversation: sendResult.primaryConversation,
+    reason: sendResult.reason,
+    result: sendResult.result,
+  }
+}
+
 export function ChatPage() {
   const isMountedRef = useRef(false)
   const [pageState, setPageState] = useState<ChatPageState>({
@@ -50,6 +93,8 @@ export function ChatPage() {
     null,
   )
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const [isSending, setIsSending] = useState(false)
+  const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
 
   const loadInitialChat = useCallback(async () => {
     setHistoryErrorMessage(null)
@@ -140,6 +185,72 @@ export function ChatPage() {
     }
   }
 
+  async function handleSendMessage({
+    clientMessageKey,
+    content,
+  }: {
+    clientMessageKey: string
+    content: string
+  }) {
+    if (pageState.status !== 'ready') {
+      return false
+    }
+
+    setIsSending(true)
+    setSendErrorMessage(null)
+
+    try {
+      const sendResult = await sendChatMessage({
+        clientMessageKey,
+        content,
+        primaryConversationId:
+          pageState.snapshot.primaryConversation?.id ?? null,
+      })
+
+      if (!isMountedRef.current) {
+        return false
+      }
+
+      if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
+        setSendErrorMessage(
+          'Не удалось отправить сообщение. Попробуйте еще раз.',
+        )
+        return false
+      }
+
+      setPageState((currentState) => {
+        const currentSnapshot =
+          currentState.status === 'ready' ? currentState.snapshot : null
+
+        return {
+          snapshot: buildSnapshotFromSendResult({
+            currentSnapshot,
+            sendResult,
+          }),
+          status: 'ready',
+        }
+      })
+
+      return true
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return false
+      }
+
+      setSendErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Не удалось отправить сообщение. Попробуйте еще раз.',
+      )
+
+      return false
+    } finally {
+      if (isMountedRef.current) {
+        setIsSending(false)
+      }
+    }
+  }
+
   useEffect(() => {
     isMountedRef.current = true
     const bootstrapTimerId = window.setTimeout(() => {
@@ -155,6 +266,13 @@ export function ChatPage() {
   const snapshot = pageState.snapshot
   const isReady =
     snapshot?.result === 'ready' && Boolean(snapshot.primaryConversation)
+  const canSend =
+    pageState.status === 'ready' &&
+    (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
+  const shouldRenderTranscript =
+    pageState.status === 'ready' &&
+    (pageState.snapshot.result === 'ready' ||
+      isFirstConversationBootstrapReady(pageState.snapshot))
 
   return (
     <>
@@ -177,7 +295,8 @@ export function ChatPage() {
         ) : null}
 
         {pageState.status === 'ready' &&
-        pageState.snapshot.result !== 'ready' ? (
+        pageState.snapshot.result !== 'ready' &&
+        !isFirstConversationBootstrapReady(pageState.snapshot) ? (
           <ChatNotReadyState
             isUnavailable={pageState.snapshot.result === 'unavailable'}
             onRetry={() => {
@@ -187,8 +306,7 @@ export function ChatPage() {
           />
         ) : null}
 
-        {pageState.status === 'ready' &&
-        pageState.snapshot.result === 'ready' ? (
+        {shouldRenderTranscript ? (
           <ChatTranscript
             hasMoreOlder={pageState.snapshot.hasMoreOlder}
             historyErrorMessage={historyErrorMessage}
@@ -200,7 +318,12 @@ export function ChatPage() {
           />
         ) : null}
 
-        <ChatReadOnlyComposer />
+        <MessageComposer
+          disabled={!canSend}
+          errorMessage={sendErrorMessage}
+          isSending={isSending}
+          onSend={handleSendMessage}
+        />
       </div>
     </>
   )

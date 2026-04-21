@@ -1,6 +1,19 @@
+import { useLayoutEffect, useRef } from 'react'
+
 import type { ChatAttachment, ChatMessage } from '../types'
+import { cn } from '../../../shared/lib/cn'
+import type {
+  TranscriptScrollAction,
+  TranscriptScrollSnapshot,
+} from './ChatTranscriptScroll'
+import {
+  captureTranscriptScrollSnapshot,
+  createTranscriptMessageBoundary,
+  getTranscriptScrollAction,
+} from './ChatTranscriptScroll'
 import {
   CalendarIcon,
+  CheckIcon,
   ChevronUpIcon,
   FileTextIcon,
 } from '../../../shared/ui/icons'
@@ -13,6 +26,8 @@ type ChatTranscriptProps = {
   onLoadOlder: () => void
 }
 
+type MessageBlockPosition = 'first' | 'last' | 'middle' | 'single'
+
 function formatMessageDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
     day: 'numeric',
@@ -20,11 +35,180 @@ function formatMessageDate(value: string) {
   }).format(new Date(value))
 }
 
-function formatMessageTime(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    hour: '2-digit',
+function formatMessageDayKey(value: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).formatToParts(new Date(value))
+
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+
+  return year && month && day ? `${year}-${month}-${day}` : ''
+}
+
+function formatMessageMetadataTimestamp(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    hour: 'numeric',
     minute: '2-digit',
+    month: 'short',
   }).format(new Date(value))
+}
+
+function requestNextFrame(callback: () => void) {
+  if (typeof window.requestAnimationFrame !== 'function') {
+    callback()
+    return null
+  }
+
+  return window.requestAnimationFrame(callback)
+}
+
+function cancelNextFrame(frameId: number | null) {
+  if (frameId !== null && typeof window.cancelAnimationFrame === 'function') {
+    window.cancelAnimationFrame(frameId)
+  }
+}
+
+function applyTranscriptScrollAction(
+  element: HTMLElement,
+  action: TranscriptScrollAction,
+) {
+  if (action.type === 'scroll_to_bottom') {
+    element.scrollTop = element.scrollHeight
+    return
+  }
+
+  if (action.type === 'preserve_prepend') {
+    element.scrollTop = action.nextScrollTop
+  }
+}
+
+function areMessagesInSameVisualBlock(
+  currentMessage: ChatMessage | null | undefined,
+  adjacentMessage: ChatMessage | null | undefined,
+) {
+  if (!currentMessage || !adjacentMessage) {
+    return false
+  }
+
+  return (
+    currentMessage.direction === adjacentMessage.direction &&
+    currentMessage.authorName === adjacentMessage.authorName &&
+    formatMessageDayKey(currentMessage.createdAt) ===
+      formatMessageDayKey(adjacentMessage.createdAt)
+  )
+}
+
+function getMessageBlockPosition(
+  messages: ChatMessage[],
+  index: number,
+): MessageBlockPosition {
+  const message = messages[index]
+  const previousMessage = index > 0 ? messages[index - 1] : null
+  const nextMessage = messages[index + 1] ?? null
+
+  const hasPreviousInBlock = areMessagesInSameVisualBlock(
+    previousMessage,
+    message,
+  )
+  const hasNextInBlock = areMessagesInSameVisualBlock(message, nextMessage)
+
+  if (!hasPreviousInBlock && !hasNextInBlock) {
+    return 'single'
+  }
+
+  if (!hasPreviousInBlock) {
+    return 'first'
+  }
+
+  if (!hasNextInBlock) {
+    return 'last'
+  }
+
+  return 'middle'
+}
+
+function shouldRenderMessageMeta(blockPosition: MessageBlockPosition) {
+  return blockPosition === 'last' || blockPosition === 'single'
+}
+
+function shouldRenderAuthorName(blockPosition: MessageBlockPosition) {
+  return blockPosition === 'first' || blockPosition === 'single'
+}
+
+function getBubbleRadiusClass({
+  blockPosition,
+  isOutgoing,
+}: {
+  blockPosition: MessageBlockPosition
+  isOutgoing: boolean
+}) {
+  if (blockPosition === 'single') {
+    return 'rounded-[0.7rem]'
+  }
+
+  if (isOutgoing) {
+    if (blockPosition === 'first') {
+      return 'rounded-[0.7rem] rounded-br-none'
+    }
+
+    if (blockPosition === 'last') {
+      return 'rounded-[0.7rem] rounded-tr-none'
+    }
+
+    return 'rounded-[0.7rem] rounded-br-none rounded-tr-none'
+  }
+
+  if (blockPosition === 'first') {
+    return 'rounded-[0.7rem] rounded-bl-none'
+  }
+
+  if (blockPosition === 'last') {
+    return 'rounded-[0.7rem] rounded-tl-none'
+  }
+
+  return 'rounded-[0.7rem] rounded-bl-none rounded-tl-none'
+}
+
+function getMessageWrapperSpacingClass({
+  blockPosition,
+  hasDateDivider,
+  index,
+}: {
+  blockPosition: MessageBlockPosition
+  hasDateDivider: boolean
+  index: number
+}) {
+  if (index === 0 || hasDateDivider) {
+    return ''
+  }
+
+  return blockPosition === 'first' || blockPosition === 'single'
+    ? 'mt-4'
+    : 'mt-2'
+}
+
+function MessageMeta({ message }: { message: ChatMessage }) {
+  const isOutgoing = message.direction === 'outgoing'
+
+  return (
+    <div
+      className={
+        isOutgoing
+          ? 'mt-2 flex items-center justify-end gap-1 text-[12px] leading-none text-white/75'
+          : 'mt-2 flex items-center justify-start text-[12px] leading-none text-slate-400'
+      }
+    >
+      <span className="font-medium tabular-nums">
+        {formatMessageMetadataTimestamp(message.createdAt)}
+      </span>
+      {isOutgoing ? <CheckIcon className="h-3.5 w-3.5 text-white/75" /> : null}
+    </div>
+  )
 }
 
 function formatAttachmentSize(value: number | null) {
@@ -42,7 +226,7 @@ function formatAttachmentSize(value: number | null) {
 function AttachmentCard({ attachment }: { attachment: ChatAttachment }) {
   return (
     <a
-      className="mt-2 flex items-start gap-3 rounded-[0.9rem] border border-slate-200 bg-slate-50/90 px-3 py-3 text-left transition hover:border-brand-200 hover:bg-white"
+      className="mt-2 flex items-start gap-3 rounded-[0.7rem] border border-slate-200 bg-white/80 px-3 py-3 text-left transition hover:border-brand-200 hover:bg-white"
       href={attachment.url || undefined}
       rel="noreferrer"
       target="_blank"
@@ -63,49 +247,64 @@ function AttachmentCard({ attachment }: { attachment: ChatAttachment }) {
   )
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  blockPosition,
+  hasDateDivider,
+  index,
+  message,
+}: {
+  blockPosition: MessageBlockPosition
+  hasDateDivider: boolean
+  index: number
+  message: ChatMessage
+}) {
   const isOutgoing = message.direction === 'outgoing'
+  const shouldRenderMeta = shouldRenderMessageMeta(blockPosition)
+  const radiusClassName = getBubbleRadiusClass({
+    blockPosition,
+    isOutgoing,
+  })
 
   return (
-    <div className={isOutgoing ? 'flex justify-end' : 'flex justify-start'}>
-      <div className="max-w-[86%] sm:max-w-[78%]">
+    <div
+      className={[
+        isOutgoing ? 'flex justify-end' : 'flex justify-start',
+        getMessageWrapperSpacingClass({
+          blockPosition,
+          hasDateDivider,
+          index,
+        }),
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      data-message-id={message.id}
+    >
+      <div className="max-w-[94%] sm:max-w-[88%]">
+        {shouldRenderAuthorName(blockPosition) ? (
+          <div
+            className={cn(
+              'mb-1 flex px-1 text-[12px] font-medium text-slate-700',
+              isOutgoing ? 'justify-end' : 'justify-start',
+            )}
+          >
+            {message.authorName}
+          </div>
+        ) : null}
         <div
+          data-chat-bubble
           className={
             isOutgoing
-              ? 'mb-1 flex items-center justify-end gap-2 px-1'
-              : 'mb-1 flex items-center gap-2 px-1'
+              ? `${radiusClassName} bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm`
+              : `${radiusClassName} border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm`
           }
         >
-          {isOutgoing ? (
-            <>
-              <span className="text-[12px] text-slate-400">
-                {formatMessageTime(message.createdAt)}
-              </span>
-              <span className="text-[12px] font-medium text-slate-700">Вы</span>
-            </>
-          ) : (
-            <>
-              <span className="text-[12px] font-medium text-slate-700">
-                {message.authorName}
-              </span>
-              <span className="text-[12px] text-slate-400">
-                {formatMessageTime(message.createdAt)}
-              </span>
-            </>
-          )}
-        </div>
-
-        <div
-          className={
-            isOutgoing
-              ? 'rounded-[1.1rem] rounded-tr-[0.4rem] bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm'
-              : 'rounded-[1.1rem] rounded-tl-[0.4rem] border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm'
-          }
-        >
-          {message.content ? <p>{message.content}</p> : null}
+          {message.content ? (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : null}
           {message.attachments.map((attachment) => (
             <AttachmentCard attachment={attachment} key={attachment.id} />
           ))}
+          {shouldRenderMeta ? <MessageMeta message={message} /> : null}
         </div>
       </div>
     </div>
@@ -130,6 +329,29 @@ function shouldRenderDateDivider(messages: ChatMessage[], index: number) {
   )
 }
 
+function DayDivider({
+  className,
+  label,
+}: {
+  className?: string
+  label: string
+}) {
+  return (
+    <div
+      className={cn(
+        'self-center flex w-full max-w-[520px] items-center gap-3 px-1',
+        className,
+      )}
+    >
+      <div className="h-px flex-1 bg-slate-200" />
+      <span className="rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-[12px] font-medium text-brand-700">
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  )
+}
+
 export function ChatTranscript({
   hasMoreOlder,
   historyErrorMessage,
@@ -137,6 +359,57 @@ export function ChatTranscript({
   messages,
   onLoadOlder,
 }: ChatTranscriptProps) {
+  const scrollElementRef = useRef<HTMLElement | null>(null)
+  const previousScrollSnapshotRef = useRef<TranscriptScrollSnapshot | null>(
+    null,
+  )
+
+  useLayoutEffect(() => {
+    const scrollElement = scrollElementRef.current
+
+    if (!scrollElement) {
+      return
+    }
+
+    const action = getTranscriptScrollAction({
+      currentBoundary: createTranscriptMessageBoundary(messages),
+      currentScrollHeight: scrollElement.scrollHeight,
+      previousSnapshot: previousScrollSnapshotRef.current,
+    })
+
+    applyTranscriptScrollAction(scrollElement, action)
+
+    const frameId = requestNextFrame(() => {
+      applyTranscriptScrollAction(scrollElement, action)
+      previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
+        scrollElement,
+        messages,
+      )
+    })
+
+    previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
+      scrollElement,
+      messages,
+    )
+
+    return () => {
+      cancelNextFrame(frameId)
+    }
+  }, [messages])
+
+  function handleTranscriptScroll() {
+    const scrollElement = scrollElementRef.current
+
+    if (!scrollElement) {
+      return
+    }
+
+    previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
+      scrollElement,
+      messages,
+    )
+  }
+
   return (
     <>
       <div className="border-b border-slate-200/70 px-5 py-3 sm:px-6">
@@ -157,8 +430,12 @@ export function ChatTranscript({
         </div>
       </div>
 
-      <section className="chat-scroll flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
-        <div className="mx-auto flex w-full max-w-[620px] flex-col gap-4">
+      <section
+        className="chat-scroll flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6"
+        onScroll={handleTranscriptScroll}
+        ref={scrollElementRef}
+      >
+        <div className="mx-auto flex w-full max-w-[620px] flex-col">
           {hasMoreOlder ? (
             <div className="flex flex-col items-center gap-2 self-center">
               <button
@@ -187,16 +464,30 @@ export function ChatTranscript({
             </div>
           ) : null}
 
-          {messages.map((message, index) => (
-            <div className="contents" key={message.id}>
-              {shouldRenderDateDivider(messages, index) ? (
-                <div className="self-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[12px] font-medium text-slate-500">
-                  {formatMessageDate(message.createdAt)}
-                </div>
-              ) : null}
-              <MessageBubble message={message} />
-            </div>
-          ))}
+          {messages.map((message, index) => {
+            const blockPosition = getMessageBlockPosition(messages, index)
+            const hasDateDivider = shouldRenderDateDivider(messages, index)
+
+            return (
+              <div className="contents" key={message.id}>
+                {hasDateDivider ? (
+                  <DayDivider
+                    className={cn(
+                      'mb-3',
+                      index === 0 && !hasMoreOlder ? '' : 'mt-4',
+                    )}
+                    label={formatMessageDate(message.createdAt)}
+                  />
+                ) : null}
+                <MessageBubble
+                  blockPosition={blockPosition}
+                  hasDateDivider={hasDateDivider}
+                  index={index}
+                  message={message}
+                />
+              </div>
+            )
+          })}
         </div>
       </section>
     </>

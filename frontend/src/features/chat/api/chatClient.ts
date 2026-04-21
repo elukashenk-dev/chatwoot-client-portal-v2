@@ -1,4 +1,4 @@
-import type { ChatMessagesSnapshot } from '../types'
+import type { ChatMessagesSnapshot, ChatSendResult } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const NETWORK_ERROR_MESSAGE =
@@ -46,17 +46,35 @@ async function parseJsonBody(response: Response) {
   }
 }
 
-async function request<TResponse>(path: string): Promise<TResponse> {
+async function request<TResponse>(
+  path: string,
+  {
+    body,
+    method = 'GET',
+    networkErrorMessage = NETWORK_ERROR_MESSAGE,
+  }: {
+    body?: unknown
+    method?: 'GET' | 'POST'
+    networkErrorMessage?: string
+  } = {},
+): Promise<TResponse> {
   let response: Response
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       credentials: 'include',
-      method: 'GET',
+      headers:
+        body === undefined
+          ? undefined
+          : {
+              'Content-Type': 'application/json',
+            },
+      method,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
   } catch {
     throw new ChatApiClientError({
-      message: NETWORK_ERROR_MESSAGE,
+      message: networkErrorMessage,
       statusCode: 0,
     })
   }
@@ -68,7 +86,7 @@ async function request<TResponse>(path: string): Promise<TResponse> {
 
     throw new ChatApiClientError({
       code: errorPayload?.error?.code,
-      message: errorPayload?.error?.message ?? NETWORK_ERROR_MESSAGE,
+      message: errorPayload?.error?.message ?? networkErrorMessage,
       statusCode: response.status,
     })
   }
@@ -98,4 +116,28 @@ export async function getChatMessages({
   return request<ChatMessagesSnapshot>(
     `/chat/messages${query ? `?${query}` : ''}`,
   )
+}
+
+export async function sendChatMessage({
+  clientMessageKey,
+  content,
+  primaryConversationId,
+}: {
+  clientMessageKey: string
+  content: string
+  primaryConversationId?: number | null
+}) {
+  return request<ChatSendResult>('/chat/messages', {
+    body: {
+      clientMessageKey,
+      content,
+      ...(primaryConversationId
+        ? {
+            primaryConversationId,
+          }
+        : {}),
+    },
+    method: 'POST',
+    networkErrorMessage: 'Не удалось отправить сообщение. Попробуйте еще раз.',
+  })
 }

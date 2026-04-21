@@ -28,7 +28,6 @@
 
 ## Remaining UI Slices
 
-- `ChatShell`, transcript rendering, `LoadOlderMessagesButton`, `AttachmentCard`, `MessageComposer`, `SendButton`.
 - `ReplyPreview` и `QuickEmojiBar`.
 - `MessageCalendarPopover`.
 - `VoiceRecordButton` и связанный recording/send flow.

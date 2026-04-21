@@ -218,6 +218,52 @@ describe('buildApp', () => {
     })
   })
 
+  it('returns a controlled send state for an authenticated user without a Chatwoot contact link', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'Name@Company.RU',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        clientMessageKey: 'portal-send:test-key',
+        content: 'Здравствуйте',
+      },
+      url: '/api/chat/messages',
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      linkedContact: null,
+      primaryConversation: null,
+      reason: 'contact_link_missing',
+      result: 'not_ready',
+      sentMessage: null,
+    })
+  })
+
   it('returns unauthorized for a tampered session cookie', async () => {
     const response = await app.inject({
       headers: {

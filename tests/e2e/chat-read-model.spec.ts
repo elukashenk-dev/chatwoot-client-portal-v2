@@ -142,3 +142,95 @@ test('renders the ready chat transcript and loads older history through the back
     '/api/chat/messages?primaryConversationId=77&beforeMessageId=205',
   ])
 })
+
+test('sends text through the backend chat contract and renders the canonical response', async ({
+  page,
+}) => {
+  const chatMessageRequests: Array<{
+    body: Record<string, unknown> | null
+    method: string
+    path: string
+  }> = []
+
+  await page.route('**/api/chat/messages*', async (route) => {
+    const request = route.request()
+    const requestUrl = new URL(request.url())
+    const method = request.method()
+
+    chatMessageRequests.push({
+      body: method === 'POST' ? JSON.parse(request.postData() ?? '{}') : null,
+      method,
+      path: `${requestUrl.pathname}${requestUrl.search}`,
+    })
+
+    if (method === 'POST') {
+      await route.fulfill({
+        body: JSON.stringify({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 6,
+            lastActivityAt: 1_777_000_100,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            content: 'Сообщение из портала',
+            contentType: 'text',
+            createdAt: '2026-04-21T10:10:00.000Z',
+            direction: 'outgoing',
+            id: 501,
+            status: 'sent',
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await page
+    .getByRole('textbox', { name: 'Сообщение' })
+    .fill('Сообщение из портала')
+  await page.getByRole('button', { name: 'Отправить' }).click()
+
+  await expect(page.getByText('Сообщение из портала')).toBeVisible()
+  expect(chatMessageRequests).toHaveLength(2)
+  expect(chatMessageRequests[0]).toMatchObject({
+    method: 'GET',
+    path: '/api/chat/messages',
+  })
+  expect(chatMessageRequests[1]).toMatchObject({
+    body: {
+      clientMessageKey: expect.stringMatching(/^portal-send:/),
+      content: 'Сообщение из портала',
+      primaryConversationId: 77,
+    },
+    method: 'POST',
+    path: '/api/chat/messages',
+  })
+})

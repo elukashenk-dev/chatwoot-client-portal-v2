@@ -32,7 +32,17 @@
 - Закрыт Phase 5 review finding `F-CHAT-002`: older-history failure теперь остается локальной retryable ошибкой у Load Older и не скрывает уже видимый transcript.
 - Устранена хрупкость backend integration tests по фиксированной дате verification/reset records: app-level tests теперь используют relative future timestamps.
 - Validation после review fixes: targeted chat tests, targeted ChatPage test, `pnpm test`, `pnpm lint`, `pnpm build`, `git diff --check`; setup-check `pnpm --dir backend chatwoot:ensure-portal-inbox` подтвердил `lockToSingleConversation: true` для inbox `6`.
+- Checkpoint commit создан: `039b1be Implement single-conversation chat routing`.
+- Реализован `Phase 6. Text Send And First Conversation Bootstrap`: backend-owned `POST /api/chat/messages`, text composer на `/app/chat`, first conversation bootstrap только при отсутствии authoritative portal conversation и send через mapped primary conversation.
+- Добавлен durable send ledger `portal_chat_message_sends` с idempotency по `clientMessageKey`, payload conflict guard, retry/in-progress states, confirmed replay по Chatwoot message id и false-negative recovery через `source_id`.
+- Chatwoot integration расширена созданием portal contact inbox, conversation bootstrap и customer-authored text message create через account API без browser Chatwoot authority.
+- Phase 6 покрыт backend context/client/service/repository/app tests, frontend ChatPage tests и Playwright chat send contract; validation пройдена: targeted tests, `pnpm test`, `pnpm lint`, `pnpm build`, `pnpm test:e2e -- chat-read-model.spec.ts`, targeted format check.
+- Backend runtime env loading теперь подхватывает root `.env` для `pnpm --dir backend db:migrate`, `dev` и CLI scripts; `pnpm --dir backend db:migrate` проверен после правки.
+- По review-правке chat transcript сгруппированы подряд идущие bubbles: timestamp показывается только на последнем сообщении блока, outgoing bubbles смотрят вправо, incoming bubbles зеркалятся влево, radius приведен к `0.7rem`; добавлены component tests.
+- Исправлен bug first-message bootstrap: linked contact без dialog и contact с удаленным mapped conversation больше не блокируют composer; backend умеет восстановить contact link по exact email match и bootstrap-нуть replacement conversation, если в portal inbox не осталось conversations.
+- Внесены chat UI polish fixes по прототипу: day dividers, bubble colors, author labels, composer autoresize/focus styling и transcript scroll behavior для initial bottom, append auto-follow и older-prepend anchor preservation.
+- Исправлено отображение agent multiline сообщений: Chatwoot escaped line breaks нормализуются в обычные переносы до отдачи transcript на frontend.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для Phase 5 review fixes и chat routing decision, затем переходить к `Phase 6. Text Send And First Conversation Bootstrap`.
+- Сделать checkpoint commit для `Phase 6`; после commit переходить к `Phase 7. Attachment Send`.

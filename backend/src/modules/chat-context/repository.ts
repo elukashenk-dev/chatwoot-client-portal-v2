@@ -4,7 +4,13 @@ import type { AppDatabase } from '../../db/client.js'
 import {
   portalUserChatwootConversations,
   portalUserContactLinks,
+  portalUsers,
 } from '../../db/schema.js'
+
+type ContactLinkInput = {
+  chatwootContactId: number
+  userId: number
+}
 
 type ConversationMappingInput = {
   chatwootContactId: number
@@ -15,18 +21,49 @@ type ConversationMappingInput = {
 }
 
 export function createChatContextRepository(db: AppDatabase) {
+  async function findContactLinkByUserId(userId: number) {
+    const [link] = await db
+      .select({
+        chatwootContactId: portalUserContactLinks.chatwootContactId,
+        userId: portalUserContactLinks.userId,
+      })
+      .from(portalUserContactLinks)
+      .where(eq(portalUserContactLinks.userId, userId))
+      .limit(1)
+
+    return link ?? null
+  }
+
   return {
-    async findContactLinkByUserId(userId: number) {
+    async createContactLink({ chatwootContactId, userId }: ContactLinkInput) {
       const [link] = await db
-        .select({
+        .insert(portalUserContactLinks)
+        .values({
+          chatwootContactId,
+          userId,
+        })
+        .onConflictDoNothing()
+        .returning({
           chatwootContactId: portalUserContactLinks.chatwootContactId,
           userId: portalUserContactLinks.userId,
         })
-        .from(portalUserContactLinks)
-        .where(eq(portalUserContactLinks.userId, userId))
+
+      return link ?? findContactLinkByUserId(userId)
+    },
+
+    findContactLinkByUserId,
+
+    async findPortalUserById(userId: number) {
+      const [user] = await db
+        .select({
+          email: portalUsers.email,
+          id: portalUsers.id,
+        })
+        .from(portalUsers)
+        .where(eq(portalUsers.id, userId))
         .limit(1)
 
-      return link ?? null
+      return user ?? null
     },
 
     async findConversationMappingByUserId(userId: number) {

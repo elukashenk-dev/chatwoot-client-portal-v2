@@ -50,3 +50,11 @@ export type ChatMessagesSnapshot = {
   reason: ChatContextReason
   result: ChatContextResult
 }
+
+export type ChatSendResult = {
+  linkedContact: ChatLinkedContact | null
+  primaryConversation: ChatPrimaryConversation | null
+  reason: ChatContextReason
+  result: ChatContextResult
+  sentMessage: ChatMessage | null
+}

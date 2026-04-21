@@ -12,6 +12,7 @@ import { createChatContextRepository } from './modules/chat-context/repository.j
 import { registerChatContextRoutes } from './modules/chat-context/routes.js'
 import { createChatContextService } from './modules/chat-context/service.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
+import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import { createChatMessagesService } from './modules/chat-messages/service.js'
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { createPasswordResetRepository } from './modules/password-reset/repository.js'
@@ -88,6 +89,7 @@ export function buildApp({ database, env }: BuildAppOptions) {
     authService,
     chatMessagesService: createChatMessagesService({
       chatContextService,
+      chatMessagesRepository: createChatMessagesRepository(database.db),
       chatwootClient,
     }),
     env,

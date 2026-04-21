@@ -33,6 +33,11 @@ type ChatwootMessagesResponse = {
   payload: unknown[]
 }
 
+type ChatwootContactInboxResponse = {
+  inboxId: number
+  sourceId: string
+}
+
 export type ChatwootContact = {
   email: string | null
   id: number
@@ -82,6 +87,11 @@ export type ChatwootMessage = {
   } | null
   sourceId: string | null
   status: string
+}
+
+export type ChatwootContactInbox = {
+  inboxId: number
+  sourceId: string
 }
 
 export type ChatwootMessagesPage = {
@@ -379,7 +389,7 @@ function mapMessage(payload: unknown): ChatwootMessage {
   const id = readInteger(payload.id)
   const messageType = readInteger(payload.message_type)
   const createdAt = readInteger(payload.created_at)
-  const contentType = readString(payload.content_type)
+  const contentType = readString(payload.content_type) ?? 'text'
   const status = readString(payload.status)
   const isPrivate =
     typeof payload.private === 'boolean' ? payload.private : null
@@ -411,6 +421,29 @@ function mapMessage(payload: unknown): ChatwootMessage {
     sender: mapSender(payload.sender, messageType === 0 ? 'contact' : null),
     sourceId: readString(payload.source_id),
     status,
+  }
+}
+
+function mapContactInbox(payload: unknown): ChatwootContactInboxResponse {
+  if (!isPlainObject(payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact inbox lookup returned an unexpected response shape.',
+    )
+  }
+
+  const sourceId = readString(payload.source_id)?.trim()
+  const inbox = readObject(payload.inbox)
+  const inboxId = readInteger(inbox?.id)
+
+  if (!sourceId || inboxId === null) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact inbox lookup returned an invalid contact inbox payload.',
+    )
+  }
+
+  return {
+    inboxId,
+    sourceId,
   }
 }
 
@@ -516,7 +549,7 @@ export function createChatwootClient({
       method = 'GET',
     }: {
       body?: unknown
-      method?: 'GET' | 'PATCH'
+      method?: 'GET' | 'PATCH' | 'POST'
     } = {},
   ): Promise<unknown> {
     const resolvedConfig = assertConfigured()
@@ -714,6 +747,69 @@ export function createChatwootClient({
     return sortMessages(parseMessagesResponse(payload).payload.map(mapMessage))
   }
 
+  async function requestConversationMessageCreate({
+    content,
+    conversationId,
+    sourceId,
+  }: {
+    content: string
+    conversationId: number
+    sourceId: string | null
+  }) {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/conversations/${conversationId}/messages`,
+      resolvedConfig.baseUrl,
+    )
+
+    let response: Response
+
+    try {
+      response = await fetchFn(requestUrl, {
+        body: JSON.stringify({
+          content,
+          content_attributes: {},
+          content_type: 'text',
+          message_type: 'incoming',
+          private: false,
+          ...(sourceId ? { source_id: sourceId } : {}),
+        }),
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          api_access_token: resolvedConfig.apiAccessToken,
+        },
+        method: 'POST',
+      })
+    } catch {
+      throw new ChatwootClientRequestError(
+        'Chatwoot message send is unavailable.',
+      )
+    }
+
+    if (response.status === 404) {
+      return null
+    }
+
+    if (!response.ok) {
+      throw new ChatwootClientRequestError(
+        `Chatwoot message send failed with status ${response.status}.`,
+      )
+    }
+
+    try {
+      return mapMessage(await response.json())
+    } catch (error) {
+      if (error instanceof ChatwootClientRequestError) {
+        throw error
+      }
+
+      throw new ChatwootClientRequestError(
+        'Chatwoot message send returned invalid JSON.',
+      )
+    }
+  }
+
   async function isConversationMessageAnchorValid(
     conversationId: number,
     beforeMessageId: number,
@@ -886,6 +982,199 @@ export function createChatwootClient({
 
       return [...conversationsById.values()].filter((conversation) =>
         isPortalConversation(conversation, resolvedConfig.portalInboxId),
+      )
+    },
+
+    async createContactInbox({
+      contactId,
+      sourceId,
+    }: {
+      contactId: number
+      sourceId: string
+    }): Promise<ChatwootContactInbox> {
+      const resolvedConfig = assertConfigured()
+
+      if (!Number.isInteger(contactId) || contactId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact inbox create requires a valid contact id.',
+        )
+      }
+
+      if (!sourceId.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact inbox create requires a source id.',
+        )
+      }
+
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/contacts/${contactId}/contact_inboxes`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot contact inbox create is unavailable.',
+        {
+          body: {
+            inbox_id: resolvedConfig.portalInboxId,
+            source_id: sourceId.trim(),
+          },
+          method: 'POST',
+        },
+      )
+
+      return mapContactInbox(payload)
+    },
+
+    async createConversation({
+      contactId,
+      sourceId,
+    }: {
+      contactId: number
+      sourceId: string
+    }): Promise<ChatwootConversation> {
+      const resolvedConfig = assertConfigured()
+
+      if (!Number.isInteger(contactId) || contactId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot conversation create requires a valid contact id.',
+        )
+      }
+
+      if (!sourceId.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot conversation create requires a source id.',
+        )
+      }
+
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/conversations`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot conversation create is unavailable.',
+        {
+          body: {
+            contact_id: contactId,
+            inbox_id: resolvedConfig.portalInboxId,
+            source_id: sourceId.trim(),
+            status: 'open',
+          },
+          method: 'POST',
+        },
+      )
+
+      if (!isPlainObject(payload)) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot conversation create returned an unexpected response shape.',
+        )
+      }
+
+      const id = readInteger(payload.id)
+      const inboxId = readInteger(payload.inbox_id)
+
+      if (id === null || inboxId === null) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot conversation create returned an invalid conversation payload.',
+        )
+      }
+
+      return {
+        assigneeName: null,
+        channelType: PORTAL_CONVERSATION_CHANNEL_TYPE,
+        createdAt: readInteger(payload.created_at),
+        id,
+        inboxId,
+        lastActivityAt: readInteger(payload.last_activity_at),
+        status: readString(payload.status) ?? 'open',
+      }
+    },
+
+    async findContactPortalInboxSourceId(contactId: number) {
+      const resolvedConfig = assertConfigured()
+
+      if (!Number.isInteger(contactId) || contactId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact lookup requires a valid contact id.',
+        )
+      }
+
+      const contact = await fetchContactDetails(contactId)
+      const sourceIds = collectPortalContactSourceIds(
+        contact,
+        resolvedConfig.portalInboxId,
+      )
+
+      return sourceIds[0] ?? null
+    },
+
+    async createConversationIncomingMessage({
+      content,
+      conversationId,
+      sourceId = null,
+    }: {
+      content: string
+      conversationId: number
+      sourceId?: string | null
+    }) {
+      assertConfigured()
+
+      if (!Number.isInteger(conversationId) || conversationId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot message send requires a valid conversation id.',
+        )
+      }
+
+      if (!content.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot message send requires non-empty content.',
+        )
+      }
+
+      return requestConversationMessageCreate({
+        content: content.trim(),
+        conversationId,
+        sourceId: sourceId?.trim() || null,
+      })
+    },
+
+    async findConversationMessageById(
+      conversationId: number,
+      messageId: number,
+    ) {
+      assertConfigured()
+
+      if (!Number.isInteger(messageId) || messageId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot message lookup requires a valid message id.',
+        )
+      }
+
+      const messages = await fetchConversationMessages({
+        beforeMessageId: messageId + 1,
+        conversationId,
+      })
+
+      return messages?.find((message) => message.id === messageId) ?? null
+    },
+
+    async findConversationMessageBySourceId(
+      conversationId: number,
+      sourceId: string,
+    ) {
+      assertConfigured()
+
+      if (!sourceId.trim()) {
+        return null
+      }
+
+      const messages = await fetchConversationMessages({
+        conversationId,
+      })
+
+      return (
+        messages?.find((message) => message.sourceId === sourceId.trim()) ??
+        null
       )
     },
 

@@ -138,6 +138,61 @@ export const portalUserChatwootConversations = pgTable(
   ],
 )
 
+export const portalChatMessageSends = pgTable(
+  'portal_chat_message_sends',
+  {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => portalUsers.id, {
+        onDelete: 'cascade',
+      }),
+    primaryConversationId: integer('primary_conversation_id').notNull(),
+    clientMessageKey: text('client_message_key').notNull(),
+    messageKind: text('message_kind').notNull(),
+    payloadSha256: text('payload_sha256').notNull(),
+    status: text('status').notNull().default('processing'),
+    processingToken: text('processing_token'),
+    attemptsCount: integer('attempts_count').notNull().default(1),
+    chatwootMessageId: integer('chatwoot_message_id'),
+    confirmedAt: timestamp('confirmed_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+    failedAt: timestamp('failed_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_chat_message_sends_scope_unique').on(
+      table.userId,
+      table.primaryConversationId,
+      table.clientMessageKey,
+    ),
+    index('portal_chat_message_sends_user_id_idx').on(table.userId),
+    index('portal_chat_message_sends_conversation_id_idx').on(
+      table.primaryConversationId,
+    ),
+    index('portal_chat_message_sends_status_updated_at_idx').on(
+      table.status,
+      table.updatedAt,
+    ),
+  ],
+)
+
 export const verificationRecords = pgTable(
   'verification_records',
   {

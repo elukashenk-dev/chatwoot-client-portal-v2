@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import type {
   ChatwootClient,
   ChatwootConversation,
@@ -41,13 +43,20 @@ export type ChatContextSnapshot = {
 type CreateChatContextServiceOptions = {
   chatContextRepository: Pick<
     ChatContextRepository,
+    | 'createContactLink'
     | 'findContactLinkByUserId'
     | 'findConversationMappingByUserId'
+    | 'findPortalUserById'
     | 'upsertConversationMapping'
   >
   chatwootClient: Pick<
     ChatwootClient,
-    'ensurePortalInboxSingleConversationRouting' | 'listContactConversations'
+    | 'createContactInbox'
+    | 'createConversation'
+    | 'ensurePortalInboxSingleConversationRouting'
+    | 'findContactByEmail'
+    | 'findContactPortalInboxSourceId'
+    | 'listContactConversations'
   >
   now?: () => Date
 }
@@ -162,37 +171,196 @@ function isChatwootUnavailableError(error: unknown) {
   )
 }
 
+function hasValidMappingForLinkedContact(
+  mapping: {
+    chatwootContactId: number
+    chatwootConversationId: number
+    chatwootInboxId: number
+  } | null,
+  linkedContact: ChatContextLinkedContact,
+) {
+  return Boolean(mapping && mapping.chatwootContactId === linkedContact.id)
+}
+
+function createUnavailableSnapshotForChatwootError({
+  error,
+  linkedContact = null,
+}: {
+  error: unknown
+  linkedContact?: ChatContextLinkedContact | null
+}) {
+  if (error instanceof ChatwootClientConfigurationError) {
+    return buildSnapshot({
+      linkedContact,
+      primaryConversation: null,
+      reason: 'chatwoot_not_configured',
+      result: 'unavailable',
+    })
+  }
+
+  if (isChatwootUnavailableError(error)) {
+    return buildSnapshot({
+      linkedContact,
+      primaryConversation: null,
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
+    })
+  }
+
+  throw error
+}
+
 export function createChatContextService({
   chatContextRepository,
   chatwootClient,
   now = () => new Date(),
 }: CreateChatContextServiceOptions) {
-  return {
-    async getCurrentUserChatContext({
-      selectedPrimaryConversationId = null,
-      userId,
-    }: GetCurrentUserChatContextInput): Promise<ChatContextSnapshot> {
-      const link = await chatContextRepository.findContactLinkByUserId(userId)
+  async function resolveLinkedContact(userId: number) {
+    const existingLink =
+      await chatContextRepository.findContactLinkByUserId(userId)
 
-      if (!link) {
-        return buildSnapshot({
+    if (existingLink) {
+      return {
+        linkedContact: {
+          id: existingLink.chatwootContactId,
+        },
+        snapshot: null,
+      }
+    }
+
+    const user = await chatContextRepository.findPortalUserById(userId)
+
+    if (!user) {
+      return {
+        linkedContact: null,
+        snapshot: buildSnapshot({
           linkedContact: null,
           primaryConversation: null,
           reason: 'contact_link_missing',
           result: 'not_ready',
+        }),
+      }
+    }
+
+    let contact: { id: number } | null
+
+    try {
+      contact = await chatwootClient.findContactByEmail(user.email)
+    } catch (error) {
+      if (error instanceof ChatwootClientConfigurationError) {
+        return {
+          linkedContact: null,
+          snapshot: buildSnapshot({
+            linkedContact: null,
+            primaryConversation: null,
+            reason: 'contact_link_missing',
+            result: 'not_ready',
+          }),
+        }
+      }
+
+      return {
+        linkedContact: null,
+        snapshot: createUnavailableSnapshotForChatwootError({
+          error,
+        }),
+      }
+    }
+
+    if (!contact) {
+      return {
+        linkedContact: null,
+        snapshot: buildSnapshot({
+          linkedContact: null,
+          primaryConversation: null,
+          reason: 'contact_link_missing',
+          result: 'not_ready',
+        }),
+      }
+    }
+
+    const linkedContact = {
+      id: contact.id,
+    }
+
+    try {
+      const persistedLink = await chatContextRepository.createContactLink({
+        chatwootContactId: contact.id,
+        userId,
+      })
+
+      if (!persistedLink || persistedLink.chatwootContactId !== contact.id) {
+        return {
+          linkedContact: null,
+          snapshot: buildSnapshot({
+            linkedContact: null,
+            primaryConversation: null,
+            reason: 'contact_link_missing',
+            result: 'not_ready',
+          }),
+        }
+      }
+    } catch {
+      return {
+        linkedContact: null,
+        snapshot: buildSnapshot({
+          linkedContact: null,
+          primaryConversation: null,
+          reason: 'conversation_mapping_unavailable',
+          result: 'unavailable',
+        }),
+      }
+    }
+
+    return {
+      linkedContact,
+      snapshot: null,
+    }
+  }
+
+  async function getCurrentUserChatContext({
+    selectedPrimaryConversationId = null,
+    userId,
+  }: GetCurrentUserChatContextInput): Promise<ChatContextSnapshot> {
+    const linkedContactResult = await resolveLinkedContact(userId)
+
+    if (linkedContactResult.snapshot) {
+      return linkedContactResult.snapshot
+    }
+
+    const linkedContact = linkedContactResult.linkedContact
+
+    let conversations: ChatwootConversation[]
+
+    try {
+      conversations = await chatwootClient.listContactConversations(
+        linkedContact.id,
+      )
+    } catch (error) {
+      if (error instanceof ChatwootClientConfigurationError) {
+        return buildSnapshot({
+          linkedContact,
+          primaryConversation: null,
+          reason: 'chatwoot_not_configured',
+          result: 'unavailable',
         })
       }
 
-      const linkedContact = {
-        id: link.chatwootContactId,
+      if (isChatwootUnavailableError(error)) {
+        return buildSnapshot({
+          linkedContact,
+          primaryConversation: null,
+          reason: 'chatwoot_unavailable',
+          result: 'unavailable',
+        })
       }
 
-      let conversations: ChatwootConversation[]
+      throw error
+    }
 
+    if (conversations.length > 1) {
       try {
-        conversations = await chatwootClient.listContactConversations(
-          linkedContact.id,
-        )
+        await chatwootClient.ensurePortalInboxSingleConversationRouting()
       } catch (error) {
         if (error instanceof ChatwootClientConfigurationError) {
           return buildSnapshot({
@@ -214,42 +382,70 @@ export function createChatContextService({
 
         throw error
       }
+    }
 
-      if (conversations.length > 1) {
-        try {
-          await chatwootClient.ensurePortalInboxSingleConversationRouting()
-        } catch (error) {
-          if (error instanceof ChatwootClientConfigurationError) {
-            return buildSnapshot({
-              linkedContact,
-              primaryConversation: null,
-              reason: 'chatwoot_not_configured',
-              result: 'unavailable',
-            })
-          }
+    let mapping: {
+      chatwootContactId: number
+      chatwootConversationId: number
+      chatwootInboxId: number
+    } | null
 
-          if (isChatwootUnavailableError(error)) {
-            return buildSnapshot({
-              linkedContact,
-              primaryConversation: null,
-              reason: 'chatwoot_unavailable',
-              result: 'unavailable',
-            })
-          }
+    try {
+      mapping =
+        await chatContextRepository.findConversationMappingByUserId(userId)
+    } catch {
+      return buildSnapshot({
+        linkedContact,
+        primaryConversation: null,
+        reason: 'conversation_mapping_unavailable',
+        result: 'unavailable',
+      })
+    }
 
-          throw error
-        }
-      }
+    const primaryConversation =
+      findMappedConversation(conversations, mapping, linkedContact) ??
+      selectAuthoritativePrimaryConversation(conversations)
 
-      let mapping: {
-        chatwootContactId: number
-        chatwootConversationId: number
-        chatwootInboxId: number
-      } | null
+    if (!primaryConversation) {
+      return buildSnapshot({
+        linkedContact,
+        primaryConversation: null,
+        reason:
+          selectedPrimaryConversationId !== null &&
+          hasValidMappingForLinkedContact(mapping, linkedContact)
+            ? 'primary_conversation_missing'
+            : 'conversation_missing',
+        result: 'not_ready',
+      })
+    }
 
+    if (
+      selectedPrimaryConversationId !== null &&
+      selectedPrimaryConversationId !== primaryConversation.id
+    ) {
+      return buildSnapshot({
+        linkedContact,
+        primaryConversation: null,
+        reason: 'primary_conversation_missing',
+        result: 'not_ready',
+      })
+    }
+
+    if (
+      shouldPersistConversationMapping({
+        linkedContact,
+        mapping,
+        primaryConversation,
+      })
+    ) {
       try {
-        mapping =
-          await chatContextRepository.findConversationMappingByUserId(userId)
+        await chatContextRepository.upsertConversationMapping({
+          chatwootContactId: linkedContact.id,
+          chatwootConversationId: primaryConversation.id,
+          chatwootInboxId: primaryConversation.inboxId,
+          now: now(),
+          userId,
+        })
       } catch {
         return buildSnapshot({
           linkedContact,
@@ -258,63 +454,181 @@ export function createChatContextService({
           result: 'unavailable',
         })
       }
+    }
 
-      const primaryConversation =
-        findMappedConversation(conversations, mapping, linkedContact) ??
-        selectAuthoritativePrimaryConversation(conversations)
+    return buildSnapshot({
+      linkedContact,
+      primaryConversation: mapPrimaryConversation(primaryConversation),
+      reason: 'none',
+      result: 'ready',
+    })
+  }
 
-      if (!primaryConversation) {
-        return buildSnapshot({
-          linkedContact,
-          primaryConversation: null,
-          reason: 'conversation_missing',
-          result: 'not_ready',
+  async function persistConversationMapping({
+    linkedContact,
+    primaryConversation,
+    userId,
+  }: {
+    linkedContact: ChatContextLinkedContact
+    primaryConversation: ChatwootConversation
+    userId: number
+  }) {
+    try {
+      await chatContextRepository.upsertConversationMapping({
+        chatwootContactId: linkedContact.id,
+        chatwootConversationId: primaryConversation.id,
+        chatwootInboxId: primaryConversation.inboxId,
+        now: now(),
+        userId,
+      })
+    } catch {
+      return buildSnapshot({
+        linkedContact,
+        primaryConversation: null,
+        reason: 'conversation_mapping_unavailable',
+        result: 'unavailable',
+      })
+    }
+
+    return null
+  }
+
+  async function ensurePortalContactInboxSourceId(
+    linkedContact: ChatContextLinkedContact,
+  ) {
+    const currentSourceId = await chatwootClient.findContactPortalInboxSourceId(
+      linkedContact.id,
+    )
+
+    if (currentSourceId) {
+      return currentSourceId
+    }
+
+    try {
+      const createdContactInbox = await chatwootClient.createContactInbox({
+        contactId: linkedContact.id,
+        sourceId: `portal-contact:${randomUUID()}`,
+      })
+
+      return createdContactInbox.sourceId
+    } catch (error) {
+      if (error instanceof ChatwootClientRequestError) {
+        return chatwootClient.findContactPortalInboxSourceId(linkedContact.id)
+      }
+
+      throw error
+    }
+  }
+
+  async function bootstrapPrimaryConversation({
+    linkedContact,
+    userId,
+  }: {
+    linkedContact: ChatContextLinkedContact
+    userId: number
+  }) {
+    let sourceId: string | null
+
+    try {
+      sourceId = await ensurePortalContactInboxSourceId(linkedContact)
+    } catch (error) {
+      return createUnavailableSnapshotForChatwootError({
+        error,
+        linkedContact,
+      })
+    }
+
+    if (!sourceId) {
+      return buildSnapshot({
+        linkedContact,
+        primaryConversation: null,
+        reason: 'conversation_missing',
+        result: 'not_ready',
+      })
+    }
+
+    let primaryConversation: ChatwootConversation
+
+    try {
+      primaryConversation = await chatwootClient.createConversation({
+        contactId: linkedContact.id,
+        sourceId,
+      })
+    } catch (error) {
+      return createUnavailableSnapshotForChatwootError({
+        error,
+        linkedContact,
+      })
+    }
+
+    const mappingErrorSnapshot = await persistConversationMapping({
+      linkedContact,
+      primaryConversation,
+      userId,
+    })
+
+    if (mappingErrorSnapshot) {
+      return mappingErrorSnapshot
+    }
+
+    return buildSnapshot({
+      linkedContact,
+      primaryConversation: mapPrimaryConversation(primaryConversation),
+      reason: 'none',
+      result: 'ready',
+    })
+  }
+
+  return {
+    getCurrentUserChatContext,
+
+    async ensureCurrentUserWritableChatContext({
+      selectedPrimaryConversationId = null,
+      userId,
+    }: GetCurrentUserChatContextInput): Promise<ChatContextSnapshot> {
+      const currentContext = await getCurrentUserChatContext({
+        selectedPrimaryConversationId,
+        userId,
+      })
+
+      if (currentContext.result === 'ready') {
+        return currentContext
+      }
+
+      if (
+        currentContext.result === 'not_ready' &&
+        currentContext.reason === 'conversation_missing' &&
+        currentContext.linkedContact
+      ) {
+        return bootstrapPrimaryConversation({
+          linkedContact: currentContext.linkedContact,
+          userId,
         })
       }
 
       if (
-        selectedPrimaryConversationId !== null &&
-        selectedPrimaryConversationId !== primaryConversation.id
+        currentContext.result === 'not_ready' &&
+        currentContext.reason === 'primary_conversation_missing' &&
+        selectedPrimaryConversationId !== null
       ) {
-        return buildSnapshot({
-          linkedContact,
-          primaryConversation: null,
-          reason: 'primary_conversation_missing',
-          result: 'not_ready',
+        const fallbackContext = await getCurrentUserChatContext({
+          selectedPrimaryConversationId: null,
+          userId,
         })
-      }
 
-      if (
-        shouldPersistConversationMapping({
-          linkedContact,
-          mapping,
-          primaryConversation,
-        })
-      ) {
-        try {
-          await chatContextRepository.upsertConversationMapping({
-            chatwootContactId: linkedContact.id,
-            chatwootConversationId: primaryConversation.id,
-            chatwootInboxId: primaryConversation.inboxId,
-            now: now(),
+        if (
+          fallbackContext.result === 'not_ready' &&
+          fallbackContext.reason === 'conversation_missing' &&
+          fallbackContext.linkedContact
+        ) {
+          return bootstrapPrimaryConversation({
+            linkedContact: fallbackContext.linkedContact,
             userId,
-          })
-        } catch {
-          return buildSnapshot({
-            linkedContact,
-            primaryConversation: null,
-            reason: 'conversation_mapping_unavailable',
-            result: 'unavailable',
           })
         }
       }
 
-      return buildSnapshot({
-        linkedContact,
-        primaryConversation: mapPrimaryConversation(primaryConversation),
-        reason: 'none',
-        result: 'ready',
-      })
+      return currentContext
     },
   }
 }

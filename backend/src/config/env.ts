@@ -1,4 +1,30 @@
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { loadEnvFile } from 'node:process'
+
 import { z } from 'zod'
+
+let didLoadLocalEnvFile = false
+
+function loadLocalEnvFileIfPresent() {
+  if (didLoadLocalEnvFile) {
+    return
+  }
+
+  didLoadLocalEnvFile = true
+
+  const candidatePaths = [
+    resolve(process.cwd(), '.env'),
+    resolve(process.cwd(), '..', '.env'),
+  ]
+
+  for (const envFilePath of candidatePaths) {
+    if (existsSync(envFilePath)) {
+      loadEnvFile(envFilePath)
+      return
+    }
+  }
+}
 
 const optionalNonEmptyString = z.preprocess((value) => {
   if (typeof value !== 'string') {
@@ -159,5 +185,9 @@ const envSchema = z
 export type AppEnv = z.infer<typeof envSchema>
 
 export function loadEnv(rawEnv: NodeJS.ProcessEnv = process.env): AppEnv {
+  if (rawEnv === process.env) {
+    loadLocalEnvFileIfPresent()
+  }
+
   return envSchema.parse(rawEnv)
 }
