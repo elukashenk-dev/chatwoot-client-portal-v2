@@ -27,6 +27,31 @@
 - Одна ветка должна закрывать один понятный scope. Не смешивать новую feature, unrelated cleanup, generated churn и docs-only правки без причины.
 - Коммитить только после closure flow и только изменения, относящиеся к текущему scope.
 
+## Commit Advisory Rule
+
+- Агент должен сам подсказывать пользователю хорошие моменты для git-фиксации, не ожидая отдельного вопроса.
+- Перед началом нового scope агент должен сказать, на какой ветке мы сейчас и нужна ли отдельная ветка.
+- Лучший момент для обычного feature/fix commit:
+  - scope завершен;
+  - code review текущей области выполнен;
+  - найденные findings в рамках scope исправлены или явно deferred пользователем;
+  - targeted checks пройдены;
+  - обязательные auto-tests пройдены или blocker записан;
+  - `docs/WORK_LOG.md` обновлен, если шаг действительно завершен.
+- Лучший момент для docs-only commit:
+  - изменены только docs/rules;
+  - форматирование проверено;
+  - `git diff --check` не показывает whitespace issues;
+  - изменение не смешано с feature-code.
+- Агент должен явно предупреждать, если commit пока рано делать:
+  - есть failing tests без зафиксированного blocker;
+  - есть незакрытые review findings внутри текущего scope;
+  - есть unrelated или unclear changes в `git status`;
+  - изменение находится не на той ветке;
+  - в staged files попали secrets, `.env`, generated artifacts или runtime output.
+- Агент должен предлагать checkpoint commit после завершения каждой фазы, slice, finding fix или docs-only governance update.
+- WIP commit допустим только по явной просьбе пользователя и должен называться как WIP; по умолчанию WIP не коммитить.
+
 ## How To Enter A Task
 
 Читать в таком порядке:

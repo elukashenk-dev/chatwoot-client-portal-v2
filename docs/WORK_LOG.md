@@ -19,6 +19,7 @@
 - Добавлены Mailpit-backed Playwright e2e happy paths для registration и password reset: registration создает eligible Chatwoot contact, читает verification code из Mailpit, проверяет `portal_user -> Chatwoot contact` link и логин; reset проверяет Mailpit code, old-password rejection и new-password login.
 - Для Mailpit e2e шага пройдены targeted/full browser checks, unit/integration tests, lint, build и format check.
 - Инициализирован отдельный git repository для `chatwoot-client-portal-v2`; в `AGENTS.md` добавлены правила git boundary, feature branches и intake/closure для нового функционала.
+- Добавлено правило `Commit Advisory Rule`: агент должен сам подсказывать удачные моменты для git commit, предупреждать когда commit рано делать и предлагать checkpoint после завершенных фаз, slices, findings и docs-only governance updates.
 
 ## Recommended Next Step
 
