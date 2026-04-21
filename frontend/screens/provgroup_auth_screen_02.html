@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>ProvGroup Клиентский портал — Подтверждение кода</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#f3f7fc',
+                100: '#e7eef8',
+                200: '#c4d5ed',
+                300: '#9cb9df',
+                400: '#6d96cb',
+                500: '#4676b4',
+                600: '#315d97',
+                700: '#234776',
+                800: '#173258',
+                900: '#112540'
+              }
+            },
+            boxShadow: {
+              card: '0 18px 50px rgba(15, 23, 42, 0.14)'
+            },
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .error-enter {
+        animation: fadeInUp 180ms ease-out;
+      }
+      .portal-shell::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(243, 247, 252, 0.95) 0%, rgba(255, 255, 255, 0) 18%);
+        pointer-events: none;
+      }
+      .portal-shell::after {
+        content: '';
+        position: absolute;
+        right: 44px;
+        top: 118px;
+        width: 96px;
+        height: 96px;
+        border-radius: 9999px;
+        background: rgba(196, 213, 237, 0.24);
+        filter: blur(34px);
+        pointer-events: none;
+      }
+      .corner-accent {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        pointer-events: none;
+      }
+      .corner-accent::before,
+      .corner-accent::after {
+        content: '';
+        position: absolute;
+        display: block;
+      }
+      .corner-accent--tl {
+        left: 28px;
+        top: 28px;
+      }
+      .corner-accent--tl::before {
+        left: 0;
+        top: 0;
+        width: 50px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tl::after {
+        left: 0;
+        top: 0;
+        width: 1px;
+        height: 50px;
+        background: linear-gradient(180deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tr {
+        right: 28px;
+        top: 28px;
+      }
+      .corner-accent--tr::before {
+        right: 0;
+        top: 0;
+        width: 50px;
+        height: 1px;
+        background: linear-gradient(270deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tr::after {
+        right: 0;
+        top: 0;
+        width: 1px;
+        height: 50px;
+        background: linear-gradient(180deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .dot-grid {
+        position: absolute;
+        right: 64px;
+        top: 160px;
+        width: 88px;
+        height: 88px;
+        opacity: 0.3;
+        background-image: radial-gradient(circle, rgba(35, 71, 118, 0.12) 1px, transparent 1px);
+        background-size: 12px 12px;
+        pointer-events: none;
+      }
+      .otp-input::-webkit-outer-spin-button,
+      .otp-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .otp-input[type='text'] {
+        -moz-appearance: textfield;
+      }
+      .otp-input.is-filled {
+        background: rgba(243, 247, 252, 0.95);
+        color: #112540;
+        box-shadow: inset 0 0 0 1px rgba(35, 71, 118, 0.08);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-200 text-slate-900 antialiased">
+    <div class="mx-auto flex min-h-screen w-full items-center justify-center sm:p-6">
+      <div class="portal-shell relative flex min-h-screen w-full flex-col overflow-hidden bg-white sm:min-h-[920px] sm:max-w-[750px] sm:rounded-[28px] sm:shadow-card lg:h-[calc(100vh-48px)] lg:max-h-[1060px]">
+        <div class="corner-accent corner-accent--tl"></div>
+        <div class="corner-accent corner-accent--tr"></div>
+        <div class="dot-grid hidden sm:block"></div>
+
+        <main class="relative z-10 flex flex-1 items-center justify-center px-6 pb-24 pt-6 sm:px-10 sm:pb-28 sm:pt-8">
+          <section class="mx-auto w-full max-w-md">
+            <div class="mb-7 text-center sm:mb-8">
+              <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] bg-brand-900 text-lg font-semibold tracking-wide text-white shadow-sm">
+                PG
+              </div>
+              <p class="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand-700/85">ProvGroup</p>
+              <div class="mx-auto mt-2.5 h-px w-14 bg-gradient-to-r from-transparent via-brand-200 to-transparent"></div>
+              <h1 class="mt-3 text-[32px] font-semibold leading-none tracking-tight text-slate-900 sm:text-[38px]">Подтверждение кода</h1>
+              <p class="mx-auto mt-2.5 max-w-sm text-[15px] leading-7 text-slate-500 sm:text-[16px]">
+                Мы отправили 6-значный код на <span class="font-medium text-slate-700">name@company.ru</span>.
+              </p>
+            </div>
+
+            <form id="codeForm" class="space-y-6" novalidate>
+              <div>
+                <label for="code-1" class="mb-2.5 block text-sm font-medium text-slate-700">Код из письма</label>
+                <div class="grid grid-cols-6 gap-2.5 sm:gap-3">
+                  <input id="code-1" inputmode="numeric" autocomplete="one-time-code" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                  <input id="code-2" inputmode="numeric" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                  <input id="code-3" inputmode="numeric" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                  <input id="code-4" inputmode="numeric" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                  <input id="code-5" inputmode="numeric" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                  <input id="code-6" inputmode="numeric" maxlength="1" class="otp-input block h-16 w-full rounded-[1rem] border border-slate-300 bg-white text-center text-[22px] font-semibold text-slate-900 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100" type="text" />
+                </div>
+                <p id="codeError" class="mt-2 hidden text-sm font-medium text-rose-700"></p>
+              </div>
+
+              <div class="rounded-[0.9rem] border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
+                Если письмо не пришло, проверьте папку «Спам» или запросите новый код.
+              </div>
+
+              <div id="globalError" class="error-enter hidden rounded-[1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                Мы не смогли выполнить запрос. Если вы считаете, что у вас должен быть доступ, обратитесь в вашу компанию.
+              </div>
+
+              <button
+                id="submitButton"
+                type="submit"
+                class="inline-flex min-h-14 w-full items-center justify-center rounded-[0.6em] bg-brand-800 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled
+              >
+                <span id="submitLabel">Продолжить</span>
+                <svg id="submitSpinner" class="ml-2 hidden h-4 w-4 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+              </button>
+            </form>
+
+            <div class="mt-5 flex items-center justify-between gap-4 text-sm sm:text-[15px]">
+              <button id="changeEmailButton" type="button" class="inline-flex min-h-11 items-center rounded-[0.6em] text-slate-700 transition hover:text-slate-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                Изменить email
+              </button>
+              <button id="resendButton" type="button" class="inline-flex min-h-11 items-center rounded-[0.6em] text-brand-800 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-400">
+                Отправить код повторно
+              </button>
+            </div>
+
+            <div class="mt-3 text-sm text-slate-500">
+              Повторная отправка будет доступна через <span id="resendTimer" class="font-semibold text-slate-800">00:30</span>
+            </div>
+          </section>
+        </main>
+
+        <nav class="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 pt-4 sm:px-6" aria-label="Быстрые действия">
+          <div class="mx-auto max-w-md">
+            <div class="rounded-[1rem] border border-slate-200/90 bg-slate-50/88 px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+              <div class="flex items-center justify-between gap-3">
+                <a href="https://provgroup.ru" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-500 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M4 12h16"></path><path d="M12 4a12.3 12.3 0 0 1 3 8 12.3 12.3 0 0 1-3 8 12.3 12.3 0 0 1-3-8 12.3 12.3 0 0 1 3-8Z"></path></svg>
+                  <span>Сайт</span>
+                </a>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v6A2.5 2.5 0 0 1 17.5 16h-6l-4.5 3V16h-.5A2.5 2.5 0 0 1 4 13.5v-6Z"></path></svg>
+                  <span>Поддержка</span>
+                </button>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <a href="tel:+78000000000" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 11.8 19.8 19.8 0 0 1 1.08 3.09 2 2 0 0 1 3.05.9h3a2 2 0 0 1 2 1.72l.5 3.3a2 2 0 0 1-.57 1.72l-1.36 1.36a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 1.72-.57l3.3.5A2 2 0 0 1 22 16.92Z"></path></svg>
+                  <span>Позвонить</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </div>
+
+    <script>
+      const codeInputs = Array.from(document.querySelectorAll('.otp-input'));
+      const codeError = document.getElementById('codeError');
+      const globalError = document.getElementById('globalError');
+      const submitButton = document.getElementById('submitButton');
+      const submitLabel = document.getElementById('submitLabel');
+      const submitSpinner = document.getElementById('submitSpinner');
+      const resendButton = document.getElementById('resendButton');
+      const resendTimer = document.getElementById('resendTimer');
+      const changeEmailButton = document.getElementById('changeEmailButton');
+      const form = document.getElementById('codeForm');
+      let remainingSeconds = 30;
+      let timerId = null;
+
+      function formatTime(seconds) {
+        const min = String(Math.floor(seconds / 60)).padStart(2, '0');
+        const sec = String(seconds % 60).padStart(2, '0');
+        return `${min}:${sec}`;
+      }
+
+      function getCode() {
+        return codeInputs.map((input) => input.value).join('');
+      }
+
+      function clearGlobalError() {
+        globalError.classList.add('hidden');
+      }
+
+      function setCodeError(message) {
+        if (!message) {
+          codeError.textContent = '';
+          codeError.classList.add('hidden');
+          codeInputs.forEach((input) => {
+            input.classList.remove('border-rose-400', 'focus:border-rose-500', 'focus:ring-rose-100');
+            input.classList.add('border-slate-300', 'focus:border-brand-700', 'focus:ring-brand-100');
+          });
+          return;
+        }
+
+        codeError.textContent = message;
+        codeError.classList.remove('hidden');
+        codeInputs.forEach((input) => {
+          input.classList.remove('border-slate-300', 'focus:border-brand-700', 'focus:ring-brand-100');
+          input.classList.add('border-rose-400', 'focus:border-rose-500', 'focus:ring-rose-100');
+        });
+      }
+
+      function updateButtonState() {
+        submitButton.disabled = getCode().length !== 6;
+      }
+
+      function syncOtpState() {
+        codeInputs.forEach((input) => {
+          input.classList.toggle('is-filled', input.value.trim() !== '');
+        });
+      }
+
+      function startTimer() {
+        resendButton.disabled = true;
+        resendTimer.textContent = formatTime(remainingSeconds);
+        timerId = window.setInterval(() => {
+          remainingSeconds -= 1;
+          resendTimer.textContent = formatTime(remainingSeconds);
+          if (remainingSeconds <= 0) {
+            window.clearInterval(timerId);
+            resendButton.disabled = false;
+            resendTimer.textContent = '00:00';
+          }
+        }, 1000);
+      }
+
+      codeInputs.forEach((input, index) => {
+        input.addEventListener('input', (event) => {
+          const value = event.target.value.replace(/\D/g, '').slice(0, 1);
+          event.target.value = value;
+          setCodeError('');
+          clearGlobalError();
+
+          if (value && index < codeInputs.length - 1) {
+            codeInputs[index + 1].focus();
+          }
+          syncOtpState();
+          updateButtonState();
+        });
+
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Backspace' && !input.value && index > 0) {
+            codeInputs[index - 1].focus();
+          }
+          if (event.key === 'ArrowLeft' && index > 0) {
+            codeInputs[index - 1].focus();
+          }
+          if (event.key === 'ArrowRight' && index < codeInputs.length - 1) {
+            codeInputs[index + 1].focus();
+          }
+        });
+
+        input.addEventListener('paste', (event) => {
+          event.preventDefault();
+          const pasted = (event.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6).split('');
+          if (!pasted.length) return;
+          codeInputs.forEach((field, fieldIndex) => {
+            field.value = pasted[fieldIndex] || '';
+          });
+          setCodeError('');
+          clearGlobalError();
+          syncOtpState();
+          updateButtonState();
+          const nextIndex = Math.min(pasted.length, codeInputs.length - 1);
+          codeInputs[nextIndex].focus();
+        });
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearGlobalError();
+        const code = getCode();
+
+        if (code.length !== 6) {
+          setCodeError('Введите 6-значный код');
+          updateButtonState();
+          return;
+        }
+
+        setCodeError('');
+        submitButton.disabled = true;
+        submitLabel.textContent = 'Проверка...';
+        submitSpinner.classList.remove('hidden');
+
+        await new Promise((resolve) => setTimeout(resolve, 950));
+
+        submitLabel.textContent = 'Продолжить';
+        submitSpinner.classList.add('hidden');
+        submitButton.disabled = false;
+        globalError.classList.remove('hidden');
+      });
+
+      resendButton.addEventListener('click', () => {
+        if (resendButton.disabled) return;
+        remainingSeconds = 30;
+        if (timerId) window.clearInterval(timerId);
+        startTimer();
+        clearGlobalError();
+        setCodeError('');
+        alert('Новый код отправлен на почту.');
+      });
+
+      changeEmailButton.addEventListener('click', () => {
+        alert('Переход назад к шагу ввода email для восстановления пароля.');
+      });
+
+      startTimer();
+      syncOtpState();
+      codeInputs[0].focus();
+    </script>
+  </body>
+</html>

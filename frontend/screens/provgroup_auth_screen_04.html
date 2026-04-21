@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>ProvGroup Клиентский портал — Создание пароля</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#f3f7fc',
+                100: '#e7eef8',
+                200: '#c4d5ed',
+                300: '#9cb9df',
+                400: '#6d96cb',
+                500: '#4676b4',
+                600: '#315d97',
+                700: '#234776',
+                800: '#173258',
+                900: '#112540'
+              }
+            },
+            boxShadow: {
+              card: '0 18px 50px rgba(15, 23, 42, 0.14)'
+            },
+            fontFamily: {
+              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .error-enter {
+        animation: fadeInUp 180ms ease-out;
+      }
+      .portal-shell::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(243, 247, 252, 0.95) 0%, rgba(255, 255, 255, 0) 18%);
+        pointer-events: none;
+      }
+      .portal-shell::after {
+        content: '';
+        position: absolute;
+        right: 44px;
+        top: 118px;
+        width: 96px;
+        height: 96px;
+        border-radius: 9999px;
+        background: rgba(196, 213, 237, 0.24);
+        filter: blur(34px);
+        pointer-events: none;
+      }
+      .corner-accent {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        pointer-events: none;
+      }
+      .corner-accent::before,
+      .corner-accent::after {
+        content: '';
+        position: absolute;
+        display: block;
+      }
+      .corner-accent--tl {
+        left: 28px;
+        top: 28px;
+      }
+      .corner-accent--tl::before {
+        left: 0;
+        top: 0;
+        width: 50px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tl::after {
+        left: 0;
+        top: 0;
+        width: 1px;
+        height: 50px;
+        background: linear-gradient(180deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tr {
+        right: 28px;
+        top: 28px;
+      }
+      .corner-accent--tr::before {
+        right: 0;
+        top: 0;
+        width: 50px;
+        height: 1px;
+        background: linear-gradient(270deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .corner-accent--tr::after {
+        right: 0;
+        top: 0;
+        width: 1px;
+        height: 50px;
+        background: linear-gradient(180deg, rgba(196, 213, 237, 0.95) 0%, rgba(196, 213, 237, 0.72) 38%, rgba(196, 213, 237, 0) 100%);
+      }
+      .dot-grid {
+        position: absolute;
+        right: 64px;
+        top: 160px;
+        width: 88px;
+        height: 88px;
+        opacity: 0.3;
+        background-image: radial-gradient(circle, rgba(35, 71, 118, 0.12) 1px, transparent 1px);
+        background-size: 12px 12px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-200 text-slate-900 antialiased">
+    <div class="mx-auto flex min-h-screen w-full items-center justify-center sm:p-6">
+      <div class="portal-shell relative flex min-h-screen w-full flex-col overflow-hidden bg-white sm:min-h-[920px] sm:max-w-[750px] sm:rounded-[28px] sm:shadow-card lg:h-[calc(100vh-48px)] lg:max-h-[1060px]">
+        <div class="corner-accent corner-accent--tl"></div>
+        <div class="corner-accent corner-accent--tr"></div>
+        <div class="dot-grid hidden sm:block"></div>
+
+        <main class="relative z-10 flex flex-1 items-center justify-center px-6 pb-24 pt-6 sm:px-10 sm:pb-28 sm:pt-8">
+          <section class="mx-auto w-full max-w-md">
+            <div class="mb-7 text-center sm:mb-8">
+              <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] bg-brand-900 text-lg font-semibold tracking-wide text-white shadow-sm">
+                PG
+              </div>
+              <p class="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand-700/85">ProvGroup</p>
+              <div class="mx-auto mt-2.5 h-px w-14 bg-gradient-to-r from-transparent via-brand-200 to-transparent"></div>
+              <h1 class="mt-3 text-[32px] font-semibold leading-none tracking-tight text-slate-900 sm:text-[38px]">Создание пароля</h1>
+              <p class="mx-auto mt-2.5 max-w-sm text-[15px] leading-7 text-slate-500 sm:text-[16px]">
+                Придумайте пароль для безопасного входа в клиентский портал.
+              </p>
+            </div>
+
+            <form id="passwordForm" class="space-y-6" novalidate>
+              <div>
+                <label for="newPassword" class="mb-2.5 block text-sm font-medium text-slate-700">Новый пароль</label>
+                <div class="relative">
+                  <input
+                    id="newPassword"
+                    name="newPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="Введите новый пароль"
+                    class="block h-16 w-full rounded-[1rem] border border-slate-300 bg-white px-5 pr-16 text-[17px] text-slate-900 placeholder:text-slate-400 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                  />
+                  <button
+                    id="toggleNewPassword"
+                    type="button"
+                    class="absolute inset-y-0 right-3 my-auto inline-flex h-10 w-10 items-center justify-center rounded-[0.6em] text-slate-400 transition hover:bg-slate-100 hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                    aria-controls="newPassword"
+                    aria-pressed="false"
+                    aria-label="Показать пароль"
+                  >
+                    <svg id="newEyeOpen" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg id="newEyeClosed" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.58 10.58a2 2 0 1 0 2.83 2.83"></path><path d="M9.36 5.37A11.8 11.8 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-4.2 5.13"></path><path d="M6.23 6.23A17.1 17.1 0 0 0 2 12s3.5 7 10 7a11.6 11.6 0 0 0 5.05-1.17"></path></svg>
+                  </button>
+                </div>
+                <p id="newPasswordError" class="mt-2 hidden text-sm font-medium text-rose-700"></p>
+              </div>
+
+              <div>
+                <label for="confirmPassword" class="mb-2.5 block text-sm font-medium text-slate-700">Подтвердите пароль</label>
+                <div class="relative">
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="Повторите пароль"
+                    class="block h-16 w-full rounded-[1rem] border border-slate-300 bg-white px-5 pr-16 text-[17px] text-slate-900 placeholder:text-slate-400 focus:border-brand-700 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                  />
+                  <button
+                    id="toggleConfirmPassword"
+                    type="button"
+                    class="absolute inset-y-0 right-3 my-auto inline-flex h-10 w-10 items-center justify-center rounded-[0.6em] text-slate-400 transition hover:bg-slate-100 hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                    aria-controls="confirmPassword"
+                    aria-pressed="false"
+                    aria-label="Показать пароль"
+                  >
+                    <svg id="confirmEyeOpen" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg id="confirmEyeClosed" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18"></path><path d="M10.58 10.58a2 2 0 1 0 2.83 2.83"></path><path d="M9.36 5.37A11.8 11.8 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-4.2 5.13"></path><path d="M6.23 6.23A17.1 17.1 0 0 0 2 12s3.5 7 10 7a11.6 11.6 0 0 0 5.05-1.17"></path></svg>
+                  </button>
+                </div>
+                <p id="confirmPasswordError" class="mt-2 hidden text-sm font-medium text-rose-700"></p>
+              </div>
+
+              <div class="rounded-[0.9rem] border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
+                <p class="mb-2 font-medium text-slate-700">Требования к паролю</p>
+                <div class="space-y-2">
+                  <div id="ruleLength" class="flex items-center gap-2 text-slate-500">
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[11px]">•</span>
+                    <span>Не менее 8 символов</span>
+                  </div>
+                  <div id="ruleLetter" class="flex items-center gap-2 text-slate-500">
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[11px]">•</span>
+                    <span>Хотя бы одна буква</span>
+                  </div>
+                  <div id="ruleNumber" class="flex items-center gap-2 text-slate-500">
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[11px]">•</span>
+                    <span>Хотя бы одна цифра</span>
+                  </div>
+                  <div id="ruleMatch" class="flex items-center gap-2 text-slate-500">
+                    <span class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[11px]">•</span>
+                    <span>Пароли совпадают</span>
+                  </div>
+                </div>
+              </div>
+
+              <div id="successMessage" class="error-enter hidden rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                Пароль сохранён. Теперь вы можете войти в клиентский портал.
+              </div>
+
+              <button
+                id="submitButton"
+                type="submit"
+                class="inline-flex min-h-14 w-full items-center justify-center rounded-[0.6em] bg-brand-800 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled
+              >
+                <span id="submitLabel">Сохранить пароль</span>
+                <svg id="submitSpinner" class="ml-2 hidden h-4 w-4 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+              </button>
+            </form>
+
+            <div class="mt-5 flex items-center justify-between gap-4 text-sm sm:text-[15px]">
+              <button id="backButton" type="button" class="inline-flex min-h-11 items-center rounded-[0.6em] text-slate-700 transition hover:text-slate-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                Вернуться назад
+              </button>
+              <button id="loginButton" type="button" class="inline-flex min-h-11 items-center rounded-[0.6em] text-brand-800 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                Перейти ко входу
+              </button>
+            </div>
+          </section>
+        </main>
+
+        <nav class="absolute inset-x-0 bottom-0 z-10 px-4 pb-5 pt-4 sm:px-6" aria-label="Быстрые действия">
+          <div class="mx-auto max-w-md">
+            <div class="rounded-[1rem] border border-slate-200/90 bg-slate-50/88 px-4 py-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+              <div class="flex items-center justify-between gap-3">
+                <a href="https://provgroup.ru" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-500 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M4 12h16"></path><path d="M12 4a12.3 12.3 0 0 1 3 8 12.3 12.3 0 0 1-3 8 12.3 12.3 0 0 1-3-8 12.3 12.3 0 0 1 3-8Z"></path></svg>
+                  <span>Сайт</span>
+                </a>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v6A2.5 2.5 0 0 1 17.5 16h-6l-4.5 3V16h-.5A2.5 2.5 0 0 1 4 13.5v-6Z"></path></svg>
+                  <span>Поддержка</span>
+                </button>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <a href="tel:+78000000000" class="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] px-2.5 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus:outline-none focus:ring-4 focus:ring-brand-100">
+                  <svg class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 11.8 19.8 19.8 0 0 1 1.08 3.09 2 2 0 0 1 3.05.9h3a2 2 0 0 1 2 1.72l.5 3.3a2 2 0 0 1-.57 1.72l-1.36 1.36a16 16 0 0 0 6 6l1.36-1.36a2 2 0 0 1 1.72-.57l3.3.5A2 2 0 0 1 22 16.92Z"></path></svg>
+                  <span>Позвонить</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </div>
+    </div>
+
+    <script>
+      const newPasswordInput = document.getElementById('newPassword');
+      const confirmPasswordInput = document.getElementById('confirmPassword');
+      const newPasswordError = document.getElementById('newPasswordError');
+      const confirmPasswordError = document.getElementById('confirmPasswordError');
+      const successMessage = document.getElementById('successMessage');
+      const submitButton = document.getElementById('submitButton');
+      const submitLabel = document.getElementById('submitLabel');
+      const submitSpinner = document.getElementById('submitSpinner');
+      const passwordForm = document.getElementById('passwordForm');
+      const backButton = document.getElementById('backButton');
+      const loginButton = document.getElementById('loginButton');
+
+      function setFieldError(input, errorNode, message) {
+        if (!message) {
+          errorNode.textContent = '';
+          errorNode.classList.add('hidden');
+          input.classList.remove('border-rose-400', 'focus:border-rose-500', 'focus:ring-rose-100');
+          input.classList.add('border-slate-300', 'focus:border-brand-700', 'focus:ring-brand-100');
+          return;
+        }
+
+        errorNode.textContent = message;
+        errorNode.classList.remove('hidden');
+        input.classList.remove('border-slate-300', 'focus:border-brand-700', 'focus:ring-brand-100');
+        input.classList.add('border-rose-400', 'focus:border-rose-500', 'focus:ring-rose-100');
+      }
+
+      function togglePassword(inputId, openId, closedId, button) {
+        const input = document.getElementById(inputId);
+        const openIcon = document.getElementById(openId);
+        const closedIcon = document.getElementById(closedId);
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        openIcon.classList.toggle('hidden', !visible);
+        closedIcon.classList.toggle('hidden', visible);
+        button.setAttribute('aria-pressed', String(!visible));
+        button.setAttribute('aria-label', visible ? 'Показать пароль' : 'Скрыть пароль');
+      }
+
+      function setRuleState(ruleId, passed) {
+        const rule = document.getElementById(ruleId);
+        const dot = rule.querySelector('span');
+        if (passed) {
+          rule.classList.remove('text-slate-500');
+          rule.classList.add('text-emerald-700');
+          dot.classList.remove('border-slate-200');
+          dot.classList.add('border-emerald-200', 'bg-emerald-50');
+          dot.textContent = '✓';
+        } else {
+          rule.classList.remove('text-emerald-700');
+          rule.classList.add('text-slate-500');
+          dot.classList.remove('border-emerald-200', 'bg-emerald-50');
+          dot.classList.add('border-slate-200');
+          dot.textContent = '•';
+        }
+      }
+
+      function validatePasswordRules() {
+        const password = newPasswordInput.value;
+        const confirm = confirmPasswordInput.value;
+
+        const hasLength = password.length >= 8;
+        const hasLetter = /[A-Za-zА-Яа-яЁё]/.test(password);
+        const hasNumber = /\d/.test(password);
+        const matches = password.length > 0 && password === confirm;
+
+        setRuleState('ruleLength', hasLength);
+        setRuleState('ruleLetter', hasLetter);
+        setRuleState('ruleNumber', hasNumber);
+        setRuleState('ruleMatch', matches);
+
+        submitButton.disabled = !(hasLength && hasLetter && hasNumber && matches);
+      }
+
+      newPasswordInput.addEventListener('input', () => {
+        if (newPasswordInput.value.trim() === '') {
+          setFieldError(newPasswordInput, newPasswordError, '');
+        } else {
+          setFieldError(newPasswordInput, newPasswordError, '');
+        }
+        successMessage.classList.add('hidden');
+        validatePasswordRules();
+      });
+
+      confirmPasswordInput.addEventListener('input', () => {
+        if (confirmPasswordInput.value.trim() === '') {
+          setFieldError(confirmPasswordInput, confirmPasswordError, '');
+        } else {
+          setFieldError(confirmPasswordInput, confirmPasswordError, '');
+        }
+        successMessage.classList.add('hidden');
+        validatePasswordRules();
+      });
+
+      document.getElementById('toggleNewPassword').addEventListener('click', function () {
+        togglePassword('newPassword', 'newEyeOpen', 'newEyeClosed', this);
+      });
+
+      document.getElementById('toggleConfirmPassword').addEventListener('click', function () {
+        togglePassword('confirmPassword', 'confirmEyeOpen', 'confirmEyeClosed', this);
+      });
+
+      passwordForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        successMessage.classList.add('hidden');
+
+        const password = newPasswordInput.value;
+        const confirm = confirmPasswordInput.value;
+        let valid = true;
+
+        if (!password) {
+          setFieldError(newPasswordInput, newPasswordError, 'Введите новый пароль');
+          valid = false;
+        } else if (password.length < 8 || !/[A-Za-zА-Яа-яЁё]/.test(password) || !/\d/.test(password)) {
+          setFieldError(newPasswordInput, newPasswordError, 'Пароль не соответствует требованиям');
+          valid = false;
+        } else {
+          setFieldError(newPasswordInput, newPasswordError, '');
+        }
+
+        if (!confirm) {
+          setFieldError(confirmPasswordInput, confirmPasswordError, 'Повторите пароль');
+          valid = false;
+        } else if (password !== confirm) {
+          setFieldError(confirmPasswordInput, confirmPasswordError, 'Пароли не совпадают');
+          valid = false;
+        } else {
+          setFieldError(confirmPasswordInput, confirmPasswordError, '');
+        }
+
+        if (!valid) {
+          validatePasswordRules();
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitLabel.textContent = 'Сохранение...';
+        submitSpinner.classList.remove('hidden');
+
+        await new Promise((resolve) => setTimeout(resolve, 950));
+
+        submitLabel.textContent = 'Сохранить пароль';
+        submitSpinner.classList.add('hidden');
+        validatePasswordRules();
+        successMessage.classList.remove('hidden');
+      });
+
+      backButton.addEventListener('click', () => {
+        alert('Переход на экран №2: подтверждение кода.');
+      });
+
+      loginButton.addEventListener('click', () => {
+        alert('Переход на экран №1: вход.');
+      });
+
+      validatePasswordRules();
+    </script>
+  </body>
+</html>

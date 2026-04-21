@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="128" fill="#112540" />
+  <rect x="44" y="44" width="148" height="6" fill="url(#topLeftLine)" />
+  <rect x="44" y="44" width="6" height="148" fill="url(#leftTopLine)" />
+  <rect x="320" y="44" width="148" height="6" fill="url(#topRightLine)" />
+  <rect x="462" y="44" width="6" height="148" fill="url(#rightTopLine)" />
+  <circle cx="390" cy="128" r="54" fill="#C4D5ED" fill-opacity="0.22" />
+  <path
+    d="M124 366V154H236C287.915 154 324 186.865 324 234C324 282.842 287.915 316 236 316H182V366H124ZM182 267H226C256.741 267 270 251.591 270 234C270 216.409 256.741 203 226 203H182V267Z"
+    fill="#F3F7FC"
+  />
+  <path
+    d="M300 261.5C300 196.07 341.757 149 410.925 149C444.501 149 473.308 160.308 491 179.598L454.328 214.471C444.766 204.354 429.775 197.258 411.953 197.258C373.758 197.258 355.279 223.171 355.279 261.5C355.279 300.753 374.416 326.742 413.095 326.742C425.64 326.742 436.36 323.978 443.109 319.374V284.261H402.479V239.993H495V347.731C472.373 363.96 443.491 375 409.181 375C340.539 375 300 328.393 300 261.5Z"
+    fill="#F3F7FC"
+  />
+  <defs>
+    <linearGradient id="topLeftLine" x1="44" y1="47" x2="192" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4D5ED" />
+      <stop offset="0.38" stop-color="#C4D5ED" stop-opacity="0.72" />
+      <stop offset="1" stop-color="#C4D5ED" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="leftTopLine" x1="47" y1="44" x2="47" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4D5ED" />
+      <stop offset="0.38" stop-color="#C4D5ED" stop-opacity="0.72" />
+      <stop offset="1" stop-color="#C4D5ED" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="topRightLine" x1="468" y1="47" x2="320" y2="47" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4D5ED" />
+      <stop offset="0.38" stop-color="#C4D5ED" stop-opacity="0.72" />
+      <stop offset="1" stop-color="#C4D5ED" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="rightTopLine" x1="465" y1="44" x2="465" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4D5ED" />
+      <stop offset="0.38" stop-color="#C4D5ED" stop-opacity="0.72" />
+      <stop offset="1" stop-color="#C4D5ED" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+</svg>

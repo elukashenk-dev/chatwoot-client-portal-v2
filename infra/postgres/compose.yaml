@@ -1,0 +1,27 @@
+name: chatwoot-client-portal-v2-postgres
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PORTAL_V2_POSTGRES_DB:-chatwoot_client_portal_v2}
+      POSTGRES_PASSWORD: ${PORTAL_V2_POSTGRES_PASSWORD:-portal_v2_local_dev_password}
+      POSTGRES_USER: ${PORTAL_V2_POSTGRES_USER:-portal_v2}
+    ports:
+      - "${PORTAL_V2_POSTGRES_PORT:-55433}:5432"
+    volumes:
+      - chatwoot-client-portal-v2-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${PORTAL_V2_POSTGRES_USER:-portal_v2} -d ${PORTAL_V2_POSTGRES_DB:-chatwoot_client_portal_v2}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  chatwoot-client-portal-v2-postgres-data:

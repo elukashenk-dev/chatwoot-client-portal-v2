@@ -1,0 +1,28 @@
+{
+  "name": "chatwoot-client-portal-v2",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev:web": "pnpm --dir frontend dev",
+    "dev:backend": "pnpm --dir backend dev",
+    "db:up": "docker --context default compose --env-file .env -f infra/postgres/compose.yaml up -d",
+    "db:down": "docker --context default compose --env-file .env -f infra/postgres/compose.yaml down",
+    "db:logs": "docker --context default compose --env-file .env -f infra/postgres/compose.yaml logs -f db",
+    "build": "pnpm -r --if-present build",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "prettier": "^3.8.3"
+  }
+}
