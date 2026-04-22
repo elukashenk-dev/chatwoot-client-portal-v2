@@ -1,4 +1,12 @@
-import { useLayoutEffect, useRef } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react'
 
 import type { ChatAttachment, ChatMessage } from '../types'
 import { cn } from '../../../shared/lib/cn'
@@ -15,7 +23,9 @@ import {
   CalendarIcon,
   CheckIcon,
   ChevronUpIcon,
+  CopyIcon,
   FileTextIcon,
+  ReplyIcon,
 } from '../../../shared/ui/icons'
 
 type ChatTranscriptProps = {
@@ -24,9 +34,39 @@ type ChatTranscriptProps = {
   isLoadingOlder: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
+  onReplyToMessage: (message: ChatMessage) => void
 }
 
 type MessageBlockPosition = 'first' | 'last' | 'middle' | 'single'
+type SwipeGestureMode = 'idle' | 'pending' | 'horizontal'
+
+type SwipeGesture = {
+  mode: SwipeGestureMode
+  pointerId: number | null
+  startX: number
+  startY: number
+}
+
+type MessageContextMenuState = {
+  message: ChatMessage
+  x: number
+  y: number
+} | null
+
+const EMPTY_SWIPE_GESTURE: SwipeGesture = {
+  mode: 'idle',
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+}
+
+const MESSAGE_CONTEXT_MENU_HEIGHT_PX = 104
+const MESSAGE_CONTEXT_MENU_WIDTH_PX = 184
+const MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX = 12
+const SWIPE_HORIZONTAL_START_PX = 12
+const SWIPE_MAX_OFFSET_PX = 72
+const SWIPE_REPLY_TRIGGER_PX = 56
+const SWIPE_VERTICAL_CANCEL_PX = 12
 
 function formatMessageDate(value: string) {
   return new Intl.DateTimeFormat('ru-RU', {
@@ -70,6 +110,102 @@ function requestNextFrame(callback: () => void) {
 function cancelNextFrame(frameId: number | null) {
   if (frameId !== null && typeof window.cancelAnimationFrame === 'function') {
     window.cancelAnimationFrame(frameId)
+  }
+}
+
+function clampValue(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getContextMenuPosition({
+  clientX,
+  clientY,
+}: {
+  clientX: number
+  clientY: number
+}) {
+  const maxX =
+    window.innerWidth -
+    MESSAGE_CONTEXT_MENU_WIDTH_PX -
+    MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX
+  const maxY =
+    window.innerHeight -
+    MESSAGE_CONTEXT_MENU_HEIGHT_PX -
+    MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX
+
+  return {
+    x: clampValue(
+      clientX,
+      MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX,
+      Math.max(MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX, maxX),
+    ),
+    y: clampValue(
+      clientY,
+      MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX,
+      Math.max(MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX, maxY),
+    ),
+  }
+}
+
+function isInteractiveEventTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'a, button, input, textarea, select, [role="button"], [data-chat-context-menu]',
+      ),
+    )
+  )
+}
+
+function shouldUseDesktopMessageContextMenu() {
+  return window.matchMedia?.('(pointer: fine)').matches ?? true
+}
+
+function getMessageCopyText(message: ChatMessage) {
+  const parts: string[] = []
+  const content = message.content?.trim()
+
+  if (content) {
+    parts.push(content)
+  }
+
+  for (const attachment of message.attachments) {
+    parts.push(attachment.url || attachment.name)
+  }
+
+  return parts.join('\n').trim()
+}
+
+async function copyTextToClipboard(text: string) {
+  if (!text) {
+    return false
+  }
+
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable.')
+    }
+
+    await navigator.clipboard.writeText(text)
+
+    return true
+  } catch {
+    const textarea = document.createElement('textarea')
+
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.left = '-9999px'
+    textarea.style.position = 'fixed'
+    textarea.style.top = '0'
+    document.body.append(textarea)
+    textarea.select()
+
+    try {
+      return document.execCommand('copy')
+    } finally {
+      textarea.remove()
+    }
   }
 }
 
@@ -247,28 +383,254 @@ function AttachmentCard({ attachment }: { attachment: ChatAttachment }) {
   )
 }
 
+function getReplyPreviewText(message: ChatMessage['replyTo']) {
+  return (
+    message?.content?.trim() ||
+    message?.attachmentName ||
+    'Сообщение недоступно'
+  )
+}
+
+function ReplyQuote({
+  isOutgoing,
+  replyTo,
+}: {
+  isOutgoing: boolean
+  replyTo: NonNullable<ChatMessage['replyTo']>
+}) {
+  return (
+    <div
+      className={
+        isOutgoing
+          ? 'mb-3 rounded-[0.8rem] border border-white/10 bg-white/10 px-3 py-2 text-[13px] leading-5 text-white/85'
+          : 'mb-3 rounded-[0.8rem] border border-slate-200 bg-slate-50/90 px-3 py-2 text-[13px] leading-5 text-slate-500'
+      }
+    >
+      <div
+        className={
+          isOutgoing
+            ? 'mb-1 font-medium text-white'
+            : 'mb-1 font-medium text-brand-800'
+        }
+      >
+        Ответ на сообщение {replyTo.authorName}
+      </div>
+      <div className="line-clamp-2">{getReplyPreviewText(replyTo)}</div>
+    </div>
+  )
+}
+
+function SwipeReplyIndicator({ swipeOffset }: { swipeOffset: number }) {
+  const isReady = swipeOffset >= SWIPE_REPLY_TRIGGER_PX
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute right-0 top-1/2 z-0 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition',
+        swipeOffset > 0 ? 'opacity-100' : 'opacity-0',
+        isReady
+          ? 'border-brand-800 bg-brand-800 text-white'
+          : 'border-brand-100 bg-white text-brand-800',
+      )}
+    >
+      <ReplyIcon className="h-4 w-4" />
+    </div>
+  )
+}
+
+function MessageContextMenu({
+  menu,
+  menuRef,
+  onClose,
+  onCopyMessage,
+  onReplyToMessage,
+}: {
+  menu: NonNullable<MessageContextMenuState>
+  menuRef: RefObject<HTMLDivElement | null>
+  onClose: () => void
+  onCopyMessage: (message: ChatMessage) => void
+  onReplyToMessage: (message: ChatMessage) => void
+}) {
+  const copyText = getMessageCopyText(menu.message)
+
+  return (
+    <div
+      className="fixed z-50 w-[184px] rounded-[0.8rem] border border-slate-200 bg-white p-1.5 text-[14px] font-medium text-slate-700 shadow-xl shadow-slate-900/10"
+      data-chat-context-menu
+      ref={menuRef}
+      role="menu"
+      style={{
+        left: menu.x,
+        top: menu.y,
+      }}
+    >
+      <button
+        className="flex min-h-10 w-full items-center gap-2 rounded-[0.65rem] px-3 text-left transition hover:bg-brand-50 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+        onClick={() => {
+          onReplyToMessage(menu.message)
+          onClose()
+        }}
+        role="menuitem"
+        type="button"
+      >
+        <ReplyIcon className="h-4 w-4" />
+        Ответить
+      </button>
+      <button
+        className="flex min-h-10 w-full items-center gap-2 rounded-[0.65rem] px-3 text-left transition hover:bg-brand-50 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+        disabled={!copyText}
+        onClick={() => {
+          onCopyMessage(menu.message)
+        }}
+        role="menuitem"
+        type="button"
+      >
+        <CopyIcon className="h-4 w-4" />
+        Копировать
+      </button>
+    </div>
+  )
+}
+
 function MessageBubble({
   blockPosition,
   hasDateDivider,
   index,
   message,
+  onOpenContextMenu,
+  onReplyToMessage,
 }: {
   blockPosition: MessageBlockPosition
   hasDateDivider: boolean
   index: number
   message: ChatMessage
+  onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
+  onReplyToMessage: (message: ChatMessage) => void
 }) {
   const isOutgoing = message.direction === 'outgoing'
+  const [isSwipeActive, setIsSwipeActive] = useState(false)
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const swipeGestureRef = useRef<SwipeGesture>(EMPTY_SWIPE_GESTURE)
+  const swipeOffsetRef = useRef(0)
   const shouldRenderMeta = shouldRenderMessageMeta(blockPosition)
   const radiusClassName = getBubbleRadiusClass({
     blockPosition,
     isOutgoing,
   })
 
+  function setCurrentSwipeOffset(nextSwipeOffset: number) {
+    const clampedOffset = clampValue(nextSwipeOffset, 0, SWIPE_MAX_OFFSET_PX)
+
+    swipeOffsetRef.current = clampedOffset
+    setSwipeOffset(clampedOffset)
+  }
+
+  function resetSwipeGesture(element?: HTMLElement | null) {
+    const pointerId = swipeGestureRef.current.pointerId
+
+    if (
+      element &&
+      pointerId !== null &&
+      typeof element.releasePointerCapture === 'function' &&
+      typeof element.hasPointerCapture === 'function' &&
+      element.hasPointerCapture(pointerId)
+    ) {
+      element.releasePointerCapture(pointerId)
+    }
+
+    swipeGestureRef.current = EMPTY_SWIPE_GESTURE
+    setIsSwipeActive(false)
+    setCurrentSwipeOffset(0)
+  }
+
+  function handleSwipePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (
+      event.pointerType === 'mouse' ||
+      event.button !== 0 ||
+      isInteractiveEventTarget(event.target)
+    ) {
+      return
+    }
+
+    swipeGestureRef.current = {
+      mode: 'pending',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    }
+    setIsSwipeActive(true)
+  }
+
+  function handleSwipePointerMove(event: PointerEvent<HTMLDivElement>) {
+    const gesture = swipeGestureRef.current
+
+    if (
+      gesture.mode === 'idle' ||
+      gesture.pointerId === null ||
+      gesture.pointerId !== event.pointerId
+    ) {
+      return
+    }
+
+    const deltaX = event.clientX - gesture.startX
+    const deltaY = event.clientY - gesture.startY
+    const absoluteDeltaX = Math.abs(deltaX)
+    const absoluteDeltaY = Math.abs(deltaY)
+
+    if (gesture.mode === 'pending') {
+      if (
+        absoluteDeltaY > SWIPE_VERTICAL_CANCEL_PX &&
+        absoluteDeltaY > absoluteDeltaX + 6
+      ) {
+        resetSwipeGesture(event.currentTarget)
+        return
+      }
+
+      if (
+        deltaX < -SWIPE_HORIZONTAL_START_PX &&
+        absoluteDeltaX > absoluteDeltaY + 8
+      ) {
+        swipeGestureRef.current = {
+          ...gesture,
+          mode: 'horizontal',
+        }
+
+        if (typeof event.currentTarget.setPointerCapture === 'function') {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }
+      } else {
+        return
+      }
+    }
+
+    event.preventDefault()
+    setCurrentSwipeOffset(-deltaX)
+  }
+
+  function handleSwipePointerEnd(event: PointerEvent<HTMLDivElement>) {
+    const gesture = swipeGestureRef.current
+    const shouldTriggerReply =
+      gesture.mode === 'horizontal' &&
+      gesture.pointerId === event.pointerId &&
+      swipeOffsetRef.current >= SWIPE_REPLY_TRIGGER_PX
+
+    resetSwipeGesture(event.currentTarget)
+
+    if (shouldTriggerReply) {
+      onReplyToMessage(message)
+    }
+  }
+
+  function handleSwipePointerCancel(event: PointerEvent<HTMLDivElement>) {
+    resetSwipeGesture(event.currentTarget)
+  }
+
   return (
     <div
       className={[
-        isOutgoing ? 'flex justify-end' : 'flex justify-start',
+        'flex items-end',
+        isOutgoing ? 'justify-end' : 'justify-start',
         getMessageWrapperSpacingClass({
           blockPosition,
           hasDateDivider,
@@ -279,32 +641,62 @@ function MessageBubble({
         .join(' ')}
       data-message-id={message.id}
     >
-      <div className="max-w-[94%] sm:max-w-[88%]">
-        {shouldRenderAuthorName(blockPosition) ? (
-          <div
-            className={cn(
-              'mb-1 flex px-1 text-[12px] font-medium text-slate-700',
-              isOutgoing ? 'justify-end' : 'justify-start',
-            )}
-          >
-            {message.authorName}
-          </div>
-        ) : null}
+      <div className="relative min-w-0 max-w-[86%] sm:max-w-[78%]">
+        <SwipeReplyIndicator swipeOffset={swipeOffset} />
         <div
-          data-chat-bubble
-          className={
-            isOutgoing
-              ? `${radiusClassName} bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm`
-              : `${radiusClassName} border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm`
-          }
+          className={cn(
+            'relative z-10 min-w-0',
+            isSwipeActive
+              ? 'select-none transition-none'
+              : 'transition-transform duration-150 ease-out',
+          )}
+          data-message-swipe-surface
+          onContextMenu={(event) => {
+            if (isInteractiveEventTarget(event.target)) {
+              return
+            }
+
+            onOpenContextMenu(message, event)
+          }}
+          onPointerCancel={handleSwipePointerCancel}
+          onPointerDown={handleSwipePointerDown}
+          onPointerMove={handleSwipePointerMove}
+          onPointerUp={handleSwipePointerEnd}
+          style={{
+            touchAction: 'pan-y',
+            transform:
+              swipeOffset > 0 ? `translateX(-${swipeOffset}px)` : undefined,
+          }}
         >
-          {message.content ? (
-            <p className="whitespace-pre-wrap">{message.content}</p>
+          {shouldRenderAuthorName(blockPosition) ? (
+            <div
+              className={cn(
+                'mb-1 flex px-1 text-[12px] font-medium text-slate-700',
+                isOutgoing ? 'justify-end' : 'justify-start',
+              )}
+            >
+              {message.authorName}
+            </div>
           ) : null}
-          {message.attachments.map((attachment) => (
-            <AttachmentCard attachment={attachment} key={attachment.id} />
-          ))}
-          {shouldRenderMeta ? <MessageMeta message={message} /> : null}
+          <div
+            data-chat-bubble
+            className={
+              isOutgoing
+                ? `${radiusClassName} bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm`
+                : `${radiusClassName} border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm`
+            }
+          >
+            {message.replyTo ? (
+              <ReplyQuote isOutgoing={isOutgoing} replyTo={message.replyTo} />
+            ) : null}
+            {message.content ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : null}
+            {message.attachments.map((attachment) => (
+              <AttachmentCard attachment={attachment} key={attachment.id} />
+            ))}
+            {shouldRenderMeta ? <MessageMeta message={message} /> : null}
+          </div>
         </div>
       </div>
     </div>
@@ -358,11 +750,51 @@ export function ChatTranscript({
   isLoadingOlder,
   messages,
   onLoadOlder,
+  onReplyToMessage,
 }: ChatTranscriptProps) {
+  const [contextMenu, setContextMenu] = useState<MessageContextMenuState>(null)
+  const [copyStatusText, setCopyStatusText] = useState('')
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const scrollElementRef = useRef<HTMLElement | null>(null)
   const previousScrollSnapshotRef = useRef<TranscriptScrollSnapshot | null>(
     null,
   )
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return
+    }
+
+    function handleDocumentPointerDown(event: globalThis.PointerEvent) {
+      const target = event.target
+
+      if (target instanceof Node && contextMenuRef.current?.contains(target)) {
+        return
+      }
+
+      setContextMenu(null)
+    }
+
+    function handleDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setContextMenu(null)
+      }
+    }
+
+    function handleWindowResize() {
+      setContextMenu(null)
+    }
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+    document.addEventListener('keydown', handleDocumentKeyDown)
+    window.addEventListener('resize', handleWindowResize)
+
+    return () => {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown)
+      document.removeEventListener('keydown', handleDocumentKeyDown)
+      window.removeEventListener('resize', handleWindowResize)
+    }
+  }, [contextMenu])
 
   useLayoutEffect(() => {
     const scrollElement = scrollElementRef.current
@@ -404,14 +836,52 @@ export function ChatTranscript({
       return
     }
 
+    if (contextMenu) {
+      setContextMenu(null)
+    }
+
     previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
       scrollElement,
       messages,
     )
   }
 
+  function handleOpenContextMenu(message: ChatMessage, event: MouseEvent) {
+    if (!shouldUseDesktopMessageContextMenu()) {
+      return
+    }
+
+    event.preventDefault()
+
+    const position = getContextMenuPosition({
+      clientX: event.clientX,
+      clientY: event.clientY,
+    })
+
+    setContextMenu({
+      message,
+      x: position.x,
+      y: position.y,
+    })
+  }
+
+  async function handleCopyMessage(message: ChatMessage) {
+    const wasCopied = await copyTextToClipboard(getMessageCopyText(message))
+
+    if (wasCopied) {
+      setCopyStatusText('Сообщение скопировано.')
+      setContextMenu(null)
+      window.setTimeout(() => {
+        setCopyStatusText('')
+      }, 1600)
+    }
+  }
+
   return (
     <>
+      <div aria-live="polite" className="sr-only">
+        {copyStatusText}
+      </div>
       <div className="border-b border-slate-200/70 px-5 py-3 sm:px-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <button
@@ -484,12 +954,28 @@ export function ChatTranscript({
                   hasDateDivider={hasDateDivider}
                   index={index}
                   message={message}
+                  onOpenContextMenu={handleOpenContextMenu}
+                  onReplyToMessage={onReplyToMessage}
                 />
               </div>
             )
           })}
         </div>
       </section>
+
+      {contextMenu ? (
+        <MessageContextMenu
+          menu={contextMenu}
+          menuRef={contextMenuRef}
+          onClose={() => {
+            setContextMenu(null)
+          }}
+          onCopyMessage={(message) => {
+            void handleCopyMessage(message)
+          }}
+          onReplyToMessage={onReplyToMessage}
+        />
+      ) : null}
     </>
   )
 }

@@ -38,6 +38,18 @@ type ChatwootContactInboxResponse = {
   sourceId: string
 }
 
+type ChatwootAccountWebhooksResponse = {
+  payload: {
+    webhooks: unknown[]
+  }
+}
+
+type ChatwootAccountWebhookResponse = {
+  payload: {
+    webhook: unknown
+  }
+}
+
 export type ChatwootContact = {
   email: string | null
   id: number
@@ -98,6 +110,14 @@ export type ChatwootAttachmentUpload = {
 export type ChatwootContactInbox = {
   inboxId: number
   sourceId: string
+}
+
+export type ChatwootAccountWebhook = {
+  id: number
+  name: string | null
+  secret: string | null
+  subscriptions: string[]
+  url: string
 }
 
 export type ChatwootMessagesPage = {
@@ -453,6 +473,75 @@ function mapContactInbox(payload: unknown): ChatwootContactInboxResponse {
   }
 }
 
+function parseAccountWebhooksResponse(
+  payload: unknown,
+): ChatwootAccountWebhooksResponse {
+  const parsedPayload = readObject(payload)
+  const parsedPayloadBody = readObject(parsedPayload?.payload)
+  const webhooks = parsedPayloadBody?.webhooks
+
+  if (!Array.isArray(webhooks)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot webhooks lookup returned an unexpected response shape.',
+    )
+  }
+
+  return {
+    payload: {
+      webhooks,
+    },
+  }
+}
+
+function parseAccountWebhookResponse(
+  payload: unknown,
+): ChatwootAccountWebhookResponse {
+  const parsedPayload = readObject(payload)
+  const parsedPayloadBody = readObject(parsedPayload?.payload)
+  const webhook = parsedPayloadBody?.webhook
+
+  if (!isPlainObject(webhook)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot webhook save returned an unexpected response shape.',
+    )
+  }
+
+  return {
+    payload: {
+      webhook,
+    },
+  }
+}
+
+function mapAccountWebhook(payload: unknown): ChatwootAccountWebhook {
+  if (!isPlainObject(payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot webhook API returned an invalid webhook payload.',
+    )
+  }
+
+  const id = readInteger(payload.id)
+  const url = readString(payload.url)?.trim()
+
+  if (id === null || !url) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot webhook API returned an invalid webhook payload.',
+    )
+  }
+
+  return {
+    id,
+    name: readString(payload.name),
+    secret: readString(payload.secret),
+    subscriptions: Array.isArray(payload.subscriptions)
+      ? payload.subscriptions
+          .map((subscription) => readString(subscription)?.trim() ?? '')
+          .filter(Boolean)
+      : [],
+    url,
+  }
+}
+
 function sortMessages(messages: ChatwootMessage[]) {
   return [...messages].sort((left, right) => {
     if (left.createdAt !== right.createdAt) {
@@ -695,6 +784,79 @@ export function createChatwootClient({
     return mapPortalInboxRouting(payload)
   }
 
+  function normalizeWebhookUrl(value: string) {
+    const normalizedValue = value.trim()
+
+    if (!normalizedValue) {
+      throw new ChatwootClientRequestError(
+        'Chatwoot webhook save requires a callback URL.',
+      )
+    }
+
+    return normalizedValue
+  }
+
+  function normalizeWebhookSubscriptions(subscriptions: string[]) {
+    const normalizedSubscriptions = [
+      ...new Set(
+        subscriptions
+          .map((subscription) => subscription.trim())
+          .filter(Boolean),
+      ),
+    ]
+
+    if (normalizedSubscriptions.length === 0) {
+      throw new ChatwootClientRequestError(
+        'Chatwoot webhook save requires at least one subscription.',
+      )
+    }
+
+    return normalizedSubscriptions
+  }
+
+  async function saveAccountWebhook({
+    name,
+    subscriptions,
+    url,
+    webhookId = null,
+  }: {
+    name?: string | null
+    subscriptions: string[]
+    url: string
+    webhookId?: number | null
+  }) {
+    const resolvedConfig = assertConfigured()
+    const normalizedUrl = normalizeWebhookUrl(url)
+    const normalizedSubscriptions = normalizeWebhookSubscriptions(subscriptions)
+    const requestUrl =
+      webhookId === null
+        ? new URL(
+            `/api/v1/accounts/${resolvedConfig.accountId}/webhooks`,
+            resolvedConfig.baseUrl,
+          )
+        : new URL(
+            `/api/v1/accounts/${resolvedConfig.accountId}/webhooks/${webhookId}`,
+            resolvedConfig.baseUrl,
+          )
+
+    const payload = await requestJson(
+      requestUrl,
+      'Chatwoot webhook save is unavailable.',
+      {
+        body: {
+          ...(name?.trim() ? { name: name.trim() } : {}),
+          subscriptions: normalizedSubscriptions,
+          url: normalizedUrl,
+        },
+        method: webhookId === null ? 'POST' : 'PATCH',
+      },
+    )
+
+    return mapAccountWebhook(
+      parseAccountWebhookResponse(payload).payload.webhook,
+    )
+  }
+
   async function fetchConversationMessages({
     beforeMessageId,
     conversationId,
@@ -764,10 +926,12 @@ export function createChatwootClient({
   async function requestConversationMessageCreate({
     content,
     conversationId,
+    replyToMessageId = null,
     sourceId,
   }: {
     content: string
     conversationId: number
+    replyToMessageId?: number | null
     sourceId: string | null
   }) {
     const resolvedConfig = assertConfigured()
@@ -782,7 +946,9 @@ export function createChatwootClient({
       response = await fetchFn(requestUrl, {
         body: JSON.stringify({
           content,
-          content_attributes: {},
+          content_attributes: replyToMessageId
+            ? { in_reply_to: replyToMessageId }
+            : {},
           content_type: 'text',
           message_type: 'incoming',
           private: false,
@@ -827,10 +993,12 @@ export function createChatwootClient({
   async function requestConversationAttachmentMessageCreate({
     attachment,
     conversationId,
+    replyToMessageId = null,
     sourceId,
   }: {
     attachment: ChatwootAttachmentUpload
     conversationId: number
+    replyToMessageId?: number | null
     sourceId: string | null
   }) {
     const resolvedConfig = assertConfigured()
@@ -841,7 +1009,10 @@ export function createChatwootClient({
     const formData = new FormData()
 
     formData.append('content', '')
-    formData.append('content_attributes', '{}')
+    formData.append(
+      'content_attributes',
+      JSON.stringify(replyToMessageId ? { in_reply_to: replyToMessageId } : {}),
+    )
     formData.append('content_type', 'text')
     formData.append('message_type', 'incoming')
     formData.append('private', 'false')
@@ -929,6 +1100,63 @@ export function createChatwootClient({
   }
 
   return {
+    async listAccountWebhooks() {
+      const resolvedConfig = assertConfigured()
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/webhooks`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot webhooks lookup is unavailable.',
+      )
+
+      return parseAccountWebhooksResponse(payload).payload.webhooks.map(
+        mapAccountWebhook,
+      )
+    },
+
+    async createAccountWebhook({
+      name = null,
+      subscriptions,
+      url,
+    }: {
+      name?: string | null
+      subscriptions: string[]
+      url: string
+    }) {
+      return saveAccountWebhook({
+        name,
+        subscriptions,
+        url,
+      })
+    },
+
+    async updateAccountWebhook({
+      name = null,
+      subscriptions,
+      url,
+      webhookId,
+    }: {
+      name?: string | null
+      subscriptions: string[]
+      url: string
+      webhookId: number
+    }) {
+      if (!Number.isInteger(webhookId) || webhookId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot webhook update requires a positive webhook id.',
+        )
+      }
+
+      return saveAccountWebhook({
+        name,
+        subscriptions,
+        url,
+        webhookId,
+      })
+    },
+
     async ensurePortalInboxSingleConversationRouting() {
       const resolvedConfig = assertConfigured()
       const currentRouting = await getPortalInboxRouting()
@@ -1197,10 +1425,12 @@ export function createChatwootClient({
     async createConversationIncomingMessage({
       content,
       conversationId,
+      replyToMessageId = null,
       sourceId = null,
     }: {
       content: string
       conversationId: number
+      replyToMessageId?: number | null
       sourceId?: string | null
     }) {
       assertConfigured()
@@ -1217,9 +1447,19 @@ export function createChatwootClient({
         )
       }
 
+      if (
+        replyToMessageId !== null &&
+        (!Number.isInteger(replyToMessageId) || replyToMessageId <= 0)
+      ) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot message send requires a valid reply target id.',
+        )
+      }
+
       return requestConversationMessageCreate({
         content: content.trim(),
         conversationId,
+        replyToMessageId,
         sourceId: sourceId?.trim() || null,
       })
     },
@@ -1227,10 +1467,12 @@ export function createChatwootClient({
     async createConversationIncomingAttachmentMessage({
       attachment,
       conversationId,
+      replyToMessageId = null,
       sourceId = null,
     }: {
       attachment: ChatwootAttachmentUpload
       conversationId: number
+      replyToMessageId?: number | null
       sourceId?: string | null
     }) {
       assertConfigured()
@@ -1259,6 +1501,15 @@ export function createChatwootClient({
         )
       }
 
+      if (
+        replyToMessageId !== null &&
+        (!Number.isInteger(replyToMessageId) || replyToMessageId <= 0)
+      ) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send requires a valid reply target id.',
+        )
+      }
+
       return requestConversationAttachmentMessageCreate({
         attachment: {
           data: attachment.data,
@@ -1266,6 +1517,7 @@ export function createChatwootClient({
           mimeType: attachment.mimeType.trim().toLowerCase(),
         },
         conversationId,
+        replyToMessageId,
         sourceId: sourceId?.trim() || null,
       })
     },

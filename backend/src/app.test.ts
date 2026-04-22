@@ -52,12 +52,14 @@ function createMultipartAttachmentPayload({
   fileName,
   mimeType,
   primaryConversationId,
+  replyToMessageId,
 }: {
   clientMessageKey: string
   fileContent: Buffer
   fileName: string
   mimeType: string
   primaryConversationId?: number
+  replyToMessageId?: number
 }) {
   const boundary = '----portal-test-boundary'
   const chunks: Buffer[] = []
@@ -73,6 +75,10 @@ function createMultipartAttachmentPayload({
 
   if (primaryConversationId !== undefined) {
     appendField('primaryConversationId', String(primaryConversationId))
+  }
+
+  if (replyToMessageId !== undefined) {
+    appendField('replyToMessageId', String(replyToMessageId))
   }
 
   chunks.push(
@@ -293,6 +299,7 @@ describe('buildApp', () => {
       payload: {
         clientMessageKey: 'portal-send:test-key',
         content: 'Здравствуйте',
+        replyToMessageId: 10,
       },
       url: '/api/chat/messages',
     })
@@ -334,6 +341,7 @@ describe('buildApp', () => {
       fileContent: Buffer.from('%PDF-1.7\n'),
       fileName: 'invoice.pdf',
       mimeType: 'application/pdf',
+      replyToMessageId: 10,
     })
 
     const response = await app.inject({

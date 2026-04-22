@@ -200,7 +200,9 @@ describe('createChatMessagesService', () => {
                 },
               ],
               content: 'Portal message',
-              contentAttributes: {},
+              contentAttributes: {
+                in_reply_to: 21,
+              },
               contentType: 'text',
               createdAt: 1_776_000_002,
               id: 22,
@@ -246,12 +248,90 @@ describe('createChatMessagesService', () => {
           content: 'Portal message',
           direction: 'outgoing',
           id: 22,
+          replyTo: {
+            attachmentName: null,
+            authorName: 'Анна Смирнова',
+            content: 'Agent reply',
+            direction: 'incoming',
+            messageId: 21,
+          },
         },
       ],
       nextOlderCursor: 21,
       reason: 'none',
       result: 'ready',
     })
+  })
+
+  it('fetches a missing reply target and exposes a safe reply preview', async () => {
+    const findConversationMessageById = vi.fn().mockResolvedValue({
+      attachments: [],
+      content: 'Старый вопрос клиента',
+      contentAttributes: {},
+      contentType: 'text',
+      createdAt: 1_776_000_000,
+      id: 18,
+      messageType: 0,
+      private: false,
+      sender: {
+        id: 44,
+        name: 'Portal User',
+        type: 'contact',
+      },
+      sourceId: null,
+      status: 'sent',
+    })
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatwootClient: createChatwootClientStub({
+        findConversationMessageById,
+        listConversationMessages: vi.fn().mockResolvedValue({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              content: 'Ответ на старый вопрос',
+              contentAttributes: {
+                in_reply_to: 18,
+              },
+              contentType: 'text',
+              createdAt: 1_776_000_010,
+              id: 25,
+              messageType: 1,
+              private: false,
+              sender: {
+                id: 5,
+                name: 'Анна Смирнова',
+                type: 'user',
+              },
+              sourceId: null,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatMessages({
+        primaryConversationId: 101,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      messages: [
+        {
+          id: 25,
+          replyTo: {
+            authorName: 'Вы',
+            content: 'Старый вопрос клиента',
+            direction: 'outgoing',
+            messageId: 18,
+          },
+        },
+      ],
+    })
+    expect(findConversationMessageById).toHaveBeenCalledWith(101, 18)
   })
 
   it('normalizes escaped Chatwoot line breaks before returning transcript content', async () => {
@@ -366,6 +446,7 @@ describe('createChatMessagesService', () => {
     expect(createConversationIncomingMessage).toHaveBeenCalledWith({
       content: 'Portal text',
       conversationId: 101,
+      replyToMessageId: null,
       sourceId: 'portal-send:test-key',
     })
     expect(
@@ -378,6 +459,98 @@ describe('createChatMessagesService', () => {
         userId: 7,
       }),
     )
+  })
+
+  it('sends text replies with Chatwoot reply metadata and reply preview', async () => {
+    const repliedChatwootMessage = {
+      ...sentChatwootMessage,
+      contentAttributes: {
+        in_reply_to: 21,
+      },
+    }
+    const replyTargetChatwootMessage = {
+      attachments: [],
+      content: 'Agent question',
+      contentAttributes: {},
+      contentType: 'text',
+      createdAt: 1_776_000_001,
+      id: 21,
+      messageType: 1,
+      private: false,
+      sender: {
+        id: 5,
+        name: 'Анна Смирнова',
+        type: 'user',
+      },
+      sourceId: null,
+      status: 'sent',
+    }
+    const createConversationIncomingMessage = vi
+      .fn()
+      .mockResolvedValue(repliedChatwootMessage)
+    const findConversationMessageById = vi
+      .fn()
+      .mockResolvedValue(replyTargetChatwootMessage)
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository: createChatMessagesRepositoryStub(),
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingMessage,
+        findConversationMessageById,
+      }),
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+    })
+
+    await expect(
+      service.sendCurrentUserTextMessage({
+        clientMessageKey: 'portal-send:test-key',
+        content: 'Portal text',
+        replyToMessageId: 21,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      sentMessage: {
+        id: 501,
+        replyTo: {
+          authorName: 'Анна Смирнова',
+          content: 'Agent question',
+          direction: 'incoming',
+          messageId: 21,
+        },
+      },
+    })
+    expect(createConversationIncomingMessage).toHaveBeenCalledWith({
+      content: 'Portal text',
+      conversationId: 101,
+      replyToMessageId: 21,
+      sourceId: 'portal-send:test-key',
+    })
+    expect(findConversationMessageById).toHaveBeenCalledWith(101, 21)
+  })
+
+  it('rejects text replies when the target message is unavailable', async () => {
+    const createConversationIncomingMessage = vi.fn()
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository: createChatMessagesRepositoryStub(),
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingMessage,
+        findConversationMessageById: vi.fn().mockResolvedValue(null),
+      }),
+    })
+
+    await expect(
+      service.sendCurrentUserTextMessage({
+        clientMessageKey: 'portal-send:test-key',
+        content: 'Portal text',
+        replyToMessageId: 999,
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({
+      code: 'reply_target_unavailable',
+      statusCode: 400,
+    })
+    expect(createConversationIncomingMessage).not.toHaveBeenCalled()
   })
 
   it('replays a confirmed ledger entry by exact Chatwoot message id without duplicate send', async () => {

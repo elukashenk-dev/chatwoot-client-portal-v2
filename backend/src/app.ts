@@ -18,6 +18,11 @@ import {
   CHAT_ATTACHMENT_MAX_BYTES,
   createChatMessagesService,
 } from './modules/chat-messages/service.js'
+import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
+import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
+import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/repository.js'
+import { registerChatwootWebhookRoutes } from './modules/chatwoot-webhooks/routes.js'
+import { createChatwootWebhookService } from './modules/chatwoot-webhooks/service.js'
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { createPasswordResetRepository } from './modules/password-reset/repository.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
@@ -70,6 +75,12 @@ export function buildApp({ database, env }: BuildAppOptions) {
     chatContextRepository: createChatContextRepository(database.db),
     chatwootClient,
   })
+  const chatMessagesService = createChatMessagesService({
+    chatContextService,
+    chatMessagesRepository: createChatMessagesRepository(database.db),
+    chatwootClient,
+  })
+  const chatRealtimeHub = createChatRealtimeHub()
 
   registerHealthRoutes(app, { env })
   registerAuthRoutes(app, {
@@ -99,12 +110,22 @@ export function buildApp({ database, env }: BuildAppOptions) {
   })
   registerChatMessagesRoutes(app, {
     authService,
-    chatMessagesService: createChatMessagesService({
-      chatContextService,
-      chatMessagesRepository: createChatMessagesRepository(database.db),
-      chatwootClient,
-    }),
+    chatMessagesService,
     env,
+  })
+  registerChatRealtimeRoutes(app, {
+    authService,
+    chatContextService,
+    env,
+    realtimeHub: chatRealtimeHub,
+  })
+  registerChatwootWebhookRoutes(app, {
+    chatwootWebhookService: createChatwootWebhookService({
+      chatMessagesService,
+      env,
+      realtimeHub: chatRealtimeHub,
+      webhookRepository: createChatwootWebhookRepository(database.db),
+    }),
   })
 
   return app

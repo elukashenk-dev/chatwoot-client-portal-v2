@@ -184,6 +184,24 @@ export function ClockIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function CopyIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <rect height="14" rx="2" width="14" x="8" y="8" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  )
+}
+
 export function FileTextIcon({ className = iconClassName }: IconProps) {
   return (
     <svg
@@ -273,6 +291,24 @@ export function RefreshIcon({ className = iconClassName }: IconProps) {
     >
       <path d="M20 12a8 8 0 1 1-2.34-5.66" />
       <path d="M20 4v6h-6" />
+    </svg>
+  )
+}
+
+export function ReplyIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="m9 17-6-6 6-6" />
+      <path d="M3 11h12a6 6 0 0 1 6 6v1" />
     </svg>
   )
 }

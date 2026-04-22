@@ -256,7 +256,68 @@
 - private/internal noise не ломает клиентский transcript;
 - duplicate webhook delivery безопасно дедуплицируется.
 
-## Phase 9. Hardening
+## Phase 9. PWA App Hardening
+
+### Цель
+
+Довести PWA-поведение до уровня installed app, а не только installable shell.
+
+### Deliverables
+
+- service worker update flow без внезапного сброса пользователя во время работы в чате;
+- явный app-update UX: приложение может сообщить, что доступна новая версия, и применить ее в безопасный момент;
+- подтвержденное правило: `/api/*`, SSE realtime и auth/chat responses не кешируются service worker;
+- reconnect/resync после возврата из background/sleep через `visibilitychange`, `focus` и `online`;
+- offline/connection state UI для chat: понятное состояние "нет соединения" без попытки молча отправлять сообщения;
+- installed-PWA mobile viewport polish: safe area, экранная клавиатура, высота composer/transcript, scroll-to-bottom behavior;
+- проверка file picker и attachment send в installed/standalone mode;
+- browser capability fallback для окружений без service worker, EventSource или install prompt;
+- отдельный manual checklist для браузера, Android installed PWA и iOS Home Screen web app;
+- решение по offline send queue явно зафиксировано: не добавлять очередь отправки сообщений/файлов, пока это не открыто отдельным product slice.
+
+### Exit Criteria
+
+- портал предсказуемо работает как browser tab и как installed PWA;
+- reconnect после сна приложения возвращает chat к актуальному backend snapshot;
+- offline state понятен пользователю и не создает ложных duplicate sends;
+- service worker не вмешивается в backend authority, auth, chat send и realtime.
+
+## Phase 10. Push Notifications
+
+### Цель
+
+Добавить обязательные push-уведомления для новых клиентски-видимых chat updates.
+
+### Deliverables
+
+- выбрать и зафиксировать browser push strategy: Web Push/VAPID для поддерживаемых браузеров, graceful fallback для неподдерживаемых окружений;
+- добавить backend env/config для push: VAPID public/private keys, subject/contact и production origin constraints;
+- добавить таблицы для push subscriptions: portal user, endpoint, keys, user agent/device metadata, status, created/updated/last_seen timestamps;
+- добавить backend endpoints для subscribe, unsubscribe и refresh subscription, только для authenticated portal user;
+- добавить frontend permission UX: объяснение зачем нужны уведомления, request permission только по явному действию пользователя, состояние denied/default/granted;
+- добавить service worker `push` handler: показывать notification без раскрытия sensitive message content сверх выбранной privacy policy;
+- добавить service worker `notificationclick` handler: открывать или фокусировать `/app/chat`;
+- связать push trigger с backend-owned chat event path: Chatwoot webhook -> route resolution -> backend snapshot/relevant update -> push только нужному portal user;
+- фильтровать private/internal Chatwoot events до push так же, как до transcript fanout;
+- не отправлять push автору собственного сообщения из портала;
+- добавить notification preferences: минимум global on/off для portal user, с возможностью расширить настройки позже;
+- добавить дедупликацию уведомлений по Chatwoot delivery/message scope, чтобы повторный webhook не создавал повторный push;
+- добавить обработку expired/invalid subscriptions: mark inactive/remove после push provider errors;
+- добавить payload privacy policy: по умолчанию безопасный текст вроде "Новое сообщение в клиентском чате", без вложений/полного текста, пока явно не утверждено иначе;
+- добавить observability для push delivery: redacted logs/status counters без записи endpoint keys в logs;
+- добавить unit/integration tests для subscribe/unsubscribe, routing, privacy filtering, duplicate suppression и expired subscription cleanup;
+- добавить focused browser/manual validation для installed PWA notification permission, background push и click-to-open chat.
+
+### Exit Criteria
+
+- пользователь может включить уведомления из портала;
+- новое клиентски-видимое сообщение от агента приводит к push-уведомлению нужному пользователю;
+- private/internal события и собственные сообщения пользователя не создают push;
+- duplicate webhook delivery не создает duplicate notification;
+- click по уведомлению открывает или фокусирует клиентский чат;
+- неподдерживаемые браузеры получают понятный fallback без поломки portal runtime.
+
+## Phase 11. Hardening
 
 ### Цель
 
@@ -292,7 +353,9 @@
 8. Text Send And First Conversation Bootstrap
 9. Attachment Send
 10. Realtime
-11. Hardening
+11. PWA App Hardening
+12. Push Notifications
+13. Hardening
 
 Мы не перепрыгиваем сразу к realtime или "красивому чату", пока не собрали auth, session, protected shell и backend authority.
 

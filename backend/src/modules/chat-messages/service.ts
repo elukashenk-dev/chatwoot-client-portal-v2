@@ -68,7 +68,16 @@ export type PortalChatMessage = {
   createdAt: string
   direction: 'incoming' | 'outgoing'
   id: number
+  replyTo: PortalChatReplyPreview | null
   status: string
+}
+
+export type PortalChatReplyPreview = {
+  attachmentName: string | null
+  authorName: string
+  content: string | null
+  direction: 'incoming' | 'outgoing'
+  messageId: number
 }
 
 export type ChatMessagesSnapshot = ChatContextSnapshot & {
@@ -146,14 +155,61 @@ function normalizePortalMessageContent(content: string | null) {
     .replace(/\\(\r\n|\n|\r)/g, '$1')
 }
 
-function mapPortalMessage(message: ChatwootMessage): PortalChatMessage | null {
+function getReplyToMessageId(message: ChatwootMessage) {
+  const rawReplyToMessageId =
+    message.contentAttributes.in_reply_to ?? message.contentAttributes.inReplyTo
+
+  return typeof rawReplyToMessageId === 'number' &&
+    Number.isInteger(rawReplyToMessageId) &&
+    rawReplyToMessageId > 0
+    ? rawReplyToMessageId
+    : null
+}
+
+function isClientVisibleMessage(message: ChatwootMessage) {
   if (message.private) {
-    return null
+    return false
   }
 
   if (!message.content && message.attachments.length === 0) {
+    return false
+  }
+
+  return true
+}
+
+function buildReplyPreview(
+  replyToMessageId: number | null,
+  targetMessage: ChatwootMessage | null | undefined,
+): PortalChatReplyPreview | null {
+  if (
+    replyToMessageId === null ||
+    !targetMessage ||
+    !isClientVisibleMessage(targetMessage)
+  ) {
     return null
   }
+
+  return {
+    attachmentName: targetMessage.attachments[0]?.name ?? null,
+    authorName: mapAuthorName(targetMessage),
+    content: normalizePortalMessageContent(targetMessage.content),
+    direction: mapMessageDirection(targetMessage),
+    messageId: replyToMessageId,
+  }
+}
+
+function mapPortalMessage(
+  message: ChatwootMessage,
+  replyTargetsById: Map<number, ChatwootMessage> = new Map(),
+): PortalChatMessage | null {
+  if (!isClientVisibleMessage(message)) {
+    return null
+  }
+
+  const replyToMessageId = getReplyToMessageId(message)
+  const replyToMessage =
+    replyToMessageId === null ? null : replyTargetsById.get(replyToMessageId)
 
   return {
     attachments: message.attachments.map((attachment) => ({
@@ -170,8 +226,52 @@ function mapPortalMessage(message: ChatwootMessage): PortalChatMessage | null {
     createdAt: toIsoTimestamp(message.createdAt),
     direction: mapMessageDirection(message),
     id: message.id,
+    replyTo: buildReplyPreview(replyToMessageId, replyToMessage),
     status: message.status,
   }
+}
+
+async function buildReplyTargetsById({
+  chatwootClient,
+  conversationId,
+  messages,
+}: {
+  chatwootClient: Pick<ChatwootClient, 'findConversationMessageById'>
+  conversationId: number
+  messages: ChatwootMessage[]
+}) {
+  const replyTargetsById = new Map<number, ChatwootMessage>()
+
+  for (const message of messages) {
+    if (isClientVisibleMessage(message)) {
+      replyTargetsById.set(message.id, message)
+    }
+  }
+
+  const missingReplyTargetIds = [
+    ...new Set(
+      messages
+        .filter(isClientVisibleMessage)
+        .map(getReplyToMessageId)
+        .filter((messageId): messageId is number => messageId !== null)
+        .filter((messageId) => !replyTargetsById.has(messageId)),
+    ),
+  ]
+
+  await Promise.all(
+    missingReplyTargetIds.map(async (messageId) => {
+      const replyTarget = await chatwootClient.findConversationMessageById(
+        conversationId,
+        messageId,
+      )
+
+      if (replyTarget && isClientVisibleMessage(replyTarget)) {
+        replyTargetsById.set(messageId, replyTarget)
+      }
+    }),
+  )
+
+  return replyTargetsById
 }
 
 function createChatUnavailableContext(
@@ -238,6 +338,51 @@ function normalizeClientMessageKey(clientMessageKey: string) {
   return normalizedClientMessageKey
 }
 
+function normalizeReplyToMessageId(replyToMessageId?: number | null) {
+  if (replyToMessageId === undefined || replyToMessageId === null) {
+    return null
+  }
+
+  if (!Number.isInteger(replyToMessageId) || replyToMessageId <= 0) {
+    throw new ApiError(
+      400,
+      'reply_target_invalid',
+      'Некорректное сообщение для ответа.',
+    )
+  }
+
+  return replyToMessageId
+}
+
+async function resolveReplyTargetMessage({
+  chatwootClient,
+  conversationId,
+  replyToMessageId,
+}: {
+  chatwootClient: Pick<ChatwootClient, 'findConversationMessageById'>
+  conversationId: number
+  replyToMessageId: number | null
+}) {
+  if (replyToMessageId === null) {
+    return null
+  }
+
+  const replyTargetMessage = await chatwootClient.findConversationMessageById(
+    conversationId,
+    replyToMessageId,
+  )
+
+  if (!replyTargetMessage || !isClientVisibleMessage(replyTargetMessage)) {
+    throw new ApiError(
+      400,
+      'reply_target_unavailable',
+      'Сообщение для ответа недоступно.',
+    )
+  }
+
+  return replyTargetMessage
+}
+
 function isAllowedAttachmentMimeType(mimeType: string) {
   return (
     mimeType.startsWith('image/') ||
@@ -299,16 +444,24 @@ function normalizeAttachmentUpload(
   }
 }
 
-function createTextPayloadSha256(content: string) {
+function createTextPayloadSha256(
+  content: string,
+  replyToMessageId: number | null,
+) {
   return createHash('sha256')
-    .update(`${SEND_LEDGER_MESSAGE_KIND_TEXT}\0${content}`)
+    .update(
+      `${SEND_LEDGER_MESSAGE_KIND_TEXT}\0${content}\0${replyToMessageId ?? ''}`,
+    )
     .digest('hex')
 }
 
-function createAttachmentPayloadSha256(attachment: PortalAttachmentUpload) {
+function createAttachmentPayloadSha256(
+  attachment: PortalAttachmentUpload,
+  replyToMessageId: number | null,
+) {
   return createHash('sha256')
     .update(
-      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0`,
+      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0${replyToMessageId ?? ''}\0`,
     )
     .update(attachment.data)
     .digest('hex')
@@ -771,10 +924,16 @@ export function createChatMessagesService({
           })
         }
 
+        const replyTargetsById = await buildReplyTargetsById({
+          chatwootClient,
+          conversationId: context.primaryConversation.id,
+          messages: page.messages,
+        })
+
         return buildMessagesSnapshot(context, {
           hasMoreOlder: page.hasMoreOlder,
           messages: page.messages
-            .map(mapPortalMessage)
+            .map((message) => mapPortalMessage(message, replyTargetsById))
             .filter(
               (message): message is PortalChatMessage => message !== null,
             ),
@@ -804,11 +963,13 @@ export function createChatMessagesService({
       clientMessageKey,
       content,
       primaryConversationId = null,
+      replyToMessageId = null,
       userId,
     }: {
       clientMessageKey: string
       content: string
       primaryConversationId?: number | null
+      replyToMessageId?: number | null
       userId: number
     }): Promise<ChatSendResult> {
       const context =
@@ -824,9 +985,16 @@ export function createChatMessagesService({
       const normalizedContent = normalizeContent(content)
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
+      const normalizedReplyToMessageId =
+        normalizeReplyToMessageId(replyToMessageId)
       const resolvedPrimaryConversationId = context.primaryConversation.id
 
       try {
+        const replyTargetMessage = await resolveReplyTargetMessage({
+          chatwootClient,
+          conversationId: resolvedPrimaryConversationId,
+          replyToMessageId: normalizedReplyToMessageId,
+        })
         const sentMessage = await createOrReplayCanonicalMessage({
           chatMessagesRepository,
           chatwootClient,
@@ -835,13 +1003,17 @@ export function createChatMessagesService({
             chatwootClient.createConversationIncomingMessage({
               content: normalizedContent,
               conversationId: resolvedPrimaryConversationId,
+              replyToMessageId: normalizedReplyToMessageId,
               sourceId: normalizedClientMessageKey,
             }),
           messageKind: SEND_LEDGER_MESSAGE_KIND_TEXT,
           now,
           payloadMismatchMessage:
             'Повторная отправка использует другой текст для того же ключа.',
-          payloadSha256: createTextPayloadSha256(normalizedContent),
+          payloadSha256: createTextPayloadSha256(
+            normalizedContent,
+            normalizedReplyToMessageId,
+          ),
           primaryConversationId: resolvedPrimaryConversationId,
           userId,
         })
@@ -855,7 +1027,12 @@ export function createChatMessagesService({
           })
         }
 
-        const portalMessage = mapPortalMessage(sentMessage)
+        const replyTargetsById = new Map(
+          replyTargetMessage
+            ? [[replyTargetMessage.id, replyTargetMessage]]
+            : [],
+        )
+        const portalMessage = mapPortalMessage(sentMessage, replyTargetsById)
 
         if (!portalMessage) {
           throw new ApiError(
@@ -886,11 +1063,13 @@ export function createChatMessagesService({
       attachment,
       clientMessageKey,
       primaryConversationId = null,
+      replyToMessageId = null,
       userId,
     }: {
       attachment: PortalAttachmentUpload
       clientMessageKey: string
       primaryConversationId?: number | null
+      replyToMessageId?: number | null
       userId: number
     }): Promise<ChatSendResult> {
       const context =
@@ -906,9 +1085,16 @@ export function createChatMessagesService({
       const normalizedAttachment = normalizeAttachmentUpload(attachment)
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
+      const normalizedReplyToMessageId =
+        normalizeReplyToMessageId(replyToMessageId)
       const resolvedPrimaryConversationId = context.primaryConversation.id
 
       try {
+        const replyTargetMessage = await resolveReplyTargetMessage({
+          chatwootClient,
+          conversationId: resolvedPrimaryConversationId,
+          replyToMessageId: normalizedReplyToMessageId,
+        })
         const sentMessage = await createOrReplayCanonicalMessage({
           chatMessagesRepository,
           chatwootClient,
@@ -917,13 +1103,17 @@ export function createChatMessagesService({
             chatwootClient.createConversationIncomingAttachmentMessage({
               attachment: normalizedAttachment,
               conversationId: resolvedPrimaryConversationId,
+              replyToMessageId: normalizedReplyToMessageId,
               sourceId: normalizedClientMessageKey,
             }),
           messageKind: SEND_LEDGER_MESSAGE_KIND_ATTACHMENT,
           now,
           payloadMismatchMessage:
             'Повторная отправка использует другой файл для того же ключа.',
-          payloadSha256: createAttachmentPayloadSha256(normalizedAttachment),
+          payloadSha256: createAttachmentPayloadSha256(
+            normalizedAttachment,
+            normalizedReplyToMessageId,
+          ),
           primaryConversationId: resolvedPrimaryConversationId,
           userId,
         })
@@ -937,7 +1127,12 @@ export function createChatMessagesService({
           })
         }
 
-        const portalMessage = mapPortalMessage(sentMessage)
+        const replyTargetsById = new Map(
+          replyTargetMessage
+            ? [[replyTargetMessage.id, replyTargetMessage]]
+            : [],
+        )
+        const portalMessage = mapPortalMessage(sentMessage, replyTargetsById)
 
         if (!portalMessage) {
           throw new ApiError(

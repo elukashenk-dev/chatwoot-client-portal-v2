@@ -43,6 +43,13 @@
       "when": 1776784369525,
       "tag": "0005_tidy_reptil",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1776797421670,
+      "tag": "0006_pale_cerebro",
+      "breakpoints": true
     }
   ]
 }

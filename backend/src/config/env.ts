@@ -95,6 +95,8 @@ const envSchema = z
     CHATWOOT_ACCOUNT_ID: optionalPositiveInt,
     CHATWOOT_API_ACCESS_TOKEN: optionalNonEmptyString,
     CHATWOOT_PORTAL_INBOX_ID: optionalPositiveInt,
+    CHATWOOT_WEBHOOK_CALLBACK_URL: optionalUrlString,
+    CHATWOOT_WEBHOOK_SECRET: optionalNonEmptyString,
     SMTP_HOST: optionalNonEmptyString,
     SMTP_PORT: optionalPositiveInt.default(1025),
     SMTP_SECURE: booleanFromStringWithDefaultFalse,

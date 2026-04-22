@@ -1,53 +1,31 @@
 # Work Log
 
-Короткий лог важных внедренных шагов в `chatwoot-client-portal-v2`.
+Короткая карта значимых внедренных шагов в `chatwoot-client-portal-v2`.
 
-- Создан отдельный проект `v2` рядом со старым порталом, без копирования кода из `v1`.
-- Собран базовый workspace: root scripts, `pnpm`, frontend, backend, env/example и tooling.
-- Поднят frontend foundation на `React + TypeScript + Vite + Tailwind CSS`; добавлены auth shell, router, login UI, PWA manifest/service worker и базовые UI-компоненты.
-- Поднят backend foundation на `Fastify + TypeScript + Zod + PostgreSQL + Drizzle`; добавлены isolated Postgres bootstrap, migrations и health/auth infrastructure.
-- Реализована DB-backed cookie session auth: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`; login screen переведен на реальный backend flow.
-- Добавлен backend CLI `pnpm --dir backend user:create` для локального создания portal user.
-- Реализован `Phase 2. Registration Flow`: Chatwoot contact eligibility, email verification через SMTP/Mailpit, `/auth/register`, `/auth/register/verify`, `/auth/register/set-password`, continuation token и создание `portal_user` после successful verify + password set.
-- Registration flow сохраняет durable связь `portal_user -> Chatwoot contact`, использует scoped transaction locks для verification lifecycle и выровненную password policy на frontend/backend.
-- Реализован `Phase 3. Password Reset`: request, verify, continuation-token set-password, generic request response без account disclosure, SMTP/Mailpit delivery и invalidation старых sessions после смены пароля.
-- Password reset flow подключен на frontend routes `/auth/password-reset/request`, `/auth/password-reset/verify`, `/auth/password-reset/set-password` с session-backed state и shared password rules UI.
-- Password reset hardening: frontend reset state истекает по TTL, недоставленный SMTP reset не оставляет stale pending record, request response не ждет active-user-only SMTP path.
-- Реализован `Phase 4. Protected App Shell`: auth-session bootstrap через `/api/auth/me`, protected `/app/*` routes, public auth redirect for authenticated sessions, logout UX и protected empty state на `/app/chat`.
-- Расширен Playwright e2e baseline: auto-seeded portal user, login/session/logout и protected auth routing checks.
-- Текущий baseline покрыт frontend/backend tests, lint, typecheck/build checks по внедренным фазам.
-- Добавлены Mailpit-backed Playwright e2e happy paths для registration и password reset: registration создает eligible Chatwoot contact, читает verification code из Mailpit, проверяет `portal_user -> Chatwoot contact` link и логин; reset проверяет Mailpit code, old-password rejection и new-password login.
-- Для Mailpit e2e шага пройдены targeted/full browser checks, unit/integration tests, lint, build и format check.
-- Инициализирован отдельный git repository для `chatwoot-client-portal-v2`; в `AGENTS.md` добавлены правила git boundary, feature branches и intake/closure для нового функционала.
-- Добавлено правило `Commit Advisory Rule`: агент должен сам подсказывать удачные моменты для git commit, предупреждать когда commit рано делать и предлагать checkpoint после завершенных фаз, slices, findings и docs-only governance updates.
-- Добавлено правило `Phase Checkpoint Flow`: перед новой phase агент должен оценить regression safety net, закрыть недостающие тесты по риску и только затем предлагать checkpoint commit.
-- Добавлен pre-Phase-5 regression baseline: Playwright auth guard/negative flows и PWA/runtime smoke, backend auth/session invariants, frontend invalid-code/state guard tests.
-- Full validation для regression baseline пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
-- Реализован `Phase 5. Chat Read Model`: backend-owned `GET /api/chat/context`, `GET /api/chat/messages`, Chatwoot linked contact/primary conversation resolution, durable conversation mapping и bounded older-history pagination.
-- `/app/chat` переведен с placeholder на controlled chat states: loading, not_ready/unavailable и ready transcript с последними 20 сообщениями, attachment cards, disabled future composer и кнопкой загрузки старой истории.
-- Phase 5 покрыт backend route/service/client tests, frontend chat/auth route tests и Playwright chat read model e2e; full validation пройдена: `pnpm test:e2e`, `pnpm test`, `pnpm lint`, `pnpm build`, targeted format/whitespace checks.
-- Принято финальное chat-routing решение: портал использует один вечный primary Chatwoot conversation; portal inbox должен быть настроен как `Reopen same conversation`, а несколько Chatwoot conversations для одного portal contact считаются anomaly, не клиентской transcript-моделью.
-- Принято routing enforcement правило: первый deploy выполняет backend setup-check для portal inbox, а runtime auto-fix запускается только при anomaly `>1 portal conversation`; canonical fallback без valid mapping выбирает самый свежий active conversation, иначе самый свежий resolved conversation.
-- Закрыты Phase 5 review findings `F-CHAT-001`, `F-CHAT-003`: добавлены Chatwoot portal inbox routing setup/auto-fix, capped contact conversations recovery через source_id, valid persisted mapping authority и canonical fallback active/newest-resolved.
-- Закрыт Phase 5 review finding `F-CHAT-002`: older-history failure теперь остается локальной retryable ошибкой у Load Older и не скрывает уже видимый transcript.
-- Устранена хрупкость backend integration tests по фиксированной дате verification/reset records: app-level tests теперь используют relative future timestamps.
-- Validation после review fixes: targeted chat tests, targeted ChatPage test, `pnpm test`, `pnpm lint`, `pnpm build`, `git diff --check`; setup-check `pnpm --dir backend chatwoot:ensure-portal-inbox` подтвердил `lockToSingleConversation: true` для inbox `6`.
-- Checkpoint commit создан: `039b1be Implement single-conversation chat routing`.
-- Реализован `Phase 6. Text Send And First Conversation Bootstrap`: backend-owned `POST /api/chat/messages`, text composer на `/app/chat`, first conversation bootstrap только при отсутствии authoritative portal conversation и send через mapped primary conversation.
-- Добавлен durable send ledger `portal_chat_message_sends` с idempotency по `clientMessageKey`, payload conflict guard, retry/in-progress states, confirmed replay по Chatwoot message id и false-negative recovery через `source_id`.
+- Создан отдельный проект `v2` рядом со старым порталом: новый frontend, backend, isolated Postgres, env/bootstrap tooling и базовая структура workspace.
+- Поднят frontend foundation на `React + TypeScript + Vite + Tailwind CSS`: auth shell, router, login UI, PWA shell и базовые UI-компоненты.
+- Поднят backend foundation на `Fastify + TypeScript + Zod + PostgreSQL + Drizzle`: health endpoint, auth infrastructure, migrations и database bootstrap.
+- Реализована DB-backed cookie session auth: login, logout, current user endpoint, protected/public route behavior и локальное создание portal user через backend CLI.
+- Реализован `Phase 2. Registration Flow`: Chatwoot contact eligibility, email verification через SMTP/Mailpit, continuation token, password setup и создание portal user.
+- Registration flow сохраняет durable связь `portal_user -> Chatwoot contact` и выравнивает password policy на frontend/backend.
+- Реализован `Phase 3. Password Reset`: request, verify, continuation-token set-password, generic response без account disclosure и invalidation старых sessions после смены пароля.
+- Реализован `Phase 4. Protected App Shell`: auth-session bootstrap через backend, protected `/app/*` routes, public auth redirects, logout UX и app shell для `/app/chat`.
+- Реализован `Phase 5. Chat Read Model`: backend-owned chat context/messages endpoints, Chatwoot linked contact resolution, primary conversation selection, durable conversation mapping и bounded older-history pagination.
+- `/app/chat` переведен на controlled chat states: loading, not ready/unavailable, ready transcript, attachment cards и загрузка старой истории.
+- Принята chat-routing модель: портал работает с одним authoritative primary Chatwoot conversation на portal contact; durable mapping остается основой read/send/realtime routing.
+- Реализован `Phase 6. Text Send And First Conversation Bootstrap`: backend-owned text send, composer на `/app/chat`, first conversation bootstrap от первого сообщения пользователя и send через mapped primary conversation.
+- Добавлен durable send ledger `portal_chat_message_sends` для idempotency, retry/replay и recovery по Chatwoot `source_id`.
 - Chatwoot integration расширена созданием portal contact inbox, conversation bootstrap и customer-authored text message create через account API без browser Chatwoot authority.
-- Phase 6 покрыт backend context/client/service/repository/app tests, frontend ChatPage tests и Playwright chat send contract; validation пройдена: targeted tests, `pnpm test`, `pnpm lint`, `pnpm build`, `pnpm test:e2e -- chat-read-model.spec.ts`, targeted format check.
-- Backend runtime env loading теперь подхватывает root `.env` для `pnpm --dir backend db:migrate`, `dev` и CLI scripts; `pnpm --dir backend db:migrate` проверен после правки.
-- По review-правке chat transcript сгруппированы подряд идущие bubbles: timestamp показывается только на последнем сообщении блока, outgoing bubbles смотрят вправо, incoming bubbles зеркалятся влево, radius приведен к `0.7rem`; добавлены component tests.
-- Исправлен bug first-message bootstrap: linked contact без dialog и contact с удаленным mapped conversation больше не блокируют composer; backend умеет восстановить contact link по exact email match и bootstrap-нуть replacement conversation, если в portal inbox не осталось conversations.
-- Внесены chat UI polish fixes по прототипу: day dividers, bubble colors, author labels, composer autoresize/focus styling и transcript scroll behavior для initial bottom, append auto-follow и older-prepend anchor preservation.
-- Исправлено отображение agent multiline сообщений: Chatwoot escaped line breaks нормализуются в обычные переносы до отдачи transcript на frontend.
-- Checkpoint commit создан: `9fb185e feat: add text send and conversation bootstrap`.
-- Реализован `Phase 7. Attachment Send`: добавлен single-file composer flow, `POST /api/chat/messages/attachment`, multipart parsing через backend, отправка в Chatwoot account API как customer-authored incoming attachment и отображение вложения в transcript.
-- Attachment send использует тот же durable send ledger с отдельным `messageKind = attachment`, payload hash по file name/type/size/content, confirmed replay и false-negative recovery через `source_id`, чтобы retry не создавал duplicate attachments.
-- Backend валидирует attachment upload: один файл, multipart-only request, limit 40 МБ и allowlist/prefix validation для поддерживаемых document/media MIME types.
-- Phase 7 покрыт backend app/client/service tests, frontend ChatPage multipart/draft-retention test и Playwright chat attachment send contract; validation пройдена: `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:e2e -- chat-read-model.spec.ts`, `git diff --check`, targeted Prettier check.
+- Chat transcript приведен к целевому UI: группировка подряд идущих сообщений, author labels, day dividers, bubble styling, composer autoresize и устойчивое поведение прокрутки.
+- Реализован `Phase 7. Attachment Send`: single-file composer flow, backend multipart endpoint, отправка customer-authored attachment в Chatwoot и отображение вложений в transcript.
+- Attachment send использует durable send ledger с отдельным `messageKind = attachment`, payload hash по файлу и backend validation для размера/MIME type.
+- Реализован `Phase 8. Realtime`: signed Chatwoot webhook intake, delivery dedupe ledger, mapping-based route resolution, SSE hub/endpoint и frontend EventSource merge новых сообщений.
+- Chatwoot webhook path доведен до воспроизводимого local setup: documented callback `/api/integrations/chatwoot/webhooks/account`, account webhook provisioning script и синхронизация local webhook secret.
+- Roadmap усилен отдельными фазами `Phase 9. PWA App Hardening` и `Phase 10. Push Notifications` с обязательными шагами для installed PWA, reconnect/offline behavior и push-уведомлений.
+- Добавлен quick emoji bar в chat composer: горизонтальная лента быстрых фраз с emoji, вставка в текущую позицию курсора и возврат фокуса в текстовое поле.
+- Добавлен reply state для чата: выбор сообщения для ответа, отправка Chatwoot `content_attributes.in_reply_to` и отображение quoted preview у сообщений пользователя и агента.
+- Reply UX приведен к app-like поведению: mobile swipe-to-reply без конфликта с вертикальной прокруткой, desktop context menu с reply/copy и без постоянных стрелок у сообщений.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `Phase 7`; после commit переходить к `Phase 8. Realtime`.
+- Руками проверить reply swipe/context menu вместе с `Phase 8`, затем перейти к `Phase 9. PWA App Hardening`.

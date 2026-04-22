@@ -464,7 +464,9 @@ describe('createChatwootClient', () => {
       createJsonResponse({
         attachments: [],
         content: 'Portal text',
-        content_attributes: {},
+        content_attributes: {
+          in_reply_to: 401,
+        },
         content_type: 'text',
         created_at: 1_776_000_010,
         id: 501,
@@ -493,12 +495,16 @@ describe('createChatwootClient', () => {
       client.createConversationIncomingMessage({
         content: ' Portal text ',
         conversationId: 101,
+        replyToMessageId: 401,
         sourceId: 'portal-send:test-key',
       }),
     ).resolves.toMatchObject({
       content: 'Portal text',
       id: 501,
       messageType: 0,
+      contentAttributes: {
+        in_reply_to: 401,
+      },
       sourceId: 'portal-send:test-key',
     })
     expect(fetchFn).toHaveBeenCalledWith(
@@ -506,7 +512,9 @@ describe('createChatwootClient', () => {
       expect.objectContaining({
         body: JSON.stringify({
           content: 'Portal text',
-          content_attributes: {},
+          content_attributes: {
+            in_reply_to: 401,
+          },
           content_type: 'text',
           message_type: 'incoming',
           private: false,
@@ -566,6 +574,7 @@ describe('createChatwootClient', () => {
           mimeType: 'Application/PDF',
         },
         conversationId: 101,
+        replyToMessageId: 401,
         sourceId: 'portal-send:attachment-key',
       }),
     ).resolves.toMatchObject({
@@ -594,8 +603,101 @@ describe('createChatwootClient', () => {
     expect(requestOptions?.headers).not.toHaveProperty('Content-Type')
     expect(formData).toBeInstanceOf(FormData)
     expect(formData.get('message_type')).toBe('incoming')
+    expect(formData.get('content_attributes')).toBe('{"in_reply_to":401}')
     expect(formData.get('private')).toBe('false')
     expect(formData.get('source_id')).toBe('portal-send:attachment-key')
     expect(formData.get('attachments[]')).toBeInstanceOf(Blob)
+  })
+
+  it('lists account webhooks with their callback secret when Chatwoot returns it', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        payload: {
+          webhooks: [
+            {
+              id: 2,
+              name: 'Portal realtime',
+              secret: 'webhook-secret',
+              subscriptions: ['message_created', 'message_updated'],
+              url: 'http://127.0.0.1:3301/api/integrations/chatwoot/webhooks/account',
+            },
+          ],
+        },
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(client.listAccountWebhooks()).resolves.toEqual([
+      {
+        id: 2,
+        name: 'Portal realtime',
+        secret: 'webhook-secret',
+        subscriptions: ['message_created', 'message_updated'],
+        url: 'http://127.0.0.1:3301/api/integrations/chatwoot/webhooks/account',
+      },
+    ])
+    expect(String(fetchFn.mock.calls[0]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/webhooks',
+    )
+  })
+
+  it('updates an account webhook through the Chatwoot account API', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        payload: {
+          webhook: {
+            id: 2,
+            name: 'Portal realtime',
+            secret: 'webhook-secret',
+            subscriptions: ['message_created', 'message_updated'],
+            url: 'http://127.0.0.1:3301/api/integrations/chatwoot/webhooks/account',
+          },
+        },
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.updateAccountWebhook({
+        name: 'Portal realtime',
+        subscriptions: ['message_created', 'message_updated'],
+        url: 'http://127.0.0.1:3301/api/integrations/chatwoot/webhooks/account',
+        webhookId: 2,
+      }),
+    ).resolves.toMatchObject({
+      id: 2,
+      secret: 'webhook-secret',
+    })
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'Portal realtime',
+          subscriptions: ['message_created', 'message_updated'],
+          url: 'http://127.0.0.1:3301/api/integrations/chatwoot/webhooks/account',
+        }),
+        method: 'PATCH',
+      }),
+    )
+    expect(String(fetchFn.mock.calls[0]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/webhooks/2',
+    )
   })
 })

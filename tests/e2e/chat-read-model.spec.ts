@@ -39,11 +39,20 @@ async function fillLoginForm(page: Page) {
     .fill(E2E_PORTAL_USER.password)
 }
 
+async function routeStoppedRealtime(page: Page) {
+  await page.route('**/api/chat/realtime**', async (route) => {
+    await route.fulfill({
+      status: 204,
+    })
+  })
+}
+
 test('renders the ready chat transcript and loads older history through the backend contract', async ({
   page,
 }) => {
   const chatMessageRequests: string[] = []
 
+  await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
 
@@ -154,6 +163,7 @@ test('sends text through the backend chat contract and renders the canonical res
     path: string
   }> = []
 
+  await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
@@ -237,6 +247,117 @@ test('sends text through the backend chat contract and renders the canonical res
   })
 })
 
+test('selects a message as reply target and sends reply metadata through the backend contract', async ({
+  page,
+}) => {
+  const chatMessageRequests: Array<{
+    body: Record<string, unknown> | null
+    method: string
+    path: string
+  }> = []
+
+  await routeStoppedRealtime(page)
+  await page.route('**/api/chat/messages**', async (route) => {
+    const request = route.request()
+    const requestUrl = new URL(request.url())
+    const method = request.method()
+
+    chatMessageRequests.push({
+      body: method === 'POST' ? JSON.parse(request.postData() ?? '{}') : null,
+      method,
+      path: `${requestUrl.pathname}${requestUrl.search}`,
+    })
+
+    if (method === 'POST') {
+      await route.fulfill({
+        body: JSON.stringify({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 6,
+            lastActivityAt: 1_777_000_110,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            content: 'Ответ из портала',
+            contentType: 'text',
+            createdAt: '2026-04-21T10:11:00.000Z',
+            direction: 'outgoing',
+            id: 502,
+            replyTo: {
+              attachmentName: null,
+              authorName: 'Ольга Support',
+              content: 'Вопрос от агента.',
+              direction: 'incoming',
+              messageId: 204,
+            },
+            status: 'sent',
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              content: 'Вопрос от агента.',
+              contentType: 'text',
+              createdAt: '2026-04-21T09:12:00.000Z',
+              direction: 'incoming',
+              id: 204,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await page.getByText('Вопрос от агента.').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Ответить' }).click()
+  await expect(page.getByText('Ответ на сообщение Ольга Support')).toBeVisible()
+  await page
+    .getByRole('textbox', { name: 'Сообщение' })
+    .fill('Ответ из портала')
+  await page.getByRole('button', { name: 'Отправить' }).click()
+
+  await expect(page.getByText('Ответ из портала')).toBeVisible()
+  await expect.poll(() => chatMessageRequests.length).toBe(2)
+  expect(chatMessageRequests[1]).toMatchObject({
+    body: {
+      clientMessageKey: expect.stringMatching(/^portal-send:/),
+      content: 'Ответ из портала',
+      primaryConversationId: 77,
+      replyToMessageId: 204,
+    },
+    method: 'POST',
+    path: '/api/chat/messages',
+  })
+})
+
 test('sends an attachment through the backend chat contract and renders the canonical response', async ({
   page,
 }) => {
@@ -246,6 +367,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     path: string
   }> = []
 
+  await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
@@ -338,4 +460,65 @@ test('sends an attachment through the backend chat contract and renders the cano
       path: '/api/chat/messages/attachment',
     },
   ])
+})
+
+test('renders new backend realtime messages without a manual transcript refresh', async ({
+  page,
+}) => {
+  const realtimeSnapshot = createReadySnapshot({
+    hasMoreOlder: false,
+    messages: [
+      {
+        attachments: [],
+        authorName: 'Ольга Support',
+        content: 'Realtime ответ от агента.',
+        contentType: 'text',
+        createdAt: '2026-04-21T10:20:00.000Z',
+        direction: 'incoming',
+        id: 701,
+        status: 'sent',
+      },
+    ],
+    nextOlderCursor: null,
+  })
+
+  await page.route('**/api/chat/realtime**', async (route) => {
+    await route.fulfill({
+      body: `event: messages\ndata: ${JSON.stringify(realtimeSnapshot)}\n\n`,
+      contentType: 'text/event-stream',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/messages**', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Вы',
+              content: 'Текущее сообщение в истории.',
+              contentType: 'text',
+              createdAt: '2026-04-21T10:00:00.000Z',
+              direction: 'outgoing',
+              id: 700,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await expect(page.getByText('Текущее сообщение в истории.')).toBeVisible()
+  await expect(page.getByText('Realtime ответ от агента.')).toBeVisible()
 })

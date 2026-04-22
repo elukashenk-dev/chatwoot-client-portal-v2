@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,6 +9,42 @@ import type { ChatMessagesSnapshot } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
+}
+
+class MockEventSource {
+  static instances: MockEventSource[] = []
+
+  readonly listeners = new Map<string, Set<(event: MessageEvent) => void>>()
+  readonly close = vi.fn()
+  readonly url: string
+  readonly withCredentials: boolean | undefined
+
+  constructor(url: string | URL, init?: EventSourceInit) {
+    this.url = String(url)
+    this.withCredentials = init?.withCredentials
+    MockEventSource.instances.push(this)
+  }
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+    const listeners = this.listeners.get(type) ?? new Set()
+    const callback =
+      typeof listener === 'function'
+        ? listener
+        : listener.handleEvent.bind(listener)
+
+    listeners.add(callback as (event: MessageEvent) => void)
+    this.listeners.set(type, listeners)
+  }
+
+  emit(type: string, data: unknown) {
+    const event = new MessageEvent(type, {
+      data: JSON.stringify(data),
+    })
+
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event)
+    }
+  }
 }
 
 function createJsonResponse(body: unknown, status = 200) {
@@ -102,6 +138,7 @@ describe('ChatPage', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     fetchMock.mockReset()
+    MockEventSource.instances = []
   })
 
   it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
@@ -138,6 +175,41 @@ describe('ChatPage', () => {
         method: 'GET',
       }),
     )
+  })
+
+  it('inserts a quick emoji phrase into the composer draft at the cursor position', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    const textarea = screen.getByRole('textbox', {
+      name: 'Сообщение',
+    }) as HTMLTextAreaElement
+
+    await user.type(textarea, 'Привет конец')
+
+    act(() => {
+      textarea.setSelectionRange(7, 7)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Добавить ✅ Готово' }))
+
+    expect(textarea).toHaveValue('Привет ✅ Готовоконец')
+    await waitFor(() => {
+      expect(textarea).toHaveFocus()
+    })
+    expect(textarea.selectionStart).toBe('Привет ✅ Готово'.length)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('loads older messages through the bounded history cursor', async () => {
@@ -371,13 +443,15 @@ describe('ChatPage', () => {
       {},
       CHAT_PAGE_LOAD_TIMEOUT,
     )
-    await user.type(
-      screen.getByRole('textbox', { name: 'Сообщение' }),
-      'Новое сообщение',
-    )
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    await user.type(textarea, 'Новое сообщение')
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
     expect(await screen.findByText('Новое сообщение')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(textarea).toHaveFocus()
+    })
 
     const [, requestOptions] = fetchMock.mock.calls[2] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
@@ -399,6 +473,97 @@ describe('ChatPage', () => {
       content: 'Новое сообщение',
       primaryConversationId: 77,
     })
+  })
+
+  it('sends a text reply to a selected message and clears reply state after success', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 9,
+            lastActivityAt: 1776763700,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            content: 'Отвечаю на вопрос',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:32:00.000Z',
+            direction: 'outgoing',
+            id: 503,
+            replyTo: {
+              attachmentName: null,
+              authorName: 'Ольга Support',
+              content: 'Здравствуйте, вижу ваше обращение.',
+              direction: 'incoming',
+              messageId: 101,
+            },
+            status: 'sent',
+          },
+        }),
+      )
+
+    renderChatRoute()
+
+    const sourceMessageText = await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+    const sourceMessageElement = sourceMessageText.closest('[data-message-id]')
+    const sourceMessageBubble =
+      sourceMessageElement?.querySelector('[data-chat-bubble]')
+
+    if (!(sourceMessageBubble instanceof HTMLElement)) {
+      throw new Error('Missing source message bubble.')
+    }
+
+    fireEvent.contextMenu(sourceMessageBubble, {
+      clientX: 120,
+      clientY: 160,
+    })
+    await user.click(screen.getByRole('menuitem', { name: 'Ответить' }))
+
+    expect(
+      screen.getByText('Ответ на сообщение Ольга Support'),
+    ).toBeInTheDocument()
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    await user.type(textarea, 'Отвечаю на вопрос')
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    expect(await screen.findByText('Отвечаю на вопрос')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Отменить ответ' }),
+      ).not.toBeInTheDocument()
+    })
+
+    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const requestBody = JSON.parse(String(requestOptions?.body)) as {
+      replyToMessageId: number
+    }
+
+    expect(requestBody).toEqual(
+      expect.objectContaining({
+        content: 'Отвечаю на вопрос',
+        primaryConversationId: 77,
+        replyToMessageId: 101,
+      }),
+    )
   })
 
   it('sends one attachment through multipart without clearing draft text', async () => {
@@ -462,6 +627,9 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('signed-act.pdf')).toBeInTheDocument()
     expect(textarea).toHaveValue('Черновик остается')
+    await waitFor(() => {
+      expect(textarea).toHaveFocus()
+    })
 
     const [, requestOptions] = fetchMock.mock.calls[2] ?? []
     const formData = requestOptions?.body as FormData
@@ -628,5 +796,76 @@ describe('ChatPage', () => {
     }
 
     expect(requestBody.primaryConversationId).toBeUndefined()
+  })
+
+  it('opens backend realtime and merges new message snapshots into the visible transcript', async () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          createReadySnapshot({
+            hasMoreOlder: true,
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Вы',
+                content: 'Старое сообщение остается.',
+                contentType: 'text',
+                createdAt: '2026-04-21T09:12:00.000Z',
+                direction: 'outgoing',
+                id: 101,
+                status: 'sent',
+              },
+            ],
+            nextOlderCursor: 101,
+          }),
+        ),
+      )
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Старое сообщение остается.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    expect(MockEventSource.instances).toHaveLength(1)
+    expect(MockEventSource.instances[0]?.url).toContain(
+      '/api/chat/realtime?primaryConversationId=77',
+    )
+    expect(MockEventSource.instances[0]?.withCredentials).toBe(true)
+
+    act(() => {
+      MockEventSource.instances[0]?.emit(
+        'messages',
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              content: 'Новый ответ без ручного обновления.',
+              contentType: 'text',
+              createdAt: '2026-04-21T09:17:00.000Z',
+              direction: 'incoming',
+              id: 102,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      )
+    })
+
+    expect(screen.getByText('Старое сообщение остается.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Новый ответ без ручного обновления.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Загрузить более ранние сообщения' }),
+    ).toBeInTheDocument()
   })
 })

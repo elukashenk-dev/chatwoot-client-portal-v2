@@ -193,6 +193,39 @@ export const portalChatMessageSends = pgTable(
   ],
 )
 
+export const chatwootWebhookDeliveries = pgTable(
+  'chatwoot_webhook_deliveries',
+  {
+    id: serial('id').primaryKey(),
+    deliveryKey: text('delivery_key').notNull(),
+    eventName: text('event_name').notNull(),
+    status: text('status').notNull(),
+    payloadSha256: text('payload_sha256').notNull(),
+    chatwootConversationId: integer('chatwoot_conversation_id'),
+    chatwootMessageId: integer('chatwoot_message_id'),
+    receivedAt: timestamp('received_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp('processed_at', {
+      mode: 'date',
+      withTimezone: true,
+    }),
+  },
+  (table) => [
+    uniqueIndex('chatwoot_webhook_deliveries_key_unique').on(table.deliveryKey),
+    index('chatwoot_webhook_deliveries_conversation_id_idx').on(
+      table.chatwootConversationId,
+    ),
+    index('chatwoot_webhook_deliveries_event_status_idx').on(
+      table.eventName,
+      table.status,
+    ),
+  ],
+)
+
 export const verificationRecords = pgTable(
   'verification_records',
   {

@@ -30,6 +30,14 @@ export type ChatAttachment = {
   url: string
 }
 
+export type ChatMessageReplyPreview = {
+  attachmentName: string | null
+  authorName: string
+  content: string | null
+  direction: 'incoming' | 'outgoing'
+  messageId: number
+}
+
 export type ChatMessage = {
   attachments: ChatAttachment[]
   authorName: string
@@ -38,6 +46,7 @@ export type ChatMessage = {
   createdAt: string
   direction: 'incoming' | 'outgoing'
   id: number
+  replyTo?: ChatMessageReplyPreview | null
   status: string
 }
 

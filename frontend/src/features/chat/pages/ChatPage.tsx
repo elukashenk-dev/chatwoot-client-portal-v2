@@ -5,6 +5,7 @@ import {
   sendChatAttachment,
   sendChatMessage,
 } from '../api/chatClient'
+import { openChatRealtime } from '../api/chatRealtimeClient'
 import type {
   ChatMessage,
   ChatMessagesSnapshot,
@@ -14,7 +15,10 @@ import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatTranscript } from '../components/ChatTranscript'
-import { MessageComposer } from '../components/MessageComposer'
+import {
+  MessageComposer,
+  type MessageComposerReplyTarget,
+} from '../components/MessageComposer'
 
 type ChatPageState =
   | {
@@ -56,12 +60,71 @@ function appendSentMessage(messages: ChatMessage[], sentMessage: ChatMessage) {
   return [...messages, sentMessage]
 }
 
+function sortMessagesByTimeline(messages: ChatMessage[]) {
+  return [...messages].sort((left, right) => {
+    const leftTime = new Date(left.createdAt).getTime()
+    const rightTime = new Date(right.createdAt).getTime()
+
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime
+    }
+
+    return left.id - right.id
+  })
+}
+
+function mergeRealtimeSnapshot({
+  currentSnapshot,
+  realtimeSnapshot,
+}: {
+  currentSnapshot: ChatMessagesSnapshot
+  realtimeSnapshot: ChatMessagesSnapshot
+}): ChatMessagesSnapshot {
+  if (
+    currentSnapshot.result !== 'ready' ||
+    !currentSnapshot.primaryConversation ||
+    realtimeSnapshot.result !== 'ready' ||
+    !realtimeSnapshot.primaryConversation ||
+    currentSnapshot.primaryConversation.id !==
+      realtimeSnapshot.primaryConversation.id
+  ) {
+    return realtimeSnapshot
+  }
+
+  const messagesById = new Map(
+    currentSnapshot.messages.map((message) => [message.id, message]),
+  )
+
+  for (const message of realtimeSnapshot.messages) {
+    messagesById.set(message.id, message)
+  }
+
+  return {
+    ...realtimeSnapshot,
+    hasMoreOlder: currentSnapshot.hasMoreOlder || realtimeSnapshot.hasMoreOlder,
+    messages: sortMessagesByTimeline([...messagesById.values()]),
+    nextOlderCursor:
+      currentSnapshot.nextOlderCursor ?? realtimeSnapshot.nextOlderCursor,
+  }
+}
+
 function isFirstConversationBootstrapReady(snapshot: ChatMessagesSnapshot) {
   return (
     snapshot.result === 'not_ready' &&
     snapshot.reason === 'conversation_missing' &&
     snapshot.linkedContact !== null
   )
+}
+
+function toComposerReplyTarget(
+  message: ChatMessage,
+): MessageComposerReplyTarget {
+  return {
+    attachmentName: message.attachments[0]?.name ?? null,
+    authorName: message.authorName,
+    content: message.content,
+    id: message.id,
+  }
 }
 
 function buildSnapshotFromSendResult({
@@ -98,6 +161,8 @@ export function ChatPage() {
   )
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [replyTarget, setReplyTarget] =
+    useState<MessageComposerReplyTarget | null>(null)
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
 
   const loadInitialChat = useCallback(async () => {
@@ -192,9 +257,11 @@ export function ChatPage() {
   async function handleSendMessage({
     clientMessageKey,
     content,
+    replyToMessageId,
   }: {
     clientMessageKey: string
     content: string
+    replyToMessageId?: number | null
   }) {
     if (pageState.status !== 'ready') {
       return false
@@ -209,6 +276,7 @@ export function ChatPage() {
         content,
         primaryConversationId:
           pageState.snapshot.primaryConversation?.id ?? null,
+        replyToMessageId,
       })
 
       if (!isMountedRef.current) {
@@ -258,9 +326,11 @@ export function ChatPage() {
   async function handleSendAttachment({
     clientMessageKey,
     file,
+    replyToMessageId,
   }: {
     clientMessageKey: string
     file: File
+    replyToMessageId?: number | null
   }) {
     if (pageState.status !== 'ready') {
       return false
@@ -275,6 +345,7 @@ export function ChatPage() {
         file,
         primaryConversationId:
           pageState.snapshot.primaryConversation?.id ?? null,
+        replyToMessageId,
       })
 
       if (!isMountedRef.current) {
@@ -332,6 +403,56 @@ export function ChatPage() {
   }, [loadInitialChat])
 
   const snapshot = pageState.snapshot
+  const realtimePrimaryConversationId =
+    pageState.status === 'ready' &&
+    pageState.snapshot.result === 'ready' &&
+    pageState.snapshot.primaryConversation
+      ? pageState.snapshot.primaryConversation.id
+      : null
+
+  useEffect(() => {
+    if (!realtimePrimaryConversationId) {
+      return
+    }
+
+    const realtimeConnection = openChatRealtime({
+      onChatState: (realtimeSnapshot) => {
+        if (!isMountedRef.current) {
+          return
+        }
+
+        setPageState({
+          snapshot: realtimeSnapshot,
+          status: 'ready',
+        })
+      },
+      onMessages: (realtimeSnapshot) => {
+        if (!isMountedRef.current) {
+          return
+        }
+
+        setPageState((currentState) => {
+          if (currentState.status !== 'ready') {
+            return currentState
+          }
+
+          return {
+            snapshot: mergeRealtimeSnapshot({
+              currentSnapshot: currentState.snapshot,
+              realtimeSnapshot,
+            }),
+            status: 'ready',
+          }
+        })
+      },
+      primaryConversationId: realtimePrimaryConversationId,
+    })
+
+    return () => {
+      realtimeConnection.close()
+    }
+  }, [realtimePrimaryConversationId])
+
   const isReady =
     snapshot?.result === 'ready' && Boolean(snapshot.primaryConversation)
   const canSend =
@@ -383,6 +504,9 @@ export function ChatPage() {
             onLoadOlder={() => {
               void handleLoadOlderMessages()
             }}
+            onReplyToMessage={(message) => {
+              setReplyTarget(toComposerReplyTarget(message))
+            }}
           />
         ) : null}
 
@@ -390,8 +514,12 @@ export function ChatPage() {
           disabled={!canSend}
           errorMessage={sendErrorMessage}
           isSending={isSending}
+          onCancelReply={() => {
+            setReplyTarget(null)
+          }}
           onSend={handleSendMessage}
           onSendAttachment={handleSendAttachment}
+          replyTarget={replyTarget}
         />
       </div>
     </>

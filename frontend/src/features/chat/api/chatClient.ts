@@ -128,10 +128,12 @@ export async function sendChatMessage({
   clientMessageKey,
   content,
   primaryConversationId,
+  replyToMessageId,
 }: {
   clientMessageKey: string
   content: string
   primaryConversationId?: number | null
+  replyToMessageId?: number | null
 }) {
   return request<ChatSendResult>('/chat/messages', {
     body: {
@@ -140,6 +142,11 @@ export async function sendChatMessage({
       ...(primaryConversationId
         ? {
             primaryConversationId,
+          }
+        : {}),
+      ...(replyToMessageId
+        ? {
+            replyToMessageId,
           }
         : {}),
     },
@@ -152,10 +159,12 @@ export async function sendChatAttachment({
   clientMessageKey,
   file,
   primaryConversationId,
+  replyToMessageId,
 }: {
   clientMessageKey: string
   file: File
   primaryConversationId?: number | null
+  replyToMessageId?: number | null
 }) {
   const formData = new FormData()
 
@@ -163,6 +172,10 @@ export async function sendChatAttachment({
 
   if (primaryConversationId) {
     formData.append('primaryConversationId', String(primaryConversationId))
+  }
+
+  if (replyToMessageId) {
+    formData.append('replyToMessageId', String(replyToMessageId))
   }
 
   formData.append('attachment', file, file.name)

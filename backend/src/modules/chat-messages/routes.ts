@@ -19,16 +19,19 @@ const sendChatMessageBodySchema = z.object({
   clientMessageKey: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1, 'Введите сообщение.').max(4000),
   primaryConversationId: z.number().int().positive().optional(),
+  replyToMessageId: z.number().int().positive().optional(),
 })
 
 const sendChatAttachmentFieldsSchema = z.object({
   clientMessageKey: z.string().trim().min(1).max(200),
   primaryConversationId: z.coerce.number().int().positive().optional(),
+  replyToMessageId: z.coerce.number().int().positive().optional(),
 })
 
 type AttachmentMultipartFields = {
   clientMessageKey?: string
   primaryConversationId?: string
+  replyToMessageId?: string
 }
 
 type RegisterChatMessagesRoutesOptions = {
@@ -55,7 +58,8 @@ function applyMultipartField(
 ) {
   if (
     part.fieldname !== 'clientMessageKey' &&
-    part.fieldname !== 'primaryConversationId'
+    part.fieldname !== 'primaryConversationId' &&
+    part.fieldname !== 'replyToMessageId'
   ) {
     return
   }
@@ -131,6 +135,7 @@ async function parseAttachmentUpload(
   attachment: PortalAttachmentUpload
   clientMessageKey: string
   primaryConversationId: number | null
+  replyToMessageId: number | null
 }> {
   if (!request.isMultipart()) {
     throw new ApiError(
@@ -189,6 +194,7 @@ async function parseAttachmentUpload(
     attachment,
     clientMessageKey: parsedFields.clientMessageKey,
     primaryConversationId: parsedFields.primaryConversationId ?? null,
+    replyToMessageId: parsedFields.replyToMessageId ?? null,
   }
 }
 
@@ -227,6 +233,7 @@ export function registerChatMessagesRoutes(
       clientMessageKey: body.clientMessageKey,
       content: body.content,
       primaryConversationId: body.primaryConversationId ?? null,
+      replyToMessageId: body.replyToMessageId ?? null,
       userId: user.id,
     })
   })
@@ -246,6 +253,7 @@ export function registerChatMessagesRoutes(
       attachment: upload.attachment,
       clientMessageKey: upload.clientMessageKey,
       primaryConversationId: upload.primaryConversationId,
+      replyToMessageId: upload.replyToMessageId,
       userId: user.id,
     })
   })

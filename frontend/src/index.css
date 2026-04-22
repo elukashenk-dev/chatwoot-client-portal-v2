@@ -227,3 +227,11 @@ button:not(:disabled),
   border: 2px solid transparent;
   border-radius: 999px;
 }
+
+.emoji-scroll {
+  scrollbar-width: none;
+}
+
+.emoji-scroll::-webkit-scrollbar {
+  display: none;
+}
