@@ -119,3 +119,27 @@
   после первого deploy portal backend должен один раз принудительно проверить и включить `lock_to_single_conversation = true` для configured `CHATWOOT_PORTAL_INBOX_ID`. В обычной работе backend не проверяет эту настройку на каждом запросе. Повторная runtime-проверка и auto-fix выполняются только если chat read model обнаруживает anomaly: больше одного portal conversation для одного linked contact в выделенном inbox. При recovery valid persisted mapping остается главным; если mapping нет или он невалиден, backend выбирает canonical conversation по правилу: самый свежий active conversation, иначе самый свежий resolved conversation
 - причина:
   это защищает портал от случайной админской смены `Conversation Routing -> Create new conversations`, но не добавляет лишний Chatwoot roundtrip на каждый chat request. Anomaly-driven recovery чинит настройку ровно тогда, когда неправильная конфигурация уже проявилась в данных
+
+## D-016. Рост frontend и backend идет по product features
+
+- дата: `2026-04-23`
+- решение:
+  новые крупные portal-возможности добавляются отдельными feature/module slices, а не доклеиваются в уже существующие giant files или в общий `components/` слой. Во frontend следующие product areas фиксируются как отдельные feature boundaries: `dashboard`, `notifications`, `branding`, `tariff`, `documents`, `tasks`, `service-requests`, `profile`, при этом `chat` остается только chat-domain фичей. В backend соответствующие portal-owned области заводятся как отдельные `modules/*`
+- причина:
+  портал уже вышел из состояния "один чат и auth". Дальше продукт будет расти быстрее, и без явных feature boundaries новые задачи начнут распухать внутри `chat`, `shared` и route-level файлов, как это уже случилось с несколькими текущими hot spots
+
+## D-017. `shared/` держим строго недоменным
+
+- дата: `2026-04-23`
+- решение:
+  `frontend/src/shared/` используется только для generic `ui`, маленьких `lib` helpers и branding/theme primitives. Бизнес-логика документов, тарифов, задач, уведомлений, service requests и других feature rules в `shared` не переносится
+- причина:
+  это не дает превратить `shared` в скрытый второй monolith, где оказывается любая логика "потому что она может пригодиться еще раз"
+
+## D-018. Root lint включает code-health guard с baseline allowlist
+
+- дата: `2026-04-23`
+- решение:
+  в root workspace добавлен `pnpm code-health`, а `pnpm lint` теперь всегда сначала прогоняет этот guard. Production `ts/tsx` файлы ограничены `500` строками, test `ts/tsx` файлы ограничены `1000` строками. Для уже существующего oversized debt используется временный allowlist с текущим baseline; allowlisted file не может расти выше этого baseline без отдельного решения. Если файл после refactor снова укладывается в лимит, его нужно удалить из allowlist
+- причина:
+  проекту нужен встроенный ранний сигнал о giant files до того, как новый личный кабинет, уведомления и branding снова раздуют рабочие области до плохо сопровождаемого состояния

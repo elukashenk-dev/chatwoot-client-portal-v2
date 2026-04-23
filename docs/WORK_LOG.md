@@ -25,7 +25,13 @@
 - Добавлен quick emoji bar в chat composer: горизонтальная лента быстрых фраз с emoji, вставка в текущую позицию курсора и возврат фокуса в текстовое поле.
 - Добавлен reply state для чата: выбор сообщения для ответа, отправка Chatwoot `content_attributes.in_reply_to` и отображение quoted preview у сообщений пользователя и агента.
 - Reply UX приведен к app-like поведению: mobile swipe-to-reply без конфликта с вертикальной прокруткой, desktop context menu с reply/copy и без постоянных стрелок у сообщений.
+- Реализован `VoiceRecordButton`: запись микрофона через browser `MediaRecorder`, отправка голосового как backend-owned audio attachment и playback audio-вложений в transcript.
+- Voice send покрыт frontend mocked microphone tests, backend audio attachment authority test и ручной runtime-проверкой микрофона в браузере.
+- Закрыт review finding по composer error state: ошибка микрофона больше не маскирует следующую ошибку text/file send.
+- Закрыт code-health checkpoint перед следующими крупными фичами: добавлен root `pnpm code-health`, `pnpm lint` теперь валит рост oversized `ts/tsx` файлов и фиксирует baseline allowlist для уже существующего debt.
+- Chat UI разрезан на меньшие domain-local части: `MessageComposer.tsx` доведен до `457` строк через локальные subcomponents и `useVoiceRecorder`, `ChatTranscript.tsx` - до `303` строк через `MessageBubble`/`MessageContextMenu`/attachment-reply helpers.
+- В архитектурные документы внесены правила feature-based роста для будущих областей `dashboard`, `notifications`, `branding`, `tariff`, `documents`, `tasks`, `service-requests` и `profile`, а `shared/` зафиксирован как строго недоменный слой.
 
 ## Recommended Next Step
 
-- Руками проверить reply swipe/context menu вместе с `Phase 8`, затем перейти к `Phase 9. PWA App Hardening`.
+- Сделать checkpoint commit по `voice + code-health checkpoint`, затем открыть отдельную ветку под следующую подтвержденную крупную фазу или slice.

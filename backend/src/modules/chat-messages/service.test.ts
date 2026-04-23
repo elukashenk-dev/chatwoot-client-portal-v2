@@ -66,6 +66,35 @@ const sentAttachmentChatwootMessage = {
   status: 'sent',
 }
 
+const sentAudioChatwootMessage = {
+  attachments: [
+    {
+      extension: 'webm',
+      fileSize: 2048,
+      fileType: 'audio',
+      id: 78,
+      messageId: 602,
+      name: 'voice-message.webm',
+      thumbUrl: '',
+      url: 'https://files.example.test/voice-message.webm',
+    },
+  ],
+  content: null,
+  contentAttributes: {},
+  contentType: 'text',
+  createdAt: 1_776_000_021,
+  id: 602,
+  messageType: 0,
+  private: false,
+  sender: {
+    id: 44,
+    name: 'Portal User',
+    type: 'contact',
+  },
+  sourceId: 'portal-send:voice-key',
+  status: 'sent',
+}
+
 function createChatContextServiceStub({
   writableContext = readyContext,
 }: {
@@ -716,6 +745,57 @@ describe('createChatMessagesService', () => {
         clientMessageKey: 'portal-send:attachment-key',
         primaryConversationId: 101,
         userId: 7,
+      }),
+    )
+  })
+
+  it('accepts recorded audio attachments through the same send authority', async () => {
+    const createConversationIncomingAttachmentMessage = vi
+      .fn()
+      .mockResolvedValue(sentAudioChatwootMessage)
+    const service = createChatMessagesService({
+      chatContextService: createChatContextServiceStub(),
+      chatMessagesRepository: createChatMessagesRepositoryStub(),
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingAttachmentMessage,
+      }),
+    })
+    const data = Buffer.from('webm voice bytes')
+
+    await expect(
+      service.sendCurrentUserAttachmentMessage({
+        attachment: {
+          data,
+          fileName: 'voice-message.webm',
+          mimeType: 'audio/webm;codecs=opus',
+          size: data.byteLength,
+        },
+        clientMessageKey: 'portal-send:voice-key',
+        primaryConversationId: 101,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      result: 'ready',
+      sentMessage: {
+        attachments: [
+          {
+            fileType: 'audio',
+            name: 'voice-message.webm',
+          },
+        ],
+        id: 602,
+      },
+    })
+
+    expect(createConversationIncomingAttachmentMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachment: expect.objectContaining({
+          fileName: 'voice-message.webm',
+          mimeType: 'audio/webm;codecs=opus',
+          size: data.byteLength,
+        }),
+        conversationId: 101,
+        sourceId: 'portal-send:voice-key',
       }),
     )
   })

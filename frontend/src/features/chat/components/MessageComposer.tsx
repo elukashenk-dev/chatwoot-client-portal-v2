@@ -1,31 +1,28 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import {
-  FileTextIcon,
   MicrophoneIcon,
   PaperclipIcon,
   SendIcon,
-  XIcon,
 } from '../../../shared/ui/icons'
+import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
+import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
+import { QuickEmojiBar } from './message-composer/QuickEmojiBar'
+import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
+import type {
+  MessageComposerReplyTarget,
+  SendAttachmentInput,
+  SendMessageInput,
+} from './message-composer/types'
+import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
+import {
+  createAttachmentSignature,
+  createClientMessageKey,
+  formatRecordingDuration,
+  resizeComposerTextarea,
+} from './message-composer/utils'
 
-type SendMessageInput = {
-  clientMessageKey: string
-  content: string
-  replyToMessageId?: number | null
-}
-
-type SendAttachmentInput = {
-  clientMessageKey: string
-  file: File
-  replyToMessageId?: number | null
-}
-
-export type MessageComposerReplyTarget = {
-  attachmentName?: string | null
-  authorName: string
-  content: string | null
-  id: number
-}
+export type { MessageComposerReplyTarget } from './message-composer/types'
 
 type MessageComposerProps = {
   disabled: boolean
@@ -35,51 +32,6 @@ type MessageComposerProps = {
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
   replyTarget: MessageComposerReplyTarget | null
-}
-
-const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 44
-const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 128
-const QUICK_EMOJI_ACTIONS = [
-  { emoji: '👍', label: 'Ок', text: '👍 Ок' },
-  { emoji: '✅', label: 'Готово', text: '✅ Готово' },
-  { emoji: '👌', label: 'Согласовано', text: '👌 Согласовано' },
-  { emoji: '🙏', label: 'Спасибо', text: '🙏 Спасибо' },
-  { emoji: '👀', label: 'Смотрю', text: '👀 Смотрю' },
-]
-
-function createClientMessageKey() {
-  if (globalThis.crypto?.randomUUID) {
-    return `portal-send:${globalThis.crypto.randomUUID()}`
-  }
-
-  return `portal-send:${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2)}`
-}
-
-function createAttachmentSignature(file: File) {
-  return [file.name, file.type, file.size, file.lastModified].join(':')
-}
-
-function formatSelectedAttachmentSize(fileSize: number) {
-  if (fileSize >= 1024 * 1024) {
-    return `${(fileSize / 1024 / 1024).toFixed(1)} МБ`
-  }
-
-  return `${Math.max(1, Math.round(fileSize / 1024))} КБ`
-}
-
-function resizeComposerTextarea(textarea: HTMLTextAreaElement) {
-  textarea.style.height = 'auto'
-
-  const nextHeight = Math.max(
-    COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
-    Math.min(textarea.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT_PX),
-  )
-
-  textarea.style.height = `${nextHeight}px`
-  textarea.style.overflowY =
-    textarea.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
 }
 
 export function MessageComposer({
@@ -97,20 +49,60 @@ export function MessageComposer({
   )
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const pendingClientMessageKeyRef = useRef<string | null>(null)
-  const pendingContentRef = useRef<string | null>(null)
-  const pendingReplyToMessageIdRef = useRef<number | null>(null)
   const pendingAttachmentClientMessageKeyRef = useRef<string | null>(null)
   const pendingAttachmentReplyToMessageIdRef = useRef<number | null>(null)
   const pendingAttachmentSignatureRef = useRef<string | null>(null)
   const pendingCaretPositionRef = useRef<number | null>(null)
+  const pendingClientMessageKeyRef = useRef<string | null>(null)
+  const pendingContentRef = useRef<string | null>(null)
+  const pendingReplyToMessageIdRef = useRef<number | null>(null)
+  const replyToMessageIdRef = useRef<number | null>(null)
   const shouldRestoreFocusRef = useRef(false)
   const normalizedDraft = draft.trim()
   const replyToMessageId = replyTarget?.id ?? null
-  const canSendText = !disabled && !isSending && normalizedDraft.length > 0
+
+  const {
+    cancelVoiceRecording,
+    clearErrorMessage: clearVoiceErrorMessage,
+    errorMessage: voiceErrorMessage,
+    finishVoiceRecording,
+    recordingElapsedMs,
+    startVoiceRecording,
+    status: voiceRecorderStatus,
+  } = useVoiceRecorder({
+    canStartRecording: !disabled && !isSending && selectedAttachment === null,
+    onSendVoiceAttachment: async (voiceFile) => {
+      setSelectedAttachment(voiceFile)
+
+      return submitAttachmentFile(voiceFile, {
+        allowVoiceRecorderBusy: true,
+      })
+    },
+  })
+
+  const isVoiceRecorderBusy = voiceRecorderStatus !== 'idle'
+  const canSendText =
+    !disabled &&
+    !isSending &&
+    !isVoiceRecorderBusy &&
+    normalizedDraft.length > 0
   const canSendAttachment =
-    !disabled && !isSending && selectedAttachment !== null
+    !disabled &&
+    !isSending &&
+    !isVoiceRecorderBusy &&
+    selectedAttachment !== null
   const canSend = canSendAttachment || canSendText
+  const canStartVoiceRecording =
+    !disabled &&
+    !isSending &&
+    !isVoiceRecorderBusy &&
+    selectedAttachment === null
+  const composerErrorMessage = voiceErrorMessage ?? errorMessage
+  const recordingDuration = formatRecordingDuration(recordingElapsedMs)
+
+  useLayoutEffect(() => {
+    replyToMessageIdRef.current = replyToMessageId
+  }, [replyToMessageId])
 
   useLayoutEffect(() => {
     if (!textareaRef.current) {
@@ -147,11 +139,37 @@ export function MessageComposer({
     textareaRef.current?.focus()
   }, [disabled, draft, isSending, replyTarget, selectedAttachment])
 
+  function resetPendingTextSendIfPayloadChanged(
+    nextDraft: string,
+    nextReplyToMessageId: number | null,
+  ) {
+    if (
+      pendingClientMessageKeyRef.current &&
+      (pendingContentRef.current !== nextDraft.trim() ||
+        pendingReplyToMessageIdRef.current !== nextReplyToMessageId)
+    ) {
+      pendingClientMessageKeyRef.current = null
+      pendingContentRef.current = null
+      pendingReplyToMessageIdRef.current = null
+    }
+  }
+
+  function handleCancelReply() {
+    pendingClientMessageKeyRef.current = null
+    pendingContentRef.current = null
+    pendingReplyToMessageIdRef.current = null
+    pendingAttachmentClientMessageKeyRef.current = null
+    pendingAttachmentReplyToMessageIdRef.current = null
+    pendingAttachmentSignatureRef.current = null
+    onCancelReply()
+  }
+
   async function submitText() {
     if (!canSendText) {
       return
     }
 
+    clearVoiceErrorMessage()
     resetPendingTextSendIfPayloadChanged(normalizedDraft, replyToMessageId)
 
     const clientMessageKey =
@@ -177,32 +195,46 @@ export function MessageComposer({
     }
   }
 
-  async function submitAttachment() {
-    if (!canSendAttachment || !selectedAttachment) {
-      return
+  async function submitAttachmentFile(
+    file: File,
+    {
+      allowVoiceRecorderBusy = false,
+    }: { allowVoiceRecorderBusy?: boolean } = {},
+  ) {
+    if (
+      disabled ||
+      isSending ||
+      (!allowVoiceRecorderBusy && isVoiceRecorderBusy)
+    ) {
+      return false
     }
 
-    const attachmentSignature = createAttachmentSignature(selectedAttachment)
+    const attachmentSignature = createAttachmentSignature(file)
+    const currentReplyToMessageId = replyToMessageIdRef.current
 
     if (
       pendingAttachmentClientMessageKeyRef.current &&
-      pendingAttachmentReplyToMessageIdRef.current !== replyToMessageId
+      (pendingAttachmentReplyToMessageIdRef.current !==
+        currentReplyToMessageId ||
+        pendingAttachmentSignatureRef.current !== attachmentSignature)
     ) {
       pendingAttachmentClientMessageKeyRef.current = null
       pendingAttachmentReplyToMessageIdRef.current = null
+      pendingAttachmentSignatureRef.current = null
     }
 
     const clientMessageKey =
       pendingAttachmentClientMessageKeyRef.current ?? createClientMessageKey()
 
+    clearVoiceErrorMessage()
     pendingAttachmentClientMessageKeyRef.current = clientMessageKey
-    pendingAttachmentReplyToMessageIdRef.current = replyToMessageId
+    pendingAttachmentReplyToMessageIdRef.current = currentReplyToMessageId
     pendingAttachmentSignatureRef.current = attachmentSignature
 
     const wasSent = await onSendAttachment({
       clientMessageKey,
-      file: selectedAttachment,
-      replyToMessageId,
+      file,
+      replyToMessageId: currentReplyToMessageId,
     })
 
     if (wasSent) {
@@ -217,6 +249,16 @@ export function MessageComposer({
         fileInputRef.current.value = ''
       }
     }
+
+    return wasSent
+  }
+
+  async function submitAttachment() {
+    if (!canSendAttachment || !selectedAttachment) {
+      return
+    }
+
+    await submitAttachmentFile(selectedAttachment)
   }
 
   async function submitCurrentDraft() {
@@ -237,6 +279,7 @@ export function MessageComposer({
       return
     }
 
+    clearVoiceErrorMessage()
     const nextSignature = createAttachmentSignature(file)
 
     if (pendingAttachmentSignatureRef.current !== nextSignature) {
@@ -248,26 +291,12 @@ export function MessageComposer({
     setSelectedAttachment(file)
   }
 
-  function resetPendingTextSendIfPayloadChanged(
-    nextDraft: string,
-    nextReplyToMessageId: number | null,
-  ) {
-    if (
-      pendingClientMessageKeyRef.current &&
-      (pendingContentRef.current !== nextDraft.trim() ||
-        pendingReplyToMessageIdRef.current !== nextReplyToMessageId)
-    ) {
-      pendingClientMessageKeyRef.current = null
-      pendingContentRef.current = null
-      pendingReplyToMessageIdRef.current = null
-    }
-  }
-
   function insertQuickText(text: string) {
-    if (disabled || isSending) {
+    if (disabled || isSending || isVoiceRecorderBusy) {
       return
     }
 
+    clearVoiceErrorMessage()
     const textarea = textareaRef.current
     const selectionStart = textarea?.selectionStart ?? draft.length
     const selectionEnd = textarea?.selectionEnd ?? draft.length
@@ -280,106 +309,50 @@ export function MessageComposer({
     setDraft(nextDraft)
   }
 
-  const replyPreviewText =
-    replyTarget?.content?.trim() ||
-    replyTarget?.attachmentName ||
-    'Вложение без текста'
-
   return (
     <footer className="border-t border-slate-200/90 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
       <div className="mx-auto w-full max-w-[620px]">
-        <div className="emoji-scroll -mx-4 mb-3 overflow-x-auto px-4">
-          <div className="flex w-max items-center gap-2 pr-4">
-            {QUICK_EMOJI_ACTIONS.map((action) => (
-              <button
-                aria-label={`Добавить ${action.text}`}
-                className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
-                disabled={disabled || isSending}
-                key={action.label}
-                onClick={() => {
-                  insertQuickText(action.text)
-                }}
-                title={action.label}
-                type="button"
-              >
-                <span aria-hidden="true">{action.emoji}</span>
-                <span>{action.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <QuickEmojiBar
+          disabled={disabled || isSending || isVoiceRecorderBusy}
+          onInsert={insertQuickText}
+        />
 
         <div className="rounded-[1rem] border border-slate-200 bg-slate-50/90 p-2">
           {replyTarget ? (
-            <div className="mb-2 rounded-[0.9rem] border border-slate-200 bg-white px-3 py-2.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[12px] font-medium text-brand-800">
-                    Ответ на сообщение {replyTarget.authorName}
-                  </div>
-                  <div className="mt-0.5 line-clamp-2 text-[13px] leading-5 text-slate-500">
-                    {replyPreviewText}
-                  </div>
-                </div>
-                <button
-                  aria-label="Отменить ответ"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-                  disabled={isSending}
-                  onClick={() => {
-                    pendingClientMessageKeyRef.current = null
-                    pendingContentRef.current = null
-                    pendingReplyToMessageIdRef.current = null
-                    pendingAttachmentClientMessageKeyRef.current = null
-                    pendingAttachmentReplyToMessageIdRef.current = null
-                    pendingAttachmentSignatureRef.current = null
-                    onCancelReply()
-                  }}
-                  title="Отменить ответ"
-                  type="button"
-                >
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <ComposerReplyPreview
+              disabled={isSending || isVoiceRecorderBusy}
+              onCancel={handleCancelReply}
+              replyTarget={replyTarget}
+            />
           ) : null}
 
           {selectedAttachment ? (
-            <div className="mb-2 flex items-center gap-3 rounded-[0.8rem] border border-slate-200 bg-white px-3 py-2">
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] bg-brand-50 text-brand-800">
-                <FileTextIcon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium text-slate-800">
-                  {selectedAttachment.name}
-                </span>
-                <span className="mt-0.5 block text-[12px] text-slate-500">
-                  {formatSelectedAttachmentSize(selectedAttachment.size)}
-                </span>
-              </span>
-              <button
-                aria-label="Убрать файл"
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-                disabled={isSending}
-                onClick={() => {
-                  selectAttachment(null)
+            <ComposerAttachmentPreview
+              disabled={isSending || isVoiceRecorderBusy}
+              file={selectedAttachment}
+              onRemove={() => {
+                selectAttachment(null)
 
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = ''
-                  }
-                }}
-                title="Убрать файл"
-                type="button"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            </div>
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = ''
+                }
+              }}
+            />
           ) : null}
+
+          <VoiceRecordingPanel
+            durationLabel={recordingDuration}
+            onCancel={cancelVoiceRecording}
+            onSend={finishVoiceRecording}
+            status={voiceRecorderStatus}
+          />
+
           <div className="flex items-end gap-2">
             <input
               accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
               aria-label="Файл вложения"
               className="sr-only"
-              disabled={disabled || isSending}
+              disabled={disabled || isSending || isVoiceRecorderBusy}
               onChange={(event) => {
                 selectAttachment(event.target.files?.[0] ?? null)
               }}
@@ -389,7 +362,7 @@ export function MessageComposer({
             <button
               aria-label="Прикрепить файл"
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-              disabled={disabled || isSending}
+              disabled={disabled || isSending || isVoiceRecorderBusy}
               onClick={() => {
                 fileInputRef.current?.click()
               }}
@@ -402,10 +375,11 @@ export function MessageComposer({
             <textarea
               aria-label="Сообщение"
               className="max-h-32 min-h-[44px] flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
-              disabled={disabled || isSending}
+              disabled={disabled || isSending || isVoiceRecorderBusy}
               onChange={(event) => {
                 const nextDraft = event.target.value
 
+                clearVoiceErrorMessage()
                 resetPendingTextSendIfPayloadChanged(
                   nextDraft,
                   replyToMessageId,
@@ -428,12 +402,21 @@ export function MessageComposer({
 
             <button
               aria-label="Голосовое сообщение"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] text-slate-300"
-              disabled
-              title="Голосовые сообщения будут доступны позже"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled={!canStartVoiceRecording}
+              onClick={() => {
+                void startVoiceRecording()
+              }}
+              title="Записать голосовое"
               type="button"
             >
-              <MicrophoneIcon className="h-[18px] w-[18px]" />
+              <MicrophoneIcon
+                className={
+                  voiceRecorderStatus === 'starting'
+                    ? 'h-[18px] w-[18px] animate-pulse'
+                    : 'h-[18px] w-[18px]'
+                }
+              />
             </button>
             <button
               aria-label={
@@ -444,7 +427,7 @@ export function MessageComposer({
                     : 'Отправить'
               }
               className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-brand-800 text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
-              disabled={!canSend}
+              disabled={!canSend || isVoiceRecorderBusy}
               onClick={() => {
                 void submitCurrentDraft()
               }}
@@ -462,9 +445,9 @@ export function MessageComposer({
           </div>
         </div>
 
-        {errorMessage ? (
+        {composerErrorMessage ? (
           <div className="mt-2 rounded-[0.8rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] leading-5 text-rose-700">
-            {errorMessage}
+            {composerErrorMessage}
           </div>
         ) : null}
       </div>

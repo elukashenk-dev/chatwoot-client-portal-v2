@@ -316,7 +316,7 @@ chatwoot-client-portal-v2/
 - `features/`
   Бизнес-фичи: `auth`, `registration`, `password-reset`, `chat`.
 - `shared/`
-  Переиспользуемые ui, lib, api-client, form helpers, constants.
+  Только переиспользуемые недоменные ui/lib/theme helpers без бизнес-логики документов, тарифов, задач, уведомлений и других feature-specific правил.
 
 ### Backend Structure
 
@@ -364,6 +364,52 @@ chatwoot-client-portal-v2/
   Request and confirm reset.
 - `chat`
   Context load, transcript render, composer, retry, attachment send, realtime updates.
+
+### Следующий Product Growth Path
+
+После chat MVP новые крупные portal-фичи добавляются отдельными feature-slices, а не доклеиваются в уже существующий `chat` или в общий `components/` слой.
+
+Подтвержденные следующие frontend области:
+
+- `dashboard`
+  Главная и центр поддержки.
+- `notifications`
+  Push permissions, unread badges, notification preferences.
+- `branding`
+  Theme tokens, logo, иллюстрации и branded assets.
+- `tariff`
+  Текущий тариф, лимиты и SLA.
+- `documents`
+  Списки документов, статусы, download/upload entrypoints.
+- `tasks`
+  Дедлайны, задачи клиента и команды.
+- `service-requests`
+  Запрос доп. услуги и изменения обслуживания.
+- `profile`
+  Профиль, команда, настройки.
+
+Правило роста:
+
+- `chat` остается только chat-domain фичей;
+- task/document-specific контекст вокруг чата не должен раздувать `ChatPage`;
+- page-level orchestration живет в feature pages;
+- локальные subcomponents/hooks/test helpers живут рядом с feature-кодом, а не в глобальном общем слое.
+
+### Следующий Backend Growth Path
+
+Для portal-owned domain поверх Chatwoot добавляем отдельные backend modules:
+
+- `dashboard`
+- `notifications`
+- `notification-preferences`
+- `portal-branding`
+- `tariffs`
+- `documents`
+- `tasks`
+- `service-requests`
+- `profile`
+
+Chatwoot остается system of record только для `contacts/conversations/messages/attachments`. Личный кабинет, тарифы, документы, задачи, branding и notification preferences считаются portal-owned backend domain, пока не появится отдельная внешняя authoritative система.
 
 ## Начальная Модель Данных
 
@@ -425,6 +471,20 @@ API `v2` остается простым и явным:
 - не открываем новую большую фазу, пока предыдущая не закрыта тестами и ручной проверкой;
 - если возникает желание добавить новый абстрактный слой, сначала доказываем, что без него уже больно;
 - новые решения должны быть понятны не только ИИ, но и человеку без глубокого бэкграунда.
+
+## Code Health Guard
+
+Перед следующими крупными slices проект обязан сам сигналить о распухающих файлах.
+
+Для этого:
+
+- в root workspace есть `pnpm code-health`;
+- root `pnpm lint` сначала прогоняет `code-health`, потом package linters;
+- production `ts/tsx` файлы ограничены `500` строками;
+- test `ts/tsx` файлы ограничены `1000` строками;
+- временный allowlist разрешен только для уже существующего debt baseline;
+- allowlisted file не должен расти без отдельного refactor/debt decision;
+- если oversized файл удалось опустить ниже лимита, его нужно убрать из allowlist, а не держать поблажку навсегда.
 
 ## Что Считать Успешным `v2`
 

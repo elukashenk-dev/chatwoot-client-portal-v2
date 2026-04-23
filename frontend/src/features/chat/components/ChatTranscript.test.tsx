@@ -162,6 +162,35 @@ describe('ChatTranscript', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('renders audio attachments with playback controls', () => {
+    renderTranscript([
+      createMessage({
+        attachments: [
+          {
+            fileSize: 24576,
+            fileType: 'audio',
+            id: 9,
+            name: 'voice-message.webm',
+            thumbUrl: '',
+            url: 'https://files.example.test/voice-message.webm',
+          },
+        ],
+        content: null,
+        id: 2,
+      }),
+    ])
+
+    const audio = screen.getByLabelText(
+      'Голосовое сообщение voice-message.webm',
+    )
+
+    expect(audio).toHaveAttribute(
+      'src',
+      'https://files.example.test/voice-message.webm',
+    )
+    expect(audio).toHaveAttribute('controls')
+  })
+
   it('opens a desktop context menu for reply actions', () => {
     const onReplyToMessage = vi.fn()
     const { container } = renderTranscript(

@@ -47,6 +47,42 @@ class MockEventSource {
   }
 }
 
+class MockMediaRecorder {
+  static instances: MockMediaRecorder[] = []
+  static isTypeSupported = vi.fn(
+    (mimeType: string) => mimeType === 'audio/webm;codecs=opus',
+  )
+
+  mimeType: string
+  ondataavailable: ((event: BlobEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  onstop: ((event: Event) => void) | null = null
+  state: RecordingState = 'inactive'
+  stream: MediaStream
+
+  constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+    this.stream = stream
+    this.mimeType = options?.mimeType ?? 'audio/webm'
+    MockMediaRecorder.instances.push(this)
+  }
+
+  start() {
+    this.state = 'recording'
+  }
+
+  stop() {
+    if (this.state === 'inactive') {
+      return
+    }
+
+    this.state = 'inactive'
+    this.ondataavailable?.({
+      data: new Blob(['voice-bytes'], { type: this.mimeType }),
+    } as BlobEvent)
+    this.onstop?.(new Event('stop'))
+  }
+}
+
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -128,6 +164,33 @@ function renderChatRoute() {
   )
 }
 
+const originalNavigatorMediaDevices = globalThis.navigator.mediaDevices
+
+function stubMicrophoneAccess() {
+  const stopTrack = vi.fn()
+  const stream = {
+    getTracks: () => [
+      {
+        stop: stopTrack,
+      },
+    ],
+  } as unknown as MediaStream
+  const getUserMedia = vi.fn().mockResolvedValue(stream)
+
+  Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+    configurable: true,
+    value: {
+      getUserMedia,
+    },
+  })
+  vi.stubGlobal('MediaRecorder', MockMediaRecorder)
+
+  return {
+    getUserMedia,
+    stopTrack,
+  }
+}
+
 describe('ChatPage', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
@@ -137,8 +200,14 @@ describe('ChatPage', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+      configurable: true,
+      value: originalNavigatorMediaDevices,
+    })
     fetchMock.mockReset()
     MockEventSource.instances = []
+    MockMediaRecorder.instances = []
+    MockMediaRecorder.isTypeSupported.mockClear()
   })
 
   it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
@@ -650,6 +719,140 @@ describe('ChatPage', () => {
     expect(formData.get('primaryConversationId')).toBe('77')
     expect(attachment.name).toBe('signed-act.pdf')
     expect(attachment.type).toBe('application/pdf')
+  })
+
+  it('records and sends a microphone voice message through the attachment pipeline', async () => {
+    const user = userEvent.setup()
+    const { getUserMedia, stopTrack } = stubMicrophoneAccess()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          linkedContact: {
+            id: 42,
+          },
+          primaryConversation: {
+            assigneeName: 'Ольга Support',
+            id: 77,
+            inboxId: 9,
+            lastActivityAt: 1776763650,
+            status: 'open',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [
+              {
+                fileSize: 11,
+                fileType: 'audio',
+                id: 78,
+                name: 'voice-message.webm',
+                thumbUrl: '',
+                url: 'https://files.example.test/voice-message.webm',
+              },
+            ],
+            authorName: 'Вы',
+            content: null,
+            contentType: 'text',
+            createdAt: '2026-04-21T09:36:00.000Z',
+            direction: 'outgoing',
+            id: 602,
+            status: 'sent',
+          },
+        }),
+      )
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Голосовое сообщение' }),
+    )
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
+    expect(await screen.findByText('Запись 00:00')).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Отправить голосовое' }),
+    )
+
+    expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
+    expect(stopTrack).toHaveBeenCalledTimes(1)
+
+    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const formData = requestOptions?.body as FormData
+    const attachment = formData.get('attachment') as File
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/chat/messages/attachment',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    expect(formData.get('clientMessageKey')).toEqual(
+      expect.stringMatching(/^portal-send:/),
+    )
+    expect(formData.get('primaryConversationId')).toBe('77')
+    expect(attachment.name).toMatch(/^voice-message-\d{8}-\d{6}\.webm$/)
+    expect(attachment.type).toContain('audio/webm')
+  })
+
+  it('does not let a voice recording error mask the next send error', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: 'chatwoot_unavailable',
+              message: 'Chatwoot temporarily unavailable.',
+            },
+          },
+          503,
+        ),
+      )
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Голосовое сообщение' }),
+    )
+
+    expect(
+      await screen.findByText('Голосовая запись недоступна в этом браузере.'),
+    ).toBeInTheDocument()
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Текст после ошибки микрофона',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    expect(
+      await screen.findByText('Chatwoot temporarily unavailable.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Голосовая запись недоступна в этом браузере.'),
+    ).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('retries a failed send with the same client message key while the draft is unchanged', async () => {
