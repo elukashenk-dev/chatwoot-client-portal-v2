@@ -822,11 +822,13 @@ export function createChatwootClient({
 
   async function requestConversationAttachmentMessageCreate({
     attachment,
+    content = null,
     conversationId,
     replyToMessageId = null,
     sourceId,
   }: {
     attachment: ChatwootAttachmentUpload
+    content?: string | null
     conversationId: number
     replyToMessageId?: number | null
     sourceId: string | null
@@ -838,7 +840,7 @@ export function createChatwootClient({
     )
     const formData = new FormData()
 
-    formData.append('content', '')
+    formData.append('content', content ?? '')
     formData.append(
       'content_attributes',
       JSON.stringify(replyToMessageId ? { in_reply_to: replyToMessageId } : {}),
@@ -1298,11 +1300,13 @@ export function createChatwootClient({
 
     async createConversationIncomingAttachmentMessage({
       attachment,
+      content = null,
       conversationId,
       replyToMessageId = null,
       sourceId = null,
     }: {
       attachment: ChatwootAttachmentUpload
+      content?: string | null
       conversationId: number
       replyToMessageId?: number | null
       sourceId?: string | null
@@ -1333,6 +1337,8 @@ export function createChatwootClient({
         )
       }
 
+      const normalizedContent = content?.trim() || null
+
       if (
         replyToMessageId !== null &&
         (!Number.isInteger(replyToMessageId) || replyToMessageId <= 0)
@@ -1348,6 +1354,7 @@ export function createChatwootClient({
           fileName: attachment.fileName.trim(),
           mimeType: attachment.mimeType.trim().toLowerCase(),
         },
+        content: normalizedContent,
         conversationId,
         replyToMessageId,
         sourceId: sourceId?.trim() || null,

@@ -10,6 +10,8 @@ import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
+const CHAT_ATTACHMENT_FIELD_MAX_BYTES = 16 * 1024
+
 const chatMessagesQuerySchema = z.object({
   beforeMessageId: z.coerce.number().int().positive().optional(),
   primaryConversationId: z.coerce.number().int().positive().optional(),
@@ -24,12 +26,14 @@ const sendChatMessageBodySchema = z.object({
 
 const sendChatAttachmentFieldsSchema = z.object({
   clientMessageKey: z.string().trim().min(1).max(200),
+  content: z.string().trim().max(4000).optional(),
   primaryConversationId: z.coerce.number().int().positive().optional(),
   replyToMessageId: z.coerce.number().int().positive().optional(),
 })
 
 type AttachmentMultipartFields = {
   clientMessageKey?: string
+  content?: string
   primaryConversationId?: string
   replyToMessageId?: string
 }
@@ -58,6 +62,7 @@ function applyMultipartField(
 ) {
   if (
     part.fieldname !== 'clientMessageKey' &&
+    part.fieldname !== 'content' &&
     part.fieldname !== 'primaryConversationId' &&
     part.fieldname !== 'replyToMessageId'
   ) {
@@ -68,6 +73,14 @@ function applyMultipartField(
 
   if (value === null) {
     throw new ApiError(400, 'invalid_attachment_field', 'Некорректный запрос.')
+  }
+
+  if (part.valueTruncated) {
+    throw new ApiError(
+      400,
+      'attachment_field_too_large',
+      'Поле вложения слишком длинное.',
+    )
   }
 
   fields[part.fieldname] = value
@@ -134,6 +147,7 @@ async function parseAttachmentUpload(
 ): Promise<{
   attachment: PortalAttachmentUpload
   clientMessageKey: string
+  content: string | null
   primaryConversationId: number | null
   replyToMessageId: number | null
 }> {
@@ -151,10 +165,11 @@ async function parseAttachmentUpload(
   try {
     const parts = request.parts({
       limits: {
-        fields: 4,
+        fields: 5,
+        fieldSize: CHAT_ATTACHMENT_FIELD_MAX_BYTES,
         fileSize: CHAT_ATTACHMENT_MAX_BYTES,
         files: 1,
-        parts: 5,
+        parts: 6,
       },
     })
 
@@ -193,6 +208,7 @@ async function parseAttachmentUpload(
   return {
     attachment,
     clientMessageKey: parsedFields.clientMessageKey,
+    content: parsedFields.content || null,
     primaryConversationId: parsedFields.primaryConversationId ?? null,
     replyToMessageId: parsedFields.replyToMessageId ?? null,
   }
@@ -252,6 +268,7 @@ export function registerChatMessagesRoutes(
     return chatMessagesService.sendCurrentUserAttachmentMessage({
       attachment: upload.attachment,
       clientMessageKey: upload.clientMessageKey,
+      content: upload.content,
       primaryConversationId: upload.primaryConversationId,
       replyToMessageId: upload.replyToMessageId,
       userId: user.id,

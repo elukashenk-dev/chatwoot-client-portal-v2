@@ -78,7 +78,7 @@ function getSwipeSurface(container: HTMLElement, messageId: number) {
 }
 
 describe('ChatTranscript', () => {
-  it('groups outgoing bubbles and renders metadata on minute boundaries', () => {
+  it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
     const { container } = renderTranscript([
       createMessage({
         content: 'Первое мое сообщение',
@@ -98,7 +98,8 @@ describe('ChatTranscript', () => {
     ])
 
     expect(screen.queryByText(/AM|PM|Apr/)).not.toBeInTheDocument()
-    expect(screen.getAllByText('Вы')).toHaveLength(2)
+    expect(screen.queryByText('Вы')).not.toBeInTheDocument()
+    expect(screen.queryByText('Доставлено')).not.toBeInTheDocument()
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
@@ -117,24 +118,26 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
     expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
-    const firstMinuteHeader = getMessageHeader(container, 1)
-    const sameMinuteHeader = getMessageHeader(container, 2)
-    const secondMinuteHeader = getMessageHeader(container, 3)
-    const firstMinuteMeta = getMessageMeta(container, 2)
-    const secondMinuteMeta = getMessageMeta(container, 3)
+    const firstMeta = getMessageMeta(container, 1)
+    const secondMeta = getMessageMeta(container, 2)
+    const thirdMeta = getMessageMeta(container, 3)
+    const firstStatusIcon = firstMeta?.querySelector(
+      '[data-message-status-icon]',
+    )
 
-    expect(firstMinuteHeader?.children[0]).toHaveTextContent('10:00')
-    expect(firstMinuteHeader?.children[1]).toHaveTextContent('Вы')
-    expect(sameMinuteHeader).toBeNull()
-    expect(secondMinuteHeader?.children[0]).toHaveTextContent('10:01')
-    expect(secondMinuteHeader?.children[1]).toHaveTextContent('Вы')
-    expect(getMessageMeta(container, 1)).toBeNull()
-    expect(firstMinuteMeta).toHaveClass('justify-end')
-    expect(firstMinuteMeta).not.toHaveTextContent('10:00')
-    expect(firstMinuteMeta).toHaveTextContent('Доставлено')
-    expect(getMessageMeta(container, 3)).not.toHaveTextContent('10:01')
-    expect(secondMinuteMeta).toHaveTextContent('Доставлено')
-    expect(getBubble(container, 2)).not.toContainElement(firstMinuteMeta)
+    expect(getMessageHeader(container, 1)).toBeNull()
+    expect(getMessageHeader(container, 2)).toBeNull()
+    expect(getMessageHeader(container, 3)).toBeNull()
+    expect(firstMeta).toHaveTextContent('10:00')
+    expect(secondMeta).toHaveTextContent('10:00')
+    expect(thirdMeta).toHaveTextContent('10:01')
+    expect(firstMeta).toHaveClass('float-right')
+    expect(firstMeta).not.toHaveClass('absolute')
+    expect(firstStatusIcon).toHaveAttribute('data-message-status-icon', 'sent')
+    expect(firstMeta?.querySelector('[aria-label="Доставлено"]')).not.toBeNull()
+    expect(getBubble(container, 1)).toContainElement(firstMeta)
+    expect(getBubble(container, 1)).toHaveClass('flow-root')
+    expect(getBubble(container, 1)).not.toHaveClass('pr-[4.75rem]')
   })
 
   it('renders an agent avatar on the first incoming bubble in a group', () => {
@@ -157,20 +160,17 @@ describe('ChatTranscript', () => {
       }),
     ])
 
-    expect(getMessageHeader(container, 1)?.children[0]).toHaveTextContent(
-      'Ольга Support',
+    expect(getMessageHeader(container, 1)).toHaveTextContent('Ольга Support')
+    expect(getMessageHeader(container, 1)).not.toHaveTextContent('10:00')
+    expect(getMessageHeader(container, 2)).toBeNull()
+    expect(getMessageMeta(container, 1)).toHaveTextContent('10:00')
+    expect(getMessageMeta(container, 2)).toHaveTextContent('10:01')
+    expect(
+      getMessageMeta(container, 1)?.querySelector('[data-message-status-icon]'),
+    ).toBeNull()
+    expect(getBubble(container, 1)).toContainElement(
+      getMessageMeta(container, 1),
     )
-    expect(getMessageHeader(container, 1)?.children[1]).toHaveTextContent(
-      '10:00',
-    )
-    expect(getMessageHeader(container, 2)?.children[0]).toHaveTextContent(
-      'Ольга Support',
-    )
-    expect(getMessageHeader(container, 2)?.children[1]).toHaveTextContent(
-      '10:01',
-    )
-    expect(getMessageMeta(container, 1)).toBeNull()
-    expect(getMessageMeta(container, 2)).toBeNull()
     const avatars = container.querySelectorAll('[data-agent-avatar]')
     expect(avatars).toHaveLength(1)
     expect(avatars[0]).toHaveAttribute('aria-label', 'Агент Ольга Support')

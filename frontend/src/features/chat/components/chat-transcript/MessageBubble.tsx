@@ -39,8 +39,6 @@ type MessageBubbleProps = {
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
   onReplyToMessage: (message: ChatMessage) => void
   onRetryTextMessage: (clientMessageKey: string) => void
-  shouldRenderHeader: boolean
-  shouldRenderMeta: boolean
 }
 
 const EMPTY_SWIPE_GESTURE: SwipeGesture = {
@@ -68,72 +66,56 @@ function isLocalTextSend(message: ChatMessage) {
   )
 }
 
-function MessageHeader({ message }: { message: ChatMessage }) {
-  const isOutgoing = message.direction === 'outgoing'
-  const timestamp = formatMessageMetadataTimestamp(message.createdAt)
-
+function AgentNameHeader({ message }: { message: ChatMessage }) {
   return (
     <div
-      className={cn(
-        'flex items-center gap-2 px-1 text-[12px] leading-none',
-        isOutgoing ? 'mb-1 justify-end' : 'mb-[7px] justify-start',
-      )}
+      className="mb-[7px] flex items-center justify-start px-1 text-[12px] font-medium leading-none text-slate-700"
       data-message-header
     >
-      {isOutgoing ? (
-        <>
-          <span className="font-normal tabular-nums text-slate-400">
-            {timestamp}
-          </span>
-          <span className="font-medium text-slate-700">
-            {message.authorName}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="font-medium text-slate-700">
-            {message.authorName}
-          </span>
-          <span className="font-normal tabular-nums text-slate-400">
-            {timestamp}
-          </span>
-        </>
-      )}
+      {message.authorName}
     </div>
   )
 }
 
-function MessageMeta({ message }: { message: ChatMessage }) {
-  const isOutgoing = message.direction === 'outgoing'
-
-  if (!isOutgoing) {
-    return null
+function MessageStatusIcon({ message }: { message: ChatMessage }) {
+  if (message.status === 'sending') {
+    return (
+      <span aria-label="Отправляется" data-message-status-icon="sending">
+        <ClockIcon className="h-3 w-3 shrink-0 animate-pulse" />
+      </span>
+    )
   }
 
-  const isSending = message.status === 'sending'
-  const isFailed = message.status === 'failed'
-  const statusLabel = isSending
-    ? 'Отправка'
-    : isFailed
-      ? 'Не отправлено'
-      : 'Доставлено'
-  const statusToneClass = isFailed ? 'text-rose-500' : 'text-slate-400'
+  if (message.status === 'failed') {
+    return (
+      <span aria-label="Не отправлено" data-message-status-icon="failed">
+        <RefreshIcon className="h-3 w-3 shrink-0 animate-pulse text-rose-200" />
+      </span>
+    )
+  }
 
   return (
-    <div
+    <span aria-label="Доставлено" data-message-status-icon="sent">
+      <CheckIcon className="h-3 w-3 shrink-0" />
+    </span>
+  )
+}
+
+function BubbleMetadata({ message }: { message: ChatMessage }) {
+  const isOutgoing = message.direction === 'outgoing'
+  const timestamp = formatMessageMetadataTimestamp(message.createdAt)
+
+  return (
+    <span
       className={cn(
-        'mt-1.5 flex items-center justify-end gap-1.5 px-1 text-[12px] leading-none',
-        statusToneClass,
+        'pointer-events-none float-right ml-3 mt-[0.55rem] inline-flex h-3.5 items-center gap-1 text-[11px] font-normal leading-none tabular-nums',
+        isOutgoing ? 'text-white/65' : 'text-slate-400',
       )}
       data-message-meta
     >
-      {isSending ? (
-        <ClockIcon className="h-3.5 w-3.5 shrink-0 animate-pulse" />
-      ) : (
-        <CheckIcon className="h-3.5 w-3.5 shrink-0" />
-      )}
-      <span>{statusLabel}</span>
-    </div>
+      <span>{timestamp}</span>
+      {isOutgoing ? <MessageStatusIcon message={message} /> : null}
+    </span>
   )
 }
 
@@ -240,8 +222,6 @@ export function MessageBubble({
   onOpenContextMenu,
   onReplyToMessage,
   onRetryTextMessage,
-  shouldRenderHeader,
-  shouldRenderMeta,
 }: MessageBubbleProps) {
   const isOutgoing = message.direction === 'outgoing'
   const canReplyToMessage = !isLocalTextSend(message)
@@ -418,26 +398,35 @@ export function MessageBubble({
               swipeOffset > 0 ? `translateX(-${swipeOffset}px)` : undefined,
           }}
         >
-          {shouldRenderHeader ? <MessageHeader message={message} /> : null}
+          {!isOutgoing && shouldRenderAuthorName(blockPosition) ? (
+            <AgentNameHeader message={message} />
+          ) : null}
           <div
             data-chat-bubble
             className={
               isOutgoing
-                ? `${radiusClassName} break-words bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm shadow-brand-900/10`
-                : `${radiusClassName} break-words border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm shadow-slate-900/5`
+                ? `${radiusClassName} flow-root break-words bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm shadow-brand-900/10`
+                : `${radiusClassName} flow-root break-words border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm shadow-slate-900/5`
             }
           >
             {message.replyTo ? (
               <ReplyQuote isOutgoing={isOutgoing} replyTo={message.replyTo} />
             ) : null}
             {message.content ? (
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p className="whitespace-pre-wrap">
+                {message.content}
+                {message.attachments.length === 0 ? (
+                  <BubbleMetadata message={message} />
+                ) : null}
+              </p>
             ) : null}
             {message.attachments.map((attachment) => (
               <AttachmentCard attachment={attachment} key={attachment.id} />
             ))}
+            {!message.content || message.attachments.length > 0 ? (
+              <BubbleMetadata message={message} />
+            ) : null}
           </div>
-          {shouldRenderMeta ? <MessageMeta message={message} /> : null}
           <RetryTextSend
             isConnectionAvailable={isConnectionAvailable}
             message={message}

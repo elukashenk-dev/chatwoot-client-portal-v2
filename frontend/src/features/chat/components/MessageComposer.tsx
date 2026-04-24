@@ -9,6 +9,7 @@ import {
 } from '../../../shared/ui/icons'
 import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
+import { ComposerSideControl } from './message-composer/ComposerSideControl'
 import { QuickEmojiBar } from './message-composer/QuickEmojiBar'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
 import type {
@@ -49,13 +50,12 @@ export function MessageComposer({
   replyTarget,
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
-    null,
-  )
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null)
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingAttachmentClientMessageKeyRef = useRef<string | null>(null)
+  const pendingAttachmentContentRef = useRef<string | null>(null)
   const pendingAttachmentReplyToMessageIdRef = useRef<number | null>(null)
   const pendingAttachmentSignatureRef = useRef<string | null>(null)
   const pendingCaretPositionRef = useRef<number | null>(null)
@@ -66,6 +66,7 @@ export function MessageComposer({
   const shouldRestoreFocusRef = useRef(false)
   const normalizedDraft = draft.trim()
   const replyToMessageId = replyTarget?.id ?? null
+  const shouldPrioritizeTextDraft = normalizedDraft.length > 0
 
   const {
     cancelVoiceRecording,
@@ -76,33 +77,32 @@ export function MessageComposer({
     startVoiceRecording,
     status: voiceRecorderStatus,
   } = useVoiceRecorder({
-    canStartRecording: !disabled && !isSending && selectedAttachment === null,
+    canStartRecording:
+      !disabled &&
+      !isSending &&
+      selectedAttachment === null &&
+      !shouldPrioritizeTextDraft,
     onSendVoiceAttachment: async (voiceFile) => {
       setSelectedAttachment(voiceFile)
 
-      return submitAttachmentFile(voiceFile, {
-        allowVoiceRecorderBusy: true,
-      })
+      return submitAttachmentFile(voiceFile, { allowVoiceRecorderBusy: true })
     },
   })
 
   const isVoiceRecorderBusy = voiceRecorderStatus !== 'idle'
   const canSendText =
-    !disabled &&
-    !isSending &&
-    !isVoiceRecorderBusy &&
-    normalizedDraft.length > 0
+    normalizedDraft.length > 0 && !disabled && !isSending && !isVoiceRecorderBusy
   const canSendAttachment =
-    !disabled &&
-    !isSending &&
-    !isVoiceRecorderBusy &&
-    selectedAttachment !== null
+    selectedAttachment !== null && !disabled && !isSending && !isVoiceRecorderBusy
   const canSend = canSendAttachment || canSendText
   const canStartVoiceRecording =
     !disabled &&
     !isSending &&
     !isVoiceRecorderBusy &&
-    selectedAttachment === null
+    selectedAttachment === null &&
+    !shouldPrioritizeTextDraft
+  const isAttachmentControlDisabled =
+    disabled || isSending || isVoiceRecorderBusy || shouldPrioritizeTextDraft
   const composerErrorMessage = voiceErrorMessage ?? errorMessage
   const recordingDuration = formatRecordingDuration(recordingElapsedMs)
 
@@ -165,6 +165,7 @@ export function MessageComposer({
     pendingContentRef.current = null
     pendingReplyToMessageIdRef.current = null
     pendingAttachmentClientMessageKeyRef.current = null
+    pendingAttachmentContentRef.current = null
     pendingAttachmentReplyToMessageIdRef.current = null
     pendingAttachmentSignatureRef.current = null
     onCancelReply()
@@ -203,7 +204,8 @@ export function MessageComposer({
     file: File,
     {
       allowVoiceRecorderBusy = false,
-    }: { allowVoiceRecorderBusy?: boolean } = {},
+      content = null,
+    }: { allowVoiceRecorderBusy?: boolean; content?: string | null } = {},
   ) {
     if (
       disabled ||
@@ -214,15 +216,18 @@ export function MessageComposer({
     }
 
     const attachmentSignature = createAttachmentSignature(file)
+    const normalizedAttachmentContent = content?.trim() || null
     const currentReplyToMessageId = replyToMessageIdRef.current
 
     if (
       pendingAttachmentClientMessageKeyRef.current &&
       (pendingAttachmentReplyToMessageIdRef.current !==
         currentReplyToMessageId ||
+        pendingAttachmentContentRef.current !== normalizedAttachmentContent ||
         pendingAttachmentSignatureRef.current !== attachmentSignature)
     ) {
       pendingAttachmentClientMessageKeyRef.current = null
+      pendingAttachmentContentRef.current = null
       pendingAttachmentReplyToMessageIdRef.current = null
       pendingAttachmentSignatureRef.current = null
     }
@@ -232,22 +237,26 @@ export function MessageComposer({
 
     clearVoiceErrorMessage()
     pendingAttachmentClientMessageKeyRef.current = clientMessageKey
+    pendingAttachmentContentRef.current = normalizedAttachmentContent
     pendingAttachmentReplyToMessageIdRef.current = currentReplyToMessageId
     pendingAttachmentSignatureRef.current = attachmentSignature
 
     const wasSent = await onSendAttachment({
       clientMessageKey,
+      content: normalizedAttachmentContent,
       file,
       replyToMessageId: currentReplyToMessageId,
     })
 
     if (wasSent) {
       pendingAttachmentClientMessageKeyRef.current = null
+      pendingAttachmentContentRef.current = null
       pendingAttachmentReplyToMessageIdRef.current = null
       pendingAttachmentSignatureRef.current = null
       shouldRestoreFocusRef.current = true
       onCancelReply()
       setSelectedAttachment(null)
+      setDraft('')
 
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -262,7 +271,9 @@ export function MessageComposer({
       return
     }
 
-    await submitAttachmentFile(selectedAttachment)
+    await submitAttachmentFile(selectedAttachment, {
+      content: normalizedDraft,
+    })
   }
 
   async function submitCurrentDraft() {
@@ -278,6 +289,7 @@ export function MessageComposer({
     if (!file) {
       setSelectedAttachment(null)
       pendingAttachmentClientMessageKeyRef.current = null
+      pendingAttachmentContentRef.current = null
       pendingAttachmentReplyToMessageIdRef.current = null
       pendingAttachmentSignatureRef.current = null
       return
@@ -288,6 +300,7 @@ export function MessageComposer({
 
     if (pendingAttachmentSignatureRef.current !== nextSignature) {
       pendingAttachmentClientMessageKeyRef.current = null
+      pendingAttachmentContentRef.current = null
       pendingAttachmentReplyToMessageIdRef.current = null
       pendingAttachmentSignatureRef.current = null
     }
@@ -367,25 +380,31 @@ export function MessageComposer({
               accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
               aria-label="Файл вложения"
               className="sr-only"
-              disabled={disabled || isSending || isVoiceRecorderBusy}
+              disabled={isAttachmentControlDisabled}
               onChange={(event) => {
                 selectAttachment(event.target.files?.[0] ?? null)
               }}
               ref={fileInputRef}
               type="file"
             />
-            <button
-              aria-label="Прикрепить файл"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-              disabled={disabled || isSending || isVoiceRecorderBusy}
-              onClick={() => {
-                fileInputRef.current?.click()
-              }}
-              title="Прикрепить файл"
-              type="button"
+            <ComposerSideControl
+              control="attachment"
+              isCollapsed={shouldPrioritizeTextDraft}
             >
-              <PaperclipIcon className="h-[18px] w-[18px]" />
-            </button>
+              <button
+                aria-label="Прикрепить файл"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                disabled={isAttachmentControlDisabled}
+                onClick={() => {
+                  fileInputRef.current?.click()
+                }}
+                tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
+                title="Прикрепить файл"
+                type="button"
+              >
+                <PaperclipIcon className="h-[18px] w-[18px]" />
+              </button>
+            </ComposerSideControl>
 
             <textarea
               aria-label="Сообщение"
@@ -415,24 +434,30 @@ export function MessageComposer({
               value={draft}
             />
 
-            <button
-              aria-label="Голосовое сообщение"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-              disabled={!canStartVoiceRecording}
-              onClick={() => {
-                void startVoiceRecording()
-              }}
-              title="Записать голосовое"
-              type="button"
+            <ComposerSideControl
+              control="voice"
+              isCollapsed={shouldPrioritizeTextDraft}
             >
-              <MicrophoneIcon
-                className={
-                  voiceRecorderStatus === 'starting'
-                    ? 'h-[18px] w-[18px] animate-pulse'
-                    : 'h-[18px] w-[18px]'
-                }
-              />
-            </button>
+              <button
+                aria-label="Голосовое сообщение"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                disabled={!canStartVoiceRecording}
+                onClick={() => {
+                  void startVoiceRecording()
+                }}
+                tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
+                title="Записать голосовое"
+                type="button"
+              >
+                <MicrophoneIcon
+                  className={
+                    voiceRecorderStatus === 'starting'
+                      ? 'h-[18px] w-[18px] animate-pulse'
+                      : 'h-[18px] w-[18px]'
+                  }
+                />
+              </button>
+            </ComposerSideControl>
             <button
               aria-label={
                 isSending

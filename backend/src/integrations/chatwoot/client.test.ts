@@ -546,7 +546,7 @@ describe('createChatwootClient', () => {
             thumb_url: '',
           },
         ],
-        content: null,
+        content: 'Подпишите, пожалуйста',
         content_attributes: {},
         content_type: 'text',
         created_at: 1_776_000_020,
@@ -579,6 +579,7 @@ describe('createChatwootClient', () => {
           fileName: ' invoice.pdf ',
           mimeType: 'Application/PDF',
         },
+        content: ' Подпишите, пожалуйста ',
         conversationId: 101,
         replyToMessageId: 401,
         sourceId: 'portal-send:attachment-key',
@@ -590,7 +591,7 @@ describe('createChatwootClient', () => {
           url: 'https://files.example.test/invoice.pdf',
         },
       ],
-      content: null,
+      content: 'Подпишите, пожалуйста',
       id: 601,
       messageType: 0,
       sourceId: 'portal-send:attachment-key',
@@ -608,6 +609,7 @@ describe('createChatwootClient', () => {
     })
     expect(requestOptions?.headers).not.toHaveProperty('Content-Type')
     expect(formData).toBeInstanceOf(FormData)
+    expect(formData.get('content')).toBe('Подпишите, пожалуйста')
     expect(formData.get('message_type')).toBe('incoming')
     expect(formData.get('content_attributes')).toBe('{"in_reply_to":401}')
     expect(formData.get('private')).toBe('false')

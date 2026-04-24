@@ -157,18 +157,25 @@ export async function sendChatMessage({
 
 export async function sendChatAttachment({
   clientMessageKey,
+  content,
   file,
   primaryConversationId,
   replyToMessageId,
 }: {
   clientMessageKey: string
+  content?: string | null
   file: File
   primaryConversationId?: number | null
   replyToMessageId?: number | null
 }) {
   const formData = new FormData()
+  const normalizedContent = content?.trim()
 
   formData.append('clientMessageKey', clientMessageKey)
+
+  if (normalizedContent) {
+    formData.append('content', normalizedContent)
+  }
 
   if (primaryConversationId) {
     formData.append('primaryConversationId', String(primaryConversationId))

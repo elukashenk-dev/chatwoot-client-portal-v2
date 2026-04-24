@@ -12,20 +12,27 @@ export type MessageContextMenuState = {
 const MESSAGE_CONTEXT_MENU_HEIGHT_PX = 104
 const MESSAGE_CONTEXT_MENU_WIDTH_PX = 184
 const MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX = 12
+const MESSAGE_DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+})
+const MESSAGE_DAY_KEY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+const MESSAGE_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  hour: '2-digit',
+  hour12: false,
+  minute: '2-digit',
+})
 
 export function formatMessageDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date(value))
+  return MESSAGE_DATE_FORMATTER.format(new Date(value))
 }
 
 function formatMessageDayKey(value: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).formatToParts(new Date(value))
+  const parts = MESSAGE_DAY_KEY_FORMATTER.formatToParts(new Date(value))
 
   const year = parts.find((part) => part.type === 'year')?.value
   const month = parts.find((part) => part.type === 'month')?.value
@@ -34,24 +41,8 @@ function formatMessageDayKey(value: string) {
   return year && month && day ? `${year}-${month}-${day}` : ''
 }
 
-function formatMessageMinuteKey(value: string) {
-  const date = new Date(value)
-
-  return [
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    date.getHours(),
-    date.getMinutes(),
-  ].join(':')
-}
-
 export function formatMessageMetadataTimestamp(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    hour: '2-digit',
-    hour12: false,
-    minute: '2-digit',
-  }).format(new Date(value))
+  return MESSAGE_TIMESTAMP_FORMATTER.format(new Date(value))
 }
 
 export function requestNextFrame(callback: () => void) {
@@ -222,51 +213,6 @@ export function getMessageBlockPosition(
   }
 
   return 'middle'
-}
-
-export function shouldRenderMessageMeta(
-  messages: ChatMessage[],
-  index: number,
-) {
-  const message = messages[index]
-  const nextMessage = messages[index + 1] ?? null
-
-  if (!message) {
-    return false
-  }
-
-  if (!areMessagesInSameVisualBlock(message, nextMessage)) {
-    return true
-  }
-
-  return (
-    formatMessageMinuteKey(message.createdAt) !==
-    formatMessageMinuteKey(nextMessage.createdAt)
-  )
-}
-
-export function shouldRenderMessageHeader(
-  messages: ChatMessage[],
-  index: number,
-) {
-  const message = messages[index]
-  const previousMessage = index > 0 ? messages[index - 1] : null
-
-  if (!message) {
-    return false
-  }
-
-  if (
-    !previousMessage ||
-    !areMessagesInSameVisualBlock(previousMessage, message)
-  ) {
-    return true
-  }
-
-  return (
-    formatMessageMinuteKey(previousMessage.createdAt) !==
-    formatMessageMinuteKey(message.createdAt)
-  )
 }
 
 export function shouldRenderAuthorName(blockPosition: MessageBlockPosition) {

@@ -120,7 +120,8 @@ describe('ChatPage optimistic text send', () => {
 
     expect(textarea).toHaveValue('')
     expect(screen.getByText('Новое сообщение')).toBeInTheDocument()
-    expect(screen.getByText('Отправка')).toBeInTheDocument()
+    expect(screen.getByLabelText('Отправляется')).toBeInTheDocument()
+    expect(screen.queryByText('Отправка')).not.toBeInTheDocument()
     await waitFor(() => {
       expect(textarea).toHaveFocus()
     })
@@ -155,7 +156,7 @@ describe('ChatPage optimistic text send', () => {
     })
 
     await waitFor(() => {
-      expect(screen.queryByText('Отправка')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Отправляется')).not.toBeInTheDocument()
     })
 
     const [, requestOptions] = fetchMock.mock.calls[2] ?? []
@@ -230,12 +231,12 @@ describe('ChatPage optimistic text send', () => {
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
     expect(screen.getByRole('textbox', { name: 'Сообщение' })).toHaveValue('')
-    expect(await screen.findByText('Не отправлено')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Не отправлено')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Повторить' }))
 
     await waitFor(() => {
-      expect(screen.queryByText('Не отправлено')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Не отправлено')).not.toBeInTheDocument()
     })
     expect(screen.getByText('Повтор после сбоя')).toBeInTheDocument()
 

@@ -14,6 +14,7 @@ import type {
   ChatContextService,
   ChatContextSnapshot,
 } from '../chat-context/service.js'
+import { normalizeContent, normalizeOptionalContent } from './content.js'
 import type {
   ChatMessagesRepository,
   ChatSendLedgerEntry,
@@ -288,16 +289,6 @@ function createChatSendUnavailableResult(
   })
 }
 
-function normalizeContent(content: string) {
-  const normalizedContent = content.trim()
-
-  if (!normalizedContent) {
-    throw new ApiError(400, 'message_content_required', 'Введите сообщение.')
-  }
-
-  return normalizedContent
-}
-
 function normalizeClientMessageKey(clientMessageKey: string) {
   const normalizedClientMessageKey = clientMessageKey.trim()
 
@@ -439,11 +430,12 @@ function createTextPayloadSha256(
 
 function createAttachmentPayloadSha256(
   attachment: PortalAttachmentUpload,
+  content: string | null,
   replyToMessageId: number | null,
 ) {
   return createHash('sha256')
     .update(
-      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0${replyToMessageId ?? ''}\0`,
+      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0${content ?? ''}\0${replyToMessageId ?? ''}\0`,
     )
     .update(attachment.data)
     .digest('hex')
@@ -1044,12 +1036,14 @@ export function createChatMessagesService({
     async sendCurrentUserAttachmentMessage({
       attachment,
       clientMessageKey,
+      content = null,
       primaryConversationId = null,
       replyToMessageId = null,
       userId,
     }: {
       attachment: PortalAttachmentUpload
       clientMessageKey: string
+      content?: string | null
       primaryConversationId?: number | null
       replyToMessageId?: number | null
       userId: number
@@ -1065,6 +1059,7 @@ export function createChatMessagesService({
       }
 
       const normalizedAttachment = normalizeAttachmentUpload(attachment)
+      const normalizedContent = normalizeOptionalContent(content)
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
       const normalizedReplyToMessageId =
@@ -1084,6 +1079,7 @@ export function createChatMessagesService({
           createChatwootMessage: () =>
             chatwootClient.createConversationIncomingAttachmentMessage({
               attachment: normalizedAttachment,
+              content: normalizedContent,
               conversationId: resolvedPrimaryConversationId,
               replyToMessageId: normalizedReplyToMessageId,
               sourceId: normalizedClientMessageKey,
@@ -1091,9 +1087,10 @@ export function createChatMessagesService({
           messageKind: SEND_LEDGER_MESSAGE_KIND_ATTACHMENT,
           now,
           payloadMismatchMessage:
-            'Повторная отправка использует другой файл для того же ключа.',
+            'Повторная отправка использует другой файл или подпись для того же ключа.',
           payloadSha256: createAttachmentPayloadSha256(
             normalizedAttachment,
+            normalizedContent,
             normalizedReplyToMessageId,
           ),
           primaryConversationId: resolvedPrimaryConversationId,

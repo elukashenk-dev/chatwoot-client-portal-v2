@@ -563,7 +563,7 @@ describe('ChatPage', () => {
     )
   })
 
-  it('sends one attachment through multipart without clearing draft text', async () => {
+  it('sends one attachment with a text caption through multipart', async () => {
     const user = userEvent.setup()
 
     fetchMock
@@ -595,7 +595,7 @@ describe('ChatPage', () => {
               },
             ],
             authorName: 'Вы',
-            content: null,
+            content: 'Черновик остается',
             contentType: 'text',
             createdAt: '2026-04-21T09:35:00.000Z',
             direction: 'outgoing',
@@ -618,12 +618,13 @@ describe('ChatPage', () => {
       type: 'application/pdf',
     })
 
-    await user.type(textarea, 'Черновик остается')
     await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.type(textarea, 'Черновик остается')
     await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
 
     expect(await screen.findByText('signed-act.pdf')).toBeInTheDocument()
-    expect(textarea).toHaveValue('Черновик остается')
+    expect(screen.getByText('Черновик остается')).toBeInTheDocument()
+    expect(textarea).toHaveValue('')
     await waitFor(() => {
       expect(textarea).toHaveFocus()
     })
@@ -644,6 +645,7 @@ describe('ChatPage', () => {
     expect(formData.get('clientMessageKey')).toEqual(
       expect.stringMatching(/^portal-send:/),
     )
+    expect(formData.get('content')).toBe('Черновик остается')
     expect(formData.get('primaryConversationId')).toBe('77')
     expect(attachment.name).toBe('signed-act.pdf')
     expect(attachment.type).toBe('application/pdf')
@@ -774,7 +776,7 @@ describe('ChatPage', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
-    expect(await screen.findByText('Не отправлено')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Не отправлено')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Повторить' }),
     ).toBeInTheDocument()

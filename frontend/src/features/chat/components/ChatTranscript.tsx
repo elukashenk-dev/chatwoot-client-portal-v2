@@ -28,8 +28,6 @@ import {
   getMessageCopyText,
   requestNextFrame,
   shouldRenderDateDivider,
-  shouldRenderMessageHeader,
-  shouldRenderMessageMeta,
   shouldUseDesktopMessageContextMenu,
   type MessageContextMenuState,
 } from './chat-transcript/utils'
@@ -321,11 +319,6 @@ export function ChatTranscript({
           {messages.map((message, index) => {
             const blockPosition = getMessageBlockPosition(messages, index)
             const hasDateDivider = shouldRenderDateDivider(messages, index)
-            const shouldRenderHeader = shouldRenderMessageHeader(
-              messages,
-              index,
-            )
-            const shouldRenderMeta = shouldRenderMessageMeta(messages, index)
 
             return (
               <div className="contents" key={message.id}>
@@ -347,8 +340,6 @@ export function ChatTranscript({
                   onOpenContextMenu={handleOpenContextMenu}
                   onReplyToMessage={onReplyToMessage}
                   onRetryTextMessage={onRetryTextMessage}
-                  shouldRenderHeader={shouldRenderHeader}
-                  shouldRenderMeta={shouldRenderMeta}
                 />
               </div>
             )
