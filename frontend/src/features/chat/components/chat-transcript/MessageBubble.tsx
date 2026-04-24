@@ -1,7 +1,12 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 
 import { cn } from '../../../../shared/lib/cn'
-import { CheckIcon, ReplyIcon } from '../../../../shared/ui/icons'
+import {
+  CheckIcon,
+  ClockIcon,
+  RefreshIcon,
+  ReplyIcon,
+} from '../../../../shared/ui/icons'
 import type { ChatMessage } from '../../types'
 
 import { AttachmentCard } from './AttachmentCard'
@@ -29,9 +34,11 @@ type MessageBubbleProps = {
   blockPosition: MessageBlockPosition
   hasDateDivider: boolean
   index: number
+  isConnectionAvailable: boolean
   message: ChatMessage
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
   onReplyToMessage: (message: ChatMessage) => void
+  onRetryTextMessage: (clientMessageKey: string) => void
 }
 
 const EMPTY_SWIPE_GESTURE: SwipeGesture = {
@@ -50,8 +57,19 @@ function clampValue(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function isLocalTextSend(message: ChatMessage) {
+  return (
+    message.direction === 'outgoing' &&
+    message.attachments.length === 0 &&
+    Boolean(message.clientMessageKey) &&
+    (message.status === 'sending' || message.status === 'failed')
+  )
+}
+
 function MessageMeta({ message }: { message: ChatMessage }) {
   const isOutgoing = message.direction === 'outgoing'
+  const isSending = message.status === 'sending'
+  const isFailed = message.status === 'failed'
 
   return (
     <div
@@ -64,7 +82,58 @@ function MessageMeta({ message }: { message: ChatMessage }) {
       <span className="font-medium tabular-nums">
         {formatMessageMetadataTimestamp(message.createdAt)}
       </span>
-      {isOutgoing ? <CheckIcon className="h-3.5 w-3.5 text-white/75" /> : null}
+      {isOutgoing && isSending ? (
+        <>
+          <span aria-hidden="true">•</span>
+          <span>Отправляем...</span>
+          <ClockIcon className="h-3.5 w-3.5 animate-pulse text-white/75" />
+        </>
+      ) : null}
+      {isOutgoing && isFailed ? (
+        <>
+          <span aria-hidden="true">•</span>
+          <span>Не отправлено</span>
+        </>
+      ) : null}
+      {isOutgoing && !isSending && !isFailed ? (
+        <CheckIcon className="h-3.5 w-3.5 text-white/75" />
+      ) : null}
+    </div>
+  )
+}
+
+function RetryTextSend({
+  isConnectionAvailable,
+  message,
+  onRetryTextMessage,
+}: {
+  isConnectionAvailable: boolean
+  message: ChatMessage
+  onRetryTextMessage: (clientMessageKey: string) => void
+}) {
+  if (
+    message.status !== 'failed' ||
+    !message.clientMessageKey ||
+    message.attachments.length > 0
+  ) {
+    return null
+  }
+
+  return (
+    <div className="mt-2 flex justify-end">
+      <button
+        className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-[12px] font-medium text-rose-700 transition hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300"
+        disabled={!isConnectionAvailable}
+        onClick={() => {
+          if (message.clientMessageKey) {
+            onRetryTextMessage(message.clientMessageKey)
+          }
+        }}
+        type="button"
+      >
+        <RefreshIcon className="h-3.5 w-3.5" />
+        {isConnectionAvailable ? 'Повторить' : 'Нет сети'}
+      </button>
     </div>
   )
 }
@@ -92,11 +161,14 @@ export function MessageBubble({
   blockPosition,
   hasDateDivider,
   index,
+  isConnectionAvailable,
   message,
   onOpenContextMenu,
   onReplyToMessage,
+  onRetryTextMessage,
 }: MessageBubbleProps) {
   const isOutgoing = message.direction === 'outgoing'
+  const canReplyToMessage = !isLocalTextSend(message)
   const [isSwipeActive, setIsSwipeActive] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeGestureRef = useRef<SwipeGesture>(EMPTY_SWIPE_GESTURE)
@@ -205,7 +277,7 @@ export function MessageBubble({
 
     resetSwipeGesture(event.currentTarget)
 
-    if (shouldTriggerReply) {
+    if (shouldTriggerReply && canReplyToMessage) {
       onReplyToMessage(message)
     }
   }
@@ -240,7 +312,7 @@ export function MessageBubble({
           )}
           data-message-swipe-surface
           onContextMenu={(event) => {
-            if (isInteractiveEventTarget(event.target)) {
+            if (isInteractiveEventTarget(event.target) || !canReplyToMessage) {
               return
             }
 
@@ -285,6 +357,11 @@ export function MessageBubble({
             ))}
             {shouldRenderMeta ? <MessageMeta message={message} /> : null}
           </div>
+          <RetryTextSend
+            isConnectionAvailable={isConnectionAvailable}
+            message={message}
+            onRetryTextMessage={onRetryTextMessage}
+          />
         </div>
       </div>
     </div>

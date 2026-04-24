@@ -37,6 +37,12 @@ export function formatRecordingDuration(elapsedMs: number) {
 export function resizeComposerTextarea(textarea: HTMLTextAreaElement) {
   textarea.style.height = 'auto'
 
+  if (textarea.value.length === 0) {
+    textarea.style.height = `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px`
+    textarea.style.overflowY = 'hidden'
+    return
+  }
+
   const nextHeight = Math.max(
     COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
     Math.min(textarea.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT_PX),

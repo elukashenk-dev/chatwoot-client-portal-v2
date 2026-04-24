@@ -67,6 +67,9 @@ test('serves service worker foundation without intercepting API routes', async (
   expect(serviceWorkerSource).toContain('return')
   expect(serviceWorkerSource).toContain('handleNavigationRequest')
   expect(serviceWorkerSource).toContain('handleStaticRequest')
+  expect(serviceWorkerSource).toContain("event.data?.type === 'SKIP_WAITING'")
+  expect(serviceWorkerSource).toContain('shouldHandleStaticRequest')
+  expect(serviceWorkerSource).toContain('shouldCacheResponse')
 })
 
 test('proxies API health through the frontend origin', async ({ request }) => {

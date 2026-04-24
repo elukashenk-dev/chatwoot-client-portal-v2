@@ -1,157 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
+  ChatApiClientError,
   getChatMessages,
   sendChatAttachment,
-  sendChatMessage,
 } from '../api/chatClient'
-import { openChatRealtime } from '../api/chatRealtimeClient'
-import type {
-  ChatMessage,
-  ChatMessagesSnapshot,
-  ChatSendResult,
-} from '../types'
+import type { ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
+import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
 import {
   MessageComposer,
   type MessageComposerReplyTarget,
 } from '../components/MessageComposer'
+import {
+  buildSnapshotFromSendResult,
+  isFirstConversationBootstrapReady,
+  mergeOlderMessages,
+  mergeRealtimeSnapshot,
+  toComposerReplyTarget,
+} from '../lib/chatSnapshot'
+import { useChatResumeResync } from '../lib/useChatResumeResync'
+import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
+import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
+import { useAuthSession } from '../../auth/lib/authSessionContext'
+import type { ChatPageState } from './chatPageState'
+import { useChatRealtimeConnection } from './useChatRealtimeConnection'
+import { useOptimisticTextSend } from './useOptimisticTextSend'
 
-type ChatPageState =
-  | {
-      status: 'error'
-      errorMessage: string
-      snapshot: ChatMessagesSnapshot | null
-    }
-  | {
-      status: 'loading'
-      snapshot: ChatMessagesSnapshot | null
-    }
-  | {
-      status: 'ready'
-      snapshot: ChatMessagesSnapshot
-    }
-
-function mergeOlderMessages(
-  currentSnapshot: ChatMessagesSnapshot,
-  olderSnapshot: ChatMessagesSnapshot,
-): ChatMessagesSnapshot {
-  const currentIds = new Set(
-    currentSnapshot.messages.map((message) => message.id),
-  )
-  const olderMessages = olderSnapshot.messages.filter(
-    (message) => !currentIds.has(message.id),
-  )
-
-  return {
-    ...olderSnapshot,
-    messages: [...olderMessages, ...currentSnapshot.messages],
-  }
-}
-
-function appendSentMessage(messages: ChatMessage[], sentMessage: ChatMessage) {
-  if (messages.some((message) => message.id === sentMessage.id)) {
-    return messages
-  }
-
-  return [...messages, sentMessage]
-}
-
-function sortMessagesByTimeline(messages: ChatMessage[]) {
-  return [...messages].sort((left, right) => {
-    const leftTime = new Date(left.createdAt).getTime()
-    const rightTime = new Date(right.createdAt).getTime()
-
-    if (leftTime !== rightTime) {
-      return leftTime - rightTime
-    }
-
-    return left.id - right.id
-  })
-}
-
-function mergeRealtimeSnapshot({
-  currentSnapshot,
-  realtimeSnapshot,
-}: {
-  currentSnapshot: ChatMessagesSnapshot
-  realtimeSnapshot: ChatMessagesSnapshot
-}): ChatMessagesSnapshot {
-  if (
-    currentSnapshot.result !== 'ready' ||
-    !currentSnapshot.primaryConversation ||
-    realtimeSnapshot.result !== 'ready' ||
-    !realtimeSnapshot.primaryConversation ||
-    currentSnapshot.primaryConversation.id !==
-      realtimeSnapshot.primaryConversation.id
-  ) {
-    return realtimeSnapshot
-  }
-
-  const messagesById = new Map(
-    currentSnapshot.messages.map((message) => [message.id, message]),
-  )
-
-  for (const message of realtimeSnapshot.messages) {
-    messagesById.set(message.id, message)
-  }
-
-  return {
-    ...realtimeSnapshot,
-    hasMoreOlder: currentSnapshot.hasMoreOlder || realtimeSnapshot.hasMoreOlder,
-    messages: sortMessagesByTimeline([...messagesById.values()]),
-    nextOlderCursor:
-      currentSnapshot.nextOlderCursor ?? realtimeSnapshot.nextOlderCursor,
-  }
-}
-
-function isFirstConversationBootstrapReady(snapshot: ChatMessagesSnapshot) {
-  return (
-    snapshot.result === 'not_ready' &&
-    snapshot.reason === 'conversation_missing' &&
-    snapshot.linkedContact !== null
-  )
-}
-
-function toComposerReplyTarget(
-  message: ChatMessage,
-): MessageComposerReplyTarget {
-  return {
-    attachmentName: message.attachments[0]?.name ?? null,
-    authorName: message.authorName,
-    content: message.content,
-    id: message.id,
-  }
-}
-
-function buildSnapshotFromSendResult({
-  currentSnapshot,
-  sendResult,
-}: {
-  currentSnapshot: ChatMessagesSnapshot | null
-  sendResult: ChatSendResult
-}): ChatMessagesSnapshot {
-  return {
-    hasMoreOlder: currentSnapshot?.hasMoreOlder ?? false,
-    linkedContact: sendResult.linkedContact,
-    messages: sendResult.sentMessage
-      ? appendSentMessage(
-          currentSnapshot?.messages ?? [],
-          sendResult.sentMessage,
-        )
-      : (currentSnapshot?.messages ?? []),
-    nextOlderCursor: currentSnapshot?.nextOlderCursor ?? null,
-    primaryConversation: sendResult.primaryConversation,
-    reason: sendResult.reason,
-    result: sendResult.result,
-  }
-}
+const OFFLINE_RUNTIME_MESSAGE =
+  'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.'
 
 export function ChatPage() {
   const isMountedRef = useRef(false)
+  const { refreshSession } = useAuthSession()
   const [pageState, setPageState] = useState<ChatPageState>({
     snapshot: null,
     status: 'loading',
@@ -164,6 +48,39 @@ export function ChatPage() {
   const [replyTarget, setReplyTarget] =
     useState<MessageComposerReplyTarget | null>(null)
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
+  const {
+    isOnline: isBrowserOnline,
+    markOffline: markBrowserOffline,
+    markOnline: markBrowserOnline,
+    navigatorHintIsOnline,
+  } = useBrowserConnectionState()
+  const isRealtimeSupported = typeof EventSource !== 'undefined'
+
+  const handleUnauthorizedChatError = useCallback(
+    async (error: unknown) => {
+      if (!(error instanceof ChatApiClientError) || error.statusCode !== 401) {
+        return false
+      }
+
+      await refreshSession()
+
+      return true
+    },
+    [refreshSession],
+  )
+
+  const handleConnectionUnavailableError = useCallback(
+    (error: unknown) => {
+      if (!(error instanceof ChatApiClientError) || error.statusCode !== 0) {
+        return false
+      }
+
+      markBrowserOffline()
+
+      return true
+    },
+    [markBrowserOffline],
+  )
 
   const loadInitialChat = useCallback(async () => {
     setHistoryErrorMessage(null)
@@ -179,6 +96,7 @@ export function ChatPage() {
         return
       }
 
+      markBrowserOnline()
       setPageState({
         snapshot,
         status: 'ready',
@@ -187,6 +105,12 @@ export function ChatPage() {
       if (!isMountedRef.current) {
         return
       }
+
+      if (await handleUnauthorizedChatError(error)) {
+        return
+      }
+
+      handleConnectionUnavailableError(error)
 
       setPageState({
         errorMessage:
@@ -197,10 +121,15 @@ export function ChatPage() {
         status: 'error',
       })
     }
-  }, [])
+  }, [
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    markBrowserOnline,
+  ])
 
   async function handleLoadOlderMessages() {
     if (
+      !isBrowserOnline ||
       pageState.status !== 'ready' ||
       !pageState.snapshot.primaryConversation ||
       !pageState.snapshot.nextOlderCursor
@@ -229,6 +158,7 @@ export function ChatPage() {
         return
       }
 
+      markBrowserOnline()
       setPageState((currentState) => {
         if (currentState.status !== 'ready') {
           return currentState
@@ -239,10 +169,16 @@ export function ChatPage() {
           status: 'ready',
         }
       })
-    } catch {
+    } catch (error) {
       if (!isMountedRef.current) {
         return
       }
+
+      if (await handleUnauthorizedChatError(error)) {
+        return
+      }
+
+      handleConnectionUnavailableError(error)
 
       setHistoryErrorMessage(
         'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
@@ -250,75 +186,6 @@ export function ChatPage() {
     } finally {
       if (isMountedRef.current) {
         setIsLoadingOlder(false)
-      }
-    }
-  }
-
-  async function handleSendMessage({
-    clientMessageKey,
-    content,
-    replyToMessageId,
-  }: {
-    clientMessageKey: string
-    content: string
-    replyToMessageId?: number | null
-  }) {
-    if (pageState.status !== 'ready') {
-      return false
-    }
-
-    setIsSending(true)
-    setSendErrorMessage(null)
-
-    try {
-      const sendResult = await sendChatMessage({
-        clientMessageKey,
-        content,
-        primaryConversationId:
-          pageState.snapshot.primaryConversation?.id ?? null,
-        replyToMessageId,
-      })
-
-      if (!isMountedRef.current) {
-        return false
-      }
-
-      if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
-        setSendErrorMessage(
-          'Не удалось отправить сообщение. Попробуйте еще раз.',
-        )
-        return false
-      }
-
-      setPageState((currentState) => {
-        const currentSnapshot =
-          currentState.status === 'ready' ? currentState.snapshot : null
-
-        return {
-          snapshot: buildSnapshotFromSendResult({
-            currentSnapshot,
-            sendResult,
-          }),
-          status: 'ready',
-        }
-      })
-
-      return true
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return false
-      }
-
-      setSendErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Не удалось отправить сообщение. Попробуйте еще раз.',
-      )
-
-      return false
-    } finally {
-      if (isMountedRef.current) {
-        setIsSending(false)
       }
     }
   }
@@ -332,7 +199,7 @@ export function ChatPage() {
     file: File
     replyToMessageId?: number | null
   }) {
-    if (pageState.status !== 'ready') {
+    if (!isBrowserOnline || pageState.status !== 'ready') {
       return false
     }
 
@@ -357,6 +224,7 @@ export function ChatPage() {
         return false
       }
 
+      markBrowserOnline()
       setPageState((currentState) => {
         const currentSnapshot =
           currentState.status === 'ready' ? currentState.snapshot : null
@@ -373,6 +241,14 @@ export function ChatPage() {
       return true
     } catch (error) {
       if (!isMountedRef.current) {
+        return false
+      }
+
+      if (await handleUnauthorizedChatError(error)) {
+        return false
+      }
+
+      if (handleConnectionUnavailableError(error)) {
         return false
       }
 
@@ -402,6 +278,68 @@ export function ChatPage() {
     }
   }, [loadInitialChat])
 
+  const refreshChatSnapshot = useCallback(async () => {
+    const primaryConversationId =
+      pageState.status === 'ready' && pageState.snapshot.primaryConversation
+        ? pageState.snapshot.primaryConversation.id
+        : null
+
+    let latestSnapshot: ChatMessagesSnapshot
+
+    try {
+      latestSnapshot = await getChatMessages({
+        primaryConversationId,
+      })
+    } catch (error) {
+      if (await handleUnauthorizedChatError(error)) {
+        return
+      }
+
+      if (handleConnectionUnavailableError(error)) {
+        return
+      }
+
+      throw error
+    }
+
+    if (!isMountedRef.current) {
+      return
+    }
+
+    markBrowserOnline()
+    setPageState((currentState) => {
+      if (
+        currentState.status === 'ready' &&
+        currentState.snapshot.result === 'ready' &&
+        latestSnapshot.result === 'ready'
+      ) {
+        return {
+          snapshot: mergeRealtimeSnapshot({
+            currentSnapshot: currentState.snapshot,
+            realtimeSnapshot: latestSnapshot,
+          }),
+          status: 'ready',
+        }
+      }
+
+      return {
+        snapshot: latestSnapshot,
+        status: 'ready',
+      }
+    })
+  }, [
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    markBrowserOnline,
+    pageState,
+  ])
+  const resyncStatus = useChatResumeResync({
+    canAttemptResync: isBrowserOnline || navigatorHintIsOnline,
+    loadInitialChat,
+    refreshChatSnapshot,
+    snapshotExists: Boolean(pageState.snapshot),
+  })
+
   const snapshot = pageState.snapshot
   const realtimePrimaryConversationId =
     pageState.status === 'ready' &&
@@ -410,48 +348,12 @@ export function ChatPage() {
       ? pageState.snapshot.primaryConversation.id
       : null
 
-  useEffect(() => {
-    if (!realtimePrimaryConversationId) {
-      return
-    }
-
-    const realtimeConnection = openChatRealtime({
-      onChatState: (realtimeSnapshot) => {
-        if (!isMountedRef.current) {
-          return
-        }
-
-        setPageState({
-          snapshot: realtimeSnapshot,
-          status: 'ready',
-        })
-      },
-      onMessages: (realtimeSnapshot) => {
-        if (!isMountedRef.current) {
-          return
-        }
-
-        setPageState((currentState) => {
-          if (currentState.status !== 'ready') {
-            return currentState
-          }
-
-          return {
-            snapshot: mergeRealtimeSnapshot({
-              currentSnapshot: currentState.snapshot,
-              realtimeSnapshot,
-            }),
-            status: 'ready',
-          }
-        })
-      },
-      primaryConversationId: realtimePrimaryConversationId,
-    })
-
-    return () => {
-      realtimeConnection.close()
-    }
-  }, [realtimePrimaryConversationId])
+  useChatRealtimeConnection({
+    isMountedRef,
+    markBrowserOnline,
+    primaryConversationId: realtimePrimaryConversationId,
+    setPageState,
+  })
 
   const isReady =
     snapshot?.result === 'ready' && Boolean(snapshot.primaryConversation)
@@ -462,12 +364,38 @@ export function ChatPage() {
     pageState.status === 'ready' &&
     (pageState.snapshot.result === 'ready' ||
       isFirstConversationBootstrapReady(pageState.snapshot))
+  const { handleRetryTextMessage, handleSendMessage, optimisticTextSends } =
+    useOptimisticTextSend({
+      handleConnectionUnavailableError,
+      handleUnauthorizedChatError,
+      isBrowserOnline,
+      isMountedRef,
+      markBrowserOnline,
+      onTextSendStarted: () => {
+        setSendErrorMessage(null)
+      },
+      pageState,
+      replyTarget,
+      setPageState,
+    })
+  const visibleMessages =
+    pageState.status === 'ready'
+      ? mergeOptimisticTextMessages({
+          messages: pageState.snapshot.messages,
+          optimisticTextSends,
+        })
+      : []
 
   return (
     <>
       <ChatHeader
         conversation={snapshot?.primaryConversation ?? null}
         isReady={isReady}
+      />
+      <ChatRuntimeAlerts
+        isOnline={isBrowserOnline}
+        isRealtimeSupported={isRealtimeSupported}
+        resyncStatus={resyncStatus}
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
@@ -499,21 +427,24 @@ export function ChatPage() {
           <ChatTranscript
             hasMoreOlder={pageState.snapshot.hasMoreOlder}
             historyErrorMessage={historyErrorMessage}
+            isConnectionAvailable={isBrowserOnline}
             isLoadingOlder={isLoadingOlder}
-            messages={pageState.snapshot.messages}
+            messages={visibleMessages}
             onLoadOlder={() => {
               void handleLoadOlderMessages()
             }}
             onReplyToMessage={(message) => {
               setReplyTarget(toComposerReplyTarget(message))
             }}
+            onRetryTextMessage={handleRetryTextMessage}
           />
         ) : null}
 
         <MessageComposer
-          disabled={!canSend}
+          disabled={!canSend || !isBrowserOnline}
           errorMessage={sendErrorMessage}
           isSending={isSending}
+          offlineAlertMessage={isBrowserOnline ? null : OFFLINE_RUNTIME_MESSAGE}
           onCancelReply={() => {
             setReplyTarget(null)
           }}

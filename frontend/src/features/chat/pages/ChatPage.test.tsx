@@ -472,78 +472,6 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('sends a text message through the backend and appends the returned canonical message', async () => {
-    const user = userEvent.setup()
-
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763600,
-            status: 'open',
-          },
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [],
-            authorName: 'Вы',
-            content: 'Новое сообщение',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:30:00.000Z',
-            direction: 'outgoing',
-            id: 501,
-            status: 'sent',
-          },
-        }),
-      )
-
-    renderChatRoute()
-
-    await screen.findByText(
-      'Здравствуйте, вижу ваше обращение.',
-      {},
-      CHAT_PAGE_LOAD_TIMEOUT,
-    )
-    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
-
-    await user.type(textarea, 'Новое сообщение')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
-
-    expect(await screen.findByText('Новое сообщение')).toBeInTheDocument()
-    await waitFor(() => {
-      expect(textarea).toHaveFocus()
-    })
-
-    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
-    const requestBody = JSON.parse(String(requestOptions?.body)) as {
-      clientMessageKey: string
-      content: string
-      primaryConversationId: number
-    }
-
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
-      '/api/chat/messages',
-      expect.objectContaining({
-        credentials: 'include',
-        method: 'POST',
-      }),
-    )
-    expect(requestBody).toEqual({
-      clientMessageKey: expect.stringMatching(/^portal-send:/),
-      content: 'Новое сообщение',
-      primaryConversationId: 77,
-    })
-  })
-
   it('sends a text reply to a selected message and clears reply state after success', async () => {
     const user = userEvent.setup()
 
@@ -806,7 +734,7 @@ describe('ChatPage', () => {
     expect(attachment.type).toContain('audio/webm')
   })
 
-  it('does not let a voice recording error mask the next send error', async () => {
+  it('does not let a voice recording error mask the next failed text send state', async () => {
     const user = userEvent.setup()
 
     fetchMock
@@ -846,90 +774,14 @@ describe('ChatPage', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
+    expect(await screen.findByText('Не отправлено')).toBeInTheDocument()
     expect(
-      await screen.findByText('Chatwoot temporarily unavailable.'),
+      screen.getByRole('button', { name: 'Повторить' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByText('Голосовая запись недоступна в этом браузере.'),
     ).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledTimes(3)
-  })
-
-  it('retries a failed send with the same client message key while the draft is unchanged', async () => {
-    const user = userEvent.setup()
-
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          {
-            error: {
-              code: 'chatwoot_unavailable',
-              message: 'Chatwoot temporarily unavailable.',
-            },
-          },
-          503,
-        ),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763600,
-            status: 'open',
-          },
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [],
-            authorName: 'Вы',
-            content: 'Повтор после сбоя',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:31:00.000Z',
-            direction: 'outgoing',
-            id: 502,
-            status: 'sent',
-          },
-        }),
-      )
-
-    renderChatRoute()
-
-    await screen.findByText(
-      'Здравствуйте, вижу ваше обращение.',
-      {},
-      CHAT_PAGE_LOAD_TIMEOUT,
-    )
-    await user.type(
-      screen.getByRole('textbox', { name: 'Сообщение' }),
-      'Повтор после сбоя',
-    )
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
-
-    expect(
-      await screen.findByText('Chatwoot temporarily unavailable.'),
-    ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
-
-    expect(await screen.findByText('Повтор после сбоя')).toBeInTheDocument()
-
-    const firstRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[2]?.[1]?.body),
-    ) as { clientMessageKey: string }
-    const retryRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[3]?.[1]?.body),
-    ) as { clientMessageKey: string }
-
-    expect(retryRequestBody.clientMessageKey).toBe(
-      firstRequestBody.clientMessageKey,
-    )
   })
 
   it('allows the first text send to bootstrap a conversation without a selected conversation id', async () => {

@@ -1,0 +1,21 @@
+{$PORTAL_CADDY_SITE_ADDRESS} {
+	encode zstd gzip
+	root * /srv
+
+	header {
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+	}
+
+	handle /api/* {
+		reverse_proxy portal-backend:3301 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -4,6 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
 type OpenChatRealtimeInput = {
   onChatState: (snapshot: ChatMessagesSnapshot) => void
+  onOpen?: () => void
   onMessages: (snapshot: ChatMessagesSnapshot) => void
   primaryConversationId: number
 }
@@ -27,6 +28,7 @@ function readSnapshotEvent(event: Event) {
 
 export function openChatRealtime({
   onChatState,
+  onOpen,
   onMessages,
   primaryConversationId,
 }: OpenChatRealtimeInput) {
@@ -40,6 +42,9 @@ export function openChatRealtime({
     withCredentials: true,
   })
 
+  eventSource.addEventListener('open', () => {
+    onOpen?.()
+  })
   eventSource.addEventListener('messages', (event) => {
     onMessages(readSnapshotEvent(event))
   })

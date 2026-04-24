@@ -288,6 +288,13 @@
 
 Добавить обязательные push-уведомления для новых клиентски-видимых chat updates.
 
+Перед входом в эту фазу `Phase 9. PWA App Hardening` должна быть закрыта. Сам rollout notifications идет в два слоя:
+
+1. in-app notification state:
+   unread counters, badges, preferences UX;
+2. browser push:
+   subscription, delivery, click-to-open chat.
+
 ### Deliverables
 
 - выбрать и зафиксировать browser push strategy: Web Push/VAPID для поддерживаемых браузеров, graceful fallback для неподдерживаемых окружений;
@@ -295,6 +302,7 @@
 - добавить таблицы для push subscriptions: portal user, endpoint, keys, user agent/device metadata, status, created/updated/last_seen timestamps;
 - добавить backend endpoints для subscribe, unsubscribe и refresh subscription, только для authenticated portal user;
 - добавить frontend permission UX: объяснение зачем нужны уведомления, request permission только по явному действию пользователя, состояние denied/default/granted;
+- добавить in-app unread/badge state и notification preferences до включения real push delivery;
 - добавить service worker `push` handler: показывать notification без раскрытия sensitive message content сверх выбранной privacy policy;
 - добавить service worker `notificationclick` handler: открывать или фокусировать `/app/chat`;
 - связать push trigger с backend-owned chat event path: Chatwoot webhook -> route resolution -> backend snapshot/relevant update -> push только нужному portal user;
@@ -311,6 +319,7 @@
 ### Exit Criteria
 
 - пользователь может включить уведомления из портала;
+- unread/badge state и notification preferences работают до и независимо от browser push delivery;
 - новое клиентски-видимое сообщение от агента приводит к push-уведомлению нужному пользователю;
 - private/internal события и собственные сообщения пользователя не создают push;
 - duplicate webhook delivery не создает duplicate notification;

@@ -18,6 +18,22 @@ import type {
   ChatMessagesRepository,
   ChatSendLedgerEntry,
 } from './repository.js'
+import type {
+  ChatMessagesSnapshot,
+  ChatSendResult,
+  PortalAttachmentUpload,
+  PortalChatMessage,
+  PortalChatReplyPreview,
+} from './types.js'
+
+export type {
+  ChatMessagesSnapshot,
+  ChatSendResult,
+  PortalAttachmentUpload,
+  PortalChatAttachment,
+  PortalChatMessage,
+  PortalChatReplyPreview,
+} from './types.js'
 
 const SEND_LEDGER_MESSAGE_KIND_TEXT = 'text'
 const SEND_LEDGER_MESSAGE_KIND_ATTACHMENT = 'attachment'
@@ -43,52 +59,6 @@ const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
   'text/plain',
   'text/rtf',
 ])
-
-export type PortalChatAttachment = {
-  fileSize: number | null
-  fileType: string
-  id: number
-  name: string
-  thumbUrl: string
-  url: string
-}
-
-export type PortalAttachmentUpload = {
-  data: Buffer
-  fileName: string
-  mimeType: string
-  size: number
-}
-
-export type PortalChatMessage = {
-  attachments: PortalChatAttachment[]
-  authorName: string
-  content: string | null
-  contentType: string
-  createdAt: string
-  direction: 'incoming' | 'outgoing'
-  id: number
-  replyTo: PortalChatReplyPreview | null
-  status: string
-}
-
-export type PortalChatReplyPreview = {
-  attachmentName: string | null
-  authorName: string
-  content: string | null
-  direction: 'incoming' | 'outgoing'
-  messageId: number
-}
-
-export type ChatMessagesSnapshot = ChatContextSnapshot & {
-  hasMoreOlder: boolean
-  messages: PortalChatMessage[]
-  nextOlderCursor: number | null
-}
-
-export type ChatSendResult = ChatContextSnapshot & {
-  sentMessage: PortalChatMessage | null
-}
 
 type CreateChatMessagesServiceOptions = {
   chatContextService: Pick<
@@ -221,6 +191,9 @@ function mapPortalMessage(
       url: attachment.url,
     })),
     authorName: mapAuthorName(message),
+    clientMessageKey: message.sourceId?.startsWith('portal-send:')
+      ? message.sourceId
+      : null,
     content: normalizePortalMessageContent(message.content),
     contentType: message.contentType,
     createdAt: toIsoTimestamp(message.createdAt),

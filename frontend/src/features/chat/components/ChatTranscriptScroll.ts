@@ -66,10 +66,12 @@ export function getTranscriptScrollAction({
   currentBoundary,
   currentScrollHeight,
   previousSnapshot,
+  shouldAutoFollowNewMessages,
 }: {
   currentBoundary: TranscriptMessageBoundary
   currentScrollHeight: number
   previousSnapshot: TranscriptScrollSnapshot | null
+  shouldAutoFollowNewMessages: boolean
 }): TranscriptScrollAction {
   if (currentBoundary.messageCount === 0) {
     return {
@@ -100,10 +102,15 @@ export function getTranscriptScrollAction({
   const hasAppendedNewMessages =
     currentBoundary.messageCount >= previousSnapshot.messageCount &&
     currentBoundary.lastMessageId !== previousSnapshot.lastMessageId
+  const hasGrownAtLatestEdge =
+    currentBoundary.firstMessageId === previousSnapshot.firstMessageId &&
+    currentBoundary.lastMessageId === previousSnapshot.lastMessageId &&
+    currentScrollHeight > previousSnapshot.scrollHeight
 
   if (
-    hasAppendedNewMessages &&
-    (previousSnapshot.wasNearBottom ||
+    (hasAppendedNewMessages || hasGrownAtLatestEdge) &&
+    (shouldAutoFollowNewMessages ||
+      previousSnapshot.wasNearBottom ||
       currentBoundary.latestMessageDirection === 'outgoing')
   ) {
     return {

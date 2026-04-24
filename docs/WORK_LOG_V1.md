@@ -32,7 +32,7 @@
 - Step-документы по prototype-derived scope и future UI-slices переименованы в понятные active-temporary docs и добавлены в обязательный reading order.
 - `reply state`, `quick emoji bar`, `message calendar`, `voice recording and send` подняты из step-docs в устойчивый продуктовый scope через `ARCHITECTURE`, `IMPLEMENTATION_PLAN` и `DECISIONS`.
 - Из временных step-документов удален уже реализованный контекст; в них оставлен только remaining screen/slice context до будущего удаления файлов.
-- Уточнено рабочее правило по старому `chatwoot-client-portal`: его можно читать как reference, но нельзя редактировать, копировать оттуда код или использовать его runtime/Postgres как часть работы над `v2`.
+- Уточнено рабочее правило по старому `chatwoot-client-portal`: его нельзя редактировать, копировать оттуда код или использовать его runtime/Postgres как часть работы над `v2`; позднее старый проект полностью снят с reference-scope.
 - Уточнено operational rule: локальное окружение `v2` запускает и останавливает только пользователь; агент не управляет окружением, а делает код, БД/таблицы/миграции и тесты в рамках задачи.
 - Уточнено operational rule: первичную bootstrap-подготовку для первого запуска делает агент, но запуск и остановка сервисов `v2` по-прежнему выполняются только пользователем.
 - Начат `Phase 2. Registration Flow`: добавлены backend registration request foundation, `verification_records`, Chatwoot contact lookup через account API, SMTP/Mailpit delivery для verification code и реальный `/auth/register` submit against backend API.

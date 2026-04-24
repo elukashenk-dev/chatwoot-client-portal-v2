@@ -60,12 +60,12 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
     : 'Защищенная сессия'
 
   return (
-    <header className="relative z-10 border-b border-slate-200/90 bg-white/95 px-5 py-4 backdrop-blur-sm sm:px-6">
-      <div className="flex items-start justify-between gap-4">
+    <header className="app-safe-top relative z-10 border-b border-slate-200/90 bg-white/95 px-4 pb-2 backdrop-blur-sm sm:px-6 sm:pb-4">
+      <div className="flex items-center justify-between gap-3 sm:items-start sm:gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <button
             aria-label="Назад"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white text-slate-400"
+            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white text-slate-400 sm:inline-flex"
             disabled
             title="Назад"
             type="button"
@@ -73,21 +73,25 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
             <ChevronLeftIcon className="h-[18px] w-[18px]" />
           </button>
 
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.75rem] bg-brand-900 text-[13px] font-semibold tracking-wide text-white sm:h-11 sm:w-11 sm:rounded-[0.85rem] sm:text-sm">
             PG
           </div>
 
           <div className="min-w-0">
-            <h1 className="truncate text-[17px] font-semibold text-slate-900">
+            <h1 className="truncate text-[16px] font-semibold text-slate-900 sm:text-[17px]">
               Клиентский чат
             </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-500">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500 sm:mt-1 sm:gap-x-3 sm:text-[13px]">
               <span className="truncate">
                 Агент: {conversation?.assigneeName ?? 'Команда ProvGroup'}
               </span>
-              <span aria-hidden="true">•</span>
-              <span className="truncate">{user?.email}</span>
-              <span aria-hidden="true">•</span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                •
+              </span>
+              <span className="hidden truncate sm:inline">{user?.email}</span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                •
+              </span>
               <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                 {statusLabel}
               </span>
@@ -97,7 +101,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
 
         <button
           aria-label={isLoggingOut ? 'Выходим...' : 'Выйти'}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300 sm:h-10 sm:w-10"
           disabled={isLoggingOut}
           onClick={() => {
             void handleLogout()
@@ -111,7 +115,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
         </button>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2 sm:mt-3">
         <InlineAlert message={logoutError} tone="error" />
       </div>
     </header>

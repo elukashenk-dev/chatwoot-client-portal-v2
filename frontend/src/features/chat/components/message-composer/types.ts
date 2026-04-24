@@ -21,5 +21,6 @@ export type MessageComposerReplyTarget = {
   attachmentName?: string | null
   authorName: string
   content: string | null
+  direction: 'incoming' | 'outgoing'
   id: number
 }

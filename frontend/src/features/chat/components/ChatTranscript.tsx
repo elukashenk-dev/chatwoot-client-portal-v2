@@ -13,6 +13,7 @@ import {
   captureTranscriptScrollSnapshot,
   createTranscriptMessageBoundary,
   getTranscriptScrollAction,
+  isTranscriptNearBottom,
 } from './ChatTranscriptScroll'
 import { CalendarIcon, ChevronUpIcon } from '../../../shared/ui/icons'
 import { MessageBubble } from './chat-transcript/MessageBubble'
@@ -34,10 +35,12 @@ import {
 type ChatTranscriptProps = {
   hasMoreOlder: boolean
   historyErrorMessage: string | null
+  isConnectionAvailable: boolean
   isLoadingOlder: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
   onReplyToMessage: (message: ChatMessage) => void
+  onRetryTextMessage: (clientMessageKey: string) => void
 }
 
 function DayDivider({
@@ -66,18 +69,22 @@ function DayDivider({
 export function ChatTranscript({
   hasMoreOlder,
   historyErrorMessage,
+  isConnectionAvailable,
   isLoadingOlder,
   messages,
   onLoadOlder,
   onReplyToMessage,
+  onRetryTextMessage,
 }: ChatTranscriptProps) {
   const [contextMenu, setContextMenu] = useState<MessageContextMenuState>(null)
   const [copyStatusText, setCopyStatusText] = useState('')
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
+  const messageListRef = useRef<HTMLDivElement | null>(null)
   const scrollElementRef = useRef<HTMLElement | null>(null)
   const previousScrollSnapshotRef = useRef<TranscriptScrollSnapshot | null>(
     null,
   )
+  const shouldAutoFollowNewMessagesRef = useRef(true)
 
   useEffect(() => {
     if (!contextMenu) {
@@ -122,29 +129,78 @@ export function ChatTranscript({
       return
     }
 
+    function captureCurrentScrollSnapshot() {
+      if (!scrollElement) {
+        return
+      }
+
+      const nextSnapshot = captureTranscriptScrollSnapshot(
+        scrollElement,
+        messages,
+      )
+
+      previousScrollSnapshotRef.current = nextSnapshot
+      shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+    }
+
     const action = getTranscriptScrollAction({
       currentBoundary: createTranscriptMessageBoundary(messages),
       currentScrollHeight: scrollElement.scrollHeight,
       previousSnapshot: previousScrollSnapshotRef.current,
+      shouldAutoFollowNewMessages: shouldAutoFollowNewMessagesRef.current,
     })
 
     applyTranscriptScrollAction(scrollElement, action)
 
     const frameId = requestNextFrame(() => {
       applyTranscriptScrollAction(scrollElement, action)
-      previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
-        scrollElement,
-        messages,
-      )
+      captureCurrentScrollSnapshot()
     })
 
-    previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
-      scrollElement,
-      messages,
-    )
+    captureCurrentScrollSnapshot()
 
     return () => {
       cancelNextFrame(frameId)
+    }
+  }, [messages])
+
+  useEffect(() => {
+    const messageListElement = messageListRef.current
+    const scrollElement = scrollElementRef.current
+
+    if (
+      !messageListElement ||
+      !scrollElement ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return
+    }
+
+    let frameId: number | null = null
+
+    const observer = new ResizeObserver(() => {
+      if (!shouldAutoFollowNewMessagesRef.current) {
+        return
+      }
+
+      cancelNextFrame(frameId)
+      frameId = requestNextFrame(() => {
+        scrollElement.scrollTop = scrollElement.scrollHeight
+        const nextSnapshot = captureTranscriptScrollSnapshot(
+          scrollElement,
+          messages,
+        )
+
+        previousScrollSnapshotRef.current = nextSnapshot
+        shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+      })
+    })
+
+    observer.observe(messageListElement)
+
+    return () => {
+      cancelNextFrame(frameId)
+      observer.disconnect()
     }
   }, [messages])
 
@@ -159,6 +215,8 @@ export function ChatTranscript({
       setContextMenu(null)
     }
 
+    shouldAutoFollowNewMessagesRef.current =
+      isTranscriptNearBottom(scrollElement)
     previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
       scrollElement,
       messages,
@@ -201,7 +259,7 @@ export function ChatTranscript({
       <div aria-live="polite" className="sr-only">
         {copyStatusText}
       </div>
-      <div className="border-b border-slate-200/70 px-5 py-3 sm:px-6">
+      <div className="hidden border-b border-slate-200/70 px-5 py-3 sm:block sm:px-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <button
             className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[0.7rem] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-400"
@@ -224,19 +282,24 @@ export function ChatTranscript({
         onScroll={handleTranscriptScroll}
         ref={scrollElementRef}
       >
-        <div className="mx-auto flex w-full max-w-[620px] flex-col">
+        <div
+          className="mx-auto flex w-full max-w-[620px] flex-col"
+          ref={messageListRef}
+        >
           {hasMoreOlder ? (
             <div className="flex flex-col items-center gap-2 self-center">
               <button
                 className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
-                disabled={isLoadingOlder}
+                disabled={isLoadingOlder || !isConnectionAvailable}
                 onClick={onLoadOlder}
                 type="button"
               >
                 <ChevronUpIcon className="h-[15px] w-[15px]" />
                 {isLoadingOlder
                   ? 'Загружаем...'
-                  : 'Загрузить более ранние сообщения'}
+                  : !isConnectionAvailable
+                    ? 'Нет сети'
+                    : 'Загрузить более ранние сообщения'}
               </button>
               {historyErrorMessage ? (
                 <div className="max-w-[340px] rounded-[0.8rem] border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800">
@@ -272,9 +335,11 @@ export function ChatTranscript({
                   blockPosition={blockPosition}
                   hasDateDivider={hasDateDivider}
                   index={index}
+                  isConnectionAvailable={isConnectionAvailable}
                   message={message}
                   onOpenContextMenu={handleOpenContextMenu}
                   onReplyToMessage={onReplyToMessage}
+                  onRetryTextMessage={onRetryTextMessage}
                 />
               </div>
             )

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
+import { cn } from '../../../shared/lib/cn'
+import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   MicrophoneIcon,
   PaperclipIcon,
@@ -14,6 +16,7 @@ import type {
   SendAttachmentInput,
   SendMessageInput,
 } from './message-composer/types'
+import { useVisualViewportKeyboardOpen } from './message-composer/useVisualViewportKeyboardOpen'
 import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
 import {
   createAttachmentSignature,
@@ -28,6 +31,7 @@ type MessageComposerProps = {
   disabled: boolean
   errorMessage: string | null
   isSending: boolean
+  offlineAlertMessage?: string | null
   onCancelReply: () => void
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
@@ -38,6 +42,7 @@ export function MessageComposer({
   disabled,
   errorMessage,
   isSending,
+  offlineAlertMessage = null,
   onCancelReply,
   onSend,
   onSendAttachment,
@@ -47,6 +52,7 @@ export function MessageComposer({
   const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
     null,
   )
+  const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingAttachmentClientMessageKeyRef = useRef<string | null>(null)
@@ -164,7 +170,7 @@ export function MessageComposer({
     onCancelReply()
   }
 
-  async function submitText() {
+  function submitText() {
     if (!canSendText) {
       return
     }
@@ -179,20 +185,18 @@ export function MessageComposer({
     pendingContentRef.current = normalizedDraft
     pendingReplyToMessageIdRef.current = replyToMessageId
 
-    const wasSent = await onSend({
+    pendingClientMessageKeyRef.current = null
+    pendingContentRef.current = null
+    pendingReplyToMessageIdRef.current = null
+    shouldRestoreFocusRef.current = true
+    onCancelReply()
+    setDraft('')
+
+    void onSend({
       clientMessageKey,
       content: normalizedDraft,
       replyToMessageId,
     })
-
-    if (wasSent) {
-      pendingClientMessageKeyRef.current = null
-      pendingContentRef.current = null
-      pendingReplyToMessageIdRef.current = null
-      shouldRestoreFocusRef.current = true
-      onCancelReply()
-      setDraft('')
-    }
   }
 
   async function submitAttachmentFile(
@@ -267,7 +271,7 @@ export function MessageComposer({
       return
     }
 
-    await submitText()
+    submitText()
   }
 
   function selectAttachment(file: File | null) {
@@ -310,8 +314,19 @@ export function MessageComposer({
   }
 
   return (
-    <footer className="border-t border-slate-200/90 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
+    <footer
+      className={cn(
+        'border-t border-slate-200/90 bg-white/95 px-4 pt-4 backdrop-blur-sm sm:px-6',
+        isVisualKeyboardOpen ? 'pb-2' : 'app-safe-bottom',
+      )}
+    >
       <div className="mx-auto w-full max-w-[620px]">
+        {offlineAlertMessage ? (
+          <div className="mb-3">
+            <InlineAlert message={offlineAlertMessage} tone="error" />
+          </div>
+        ) : null}
+
         <QuickEmojiBar
           disabled={disabled || isSending || isVoiceRecorderBusy}
           onInsert={insertQuickText}
@@ -374,7 +389,7 @@ export function MessageComposer({
 
             <textarea
               aria-label="Сообщение"
-              className="max-h-32 min-h-[44px] flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
+              className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
               disabled={disabled || isSending || isVoiceRecorderBusy}
               onChange={(event) => {
                 const nextDraft = event.target.value
@@ -393,7 +408,7 @@ export function MessageComposer({
                 }
               }}
               placeholder={
-                disabled ? 'Чат временно недоступен' : 'Напишите сообщение...'
+                disabled ? 'Чат временно недоступен' : 'Сообщение...'
               }
               ref={textareaRef}
               rows={1}

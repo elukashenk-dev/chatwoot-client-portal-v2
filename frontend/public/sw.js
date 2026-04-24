@@ -1,4 +1,5 @@
-const STATIC_CACHE = 'provgroup-portal-static-v1'
+const SERVICE_WORKER_REVISION = '__PORTAL_SERVICE_WORKER_REVISION__'
+const STATIC_CACHE = `provgroup-portal-static-${SERVICE_WORKER_REVISION}`
 const APP_SHELL_URLS = [
   '/',
   '/manifest.webmanifest',
@@ -13,7 +14,6 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => cache.addAll(APP_SHELL_URLS)),
   )
-  self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
@@ -29,6 +29,12 @@ self.addEventListener('activate', (event) => {
       )
       .then(() => self.clients.claim()),
   )
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 self.addEventListener('fetch', (event) => {
@@ -53,8 +59,24 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  if (!shouldHandleStaticRequest(request)) {
+    return
+  }
+
   event.respondWith(handleStaticRequest(request))
 })
+
+function shouldHandleStaticRequest(request) {
+  const requestUrl = new URL(request.url)
+
+  if (APP_SHELL_URLS.includes(requestUrl.pathname)) {
+    return true
+  }
+
+  return ['font', 'image', 'manifest', 'script', 'style', 'worker'].includes(
+    request.destination,
+  )
+}
 
 async function handleNavigationRequest(request) {
   const cache = await caches.open(STATIC_CACHE)
@@ -62,7 +84,7 @@ async function handleNavigationRequest(request) {
   try {
     const response = await fetch(request)
 
-    if (response.ok) {
+    if (shouldCacheResponse(response)) {
       await cache.put(request, response.clone())
     }
 
@@ -91,9 +113,20 @@ async function handleStaticRequest(request) {
 async function updateCache(request, cache) {
   const response = await fetch(request)
 
-  if (response.ok) {
+  if (shouldCacheResponse(response)) {
     await cache.put(request, response.clone())
   }
 
   return response
+}
+
+function shouldCacheResponse(response) {
+  if (!response.ok) {
+    return false
+  }
+
+  const cacheControl =
+    response.headers.get('cache-control')?.toLowerCase() ?? ''
+
+  return !cacheControl.includes('no-store')
 }

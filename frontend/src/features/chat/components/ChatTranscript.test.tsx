@@ -31,10 +31,12 @@ function renderTranscript(
     <ChatTranscript
       hasMoreOlder={false}
       historyErrorMessage={null}
+      isConnectionAvailable
       isLoadingOlder={false}
       messages={messages}
       onLoadOlder={vi.fn()}
       onReplyToMessage={onReplyToMessage}
+      onRetryTextMessage={vi.fn()}
     />,
   )
 }
@@ -346,6 +348,88 @@ describe('ChatTranscript', () => {
           scrollTop: 632,
           wasNearBottom: true,
         },
+        shouldAutoFollowNewMessages: true,
+      }),
+    ).toEqual({
+      type: 'scroll_to_bottom',
+    })
+  })
+
+  it('keeps following the bottom when the stored snapshot is stale but the user did not scroll away', () => {
+    expect(
+      getTranscriptScrollAction({
+        currentBoundary: {
+          firstMessageId: 1,
+          lastMessageId: 3,
+          latestMessageDirection: 'incoming',
+          messageCount: 3,
+        },
+        currentScrollHeight: 1200,
+        previousSnapshot: {
+          clientHeight: 320,
+          firstMessageId: 1,
+          lastMessageId: 2,
+          latestMessageDirection: 'incoming',
+          messageCount: 2,
+          scrollHeight: 1000,
+          scrollTop: 560,
+          wasNearBottom: false,
+        },
+        shouldAutoFollowNewMessages: true,
+      }),
+    ).toEqual({
+      type: 'scroll_to_bottom',
+    })
+  })
+
+  it('does not pull the user down for incoming messages after they scroll up', () => {
+    expect(
+      getTranscriptScrollAction({
+        currentBoundary: {
+          firstMessageId: 1,
+          lastMessageId: 3,
+          latestMessageDirection: 'incoming',
+          messageCount: 3,
+        },
+        currentScrollHeight: 1200,
+        previousSnapshot: {
+          clientHeight: 320,
+          firstMessageId: 1,
+          lastMessageId: 2,
+          latestMessageDirection: 'incoming',
+          messageCount: 2,
+          scrollHeight: 1000,
+          scrollTop: 240,
+          wasNearBottom: false,
+        },
+        shouldAutoFollowNewMessages: false,
+      }),
+    ).toEqual({
+      type: 'none',
+    })
+  })
+
+  it('keeps the bottom pinned when the latest visible message grows in place', () => {
+    expect(
+      getTranscriptScrollAction({
+        currentBoundary: {
+          firstMessageId: 1,
+          lastMessageId: 2,
+          latestMessageDirection: 'incoming',
+          messageCount: 2,
+        },
+        currentScrollHeight: 1180,
+        previousSnapshot: {
+          clientHeight: 320,
+          firstMessageId: 1,
+          lastMessageId: 2,
+          latestMessageDirection: 'incoming',
+          messageCount: 2,
+          scrollHeight: 1000,
+          scrollTop: 680,
+          wasNearBottom: true,
+        },
+        shouldAutoFollowNewMessages: true,
       }),
     ).toEqual({
       type: 'scroll_to_bottom',
@@ -372,6 +456,7 @@ describe('ChatTranscript', () => {
           scrollTop: 220,
           wasNearBottom: false,
         },
+        shouldAutoFollowNewMessages: false,
       }),
     ).toEqual({
       nextScrollTop: 720,

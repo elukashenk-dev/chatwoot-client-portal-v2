@@ -31,7 +31,20 @@
 - Закрыт code-health checkpoint перед следующими крупными фичами: добавлен root `pnpm code-health`, `pnpm lint` теперь валит рост oversized `ts/tsx` файлов и фиксирует baseline allowlist для уже существующего debt.
 - Chat UI разрезан на меньшие domain-local части: `MessageComposer.tsx` доведен до `457` строк через локальные subcomponents и `useVoiceRecorder`, `ChatTranscript.tsx` - до `303` строк через `MessageBubble`/`MessageContextMenu`/attachment-reply helpers.
 - В архитектурные документы внесены правила feature-based роста для будущих областей `dashboard`, `notifications`, `branding`, `tariff`, `documents`, `tasks`, `service-requests` и `profile`, а `shared/` зафиксирован как строго недоменный слой.
+- Начат `Phase 9. PWA App Hardening`: service worker переведен на controlled update flow без принудительного `skipWaiting`, добавлен app update banner, chat получил явное offline/reconnect-resync поведение, а manual checklist вынесен в `docs/PWA_HARDENING_CHECKLIST.md`.
+- Зафиксирован rollout notifications после PWA hardening: сначала in-app unread/badges/preferences, затем browser push поверх укрепленного service worker lifecycle.
+- Закрыты review findings по текущему `Phase 9` slice: expired backend-session при resume/reconnect теперь переводит пользователя обратно в auth flow вместо stale chat error, а PWA update banner учитывает top safe area.
+- Исправлен runtime-gap в offline UX installed PWA: chat теперь сам переключается в offline-состояние после сетевой ошибки запроса, даже если браузер не прислал `offline` event, и возвращается через lifecycle resync; сценарий закрыт frontend runtime regression tests.
+- Закрыт `F-PWA-003`: offline warning перенесен в область composer и подтвержден ручной installed-PWA проверкой на production VM; warning виден без прокрутки, а отправка блокируется сразу после потери сети.
+- Добавлен production service-worker revision stamp: `frontend build` теперь подставляет уникальный revision в `dist/sw.js`, чтобы installed PWA обнаруживал новый deploy и показывал update flow вместо тихого удержания старого JS cache.
+- App shell для protected `/app/*` переведен на fixed `100dvh` layout: composer больше не должен выталкиваться ниже installed-PWA viewport при поступлении новых realtime messages; transcript остается единственной scroll-зоной.
+- Убран chat lifecycle resync по `window.focus`: в Windows installed PWA фокус textarea мог раз в 15 секунд запускать refresh и давать краткий visual jump ленты; reconnect/resume остается на `online` и `visibilitychange`.
+- В текущую ветку возвращен production deployment baseline: Dockerfiles, production compose/Caddy, terminal installer, Chatwoot webhook secret sync core, GitHub Actions deploy scaffolding и production runbook/session log.
+- Добавлен archive-based VM update helper `scripts/deploy-production-archive.sh`: он упаковывает текущий working tree, доставляет его на VM, сохраняет `.env.production`/`.install`/`logs`/`backups` и при необходимости сразу пересобирает stack и запускает webhook secret sync.
+- Старый `../chatwoot-client-portal` снят с reference-scope: правила и устойчивые документы теперь запрещают читать, запускать или использовать старый портал как source of truth для `v2`.
+- Закрыт `F-CHAT-001`: optimistic text send подтвержден frontend regression tests и ручной production-проверкой; composer очищается сразу, pending/failed/retry состояния работают без duplicate messages.
+- Закрыты `F-DEPLOY-001` и `F-DEPLOY-002`: GitHub production deploy теперь валидирует deploy ref и передает remote args без shell interpolation, а archive helper фильтрует local/nested env files перед упаковкой текущего worktree.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit по `voice + code-health checkpoint`, затем открыть отдельную ветку под следующую подтвержденную крупную фазу или slice.
+- После зеленых targeted auto-checks сделать `Phase 9` checkpoint commit на текущей ветке.

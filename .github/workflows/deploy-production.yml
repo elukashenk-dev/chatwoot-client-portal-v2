@@ -1,0 +1,98 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git tag, branch, or commit SHA to deploy.
+        required: true
+        type: string
+
+concurrency:
+  cancel-in-progress: false
+  group: production
+
+jobs:
+  deploy:
+    environment: production
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Prepare SSH
+        env:
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT || '22' }}
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/production_deploy_key
+          chmod 600 ~/.ssh/production_deploy_key
+
+          if [ -n "$SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
+          fi
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy on VM
+        env:
+          APP_PATH: ${{ secrets.PRODUCTION_APP_PATH }}
+          DEPLOY_REF: ${{ inputs.ref }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT || '22' }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ ! "$DEPLOY_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]]; then
+            echo "Invalid deploy ref. Use a tag, branch, or commit SHA without shell metacharacters." >&2
+            exit 2
+          fi
+
+          case "$DEPLOY_REF" in
+            -*|*..*|*@\{*|*//*|*/|*.|*.lock|*.lock/*)
+              echo "Invalid deploy ref syntax: $DEPLOY_REF" >&2
+              exit 2
+              ;;
+          esac
+
+          if [[ ! "$APP_PATH" =~ ^/[A-Za-z0-9._/@+-]+$ ]]; then
+            echo "Invalid production app path." >&2
+            exit 2
+          fi
+
+          printf -v REMOTE_SCRIPT_ARGS '%q ' "$APP_PATH" "$DEPLOY_REF"
+
+          ssh \
+            -i ~/.ssh/production_deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- $REMOTE_SCRIPT_ARGS" <<'EOF'
+          set -Eeuo pipefail
+
+          app_path="$1"
+          deploy_ref="$2"
+
+          cd "$app_path"
+          git fetch --tags --prune origin
+
+          if [[ "$deploy_ref" =~ ^[0-9a-fA-F]{7,40}$ ]] && git rev-parse --verify --quiet "${deploy_ref}^{commit}" >/dev/null; then
+            resolved_ref="$deploy_ref"
+          elif git rev-parse --verify --quiet "refs/tags/${deploy_ref}^{commit}" >/dev/null; then
+            resolved_ref="refs/tags/${deploy_ref}"
+          elif git rev-parse --verify --quiet "refs/remotes/origin/${deploy_ref}^{commit}" >/dev/null; then
+            resolved_ref="refs/remotes/origin/${deploy_ref}"
+          else
+            echo "Deploy ref not found after fetch: $deploy_ref" >&2
+            exit 2
+          fi
+
+          git checkout --detach -- "$resolved_ref"
+          docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build
+          docker compose --env-file .env.production -f infra/production/compose.yaml ps
+          EOF
