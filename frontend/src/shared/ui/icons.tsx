@@ -241,6 +241,25 @@ export function LogOutIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function MenuIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h16" />
+    </svg>
+  )
+}
+
 export function MicrophoneIcon({ className = iconClassName }: IconProps) {
   return (
     <svg

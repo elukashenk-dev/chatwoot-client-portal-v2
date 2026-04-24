@@ -34,12 +34,23 @@ function formatMessageDayKey(value: string) {
   return year && month && day ? `${year}-${month}-${day}` : ''
 }
 
+function formatMessageMinuteKey(value: string) {
+  const date = new Date(value)
+
+  return [
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+  ].join(':')
+}
+
 export function formatMessageMetadataTimestamp(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    hour: 'numeric',
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    hour12: false,
     minute: '2-digit',
-    month: 'short',
   }).format(new Date(value))
 }
 
@@ -213,12 +224,70 @@ export function getMessageBlockPosition(
   return 'middle'
 }
 
-export function shouldRenderMessageMeta(blockPosition: MessageBlockPosition) {
-  return blockPosition === 'last' || blockPosition === 'single'
+export function shouldRenderMessageMeta(
+  messages: ChatMessage[],
+  index: number,
+) {
+  const message = messages[index]
+  const nextMessage = messages[index + 1] ?? null
+
+  if (!message) {
+    return false
+  }
+
+  if (!areMessagesInSameVisualBlock(message, nextMessage)) {
+    return true
+  }
+
+  return (
+    formatMessageMinuteKey(message.createdAt) !==
+    formatMessageMinuteKey(nextMessage.createdAt)
+  )
+}
+
+export function shouldRenderMessageHeader(
+  messages: ChatMessage[],
+  index: number,
+) {
+  const message = messages[index]
+  const previousMessage = index > 0 ? messages[index - 1] : null
+
+  if (!message) {
+    return false
+  }
+
+  if (
+    !previousMessage ||
+    !areMessagesInSameVisualBlock(previousMessage, message)
+  ) {
+    return true
+  }
+
+  return (
+    formatMessageMinuteKey(previousMessage.createdAt) !==
+    formatMessageMinuteKey(message.createdAt)
+  )
 }
 
 export function shouldRenderAuthorName(blockPosition: MessageBlockPosition) {
   return blockPosition === 'first' || blockPosition === 'single'
+}
+
+export function getAuthorInitials(authorName: string) {
+  const words = authorName.trim().split(/\s+/).filter(Boolean)
+
+  if (words.length === 0) {
+    return 'PG'
+  }
+
+  if (words.length === 1) {
+    return Array.from(words[0]).slice(0, 2).join('').toUpperCase()
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => Array.from(word).at(0)?.toUpperCase() ?? '')
+    .join('')
 }
 
 export function getBubbleRadiusClass({
@@ -229,30 +298,18 @@ export function getBubbleRadiusClass({
   isOutgoing: boolean
 }) {
   if (blockPosition === 'single') {
-    return 'rounded-[0.7rem]'
-  }
-
-  if (isOutgoing) {
-    if (blockPosition === 'first') {
-      return 'rounded-[0.7rem] rounded-br-none'
-    }
-
-    if (blockPosition === 'last') {
-      return 'rounded-[0.7rem] rounded-tr-none'
-    }
-
-    return 'rounded-[0.7rem] rounded-br-none rounded-tr-none'
+    return isOutgoing
+      ? 'rounded-[0.9rem] rounded-tr-[0.4rem]'
+      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
   }
 
   if (blockPosition === 'first') {
-    return 'rounded-[0.7rem] rounded-bl-none'
+    return isOutgoing
+      ? 'rounded-[0.9rem] rounded-tr-[0.4rem]'
+      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
   }
 
-  if (blockPosition === 'last') {
-    return 'rounded-[0.7rem] rounded-tl-none'
-  }
-
-  return 'rounded-[0.7rem] rounded-bl-none rounded-tl-none'
+  return 'rounded-[0.9rem]'
 }
 
 export function getMessageWrapperSpacingClass({

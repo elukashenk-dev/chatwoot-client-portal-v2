@@ -18,7 +18,8 @@
 - Реализован `Phase 9. PWA App Hardening`: controlled service worker update flow, app update banner, build revision stamp, API/SSE no-cache boundary, installed-PWA viewport/safe-area polish, offline UI и reconnect/resync behavior.
 - Подготовлен production deployment baseline: backend/frontend Dockerfiles, production compose/Caddy, terminal installer, Chatwoot webhook secret sync, GitHub Actions deploy scaffolding, production runbook/session log и archive-based VM update helper.
 - Старый `../chatwoot-client-portal` снят с reference-scope: правила и устойчивые документы теперь запрещают читать, запускать или использовать старый портал как source of truth для `v2`.
+- Реализован первый `chat UI polish` slice: темная chat header styling, смягченная форма grouped message bubbles, реальная Chatwoot-аватарка агента, author/time header и внешняя delivery-status metadata.
 
 ## Recommended Next Step
 
-- Закрыть текущую `Phase 9` ветку через merge/PR в `main`, затем открыть отдельный chat UI polish slice для формы message bubble, agent avatar в группах сообщений и связанных косметических правок.
+- Ручно проверить новый header/bubble/avatar/message-meta дизайн в реальном чате, затем сделать checkpoint commit для `feature/phase-9-chat-ui-polish` или открыть следующую точечную cosmetic-итерацию.

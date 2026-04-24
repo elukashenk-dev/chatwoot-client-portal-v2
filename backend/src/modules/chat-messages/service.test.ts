@@ -208,6 +208,7 @@ describe('createChatMessagesService', () => {
               messageType: 1,
               private: false,
               sender: {
+                avatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
                 id: 5,
                 name: 'Анна Смирнова',
                 type: 'user',
@@ -261,6 +262,7 @@ describe('createChatMessagesService', () => {
       hasMoreOlder: true,
       messages: [
         {
+          authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
           authorName: 'Анна Смирнова',
           content: 'Agent reply',
           direction: 'incoming',

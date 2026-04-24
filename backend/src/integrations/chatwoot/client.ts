@@ -1,5 +1,23 @@
 import type { AppEnv } from '../../config/env.js'
 import { normalizeEmail } from '../../lib/email.js'
+import {
+  ChatwootClientConfigurationError,
+  ChatwootClientRequestError,
+  ChatwootInvalidHistoryCursorError,
+} from './errors.js'
+import { mapMessage } from './messagePayload.js'
+import type { ChatwootMessage, ChatwootMessagesPage } from './messagePayload.js'
+
+export {
+  ChatwootClientConfigurationError,
+  ChatwootClientRequestError,
+  ChatwootInvalidHistoryCursorError,
+} from './errors.js'
+export type {
+  ChatwootMessage,
+  ChatwootMessageAttachment,
+  ChatwootMessagesPage,
+} from './messagePayload.js'
 
 const PORTAL_CONVERSATION_CHANNEL_TYPE = 'Channel::Api'
 const CONTACT_CONVERSATIONS_PAGE_LIMIT = 20
@@ -72,35 +90,6 @@ export type ChatwootPortalInboxRouting = {
   lockToSingleConversation: boolean
 }
 
-export type ChatwootMessageAttachment = {
-  extension: string | null
-  fileSize: number | null
-  fileType: string
-  id: number
-  messageId: number
-  name: string
-  thumbUrl: string
-  url: string
-}
-
-export type ChatwootMessage = {
-  attachments: ChatwootMessageAttachment[]
-  content: string | null
-  contentAttributes: Record<string, unknown>
-  contentType: string
-  createdAt: number
-  id: number
-  messageType: number
-  private: boolean
-  sender: {
-    id: number | null
-    name: string | null
-    type: string | null
-  } | null
-  sourceId: string | null
-  status: string
-}
-
 export type ChatwootAttachmentUpload = {
   data: Uint8Array
   fileName: string
@@ -118,38 +107,6 @@ export type ChatwootAccountWebhook = {
   secret: string | null
   subscriptions: string[]
   url: string
-}
-
-export type ChatwootMessagesPage = {
-  hasMoreOlder: boolean
-  messages: ChatwootMessage[]
-  nextOlderCursor: number | null
-}
-
-export class ChatwootClientConfigurationError extends Error {
-  constructor(message = 'Chatwoot integration is not configured.') {
-    super(message)
-
-    this.name = 'ChatwootClientConfigurationError'
-  }
-}
-
-export class ChatwootClientRequestError extends Error {
-  constructor(message = 'Chatwoot request failed.') {
-    super(message)
-
-    this.name = 'ChatwootClientRequestError'
-  }
-}
-
-export class ChatwootInvalidHistoryCursorError extends Error {
-  constructor(
-    message = 'History cursor is invalid for the current conversation.',
-  ) {
-    super(message)
-
-    this.name = 'ChatwootInvalidHistoryCursorError'
-  }
 }
 
 type CreateChatwootClientOptions = {
@@ -312,141 +269,6 @@ function parseMessagesResponse(payload: unknown): ChatwootMessagesResponse {
 
   return {
     payload: payload.payload,
-  }
-}
-
-function extractAttachmentNameFromUrl(url: string) {
-  if (!url.trim()) {
-    return null
-  }
-
-  try {
-    const parsedUrl = new URL(url)
-    const rawSegment = parsedUrl.pathname.split('/').pop()
-
-    return rawSegment ? decodeURIComponent(rawSegment) : null
-  } catch {
-    return null
-  }
-}
-
-function buildAttachmentName(payload: Record<string, unknown>) {
-  const fallbackTitle = readString(payload.fallback_title)?.trim()
-
-  if (fallbackTitle) {
-    return fallbackTitle
-  }
-
-  const dataUrl = readString(payload.data_url) ?? ''
-  const urlName = extractAttachmentNameFromUrl(dataUrl)
-
-  if (urlName) {
-    return urlName
-  }
-
-  const extension = readString(payload.extension)?.trim().replace(/^\./, '')
-
-  if (extension) {
-    return `attachment.${extension}`
-  }
-
-  return readString(payload.file_type) === 'image'
-    ? 'image-attachment'
-    : 'attached-file'
-}
-
-function mapAttachment(payload: unknown): ChatwootMessageAttachment {
-  if (!isPlainObject(payload)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot messages lookup returned an invalid attachment payload.',
-    )
-  }
-
-  const id = readInteger(payload.id)
-  const messageId = readInteger(payload.message_id)
-  const fileType = readString(payload.file_type)
-
-  if (id === null || messageId === null || !fileType) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot messages lookup returned an invalid attachment payload.',
-    )
-  }
-
-  return {
-    extension: readString(payload.extension),
-    fileSize: readInteger(payload.file_size),
-    fileType,
-    id,
-    messageId,
-    name: buildAttachmentName(payload),
-    thumbUrl: readString(payload.thumb_url) ?? '',
-    url: readString(payload.data_url) ?? '',
-  }
-}
-
-function mapSender(payload: unknown, defaultType: string | null) {
-  if (!isPlainObject(payload)) {
-    return null
-  }
-
-  const id = readInteger(payload.id) ?? readInteger(payload.sender_id)
-  const name = readString(payload.name)
-  const type =
-    readString(payload.type) ?? readString(payload.sender_type) ?? defaultType
-
-  if (id === null && name === null && type === null) {
-    return null
-  }
-
-  return {
-    id,
-    name,
-    type,
-  }
-}
-
-function mapMessage(payload: unknown): ChatwootMessage {
-  if (!isPlainObject(payload)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot messages lookup returned an invalid message payload.',
-    )
-  }
-
-  const id = readInteger(payload.id)
-  const messageType = readInteger(payload.message_type)
-  const createdAt = readInteger(payload.created_at)
-  const contentType = readString(payload.content_type) ?? 'text'
-  const status = readString(payload.status)
-  const isPrivate =
-    typeof payload.private === 'boolean' ? payload.private : null
-
-  if (
-    id === null ||
-    messageType === null ||
-    createdAt === null ||
-    !contentType ||
-    !status ||
-    isPrivate === null
-  ) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot messages lookup returned an invalid message payload.',
-    )
-  }
-
-  return {
-    attachments: Array.isArray(payload.attachments)
-      ? payload.attachments.map(mapAttachment)
-      : [],
-    content: readString(payload.content),
-    contentAttributes: readObject(payload.content_attributes) ?? {},
-    contentType,
-    createdAt,
-    id,
-    messageType,
-    private: isPrivate,
-    sender: mapSender(payload.sender, messageType === 0 ? 'contact' : null),
-    sourceId: readString(payload.source_id),
-    status,
   }
 }
 
@@ -912,7 +734,13 @@ export function createChatwootClient({
       )
     }
 
-    return sortMessages(parseMessagesResponse(payload).payload.map(mapMessage))
+    return sortMessages(
+      parseMessagesResponse(payload).payload.map((message) =>
+        mapMessage(message, {
+          baseUrl: resolvedConfig.baseUrl,
+        }),
+      ),
+    )
   }
 
   function createAttachmentBlob(attachment: ChatwootAttachmentUpload) {
@@ -978,7 +806,9 @@ export function createChatwootClient({
     }
 
     try {
-      return mapMessage(await response.json())
+      return mapMessage(await response.json(), {
+        baseUrl: resolvedConfig.baseUrl,
+      })
     } catch (error) {
       if (error instanceof ChatwootClientRequestError) {
         throw error
@@ -1055,7 +885,9 @@ export function createChatwootClient({
     }
 
     try {
-      return mapMessage(await response.json())
+      return mapMessage(await response.json(), {
+        baseUrl: resolvedConfig.baseUrl,
+      })
     } catch (error) {
       if (error instanceof ChatwootClientRequestError) {
         throw error

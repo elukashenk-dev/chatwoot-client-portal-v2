@@ -52,6 +52,20 @@ function getBubble(container: HTMLElement, messageId: number) {
   return bubble
 }
 
+function getMessageMeta(container: HTMLElement, messageId: number) {
+  const message = container.querySelector(`[data-message-id="${messageId}"]`)
+  const meta = message?.querySelector('[data-message-meta]')
+
+  return meta instanceof HTMLElement ? meta : null
+}
+
+function getMessageHeader(container: HTMLElement, messageId: number) {
+  const message = container.querySelector(`[data-message-id="${messageId}"]`)
+  const header = message?.querySelector('[data-message-header]')
+
+  return header instanceof HTMLElement ? header : null
+}
+
 function getSwipeSurface(container: HTMLElement, messageId: number) {
   const message = container.querySelector(`[data-message-id="${messageId}"]`)
   const swipeSurface = message?.querySelector('[data-message-swipe-surface]')
@@ -64,7 +78,7 @@ function getSwipeSurface(container: HTMLElement, messageId: number) {
 }
 
 describe('ChatTranscript', () => {
-  it('groups consecutive outgoing bubbles with metadata only on the final message', () => {
+  it('groups outgoing bubbles and renders metadata on minute boundaries', () => {
     const { container } = renderTranscript([
       createMessage({
         content: 'Первое мое сообщение',
@@ -73,20 +87,18 @@ describe('ChatTranscript', () => {
       }),
       createMessage({
         content: 'Второе мое сообщение',
-        createdAt: '2026-04-21T10:01:00',
+        createdAt: '2026-04-21T10:00:30',
         id: 2,
       }),
       createMessage({
         content: 'Последнее мое сообщение',
-        createdAt: '2026-04-21T10:02:00',
+        createdAt: '2026-04-21T10:01:00',
         id: 3,
       }),
     ])
 
-    expect(screen.queryByText('Apr 21, 10:00 AM')).not.toBeInTheDocument()
-    expect(screen.queryByText('Apr 21, 10:01 AM')).not.toBeInTheDocument()
-    expect(screen.getByText('Apr 21, 10:02 AM')).toBeInTheDocument()
-    expect(screen.getByText('Вы')).toBeInTheDocument()
+    expect(screen.queryByText(/AM|PM|Apr/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Вы')).toHaveLength(2)
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
@@ -96,20 +108,39 @@ describe('ChatTranscript', () => {
     )
     expect(dayDividerLabel.parentElement).toHaveClass('max-w-[520px]', 'gap-3')
 
-    expect(getBubble(container, 1)).toHaveClass('rounded-br-none')
-    expect(getBubble(container, 1)).toHaveClass('bg-brand-800', 'text-white')
-    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-none')
-    expect(getBubble(container, 2)).toHaveClass(
-      'rounded-br-none',
-      'rounded-tr-none',
+    expect(container.querySelector('[data-agent-avatar]')).toBeNull()
+    expect(getBubble(container, 1)).toHaveClass(
+      'rounded-[0.9rem]',
+      'rounded-tr-[0.4rem]',
     )
-    expect(getBubble(container, 3)).toHaveClass('rounded-tr-none')
-    expect(getBubble(container, 3)).not.toHaveClass('rounded-br-none')
+    expect(getBubble(container, 1)).toHaveClass('bg-brand-800', 'text-white')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
+    const firstMinuteHeader = getMessageHeader(container, 1)
+    const sameMinuteHeader = getMessageHeader(container, 2)
+    const secondMinuteHeader = getMessageHeader(container, 3)
+    const firstMinuteMeta = getMessageMeta(container, 2)
+    const secondMinuteMeta = getMessageMeta(container, 3)
+
+    expect(firstMinuteHeader?.children[0]).toHaveTextContent('10:00')
+    expect(firstMinuteHeader?.children[1]).toHaveTextContent('Вы')
+    expect(sameMinuteHeader).toBeNull()
+    expect(secondMinuteHeader?.children[0]).toHaveTextContent('10:01')
+    expect(secondMinuteHeader?.children[1]).toHaveTextContent('Вы')
+    expect(getMessageMeta(container, 1)).toBeNull()
+    expect(firstMinuteMeta).toHaveClass('justify-end')
+    expect(firstMinuteMeta).not.toHaveTextContent('10:00')
+    expect(firstMinuteMeta).toHaveTextContent('Доставлено')
+    expect(getMessageMeta(container, 3)).not.toHaveTextContent('10:01')
+    expect(secondMinuteMeta).toHaveTextContent('Доставлено')
+    expect(getBubble(container, 2)).not.toContainElement(firstMinuteMeta)
   })
 
-  it('mirrors consecutive incoming bubble corners to the left side', () => {
+  it('renders an agent avatar on the first incoming bubble in a group', () => {
     const { container } = renderTranscript([
       createMessage({
+        authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
         content: 'Первый ответ агента',
         createdAt: '2026-04-21T10:00:00',
@@ -117,6 +148,7 @@ describe('ChatTranscript', () => {
         id: 1,
       }),
       createMessage({
+        authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
         content: 'Последний ответ агента',
         createdAt: '2026-04-21T10:01:00',
@@ -125,13 +157,35 @@ describe('ChatTranscript', () => {
       }),
     ])
 
-    expect(screen.queryByText('Apr 21, 10:00 AM')).not.toBeInTheDocument()
-    expect(screen.getByText('Apr 21, 10:01 AM')).toBeInTheDocument()
-    expect(getBubble(container, 1)).toHaveClass('rounded-bl-none')
+    expect(getMessageHeader(container, 1)?.children[0]).toHaveTextContent(
+      'Ольга Support',
+    )
+    expect(getMessageHeader(container, 1)?.children[1]).toHaveTextContent(
+      '10:00',
+    )
+    expect(getMessageHeader(container, 2)?.children[0]).toHaveTextContent(
+      'Ольга Support',
+    )
+    expect(getMessageHeader(container, 2)?.children[1]).toHaveTextContent(
+      '10:01',
+    )
+    expect(getMessageMeta(container, 1)).toBeNull()
+    expect(getMessageMeta(container, 2)).toBeNull()
+    const avatars = container.querySelectorAll('[data-agent-avatar]')
+    expect(avatars).toHaveLength(1)
+    expect(avatars[0]).toHaveAttribute('aria-label', 'Агент Ольга Support')
+    expect(avatars[0]).not.toHaveTextContent('ОS')
+    expect(avatars[0]?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://chatwoot.example.test/agent-avatar.png',
+    )
+    expect(getBubble(container, 1)).toHaveClass(
+      'rounded-[0.9rem]',
+      'rounded-tl-[0.4rem]',
+    )
     expect(getBubble(container, 1)).toHaveClass('bg-white', 'text-slate-700')
-    expect(getBubble(container, 1)).not.toHaveClass('rounded-tl-none')
-    expect(getBubble(container, 2)).toHaveClass('rounded-tl-none')
-    expect(getBubble(container, 2)).not.toHaveClass('rounded-bl-none')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.4rem]')
   })
 
   it('renders reply previews inside bubbles without persistent reply buttons', () => {

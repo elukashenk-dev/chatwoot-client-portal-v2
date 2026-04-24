@@ -120,7 +120,7 @@ describe('ChatPage optimistic text send', () => {
 
     expect(textarea).toHaveValue('')
     expect(screen.getByText('Новое сообщение')).toBeInTheDocument()
-    expect(screen.getByText('Отправляем...')).toBeInTheDocument()
+    expect(screen.getByText('Отправка')).toBeInTheDocument()
     await waitFor(() => {
       expect(textarea).toHaveFocus()
     })
@@ -155,7 +155,7 @@ describe('ChatPage optimistic text send', () => {
     })
 
     await waitFor(() => {
-      expect(screen.queryByText('Отправляем...')).not.toBeInTheDocument()
+      expect(screen.queryByText('Отправка')).not.toBeInTheDocument()
     })
 
     const [, requestOptions] = fetchMock.mock.calls[2] ?? []

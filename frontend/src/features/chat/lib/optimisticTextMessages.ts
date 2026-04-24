@@ -63,6 +63,7 @@ export function createOptimisticTextSend({
 export function toOptimisticChatMessage(send: OptimisticTextSend): ChatMessage {
   return {
     attachments: [],
+    authorAvatarUrl: null,
     authorName: 'Вы',
     clientMessageKey: send.clientMessageKey,
     content: send.content,

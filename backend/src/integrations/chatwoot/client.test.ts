@@ -318,6 +318,8 @@ describe('createChatwootClient', () => {
             message_type: 1,
             private: false,
             sender: {
+              avatar_url:
+                '/rails/active_storage/representations/agent-avatar.png',
               id: 5,
               name: 'Анна Смирнова',
               type: 'user',
@@ -359,6 +361,10 @@ describe('createChatwootClient', () => {
           content: 'Agent reply',
           id: 21,
           messageType: 1,
+          sender: {
+            avatarUrl:
+              'http://127.0.0.1:3000/rails/active_storage/representations/agent-avatar.png',
+          },
         },
         {
           content: 'Portal message',

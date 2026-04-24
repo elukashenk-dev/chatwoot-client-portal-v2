@@ -40,6 +40,7 @@ export type ChatMessageReplyPreview = {
 
 export type ChatMessage = {
   attachments: ChatAttachment[]
+  authorAvatarUrl?: string | null
   authorName: string
   clientMessageKey?: string | null
   content: string | null

@@ -6,7 +6,7 @@ import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPrimaryConversation } from '../types'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
-import { ChevronLeftIcon, LogOutIcon } from '../../../shared/ui/icons'
+import { LogOutIcon, MenuIcon } from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
   conversation: ChatPrimaryConversation | null
@@ -60,39 +60,45 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
     : 'Защищенная сессия'
 
   return (
-    <header className="app-safe-top relative z-10 border-b border-slate-200/90 bg-white/95 px-4 pb-2 backdrop-blur-sm sm:px-6 sm:pb-4">
+    <header className="app-safe-top relative z-10 border-b border-brand-900/20 bg-brand-800 px-4 pb-2 text-white shadow-sm [background-image:radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.10),transparent_48%)] sm:px-6 sm:pb-4">
       <div className="flex items-center justify-between gap-3 sm:items-start sm:gap-4">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center gap-4">
           <button
-            aria-label="Назад"
-            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white text-slate-400 sm:inline-flex"
+            aria-label="Меню"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] text-white/90 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/20 disabled:cursor-default sm:h-11 sm:w-11"
             disabled
-            title="Назад"
+            title="Меню"
             type="button"
           >
-            <ChevronLeftIcon className="h-[18px] w-[18px]" />
+            <MenuIcon className="h-6 w-6" />
           </button>
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.75rem] bg-brand-900 text-[13px] font-semibold tracking-wide text-white sm:h-11 sm:w-11 sm:rounded-[0.85rem] sm:text-sm">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1rem] border border-white/30 bg-brand-900/35 text-[24px] font-semibold tracking-wide text-white shadow-sm shadow-brand-950/20 ring-1 ring-white/10 sm:h-16 sm:w-16 sm:rounded-[1.15rem] sm:text-[28px]">
             PG
           </div>
 
           <div className="min-w-0">
-            <h1 className="truncate text-[16px] font-semibold text-slate-900 sm:text-[17px]">
+            <h1 className="truncate text-[16px] font-semibold text-white sm:text-[17px]">
               Клиентский чат
             </h1>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-slate-500 sm:mt-1 sm:gap-x-3 sm:text-[13px]">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/75 sm:mt-1 sm:gap-x-3 sm:text-[13px]">
               <span className="truncate">
                 Агент: {conversation?.assigneeName ?? 'Команда ProvGroup'}
               </span>
-              <span aria-hidden="true" className="hidden sm:inline">
+              <span
+                aria-hidden="true"
+                className="hidden text-white/70 sm:inline"
+              >
                 •
               </span>
               <span className="hidden truncate sm:inline">{user?.email}</span>
-              <span aria-hidden="true" className="hidden sm:inline">
+              <span
+                aria-hidden="true"
+                className="hidden text-white/70 sm:inline"
+              >
                 •
               </span>
-              <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              <span className="inline-flex rounded-full border border-emerald-100/20 bg-emerald-400/30 px-2 py-0.5 text-[11px] font-medium text-white">
                 {statusLabel}
               </span>
             </div>

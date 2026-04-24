@@ -113,6 +113,14 @@ function mapAuthorName(message: ChatwootMessage) {
   return message.sender?.name?.trim() || 'Агент'
 }
 
+function mapAuthorAvatarUrl(message: ChatwootMessage) {
+  if (message.messageType === 0) {
+    return null
+  }
+
+  return message.sender?.avatarUrl?.trim() || null
+}
+
 function normalizePortalMessageContent(content: string | null) {
   if (content === null) {
     return null
@@ -190,6 +198,7 @@ function mapPortalMessage(
       thumbUrl: attachment.thumbUrl,
       url: attachment.url,
     })),
+    authorAvatarUrl: mapAuthorAvatarUrl(message),
     authorName: mapAuthorName(message),
     clientMessageKey: message.sourceId?.startsWith('portal-send:')
       ? message.sourceId
