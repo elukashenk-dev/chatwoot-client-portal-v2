@@ -253,14 +253,14 @@ button:not(:disabled),
       148deg,
       #00000000 60%,
       transparent 75%,
-      rgb(255 255 255 / 0.05) 50%,
+      rgb(255 255 255 / 0.02) 50%,
       transparent 100%
     ),
     linear-gradient(
       40deg,
       transparent 54%,
       transparent 70%,
-      rgb(17 37 64 / 0.15) 67%,
+      rgb(17 37 64 / 0.10) 67%,
       transparent 100%
     );
 }
