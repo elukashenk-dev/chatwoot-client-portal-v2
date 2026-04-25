@@ -694,6 +694,7 @@ configure_nginx_proxy() {
 server {
     listen 80;
     server_name ${PORTAL_DOMAIN};
+    client_max_body_size 50m;
 
     location / {
         proxy_pass http://127.0.0.1:${PORTAL_HTTP_PORT};
