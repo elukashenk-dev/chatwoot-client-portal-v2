@@ -27,7 +27,8 @@
 - Добавлен экспериментальный faceted gradient surface для outgoing и incoming bubbles.
 - Добавлен экспериментальный PNG-фон шапки чата как Vite-managed asset, фон ленты возвращен к прежнему чистому surface.
 - Скорректирована схема radius outgoing bubbles: `0.4rem` применяется только к нижнему правому углу одиночного или последнего сообщения в группе.
+- Исправлен iOS app shell alignment: fixed viewport теперь учитывает `visualViewport.width` и `visualViewport.offsetLeft`, чтобы layout не уезжал вправо.
 
 ## Recommended Next Step
 
-- Ручно проверить на проде одиночный и последний grouped outgoing bubble вместе с экспериментальными gradients/header texture.
+- Ручно проверить на iPhone 16, что app shell больше не уезжает вправо, включая transcript, quick actions и composer.
