@@ -26,7 +26,8 @@
 - Доработана compact chat header: возвращена светлая цветовая схема из `provgroup_chat_screen_01.html`, menu/logout actions оставлены как голые иконки, статус показан как компактный `Онлайн`, удалена панель календаря/последних 20 сообщений, outgoing bubble/send actions вынесены в цвет `chat-outgoing` `#465a72`, incoming bubble вынесен в `chat-incoming` `#f7f7f7` с border `#c0c0c029`, line-height bubbles уплотнен, тени с message bubbles убраны.
 - Добавлен экспериментальный faceted gradient surface для outgoing и incoming bubbles.
 - Добавлен экспериментальный PNG-фон шапки чата как Vite-managed asset, фон ленты возвращен к прежнему чистому surface.
+- Скорректирован radius первого outgoing bubble в группе: верхний правый угол возвращен к общему `0.9rem`.
 
 ## Recommended Next Step
 
-- Ручно сравнить экспериментальные faceted gradient bubbles и PNG-фон шапки на desktop/mobile с плоским baseline из `fix/chat-ui-next-polish`.
+- Ручно проверить на проде первый outgoing bubble в grouped-сообщениях вместе с экспериментальными gradients/header texture.

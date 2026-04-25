@@ -251,7 +251,7 @@ export function getBubbleRadiusClass({
 
   if (blockPosition === 'first') {
     return isOutgoing
-      ? 'rounded-[0.9rem] rounded-tr-[0.4rem]'
+      ? 'rounded-[0.9rem]'
       : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
   }
 

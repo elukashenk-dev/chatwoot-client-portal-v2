@@ -120,10 +120,8 @@ describe('ChatTranscript', () => {
     expect(dayDividerLabel.parentElement).toHaveClass('max-w-[520px]', 'gap-3')
 
     expect(container.querySelector('[data-agent-avatar]')).toBeNull()
-    expect(getBubble(container, 1)).toHaveClass(
-      'rounded-[0.9rem]',
-      'rounded-tr-[0.4rem]',
-    )
+    expect(getBubble(container, 1)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
     expect(getBubble(container, 1)).toHaveClass(
       'chat-outgoing-surface',
       'leading-[1.45]',
