@@ -28,7 +28,8 @@
 - Добавлен экспериментальный PNG-фон шапки чата как Vite-managed asset, фон ленты возвращен к прежнему чистому surface.
 - Скорректирована схема radius outgoing bubbles: `0.4rem` применяется только к нижнему правому углу одиночного или последнего сообщения в группе.
 - Исправлен iOS app shell alignment: fixed viewport теперь учитывает `visualViewport.width` и `visualViewport.offsetLeft`, чтобы layout не уезжал вправо.
+- Доработан iOS keyboard detection для composer: открытая клавиатура определяется по просадке `visualViewport.height` от baseline, даже если Safari/PWA меняет `innerHeight`.
 
 ## Recommended Next Step
 
-- Ручно проверить на iPhone 16, что app shell больше не уезжает вправо, включая transcript, quick actions и composer.
+- Ручно проверить на iPhone 16, что composer при открытой клавиатуре не оставляет лишний bottom gap над системной iOS-плашкой.

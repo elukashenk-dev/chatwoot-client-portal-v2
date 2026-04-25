@@ -9,10 +9,17 @@ function KeyboardStateProbe() {
   return <span>{isKeyboardOpen ? 'keyboard-open' : 'keyboard-closed'}</span>
 }
 
-function installVisualViewport(height: number) {
+function installVisualViewport({
+  height,
+  width = 390,
+}: {
+  height: number
+  width?: number
+}) {
   const listeners = new Map<string, Set<() => void>>()
   const visualViewport = {
     height,
+    width,
     addEventListener: vi.fn((eventName: string, listener: () => void) => {
       const eventListeners = listeners.get(eventName) ?? new Set<() => void>()
 
@@ -39,8 +46,9 @@ function installVisualViewport(height: number) {
         listener()
       })
     },
-    setHeight(nextHeight: number) {
-      visualViewport.height = nextHeight
+    setMetrics(nextMetrics: { height?: number; width?: number }) {
+      visualViewport.height = nextMetrics.height ?? visualViewport.height
+      visualViewport.width = nextMetrics.width ?? visualViewport.width
     },
   }
 }
@@ -51,17 +59,57 @@ describe('useVisualViewportKeyboardOpen', () => {
   })
 
   it('detects a mobile keyboard from the visual viewport height delta', () => {
-    const viewport = installVisualViewport(800)
+    const viewport = installVisualViewport({ height: 800 })
 
     render(<KeyboardStateProbe />)
 
     expect(screen.getByText('keyboard-closed')).toBeInTheDocument()
 
     act(() => {
-      viewport.setHeight(560)
+      viewport.setMetrics({ height: 560 })
       viewport.fire('resize')
     })
 
     expect(screen.getByText('keyboard-open')).toBeInTheDocument()
+  })
+
+  it('keeps detecting the keyboard when iOS shrinks innerHeight too', () => {
+    const viewport = installVisualViewport({ height: 780 })
+
+    render(<KeyboardStateProbe />)
+
+    expect(screen.getByText('keyboard-closed')).toBeInTheDocument()
+
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 540,
+    })
+
+    act(() => {
+      viewport.setMetrics({ height: 540 })
+      viewport.fire('resize')
+    })
+
+    expect(screen.getByText('keyboard-open')).toBeInTheDocument()
+  })
+
+  it('resets the baseline when visual viewport width changes significantly', () => {
+    const viewport = installVisualViewport({ height: 780, width: 390 })
+
+    render(<KeyboardStateProbe />)
+
+    act(() => {
+      viewport.setMetrics({ height: 540 })
+      viewport.fire('resize')
+    })
+
+    expect(screen.getByText('keyboard-open')).toBeInTheDocument()
+
+    act(() => {
+      viewport.setMetrics({ height: 540, width: 740 })
+      viewport.fire('resize')
+    })
+
+    expect(screen.getByText('keyboard-closed')).toBeInTheDocument()
   })
 })
