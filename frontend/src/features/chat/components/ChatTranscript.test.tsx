@@ -200,7 +200,7 @@ describe('ChatTranscript', () => {
     )
     expect(getBubble(container, 1)).toHaveClass(
       'border-chat-incoming-border',
-      'bg-chat-incoming',
+      'chat-incoming-surface',
       'leading-[1.45]',
       'text-slate-700',
     )

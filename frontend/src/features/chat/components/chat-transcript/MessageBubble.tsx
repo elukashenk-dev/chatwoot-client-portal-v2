@@ -407,7 +407,7 @@ export function MessageBubble({
             className={
               isOutgoing
                 ? `${radiusClassName} chat-outgoing-surface flow-root break-words px-4 py-3 text-[15px] leading-[1.45] text-white`
-                : `${radiusClassName} flow-root break-words border border-chat-incoming-border bg-chat-incoming px-4 py-3 text-[15px] leading-[1.45] text-slate-700`
+                : `${radiusClassName} chat-incoming-surface flow-root break-words border border-chat-incoming-border px-4 py-3 text-[15px] leading-[1.45] text-slate-700`
             }
           >
             {message.replyTo ? (
