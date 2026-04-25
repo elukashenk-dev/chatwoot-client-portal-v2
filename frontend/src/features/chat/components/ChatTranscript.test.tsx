@@ -122,6 +122,7 @@ describe('ChatTranscript', () => {
     expect(container.querySelector('[data-agent-avatar]')).toBeNull()
     expect(getBubble(container, 1)).toHaveClass('rounded-[0.9rem]')
     expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.4rem]')
     expect(getBubble(container, 1)).toHaveClass(
       'chat-outgoing-surface',
       'leading-[1.45]',
@@ -130,7 +131,10 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
     expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-br-[0.4rem]')
     expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 3)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-br-[0.4rem]')
     const firstMeta = getMessageMeta(container, 1)
     const secondMeta = getMessageMeta(container, 2)
     const thirdMeta = getMessageMeta(container, 3)
@@ -151,6 +155,21 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).toContainElement(firstMeta)
     expect(getBubble(container, 1)).toHaveClass('flow-root')
     expect(getBubble(container, 1)).not.toHaveClass('pr-[4.75rem]')
+  })
+
+  it('renders a single outgoing bubble with the compact lower-right corner', () => {
+    const { container } = renderTranscript([
+      createMessage({
+        content: 'Одиночное сообщение',
+        id: 1,
+      }),
+    ])
+
+    expect(getBubble(container, 1)).toHaveClass(
+      'rounded-[0.9rem]',
+      'rounded-br-[0.4rem]',
+    )
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
   })
 
   it('renders an agent avatar on the first incoming bubble in a group', () => {
