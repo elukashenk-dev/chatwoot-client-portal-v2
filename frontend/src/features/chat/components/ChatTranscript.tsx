@@ -261,7 +261,7 @@ export function ChatTranscript({
       </div>
 
       <section
-        className="chat-scroll flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6"
+        className="chat-scroll chat-transcript-background flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6"
         onScroll={handleTranscriptScroll}
         ref={scrollElementRef}
       >

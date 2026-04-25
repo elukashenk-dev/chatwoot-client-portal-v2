@@ -15,6 +15,7 @@
   --color-chat-incoming: #f7f7f7;
   --color-chat-incoming-border: #c0c0c029;
   --color-chat-outgoing: #465a72;
+  --color-chat-transcript: #f8fafc;
   --shadow-shell: 0 18px 50px rgba(15, 23, 42, 0.14);
   --shadow-footer: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
@@ -282,6 +283,14 @@ button:not(:disabled),
       rgb(15 23 42 / 0.035) 67%,
       transparent 100%
     );
+}
+
+.chat-transcript-background {
+  background-color: var(--color-chat-transcript);
+  background-image: url('./assets/chat/bg-lenta.png');
+  background-position: center top;
+  background-repeat: repeat-y;
+  background-size: min(100%, 724px) auto;
 }
 
 .chat-scroll::-webkit-scrollbar {
