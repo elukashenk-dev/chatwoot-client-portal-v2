@@ -252,30 +252,24 @@ button:not(:disabled),
     linear-gradient(
       145deg,
       transparent 0%,
-      rgb(255 255 255 / 0.08) 36%,
-      transparent 68%
+      transparent 56%,
+      rgb(255 255 255 / 0.08) 74%,
+      transparent 100%
     ),
     linear-gradient(
       34deg,
       transparent 0%,
-      rgb(17 37 64 / 0.16) 42%,
-      transparent 78%
+      transparent 52%,
+      rgb(17 37 64 / 0.15) 76%,
+      transparent 100%
     ),
     linear-gradient(
       318deg,
       transparent 0%,
-      rgb(255 255 255 / 0.05) 46%,
-      transparent 82%
+      transparent 62%,
+      rgb(255 255 255 / 0.05) 84%,
+      transparent 100%
     );
-  background-position:
-    right center,
-    right center,
-    right center;
-  background-repeat: no-repeat;
-  background-size:
-    45% 100%,
-    43% 100%,
-    38% 100%;
 }
 
 .chat-scroll::-webkit-scrollbar {
