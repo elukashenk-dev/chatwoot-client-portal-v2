@@ -11,6 +11,9 @@ import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
 const CHAT_ATTACHMENT_FIELD_MAX_BYTES = 16 * 1024
+const CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES = 256 * 1024
+const CHAT_ATTACHMENT_REQUEST_MAX_BYTES =
+  CHAT_ATTACHMENT_MAX_BYTES + CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES
 
 const chatMessagesQuerySchema = z.object({
   beforeMessageId: z.coerce.number().int().positive().optional(),
@@ -254,24 +257,30 @@ export function registerChatMessagesRoutes(
     })
   })
 
-  app.post('/api/chat/messages/attachment', async (request, reply) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+  app.post(
+    '/api/chat/messages/attachment',
+    {
+      bodyLimit: CHAT_ATTACHMENT_REQUEST_MAX_BYTES,
+    },
+    async (request, reply) => {
+      assertAllowedOrigin(request, env.APP_ORIGIN)
 
-    const user = await resolveAuthenticatedPortalUser({
-      authService,
-      env,
-      reply,
-      request,
-    })
-    const upload = await parseAttachmentUpload(app, request)
+      const user = await resolveAuthenticatedPortalUser({
+        authService,
+        env,
+        reply,
+        request,
+      })
+      const upload = await parseAttachmentUpload(app, request)
 
-    return chatMessagesService.sendCurrentUserAttachmentMessage({
-      attachment: upload.attachment,
-      clientMessageKey: upload.clientMessageKey,
-      content: upload.content,
-      primaryConversationId: upload.primaryConversationId,
-      replyToMessageId: upload.replyToMessageId,
-      userId: user.id,
-    })
-  })
+      return chatMessagesService.sendCurrentUserAttachmentMessage({
+        attachment: upload.attachment,
+        clientMessageKey: upload.clientMessageKey,
+        content: upload.content,
+        primaryConversationId: upload.primaryConversationId,
+        replyToMessageId: upload.replyToMessageId,
+        userId: user.id,
+      })
+    },
+  )
 }
