@@ -30,8 +30,8 @@
 - Исправлен iOS app shell alignment: fixed viewport теперь учитывает `visualViewport.width` и `visualViewport.offsetLeft`, чтобы layout не уезжал вправо.
 - Доработан iOS keyboard detection для composer: открытая клавиатура определяется по просадке `visualViewport.height` от baseline, даже если Safari/PWA меняет `innerHeight`.
 - Зафиксирован deferred finding `F-IOS-001`: iOS keyboard textarea drag вызывает visual viewport pan; неудачный freeze `offsetTop` откатан и задокументирован.
-- Исправлен attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
+- Исправлен и проверен на production attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
 
 ## Recommended Next Step
 
-- Проверить отправку файла больше 1 МБ на production, затем сделать checkpoint commit.
+- Вернуться к дизайн-полировке чата или отдельно открыть экспериментальный iOS touch guard для `F-IOS-001`.
