@@ -227,6 +227,7 @@ describe('ChatPage', () => {
     expect(
       await screen.findByText('Здравствуйте, вижу ваше обращение.'),
     ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toHaveClass('chat-header-background')
     expect(screen.getByText('Ольга Support')).toBeInTheDocument()
     expect(screen.getByRole('status', { name: 'Онлайн' })).toBeInTheDocument()
     expect(screen.queryByText('В работе')).not.toBeInTheDocument()

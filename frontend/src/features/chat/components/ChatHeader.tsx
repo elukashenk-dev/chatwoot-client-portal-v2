@@ -36,7 +36,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   const presenceLabel = isReady ? 'Онлайн' : 'Подключение'
 
   return (
-    <header className="app-safe-top relative z-10 border-b border-slate-200/90 bg-white/95 px-4 pb-2.5 text-slate-900 shadow-sm backdrop-blur-sm sm:px-6 sm:pb-3">
+    <header className="app-safe-top chat-header-background relative z-10 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
       <div className="flex min-h-10 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <button

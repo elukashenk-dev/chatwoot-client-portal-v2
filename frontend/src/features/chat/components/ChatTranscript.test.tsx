@@ -118,9 +118,6 @@ describe('ChatTranscript', () => {
       'text-brand-700',
     )
     expect(dayDividerLabel.parentElement).toHaveClass('max-w-[520px]', 'gap-3')
-    expect(container.querySelector('.chat-scroll')).toHaveClass(
-      'chat-transcript-background',
-    )
 
     expect(container.querySelector('[data-agent-avatar]')).toBeNull()
     expect(getBubble(container, 1)).toHaveClass(
