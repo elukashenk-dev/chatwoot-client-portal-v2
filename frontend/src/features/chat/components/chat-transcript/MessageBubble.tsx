@@ -406,7 +406,7 @@ export function MessageBubble({
             data-chat-bubble
             className={
               isOutgoing
-                ? `${radiusClassName} flow-root break-words bg-chat-outgoing px-4 py-3 text-[15px] leading-[1.45] text-white`
+                ? `${radiusClassName} chat-outgoing-surface flow-root break-words px-4 py-3 text-[15px] leading-[1.45] text-white`
                 : `${radiusClassName} flow-root break-words border border-chat-incoming-border bg-chat-incoming px-4 py-3 text-[15px] leading-[1.45] text-slate-700`
             }
           >

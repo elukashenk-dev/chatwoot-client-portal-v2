@@ -24,7 +24,8 @@
 - Доработана отправка attachment captions: текстовый draft при выбранном файле отправляется как content того же Chatwoot message, участвует в send-ledger idempotency и очищается после успешной отправки.
 - Закрыт targeted review по attachment captions: добавлен multipart field-size guard и защита от silently truncated caption fields.
 - Доработана compact chat header: возвращена светлая цветовая схема из `provgroup_chat_screen_01.html`, menu/logout actions оставлены как голые иконки, статус показан как компактный `Онлайн`, удалена панель календаря/последних 20 сообщений, outgoing bubble/send actions вынесены в цвет `chat-outgoing` `#465a72`, incoming bubble вынесен в `chat-incoming` `#f7f7f7` с border `#c0c0c029`, line-height bubbles уплотнен, тени с message bubbles убраны.
+- Добавлен экспериментальный faceted gradient surface для outgoing bubble поверх `chat-outgoing`.
 
 ## Recommended Next Step
 
-- Ручно проверить compact chat header и transcript на desktop/mobile: светлую шапку, голые menu/logout иконки, статус `Онлайн` без третьей строки, отсутствие панели календаря/последних 20 сообщений, новые цвета user/agent bubbles и более плотный line-height.
+- Ручно сравнить экспериментальный faceted gradient outgoing bubble на desktop/mobile с плоским baseline из `fix/chat-ui-next-polish`.

@@ -125,7 +125,7 @@ describe('ChatTranscript', () => {
       'rounded-tr-[0.4rem]',
     )
     expect(getBubble(container, 1)).toHaveClass(
-      'bg-chat-outgoing',
+      'chat-outgoing-surface',
       'leading-[1.45]',
       'text-white',
     )
