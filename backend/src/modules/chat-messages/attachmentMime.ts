@@ -69,6 +69,9 @@ const CHAT_ATTACHMENT_UNKNOWN_MIME_TYPES = new Set([
   'application/octet-stream',
   'binary/octet-stream',
 ])
+const CHAT_ATTACHMENT_MIME_ALIASES = new Map([
+  ['application/png', 'image/png'],
+])
 
 function getMimeTypeEssence(mimeType: string) {
   return mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
@@ -92,21 +95,50 @@ function inferAttachmentMimeTypeFromFileName(fileName: string) {
   )
 }
 
+function inferAttachmentMimeTypeFromData(data: Buffer) {
+  if (
+    data.length >= 8 &&
+    data[0] === 0x89 &&
+    data[1] === 0x50 &&
+    data[2] === 0x4e &&
+    data[3] === 0x47 &&
+    data[4] === 0x0d &&
+    data[5] === 0x0a &&
+    data[6] === 0x1a &&
+    data[7] === 0x0a
+  ) {
+    return 'image/png'
+  }
+
+  return null
+}
+
 export function normalizeAttachmentMimeType({
+  data,
   fileName,
   mimeType,
 }: {
+  data?: Buffer
   fileName: string
   mimeType: string
 }) {
   const normalizedMimeType = mimeType.trim().toLowerCase()
   const mimeTypeEssence = getMimeTypeEssence(normalizedMimeType)
+  const aliasedMimeType = CHAT_ATTACHMENT_MIME_ALIASES.get(mimeTypeEssence)
+
+  if (aliasedMimeType) {
+    return aliasedMimeType
+  }
 
   if (!CHAT_ATTACHMENT_UNKNOWN_MIME_TYPES.has(mimeTypeEssence)) {
     return normalizedMimeType
   }
 
-  return inferAttachmentMimeTypeFromFileName(fileName) ?? normalizedMimeType
+  return (
+    inferAttachmentMimeTypeFromFileName(fileName) ??
+    (data ? inferAttachmentMimeTypeFromData(data) : null) ??
+    normalizedMimeType
+  )
 }
 
 export function isAllowedAttachmentMimeType(mimeType: string) {

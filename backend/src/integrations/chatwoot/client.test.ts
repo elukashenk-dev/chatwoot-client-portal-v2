@@ -615,6 +615,78 @@ describe('createChatwootClient', () => {
     expect(formData.get('private')).toBe('false')
     expect(formData.get('source_id')).toBe('portal-send:attachment-key')
     expect(formData.get('attachments[]')).toBeInstanceOf(Blob)
+    expect((formData.get('attachments[]') as File).name).toBe('invoice.pdf')
+  })
+
+  it('uses a safe ASCII filename for Chatwoot multipart attachment uploads', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        attachments: [
+          {
+            data_url: 'https://files.example.test/screenshot.png',
+            extension: 'png',
+            fallback_title: '2026-04-26-00.12.34.png',
+            file_size: 4096,
+            file_type: 'image',
+            id: 78,
+            message_id: 602,
+            thumb_url: 'https://files.example.test/screenshot-thumb.png',
+          },
+        ],
+        content: '',
+        content_attributes: {},
+        content_type: 'text',
+        created_at: 1_776_000_021,
+        id: 602,
+        message_type: 0,
+        private: false,
+        sender: {
+          id: 7,
+          name: 'Portal User',
+          type: 'contact',
+        },
+        source_id: 'portal-send:screenshot-key',
+        status: 'sent',
+      }),
+    )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.createConversationIncomingAttachmentMessage({
+        attachment: {
+          data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+          fileName: 'Снимок экрана 2026-04-26 в 00.12.34.PNG',
+          mimeType: 'image/png',
+        },
+        conversationId: 101,
+        sourceId: 'portal-send:screenshot-key',
+      }),
+    ).resolves.toMatchObject({
+      attachments: [
+        {
+          fileType: 'image',
+          name: '2026-04-26-00.12.34.png',
+        },
+      ],
+      id: 602,
+      sourceId: 'portal-send:screenshot-key',
+    })
+
+    const [, requestOptions] = fetchFn.mock.calls[0] ?? []
+    const formData = requestOptions?.body as FormData
+    const attachment = formData.get('attachments[]') as File
+
+    expect(attachment).toBeInstanceOf(Blob)
+    expect(attachment.name).toBe('2026-04-26-00.12.34.png')
+    expect(attachment.type).toBe('image/png')
   })
 
   it('lists account webhooks with their callback secret when Chatwoot returns it', async () => {

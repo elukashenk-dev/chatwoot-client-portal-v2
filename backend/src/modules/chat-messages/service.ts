@@ -346,11 +346,12 @@ function normalizeAttachmentUpload(
   attachment: PortalAttachmentUpload,
 ): PortalAttachmentUpload {
   const fileName = attachment.fileName.trim()
+  const data = Buffer.from(attachment.data)
   const mimeType = normalizeAttachmentMimeType({
+    data,
     fileName,
     mimeType: attachment.mimeType,
   })
-  const data = Buffer.from(attachment.data)
   const size = data.byteLength
 
   if (!fileName) {

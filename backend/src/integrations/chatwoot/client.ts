@@ -5,6 +5,7 @@ import {
   ChatwootClientRequestError,
   ChatwootInvalidHistoryCursorError,
 } from './errors.js'
+import { buildSafeChatwootMultipartFileName } from './attachmentUpload.js'
 import { mapMessage } from './messagePayload.js'
 import type { ChatwootMessage, ChatwootMessagesPage } from './messagePayload.js'
 
@@ -856,7 +857,7 @@ export function createChatwootClient({
     formData.append(
       'attachments[]',
       createAttachmentBlob(attachment),
-      attachment.fileName,
+      buildSafeChatwootMultipartFileName(attachment.fileName),
     )
 
     let response: Response
