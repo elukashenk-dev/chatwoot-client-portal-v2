@@ -44,7 +44,7 @@ export function VoiceRecordingPanel({
       </button>
       <button
         aria-label="Отправить голосовое"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] bg-brand-800 text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
         disabled={status !== 'recording'}
         onClick={onSend}
         title="Отправить голосовое"

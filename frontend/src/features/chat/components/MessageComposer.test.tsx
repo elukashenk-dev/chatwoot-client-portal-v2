@@ -49,6 +49,15 @@ describe('MessageComposer', () => {
     ).not.toBeDisabled()
     expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
     expect(voiceControl).toHaveClass('w-11', 'opacity-100')
+    expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toHaveClass(
+      'hover:text-chat-outgoing',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Голосовое сообщение' }),
+    ).toHaveClass('hover:text-chat-outgoing')
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+      'bg-chat-outgoing',
+    )
 
     await user.type(textarea, 'П')
 

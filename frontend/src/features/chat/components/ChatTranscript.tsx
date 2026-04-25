@@ -15,7 +15,7 @@ import {
   getTranscriptScrollAction,
   isTranscriptNearBottom,
 } from './ChatTranscriptScroll'
-import { CalendarIcon, ChevronUpIcon } from '../../../shared/ui/icons'
+import { ChevronUpIcon } from '../../../shared/ui/icons'
 import { MessageBubble } from './chat-transcript/MessageBubble'
 import { MessageContextMenu } from './chat-transcript/MessageContextMenu'
 import {
@@ -258,23 +258,6 @@ export function ChatTranscript({
     <>
       <div aria-live="polite" className="sr-only">
         {copyStatusText}
-      </div>
-      <div className="hidden border-b border-slate-200/70 px-5 py-3 sm:block sm:px-6">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-[0.7rem] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-400"
-            disabled
-            title="Календарь сообщений будет подключен отдельным slice"
-            type="button"
-          >
-            <CalendarIcon />
-            Календарь сообщений
-          </button>
-
-          <span className="rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700">
-            Показаны последние {Math.min(messages.length, 20)} сообщений
-          </span>
-        </div>
       </div>
 
       <section

@@ -77,6 +77,16 @@ function getSwipeSurface(container: HTMLElement, messageId: number) {
   return swipeSurface
 }
 
+function getSwipeIndicator(container: HTMLElement) {
+  const indicator = container.querySelector('[data-swipe-reply-indicator]')
+
+  if (!(indicator instanceof HTMLElement)) {
+    throw new Error('Missing swipe reply indicator.')
+  }
+
+  return indicator
+}
+
 describe('ChatTranscript', () => {
   it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
     const { container } = renderTranscript([
@@ -114,7 +124,12 @@ describe('ChatTranscript', () => {
       'rounded-[0.9rem]',
       'rounded-tr-[0.4rem]',
     )
-    expect(getBubble(container, 1)).toHaveClass('bg-brand-800', 'text-white')
+    expect(getBubble(container, 1)).toHaveClass(
+      'bg-chat-outgoing',
+      'leading-[1.45]',
+      'text-white',
+    )
+    expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
     expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
     expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
@@ -183,7 +198,13 @@ describe('ChatTranscript', () => {
       'rounded-[0.9rem]',
       'rounded-tl-[0.4rem]',
     )
-    expect(getBubble(container, 1)).toHaveClass('bg-white', 'text-slate-700')
+    expect(getBubble(container, 1)).toHaveClass(
+      'border-chat-incoming-border',
+      'bg-chat-incoming',
+      'leading-[1.45]',
+      'text-slate-700',
+    )
+    expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
     expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.4rem]')
   })
@@ -330,6 +351,12 @@ describe('ChatTranscript', () => {
       pointerId: 1,
       pointerType: 'touch',
     })
+
+    expect(getSwipeIndicator(container)).toHaveClass(
+      'border-chat-outgoing',
+      'bg-chat-outgoing',
+    )
+
     fireEvent.pointerUp(swipeSurface, {
       clientX: 150,
       clientY: 124,

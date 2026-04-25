@@ -23,7 +23,8 @@
 - Доработан composer typing mode: attachment и voice controls аккуратно схлопываются при появлении текстового draft и возвращаются после очистки поля.
 - Доработана отправка attachment captions: текстовый draft при выбранном файле отправляется как content того же Chatwoot message, участвует в send-ledger idempotency и очищается после успешной отправки.
 - Закрыт targeted review по attachment captions: добавлен multipart field-size guard и защита от silently truncated caption fields.
+- Доработана compact chat header: возвращена светлая цветовая схема из `provgroup_chat_screen_01.html`, menu/logout actions оставлены как голые иконки, статус показан как компактный `Онлайн`, удалена панель календаря/последних 20 сообщений, outgoing bubble/send actions вынесены в цвет `chat-outgoing` `#465a72`, incoming bubble вынесен в `chat-incoming` `#f7f7f7` с border `#c0c0c029`, line-height bubbles уплотнен, тени с message bubbles убраны.
 
 ## Recommended Next Step
 
-- Протестировать chat UI polish на production: длинные/reply bubbles, avatar/header styling, composer typing-mode transition, attachment caption send и базовую отправку файла/голоса без подписи.
+- Ручно проверить compact chat header и transcript на desktop/mobile: светлую шапку, голые menu/logout иконки, статус `Онлайн` без третьей строки, отсутствие панели календаря/последних 20 сообщений, новые цвета user/agent bubbles и более плотный line-height.

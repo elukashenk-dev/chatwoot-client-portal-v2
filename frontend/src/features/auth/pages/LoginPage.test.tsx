@@ -142,9 +142,8 @@ describe('LoginPage', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Клиентский чат' }),
+      await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('name@company.ru')).toBeInTheDocument()
     expect(await screen.findByText('Чат не подключен')).toBeInTheDocument()
   })
 
@@ -170,7 +169,7 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/auth/login'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Клиентский чат' }),
+      await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
@@ -204,7 +203,7 @@ describe('LoginPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Клиентский портал' }),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Клиентский чат')).not.toBeInTheDocument()
+    expect(screen.queryByText('Поддержка клиентов')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -230,9 +229,8 @@ describe('LoginPage', () => {
       renderAuthRoutes([initialEntry])
 
       expect(
-        await screen.findByRole('heading', { name: 'Клиентский чат' }),
+        await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
       ).toBeInTheDocument()
-      expect(screen.getByText('name@company.ru')).toBeInTheDocument()
       expect(
         screen.queryByRole('heading', { name: publicPageHeading }),
       ).not.toBeInTheDocument()

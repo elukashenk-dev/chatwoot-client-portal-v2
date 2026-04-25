@@ -220,16 +220,18 @@ describe('ChatPage', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { name: 'Клиентский чат' },
+        { name: 'Поддержка клиентов' },
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('name@company.ru')).toBeInTheDocument()
     expect(
       await screen.findByText('Здравствуйте, вижу ваше обращение.'),
     ).toBeInTheDocument()
     expect(screen.getByText('Ольга Support')).toBeInTheDocument()
-    expect(screen.getByText('В работе')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Онлайн' })).toBeInTheDocument()
+    expect(screen.queryByText('В работе')).not.toBeInTheDocument()
+    expect(screen.queryByText('Календарь сообщений')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Показаны последние/)).not.toBeInTheDocument()
     expect(screen.getByText('Спасибо, прикладываю файл.')).toBeInTheDocument()
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
     expect(

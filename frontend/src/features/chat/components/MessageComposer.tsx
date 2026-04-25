@@ -393,7 +393,7 @@ export function MessageComposer({
             >
               <button
                 aria-label="Прикрепить файл"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-chat-outgoing focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
                 disabled={isAttachmentControlDisabled}
                 onClick={() => {
                   fileInputRef.current?.click()
@@ -440,7 +440,7 @@ export function MessageComposer({
             >
               <button
                 aria-label="Голосовое сообщение"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-chat-outgoing focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
                 disabled={!canStartVoiceRecording}
                 onClick={() => {
                   void startVoiceRecording()
@@ -466,7 +466,7 @@ export function MessageComposer({
                     ? 'Отправить файл'
                     : 'Отправить'
               }
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-brand-800 text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
               disabled={!canSend || isVoiceRecorderBusy}
               onClick={() => {
                 void submitCurrentDraft()

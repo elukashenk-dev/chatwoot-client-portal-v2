@@ -204,9 +204,10 @@ function SwipeReplyIndicator({ swipeOffset }: { swipeOffset: number }) {
         'pointer-events-none absolute right-0 top-1/2 z-0 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition',
         swipeOffset > 0 ? 'opacity-100' : 'opacity-0',
         isReady
-          ? 'border-brand-800 bg-brand-800 text-white'
+          ? 'border-chat-outgoing bg-chat-outgoing text-white'
           : 'border-brand-100 bg-white text-brand-800',
       )}
+      data-swipe-reply-indicator
     >
       <ReplyIcon className="h-4 w-4" />
     </div>
@@ -405,8 +406,8 @@ export function MessageBubble({
             data-chat-bubble
             className={
               isOutgoing
-                ? `${radiusClassName} flow-root break-words bg-brand-800 px-4 py-3 text-[15px] leading-7 text-white shadow-sm shadow-brand-900/10`
-                : `${radiusClassName} flow-root break-words border border-slate-200 bg-white px-4 py-3 text-[15px] leading-7 text-slate-700 shadow-sm shadow-slate-900/5`
+                ? `${radiusClassName} flow-root break-words bg-chat-outgoing px-4 py-3 text-[15px] leading-[1.45] text-white`
+                : `${radiusClassName} flow-root break-words border border-chat-incoming-border bg-chat-incoming px-4 py-3 text-[15px] leading-[1.45] text-slate-700`
             }
           >
             {message.replyTo ? (

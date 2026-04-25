@@ -1,4 +1,4 @@
-import { CalendarIcon, ClockIcon } from '../../../shared/ui/icons'
+import { ClockIcon } from '../../../shared/ui/icons'
 
 function SkeletonLine({ className }: { className: string }) {
   return <div className={`app-skeleton ${className}`} />
@@ -7,18 +7,6 @@ function SkeletonLine({ className }: { className: string }) {
 export function ChatLoadingState() {
   return (
     <>
-      <div className="border-b border-slate-200/70 px-5 py-3 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex min-h-10 items-center gap-2 rounded-[0.7rem] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-400">
-            <CalendarIcon />
-            Календарь сообщений
-          </div>
-          <span className="rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-medium text-brand-700">
-            Загружаем последние 20 сообщений
-          </span>
-        </div>
-      </div>
-
       <section className="flex-1 overflow-hidden px-4 py-5 sm:px-6 sm:py-6">
         <div className="mx-auto flex h-full w-full max-w-[620px] flex-col">
           <div className="mb-6 rounded-[1rem] border border-slate-200 bg-slate-50/90 px-5 py-5">
