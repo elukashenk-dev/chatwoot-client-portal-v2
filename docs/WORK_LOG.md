@@ -30,8 +30,7 @@
 - Исправлен iOS app shell alignment: fixed viewport теперь учитывает `visualViewport.width` и `visualViewport.offsetLeft`, чтобы layout не уезжал вправо.
 - Доработан iOS keyboard detection для composer: открытая клавиатура определяется по просадке `visualViewport.height` от baseline, даже если Safari/PWA меняет `innerHeight`.
 - Зафиксирован deferred finding `F-IOS-001`: iOS keyboard textarea drag вызывает visual viewport pan; неудачный freeze `offsetTop` откатан и задокументирован.
-- Исправлена отправка Apple-вложений с неопределенным MIME: backend восстанавливает безопасный MIME по расширению или PNG-сигнатуре, сохраняет attachment allowlist и отправляет в Chatwoot безопасное multipart-имя файла.
 
 ## Recommended Next Step
 
-- Задеплоить `fix/apple-attachment-upload` на production и проверить PNG-вложения с Mac/iPhone.
+- Продолжить дизайн-полировку чата или отдельно открыть экспериментальный iOS touch guard для `F-IOS-001`.

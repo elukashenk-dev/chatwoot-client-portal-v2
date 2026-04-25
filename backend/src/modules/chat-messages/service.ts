@@ -15,10 +15,6 @@ import type {
   ChatContextSnapshot,
 } from '../chat-context/service.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
-import {
-  isAllowedAttachmentMimeType,
-  normalizeAttachmentMimeType,
-} from './attachmentMime.js'
 import type {
   ChatMessagesRepository,
   ChatSendLedgerEntry,
@@ -46,6 +42,24 @@ const SEND_LEDGER_STALE_PROCESSING_MS = 2 * 60 * 1000
 const CLIENT_MESSAGE_KEY_MAX_LENGTH = 200
 export const CHAT_ATTACHMENT_MAX_BYTES = 40 * 1024 * 1024
 const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
+const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
+  'application/json',
+  'application/msword',
+  'application/pdf',
+  'application/rtf',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/x-7z-compressed',
+  'application/x-tar',
+  'application/zip',
+  'text/csv',
+  'text/plain',
+  'text/rtf',
+])
 
 type CreateChatMessagesServiceOptions = {
   chatContextService: Pick<
@@ -342,16 +356,21 @@ async function resolveReplyTargetMessage({
   return replyTargetMessage
 }
 
+function isAllowedAttachmentMimeType(mimeType: string) {
+  return (
+    mimeType.startsWith('image/') ||
+    mimeType.startsWith('video/') ||
+    mimeType.startsWith('audio/') ||
+    CHAT_ATTACHMENT_ALLOWED_MIME_TYPES.has(mimeType)
+  )
+}
+
 function normalizeAttachmentUpload(
   attachment: PortalAttachmentUpload,
 ): PortalAttachmentUpload {
   const fileName = attachment.fileName.trim()
+  const mimeType = attachment.mimeType.trim().toLowerCase()
   const data = Buffer.from(attachment.data)
-  const mimeType = normalizeAttachmentMimeType({
-    data,
-    fileName,
-    mimeType: attachment.mimeType,
-  })
   const size = data.byteLength
 
   if (!fileName) {

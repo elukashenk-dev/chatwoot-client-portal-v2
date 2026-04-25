@@ -807,76 +807,6 @@ describe('createChatMessagesService', () => {
     )
   })
 
-  it('infers a PNG mime type for Apple screenshots reported as octet-stream', async () => {
-    const createConversationIncomingAttachmentMessage = vi.fn().mockResolvedValue(
-      {
-        ...sentAttachmentChatwootMessage,
-        attachments: [
-          {
-            extension: 'png',
-            fileSize: 4096,
-            fileType: 'image',
-            id: 79,
-            messageId: 603,
-            name: 'Снимок экрана 2026-04-26 в 00.12.34.PNG',
-            thumbUrl: 'https://files.example.test/screenshot-thumb.png',
-            url: 'https://files.example.test/screenshot.png',
-          },
-        ],
-        content: 'Скрин ошибки',
-        id: 603,
-      },
-    )
-    const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
-      chatMessagesRepository: createChatMessagesRepositoryStub(),
-      chatwootClient: createChatwootClientStub({
-        createConversationIncomingAttachmentMessage,
-      }),
-    })
-    const data = Buffer.from([0x89, 0x50, 0x4e, 0x47])
-
-    await expect(
-      service.sendCurrentUserAttachmentMessage({
-        attachment: {
-          data,
-          fileName: ' Снимок экрана 2026-04-26 в 00.12.34.PNG ',
-          mimeType: 'application/octet-stream',
-          size: data.byteLength,
-        },
-        clientMessageKey: 'portal-send:apple-screenshot-key',
-        content: ' Скрин ошибки ',
-        primaryConversationId: 101,
-        userId: 7,
-      }),
-    ).resolves.toMatchObject({
-      result: 'ready',
-      sentMessage: {
-        attachments: [
-          {
-            fileType: 'image',
-            name: 'Снимок экрана 2026-04-26 в 00.12.34.PNG',
-          },
-        ],
-        content: 'Скрин ошибки',
-        id: 603,
-      },
-    })
-
-    expect(createConversationIncomingAttachmentMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        attachment: expect.objectContaining({
-          fileName: 'Снимок экрана 2026-04-26 в 00.12.34.PNG',
-          mimeType: 'image/png',
-          size: data.byteLength,
-        }),
-        content: 'Скрин ошибки',
-        conversationId: 101,
-        sourceId: 'portal-send:apple-screenshot-key',
-      }),
-    )
-  })
-
   it('rejects unsupported attachment types before calling Chatwoot', async () => {
     const createConversationIncomingAttachmentMessage = vi.fn()
     const service = createChatMessagesService({
@@ -896,34 +826,6 @@ describe('createChatMessagesService', () => {
           size: 9,
         },
         clientMessageKey: 'portal-send:attachment-key',
-        userId: 7,
-      }),
-    ).rejects.toMatchObject({
-      code: 'attachment_type_not_allowed',
-      statusCode: 415,
-    })
-    expect(createConversationIncomingAttachmentMessage).not.toHaveBeenCalled()
-  })
-
-  it('rejects octet-stream attachments when the file extension is still unsupported', async () => {
-    const createConversationIncomingAttachmentMessage = vi.fn()
-    const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
-      chatMessagesRepository: createChatMessagesRepositoryStub(),
-      chatwootClient: createChatwootClientStub({
-        createConversationIncomingAttachmentMessage,
-      }),
-    })
-
-    await expect(
-      service.sendCurrentUserAttachmentMessage({
-        attachment: {
-          data: Buffer.from('unknown bytes'),
-          fileName: 'upload.bin',
-          mimeType: 'application/octet-stream',
-          size: 13,
-        },
-        clientMessageKey: 'portal-send:unknown-attachment-key',
         userId: 7,
       }),
     ).rejects.toMatchObject({
