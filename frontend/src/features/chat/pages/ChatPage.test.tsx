@@ -274,6 +274,7 @@ describe('ChatPage', () => {
       textarea.setSelectionRange(7, 7)
     })
 
+    await user.click(screen.getByRole('button', { name: 'Добавить эмоджи' }))
     await user.click(screen.getByRole('button', { name: 'Добавить ✅ Готово' }))
 
     expect(textarea).toHaveValue('Привет ✅ Готовоконец')

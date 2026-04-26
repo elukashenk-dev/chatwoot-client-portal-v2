@@ -175,7 +175,9 @@ describe('ChatPage runtime hardening', () => {
         'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Отправить' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toBeDisabled()
@@ -294,7 +296,9 @@ describe('ChatPage runtime hardening', () => {
         'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Отправить' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText('Не удалось отправить сообщение. Попробуйте еще раз.'),
     ).not.toBeInTheDocument()
@@ -369,7 +373,9 @@ describe('ChatPage runtime hardening', () => {
     expect(
       screen.getByRole('textbox', { name: 'Сообщение' }),
     ).not.toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: 'Отправить' }),
+    ).not.toBeInTheDocument()
   })
 
   it('clears request-detected offline state when realtime receives a fresh snapshot', async () => {

@@ -350,6 +350,26 @@ export function SendIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function SmileIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 10h.01" />
+      <path d="M16 10h.01" />
+      <path d="M8.5 14a4.5 4.5 0 0 0 7 0" />
+    </svg>
+  )
+}
+
 export function XIcon({ className = iconClassName }: IconProps) {
   return (
     <svg
