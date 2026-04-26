@@ -18,7 +18,21 @@
 - Реализован `Phase 9. PWA App Hardening`: controlled service worker update flow, app update banner, build revision stamp, API/SSE no-cache boundary, installed-PWA viewport/safe-area polish, offline UI и reconnect/resync behavior.
 - Подготовлен production deployment baseline: backend/frontend Dockerfiles, production compose/Caddy, terminal installer, Chatwoot webhook secret sync, GitHub Actions deploy scaffolding, production runbook/session log и archive-based VM update helper.
 - Старый `../chatwoot-client-portal` снят с reference-scope: правила и устойчивые документы теперь запрещают читать, запускать или использовать старый портал как source of truth для `v2`.
+- Реализован первый `chat UI polish` slice: темная chat header styling, смягченная форма grouped message bubbles, реальная Chatwoot-аватарка агента и компактная in-bubble time/status metadata без текстовых delivery-статусов.
+- Доработана in-bubble metadata: время/статус перенесены в inline float, убран постоянный правый gutter у длинных сообщений и reply-bubbles.
+- Доработан composer typing mode: attachment и voice controls аккуратно схлопываются при появлении текстового draft и возвращаются после очистки поля.
+- Доработана отправка attachment captions: текстовый draft при выбранном файле отправляется как content того же Chatwoot message, участвует в send-ledger idempotency и очищается после успешной отправки.
+- Закрыт targeted review по attachment captions: добавлен multipart field-size guard и защита от silently truncated caption fields.
+- Доработана compact chat header: возвращена светлая цветовая схема из `provgroup_chat_screen_01.html`, menu/logout actions оставлены как голые иконки, статус показан как компактный `Онлайн`, удалена панель календаря/последних 20 сообщений, outgoing bubble/send actions вынесены в цвет `chat-outgoing` `#465a72`, incoming bubble вынесен в `chat-incoming` `#f7f7f7` с border `#c0c0c029`, line-height bubbles уплотнен, тени с message bubbles убраны.
+- Добавлен экспериментальный faceted gradient surface для outgoing и incoming bubbles.
+- Добавлен экспериментальный PNG-фон шапки чата как Vite-managed asset, фон ленты возвращен к прежнему чистому surface.
+- Скорректирована схема radius outgoing bubbles: `0.4rem` применяется только к нижнему правому углу одиночного или последнего сообщения в группе.
+- Исправлен iOS app shell alignment: fixed viewport теперь учитывает `visualViewport.width` и `visualViewport.offsetLeft`, чтобы layout не уезжал вправо.
+- Доработан iOS keyboard detection для composer: открытая клавиатура определяется по просадке `visualViewport.height` от baseline, даже если Safari/PWA меняет `innerHeight`.
+- Зафиксирован deferred finding `F-IOS-001`: iOS keyboard textarea drag вызывает visual viewport pan; неудачный freeze `offsetTop` откатан и задокументирован.
+- Исправлен и проверен на production attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
+- Закрыт finding `F-CHAT-VOICE-001`: iPhone/WebKit voice recordings нормализуются в MP3 перед отправкой, MP3-энкодер вынесен в lazy-loaded chunk, production deploy выполнен, ручная проверка на iPhone подтвердила корректную отправку, duration metadata и playback на portal/agent сторонах.
 
 ## Recommended Next Step
 
-- Закрыть текущую `Phase 9` ветку через merge/PR в `main`, затем открыть отдельный chat UI polish slice для формы message bubble, agent avatar в группах сообщений и связанных косметических правок.
+- Сделать checkpoint commit для `F-CHAT-VOICE-001`, затем решить, переносить фикс отдельным cherry-pick/PR поверх `main` или сначала закрывать baseline-ветку `fix/attachment-upload-size-limit`.

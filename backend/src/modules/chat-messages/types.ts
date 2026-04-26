@@ -26,6 +26,7 @@ export type PortalChatReplyPreview = {
 
 export type PortalChatMessage = {
   attachments: PortalChatAttachment[]
+  authorAvatarUrl?: string | null
   authorName: string
   clientMessageKey?: string | null
   content: string | null

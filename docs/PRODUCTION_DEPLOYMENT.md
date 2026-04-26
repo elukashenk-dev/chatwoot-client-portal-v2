@@ -299,6 +299,7 @@ Installer поддерживает два режима.
 - использовать, если на этой же VM уже работает Chatwoot и его Nginx занимает `80/443`;
 - `portal-web` слушает только `127.0.0.1:8088` по HTTP;
 - host Nginx проксирует `portal.example.com` в `127.0.0.1:8088`;
+- host Nginx должен задавать `client_max_body_size 50m;`, иначе его дефолтный 1 MiB лимит отрежет attachment uploads до portal backend;
 - installer может поставить `nginx/certbot`, создать отдельный Nginx site и запросить Let's Encrypt certificate через `certbot --nginx`;
 - Chatwoot Nginx не должен редактироваться вручную внутри его application files.
 

@@ -7,6 +7,7 @@ import {
 } from 'react'
 
 import type { VoiceRecorderStatus } from './types'
+import { createVoiceAttachmentFile } from './utils'
 
 const VOICE_RECORDING_MIME_TYPES = [
   'audio/webm;codecs=opus',
@@ -29,33 +30,6 @@ type VoiceRecorderController = {
   recordingElapsedMs: number
   startVoiceRecording: () => Promise<void>
   status: VoiceRecorderStatus
-}
-
-function createVoiceAttachmentFileName(mimeType: string) {
-  const now = new Date()
-  const timestamp = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-    '-',
-    String(now.getHours()).padStart(2, '0'),
-    String(now.getMinutes()).padStart(2, '0'),
-    String(now.getSeconds()).padStart(2, '0'),
-  ].join('')
-  const normalizedMimeType = mimeType.toLowerCase()
-  const extension = normalizedMimeType.includes('ogg')
-    ? 'ogg'
-    : normalizedMimeType.includes('mp4')
-      ? 'm4a'
-      : normalizedMimeType.includes('wav')
-        ? 'wav'
-        : 'webm'
-
-  return `voice-message-${timestamp}.${extension}`
-}
-
-function getCurrentTimestampMs() {
-  return Date.now()
 }
 
 function getSupportedVoiceMimeType() {
@@ -167,18 +141,23 @@ export function useVoiceRecorder({
       return
     }
 
-    const mimeType = recordedMimeType || chunks[0]?.type || 'audio/webm'
-    const voiceBlob = new Blob(chunks, { type: mimeType })
-    const voiceFile = new File(
-      [voiceBlob],
-      createVoiceAttachmentFileName(mimeType),
-      {
-        lastModified: getCurrentTimestampMs(),
-        type: mimeType,
-      },
-    )
-
     setStatus('sending')
+
+    let voiceFile: File
+
+    try {
+      voiceFile = await createVoiceAttachmentFile({
+        chunks,
+        recordedMimeType,
+      })
+    } catch {
+      if (isMountedRef.current) {
+        setStatus('idle')
+        setErrorMessage('Не удалось подготовить голосовое сообщение.')
+      }
+
+      return
+    }
 
     const wasSent = await onSendVoiceAttachmentRef.current(voiceFile)
 
@@ -272,7 +251,7 @@ export function useVoiceRecorder({
       }
 
       mediaRecorder.start()
-      voiceRecordingStartedAtRef.current = getCurrentTimestampMs()
+      voiceRecordingStartedAtRef.current = Date.now()
       setRecordingElapsedMs(0)
       setStatus('recording')
     } catch (error) {

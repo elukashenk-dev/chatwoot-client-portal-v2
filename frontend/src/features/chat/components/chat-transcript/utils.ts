@@ -12,20 +12,27 @@ export type MessageContextMenuState = {
 const MESSAGE_CONTEXT_MENU_HEIGHT_PX = 104
 const MESSAGE_CONTEXT_MENU_WIDTH_PX = 184
 const MESSAGE_CONTEXT_MENU_VIEWPORT_PADDING_PX = 12
+const MESSAGE_DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+})
+const MESSAGE_DAY_KEY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+const MESSAGE_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
+  hour: '2-digit',
+  hour12: false,
+  minute: '2-digit',
+})
 
 export function formatMessageDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-  }).format(new Date(value))
+  return MESSAGE_DATE_FORMATTER.format(new Date(value))
 }
 
 function formatMessageDayKey(value: string) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).formatToParts(new Date(value))
+  const parts = MESSAGE_DAY_KEY_FORMATTER.formatToParts(new Date(value))
 
   const year = parts.find((part) => part.type === 'year')?.value
   const month = parts.find((part) => part.type === 'month')?.value
@@ -35,12 +42,7 @@ function formatMessageDayKey(value: string) {
 }
 
 export function formatMessageMetadataTimestamp(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    month: 'short',
-  }).format(new Date(value))
+  return MESSAGE_TIMESTAMP_FORMATTER.format(new Date(value))
 }
 
 export function requestNextFrame(callback: () => void) {
@@ -213,12 +215,25 @@ export function getMessageBlockPosition(
   return 'middle'
 }
 
-export function shouldRenderMessageMeta(blockPosition: MessageBlockPosition) {
-  return blockPosition === 'last' || blockPosition === 'single'
-}
-
 export function shouldRenderAuthorName(blockPosition: MessageBlockPosition) {
   return blockPosition === 'first' || blockPosition === 'single'
+}
+
+export function getAuthorInitials(authorName: string) {
+  const words = authorName.trim().split(/\s+/).filter(Boolean)
+
+  if (words.length === 0) {
+    return 'PG'
+  }
+
+  if (words.length === 1) {
+    return Array.from(words[0]).slice(0, 2).join('').toUpperCase()
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => Array.from(word).at(0)?.toUpperCase() ?? '')
+    .join('')
 }
 
 export function getBubbleRadiusClass({
@@ -229,30 +244,24 @@ export function getBubbleRadiusClass({
   isOutgoing: boolean
 }) {
   if (blockPosition === 'single') {
-    return 'rounded-[0.7rem]'
-  }
-
-  if (isOutgoing) {
-    if (blockPosition === 'first') {
-      return 'rounded-[0.7rem] rounded-br-none'
-    }
-
-    if (blockPosition === 'last') {
-      return 'rounded-[0.7rem] rounded-tr-none'
-    }
-
-    return 'rounded-[0.7rem] rounded-br-none rounded-tr-none'
+    return isOutgoing
+      ? 'rounded-[0.9rem] rounded-br-[0.4rem]'
+      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
   }
 
   if (blockPosition === 'first') {
-    return 'rounded-[0.7rem] rounded-bl-none'
+    return isOutgoing
+      ? 'rounded-[0.9rem]'
+      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
   }
 
   if (blockPosition === 'last') {
-    return 'rounded-[0.7rem] rounded-tl-none'
+    return isOutgoing
+      ? 'rounded-[0.9rem] rounded-br-[0.4rem]'
+      : 'rounded-[0.9rem]'
   }
 
-  return 'rounded-[0.7rem] rounded-bl-none rounded-tl-none'
+  return 'rounded-[0.9rem]'
 }
 
 export function getMessageWrapperSpacingClass({

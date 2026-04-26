@@ -48,6 +48,7 @@ function minutesFromNow(minutes: number) {
 
 function createMultipartAttachmentPayload({
   clientMessageKey,
+  content,
   fileContent,
   fileName,
   mimeType,
@@ -55,6 +56,7 @@ function createMultipartAttachmentPayload({
   replyToMessageId,
 }: {
   clientMessageKey: string
+  content?: string
   fileContent: Buffer
   fileName: string
   mimeType: string
@@ -72,6 +74,10 @@ function createMultipartAttachmentPayload({
   }
 
   appendField('clientMessageKey', clientMessageKey)
+
+  if (content !== undefined) {
+    appendField('content', content)
+  }
 
   if (primaryConversationId !== undefined) {
     appendField('primaryConversationId', String(primaryConversationId))
@@ -338,6 +344,7 @@ describe('buildApp', () => {
     const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
     const multipart = createMultipartAttachmentPayload({
       clientMessageKey: 'portal-send:attachment-key',
+      content: 'Подпись к файлу',
       fileContent: Buffer.from('%PDF-1.7\n'),
       fileName: 'invoice.pdf',
       mimeType: 'application/pdf',
@@ -362,6 +369,104 @@ describe('buildApp', () => {
       reason: 'contact_link_missing',
       result: 'not_ready',
       sentMessage: null,
+    })
+  })
+
+  it('accepts attachment requests larger than Fastify default body limit', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'large-file@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'large-file@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+    const multipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:large-attachment-key',
+      fileContent: Buffer.alloc(1024 * 1024 + 64 * 1024, 0x25),
+      fileName: 'large-invoice.pdf',
+      mimeType: 'application/pdf',
+    })
+
+    const response = await app.inject({
+      headers: {
+        'content-type': multipart.contentType,
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/chat/messages/attachment',
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toMatchObject({
+      reason: 'contact_link_missing',
+      result: 'not_ready',
+      sentMessage: null,
+    })
+  })
+
+  it('rejects oversized attachment multipart fields before chat send', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'large-caption@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'large-caption@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+    const multipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:large-caption-key',
+      content: 'x'.repeat(17_000),
+      fileContent: Buffer.from('%PDF-1.7\n'),
+      fileName: 'invoice.pdf',
+      mimeType: 'application/pdf',
+    })
+
+    const response = await app.inject({
+      headers: {
+        'content-type': multipart.contentType,
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/chat/messages/attachment',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      error: {
+        code: 'attachment_field_too_large',
+        message: 'Поле вложения слишком длинное.',
+      },
     })
   })
 

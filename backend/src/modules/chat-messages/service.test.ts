@@ -208,6 +208,7 @@ describe('createChatMessagesService', () => {
               messageType: 1,
               private: false,
               sender: {
+                avatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
                 id: 5,
                 name: 'Анна Смирнова',
                 type: 'user',
@@ -261,6 +262,7 @@ describe('createChatMessagesService', () => {
       hasMoreOlder: true,
       messages: [
         {
+          authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
           authorName: 'Анна Смирнова',
           content: 'Agent reply',
           direction: 'incoming',
@@ -671,9 +673,12 @@ describe('createChatMessagesService', () => {
 
   it('sends an attachment through the writable conversation and confirms the ledger', async () => {
     const chatMessagesRepository = createChatMessagesRepositoryStub()
-    const createConversationIncomingAttachmentMessage = vi
-      .fn()
-      .mockResolvedValue(sentAttachmentChatwootMessage)
+    const createConversationIncomingAttachmentMessage = vi.fn().mockResolvedValue(
+      {
+        ...sentAttachmentChatwootMessage,
+        content: 'Подпись к файлу',
+      },
+    )
     const service = createChatMessagesService({
       chatContextService: createChatContextServiceStub(),
       chatMessagesRepository,
@@ -693,6 +698,7 @@ describe('createChatMessagesService', () => {
           size: data.byteLength,
         },
         clientMessageKey: 'portal-send:attachment-key',
+        content: ' Подпись к файлу ',
         primaryConversationId: 101,
         userId: 7,
       }),
@@ -707,7 +713,7 @@ describe('createChatMessagesService', () => {
           },
         ],
         authorName: 'Вы',
-        content: null,
+        content: 'Подпись к файлу',
         direction: 'outgoing',
         id: 601,
       },
@@ -722,6 +728,7 @@ describe('createChatMessagesService', () => {
         mimeType: 'application/pdf',
         size: data.byteLength,
       },
+      content: 'Подпись к файлу',
       conversationId: 101,
       sourceId: 'portal-send:attachment-key',
     })

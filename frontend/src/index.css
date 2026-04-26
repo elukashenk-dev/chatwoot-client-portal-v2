@@ -12,6 +12,9 @@
   --color-brand-700: #234776;
   --color-brand-800: #173258;
   --color-brand-900: #112540;
+  --color-chat-incoming: #f7f7f7;
+  --color-chat-incoming-border: #c0c0c029;
+  --color-chat-outgoing: #465a72;
   --shadow-shell: 0 18px 50px rgba(15, 23, 42, 0.14);
   --shadow-footer: 0 8px 20px rgba(15, 23, 42, 0.04);
 }
@@ -54,8 +57,9 @@ body.app-shell-scroll-lock {
 
 .app-shell-viewport {
   position: fixed;
-  inset-inline: 0;
+  left: var(--portal-app-viewport-offset-left, 0);
   top: var(--portal-app-viewport-offset-top, 0);
+  width: var(--portal-app-viewport-width, 100vw);
   height: var(--portal-app-viewport-height, 100dvh);
   overflow: hidden;
   overscroll-behavior: none;
@@ -241,6 +245,52 @@ button:not(:disabled),
   );
   background-size: 12px 12px;
   pointer-events: none;
+}
+
+.chat-outgoing-surface {
+  background-color: var(--color-chat-outgoing);
+  background-image:
+    linear-gradient(
+      148deg,
+      #00000000 60%,
+      transparent 75%,
+      rgb(255 255 255 / 0.02) 50%,
+      transparent 100%
+    ),
+    linear-gradient(
+      40deg,
+      transparent 54%,
+      transparent 70%,
+      rgb(17 37 64 / 0.10) 67%,
+      transparent 100%
+    );
+}
+
+.chat-incoming-surface {
+  background-color: var(--color-chat-incoming);
+  background-image:
+    linear-gradient(
+      148deg,
+      rgb(255 255 255 / 0) 58%,
+      transparent 74%,
+      rgb(255 255 255 / 0.58) 50%,
+      transparent 100%
+    ),
+    linear-gradient(
+      40deg,
+      transparent 54%,
+      transparent 70%,
+      rgb(15 23 42 / 0.035) 67%,
+      transparent 100%
+    );
+}
+
+.chat-header-background {
+  background-color: rgb(255 255 255 / 0.95);
+  background-image: url('./assets/chat/bg-lenta-top.png');
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .chat-scroll::-webkit-scrollbar {

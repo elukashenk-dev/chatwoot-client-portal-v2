@@ -6,6 +6,7 @@ export type SendMessageInput = {
 
 export type SendAttachmentInput = {
   clientMessageKey: string
+  content?: string | null
   file: File
   replyToMessageId?: number | null
 }

@@ -192,10 +192,12 @@ export function ChatPage() {
 
   async function handleSendAttachment({
     clientMessageKey,
+    content,
     file,
     replyToMessageId,
   }: {
     clientMessageKey: string
+    content?: string | null
     file: File
     replyToMessageId?: number | null
   }) {
@@ -209,6 +211,7 @@ export function ChatPage() {
     try {
       const sendResult = await sendChatAttachment({
         clientMessageKey,
+        content,
         file,
         primaryConversationId:
           pageState.snapshot.primaryConversation?.id ?? null,

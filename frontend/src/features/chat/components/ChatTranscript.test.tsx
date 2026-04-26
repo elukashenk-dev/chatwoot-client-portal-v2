@@ -52,6 +52,20 @@ function getBubble(container: HTMLElement, messageId: number) {
   return bubble
 }
 
+function getMessageMeta(container: HTMLElement, messageId: number) {
+  const message = container.querySelector(`[data-message-id="${messageId}"]`)
+  const meta = message?.querySelector('[data-message-meta]')
+
+  return meta instanceof HTMLElement ? meta : null
+}
+
+function getMessageHeader(container: HTMLElement, messageId: number) {
+  const message = container.querySelector(`[data-message-id="${messageId}"]`)
+  const header = message?.querySelector('[data-message-header]')
+
+  return header instanceof HTMLElement ? header : null
+}
+
 function getSwipeSurface(container: HTMLElement, messageId: number) {
   const message = container.querySelector(`[data-message-id="${messageId}"]`)
   const swipeSurface = message?.querySelector('[data-message-swipe-surface]')
@@ -63,8 +77,18 @@ function getSwipeSurface(container: HTMLElement, messageId: number) {
   return swipeSurface
 }
 
+function getSwipeIndicator(container: HTMLElement) {
+  const indicator = container.querySelector('[data-swipe-reply-indicator]')
+
+  if (!(indicator instanceof HTMLElement)) {
+    throw new Error('Missing swipe reply indicator.')
+  }
+
+  return indicator
+}
+
 describe('ChatTranscript', () => {
-  it('groups consecutive outgoing bubbles with metadata only on the final message', () => {
+  it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
     const { container } = renderTranscript([
       createMessage({
         content: 'Первое мое сообщение',
@@ -73,20 +97,19 @@ describe('ChatTranscript', () => {
       }),
       createMessage({
         content: 'Второе мое сообщение',
-        createdAt: '2026-04-21T10:01:00',
+        createdAt: '2026-04-21T10:00:30',
         id: 2,
       }),
       createMessage({
         content: 'Последнее мое сообщение',
-        createdAt: '2026-04-21T10:02:00',
+        createdAt: '2026-04-21T10:01:00',
         id: 3,
       }),
     ])
 
-    expect(screen.queryByText('Apr 21, 10:00 AM')).not.toBeInTheDocument()
-    expect(screen.queryByText('Apr 21, 10:01 AM')).not.toBeInTheDocument()
-    expect(screen.getByText('Apr 21, 10:02 AM')).toBeInTheDocument()
-    expect(screen.getByText('Вы')).toBeInTheDocument()
+    expect(screen.queryByText(/AM|PM|Apr/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Вы')).not.toBeInTheDocument()
+    expect(screen.queryByText('Доставлено')).not.toBeInTheDocument()
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
@@ -96,20 +119,63 @@ describe('ChatTranscript', () => {
     )
     expect(dayDividerLabel.parentElement).toHaveClass('max-w-[520px]', 'gap-3')
 
-    expect(getBubble(container, 1)).toHaveClass('rounded-br-none')
-    expect(getBubble(container, 1)).toHaveClass('bg-brand-800', 'text-white')
-    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-none')
-    expect(getBubble(container, 2)).toHaveClass(
-      'rounded-br-none',
-      'rounded-tr-none',
+    expect(container.querySelector('[data-agent-avatar]')).toBeNull()
+    expect(getBubble(container, 1)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.4rem]')
+    expect(getBubble(container, 1)).toHaveClass(
+      'chat-outgoing-surface',
+      'leading-[1.45]',
+      'text-white',
     )
-    expect(getBubble(container, 3)).toHaveClass('rounded-tr-none')
-    expect(getBubble(container, 3)).not.toHaveClass('rounded-br-none')
+    expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-br-[0.4rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 3)).not.toHaveClass('rounded-tr-[0.4rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-br-[0.4rem]')
+    const firstMeta = getMessageMeta(container, 1)
+    const secondMeta = getMessageMeta(container, 2)
+    const thirdMeta = getMessageMeta(container, 3)
+    const firstStatusIcon = firstMeta?.querySelector(
+      '[data-message-status-icon]',
+    )
+
+    expect(getMessageHeader(container, 1)).toBeNull()
+    expect(getMessageHeader(container, 2)).toBeNull()
+    expect(getMessageHeader(container, 3)).toBeNull()
+    expect(firstMeta).toHaveTextContent('10:00')
+    expect(secondMeta).toHaveTextContent('10:00')
+    expect(thirdMeta).toHaveTextContent('10:01')
+    expect(firstMeta).toHaveClass('float-right')
+    expect(firstMeta).not.toHaveClass('absolute')
+    expect(firstStatusIcon).toHaveAttribute('data-message-status-icon', 'sent')
+    expect(firstMeta?.querySelector('[aria-label="Доставлено"]')).not.toBeNull()
+    expect(getBubble(container, 1)).toContainElement(firstMeta)
+    expect(getBubble(container, 1)).toHaveClass('flow-root')
+    expect(getBubble(container, 1)).not.toHaveClass('pr-[4.75rem]')
   })
 
-  it('mirrors consecutive incoming bubble corners to the left side', () => {
+  it('renders a single outgoing bubble with the compact lower-right corner', () => {
     const { container } = renderTranscript([
       createMessage({
+        content: 'Одиночное сообщение',
+        id: 1,
+      }),
+    ])
+
+    expect(getBubble(container, 1)).toHaveClass(
+      'rounded-[0.9rem]',
+      'rounded-br-[0.4rem]',
+    )
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
+  })
+
+  it('renders an agent avatar on the first incoming bubble in a group', () => {
+    const { container } = renderTranscript([
+      createMessage({
+        authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
         content: 'Первый ответ агента',
         createdAt: '2026-04-21T10:00:00',
@@ -117,6 +183,7 @@ describe('ChatTranscript', () => {
         id: 1,
       }),
       createMessage({
+        authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
         content: 'Последний ответ агента',
         createdAt: '2026-04-21T10:01:00',
@@ -125,13 +192,38 @@ describe('ChatTranscript', () => {
       }),
     ])
 
-    expect(screen.queryByText('Apr 21, 10:00 AM')).not.toBeInTheDocument()
-    expect(screen.getByText('Apr 21, 10:01 AM')).toBeInTheDocument()
-    expect(getBubble(container, 1)).toHaveClass('rounded-bl-none')
-    expect(getBubble(container, 1)).toHaveClass('bg-white', 'text-slate-700')
-    expect(getBubble(container, 1)).not.toHaveClass('rounded-tl-none')
-    expect(getBubble(container, 2)).toHaveClass('rounded-tl-none')
-    expect(getBubble(container, 2)).not.toHaveClass('rounded-bl-none')
+    expect(getMessageHeader(container, 1)).toHaveTextContent('Ольга Support')
+    expect(getMessageHeader(container, 1)).not.toHaveTextContent('10:00')
+    expect(getMessageHeader(container, 2)).toBeNull()
+    expect(getMessageMeta(container, 1)).toHaveTextContent('10:00')
+    expect(getMessageMeta(container, 2)).toHaveTextContent('10:01')
+    expect(
+      getMessageMeta(container, 1)?.querySelector('[data-message-status-icon]'),
+    ).toBeNull()
+    expect(getBubble(container, 1)).toContainElement(
+      getMessageMeta(container, 1),
+    )
+    const avatars = container.querySelectorAll('[data-agent-avatar]')
+    expect(avatars).toHaveLength(1)
+    expect(avatars[0]).toHaveAttribute('aria-label', 'Агент Ольга Support')
+    expect(avatars[0]).not.toHaveTextContent('ОS')
+    expect(avatars[0]?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://chatwoot.example.test/agent-avatar.png',
+    )
+    expect(getBubble(container, 1)).toHaveClass(
+      'rounded-[0.9rem]',
+      'rounded-tl-[0.4rem]',
+    )
+    expect(getBubble(container, 1)).toHaveClass(
+      'border-chat-incoming-border',
+      'chat-incoming-surface',
+      'leading-[1.45]',
+      'text-slate-700',
+    )
+    expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.4rem]')
   })
 
   it('renders reply previews inside bubbles without persistent reply buttons', () => {
@@ -276,6 +368,12 @@ describe('ChatTranscript', () => {
       pointerId: 1,
       pointerType: 'touch',
     })
+
+    expect(getSwipeIndicator(container)).toHaveClass(
+      'border-chat-outgoing',
+      'bg-chat-outgoing',
+    )
+
     fireEvent.pointerUp(swipeSurface, {
       clientX: 150,
       clientY: 124,

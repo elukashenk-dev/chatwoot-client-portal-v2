@@ -318,6 +318,8 @@ describe('createChatwootClient', () => {
             message_type: 1,
             private: false,
             sender: {
+              avatar_url:
+                '/rails/active_storage/representations/agent-avatar.png',
               id: 5,
               name: 'Анна Смирнова',
               type: 'user',
@@ -359,6 +361,10 @@ describe('createChatwootClient', () => {
           content: 'Agent reply',
           id: 21,
           messageType: 1,
+          sender: {
+            avatarUrl:
+              'http://127.0.0.1:3000/rails/active_storage/representations/agent-avatar.png',
+          },
         },
         {
           content: 'Portal message',
@@ -540,7 +546,7 @@ describe('createChatwootClient', () => {
             thumb_url: '',
           },
         ],
-        content: null,
+        content: 'Подпишите, пожалуйста',
         content_attributes: {},
         content_type: 'text',
         created_at: 1_776_000_020,
@@ -573,6 +579,7 @@ describe('createChatwootClient', () => {
           fileName: ' invoice.pdf ',
           mimeType: 'Application/PDF',
         },
+        content: ' Подпишите, пожалуйста ',
         conversationId: 101,
         replyToMessageId: 401,
         sourceId: 'portal-send:attachment-key',
@@ -584,7 +591,7 @@ describe('createChatwootClient', () => {
           url: 'https://files.example.test/invoice.pdf',
         },
       ],
-      content: null,
+      content: 'Подпишите, пожалуйста',
       id: 601,
       messageType: 0,
       sourceId: 'portal-send:attachment-key',
@@ -602,6 +609,7 @@ describe('createChatwootClient', () => {
     })
     expect(requestOptions?.headers).not.toHaveProperty('Content-Type')
     expect(formData).toBeInstanceOf(FormData)
+    expect(formData.get('content')).toBe('Подпишите, пожалуйста')
     expect(formData.get('message_type')).toBe('incoming')
     expect(formData.get('content_attributes')).toBe('{"in_reply_to":401}')
     expect(formData.get('private')).toBe('false')

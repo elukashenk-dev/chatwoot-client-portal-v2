@@ -1,6 +1,8 @@
 import { useLayoutEffect } from 'react'
 
 const APP_VIEWPORT_HEIGHT_VAR = '--portal-app-viewport-height'
+const APP_VIEWPORT_WIDTH_VAR = '--portal-app-viewport-width'
+const APP_VIEWPORT_OFFSET_LEFT_VAR = '--portal-app-viewport-offset-left'
 const APP_VIEWPORT_OFFSET_TOP_VAR = '--portal-app-viewport-offset-top'
 const APP_SHELL_SCROLL_LOCK_CLASS = 'app-shell-scroll-lock'
 
@@ -12,11 +14,18 @@ export function useAppViewportLock() {
 
     function syncViewportMetrics() {
       const viewportHeight = visualViewport?.height ?? window.innerHeight
+      const viewportWidth = visualViewport?.width ?? window.innerWidth
+      const viewportOffsetLeft = visualViewport?.offsetLeft ?? 0
       const viewportOffsetTop = visualViewport?.offsetTop ?? 0
 
       rootElement.style.setProperty(
         APP_VIEWPORT_HEIGHT_VAR,
         `${viewportHeight}px`,
+      )
+      rootElement.style.setProperty(APP_VIEWPORT_WIDTH_VAR, `${viewportWidth}px`)
+      rootElement.style.setProperty(
+        APP_VIEWPORT_OFFSET_LEFT_VAR,
+        `${viewportOffsetLeft}px`,
       )
       rootElement.style.setProperty(
         APP_VIEWPORT_OFFSET_TOP_VAR,
@@ -39,6 +48,8 @@ export function useAppViewportLock() {
       rootElement.classList.remove(APP_SHELL_SCROLL_LOCK_CLASS)
       bodyElement.classList.remove(APP_SHELL_SCROLL_LOCK_CLASS)
       rootElement.style.removeProperty(APP_VIEWPORT_HEIGHT_VAR)
+      rootElement.style.removeProperty(APP_VIEWPORT_WIDTH_VAR)
+      rootElement.style.removeProperty(APP_VIEWPORT_OFFSET_LEFT_VAR)
       rootElement.style.removeProperty(APP_VIEWPORT_OFFSET_TOP_VAR)
     }
   }, [])
