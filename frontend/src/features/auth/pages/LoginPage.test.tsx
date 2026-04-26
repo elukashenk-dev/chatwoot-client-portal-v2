@@ -77,6 +77,11 @@ describe('LoginPage', () => {
       'href',
       '/auth/register',
     )
+    expect(screen.queryByRole('link', { name: 'Сайт' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Поддержка')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Позвонить' }),
+    ).not.toBeInTheDocument()
   })
 
   it('toggles password visibility, validates fields, and authenticates against backend auth routes', async () => {

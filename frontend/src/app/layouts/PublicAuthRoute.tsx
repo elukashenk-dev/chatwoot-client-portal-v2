@@ -6,12 +6,11 @@ import { AuthShell } from '../../shared/ui/AuthShell'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../shared/ui/PortalFrame'
-import { ServiceFooter } from '../../shared/ui/ServiceFooter'
 import { AuthLayout } from './AuthLayout'
 
 function AuthSessionCheck() {
   return (
-    <PortalFrame footer={<ServiceFooter />}>
+    <PortalFrame>
       <AuthShell
         description="Проверяем, нужно ли открыть форму входа или защищенную клиентскую зону."
         title="Клиентский портал"

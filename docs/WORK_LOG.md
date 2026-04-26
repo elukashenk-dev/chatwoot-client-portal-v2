@@ -34,7 +34,8 @@
 - Закрыт finding `F-CHAT-VOICE-001`: iPhone/WebKit voice recordings нормализуются в MP3 перед отправкой, MP3-энкодер вынесен в lazy-loaded chunk, production deploy выполнен, ручная проверка на iPhone подтвердила корректную отправку, duration metadata и playback на portal/agent сторонах.
 - Добавлен route-level code splitting для frontend pages: auth/chat страницы вынесены в lazy chunks, основной production JS уменьшен примерно с `352 KB / 102 KB gzip` до `205 KB / 64 KB gzip`; targeted route tests, frontend build, lint, полный test-suite, production deploy и ручная проверка пройдены.
 - Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint, полный test-suite, production deploy и ручная мобильная проверка пройдены.
+- Удален service footer menu (`Сайт`, `Поддержка`, `Позвонить`) со всех non-chat auth/app-shell экранов; targeted auth tests, frontend typecheck/build, lint и полный test-suite пройдены.
 
 ## Recommended Next Step
 
-- Продолжить следующую дизайн-полировку чата отдельным scope/веткой.
+- При необходимости задеплоить удаление service footer menu на production для ручной проверки auth-экранов.
