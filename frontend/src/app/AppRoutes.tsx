@@ -1,17 +1,59 @@
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppShellLayout } from './layouts/AppShellLayout'
-import { LoginPage } from '../features/auth/pages/LoginPage'
-import { PasswordResetRequestPage } from '../features/auth/pages/PasswordResetRequestPage'
-import { PasswordResetSetPasswordPage } from '../features/auth/pages/PasswordResetSetPasswordPage'
-import { PasswordResetVerifyPage } from '../features/auth/pages/PasswordResetVerifyPage'
-import { RegisterRequestPage } from '../features/auth/pages/RegisterRequestPage'
-import { RegisterSetPasswordPage } from '../features/auth/pages/RegisterSetPasswordPage'
-import { RegisterVerifyPage } from '../features/auth/pages/RegisterVerifyPage'
-import { ChatPage } from '../features/chat/pages/ChatPage'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
+
+function lazyRouteComponent<TProps extends object>(
+  loadComponent: () => Promise<ComponentType<TProps>>,
+) {
+  return lazy(async () => ({
+    default: await loadComponent(),
+  }))
+}
+
+const LoginPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/LoginPage').then((module) => module.LoginPage),
+)
+const RegisterRequestPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/RegisterRequestPage').then(
+    (module) => module.RegisterRequestPage,
+  ),
+)
+const RegisterVerifyPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/RegisterVerifyPage').then(
+    (module) => module.RegisterVerifyPage,
+  ),
+)
+const RegisterSetPasswordPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/RegisterSetPasswordPage').then(
+    (module) => module.RegisterSetPasswordPage,
+  ),
+)
+const PasswordResetRequestPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordResetRequestPage').then(
+    (module) => module.PasswordResetRequestPage,
+  ),
+)
+const PasswordResetVerifyPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordResetVerifyPage').then(
+    (module) => module.PasswordResetVerifyPage,
+  ),
+)
+const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordResetSetPasswordPage').then(
+    (module) => module.PasswordResetSetPasswordPage,
+  ),
+)
+const ChatPage = lazyRouteComponent(() =>
+  import('../features/chat/pages/ChatPage').then((module) => module.ChatPage),
+)
+
+function LazyRoute({ children }: { children: ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>
+}
 
 export function AppRoutes() {
   return (
@@ -22,24 +64,61 @@ export function AppRoutes() {
       />
 
       <Route path="/auth" element={<PublicAuthRoute />}>
-        <Route path="login" element={<LoginPage />} />
-        <Route path="register" element={<RegisterRequestPage />} />
-        <Route path="register/verify" element={<RegisterVerifyPage />} />
+        <Route
+          path="login"
+          element={
+            <LazyRoute>
+              <LoginPage />
+            </LazyRoute>
+          }
+        />
+        <Route
+          path="register"
+          element={
+            <LazyRoute>
+              <RegisterRequestPage />
+            </LazyRoute>
+          }
+        />
+        <Route
+          path="register/verify"
+          element={
+            <LazyRoute>
+              <RegisterVerifyPage />
+            </LazyRoute>
+          }
+        />
         <Route
           path="register/set-password"
-          element={<RegisterSetPasswordPage />}
+          element={
+            <LazyRoute>
+              <RegisterSetPasswordPage />
+            </LazyRoute>
+          }
         />
         <Route
           path="password-reset/request"
-          element={<PasswordResetRequestPage />}
+          element={
+            <LazyRoute>
+              <PasswordResetRequestPage />
+            </LazyRoute>
+          }
         />
         <Route
           path="password-reset/verify"
-          element={<PasswordResetVerifyPage />}
+          element={
+            <LazyRoute>
+              <PasswordResetVerifyPage />
+            </LazyRoute>
+          }
         />
         <Route
           path="password-reset/set-password"
-          element={<PasswordResetSetPasswordPage />}
+          element={
+            <LazyRoute>
+              <PasswordResetSetPasswordPage />
+            </LazyRoute>
+          }
         />
       </Route>
 
@@ -49,7 +128,14 @@ export function AppRoutes() {
             index
             element={<Navigate replace to={routePaths.app.chat} />}
           />
-          <Route path="chat" element={<ChatPage />} />
+          <Route
+            path="chat"
+            element={
+              <LazyRoute>
+                <ChatPage />
+              </LazyRoute>
+            }
+          />
         </Route>
       </Route>
 
