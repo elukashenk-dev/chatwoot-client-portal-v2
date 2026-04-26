@@ -33,8 +33,8 @@
 - Исправлен и проверен на production attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
 - Закрыт finding `F-CHAT-VOICE-001`: iPhone/WebKit voice recordings нормализуются в MP3 перед отправкой, MP3-энкодер вынесен в lazy-loaded chunk, production deploy выполнен, ручная проверка на iPhone подтвердила корректную отправку, duration metadata и playback на portal/agent сторонах.
 - Добавлен route-level code splitting для frontend pages: auth/chat страницы вынесены в lazy chunks, основной production JS уменьшен примерно с `352 KB / 102 KB gzip` до `205 KB / 64 KB gzip`; targeted route tests, frontend build, lint, полный test-suite, production deploy и ручная проверка пройдены.
-- Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
+- Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint, полный test-suite, production deploy и ручная мобильная проверка пройдены.
 
 ## Recommended Next Step
 
-- Задеплоить composer cleanup на production для мобильной проверки и затем закрыть ветку `fix/chat-composer-emoji-controls`.
+- Продолжить следующую дизайн-полировку чата отдельным scope/веткой.
