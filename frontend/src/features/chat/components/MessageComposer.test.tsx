@@ -34,13 +34,17 @@ function getSideControl(
 }
 
 describe('MessageComposer', () => {
-  it('collapses attachment and voice controls while a text draft is active', async () => {
+  it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
     const attachmentControl = getSideControl(container, 'attachment')
     const voiceControl = getSideControl(container, 'voice')
 
+    expect(
+      screen.queryByRole('button', { name: /эмоджи/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Готово')).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Прикрепить файл' }),
     ).not.toBeDisabled()

@@ -10,7 +10,6 @@ import {
 import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
 import { ComposerSideControl } from './message-composer/ComposerSideControl'
-import { QuickEmojiBar } from './message-composer/QuickEmojiBar'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
 import type {
   MessageComposerReplyTarget,
@@ -58,7 +57,6 @@ export function MessageComposer({
   const pendingAttachmentContentRef = useRef<string | null>(null)
   const pendingAttachmentReplyToMessageIdRef = useRef<number | null>(null)
   const pendingAttachmentSignatureRef = useRef<string | null>(null)
-  const pendingCaretPositionRef = useRef<number | null>(null)
   const pendingClientMessageKeyRef = useRef<string | null>(null)
   const pendingContentRef = useRef<string | null>(null)
   const pendingReplyToMessageIdRef = useRef<number | null>(null)
@@ -115,18 +113,8 @@ export function MessageComposer({
       return
     }
 
-    const textarea = textareaRef.current
-
-    resizeComposerTextarea(textarea)
-
-    if (pendingCaretPositionRef.current !== null && !disabled && !isSending) {
-      const nextCaretPosition = pendingCaretPositionRef.current
-
-      pendingCaretPositionRef.current = null
-      textarea.focus()
-      textarea.setSelectionRange(nextCaretPosition, nextCaretPosition)
-    }
-  }, [disabled, draft, isSending])
+    resizeComposerTextarea(textareaRef.current)
+  }, [draft])
 
   useLayoutEffect(() => {
     if (!replyTarget || disabled || isSending) {
@@ -308,24 +296,6 @@ export function MessageComposer({
     setSelectedAttachment(file)
   }
 
-  function insertQuickText(text: string) {
-    if (disabled || isSending || isVoiceRecorderBusy) {
-      return
-    }
-
-    clearVoiceErrorMessage()
-    const textarea = textareaRef.current
-    const selectionStart = textarea?.selectionStart ?? draft.length
-    const selectionEnd = textarea?.selectionEnd ?? draft.length
-    const nextDraft = `${draft.slice(0, selectionStart)}${text}${draft.slice(
-      selectionEnd,
-    )}`
-
-    pendingCaretPositionRef.current = selectionStart + text.length
-    resetPendingTextSendIfPayloadChanged(nextDraft, replyToMessageId)
-    setDraft(nextDraft)
-  }
-
   return (
     <footer
       className={cn(
@@ -339,11 +309,6 @@ export function MessageComposer({
             <InlineAlert message={offlineAlertMessage} tone="error" />
           </div>
         ) : null}
-
-        <QuickEmojiBar
-          disabled={disabled || isSending || isVoiceRecorderBusy}
-          onInsert={insertQuickText}
-        />
 
         <div className="rounded-[1rem] border border-slate-200 bg-slate-50/90 p-2">
           {replyTarget ? (
