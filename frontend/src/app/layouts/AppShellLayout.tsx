@@ -11,7 +11,6 @@ export function AppShellLayout() {
         <div className="portal-shell relative flex h-full min-h-0 w-full max-w-[500px] flex-col overflow-hidden bg-white">
           <div className="portal-corner portal-corner--tl" />
           <div className="portal-corner portal-corner--tr" />
-          <div className="portal-dot-grid hidden sm:block" />
 
           <Outlet />
         </div>

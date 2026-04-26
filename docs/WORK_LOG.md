@@ -36,7 +36,8 @@
 - Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint, полный test-suite, production deploy и ручная мобильная проверка пройдены.
 - Удален service footer menu (`Сайт`, `Поддержка`, `Позвонить`) со всех non-chat auth/app-shell экранов; targeted auth tests, frontend typecheck/build, lint и полный test-suite пройдены.
 - Убрана планшетная card-оболочка portal shell: public/auth и protected app layouts теперь без `sm` padding, rounded corners, shadow и `750px` shell, общий максимум ширины ограничен `500px`; targeted layout/auth/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
+- Удален декоративный `portal-dot-grid` из auth и app shell; выполнен markup review auth/chat разметки, заведены findings `F-CHAT-UI-002` и `F-CHAT-UI-003`; frontend typecheck, targeted auth/chat tests, frontend build, lint и полный test-suite пройдены.
 
 ## Recommended Next Step
 
-- Проверить shell width/corners на production mobile/tablet и затем решить, закрываем ли ветку `fix/remove-tablet-shell-card`.
+- Задеплоить ветку `fix/auth-shell-dot-grid-markup-review` на production для ручной проверки auth/chat shell без tablet-card и dot-grid; затем выбрать следующий маленький chat/auth UI polish finding.

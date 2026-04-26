@@ -11,7 +11,6 @@ export function PortalFrame({ children }: PortalFrameProps) {
         <div className="portal-shell app-viewport-shell relative flex w-full max-w-[500px] flex-col overflow-hidden bg-white">
           <div className="portal-corner portal-corner--tl" />
           <div className="portal-corner portal-corner--tr" />
-          <div className="portal-dot-grid hidden sm:block" />
 
           <div className="app-safe-bottom app-safe-top relative z-10 flex flex-1 items-center justify-center px-6 sm:px-10 sm:pt-8">
             {children}

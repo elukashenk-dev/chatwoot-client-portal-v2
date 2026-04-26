@@ -229,22 +229,6 @@ button:not(:disabled),
   );
 }
 
-.portal-dot-grid {
-  position: absolute;
-  right: 64px;
-  top: 160px;
-  width: 88px;
-  height: 88px;
-  opacity: 0.3;
-  background-image: radial-gradient(
-    circle,
-    rgba(35, 71, 118, 0.12) 1px,
-    transparent 1px
-  );
-  background-size: 12px 12px;
-  pointer-events: none;
-}
-
 .chat-outgoing-surface {
   background-color: var(--color-chat-outgoing);
   background-image:
@@ -259,7 +243,7 @@ button:not(:disabled),
       40deg,
       transparent 54%,
       transparent 70%,
-      rgb(17 37 64 / 0.10) 67%,
+      rgb(17 37 64 / 0.1) 67%,
       transparent 100%
     );
 }
