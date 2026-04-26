@@ -31,7 +31,8 @@
 - Доработан iOS keyboard detection для composer: открытая клавиатура определяется по просадке `visualViewport.height` от baseline, даже если Safari/PWA меняет `innerHeight`.
 - Зафиксирован deferred finding `F-IOS-001`: iOS keyboard textarea drag вызывает visual viewport pan; неудачный freeze `offsetTop` откатан и задокументирован.
 - Исправлен и проверен на production attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
+- Закрыт finding `F-CHAT-VOICE-001`: iPhone/WebKit voice recordings нормализуются в MP3 перед отправкой, MP3-энкодер вынесен в lazy-loaded chunk, production deploy выполнен, ручная проверка на iPhone подтвердила корректную отправку, duration metadata и playback на portal/agent сторонах.
 
 ## Recommended Next Step
 
-- Вернуться к дизайн-полировке чата или отдельно открыть экспериментальный iOS touch guard для `F-IOS-001`.
+- Сделать checkpoint commit для `F-CHAT-VOICE-001`, затем решить, переносить фикс отдельным cherry-pick/PR поверх `main` или сначала закрывать baseline-ветку `fix/attachment-upload-size-limit`.
