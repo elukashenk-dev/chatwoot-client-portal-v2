@@ -71,9 +71,6 @@ describe('LoginPage', () => {
       screen.getByRole('heading', { name: 'Клиентский портал' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(/Используйте рабочий email/),
-    ).not.toBeInTheDocument()
-    expect(
       screen.getByRole('link', { name: 'Забыли пароль?' }),
     ).toHaveAttribute('href', '/auth/password-reset/request')
     expect(screen.getByRole('link', { name: 'Новый аккаунт' })).toHaveAttribute(

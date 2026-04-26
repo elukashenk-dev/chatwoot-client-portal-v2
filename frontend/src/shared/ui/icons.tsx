@@ -184,43 +184,6 @@ export function ClockIcon({ className = iconClassName }: IconProps) {
   )
 }
 
-export function EnvelopeIcon({ className = iconClassName }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 24 24"
-    >
-      <rect height="14" rx="2.5" width="18" x="3" y="5" />
-      <path d="m4 7 8 6 8-6" />
-    </svg>
-  )
-}
-
-export function LockIcon({ className = iconClassName }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 24 24"
-    >
-      <rect height="11" rx="2" width="16" x="4" y="10" />
-      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-      <path d="M12 15v2" />
-    </svg>
-  )
-}
-
 export function CopyIcon({ className = iconClassName }: IconProps) {
   return (
     <svg
@@ -255,25 +218,6 @@ export function FileTextIcon({ className = iconClassName }: IconProps) {
       <path d="M14 2v6h6" />
       <path d="M8 13h8" />
       <path d="M8 17h5" />
-    </svg>
-  )
-}
-
-export function ShieldLockIcon({ className = iconClassName }: IconProps) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-      <rect height="5" rx="1" width="6" x="9" y="11" />
-      <path d="M10 11V9a2 2 0 0 1 4 0v2" />
     </svg>
   )
 }

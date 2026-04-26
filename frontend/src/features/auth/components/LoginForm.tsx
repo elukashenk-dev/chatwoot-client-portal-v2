@@ -7,11 +7,6 @@ import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PasswordField } from '../../../shared/ui/PasswordField'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
-import {
-  EnvelopeIcon,
-  LockIcon,
-  ShieldLockIcon,
-} from '../../../shared/ui/icons'
 import { getAuthRequestErrorMessage } from '../lib/authErrors'
 import { useAuthSession } from '../lib/authSessionContext'
 import { validateLoginForm } from '../lib/loginValidation'
@@ -44,10 +39,14 @@ export function LoginForm() {
   const visiblePasswordError =
     touched.password || hasSubmitted ? fieldErrors.password : undefined
 
+  const emailHintId = 'login-email-hint'
   const emailErrorId = 'login-email-error'
   const passwordErrorId = 'login-password-error'
 
-  const emailDescribedBy = [visibleEmailError ? emailErrorId : undefined]
+  const emailDescribedBy = [
+    emailHintId,
+    visibleEmailError ? emailErrorId : undefined,
+  ]
     .filter(Boolean)
     .join(' ')
   const passwordDescribedBy = [
@@ -121,6 +120,8 @@ export function LoginForm() {
       <FormField
         error={visibleEmailError}
         errorId={emailErrorId}
+        hint="Используйте рабочий email, который уже известен вашей компании."
+        hintId={emailHintId}
         htmlFor="login-email"
         label="Email"
         required
@@ -132,7 +133,6 @@ export function LoginForm() {
           hasError={Boolean(visibleEmailError)}
           id="login-email"
           inputMode="email"
-          leadingIcon={<EnvelopeIcon className="h-5 w-5" />}
           name="email"
           onBlur={() => markFieldTouched('email')}
           onChange={(event) => setFieldValue('email', event.target.value)}
@@ -156,7 +156,6 @@ export function LoginForm() {
           autoComplete="current-password"
           hasError={Boolean(visiblePasswordError)}
           id="login-password"
-          leadingIcon={<LockIcon className="h-5 w-5" />}
           name="password"
           onBlur={() => markFieldTouched('password')}
           onChange={(event) => setFieldValue('password', event.target.value)}
@@ -174,8 +173,7 @@ export function LoginForm() {
         loadingLabel="Вход..."
         type="submit"
       >
-        <ShieldLockIcon className="h-5 w-5" />
-        <span>Войти</span>
+        Войти
       </PrimaryButton>
     </form>
   )

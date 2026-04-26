@@ -1,17 +1,13 @@
-import type { InputHTMLAttributes, ReactNode } from 'react'
+import type { InputHTMLAttributes } from 'react'
 import { useState } from 'react'
 
 import { cn } from '../lib/cn'
 import { inputClassName } from './inputStyles'
 import { EyeClosedIcon, EyeOpenIcon } from './icons'
 
-type PasswordFieldProps = Omit<
-  InputHTMLAttributes<HTMLInputElement>,
-  'type'
-> & {
+type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
   hasError?: boolean
   hideLabel?: string
-  leadingIcon?: ReactNode
   showLabel?: string
 }
 
@@ -20,7 +16,6 @@ export function PasswordField({
   hasError,
   hideLabel = 'Скрыть пароль',
   id,
-  leadingIcon,
   showLabel = 'Показать пароль',
   ...props
 }: PasswordFieldProps) {
@@ -30,21 +25,10 @@ export function PasswordField({
     <div className="relative">
       <input
         {...props}
-        className={cn(
-          inputClassName(Boolean(hasError)),
-          leadingIcon ? 'pl-14' : '',
-          'pr-16',
-          className,
-        )}
+        className={cn(inputClassName(Boolean(hasError)), 'pr-16', className)}
         id={id}
         type={isVisible ? 'text' : 'password'}
       />
-
-      {leadingIcon ? (
-        <span className="pointer-events-none absolute inset-y-0 left-5 flex items-center text-slate-500">
-          {leadingIcon}
-        </span>
-      ) : null}
 
       <button
         aria-controls={id}

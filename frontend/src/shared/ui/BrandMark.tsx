@@ -1,32 +1,15 @@
 type BrandMarkProps = {
-  align?: 'center' | 'start'
   monogram?: string
   name?: string
-  showDivider?: boolean
-  size?: 'default' | 'hero'
 }
 
 export function BrandMark({
-  align = 'center',
   monogram = 'PG',
   name = 'ProvGroup',
-  showDivider = true,
-  size = 'default',
 }: BrandMarkProps) {
-  const isHero = size === 'hero'
-  const isCentered = align === 'center'
-
   return (
-    <div className={isCentered ? 'text-center' : 'text-left'}>
-      <div
-        className={[
-          'mb-3 flex items-center justify-center bg-brand-900 font-semibold tracking-wide text-white shadow-sm',
-          isCentered ? 'mx-auto' : '',
-          isHero
-            ? 'h-[4.5rem] w-[4.5rem] rounded-[1.35rem] text-2xl'
-            : 'h-14 w-14 rounded-[18px] text-lg',
-        ].join(' ')}
-      >
+    <>
+      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[18px] bg-brand-900 text-lg font-semibold tracking-wide text-white shadow-sm">
         {monogram}
       </div>
 
@@ -34,9 +17,7 @@ export function BrandMark({
         {name}
       </p>
 
-      {showDivider ? (
-        <div className="mx-auto mt-2.5 h-px w-14 bg-gradient-to-r from-transparent via-brand-200 to-transparent" />
-      ) : null}
-    </div>
+      <div className="mx-auto mt-2.5 h-px w-14 bg-gradient-to-r from-transparent via-brand-200 to-transparent" />
+    </>
   )
 }

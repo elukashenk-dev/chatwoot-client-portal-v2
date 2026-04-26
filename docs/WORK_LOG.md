@@ -36,8 +36,7 @@
 - Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint, полный test-suite, production deploy и ручная мобильная проверка пройдены.
 - Удален service footer menu (`Сайт`, `Поддержка`, `Позвонить`) со всех non-chat auth/app-shell экранов; targeted auth tests, frontend typecheck/build, lint и полный test-suite пройдены.
 - Убрана планшетная card-оболочка portal shell: public/auth и protected app layouts теперь без `sm` padding, rounded corners, shadow и `750px` shell, общий максимум ширины ограничен `500px`; targeted layout/auth/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
-- Доработан первый маленький login redesign slice: на страницу входа добавлена PNG-шапка `main-header.png`, бренд перенесен в левый верх hero, email/password/login controls получили иконки, email hint удален; LoginPage regression, frontend typecheck/build, lint и полный test-suite пройдены.
 
 ## Recommended Next Step
 
-- Задеплоить ветку `feature/login-header-polish` на production для ручной проверки login page на mobile/tablet, затем закрыть визуальный slice.
+- Проверить shell width/corners на production mobile/tablet и затем решить, закрываем ли ветку `fix/remove-tablet-shell-card`.
