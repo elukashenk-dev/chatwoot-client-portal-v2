@@ -27,7 +27,9 @@ export function PrimaryButton({
       disabled={disabled || loading}
       type={type}
     >
-      <span>{loading && loadingLabel ? loadingLabel : children}</span>
+      <span className="inline-flex items-center justify-center gap-2">
+        {loading && loadingLabel ? loadingLabel : children}
+      </span>
 
       {loading ? (
         <svg
