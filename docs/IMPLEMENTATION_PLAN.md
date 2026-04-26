@@ -229,8 +229,6 @@
   Идет отдельным slice после `Phase 5`, поверх chat read model, и потребует отдельного backend-контракта для date-based navigation.
 - `reply state`
   Идет отдельным slice после `Phase 6`, поверх базового composer/send flow.
-- `quick emoji bar`
-  Идет отдельным slice после `Phase 6` как расширение composer UX, а не как отдельная routing-model.
 - `voice recording and send`
   Идет отдельным slice после `Phase 7`, поверх backend-owned attachment/audio pipeline.
 

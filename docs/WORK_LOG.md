@@ -12,7 +12,7 @@
 - Реализован `Phase 6. Text Send And First Conversation Bootstrap`: backend-owned text send, first conversation bootstrap, customer-authored Chatwoot messages и durable send ledger для idempotency/retry/recovery.
 - Реализован `Phase 7. Attachment Send`: backend multipart endpoint, single-file composer flow, Chatwoot attachment delivery, attachment rendering и send ledger для файлов.
 - Реализован `Phase 8. Realtime`: signed Chatwoot webhook intake, delivery dedupe ledger, mapping-based route resolution, SSE endpoint и frontend realtime merge.
-- Доведен chat UX baseline: grouped transcript, day dividers, stable scroll behavior, reply state, quick emoji bar, voice recording/audio send, copy/reply context menu и mobile swipe-to-reply.
+- Доведен chat UX baseline: grouped transcript, day dividers, stable scroll behavior, reply state, voice recording/audio send, copy/reply context menu и mobile swipe-to-reply.
 - Добавлен optimistic text send UX: composer очищается сразу, outgoing bubble получает `sending/failed/retry`, retry использует тот же `clientMessageKey`, duplicate sends защищены backend ledger.
 - Закрыт code-health checkpoint: root `pnpm code-health`, lint guard, file-size baseline allowlist и feature-boundary rules для будущих portal domains.
 - Реализован `Phase 9. PWA App Hardening`: controlled service worker update flow, app update banner, build revision stamp, API/SSE no-cache boundary, installed-PWA viewport/safe-area polish, offline UI и reconnect/resync behavior.
@@ -33,8 +33,8 @@
 - Исправлен и проверен на production attachment upload для файлов больше 1 MiB: route-level Fastify `bodyLimit` поднят только для `/api/chat/messages/attachment`, production host Nginx получил `client_max_body_size 50m`, multipart `fileSize` остается 40 MiB.
 - Закрыт finding `F-CHAT-VOICE-001`: iPhone/WebKit voice recordings нормализуются в MP3 перед отправкой, MP3-энкодер вынесен в lazy-loaded chunk, production deploy выполнен, ручная проверка на iPhone подтвердила корректную отправку, duration metadata и playback на portal/agent сторонах.
 - Добавлен route-level code splitting для frontend pages: auth/chat страницы вынесены в lazy chunks, основной production JS уменьшен примерно с `352 KB / 102 KB gzip` до `205 KB / 64 KB gzip`; targeted route tests, frontend build, lint, полный test-suite, production deploy и ручная проверка пройдены.
-- Доработан composer controls UX: верхняя quick emoji лента удалена, emoji picker перенесен в composer row, send скрыт до текста/attachment, idle state оставляет только attachment/emoji/voice controls; targeted composer/chat tests, frontend build, lint и полный test-suite пройдены.
+- Доработан composer controls UX: верхняя quick emoji лента и последующий composer emoji picker/button удалены, composer вернулся к простым attachment/textarea/voice/send controls; targeted composer/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
 
 ## Recommended Next Step
 
-- Проверить composer controls UX на production/mobile и затем закрыть ветку в `main`.
+- Задеплоить composer cleanup на production для мобильной проверки и затем закрыть ветку `fix/chat-composer-emoji-controls`.

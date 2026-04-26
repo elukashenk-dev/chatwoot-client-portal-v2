@@ -28,7 +28,7 @@
 
 ## Remaining UI Slices
 
-- `ReplyPreview` и `QuickEmojiBar`.
+- `ReplyPreview`.
 - `MessageCalendarPopover`.
 - `VoiceRecordButton` и связанный recording/send flow.
 

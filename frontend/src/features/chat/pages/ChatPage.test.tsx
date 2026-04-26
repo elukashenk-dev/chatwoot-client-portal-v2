@@ -249,42 +249,6 @@ describe('ChatPage', () => {
     )
   })
 
-  it('inserts a quick emoji phrase into the composer draft at the cursor position', async () => {
-    const user = userEvent.setup()
-
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-
-    renderChatRoute()
-
-    await screen.findByText(
-      'Здравствуйте, вижу ваше обращение.',
-      {},
-      CHAT_PAGE_LOAD_TIMEOUT,
-    )
-
-    const textarea = screen.getByRole('textbox', {
-      name: 'Сообщение',
-    }) as HTMLTextAreaElement
-
-    await user.type(textarea, 'Привет конец')
-
-    act(() => {
-      textarea.setSelectionRange(7, 7)
-    })
-
-    await user.click(screen.getByRole('button', { name: 'Добавить эмоджи' }))
-    await user.click(screen.getByRole('button', { name: 'Добавить ✅ Готово' }))
-
-    expect(textarea).toHaveValue('Привет ✅ Готовоконец')
-    await waitFor(() => {
-      expect(textarea).toHaveFocus()
-    })
-    expect(textarea.selectionStart).toBe('Привет ✅ Готово'.length)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
   it('loads older messages through the bounded history cursor', async () => {
     const user = userEvent.setup()
 

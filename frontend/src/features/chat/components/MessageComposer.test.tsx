@@ -20,7 +20,7 @@ function renderComposer() {
 
 function getSideControl(
   container: HTMLElement,
-  control: 'attachment' | 'emoji' | 'send' | 'voice',
+  control: 'attachment' | 'voice',
 ) {
   const sideControl = container.querySelector(
     `[data-composer-side-control="${control}"]`,
@@ -34,46 +34,17 @@ function getSideControl(
 }
 
 describe('MessageComposer', () => {
-  it('shows only attachment, emoji and voice controls before the user starts composing', () => {
-    const { container } = renderComposer()
-    const attachmentControl = getSideControl(container, 'attachment')
-    const emojiControl = getSideControl(container, 'emoji')
-    const voiceControl = getSideControl(container, 'voice')
-    const sendControl = getSideControl(container, 'send')
-
-    expect(
-      screen.getByRole('button', { name: 'Прикрепить файл' }),
-    ).not.toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Добавить эмоджи' }),
-    ).not.toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Голосовое сообщение' }),
-    ).not.toBeDisabled()
-    expect(
-      screen.queryByRole('button', { name: 'Отправить' }),
-    ).not.toBeInTheDocument()
-    expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(emojiControl).toHaveClass('w-11', 'opacity-100')
-    expect(voiceControl).toHaveClass('w-11', 'opacity-100')
-    expect(sendControl).toHaveClass('w-0', 'opacity-0')
-    expect(
-      within(sendControl).getByRole('button', {
-        hidden: true,
-        name: 'Отправить',
-      }),
-    ).toBeDisabled()
-  })
-
-  it('keeps emoji visible and shows send while a text draft is active', async () => {
+  it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
     const attachmentControl = getSideControl(container, 'attachment')
-    const emojiControl = getSideControl(container, 'emoji')
     const voiceControl = getSideControl(container, 'voice')
-    const sendControl = getSideControl(container, 'send')
 
+    expect(
+      screen.queryByRole('button', { name: /эмоджи/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Готово')).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Прикрепить файл' }),
     ).not.toBeDisabled()
@@ -81,7 +52,6 @@ describe('MessageComposer', () => {
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).not.toBeDisabled()
     expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(emojiControl).toHaveClass('w-11', 'opacity-100')
     expect(voiceControl).toHaveClass('w-11', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toHaveClass(
       'hover:text-chat-outgoing',
@@ -89,7 +59,9 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toHaveClass('hover:text-chat-outgoing')
-    expect(sendControl).toHaveClass('w-0', 'opacity-0')
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+      'bg-chat-outgoing',
+    )
 
     await user.type(textarea, 'П')
 
@@ -97,19 +69,12 @@ describe('MessageComposer', () => {
       screen.queryByRole('button', { name: 'Прикрепить файл' }),
     ).not.toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Добавить эмоджи' }),
-    ).not.toBeDisabled()
-    expect(
       screen.queryByRole('button', { name: 'Голосовое сообщение' }),
     ).not.toBeInTheDocument()
     expect(attachmentControl).toHaveAttribute('aria-hidden', 'true')
-    expect(emojiControl).not.toHaveAttribute('aria-hidden')
     expect(voiceControl).toHaveAttribute('aria-hidden', 'true')
-    expect(sendControl).not.toHaveAttribute('aria-hidden')
     expect(attachmentControl).toHaveClass('w-0', 'opacity-0')
-    expect(emojiControl).toHaveClass('w-11', 'opacity-100')
     expect(voiceControl).toHaveClass('w-0', 'opacity-0')
-    expect(sendControl).toHaveClass('w-11', 'opacity-100')
     expect(
       within(attachmentControl).getByRole('button', {
         hidden: true,
@@ -122,9 +87,6 @@ describe('MessageComposer', () => {
         name: 'Голосовое сообщение',
       }),
     ).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'bg-chat-outgoing',
-    )
     expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
 
     await user.clear(textarea)
@@ -135,26 +97,18 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).not.toBeDisabled()
-    expect(
-      screen.queryByRole('button', { name: 'Отправить' }),
-    ).not.toBeInTheDocument()
     expect(attachmentControl).not.toHaveAttribute('aria-hidden')
-    expect(emojiControl).not.toHaveAttribute('aria-hidden')
     expect(voiceControl).not.toHaveAttribute('aria-hidden')
-    expect(sendControl).toHaveAttribute('aria-hidden', 'true')
     expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(emojiControl).toHaveClass('w-11', 'opacity-100')
     expect(voiceControl).toHaveClass('w-11', 'opacity-100')
-    expect(sendControl).toHaveClass('w-0', 'opacity-0')
   })
 
-  it('keeps idle controls visible for a whitespace-only draft', async () => {
+  it('keeps side controls visible for a whitespace-only draft', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
     const attachmentControl = getSideControl(container, 'attachment')
     const voiceControl = getSideControl(container, 'voice')
-    const sendControl = getSideControl(container, 'send')
 
     await user.type(textarea, '   ')
 
@@ -166,75 +120,6 @@ describe('MessageComposer', () => {
     ).not.toBeDisabled()
     expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
     expect(voiceControl).toHaveClass('w-11', 'opacity-100')
-    expect(sendControl).toHaveClass('w-0', 'opacity-0')
-    expect(
-      screen.queryByRole('button', { name: 'Отправить' }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('inserts emoji from the picker and closes after a quick phrase', async () => {
-    const user = userEvent.setup()
-
-    renderComposer()
-
-    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
-    const emojiButton = screen.getByRole('button', {
-      name: 'Добавить эмоджи',
-    })
-
-    await user.click(emojiButton)
-
-    expect(emojiButton).toHaveAttribute('aria-expanded', 'true')
-    expect(
-      screen.getByRole('dialog', { name: 'Выбор эмоджи' }),
-    ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Добавить 😀' }))
-
-    expect(textarea).toHaveValue('😀')
-    expect(
-      screen.getByRole('dialog', { name: 'Выбор эмоджи' }),
-    ).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Добавить 👍 Ок' }))
-
-    expect(textarea).toHaveValue('😀👍 Ок')
-    expect(
-      screen.queryByRole('dialog', { name: 'Выбор эмоджи' }),
-    ).not.toBeInTheDocument()
-    expect(emojiButton).toHaveAttribute('aria-expanded', 'false')
-  })
-
-  it('hides attachment and voice controls after selecting a file caption target', async () => {
-    const user = userEvent.setup()
-    const { container } = renderComposer()
-    const attachmentInput = screen.getByLabelText(
-      'Файл вложения',
-    ) as HTMLInputElement
-    const attachmentControl = getSideControl(container, 'attachment')
-    const voiceControl = getSideControl(container, 'voice')
-    const sendControl = getSideControl(container, 'send')
-    const file = new File(['invoice'], 'invoice.pdf', {
-      type: 'application/pdf',
-    })
-
-    await user.upload(attachmentInput, file)
-
-    expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Прикрепить файл' }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Голосовое сообщение' }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Добавить эмоджи' }),
-    ).not.toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Отправить файл' }),
-    ).not.toBeDisabled()
-    expect(attachmentControl).toHaveClass('w-0', 'opacity-0')
-    expect(voiceControl).toHaveClass('w-0', 'opacity-0')
-    expect(sendControl).toHaveClass('w-11', 'opacity-100')
+    expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
   })
 })
