@@ -37,6 +37,7 @@
 - Удален service footer menu (`Сайт`, `Поддержка`, `Позвонить`) со всех non-chat auth/app-shell экранов; targeted auth tests, frontend typecheck/build, lint и полный test-suite пройдены.
 - Убрана планшетная card-оболочка portal shell: public/auth и protected app layouts теперь без `sm` padding, rounded corners, shadow и `750px` shell, общий максимум ширины ограничен `500px`; targeted layout/auth/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
 - Удален декоративный `portal-dot-grid` из auth и app shell; выполнен markup review auth/chat разметки, заведены findings `F-CHAT-UI-002` и `F-CHAT-UI-003`; frontend typecheck, targeted auth/chat tests, frontend build, lint и полный test-suite пройдены.
+- Зафиксирована B2B product goal рамка: проект описан как брендируемый клиентский PWA-слой поверх Chatwoot для компаний-покупателей услуги, а не единый общий чат.
 
 ## Recommended Next Step
 
