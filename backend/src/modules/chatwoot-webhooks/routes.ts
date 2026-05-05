@@ -8,7 +8,10 @@ type RawBodyRequest = FastifyRequest & {
 }
 
 type RegisterChatwootWebhookRoutesOptions = {
-  chatwootWebhookService: ChatwootWebhookService
+  chatwootWebhookService?: ChatwootWebhookService
+  createChatwootWebhookService?: (
+    request: FastifyRequest,
+  ) => ChatwootWebhookService
 }
 
 const CHATWOOT_WEBHOOK_PATHS = [
@@ -30,7 +33,10 @@ function parseJsonRawBody(rawBody: Buffer) {
 
 export function registerChatwootWebhookRoutes(
   app: FastifyInstance,
-  { chatwootWebhookService }: RegisterChatwootWebhookRoutesOptions,
+  {
+    chatwootWebhookService,
+    createChatwootWebhookService,
+  }: RegisterChatwootWebhookRoutesOptions,
 ) {
   app.register(async (webhookApp) => {
     webhookApp.removeContentTypeParser('application/json')
@@ -64,7 +70,18 @@ export function registerChatwootWebhookRoutes(
         )
       }
 
-      return chatwootWebhookService.handleWebhook({
+      const resolvedWebhookService =
+        createChatwootWebhookService?.(request) ?? chatwootWebhookService
+
+      if (!resolvedWebhookService) {
+        throw new ApiError(
+          500,
+          'chatwoot_webhook_service_missing',
+          'Chatwoot webhook service is missing.',
+        )
+      }
+
+      return resolvedWebhookService.handleWebhook({
         headers: request.headers,
         payload: request.body,
         rawBody,

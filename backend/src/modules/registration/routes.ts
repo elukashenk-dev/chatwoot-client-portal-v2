@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
@@ -43,19 +43,19 @@ const registerSetPasswordBodySchema = z.object({
 })
 
 type RegisterRegistrationRoutesOptions = {
-  registrationService: RegistrationService
+  createRegistrationService: (request: FastifyRequest) => RegistrationService
 }
 
 export function registerRegistrationRoutes(
   app: FastifyInstance,
-  { registrationService }: RegisterRegistrationRoutesOptions,
+  { createRegistrationService }: RegisterRegistrationRoutesOptions,
 ) {
   app.post('/api/auth/register/request', async (request) => {
     assertAllowedTenantOrigin(request)
 
     const body = registerRequestBodySchema.parse(request.body)
 
-    return registrationService.requestVerification({
+    return createRegistrationService(request).requestVerification({
       email: body.email,
       fullName: body.fullName,
     })
@@ -66,7 +66,7 @@ export function registerRegistrationRoutes(
 
     const body = registerVerifyBodySchema.parse(request.body)
 
-    return registrationService.confirmVerification({
+    return createRegistrationService(request).confirmVerification({
       code: body.code,
       email: body.email,
     })
@@ -77,7 +77,7 @@ export function registerRegistrationRoutes(
 
     const body = registerSetPasswordBodySchema.parse(request.body)
 
-    return registrationService.setPassword({
+    return createRegistrationService(request).setPassword({
       continuationToken: body.continuationToken,
       email: body.email,
       newPassword: body.newPassword,

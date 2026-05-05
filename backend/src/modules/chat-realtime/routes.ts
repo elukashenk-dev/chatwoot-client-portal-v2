@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
@@ -14,7 +14,9 @@ const chatRealtimeQuerySchema = z.object({
 
 type RegisterChatRealtimeRoutesOptions = {
   authService: AuthService
-  chatContextService: Pick<ChatContextService, 'getCurrentUserChatContext'>
+  createChatContextService: (
+    request: FastifyRequest,
+  ) => Pick<ChatContextService, 'getCurrentUserChatContext'>
   env: AppEnv
   realtimeHub: ChatRealtimeHub
 }
@@ -31,7 +33,7 @@ export function registerChatRealtimeRoutes(
   app: FastifyInstance,
   {
     authService,
-    chatContextService,
+    createChatContextService,
     env,
     realtimeHub,
   }: RegisterChatRealtimeRoutesOptions,
@@ -44,7 +46,9 @@ export function registerChatRealtimeRoutes(
       request,
     })
     const query = chatRealtimeQuerySchema.parse(request.query)
-    const context = await chatContextService.getCurrentUserChatContext({
+    const context = await createChatContextService(
+      request,
+    ).getCurrentUserChatContext({
       selectedPrimaryConversationId: query.primaryConversationId,
       userId: user.id,
     })

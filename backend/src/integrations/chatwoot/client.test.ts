@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createChatwootClient } from './client.js'
+import { createChatwootClient, createChatwootClientFactory } from './client.js'
 
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -12,6 +12,64 @@ function createJsonResponse(body: unknown, status = 200) {
 }
 
 describe('createChatwootClient', () => {
+  it('creates clients from explicit tenant Chatwoot config instead of global env authority', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          payload: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          payload: [],
+        }),
+      )
+    const factory = createChatwootClientFactory({
+      fetchFn,
+    })
+
+    await factory
+      .forTenant({
+        accountId: 3,
+        apiAccessToken: 'tenant-a-token',
+        baseUrl: 'https://chatwoot-a.example.com/',
+        portalInboxId: 6,
+      })
+      .findContactByEmail('user@example.com')
+    await factory
+      .forTenant({
+        accountId: 4,
+        apiAccessToken: 'tenant-b-token',
+        baseUrl: 'https://chatwoot-b.example.com',
+        portalInboxId: 7,
+      })
+      .findContactByEmail('user@example.com')
+
+    expect(fetchFn).toHaveBeenNthCalledWith(
+      1,
+      new URL(
+        'https://chatwoot-a.example.com/api/v1/accounts/3/contacts/search?q=user%40example.com',
+      ),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          api_access_token: 'tenant-a-token',
+        }),
+      }),
+    )
+    expect(fetchFn).toHaveBeenNthCalledWith(
+      2,
+      new URL(
+        'https://chatwoot-b.example.com/api/v1/accounts/4/contacts/search?q=user%40example.com',
+      ),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          api_access_token: 'tenant-b-token',
+        }),
+      }),
+    )
+  })
+
   it('returns an exact email match from Chatwoot search results', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       createJsonResponse({

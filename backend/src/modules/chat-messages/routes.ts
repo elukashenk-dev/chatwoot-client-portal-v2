@@ -43,7 +43,7 @@ type AttachmentMultipartFields = {
 
 type RegisterChatMessagesRoutesOptions = {
   authService: AuthService
-  chatMessagesService: ChatMessagesService
+  createChatMessagesService: (request: FastifyRequest) => ChatMessagesService
   env: AppEnv
 }
 
@@ -219,7 +219,11 @@ async function parseAttachmentUpload(
 
 export function registerChatMessagesRoutes(
   app: FastifyInstance,
-  { authService, chatMessagesService, env }: RegisterChatMessagesRoutesOptions,
+  {
+    authService,
+    createChatMessagesService,
+    env,
+  }: RegisterChatMessagesRoutesOptions,
 ) {
   app.get('/api/chat/messages', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({
@@ -230,7 +234,7 @@ export function registerChatMessagesRoutes(
     })
     const query = chatMessagesQuerySchema.parse(request.query)
 
-    return chatMessagesService.getCurrentUserChatMessages({
+    return createChatMessagesService(request).getCurrentUserChatMessages({
       beforeMessageId: query.beforeMessageId ?? null,
       primaryConversationId: query.primaryConversationId ?? null,
       userId: user.id,
@@ -248,7 +252,7 @@ export function registerChatMessagesRoutes(
     })
     const body = sendChatMessageBodySchema.parse(request.body)
 
-    return chatMessagesService.sendCurrentUserTextMessage({
+    return createChatMessagesService(request).sendCurrentUserTextMessage({
       clientMessageKey: body.clientMessageKey,
       content: body.content,
       primaryConversationId: body.primaryConversationId ?? null,
@@ -273,7 +277,9 @@ export function registerChatMessagesRoutes(
       })
       const upload = await parseAttachmentUpload(app, request)
 
-      return chatMessagesService.sendCurrentUserAttachmentMessage({
+      return createChatMessagesService(
+        request,
+      ).sendCurrentUserAttachmentMessage({
         attachment: upload.attachment,
         clientMessageKey: upload.clientMessageKey,
         content: upload.content,

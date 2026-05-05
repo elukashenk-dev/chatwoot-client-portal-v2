@@ -6,7 +6,6 @@ import {
 } from 'node:crypto'
 import type { IncomingHttpHeaders } from 'node:http'
 
-import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
@@ -36,9 +35,9 @@ type CreateChatwootWebhookServiceOptions = {
       userId: number
     }) => Promise<ChatMessagesSnapshot>
   }
-  env: Pick<AppEnv, 'CHATWOOT_WEBHOOK_SECRET'>
   now?: () => Date
   realtimeHub: ChatRealtimeHub
+  webhookSecret: string
   webhookRepository: ChatwootWebhookRepository
 }
 
@@ -266,9 +265,9 @@ async function publishCurrentSnapshot({
 
 export function createChatwootWebhookService({
   chatMessagesService,
-  env,
   now = () => new Date(),
   realtimeHub,
+  webhookSecret,
   webhookRepository,
 }: CreateChatwootWebhookServiceOptions) {
   return {
@@ -277,7 +276,7 @@ export function createChatwootWebhookService({
       payload,
       rawBody,
     }: HandleChatwootWebhookInput): Promise<HandleChatwootWebhookResult> {
-      if (!env.CHATWOOT_WEBHOOK_SECRET) {
+      if (!webhookSecret.trim()) {
         throw new ApiError(
           503,
           'chatwoot_webhook_not_configured',
@@ -292,7 +291,7 @@ export function createChatwootWebhookService({
           headers,
           now: currentTime,
           rawBody,
-          secret: env.CHATWOOT_WEBHOOK_SECRET,
+          secret: webhookSecret,
         })
       ) {
         throw new ApiError(

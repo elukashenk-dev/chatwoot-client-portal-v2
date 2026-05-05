@@ -5,6 +5,9 @@ import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
+
+const tenantSecretKey = Buffer.alloc(32, 5).toString('base64')
 
 const baseTestEnv: AppEnv = {
   APP_ORIGIN: 'https://lk.default.test',
@@ -18,6 +21,7 @@ const baseTestEnv: AppEnv = {
   NODE_ENV: 'test',
   PORT: 3301,
   PORTAL_TRUST_PROXY: false,
+  PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',
   SESSION_SECRET: 'test-session-secret-with-at-least-thirty-two-characters',
   SESSION_TTL_DAYS: 14,
@@ -43,12 +47,20 @@ async function seedTenant(
     slug: string
   },
 ) {
+  const key = decodeTenantSecretKey(tenantSecretKey)
+
   await database.db.insert(portalTenants).values({
     chatwootAccountId: 1,
-    chatwootApiAccessTokenCiphertext: `v1:${slug}:api-token`,
+    chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+      `${slug}:api-token`,
+      key,
+    ),
     chatwootBaseUrl: 'https://chatwoot.example.test',
     chatwootPortalInboxId: 1,
-    chatwootWebhookSecretCiphertext: `v1:${slug}:webhook-secret`,
+    chatwootWebhookSecretCiphertext: encryptTenantSecret(
+      `${slug}:webhook-secret`,
+      key,
+    ),
     displayName,
     primaryDomain,
     publicBaseUrl,

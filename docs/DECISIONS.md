@@ -255,3 +255,11 @@
   tenant resolution использует normalized request host. `X-Forwarded-Host` учитывается только когда backend запущен с `PORTAL_TRUST_PROXY=true`. По умолчанию `PORTAL_TRUST_PROXY=false`, и backend берет обычный `Host`. В production включать trusted proxy mode можно только если backend недоступен напрямую из интернета и получает traffic через контролируемый Caddy/Nginx boundary
 - причина:
   host выбирает tenant до auth/session/chat runtime. Если публичный клиент сможет произвольно подставить forwarded host, он сможет попытаться выбрать чужой tenant. Поэтому forwarded headers допустимы только как часть явно контролируемой reverse proxy схемы
+
+## D-033. Chatwoot runtime client создается из current tenant
+
+- дата: `2026-05-05`
+- решение:
+  backend runtime больше не создает общий Chatwoot client из глобальных `CHATWOOT_*` env. Для registration, chat runtime и webhook processing Chatwoot client создается на request из `request.tenant.chatwoot`: tenant `baseUrl`, `accountId`, `portalInboxId`, decrypted runtime API token и decrypted webhook secret. Старые `CHATWOOT_*` env остаются допустимы только для bootstrap/provisioning scripts, пока они не заменены tenant-aware scripts
+- причина:
+  один portal deploy может обслуживать tenants с разными Chatwoot accounts или installations. Общий env-bound Chatwoot client возвращал single-tenant authority и мог отправить запросы не в тот Chatwoot account/inbox

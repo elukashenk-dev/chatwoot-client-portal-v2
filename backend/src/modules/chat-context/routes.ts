@@ -13,7 +13,7 @@ const chatContextQuerySchema = z.object({
 
 type RegisterChatContextRoutesOptions = {
   authService: AuthService
-  chatContextService: ChatContextService
+  createChatContextService: (request: FastifyRequest) => ChatContextService
   env: AppEnv
 }
 
@@ -47,7 +47,11 @@ export async function resolveAuthenticatedPortalUser({
 
 export function registerChatContextRoutes(
   app: FastifyInstance,
-  { authService, chatContextService, env }: RegisterChatContextRoutesOptions,
+  {
+    authService,
+    createChatContextService,
+    env,
+  }: RegisterChatContextRoutesOptions,
 ) {
   app.get('/api/chat/context', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({
@@ -58,7 +62,7 @@ export function registerChatContextRoutes(
     })
     const query = chatContextQuerySchema.parse(request.query)
 
-    return chatContextService.getCurrentUserChatContext({
+    return createChatContextService(request).getCurrentUserChatContext({
       selectedPrimaryConversationId: query.primaryConversationId ?? null,
       userId: user.id,
     })

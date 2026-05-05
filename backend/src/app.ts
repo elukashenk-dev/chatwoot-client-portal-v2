@@ -1,10 +1,11 @@
 import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 import Fastify from 'fastify'
+import type { FastifyRequest } from 'fastify'
 
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
-import { createChatwootClient } from './integrations/chatwoot/client.js'
+import { createChatwootClientFactory } from './integrations/chatwoot/client.js'
 import { createSmtpEmailDelivery } from './integrations/email/smtp.js'
 import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
@@ -33,6 +34,7 @@ import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
 import { createTenantsRepository } from './modules/tenants/repository.js'
 import {
+  requireTenantContext,
   registerTenantContext,
   registerTenantRoutes,
 } from './modules/tenants/routes.js'
@@ -77,21 +79,43 @@ export function buildApp({ database, env }: BuildAppOptions) {
     db: database.db,
     env,
   })
-  const chatwootClient = createChatwootClient({ env })
-  const chatContextService = createChatContextService({
-    chatContextRepository: createChatContextRepository(database.db),
-    chatwootClient,
-  })
-  const chatMessagesService = createChatMessagesService({
-    chatContextService,
-    chatMessagesRepository: createChatMessagesRepository(database.db),
-    chatwootClient,
-  })
+  const chatwootClientFactory = createChatwootClientFactory()
   const chatRealtimeHub = createChatRealtimeHub()
   const tenantsService = createTenantsService({
     defaultTenantSlug: env.DEFAULT_TENANT_SLUG,
+    tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
     tenantsRepository: createTenantsRepository(database.db),
   })
+  const createChatwootClientForRequest = (request: FastifyRequest) =>
+    chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
+  const createChatContextServiceForRequest = (request: FastifyRequest) =>
+    createChatContextService({
+      chatContextRepository: createChatContextRepository(database.db),
+      chatwootClient: createChatwootClientForRequest(request),
+    })
+  const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
+    createChatMessagesService({
+      chatContextService: createChatContextServiceForRequest(request),
+      chatMessagesRepository: createChatMessagesRepository(database.db),
+      chatwootClient: createChatwootClientForRequest(request),
+    })
+  const createRegistrationServiceForRequest = (request: FastifyRequest) =>
+    createRegistrationService({
+      chatwootClient: createChatwootClientForRequest(request),
+      emailDelivery: createSmtpEmailDelivery({ env }),
+      portalUsersRepository: createPortalUsersRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db),
+    })
+  const createChatwootWebhookServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatwootWebhookService({
+      chatMessagesService: createChatMessagesServiceForRequest(request),
+      realtimeHub: chatRealtimeHub,
+      webhookRepository: createChatwootWebhookRepository(database.db),
+      webhookSecret: tenant.chatwoot.webhookSecret,
+    })
+  }
 
   registerHealthRoutes(app, { env })
   registerTenantContext(app, { tenantsService })
@@ -101,12 +125,7 @@ export function buildApp({ database, env }: BuildAppOptions) {
     env,
   })
   registerRegistrationRoutes(app, {
-    registrationService: createRegistrationService({
-      chatwootClient,
-      emailDelivery: createSmtpEmailDelivery({ env }),
-      portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db),
-    }),
+    createRegistrationService: createRegistrationServiceForRequest,
   })
   registerPasswordResetRoutes(app, {
     passwordResetService: createPasswordResetService({
@@ -116,27 +135,22 @@ export function buildApp({ database, env }: BuildAppOptions) {
   })
   registerChatContextRoutes(app, {
     authService,
-    chatContextService,
+    createChatContextService: createChatContextServiceForRequest,
     env,
   })
   registerChatMessagesRoutes(app, {
     authService,
-    chatMessagesService,
+    createChatMessagesService: createChatMessagesServiceForRequest,
     env,
   })
   registerChatRealtimeRoutes(app, {
     authService,
-    chatContextService,
+    createChatContextService: createChatContextServiceForRequest,
     env,
     realtimeHub: chatRealtimeHub,
   })
   registerChatwootWebhookRoutes(app, {
-    chatwootWebhookService: createChatwootWebhookService({
-      chatMessagesService,
-      env,
-      realtimeHub: chatRealtimeHub,
-      webhookRepository: createChatwootWebhookRepository(database.db),
-    }),
+    createChatwootWebhookService: createChatwootWebhookServiceForRequest,
   })
 
   return app

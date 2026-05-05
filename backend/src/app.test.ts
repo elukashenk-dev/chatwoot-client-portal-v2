@@ -13,7 +13,13 @@ import {
   verificationRecords,
 } from './db/schema.js'
 import { hashPassword } from './lib/password.js'
+import {
+  decodeTenantSecretKey,
+  encryptTenantSecret,
+} from './modules/tenants/secrets.js'
 import { createTestDatabase } from './test/testDatabase.js'
+
+const tenantSecretKey = Buffer.alloc(32, 3).toString('base64')
 
 const testEnv: AppEnv = {
   APP_ORIGIN: 'http://127.0.0.1:5173',
@@ -26,6 +32,7 @@ const testEnv: AppEnv = {
   NODE_ENV: 'test',
   PORT: 3301,
   PORTAL_TRUST_PROXY: false,
+  PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',
   SESSION_SECRET: 'test-session-secret-with-at-least-thirty-two-characters',
   SESSION_TTL_DAYS: 14,
@@ -38,12 +45,20 @@ const testEnv: AppEnv = {
 }
 
 async function seedDefaultTenant(database: DatabaseClient) {
+  const key = decodeTenantSecretKey(tenantSecretKey)
+
   await database.db.insert(portalTenants).values({
     chatwootAccountId: 1,
-    chatwootApiAccessTokenCiphertext: 'v1:test-api-token',
+    chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+      'test-api-token',
+      key,
+    ),
     chatwootBaseUrl: 'https://chatwoot.example.test',
     chatwootPortalInboxId: 1,
-    chatwootWebhookSecretCiphertext: 'v1:test-webhook-secret',
+    chatwootWebhookSecretCiphertext: encryptTenantSecret(
+      'test-webhook-secret',
+      key,
+    ),
     displayName: 'Local Test Tenant',
     primaryDomain: 'localhost',
     publicBaseUrl: testEnv.APP_ORIGIN,
@@ -275,8 +290,8 @@ describe('buildApp', () => {
     expect(contextResponse.json()).toEqual({
       linkedContact: null,
       primaryConversation: null,
-      reason: 'contact_link_missing',
-      result: 'not_ready',
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
     })
     expect(messagesResponse.statusCode).toBe(200)
     expect(messagesResponse.json()).toEqual({
@@ -285,8 +300,8 @@ describe('buildApp', () => {
       messages: [],
       nextOlderCursor: null,
       primaryConversation: null,
-      reason: 'contact_link_missing',
-      result: 'not_ready',
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
     })
   })
 
@@ -331,8 +346,8 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       linkedContact: null,
       primaryConversation: null,
-      reason: 'contact_link_missing',
-      result: 'not_ready',
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
       sentMessage: null,
     })
   })
@@ -383,8 +398,8 @@ describe('buildApp', () => {
     expect(response.json()).toEqual({
       linkedContact: null,
       primaryConversation: null,
-      reason: 'contact_link_missing',
-      result: 'not_ready',
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
       sentMessage: null,
     })
   })
@@ -431,8 +446,8 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toMatchObject({
-      reason: 'contact_link_missing',
-      result: 'not_ready',
+      reason: 'chatwoot_unavailable',
+      result: 'unavailable',
       sentMessage: null,
     })
   })

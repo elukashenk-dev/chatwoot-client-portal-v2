@@ -50,7 +50,8 @@
 - Выполнен smoke review MT-0 плана перед checkpoint commit: stale `Open Decisions Before Coding` заменен на initial decisions before MT-1, новых блокеров для MT-1 не найдено; код/schema/runtime не менялись.
 - Реализован `MT-1 Tenant Schema Foundation`: добавлены `portal_tenants` schema/migration без `mode` и admin-verification token, tenant secret AES-GCM helper, default tenant bootstrap, repository/bootstrap tests; `portal_tenant_domains` отложен, проверки backend tests/build/lint, Prettier и `git diff --check` пройдены.
 - Реализован `MT-2 Tenant Resolution Middleware`: backend резолвит tenant по normalized Host до auth/chat routes, добавлен `/api/tenant`, tenant-aware origin guard, `PORTAL_TRUST_PROXY` rule для `X-Forwarded-Host`, non-default customer runtime hard-fail до завершения isolation phases; backend build/lint/test пройдены.
+- Реализован `MT-3 Tenant-Aware Chatwoot Client`: runtime Chatwoot client создается из `request.tenant.chatwoot`, tenant secrets расшифровываются backend-only через `PORTAL_TENANT_SECRET_KEY`, registration/chat/webhook services получают tenant config per request, добавлен tenant Chatwoot verification script; backend build/lint/test, Prettier и `git diff --check` пройдены.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `MT-2 Tenant Resolution Middleware`; затем перейти к `MT-3 Tenant-Aware Chatwoot Client`.
+- Сделать checkpoint commit для `MT-3 Tenant-Aware Chatwoot Client`; затем перейти к `MT-4 Tenant-Scoped Persistence`.

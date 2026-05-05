@@ -109,15 +109,69 @@ export type ChatwootAccountWebhook = {
   url: string
 }
 
+export type ChatwootClientConfig = {
+  accountId: number
+  apiAccessToken: string
+  baseUrl: string
+  portalInboxId: number
+}
+
+type ChatwootEnvConfig = Pick<
+  AppEnv,
+  | 'CHATWOOT_ACCOUNT_ID'
+  | 'CHATWOOT_API_ACCESS_TOKEN'
+  | 'CHATWOOT_BASE_URL'
+  | 'CHATWOOT_PORTAL_INBOX_ID'
+>
+
 type CreateChatwootClientOptions = {
-  env: Pick<
-    AppEnv,
-    | 'CHATWOOT_ACCOUNT_ID'
-    | 'CHATWOOT_API_ACCESS_TOKEN'
-    | 'CHATWOOT_BASE_URL'
-    | 'CHATWOOT_PORTAL_INBOX_ID'
-  >
+  config?: ChatwootClientConfig | null | undefined
+  env?: ChatwootEnvConfig | undefined
   fetchFn?: typeof fetch
+}
+
+type CreateChatwootClientFactoryOptions = {
+  fetchFn?: typeof fetch
+}
+
+function resolveConfigFromEnv(env: ChatwootEnvConfig) {
+  return env.CHATWOOT_BASE_URL &&
+    env.CHATWOOT_ACCOUNT_ID &&
+    env.CHATWOOT_API_ACCESS_TOKEN &&
+    env.CHATWOOT_PORTAL_INBOX_ID
+    ? {
+        accountId: env.CHATWOOT_ACCOUNT_ID,
+        apiAccessToken: env.CHATWOOT_API_ACCESS_TOKEN,
+        baseUrl: env.CHATWOOT_BASE_URL,
+        portalInboxId: env.CHATWOOT_PORTAL_INBOX_ID,
+      }
+    : null
+}
+
+function normalizeConfig(
+  config: ChatwootClientConfig | null | undefined,
+): ChatwootClientConfig | null {
+  if (!config) {
+    return null
+  }
+
+  return {
+    accountId: config.accountId,
+    apiAccessToken: config.apiAccessToken,
+    baseUrl: normalizeBaseUrl(config.baseUrl),
+    portalInboxId: config.portalInboxId,
+  }
+}
+
+function resolveInitialConfig({
+  config,
+  env,
+}: Pick<CreateChatwootClientOptions, 'config' | 'env'>) {
+  if (config !== undefined) {
+    return normalizeConfig(config)
+  }
+
+  return normalizeConfig(env ? resolveConfigFromEnv(env) : null)
 }
 
 function normalizeBaseUrl(value: string) {
@@ -425,20 +479,14 @@ function collectPortalContactSourceIds(
 }
 
 export function createChatwootClient({
+  config: initialConfig,
   env,
   fetchFn = fetch,
 }: CreateChatwootClientOptions) {
-  const config =
-    env.CHATWOOT_BASE_URL &&
-    env.CHATWOOT_ACCOUNT_ID &&
-    env.CHATWOOT_API_ACCESS_TOKEN
-      ? {
-          accountId: env.CHATWOOT_ACCOUNT_ID,
-          apiAccessToken: env.CHATWOOT_API_ACCESS_TOKEN,
-          baseUrl: normalizeBaseUrl(env.CHATWOOT_BASE_URL),
-          portalInboxId: env.CHATWOOT_PORTAL_INBOX_ID,
-        }
-      : null
+  const config = resolveInitialConfig({
+    config: initialConfig,
+    env,
+  })
 
   function assertConfigured(): {
     accountId: number
@@ -991,6 +1039,22 @@ export function createChatwootClient({
       })
     },
 
+    async verifyPortalInboxConnection() {
+      const resolvedConfig = assertConfigured()
+      const currentRouting = await getPortalInboxRouting()
+
+      if (
+        currentRouting.id !== resolvedConfig.portalInboxId ||
+        currentRouting.channelType !== PORTAL_CONVERSATION_CHANNEL_TYPE
+      ) {
+        throw new ChatwootClientRequestError(
+          'Configured Chatwoot portal inbox is not a Channel::Api inbox.',
+        )
+      }
+
+      return currentRouting
+    },
+
     async ensurePortalInboxSingleConversationRouting() {
       const resolvedConfig = assertConfigured()
       const currentRouting = await getPortalInboxRouting()
@@ -1040,14 +1104,12 @@ export function createChatwootClient({
     },
 
     async findContactByEmail(email: string): Promise<ChatwootContact | null> {
-      if (!config) {
-        throw new ChatwootClientConfigurationError()
-      }
+      const resolvedConfig = assertConfigured()
 
       const normalizedEmail = normalizeEmail(email)
       const requestUrl = new URL(
-        `/api/v1/accounts/${config.accountId}/contacts/search`,
-        config.baseUrl,
+        `/api/v1/accounts/${resolvedConfig.accountId}/contacts/search`,
+        resolvedConfig.baseUrl,
       )
 
       requestUrl.searchParams.set('q', normalizedEmail)
@@ -1491,3 +1553,20 @@ export function createChatwootClient({
 }
 
 export type ChatwootClient = ReturnType<typeof createChatwootClient>
+
+export function createChatwootClientFactory({
+  fetchFn = fetch,
+}: CreateChatwootClientFactoryOptions = {}) {
+  return {
+    forTenant(config: ChatwootClientConfig) {
+      return createChatwootClient({
+        config,
+        fetchFn,
+      })
+    },
+  }
+}
+
+export type ChatwootClientFactory = ReturnType<
+  typeof createChatwootClientFactory
+>

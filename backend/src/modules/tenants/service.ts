@@ -1,7 +1,17 @@
 import type { TenantsRepository } from './repository.js'
+import type { ChatwootClientConfig } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
+import {
+  decodeTenantSecretKey,
+  decryptTenantSecret,
+  TenantSecretCiphertextError,
+  TenantSecretKeyError,
+} from './secrets.js'
 
 export type TenantRequestContext = {
+  chatwoot: ChatwootClientConfig & {
+    webhookSecret: string
+  }
   displayName: string
   id: number
   isDefault: boolean
@@ -13,6 +23,7 @@ export type TenantRequestContext = {
 
 type CreateTenantsServiceOptions = {
   defaultTenantSlug?: string | undefined
+  tenantSecretKey?: string | undefined
   tenantsRepository: Pick<
     TenantsRepository,
     'findByPrimaryDomain' | 'findBySlug'
@@ -62,14 +73,29 @@ export function normalizeTenantHost(rawHost: string) {
 
 function toTenantRequestContext({
   defaultSlug,
+  tenantSecretKey,
   tenant,
 }: {
   defaultSlug: string
+  tenantSecretKey: Buffer
   tenant: NonNullable<
     Awaited<ReturnType<TenantsRepository['findByPrimaryDomain']>>
   >
 }): TenantRequestContext {
   return {
+    chatwoot: {
+      accountId: tenant.chatwootAccountId,
+      apiAccessToken: decryptTenantSecret(
+        tenant.chatwootApiAccessTokenCiphertext,
+        tenantSecretKey,
+      ),
+      baseUrl: tenant.chatwootBaseUrl,
+      portalInboxId: tenant.chatwootPortalInboxId,
+      webhookSecret: decryptTenantSecret(
+        tenant.chatwootWebhookSecretCiphertext,
+        tenantSecretKey,
+      ),
+    },
     displayName: tenant.displayName,
     id: tenant.id,
     isDefault: tenant.slug === defaultSlug,
@@ -82,6 +108,7 @@ function toTenantRequestContext({
 
 export function createTenantsService({
   defaultTenantSlug: configuredDefaultTenantSlug,
+  tenantSecretKey: rawTenantSecretKey,
   tenantsRepository,
 }: CreateTenantsServiceOptions) {
   const normalizedDefaultTenantSlug = (
@@ -89,6 +116,54 @@ export function createTenantsService({
   )
     .trim()
     .toLowerCase()
+
+  function resolveTenantSecretKey() {
+    if (!rawTenantSecretKey?.trim()) {
+      throw new ApiError(
+        500,
+        'TENANT_SECRET_KEY_MISSING',
+        'Tenant secret key is not configured.',
+      )
+    }
+
+    try {
+      return decodeTenantSecretKey(rawTenantSecretKey)
+    } catch (error) {
+      if (error instanceof TenantSecretKeyError) {
+        throw new ApiError(
+          500,
+          'TENANT_SECRET_KEY_INVALID',
+          'Tenant secret key is invalid.',
+        )
+      }
+
+      throw error
+    }
+  }
+
+  function buildTenantRequestContext(
+    tenant: NonNullable<
+      Awaited<ReturnType<TenantsRepository['findByPrimaryDomain']>>
+    >,
+  ) {
+    try {
+      return toTenantRequestContext({
+        defaultSlug: normalizedDefaultTenantSlug,
+        tenant,
+        tenantSecretKey: resolveTenantSecretKey(),
+      })
+    } catch (error) {
+      if (error instanceof TenantSecretCiphertextError) {
+        throw new ApiError(
+          500,
+          'TENANT_SECRET_CIPHERTEXT_INVALID',
+          'Tenant secret ciphertext is invalid.',
+        )
+      }
+
+      throw error
+    }
+  }
 
   return {
     assertDefaultTenantRuntime(tenant: TenantRequestContext) {
@@ -133,10 +208,7 @@ export function createTenantsService({
         )
       }
 
-      return toTenantRequestContext({
-        defaultSlug: normalizedDefaultTenantSlug,
-        tenant,
-      })
+      return buildTenantRequestContext(tenant)
     },
 
     async resolveDefaultTenant() {
@@ -148,10 +220,7 @@ export function createTenantsService({
         return null
       }
 
-      return toTenantRequestContext({
-        defaultSlug: normalizedDefaultTenantSlug,
-        tenant,
-      })
+      return buildTenantRequestContext(tenant)
     },
   }
 }

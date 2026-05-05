@@ -97,9 +97,6 @@ function createService(
     chatMessagesService: {
       getCurrentUserChatMessages,
     },
-    env: {
-      CHATWOOT_WEBHOOK_SECRET: webhookSecret,
-    },
     now: () => now,
     realtimeHub: {
       publishMessages,
@@ -112,6 +109,7 @@ function createService(
       findConversationMappingByChatwootConversationId,
       recordDelivery,
     },
+    webhookSecret,
   })
 
   return {
