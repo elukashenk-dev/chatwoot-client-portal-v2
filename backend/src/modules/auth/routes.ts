@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
+import { requireTenantContext } from '../tenants/routes.js'
 import type { AuthService } from './service.js'
 import {
   clearSessionCookie,
@@ -35,7 +36,11 @@ export function registerAuthRoutes(
     assertAllowedTenantOrigin(request)
 
     const body = loginBodySchema.parse(request.body)
-    const session = await authService.login(body)
+    const tenant = requireTenantContext(request)
+    const session = await authService.login({
+      ...body,
+      tenantId: tenant.id,
+    })
 
     reply.setCookie(
       env.SESSION_COOKIE_NAME,
@@ -52,9 +57,13 @@ export function registerAuthRoutes(
     assertAllowedTenantOrigin(request)
 
     const sessionToken = getSessionToken(request, env)
+    const tenant = requireTenantContext(request)
 
     if (sessionToken) {
-      await authService.logout(sessionToken)
+      await authService.logout({
+        sessionToken,
+        tenantId: tenant.id,
+      })
     }
 
     clearSessionCookie(reply, env)
@@ -64,13 +73,17 @@ export function registerAuthRoutes(
 
   app.get('/api/auth/me', async (request, reply) => {
     const sessionToken = getSessionToken(request, env)
+    const tenant = requireTenantContext(request)
 
     if (!sessionToken) {
       clearSessionCookie(reply, env)
       throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
     }
 
-    const user = await authService.getCurrentUser(sessionToken)
+    const user = await authService.getCurrentUser({
+      sessionToken,
+      tenantId: tenant.id,
+    })
 
     if (!user) {
       clearSessionCookie(reply, env)

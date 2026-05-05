@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import { createDatabaseClient } from '../../../backend/src/db/client.ts'
 import {
   portalUserContactLinks,
+  portalTenants,
   portalUsers,
 } from '../../../backend/src/db/schema.ts'
 import { seedE2ePortalUser } from '../../../backend/src/test/e2ePortalUser.ts'
@@ -32,6 +33,18 @@ export async function findPortalUserContactLinkForE2e(email: string) {
   })
 
   try {
+    const [tenant] = await database.db
+      .select({
+        id: portalTenants.id,
+      })
+      .from(portalTenants)
+      .orderBy(sql`${portalTenants.id} asc`)
+      .limit(1)
+
+    if (!tenant) {
+      return null
+    }
+
     const [link] = await database.db
       .select({
         chatwootContactId: portalUserContactLinks.chatwootContactId,
@@ -43,7 +56,13 @@ export async function findPortalUserContactLinkForE2e(email: string) {
         portalUserContactLinks,
         eq(portalUserContactLinks.userId, portalUsers.id),
       )
-      .where(eq(portalUsers.email, email))
+      .where(
+        and(
+          eq(portalUsers.tenantId, tenant.id),
+          eq(portalUserContactLinks.tenantId, tenant.id),
+          eq(portalUsers.email, email),
+        ),
+      )
       .limit(1)
 
     return link ?? null

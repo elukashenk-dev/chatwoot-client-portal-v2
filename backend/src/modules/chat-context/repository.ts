@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -20,7 +20,14 @@ type ConversationMappingInput = {
   userId: number
 }
 
-export function createChatContextRepository(db: AppDatabase) {
+type TenantRepositoryScope = {
+  tenantId: number
+}
+
+export function createChatContextRepository(
+  db: AppDatabase,
+  { tenantId }: TenantRepositoryScope,
+) {
   async function findContactLinkByUserId(userId: number) {
     const [link] = await db
       .select({
@@ -28,7 +35,12 @@ export function createChatContextRepository(db: AppDatabase) {
         userId: portalUserContactLinks.userId,
       })
       .from(portalUserContactLinks)
-      .where(eq(portalUserContactLinks.userId, userId))
+      .where(
+        and(
+          eq(portalUserContactLinks.tenantId, tenantId),
+          eq(portalUserContactLinks.userId, userId),
+        ),
+      )
       .limit(1)
 
     return link ?? null
@@ -40,6 +52,7 @@ export function createChatContextRepository(db: AppDatabase) {
         .insert(portalUserContactLinks)
         .values({
           chatwootContactId,
+          tenantId,
           userId,
         })
         .onConflictDoNothing()
@@ -60,7 +73,9 @@ export function createChatContextRepository(db: AppDatabase) {
           id: portalUsers.id,
         })
         .from(portalUsers)
-        .where(eq(portalUsers.id, userId))
+        .where(
+          and(eq(portalUsers.id, userId), eq(portalUsers.tenantId, tenantId)),
+        )
         .limit(1)
 
       return user ?? null
@@ -76,7 +91,12 @@ export function createChatContextRepository(db: AppDatabase) {
           userId: portalUserChatwootConversations.userId,
         })
         .from(portalUserChatwootConversations)
-        .where(eq(portalUserChatwootConversations.userId, userId))
+        .where(
+          and(
+            eq(portalUserChatwootConversations.tenantId, tenantId),
+            eq(portalUserChatwootConversations.userId, userId),
+          ),
+        )
         .limit(1)
 
       return mapping ?? null
@@ -95,6 +115,7 @@ export function createChatContextRepository(db: AppDatabase) {
           chatwootContactId,
           chatwootConversationId,
           chatwootInboxId,
+          tenantId,
           updatedAt: now,
           userId,
         })
@@ -105,7 +126,10 @@ export function createChatContextRepository(db: AppDatabase) {
             chatwootInboxId,
             updatedAt: now,
           },
-          target: portalUserChatwootConversations.userId,
+          target: [
+            portalUserChatwootConversations.tenantId,
+            portalUserChatwootConversations.userId,
+          ],
         })
         .returning({
           chatwootContactId: portalUserChatwootConversations.chatwootContactId,

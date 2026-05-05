@@ -57,6 +57,11 @@ export const portalUsers = pgTable(
   'portal_users',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     email: text('email').notNull(),
     fullName: text('full_name'),
     passwordHash: text('password_hash').notNull(),
@@ -78,13 +83,24 @@ export const portalUsers = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex('portal_users_email_unique').on(table.email)],
+  (table) => [
+    uniqueIndex('portal_users_tenant_email_unique').on(
+      table.tenantId,
+      table.email,
+    ),
+    index('portal_users_tenant_id_idx').on(table.tenantId),
+  ],
 )
 
 export const portalSessions = pgTable(
   'portal_sessions',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     userId: integer('user_id')
       .notNull()
       .references(() => portalUsers.id, {
@@ -108,7 +124,10 @@ export const portalSessions = pgTable(
   },
   (table) => [
     uniqueIndex('portal_sessions_token_hash_unique').on(table.tokenHash),
-    index('portal_sessions_user_id_idx').on(table.userId),
+    index('portal_sessions_tenant_user_id_idx').on(
+      table.tenantId,
+      table.userId,
+    ),
     index('portal_sessions_expires_at_idx').on(table.expiresAt),
   ],
 )
@@ -117,6 +136,11 @@ export const portalUserContactLinks = pgTable(
   'portal_user_contact_links',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     userId: integer('user_id')
       .notNull()
       .references(() => portalUsers.id, {
@@ -137,8 +161,12 @@ export const portalUserContactLinks = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('portal_user_contact_links_user_id_unique').on(table.userId),
-    uniqueIndex('portal_user_contact_links_contact_id_unique').on(
+    uniqueIndex('portal_user_contact_links_tenant_user_unique').on(
+      table.tenantId,
+      table.userId,
+    ),
+    uniqueIndex('portal_user_contact_links_tenant_contact_unique').on(
+      table.tenantId,
       table.chatwootContactId,
     ),
   ],
@@ -148,6 +176,11 @@ export const portalUserChatwootConversations = pgTable(
   'portal_user_chatwoot_conversations',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     userId: integer('user_id')
       .notNull()
       .references(() => portalUsers.id, {
@@ -170,13 +203,15 @@ export const portalUserChatwootConversations = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('portal_user_chatwoot_conversations_user_id_unique').on(
+    uniqueIndex('portal_user_chatwoot_conversations_tenant_user_unique').on(
+      table.tenantId,
       table.userId,
     ),
-    uniqueIndex('portal_user_chatwoot_conversations_conversation_id_unique').on(
-      table.chatwootConversationId,
-    ),
-    index('portal_user_chatwoot_conversations_contact_id_idx').on(
+    uniqueIndex(
+      'portal_user_chatwoot_conversations_tenant_conversation_unique',
+    ).on(table.tenantId, table.chatwootConversationId),
+    index('portal_user_chatwoot_conversations_tenant_contact_id_idx').on(
+      table.tenantId,
       table.chatwootContactId,
     ),
   ],
@@ -186,6 +221,11 @@ export const portalChatMessageSends = pgTable(
   'portal_chat_message_sends',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     userId: integer('user_id')
       .notNull()
       .references(() => portalUsers.id, {
@@ -222,12 +262,17 @@ export const portalChatMessageSends = pgTable(
   },
   (table) => [
     uniqueIndex('portal_chat_message_sends_scope_unique').on(
+      table.tenantId,
       table.userId,
       table.primaryConversationId,
       table.clientMessageKey,
     ),
-    index('portal_chat_message_sends_user_id_idx').on(table.userId),
-    index('portal_chat_message_sends_conversation_id_idx').on(
+    index('portal_chat_message_sends_tenant_user_id_idx').on(
+      table.tenantId,
+      table.userId,
+    ),
+    index('portal_chat_message_sends_tenant_conversation_id_idx').on(
+      table.tenantId,
       table.primaryConversationId,
     ),
     index('portal_chat_message_sends_status_updated_at_idx').on(
@@ -241,6 +286,11 @@ export const chatwootWebhookDeliveries = pgTable(
   'chatwoot_webhook_deliveries',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     deliveryKey: text('delivery_key').notNull(),
     eventName: text('event_name').notNull(),
     status: text('status').notNull(),
@@ -259,11 +309,16 @@ export const chatwootWebhookDeliveries = pgTable(
     }),
   },
   (table) => [
-    uniqueIndex('chatwoot_webhook_deliveries_key_unique').on(table.deliveryKey),
-    index('chatwoot_webhook_deliveries_conversation_id_idx').on(
+    uniqueIndex('chatwoot_webhook_deliveries_tenant_key_unique').on(
+      table.tenantId,
+      table.deliveryKey,
+    ),
+    index('chatwoot_webhook_deliveries_tenant_conversation_id_idx').on(
+      table.tenantId,
       table.chatwootConversationId,
     ),
-    index('chatwoot_webhook_deliveries_event_status_idx').on(
+    index('chatwoot_webhook_deliveries_tenant_event_status_idx').on(
+      table.tenantId,
       table.eventName,
       table.status,
     ),
@@ -274,6 +329,11 @@ export const verificationRecords = pgTable(
   'verification_records',
   {
     id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
     purpose: text('purpose').notNull(),
     email: text('email').notNull(),
     fullName: text('full_name'),
@@ -321,13 +381,20 @@ export const verificationRecords = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('verification_records_email_idx').on(table.email),
-    index('verification_records_email_purpose_status_idx').on(
+    index('verification_records_tenant_email_idx').on(
+      table.tenantId,
+      table.email,
+    ),
+    index('verification_records_tenant_email_purpose_status_idx').on(
+      table.tenantId,
       table.email,
       table.purpose,
       table.status,
     ),
     index('verification_records_expires_at_idx').on(table.expiresAt),
-    index('verification_records_portal_user_id_idx').on(table.portalUserId),
+    index('verification_records_tenant_portal_user_id_idx').on(
+      table.tenantId,
+      table.portalUserId,
+    ),
   ],
 )

@@ -47,23 +47,34 @@ const testEnv: AppEnv = {
 async function seedDefaultTenant(database: DatabaseClient) {
   const key = decodeTenantSecretKey(tenantSecretKey)
 
-  await database.db.insert(portalTenants).values({
-    chatwootAccountId: 1,
-    chatwootApiAccessTokenCiphertext: encryptTenantSecret(
-      'test-api-token',
-      key,
-    ),
-    chatwootBaseUrl: 'https://chatwoot.example.test',
-    chatwootPortalInboxId: 1,
-    chatwootWebhookSecretCiphertext: encryptTenantSecret(
-      'test-webhook-secret',
-      key,
-    ),
-    displayName: 'Local Test Tenant',
-    primaryDomain: 'localhost',
-    publicBaseUrl: testEnv.APP_ORIGIN,
-    slug: 'default',
-  })
+  const [tenant] = await database.db
+    .insert(portalTenants)
+    .values({
+      chatwootAccountId: 1,
+      chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+        'test-api-token',
+        key,
+      ),
+      chatwootBaseUrl: 'https://chatwoot.example.test',
+      chatwootPortalInboxId: 1,
+      chatwootWebhookSecretCiphertext: encryptTenantSecret(
+        'test-webhook-secret',
+        key,
+      ),
+      displayName: 'Local Test Tenant',
+      primaryDomain: 'localhost',
+      publicBaseUrl: testEnv.APP_ORIGIN,
+      slug: 'default',
+    })
+    .returning({
+      id: portalTenants.id,
+    })
+
+  if (!tenant) {
+    throw new Error('Failed to seed default tenant.')
+  }
+
+  return tenant.id
 }
 
 async function waitForBackgroundTasks() {
@@ -135,10 +146,11 @@ function createMultipartAttachmentPayload({
 describe('buildApp', () => {
   let app: ReturnType<typeof buildApp>
   let database: DatabaseClient
+  let tenantId: number
 
   beforeEach(async () => {
     database = await createTestDatabase()
-    await seedDefaultTenant(database)
+    tenantId = await seedDefaultTenant(database)
     app = buildApp({
       database,
       env: testEnv,
@@ -171,6 +183,7 @@ describe('buildApp', () => {
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -253,6 +266,7 @@ describe('buildApp', () => {
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -310,6 +324,7 @@ describe('buildApp', () => {
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -357,6 +372,7 @@ describe('buildApp', () => {
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -409,6 +425,7 @@ describe('buildApp', () => {
       email: 'large-file@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -457,6 +474,7 @@ describe('buildApp', () => {
       email: 'large-caption@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -537,6 +555,7 @@ describe('buildApp', () => {
       email: 'inactive@company.ru',
       isActive: false,
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const response = await app.inject({
@@ -566,6 +585,7 @@ describe('buildApp', () => {
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const loginResponse = await app.inject({
@@ -609,6 +629,7 @@ describe('buildApp', () => {
     await database.db.insert(portalUsers).values({
       email: 'name@company.ru',
       passwordHash: await hashPassword('Secret123'),
+      tenantId,
     })
 
     const response = await app.inject({
@@ -669,6 +690,7 @@ describe('buildApp', () => {
       resendCount: 0,
       resendNotBefore: minutesFromNow(1),
       status: 'pending',
+      tenantId,
     })
 
     const response = await app.inject({
@@ -712,6 +734,7 @@ describe('buildApp', () => {
       resendCount: 0,
       resendNotBefore: minutesFromNow(1),
       status: 'verified',
+      tenantId,
       verifiedAt: minutesFromNow(-1),
     })
 
@@ -766,6 +789,7 @@ describe('buildApp', () => {
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const existingUserResponse = await app.inject({
@@ -813,6 +837,7 @@ describe('buildApp', () => {
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const preResetLoginResponse = await app.inject({
@@ -846,6 +871,7 @@ describe('buildApp', () => {
       resendCount: 0,
       resendNotBefore: minutesFromNow(1),
       status: 'pending',
+      tenantId,
     })
 
     const verifyResponse = await app.inject({

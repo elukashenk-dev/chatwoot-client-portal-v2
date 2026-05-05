@@ -78,23 +78,88 @@ function basePendingRecordSelection() {
   }
 }
 
-function createScopedLockKey(email: string) {
+function createScopedLockKey(tenantId: number, email: string) {
   const digest = createHash('sha256')
-    .update(`${REGISTRATION_VERIFICATION_PURPOSE}:${normalizeEmail(email)}`)
+    .update(
+      `${REGISTRATION_VERIFICATION_PURPOSE}:${tenantId}:${normalizeEmail(email)}`,
+    )
     .digest()
 
   return [digest.readInt32BE(0), digest.readInt32BE(4)] as const
 }
 
-export function createRegistrationRepository(db: AppDatabase) {
+function scopedVerificationRecordById(tenantId: number, recordId: number) {
+  return and(
+    eq(verificationRecords.id, recordId),
+    eq(verificationRecords.tenantId, tenantId),
+  )
+}
+
+function scopedVerificationRecordByStatus(
+  tenantId: number,
+  recordId: number,
+  status: string,
+) {
+  return and(
+    scopedVerificationRecordById(tenantId, recordId),
+    eq(verificationRecords.status, status),
+  )
+}
+
+async function findLatestRegistrationVerification({
+  email,
+  executor,
+  lock = false,
+  status,
+  statuses,
+  tenantId,
+}: {
+  email: string
+  executor: AppDatabase
+  lock?: boolean
+  status?: string
+  statuses?: string[]
+  tenantId: number
+}) {
+  const normalizedEmail = normalizeEmail(email)
+  const statusFilter = status
+    ? eq(verificationRecords.status, status)
+    : statuses
+      ? inArray(verificationRecords.status, statuses)
+      : undefined
+
+  const query = executor
+    .select(basePendingRecordSelection())
+    .from(verificationRecords)
+    .where(
+      and(
+        eq(verificationRecords.tenantId, tenantId),
+        sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
+        eq(verificationRecords.purpose, REGISTRATION_VERIFICATION_PURPOSE),
+        statusFilter,
+      ),
+    )
+    .orderBy(desc(verificationRecords.createdAt), desc(verificationRecords.id))
+    .limit(1)
+
+  const [record] = lock ? await query.for('update') : await query
+
+  return record ?? null
+}
+
+export function createRegistrationRepository(
+  db: AppDatabase,
+  { tenantId }: { tenantId: number },
+) {
   return {
     async transactionWithScopedLock<T>(
       email: string,
       handler: (executor: AppDatabase) => Promise<T>,
     ) {
-      const normalizedEmail = normalizeEmail(email)
-      const [lockKeyPartOne, lockKeyPartTwo] =
-        createScopedLockKey(normalizedEmail)
+      const [lockKeyPartOne, lockKeyPartTwo] = createScopedLockKey(
+        tenantId,
+        email,
+      )
 
       return db.transaction(async (tx) => {
         await tx.execute(
@@ -126,6 +191,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           resendCount: input.resendCount ?? 0,
           resendNotBefore: input.resendNotBefore,
           status: input.status ?? 'pending',
+          tenantId,
         })
         .returning(basePendingRecordSelection())
 
@@ -142,7 +208,7 @@ export function createRegistrationRepository(db: AppDatabase) {
     ) {
       await executor
         .delete(verificationRecords)
-        .where(eq(verificationRecords.id, recordId))
+        .where(scopedVerificationRecordById(tenantId, recordId))
     },
 
     async expireVerificationRecord(
@@ -156,109 +222,53 @@ export function createRegistrationRepository(db: AppDatabase) {
           status: 'expired',
           updatedAt: at,
         })
-        .where(eq(verificationRecords.id, recordId))
+        .where(scopedVerificationRecordById(tenantId, recordId))
     },
 
     async findLatestPendingVerificationByEmail(
       email: string,
       executor: AppDatabase = db,
     ) {
-      const normalizedEmail = normalizeEmail(email)
-
-      const [record] = await executor
-        .select(basePendingRecordSelection())
-        .from(verificationRecords)
-        .where(
-          and(
-            sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
-            eq(verificationRecords.purpose, REGISTRATION_VERIFICATION_PURPOSE),
-            eq(verificationRecords.status, 'pending'),
-          ),
-        )
-        .orderBy(
-          desc(verificationRecords.createdAt),
-          desc(verificationRecords.id),
-        )
-        .limit(1)
-        .for('update')
-
-      return record ?? null
+      return findLatestRegistrationVerification({
+        email,
+        executor,
+        lock: true,
+        status: 'pending',
+        tenantId,
+      })
     },
 
     async findLatestActiveVerificationByEmail(
       email: string,
       executor: AppDatabase = db,
     ) {
-      const normalizedEmail = normalizeEmail(email)
-
-      const [record] = await executor
-        .select(basePendingRecordSelection())
-        .from(verificationRecords)
-        .where(
-          and(
-            sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
-            eq(verificationRecords.purpose, REGISTRATION_VERIFICATION_PURPOSE),
-            inArray(verificationRecords.status, ['pending', 'sending']),
-          ),
-        )
-        .orderBy(
-          desc(verificationRecords.createdAt),
-          desc(verificationRecords.id),
-        )
-        .limit(1)
-        .for('update')
-
-      return record ?? null
+      return findLatestRegistrationVerification({
+        email,
+        executor,
+        lock: true,
+        statuses: ['pending', 'sending'],
+        tenantId,
+      })
     },
 
     async findLatestVerifiedVerificationByEmail(
       email: string,
       executor: AppDatabase = db,
     ) {
-      const normalizedEmail = normalizeEmail(email)
-
-      const [record] = await executor
-        .select(basePendingRecordSelection())
-        .from(verificationRecords)
-        .where(
-          and(
-            sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
-            eq(verificationRecords.purpose, REGISTRATION_VERIFICATION_PURPOSE),
-            eq(verificationRecords.status, 'verified'),
-          ),
-        )
-        .orderBy(
-          desc(verificationRecords.createdAt),
-          desc(verificationRecords.id),
-        )
-        .limit(1)
-        .for('update')
-
-      return record ?? null
+      return findLatestRegistrationVerification({
+        email,
+        executor,
+        lock: true,
+        status: 'verified',
+        tenantId,
+      })
     },
 
     async findLatestVerificationByEmail(
       email: string,
       executor: AppDatabase = db,
     ) {
-      const normalizedEmail = normalizeEmail(email)
-
-      const [record] = await executor
-        .select(basePendingRecordSelection())
-        .from(verificationRecords)
-        .where(
-          and(
-            sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
-            eq(verificationRecords.purpose, REGISTRATION_VERIFICATION_PURPOSE),
-          ),
-        )
-        .orderBy(
-          desc(verificationRecords.createdAt),
-          desc(verificationRecords.id),
-        )
-        .limit(1)
-
-      return record ?? null
+      return findLatestRegistrationVerification({ email, executor, tenantId })
     },
 
     async findPortalUserByEmail(email: string, executor: AppDatabase = db) {
@@ -273,7 +283,12 @@ export function createRegistrationRepository(db: AppDatabase) {
           passwordHash: portalUsers.passwordHash,
         })
         .from(portalUsers)
-        .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+        .where(
+          and(
+            eq(portalUsers.tenantId, tenantId),
+            sql`lower(${portalUsers.email}) = ${normalizedEmail}`,
+          ),
+        )
         .limit(1)
 
       return user ?? null
@@ -300,7 +315,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           status,
           updatedAt,
         })
-        .where(eq(verificationRecords.id, recordId))
+        .where(scopedVerificationRecordById(tenantId, recordId))
         .returning(basePendingRecordSelection())
 
       if (!updatedRecord) {
@@ -328,7 +343,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           status: input.status ?? 'pending',
           updatedAt: input.updatedAt,
         })
-        .where(eq(verificationRecords.id, input.recordId))
+        .where(scopedVerificationRecordById(tenantId, input.recordId))
         .returning(basePendingRecordSelection())
 
       if (!updatedRecord) {
@@ -359,12 +374,14 @@ export function createRegistrationRepository(db: AppDatabase) {
           email: normalizedEmail,
           fullName: normalizedFullName,
           passwordHash,
+          tenantId,
         })
         .returning({
           email: portalUsers.email,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
           isActive: portalUsers.isActive,
+          tenantId: portalUsers.tenantId,
         })
 
       return createdUser ?? null
@@ -384,11 +401,13 @@ export function createRegistrationRepository(db: AppDatabase) {
         .insert(portalUserContactLinks)
         .values({
           chatwootContactId,
+          tenantId,
           userId,
         })
         .returning({
           chatwootContactId: portalUserContactLinks.chatwootContactId,
           id: portalUserContactLinks.id,
+          tenantId: portalUserContactLinks.tenantId,
           userId: portalUserContactLinks.userId,
         })
 
@@ -410,12 +429,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           status: 'pending',
           updatedAt,
         })
-        .where(
-          and(
-            eq(verificationRecords.id, recordId),
-            eq(verificationRecords.status, 'sending'),
-          ),
-        )
+        .where(scopedVerificationRecordByStatus(tenantId, recordId, 'sending'))
         .returning(basePendingRecordSelection())
 
       return updatedRecord ?? null
@@ -434,12 +448,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           status: 'invalidated',
           updatedAt,
         })
-        .where(
-          and(
-            eq(verificationRecords.id, recordId),
-            eq(verificationRecords.status, 'verified'),
-          ),
-        )
+        .where(scopedVerificationRecordByStatus(tenantId, recordId, 'verified'))
         .returning(basePendingRecordSelection())
 
       return updatedRecord ?? null
@@ -458,12 +467,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           status: 'consumed',
           updatedAt,
         })
-        .where(
-          and(
-            eq(verificationRecords.id, recordId),
-            eq(verificationRecords.status, 'verified'),
-          ),
-        )
+        .where(scopedVerificationRecordByStatus(tenantId, recordId, 'verified'))
         .returning(basePendingRecordSelection())
 
       return updatedRecord ?? null
@@ -494,12 +498,7 @@ export function createRegistrationRepository(db: AppDatabase) {
           updatedAt,
           verifiedAt,
         })
-        .where(
-          and(
-            eq(verificationRecords.id, recordId),
-            eq(verificationRecords.status, 'pending'),
-          ),
-        )
+        .where(scopedVerificationRecordByStatus(tenantId, recordId, 'pending'))
         .returning(basePendingRecordSelection())
 
       return updatedRecord ?? null

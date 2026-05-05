@@ -8,6 +8,7 @@ import {
 import { hashPassword, verifyPassword } from '../../lib/password.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { seedTestTenant } from '../../test/testTenants.js'
 import { createPasswordResetRepository } from './repository.js'
 import { createPasswordResetService } from './service.js'
 
@@ -48,9 +49,11 @@ async function waitForExpectation(assertion: () => Promise<void> | void) {
 
 describe('password reset service', () => {
   let database: DatabaseClient
+  let tenantId: number
 
   beforeEach(async () => {
     database = await createTestDatabase()
+    tenantId = (await seedTestTenant(database.db)).id
   })
 
   afterEach(async () => {
@@ -60,12 +63,15 @@ describe('password reset service', () => {
   it('creates a reset record and sends a code email for an active portal user', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -111,7 +117,9 @@ describe('password reset service', () => {
 
   it('keeps request response generic for a missing account and does not send email', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
     const service = createPasswordResetService({
       emailDelivery: {
         send: sendEmail,
@@ -146,12 +154,15 @@ describe('password reset service', () => {
   it('confirms the reset code and returns a continuation token', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -197,12 +208,15 @@ describe('password reset service', () => {
   it('increments attempts and invalidates after too many incorrect codes', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -244,12 +258,15 @@ describe('password reset service', () => {
   it('does not lose invalid attempts under parallel reset verification requests', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -297,12 +314,15 @@ describe('password reset service', () => {
   it('sets a new password after verification and consumes the reset proof', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -338,7 +358,10 @@ describe('password reset service', () => {
       result: 'password_reset_completed',
     })
 
-    const user = await portalUsersRepository.findByEmail('name@company.ru')
+    const user = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId,
+    })
 
     expect(user).not.toBeNull()
     expect(await verifyPassword('OldPass123', user?.passwordHash ?? '')).toBe(
@@ -366,12 +389,15 @@ describe('password reset service', () => {
         }),
     )
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -406,12 +432,15 @@ describe('password reset service', () => {
       .mockRejectedValueOnce(new SmtpEmailDeliveryConfigurationError())
       .mockResolvedValueOnce(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({
@@ -456,12 +485,15 @@ describe('password reset service', () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new SmtpEmailDeliveryError())
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const passwordResetRepository = createPasswordResetRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
 
     await portalUsersRepository.create({
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: await hashPassword('OldPass123'),
+      tenantId,
     })
 
     const service = createPasswordResetService({

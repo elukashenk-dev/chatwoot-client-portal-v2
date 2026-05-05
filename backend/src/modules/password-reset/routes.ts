@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
@@ -38,19 +38,19 @@ const passwordResetSetPasswordBodySchema = z.object({
 })
 
 type RegisterPasswordResetRoutesOptions = {
-  passwordResetService: PasswordResetService
+  createPasswordResetService: (request: FastifyRequest) => PasswordResetService
 }
 
 export function registerPasswordResetRoutes(
   app: FastifyInstance,
-  { passwordResetService }: RegisterPasswordResetRoutesOptions,
+  { createPasswordResetService }: RegisterPasswordResetRoutesOptions,
 ) {
   app.post('/api/auth/password-reset/request', async (request) => {
     assertAllowedTenantOrigin(request)
 
     const body = passwordResetRequestBodySchema.parse(request.body)
 
-    return passwordResetService.requestPasswordReset({
+    return createPasswordResetService(request).requestPasswordReset({
       email: body.email,
     })
   })
@@ -60,7 +60,7 @@ export function registerPasswordResetRoutes(
 
     const body = passwordResetVerifyBodySchema.parse(request.body)
 
-    return passwordResetService.confirmPasswordReset({
+    return createPasswordResetService(request).confirmPasswordReset({
       code: body.code,
       email: body.email,
     })
@@ -71,7 +71,7 @@ export function registerPasswordResetRoutes(
 
     const body = passwordResetSetPasswordBodySchema.parse(request.body)
 
-    return passwordResetService.setPassword({
+    return createPasswordResetService(request).setPassword({
       continuationToken: body.continuationToken,
       email: body.email,
       newPassword: body.newPassword,

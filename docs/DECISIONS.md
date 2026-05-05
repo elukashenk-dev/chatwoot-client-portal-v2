@@ -263,3 +263,11 @@
   backend runtime больше не создает общий Chatwoot client из глобальных `CHATWOOT_*` env. Для registration, chat runtime и webhook processing Chatwoot client создается на request из `request.tenant.chatwoot`: tenant `baseUrl`, `accountId`, `portalInboxId`, decrypted runtime API token и decrypted webhook secret. Старые `CHATWOOT_*` env остаются допустимы только для bootstrap/provisioning scripts, пока они не заменены tenant-aware scripts
 - причина:
   один portal deploy может обслуживать tenants с разными Chatwoot accounts или installations. Общий env-bound Chatwoot client возвращал single-tenant authority и мог отправить запросы не в тот Chatwoot account/inbox
+
+## D-034. Customer/chat persistence требует tenant scope
+
+- дата: `2026-05-05`
+- решение:
+  tenant-owned tables получили `tenant_id`: `portal_users`, `portal_sessions`, `verification_records`, `portal_user_contact_links`, `portal_user_chatwoot_conversations`, `portal_chat_message_sends` и `chatwoot_webhook_deliveries`. Unique/index scope для email, Chatwoot contact id, conversation id, send ledger и webhook delivery key теперь включает tenant там, где это нужно для isolation. Runtime repositories для этих таблиц создаются или вызываются с tenant scope
+- причина:
+  один и тот же email, Chatwoot contact id, conversation id или delivery key может легитимно повторяться в разных tenants. Без `tenant_id` persistence layer оставался бы скрыто global и мог смешать данные компаний даже при правильном Host-based tenant resolution

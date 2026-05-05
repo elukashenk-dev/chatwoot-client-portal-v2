@@ -10,6 +10,7 @@ import {
 } from '../../integrations/email/smtp.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { seedTestTenant } from '../../test/testTenants.js'
 import { createRegistrationRepository } from './repository.js'
 import { createRegistrationService } from './service.js'
 
@@ -52,7 +53,10 @@ async function waitForMockCall(mock: ReturnType<typeof vi.fn>) {
   throw new Error('Expected mock to be called.')
 }
 
-async function findPendingRegistrationRecords(database: DatabaseClient) {
+async function findPendingRegistrationRecords(
+  database: DatabaseClient,
+  tenantId: number,
+) {
   return database.db
     .select({
       attemptsCount: verificationRecords.attemptsCount,
@@ -64,6 +68,7 @@ async function findPendingRegistrationRecords(database: DatabaseClient) {
     .from(verificationRecords)
     .where(
       and(
+        eq(verificationRecords.tenantId, tenantId),
         eq(verificationRecords.email, 'name@company.ru'),
         eq(verificationRecords.purpose, 'registration'),
         eq(verificationRecords.status, 'pending'),
@@ -71,7 +76,10 @@ async function findPendingRegistrationRecords(database: DatabaseClient) {
     )
 }
 
-async function findActiveRegistrationRecords(database: DatabaseClient) {
+async function findActiveRegistrationRecords(
+  database: DatabaseClient,
+  tenantId: number,
+) {
   return database.db
     .select({
       email: verificationRecords.email,
@@ -82,6 +90,7 @@ async function findActiveRegistrationRecords(database: DatabaseClient) {
     .from(verificationRecords)
     .where(
       and(
+        eq(verificationRecords.tenantId, tenantId),
         eq(verificationRecords.email, 'name@company.ru'),
         eq(verificationRecords.purpose, 'registration'),
         inArray(verificationRecords.status, ['pending', 'sending']),
@@ -89,20 +98,35 @@ async function findActiveRegistrationRecords(database: DatabaseClient) {
     )
 }
 
-async function findPortalUserContactLinks(database: DatabaseClient) {
+async function findPortalUserContactLinks(
+  database: DatabaseClient,
+  tenantId: number,
+) {
   return database.db
     .select({
       chatwootContactId: portalUserContactLinks.chatwootContactId,
       userId: portalUserContactLinks.userId,
     })
     .from(portalUserContactLinks)
+    .where(eq(portalUserContactLinks.tenantId, tenantId))
 }
 
 describe('registration service', () => {
   let database: DatabaseClient
+  let tenantId: number
+
+  function createRegistrationServiceForTest(
+    options: Omit<Parameters<typeof createRegistrationService>[0], 'tenantId'>,
+  ) {
+    return createRegistrationService({
+      ...options,
+      tenantId,
+    })
+  }
 
   beforeEach(async () => {
     database = await createTestDatabase()
+    tenantId = (await seedTestTenant(database.db)).id
   })
 
   afterEach(async () => {
@@ -110,7 +134,7 @@ describe('registration service', () => {
   })
 
   it('rejects registration when Chatwoot contact is not found', async () => {
-    const service = createRegistrationService({
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue(null),
       },
@@ -119,7 +143,9 @@ describe('registration service', () => {
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
       portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId,
+      }),
     })
 
     await expect(
@@ -135,7 +161,7 @@ describe('registration service', () => {
 
   it('requires Chatwoot eligibility when there is no active pending verification', async () => {
     const sendEmail = vi.fn()
-    const service = createRegistrationService({
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi
           .fn()
@@ -146,7 +172,9 @@ describe('registration service', () => {
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
       portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId,
+      }),
     })
 
     await expect(
@@ -168,9 +196,10 @@ describe('registration service', () => {
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: 'hashed-password',
+      tenantId,
     })
 
-    const service = createRegistrationService({
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -183,7 +212,9 @@ describe('registration service', () => {
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
       portalUsersRepository,
-      registrationRepository: createRegistrationRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId,
+      }),
     })
 
     await expect(
@@ -199,8 +230,10 @@ describe('registration service', () => {
 
   it('creates a pending verification record and sends a code email', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'Name@Company.RU',
@@ -256,7 +289,9 @@ describe('registration service', () => {
   it('returns the active pending verification during cooldown without depending on Chatwoot', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const registrationRepository = createRegistrationRepository(database.db)
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
     const findContactByEmail = vi
       .fn()
       .mockResolvedValueOnce({
@@ -266,7 +301,7 @@ describe('registration service', () => {
       })
       .mockRejectedValue(new ChatwootClientRequestError())
     let now = new Date('2026-04-21T12:00:00.000Z')
-    const service = createRegistrationService({
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail,
       },
@@ -305,8 +340,10 @@ describe('registration service', () => {
 
   it('serializes parallel registration requests to one active pending code', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -341,14 +378,18 @@ describe('registration service', () => {
       ),
     ).toBe(true)
     expect(sendEmail).toHaveBeenCalledTimes(1)
-    expect(await findPendingRegistrationRecords(database)).toHaveLength(1)
+    expect(
+      await findPendingRegistrationRecords(database, tenantId),
+    ).toHaveLength(1)
   })
 
   it('does not expose in-flight delivery as reusable pending when email send fails', async () => {
     const delivery = createDeferred<void>()
     const sendEmail = vi.fn(() => delivery.promise)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -387,15 +428,19 @@ describe('registration service', () => {
       code: 'REGISTRATION_DELIVERY_UNAVAILABLE',
       statusCode: 503,
     })
-    expect(await findPendingRegistrationRecords(database)).toHaveLength(0)
+    expect(
+      await findPendingRegistrationRecords(database, tenantId),
+    ).toHaveLength(0)
   })
 
   it('cleans up the sending verification when SMTP delivery is misconfigured', async () => {
     const sendEmail = vi
       .fn()
       .mockRejectedValue(new SmtpEmailDeliveryConfigurationError())
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -422,14 +467,18 @@ describe('registration service', () => {
     })
 
     expect(sendEmail).toHaveBeenCalledTimes(1)
-    expect(await findActiveRegistrationRecords(database)).toHaveLength(0)
+    expect(
+      await findActiveRegistrationRecords(database, tenantId),
+    ).toHaveLength(0)
   })
 
   it('confirms the verification code and returns a continuation token', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -481,8 +530,10 @@ describe('registration service', () => {
 
   it('increments attempts and rejects an invalid verification code', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -526,8 +577,10 @@ describe('registration service', () => {
 
   it('invalidates the verification after too many incorrect attempts', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -575,8 +628,10 @@ describe('registration service', () => {
 
   it('does not lose invalid attempts under parallel verification requests', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -631,8 +686,10 @@ describe('registration service', () => {
   it('completes registration after verification and creates a portal user', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -673,15 +730,17 @@ describe('registration service', () => {
       result: 'registration_completed',
     })
 
-    const createdUser =
-      await portalUsersRepository.findByEmail('name@company.ru')
+    const createdUser = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId,
+    })
 
     expect(createdUser).toMatchObject({
       email: 'name@company.ru',
       fullName: 'Portal User',
       isActive: true,
     })
-    expect(await findPortalUserContactLinks(database)).toEqual([
+    expect(await findPortalUserContactLinks(database, tenantId)).toEqual([
       {
         chatwootContactId: 44,
         userId: createdUser?.id,
@@ -700,7 +759,7 @@ describe('registration service', () => {
   })
 
   it('rejects registration set-password when password misses a letter or number', async () => {
-    const service = createRegistrationService({
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn(),
       },
@@ -709,7 +768,9 @@ describe('registration service', () => {
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
       portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId,
+      }),
     })
 
     await expect(
@@ -738,8 +799,10 @@ describe('registration service', () => {
   it('rejects set-password when the portal account already exists', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)
-    const registrationRepository = createRegistrationRepository(database.db)
-    const service = createRegistrationService({
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const service = createRegistrationServiceForTest({
       chatwootClient: {
         findContactByEmail: vi.fn().mockResolvedValue({
           email: 'name@company.ru',
@@ -771,6 +834,7 @@ describe('registration service', () => {
       email: 'name@company.ru',
       fullName: 'Portal User',
       passwordHash: 'hashed-password',
+      tenantId,
     })
 
     await expect(

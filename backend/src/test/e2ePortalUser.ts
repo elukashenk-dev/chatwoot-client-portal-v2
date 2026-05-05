@@ -1,7 +1,11 @@
-import { sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import type { NodeAppDatabase } from '../db/client.js'
-import { portalUsers, verificationRecords } from '../db/schema.js'
+import {
+  portalTenants,
+  portalUsers,
+  verificationRecords,
+} from '../db/schema.js'
 import { normalizeEmail } from '../lib/email.js'
 import { hashPassword } from '../lib/password.js'
 
@@ -20,12 +24,34 @@ export async function seedE2ePortalUser(
   const passwordHash = await hashPassword(user.password)
 
   return db.transaction(async (transaction) => {
+    const [tenant] = await transaction
+      .select({
+        id: portalTenants.id,
+      })
+      .from(portalTenants)
+      .orderBy(sql`${portalTenants.id} asc`)
+      .limit(1)
+
+    if (!tenant) {
+      throw new Error('Seed a portal tenant before seeding e2e portal users.')
+    }
+
     await transaction
       .delete(verificationRecords)
-      .where(sql`lower(${verificationRecords.email}) = ${email}`)
+      .where(
+        and(
+          eq(verificationRecords.tenantId, tenant.id),
+          sql`lower(${verificationRecords.email}) = ${email}`,
+        ),
+      )
     await transaction
       .delete(portalUsers)
-      .where(sql`lower(${portalUsers.email}) = ${email}`)
+      .where(
+        and(
+          eq(portalUsers.tenantId, tenant.id),
+          sql`lower(${portalUsers.email}) = ${email}`,
+        ),
+      )
 
     const [createdUser] = await transaction
       .insert(portalUsers)
@@ -34,6 +60,7 @@ export async function seedE2ePortalUser(
         fullName: user.fullName,
         isActive: true,
         passwordHash,
+        tenantId: tenant.id,
         updatedAt: now,
       })
       .returning({

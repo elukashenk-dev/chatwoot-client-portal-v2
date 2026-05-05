@@ -57,6 +57,13 @@
       "when": 1777988173734,
       "tag": "0007_true_wrecking_crew",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777991973574,
+      "tag": "0008_bored_dreadnoughts",
+      "breakpoints": true
     }
   ]
 }

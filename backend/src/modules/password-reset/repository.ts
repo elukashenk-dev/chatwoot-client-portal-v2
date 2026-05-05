@@ -71,23 +71,32 @@ function baseResetRecordSelection() {
   }
 }
 
-function createScopedLockKey(email: string) {
+type TenantRepositoryScope = {
+  tenantId: number
+}
+
+function createScopedLockKey(tenantId: number, email: string) {
   const digest = createHash('sha256')
-    .update(`${PASSWORD_RESET_PURPOSE}:${normalizeEmail(email)}`)
+    .update(`${PASSWORD_RESET_PURPOSE}:${tenantId}:${normalizeEmail(email)}`)
     .digest()
 
   return [digest.readInt32BE(0), digest.readInt32BE(4)] as const
 }
 
-export function createPasswordResetRepository(db: AppDatabase) {
+export function createPasswordResetRepository(
+  db: AppDatabase,
+  { tenantId }: TenantRepositoryScope,
+) {
   return {
     async transactionWithScopedLock<T>(
       email: string,
       handler: (executor: AppDatabase) => Promise<T>,
     ) {
       const normalizedEmail = normalizeEmail(email)
-      const [lockKeyPartOne, lockKeyPartTwo] =
-        createScopedLockKey(normalizedEmail)
+      const [lockKeyPartOne, lockKeyPartTwo] = createScopedLockKey(
+        tenantId,
+        normalizedEmail,
+      )
 
       return db.transaction(async (tx) => {
         await tx.execute(
@@ -118,6 +127,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
           resendCount: input.resendCount ?? 0,
           resendNotBefore: input.resendNotBefore,
           status: 'pending',
+          tenantId,
         })
         .returning(baseResetRecordSelection())
 
@@ -131,7 +141,12 @@ export function createPasswordResetRepository(db: AppDatabase) {
     async deleteResetRecord(recordId: number, executor: AppDatabase = db) {
       await executor
         .delete(verificationRecords)
-        .where(eq(verificationRecords.id, recordId))
+        .where(
+          and(
+            eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
+          ),
+        )
     },
 
     async expireResetRecord(
@@ -145,7 +160,12 @@ export function createPasswordResetRepository(db: AppDatabase) {
           status: 'expired',
           updatedAt: at,
         })
-        .where(eq(verificationRecords.id, recordId))
+        .where(
+          and(
+            eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
+          ),
+        )
     },
 
     async findLatestPendingResetByEmail(
@@ -159,6 +179,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .from(verificationRecords)
         .where(
           and(
+            eq(verificationRecords.tenantId, tenantId),
             sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
             eq(verificationRecords.purpose, PASSWORD_RESET_PURPOSE),
             eq(verificationRecords.status, 'pending'),
@@ -182,6 +203,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .from(verificationRecords)
         .where(
           and(
+            eq(verificationRecords.tenantId, tenantId),
             sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
             eq(verificationRecords.purpose, PASSWORD_RESET_PURPOSE),
           ),
@@ -206,6 +228,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .from(verificationRecords)
         .where(
           and(
+            eq(verificationRecords.tenantId, tenantId),
             sql`lower(${verificationRecords.email}) = ${normalizedEmail}`,
             eq(verificationRecords.purpose, PASSWORD_RESET_PURPOSE),
             eq(verificationRecords.status, 'verified'),
@@ -233,24 +256,31 @@ export function createPasswordResetRepository(db: AppDatabase) {
           passwordHash: portalUsers.passwordHash,
         })
         .from(portalUsers)
-        .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+        .where(
+          and(
+            eq(portalUsers.tenantId, tenantId),
+            sql`lower(${portalUsers.email}) = ${normalizedEmail}`,
+          ),
+        )
         .limit(1)
 
       return user ?? null
     },
 
-    async recordInvalidAttempt({
-      attemptsCount,
-      recordId,
-      status = 'pending',
-      updatedAt,
-    }: {
-      attemptsCount: number
-      recordId: number
-      status?: string
-      updatedAt: Date
-    },
-    executor: AppDatabase = db) {
+    async recordInvalidAttempt(
+      {
+        attemptsCount,
+        recordId,
+        status = 'pending',
+        updatedAt,
+      }: {
+        attemptsCount: number
+        recordId: number
+        status?: string
+        updatedAt: Date
+      },
+      executor: AppDatabase = db,
+    ) {
       const [updatedRecord] = await executor
         .update(verificationRecords)
         .set({
@@ -258,7 +288,12 @@ export function createPasswordResetRepository(db: AppDatabase) {
           status,
           updatedAt,
         })
-        .where(eq(verificationRecords.id, recordId))
+        .where(
+          and(
+            eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
+          ),
+        )
         .returning(baseResetRecordSelection())
 
       if (!updatedRecord) {
@@ -288,7 +323,12 @@ export function createPasswordResetRepository(db: AppDatabase) {
           updatedAt: input.updatedAt,
           verifiedAt: null,
         })
-        .where(eq(verificationRecords.id, input.recordId))
+        .where(
+          and(
+            eq(verificationRecords.id, input.recordId),
+            eq(verificationRecords.tenantId, tenantId),
+          ),
+        )
         .returning(baseResetRecordSelection())
 
       if (!updatedRecord) {
@@ -298,20 +338,22 @@ export function createPasswordResetRepository(db: AppDatabase) {
       return updatedRecord
     },
 
-    async verifyPendingReset({
-      continuationTokenExpiresAt,
-      continuationTokenHash,
-      recordId,
-      updatedAt,
-      verifiedAt,
-    }: {
-      continuationTokenExpiresAt: Date
-      continuationTokenHash: string
-      recordId: number
-      updatedAt: Date
-      verifiedAt: Date
-    },
-    executor: AppDatabase = db) {
+    async verifyPendingReset(
+      {
+        continuationTokenExpiresAt,
+        continuationTokenHash,
+        recordId,
+        updatedAt,
+        verifiedAt,
+      }: {
+        continuationTokenExpiresAt: Date
+        continuationTokenHash: string
+        recordId: number
+        updatedAt: Date
+        verifiedAt: Date
+      },
+      executor: AppDatabase = db,
+    ) {
       const [updatedRecord] = await executor
         .update(verificationRecords)
         .set({
@@ -324,6 +366,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .where(
           and(
             eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
             eq(verificationRecords.status, 'pending'),
           ),
         )
@@ -348,6 +391,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .where(
           and(
             eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
             eq(verificationRecords.status, 'verified'),
           ),
         )
@@ -372,6 +416,7 @@ export function createPasswordResetRepository(db: AppDatabase) {
         .where(
           and(
             eq(verificationRecords.id, recordId),
+            eq(verificationRecords.tenantId, tenantId),
             eq(verificationRecords.status, 'verified'),
           ),
         )
@@ -398,12 +443,15 @@ export function createPasswordResetRepository(db: AppDatabase) {
           passwordHash,
           updatedAt,
         })
-        .where(eq(portalUsers.id, userId))
+        .where(
+          and(eq(portalUsers.id, userId), eq(portalUsers.tenantId, tenantId)),
+        )
         .returning({
           email: portalUsers.email,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
           isActive: portalUsers.isActive,
+          tenantId: portalUsers.tenantId,
         })
 
       return updatedUser ?? null
@@ -412,7 +460,12 @@ export function createPasswordResetRepository(db: AppDatabase) {
     async deleteSessionsForUser(userId: number, executor: AppDatabase = db) {
       await executor
         .delete(portalSessions)
-        .where(eq(portalSessions.userId, userId))
+        .where(
+          and(
+            eq(portalSessions.userId, userId),
+            eq(portalSessions.tenantId, tenantId),
+          ),
+        )
     },
   }
 }

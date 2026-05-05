@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -22,7 +22,14 @@ type RecordDeliveryInput = {
   status: ChatwootWebhookDeliveryStatus
 }
 
-export function createChatwootWebhookRepository(db: AppDatabase) {
+type TenantRepositoryScope = {
+  tenantId: number
+}
+
+export function createChatwootWebhookRepository(
+  db: AppDatabase,
+  { tenantId }: TenantRepositoryScope,
+) {
   return {
     async findConversationMappingByChatwootConversationId(
       chatwootConversationId: number,
@@ -37,9 +44,12 @@ export function createChatwootWebhookRepository(db: AppDatabase) {
         })
         .from(portalUserChatwootConversations)
         .where(
-          eq(
-            portalUserChatwootConversations.chatwootConversationId,
-            chatwootConversationId,
+          and(
+            eq(portalUserChatwootConversations.tenantId, tenantId),
+            eq(
+              portalUserChatwootConversations.chatwootConversationId,
+              chatwootConversationId,
+            ),
           ),
         )
         .limit(1)
@@ -59,6 +69,7 @@ export function createChatwootWebhookRepository(db: AppDatabase) {
           processedAt: input.now,
           receivedAt: input.now,
           status: input.status,
+          tenantId,
         })
         .onConflictDoNothing()
         .returning({

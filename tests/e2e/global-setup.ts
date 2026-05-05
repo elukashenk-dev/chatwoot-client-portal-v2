@@ -4,6 +4,7 @@ import { loadEnvFile } from 'node:process'
 
 import { loadEnv } from '../../backend/src/config/env.ts'
 import { createDatabaseClient } from '../../backend/src/db/client.ts'
+import { bootstrapDefaultTenant } from '../../backend/src/scripts/bootstrap-default-tenant-core.ts'
 import { seedE2ePortalUser } from '../../backend/src/test/e2ePortalUser.ts'
 
 export default async function globalSetup() {
@@ -27,6 +28,10 @@ export default async function globalSetup() {
     await runDatabaseMigrations(database.db)
     process.chdir(projectRoot)
 
+    await bootstrapDefaultTenant({
+      db: database.db,
+      env,
+    })
     await seedE2ePortalUser(database.db)
   } finally {
     process.chdir(projectRoot)

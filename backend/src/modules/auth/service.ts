@@ -35,18 +35,29 @@ export function createAuthService({
   const repository = createAuthRepository(db)
 
   return {
-    async getCurrentUser(sessionToken: string): Promise<PublicPortalUser | null> {
+    async getCurrentUser({
+      sessionToken,
+      tenantId,
+    }: {
+      sessionToken: string
+      tenantId: number
+    }): Promise<PublicPortalUser | null> {
       const resolvedAt = now()
-      const session = await repository.findUserBySessionTokenHash(
-        hashSessionToken(sessionToken),
-        resolvedAt,
-      )
+      const session = await repository.findUserBySessionTokenHash({
+        now: resolvedAt,
+        tenantId,
+        tokenHash: hashSessionToken(sessionToken),
+      })
 
       if (!session) {
         return null
       }
 
-      await repository.touchSession(session.sessionId, resolvedAt)
+      await repository.touchSession({
+        at: resolvedAt,
+        sessionId: session.sessionId,
+        tenantId,
+      })
 
       return {
         ...session.user,
@@ -57,20 +68,33 @@ export function createAuthService({
     async login({
       email,
       password,
+      tenantId,
     }: {
       email: string
       password: string
+      tenantId: number
     }) {
-      const user = await repository.findUserByEmail(normalizeEmail(email))
+      const user = await repository.findUserByEmail({
+        email: normalizeEmail(email),
+        tenantId,
+      })
 
       if (!user || !user.isActive) {
-        throw new ApiError(401, 'INVALID_CREDENTIALS', 'Неверный email или пароль.')
+        throw new ApiError(
+          401,
+          'INVALID_CREDENTIALS',
+          'Неверный email или пароль.',
+        )
       }
 
       const passwordMatches = await verifyPassword(password, user.passwordHash)
 
       if (!passwordMatches) {
-        throw new ApiError(401, 'INVALID_CREDENTIALS', 'Неверный email или пароль.')
+        throw new ApiError(
+          401,
+          'INVALID_CREDENTIALS',
+          'Неверный email или пароль.',
+        )
       }
 
       const issuedAt = now()
@@ -82,10 +106,15 @@ export function createAuthService({
       await repository.createSession({
         expiresAt,
         lastSeenAt: issuedAt,
+        tenantId,
         tokenHash: hashSessionToken(sessionToken),
         userId: user.id,
       })
-      await repository.recordSuccessfulLogin(user.id, issuedAt)
+      await repository.recordSuccessfulLogin({
+        at: issuedAt,
+        tenantId,
+        userId: user.id,
+      })
 
       return {
         expiresAt,
@@ -98,8 +127,17 @@ export function createAuthService({
       }
     },
 
-    async logout(sessionToken: string) {
-      await repository.deleteSessionByTokenHash(hashSessionToken(sessionToken))
+    async logout({
+      sessionToken,
+      tenantId,
+    }: {
+      sessionToken: string
+      tenantId: number
+    }) {
+      await repository.deleteSessionByTokenHash({
+        tenantId,
+        tokenHash: hashSessionToken(sessionToken),
+      })
     },
   }
 }

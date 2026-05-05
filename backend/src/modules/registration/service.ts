@@ -31,6 +31,7 @@ type CreateRegistrationServiceOptions = {
   now?: () => Date
   portalUsersRepository: Pick<PortalUsersRepository, 'findByEmail'>
   registrationRepository: RegistrationRepository
+  tenantId: number
 }
 
 type RegistrationVerificationRequestResult = {
@@ -271,6 +272,7 @@ export function createRegistrationService({
   now = () => new Date(),
   portalUsersRepository,
   registrationRepository,
+  tenantId,
 }: CreateRegistrationServiceOptions) {
   return {
     async requestVerification({
@@ -284,15 +286,13 @@ export function createRegistrationService({
       const normalizedFullName = fullName.trim()
       const requestedAt = now()
 
-      const existingPortalUser =
-        await portalUsersRepository.findByEmail(normalizedEmail)
+      const existingPortalUser = await portalUsersRepository.findByEmail({
+        email: normalizedEmail,
+        tenantId,
+      })
 
       if (existingPortalUser) {
-        throw new ApiError(
-          409,
-          'REGISTRATION_ACCOUNT_EXISTS',
-          'Для этого email уже создан аккаунт. Войдите или используйте восстановление пароля.',
-        )
+        throw createAccountExistsError()
       }
 
       const preflightResult =

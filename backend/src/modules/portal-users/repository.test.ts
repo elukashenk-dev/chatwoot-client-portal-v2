@@ -2,13 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DatabaseClient } from '../../db/client.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
-import { createPortalUsersRepository, PortalUserConflictError } from './repository.js'
+import { seedTestTenant } from '../../test/testTenants.js'
+import {
+  createPortalUsersRepository,
+  PortalUserConflictError,
+} from './repository.js'
 
 describe('portal users repository', () => {
   let database: DatabaseClient
+  let tenantId: number
 
   beforeEach(async () => {
     database = await createTestDatabase()
+    tenantId = (await seedTestTenant(database.db)).id
   })
 
   afterEach(async () => {
@@ -22,6 +28,7 @@ describe('portal users repository', () => {
       email: ' Name@Company.RU ',
       fullName: '  Portal User  ',
       passwordHash: 'hashed-password',
+      tenantId,
     })
 
     expect(user).toMatchObject({
@@ -30,7 +37,10 @@ describe('portal users repository', () => {
       isActive: true,
     })
 
-    const resolvedUser = await repository.findByEmail('NAME@COMPANY.RU')
+    const resolvedUser = await repository.findByEmail({
+      email: 'NAME@COMPANY.RU',
+      tenantId,
+    })
 
     expect(resolvedUser).toMatchObject({
       email: 'name@company.ru',
@@ -45,6 +55,7 @@ describe('portal users repository', () => {
       email: 'Name@Company.RU',
       fullName: 'Portal User',
       passwordHash: 'hashed-password',
+      tenantId,
     })
 
     await expect(
@@ -52,7 +63,48 @@ describe('portal users repository', () => {
         email: 'name@company.ru',
         fullName: 'Another User',
         passwordHash: 'another-hash',
+        tenantId,
       }),
     ).rejects.toThrow(PortalUserConflictError)
+  })
+
+  it('allows the same email in different tenants', async () => {
+    const repository = createPortalUsersRepository(database.db)
+    const otherTenantId = (
+      await seedTestTenant(database.db, {
+        primaryDomain: 'other.localhost',
+        slug: 'other',
+      })
+    ).id
+
+    await repository.create({
+      email: 'Name@Company.RU',
+      fullName: 'Tenant One User',
+      passwordHash: 'hashed-password',
+      tenantId,
+    })
+    await repository.create({
+      email: 'name@company.ru',
+      fullName: 'Tenant Two User',
+      passwordHash: 'another-hash',
+      tenantId: otherTenantId,
+    })
+
+    await expect(
+      repository.findByEmail({
+        email: 'name@company.ru',
+        tenantId,
+      }),
+    ).resolves.toMatchObject({
+      fullName: 'Tenant One User',
+    })
+    await expect(
+      repository.findByEmail({
+        email: 'name@company.ru',
+        tenantId: otherTenantId,
+      }),
+    ).resolves.toMatchObject({
+      fullName: 'Tenant Two User',
+    })
   })
 })

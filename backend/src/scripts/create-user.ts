@@ -7,6 +7,7 @@ import {
   createPortalUsersRepository,
   PortalUserConflictError,
 } from '../modules/portal-users/repository.js'
+import { createTenantsRepository } from '../modules/tenants/repository.js'
 
 type ParsedArgs = {
   email: string | null
@@ -15,15 +16,17 @@ type ParsedArgs = {
   isActive: boolean
   password: string | null
   passwordFromStdin: boolean
+  tenantSlug: string | null
 }
 
 function printHelp() {
   console.log(`Usage:
-  pnpm --dir backend user:create -- --email=<email> [--full-name="Portal User"] [--password=<password>]
-  printf 'PortalPass123!\\n' | pnpm --dir backend user:create -- --email=<email> --password-stdin
+  pnpm --dir backend user:create -- --email=<email> [--tenant=<slug>] [--full-name="Portal User"] [--password=<password>]
+  printf 'PortalPass123!\\n' | pnpm --dir backend user:create -- --email=<email> --tenant=<slug> --password-stdin
 
 Options:
   --email             Required portal user email
+  --tenant            Portal tenant slug; defaults to DEFAULT_TENANT_SLUG
   --full-name         Optional display name
   --password          Password passed directly in the command
   --password-stdin    Read password from stdin
@@ -55,6 +58,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let fullName: string | null = null
   let password: string | null = null
   let passwordFromStdin = false
+  let tenantSlug: string | null = null
   let isActive = true
   let help = false
 
@@ -104,6 +108,18 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue
     }
 
+    const tenantValue = readFlagValue(argv, index, '--tenant')
+
+    if (tenantValue !== null) {
+      tenantSlug = tenantValue
+
+      if (current === '--tenant') {
+        index += 1
+      }
+
+      continue
+    }
+
     const passwordValue = readFlagValue(argv, index, '--password')
 
     if (passwordValue !== null) {
@@ -126,6 +142,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     isActive,
     password,
     passwordFromStdin,
+    tenantSlug,
   }
 }
 
@@ -136,7 +153,9 @@ async function readPasswordFromStdin() {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
 
-  return Buffer.concat(chunks).toString('utf8').replace(/\r?\n$/, '')
+  return Buffer.concat(chunks)
+    .toString('utf8')
+    .replace(/\r?\n$/, '')
 }
 
 async function resolvePassword(parsedArgs: ParsedArgs) {
@@ -183,12 +202,23 @@ try {
 
   const password = await resolvePassword(parsedArgs)
   const repository = createPortalUsersRepository(database.db)
+  const tenantSlug = parsedArgs.tenantSlug || env.DEFAULT_TENANT_SLUG
+  const tenant = tenantSlug
+    ? await createTenantsRepository(database.db).findBySlug(tenantSlug)
+    : null
+
+  if (!tenant) {
+    throw new Error(
+      'Tenant is required. Pass --tenant=<slug> or DEFAULT_TENANT_SLUG.',
+    )
+  }
 
   const createdUser = await repository.create({
     email: normalizeEmail(parsedArgs.email),
     fullName: parsedArgs.fullName,
     isActive: parsedArgs.isActive,
     passwordHash: await hashPassword(password),
+    tenantId: tenant.id,
   })
 
   console.log(

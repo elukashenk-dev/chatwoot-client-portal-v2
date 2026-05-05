@@ -7,8 +7,19 @@ import { normalizeEmail } from '../../lib/email.js'
 type CreateSessionInput = {
   expiresAt: Date
   lastSeenAt: Date
+  tenantId: number
   tokenHash: string
   userId: number
+}
+
+type TenantEmailScope = {
+  email: string
+  tenantId: number
+}
+
+type TenantTokenScope = {
+  tenantId: number
+  tokenHash: string
 }
 
 type SessionUserRecord = {
@@ -26,26 +37,39 @@ export function createAuthRepository(db: AppDatabase) {
       await db.insert(portalSessions).values(input)
     },
 
-    async deleteSessionByTokenHash(tokenHash: string) {
-      await db.delete(portalSessions).where(eq(portalSessions.tokenHash, tokenHash))
+    async deleteSessionByTokenHash({ tenantId, tokenHash }: TenantTokenScope) {
+      await db
+        .delete(portalSessions)
+        .where(
+          and(
+            eq(portalSessions.tenantId, tenantId),
+            eq(portalSessions.tokenHash, tokenHash),
+          ),
+        )
     },
 
-    async findUserByEmail(email: string) {
+    async findUserByEmail({ email, tenantId }: TenantEmailScope) {
       const normalizedEmail = normalizeEmail(email)
 
       const [user] = await db
         .select()
         .from(portalUsers)
-        .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+        .where(
+          and(
+            eq(portalUsers.tenantId, tenantId),
+            sql`lower(${portalUsers.email}) = ${normalizedEmail}`,
+          ),
+        )
         .limit(1)
 
       return user ?? null
     },
 
-    async findUserBySessionTokenHash(
-      tokenHash: string,
-      now: Date,
-    ): Promise<SessionUserRecord | null> {
+    async findUserBySessionTokenHash({
+      now,
+      tenantId,
+      tokenHash,
+    }: TenantTokenScope & { now: Date }): Promise<SessionUserRecord | null> {
       const [session] = await db
         .select({
           email: portalUsers.email,
@@ -57,8 +81,10 @@ export function createAuthRepository(db: AppDatabase) {
         .innerJoin(portalUsers, eq(portalSessions.userId, portalUsers.id))
         .where(
           and(
+            eq(portalSessions.tenantId, tenantId),
             eq(portalSessions.tokenHash, tokenHash),
             gt(portalSessions.expiresAt, now),
+            eq(portalUsers.tenantId, tenantId),
             eq(portalUsers.isActive, true),
           ),
         )
@@ -78,23 +104,46 @@ export function createAuthRepository(db: AppDatabase) {
       }
     },
 
-    async recordSuccessfulLogin(userId: number, at: Date) {
+    async recordSuccessfulLogin({
+      at,
+      tenantId,
+      userId,
+    }: {
+      at: Date
+      tenantId: number
+      userId: number
+    }) {
       await db
         .update(portalUsers)
         .set({
           lastLoginAt: at,
           updatedAt: at,
         })
-        .where(eq(portalUsers.id, userId))
+        .where(
+          and(eq(portalUsers.id, userId), eq(portalUsers.tenantId, tenantId)),
+        )
     },
 
-    async touchSession(sessionId: number, at: Date) {
+    async touchSession({
+      at,
+      sessionId,
+      tenantId,
+    }: {
+      at: Date
+      sessionId: number
+      tenantId: number
+    }) {
       await db
         .update(portalSessions)
         .set({
           lastSeenAt: at,
         })
-        .where(eq(portalSessions.id, sessionId))
+        .where(
+          and(
+            eq(portalSessions.id, sessionId),
+            eq(portalSessions.tenantId, tenantId),
+          ),
+        )
     },
   }
 }

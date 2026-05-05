@@ -51,7 +51,8 @@
 - Реализован `MT-1 Tenant Schema Foundation`: добавлены `portal_tenants` schema/migration без `mode` и admin-verification token, tenant secret AES-GCM helper, default tenant bootstrap, repository/bootstrap tests; `portal_tenant_domains` отложен, проверки backend tests/build/lint, Prettier и `git diff --check` пройдены.
 - Реализован `MT-2 Tenant Resolution Middleware`: backend резолвит tenant по normalized Host до auth/chat routes, добавлен `/api/tenant`, tenant-aware origin guard, `PORTAL_TRUST_PROXY` rule для `X-Forwarded-Host`, non-default customer runtime hard-fail до завершения isolation phases; backend build/lint/test пройдены.
 - Реализован `MT-3 Tenant-Aware Chatwoot Client`: runtime Chatwoot client создается из `request.tenant.chatwoot`, tenant secrets расшифровываются backend-only через `PORTAL_TENANT_SECRET_KEY`, registration/chat/webhook services получают tenant config per request, добавлен tenant Chatwoot verification script; backend build/lint/test, Prettier и `git diff --check` пройдены.
+- Реализован `MT-4 Tenant-Scoped Persistence`: tenant-owned tables получили `tenant_id`, unique/index scope стал tenant-aware, repositories/services/routes протаскивают tenant scope, добавлены tests для одинаковых email/contact/conversation/delivery values across tenants; backend build/lint/test, code-health, Prettier и `git diff --check` пройдены.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `MT-3 Tenant-Aware Chatwoot Client`; затем перейти к `MT-4 Tenant-Scoped Persistence`.
+- Сделать checkpoint commit для `MT-4 Tenant-Scoped Persistence`; затем перейти к `MT-5 Tenant-Aware Customer Auth`.

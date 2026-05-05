@@ -5,6 +5,7 @@ import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
 import type { AuthService, PublicPortalUser } from '../auth/service.js'
 import { clearSessionCookie, getSessionToken } from '../auth/sessionCookie.js'
+import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatContextService } from './service.js'
 
 const chatContextQuerySchema = z.object({
@@ -35,7 +36,11 @@ export async function resolveAuthenticatedPortalUser({
     throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
   }
 
-  const user = await authService.getCurrentUser(sessionToken)
+  const tenant = requireTenantContext(request)
+  const user = await authService.getCurrentUser({
+    sessionToken,
+    tenantId: tenant.id,
+  })
 
   if (!user) {
     clearSessionCookie(reply, env)

@@ -90,13 +90,17 @@ export function buildApp({ database, env }: BuildAppOptions) {
     chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
   const createChatContextServiceForRequest = (request: FastifyRequest) =>
     createChatContextService({
-      chatContextRepository: createChatContextRepository(database.db),
+      chatContextRepository: createChatContextRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
       chatwootClient: createChatwootClientForRequest(request),
     })
   const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
     createChatMessagesService({
       chatContextService: createChatContextServiceForRequest(request),
-      chatMessagesRepository: createChatMessagesRepository(database.db),
+      chatMessagesRepository: createChatMessagesRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
       chatwootClient: createChatwootClientForRequest(request),
     })
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
@@ -104,7 +108,17 @@ export function buildApp({ database, env }: BuildAppOptions) {
       chatwootClient: createChatwootClientForRequest(request),
       emailDelivery: createSmtpEmailDelivery({ env }),
       portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
+      tenantId: requireTenantContext(request).id,
+    })
+  const createPasswordResetServiceForRequest = (request: FastifyRequest) =>
+    createPasswordResetService({
+      emailDelivery: createSmtpEmailDelivery({ env }),
+      passwordResetRepository: createPasswordResetRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
     })
   const createChatwootWebhookServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
@@ -112,7 +126,9 @@ export function buildApp({ database, env }: BuildAppOptions) {
     return createChatwootWebhookService({
       chatMessagesService: createChatMessagesServiceForRequest(request),
       realtimeHub: chatRealtimeHub,
-      webhookRepository: createChatwootWebhookRepository(database.db),
+      webhookRepository: createChatwootWebhookRepository(database.db, {
+        tenantId: tenant.id,
+      }),
       webhookSecret: tenant.chatwoot.webhookSecret,
     })
   }
@@ -128,10 +144,7 @@ export function buildApp({ database, env }: BuildAppOptions) {
     createRegistrationService: createRegistrationServiceForRequest,
   })
   registerPasswordResetRoutes(app, {
-    passwordResetService: createPasswordResetService({
-      emailDelivery: createSmtpEmailDelivery({ env }),
-      passwordResetRepository: createPasswordResetRepository(database.db),
-    }),
+    createPasswordResetService: createPasswordResetServiceForRequest,
   })
   registerChatContextRoutes(app, {
     authService,

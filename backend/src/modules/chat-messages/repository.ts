@@ -41,12 +41,16 @@ type MarkSendLedgerEntryInput = SendLedgerScope & {
   processingToken?: string
 }
 
-function buildScopeWhere({
-  clientMessageKey,
-  primaryConversationId,
-  userId,
-}: SendLedgerScope) {
+type TenantRepositoryScope = {
+  tenantId: number
+}
+
+function buildScopeWhere(
+  tenantId: number,
+  { clientMessageKey, primaryConversationId, userId }: SendLedgerScope,
+) {
   return and(
+    eq(portalChatMessageSends.tenantId, tenantId),
     eq(portalChatMessageSends.userId, userId),
     eq(portalChatMessageSends.primaryConversationId, primaryConversationId),
     eq(portalChatMessageSends.clientMessageKey, clientMessageKey),
@@ -81,12 +85,15 @@ function hasMatchingPayload(
   )
 }
 
-export function createChatMessagesRepository(db: AppDatabase) {
+export function createChatMessagesRepository(
+  db: AppDatabase,
+  { tenantId }: TenantRepositoryScope,
+) {
   async function findSendLedgerEntry(scope: SendLedgerScope) {
     const [entry] = await db
       .select(ledgerSelection)
       .from(portalChatMessageSends)
-      .where(buildScopeWhere(scope))
+      .where(buildScopeWhere(tenantId, scope))
       .limit(1)
 
     return entry ?? null
@@ -111,6 +118,7 @@ export function createChatMessagesRepository(db: AppDatabase) {
           primaryConversationId: input.primaryConversationId,
           processingToken: input.processingToken,
           status: 'processing',
+          tenantId,
           updatedAt: input.now,
           userId: input.userId,
         })
@@ -158,7 +166,7 @@ export function createChatMessagesRepository(db: AppDatabase) {
         })
         .where(
           and(
-            buildScopeWhere(input),
+            buildScopeWhere(tenantId, input),
             or(
               eq(portalChatMessageSends.status, 'failed'),
               and(
@@ -219,7 +227,7 @@ export function createChatMessagesRepository(db: AppDatabase) {
       processingToken,
       ...scope
     }: MarkSendLedgerEntryInput & { chatwootMessageId: number }) {
-      const whereClauses = [buildScopeWhere(scope)]
+      const whereClauses = [buildScopeWhere(tenantId, scope)]
 
       if (processingToken !== undefined) {
         whereClauses.push(
@@ -248,7 +256,7 @@ export function createChatMessagesRepository(db: AppDatabase) {
       processingToken,
       ...scope
     }: MarkSendLedgerEntryInput) {
-      const whereClauses = [buildScopeWhere(scope)]
+      const whereClauses = [buildScopeWhere(tenantId, scope)]
 
       if (processingToken !== undefined) {
         whereClauses.push(

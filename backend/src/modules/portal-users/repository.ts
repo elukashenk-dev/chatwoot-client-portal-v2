@@ -17,6 +17,12 @@ type CreatePortalUserInput = {
   fullName?: string | null
   isActive?: boolean
   passwordHash: string
+  tenantId: number
+}
+
+type TenantEmailScope = {
+  email: string
+  tenantId: number
 }
 
 export function createPortalUsersRepository(db: AppDatabase) {
@@ -26,11 +32,15 @@ export function createPortalUsersRepository(db: AppDatabase) {
       fullName,
       isActive = true,
       passwordHash,
+      tenantId,
     }: CreatePortalUserInput) {
       const normalizedEmail = normalizeEmail(email)
       const normalizedFullName = fullName?.trim() ? fullName.trim() : null
 
-      const existingUser = await this.findByEmail(normalizedEmail)
+      const existingUser = await this.findByEmail({
+        email: normalizedEmail,
+        tenantId,
+      })
 
       if (existingUser) {
         throw new PortalUserConflictError()
@@ -43,18 +53,20 @@ export function createPortalUsersRepository(db: AppDatabase) {
           fullName: normalizedFullName,
           isActive,
           passwordHash,
+          tenantId,
         })
         .returning({
           email: portalUsers.email,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
           isActive: portalUsers.isActive,
+          tenantId: portalUsers.tenantId,
         })
 
       return createdUser
     },
 
-    async findByEmail(email: string) {
+    async findByEmail({ email, tenantId }: TenantEmailScope) {
       const normalizedEmail = normalizeEmail(email)
 
       const [user] = await db
@@ -64,9 +76,12 @@ export function createPortalUsersRepository(db: AppDatabase) {
           id: portalUsers.id,
           isActive: portalUsers.isActive,
           passwordHash: portalUsers.passwordHash,
+          tenantId: portalUsers.tenantId,
         })
         .from(portalUsers)
-        .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+        .where(
+          sql`${portalUsers.tenantId} = ${tenantId} and lower(${portalUsers.email}) = ${normalizedEmail}`,
+        )
         .limit(1)
 
       return user ?? null
@@ -74,4 +89,6 @@ export function createPortalUsersRepository(db: AppDatabase) {
   }
 }
 
-export type PortalUsersRepository = ReturnType<typeof createPortalUsersRepository>
+export type PortalUsersRepository = ReturnType<
+  typeof createPortalUsersRepository
+>
