@@ -8,6 +8,7 @@ import {
   SmtpEmailDeliveryConfigurationError,
   SmtpEmailDeliveryError,
 } from '../../integrations/email/smtp.js'
+import { hashPassword } from '../../lib/password.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
@@ -856,6 +857,141 @@ describe('registration service', () => {
     expect(latestRecord).toMatchObject({
       continuationTokenHash: null,
       status: 'invalidated',
+    })
+  })
+
+  it('keeps same-email verification codes and continuation tokens isolated by tenant', async () => {
+    const tenantB = await seedTestTenant(database.db, {
+      primaryDomain: 'tenant-b.localhost',
+      slug: 'tenant-b',
+    })
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const now = new Date('2026-04-21T12:00:00.000Z')
+    const serviceA = createRegistrationService({
+      chatwootClient: {
+        findContactByEmail: vi.fn(),
+      },
+      emailDelivery: {
+        send: vi.fn(),
+      },
+      now: () => now,
+      portalUsersRepository,
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId,
+      }),
+      tenantId,
+    })
+    const serviceB = createRegistrationService({
+      chatwootClient: {
+        findContactByEmail: vi.fn(),
+      },
+      emailDelivery: {
+        send: vi.fn(),
+      },
+      now: () => now,
+      portalUsersRepository,
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId: tenantB.id,
+      }),
+      tenantId: tenantB.id,
+    })
+
+    await database.db.insert(verificationRecords).values([
+      {
+        attemptsCount: 0,
+        chatwootContactId: 44,
+        codeHash: await hashPassword('111111'),
+        email: 'name@company.ru',
+        expiresAt: new Date('2026-04-21T12:15:00.000Z'),
+        fullName: 'Tenant A User',
+        lastSentAt: now,
+        maxAttempts: 5,
+        purpose: 'registration',
+        resendCount: 0,
+        resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+        status: 'pending',
+        tenantId,
+      },
+      {
+        attemptsCount: 0,
+        chatwootContactId: 44,
+        codeHash: await hashPassword('222222'),
+        email: 'name@company.ru',
+        expiresAt: new Date('2026-04-21T12:15:00.000Z'),
+        fullName: 'Tenant B User',
+        lastSentAt: now,
+        maxAttempts: 5,
+        purpose: 'registration',
+        resendCount: 0,
+        resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+        status: 'pending',
+        tenantId: tenantB.id,
+      },
+    ])
+
+    await expect(
+      serviceB.confirmVerification({
+        code: '111111',
+        email: 'name@company.ru',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REGISTRATION_VERIFICATION_INVALID_CODE',
+      statusCode: 400,
+    })
+
+    const verificationA = await serviceA.confirmVerification({
+      code: '111111',
+      email: 'name@company.ru',
+    })
+    const verificationB = await serviceB.confirmVerification({
+      code: '222222',
+      email: 'name@company.ru',
+    })
+
+    await expect(
+      serviceB.setPassword({
+        continuationToken: verificationA.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'TenantB123',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REGISTRATION_VERIFICATION_CONTINUATION_INVALID',
+      statusCode: 409,
+    })
+
+    await expect(
+      serviceA.setPassword({
+        continuationToken: verificationA.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'TenantA123',
+      }),
+    ).resolves.toMatchObject({
+      result: 'registration_completed',
+    })
+    await expect(
+      serviceB.setPassword({
+        continuationToken: verificationB.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'TenantB123',
+      }),
+    ).resolves.toMatchObject({
+      result: 'registration_completed',
+    })
+    await expect(
+      portalUsersRepository.findByEmail({
+        email: 'name@company.ru',
+        tenantId,
+      }),
+    ).resolves.toMatchObject({
+      fullName: 'Tenant A User',
+    })
+    await expect(
+      portalUsersRepository.findByEmail({
+        email: 'name@company.ru',
+        tenantId: tenantB.id,
+      }),
+    ).resolves.toMatchObject({
+      fullName: 'Tenant B User',
     })
   })
 })

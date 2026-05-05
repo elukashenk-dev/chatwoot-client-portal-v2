@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DatabaseClient } from '../../db/client.js'
+import { verificationRecords } from '../../db/schema.js'
 import {
   SmtpEmailDeliveryConfigurationError,
   SmtpEmailDeliveryError,
@@ -533,5 +534,135 @@ describe('password reset service', () => {
         status: 'pending',
       })
     })
+  })
+
+  it('keeps same-email reset codes and continuation tokens isolated by tenant', async () => {
+    const tenantB = await seedTestTenant(database.db, {
+      primaryDomain: 'tenant-b.localhost',
+      slug: 'tenant-b',
+    })
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const now = new Date('2026-04-21T12:00:00.000Z')
+    const userA = await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Tenant A User',
+      passwordHash: await hashPassword('TenantOldA123'),
+      tenantId,
+    })
+    const userB = await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Tenant B User',
+      passwordHash: await hashPassword('TenantOldB123'),
+      tenantId: tenantB.id,
+    })
+
+    if (!userA || !userB) {
+      throw new Error('Failed to create tenant-scoped password reset users.')
+    }
+
+    const serviceA = createPasswordResetService({
+      emailDelivery: {
+        send: vi.fn(),
+      },
+      now: () => now,
+      passwordResetRepository: createPasswordResetRepository(database.db, {
+        tenantId,
+      }),
+    })
+    const serviceB = createPasswordResetService({
+      emailDelivery: {
+        send: vi.fn(),
+      },
+      now: () => now,
+      passwordResetRepository: createPasswordResetRepository(database.db, {
+        tenantId: tenantB.id,
+      }),
+    })
+
+    await database.db.insert(verificationRecords).values([
+      {
+        attemptsCount: 0,
+        codeHash: await hashPassword('111111'),
+        email: 'name@company.ru',
+        expiresAt: new Date('2026-04-21T12:15:00.000Z'),
+        lastSentAt: now,
+        maxAttempts: 5,
+        portalUserId: userA.id,
+        purpose: 'password_reset',
+        resendCount: 0,
+        resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+        status: 'pending',
+        tenantId,
+      },
+      {
+        attemptsCount: 0,
+        codeHash: await hashPassword('222222'),
+        email: 'name@company.ru',
+        expiresAt: new Date('2026-04-21T12:15:00.000Z'),
+        lastSentAt: now,
+        maxAttempts: 5,
+        portalUserId: userB.id,
+        purpose: 'password_reset',
+        resendCount: 0,
+        resendNotBefore: new Date('2026-04-21T12:01:00.000Z'),
+        status: 'pending',
+        tenantId: tenantB.id,
+      },
+    ])
+
+    await expect(
+      serviceB.confirmPasswordReset({
+        code: '111111',
+        email: 'name@company.ru',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PASSWORD_RESET_INVALID_CODE',
+      statusCode: 400,
+    })
+
+    const verificationA = await serviceA.confirmPasswordReset({
+      code: '111111',
+      email: 'name@company.ru',
+    })
+    const verificationB = await serviceB.confirmPasswordReset({
+      code: '222222',
+      email: 'name@company.ru',
+    })
+
+    await expect(
+      serviceB.setPassword({
+        continuationToken: verificationA.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'TenantNewB123',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PASSWORD_RESET_CONTINUATION_INVALID',
+      statusCode: 409,
+    })
+    await expect(
+      serviceB.setPassword({
+        continuationToken: verificationB.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'TenantNewB123',
+      }),
+    ).resolves.toMatchObject({
+      result: 'password_reset_completed',
+    })
+
+    const unchangedUserA = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId,
+    })
+    const updatedUserB = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId: tenantB.id,
+    })
+
+    expect(
+      await verifyPassword('TenantOldA123', unchangedUserA?.passwordHash ?? ''),
+    ).toBe(true)
+    expect(
+      await verifyPassword('TenantNewB123', updatedUserB?.passwordHash ?? ''),
+    ).toBe(true)
   })
 })

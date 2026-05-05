@@ -271,3 +271,11 @@
   tenant-owned tables получили `tenant_id`: `portal_users`, `portal_sessions`, `verification_records`, `portal_user_contact_links`, `portal_user_chatwoot_conversations`, `portal_chat_message_sends` и `chatwoot_webhook_deliveries`. Unique/index scope для email, Chatwoot contact id, conversation id, send ledger и webhook delivery key теперь включает tenant там, где это нужно для isolation. Runtime repositories для этих таблиц создаются или вызываются с tenant scope
 - причина:
   один и тот же email, Chatwoot contact id, conversation id или delivery key может легитимно повторяться в разных tenants. Без `tenant_id` persistence layer оставался бы скрыто global и мог смешать данные компаний даже при правильном Host-based tenant resolution
+
+## D-035. Customer auth state изолирован tenant scope
+
+- дата: `2026-05-05`
+- решение:
+  customer auth state проверяется через tenant-aware service/repository boundary: login ищет пользователя по `tenant_id + email`, session lookup требует current tenant, registration verification records и password reset records используют tenant-scoped locks/lookups/continuation tokens. Non-default HTTP customer runtime guard остается включенным до завершения `MT-6`/`MT-7`, поэтому cross-tenant auth isolation дополнительно закреплена service-level regression tests
+- причина:
+  пока shared SaaS runtime еще закрыт transitional guard-ом, нельзя полагаться только на HTTP happy-path tests для non-default tenants. Но auth boundary уже должен быть доказуемо tenant-safe, чтобы следующий chat/runtime слой строился поверх правильной основы

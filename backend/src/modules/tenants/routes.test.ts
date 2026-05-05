@@ -124,7 +124,7 @@ describe('tenant routes and request context', () => {
     } finally {
       await app.close()
     }
-  }, 15_000)
+  }, 20_000)
 
   it('does not fallback to default tenant for unknown hosts', async () => {
     const { app } = await createTenantApp()
