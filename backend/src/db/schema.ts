@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm'
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -8,6 +10,48 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
+
+export const portalTenants = pgTable(
+  'portal_tenants',
+  {
+    id: serial('id').primaryKey(),
+    slug: text('slug').notNull(),
+    displayName: text('display_name').notNull(),
+    status: text('status').notNull().default('active'),
+    primaryDomain: text('primary_domain').notNull(),
+    publicBaseUrl: text('public_base_url').notNull(),
+    chatwootBaseUrl: text('chatwoot_base_url').notNull(),
+    chatwootAccountId: integer('chatwoot_account_id').notNull(),
+    chatwootPortalInboxId: integer('chatwoot_portal_inbox_id').notNull(),
+    chatwootApiAccessTokenCiphertext: text(
+      'chatwoot_api_access_token_ciphertext',
+    ).notNull(),
+    chatwootWebhookSecretCiphertext: text(
+      'chatwoot_webhook_secret_ciphertext',
+    ).notNull(),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_tenants_slug_unique').on(table.slug),
+    uniqueIndex('portal_tenants_primary_domain_unique').on(table.primaryDomain),
+    index('portal_tenants_status_idx').on(table.status),
+    check(
+      'portal_tenants_status_check',
+      sql`${table.status} in ('active', 'suspended', 'provisioning', 'archived')`,
+    ),
+  ],
+)
 
 export const portalUsers = pgTable(
   'portal_users',

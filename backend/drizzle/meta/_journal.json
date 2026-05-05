@@ -50,6 +50,13 @@
       "when": 1776797421670,
       "tag": "0006_pale_cerebro",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777988173734,
+      "tag": "0007_true_wrecking_crew",
+      "breakpoints": true
     }
   ]
 }

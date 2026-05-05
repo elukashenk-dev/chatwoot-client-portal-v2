@@ -68,7 +68,7 @@
 - `portal_tenants` schema и migration;
 - no `portal_tenants.mode`; tenant identity is company + domain + exact Chatwoot connection;
 - no admin-verification token in MT-1 schema; store only runtime Chatwoot connection secrets needed for portal operation;
-- решение по `portal_tenant_domains` для первого implementation pass;
+- `portal_tenant_domains` deferred for first implementation pass; `portal_tenants.primary_domain` is enough for `lk.<client-domain>`;
 - encrypted tenant secret helper design;
 - default tenant bootstrap script for dedicated compatibility;
 - tenant repository/bootstrap tests.

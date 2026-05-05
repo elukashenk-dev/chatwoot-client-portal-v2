@@ -48,7 +48,8 @@
 - Закрыт finding `F-MT-003`: password reset остается в `verification_records` с `purpose = password_reset`, отдельная `password_reset_records` table не создается, MT-1 tenant scope добавляется в `verification_records`; код/schema/runtime не менялись.
 - Уточнен deferred finding `F-MT-004`: MT-1 schema не включает admin-verification token, runtime token не становится master-key, перед MT-9 обязателен Chatwoot permissions spike и выбор admin verification token strategy; код/schema/runtime не менялись.
 - Выполнен smoke review MT-0 плана перед checkpoint commit: stale `Open Decisions Before Coding` заменен на initial decisions before MT-1, новых блокеров для MT-1 не найдено; код/schema/runtime не менялись.
+- Реализован `MT-1 Tenant Schema Foundation`: добавлены `portal_tenants` schema/migration без `mode` и admin-verification token, tenant secret AES-GCM helper, default tenant bootstrap, repository/bootstrap tests; `portal_tenant_domains` отложен, проверки backend tests/build/lint, Prettier и `git diff --check` пройдены.
 
 ## Recommended Next Step
 
-- Сделать docs-only checkpoint commit для MT-0 governance/review updates; затем перейти к `MT-1 Tenant Schema Foundation`: `portal_tenants` schema/migration без `mode`, tenant secret handling design, default tenant bootstrap и repository/bootstrap tests.
+- Сделать checkpoint commit для `MT-1 Tenant Schema Foundation`; затем перейти к `MT-2 Tenant Resolution Middleware`.

@@ -239,3 +239,11 @@
   `F-MT-004` не блокирует `MT-1` и остается deferred до `MT-9 Tenant Admin And Branding Rebuild`. В `MT-1` schema не добавляем отдельный admin-verification token и храним только runtime Chatwoot connection secrets, нужные для работы портала. Runtime Chatwoot token и admin-verification authority считаются отдельными security concerns. Перед `MT-9` обязателен Chatwoot permissions spike и выбор стратегии: тот же tenant runtime token, если его прав достаточно и он не слишком широкий; отдельный tenant admin-verification token; или provisioning/platform-admin подход
 - причина:
   сейчас не нужно усложнять tenant schema будущим admin-token полем, но нельзя молча использовать один сверхширокий Chatwoot token для chat runtime, admin verification и provisioning. Если проверка Chatwoot administrators требует более широких прав, чем обычный chat runtime, предпочтительное направление - отдельный tenant admin-verification token
+
+## D-031. `portal_tenant_domains` не добавляем в MT-1
+
+- дата: `2026-05-05`
+- решение:
+  в `MT-1` tenant foundation храним один canonical domain в `portal_tenants.primary_domain`. Отдельную таблицу `portal_tenant_domains` не создаем в первом implementation pass. Multi-domain/custom-domain поддержку оставляем на будущий slice, когда появится реальная потребность в нескольких доменах на один tenant
+- причина:
+  текущая production convention `lk.<client-domain>` требует одного основного host для tenant resolution. Отдельная таблица доменов уже нужна только для secondary/custom domains, verified domains и domain ownership flow. Добавлять ее сейчас означало бы расширить scope MT-1 без runtime-пользы
