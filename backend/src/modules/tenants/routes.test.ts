@@ -5,6 +5,7 @@ import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { chatwootWebhookTestInternals } from '../chatwoot-webhooks/service.js'
 import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
 
 const tenantSecretKey = Buffer.alloc(32, 5).toString('base64')
@@ -96,6 +97,35 @@ async function createTenantApp(envOverrides: Partial<AppEnv> = {}) {
   return {
     app,
     database,
+  }
+}
+
+function createSignedWebhook({
+  deliveryKey = 'delivery-1',
+  payload,
+  secret,
+}: {
+  deliveryKey?: string
+  payload: Record<string, unknown>
+  secret: string
+}) {
+  const now = new Date()
+  const timestamp = String(Math.floor(now.getTime() / 1000))
+  const rawBody = Buffer.from(JSON.stringify(payload))
+
+  return {
+    headers: {
+      'content-type': 'application/json',
+      'x-chatwoot-delivery': deliveryKey,
+      'x-chatwoot-signature':
+        chatwootWebhookTestInternals.createSignatureDigest({
+          rawBody,
+          secret,
+          timestamp,
+        }),
+      'x-chatwoot-timestamp': timestamp,
+    },
+    rawBody,
   }
 }
 
@@ -225,7 +255,7 @@ describe('tenant routes and request context', () => {
     }
   }, 15_000)
 
-  it('hard-fails non-default tenant customer runtime until tenant isolation is complete', async () => {
+  it('allows non-default tenant customer runtime after tenant isolation phases are complete', async () => {
     const { app } = await createTenantApp()
 
     try {
@@ -242,15 +272,74 @@ describe('tenant routes and request context', () => {
         url: '/api/auth/login',
       })
 
-      expect(response.statusCode).toBe(503)
+      expect(response.statusCode).toBe(401)
       expect(response.json()).toEqual({
         error: {
-          code: 'TENANT_RUNTIME_NOT_READY',
-          message: 'Личный кабинет для этого tenant пока не включен.',
+          code: 'INVALID_CREDENTIALS',
+          message: 'Неверный email или пароль.',
         },
       })
     } finally {
       await app.close()
     }
   }, 15_000)
+
+  it('verifies Chatwoot webhooks with the current tenant secret from Host', async () => {
+    const { app } = await createTenantApp()
+    const payload = {
+      conversation: {
+        id: 101,
+      },
+      event: 'message_created',
+      id: 501,
+      private: false,
+    }
+
+    try {
+      const signedWithDefaultSecret = createSignedWebhook({
+        payload,
+        secret: 'default:webhook-secret',
+      })
+      const wrongSecretResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+          ...signedWithDefaultSecret.headers,
+        },
+        method: 'POST',
+        payload: signedWithDefaultSecret.rawBody,
+        url: '/api/integrations/chatwoot/webhooks/account',
+      })
+
+      expect(wrongSecretResponse.statusCode).toBe(401)
+      expect(wrongSecretResponse.json()).toEqual({
+        error: {
+          code: 'chatwoot_webhook_signature_invalid',
+          message: 'Chatwoot webhook signature is invalid.',
+        },
+      })
+
+      const signedWithSecondSecret = createSignedWebhook({
+        deliveryKey: 'delivery-2',
+        payload,
+        secret: 'second:webhook-secret',
+      })
+      const currentTenantSecretResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+          ...signedWithSecondSecret.headers,
+        },
+        method: 'POST',
+        payload: signedWithSecondSecret.rawBody,
+        url: '/api/integrations/chatwoot/webhooks/account',
+      })
+
+      expect(currentTenantSecretResponse.statusCode).toBe(200)
+      expect(currentTenantSecretResponse.json()).toEqual({
+        reason: 'unmapped_conversation',
+        result: 'ignored',
+      })
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
 })

@@ -10,6 +10,7 @@
     "chatwoot:ensure-portal-inbox": "tsx src/scripts/ensure-chatwoot-portal-inbox-routing.ts",
     "chatwoot:webhook:configure": "tsx src/scripts/configure-chatwoot-account-webhook.ts",
     "tenant:bootstrap-default": "tsx src/scripts/bootstrap-default-tenant.ts",
+    "tenant:chatwoot:webhook:configure": "tsx src/scripts/configure-tenant-chatwoot-webhook.ts",
     "tenant:chatwoot:verify": "tsx src/scripts/verify-tenant-chatwoot-connection.ts",
     "user:create": "tsx src/scripts/create-user.ts",
     "db:generate": "drizzle-kit generate",

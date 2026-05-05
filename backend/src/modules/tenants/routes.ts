@@ -12,13 +12,6 @@ type RegisterTenantRoutesOptions = {
 }
 
 const tenantOptionalPaths = new Set(['/api/health'])
-const tenantPublicPaths = new Set(['/api/tenant'])
-const customerRuntimePathPrefixes = [
-  '/api/auth/',
-  '/api/chat/',
-  '/api/chatwoot/webhooks',
-  '/api/integrations/chatwoot/webhooks',
-]
 
 function getRequestPathname(request: FastifyRequest) {
   try {
@@ -30,16 +23,6 @@ function getRequestPathname(request: FastifyRequest) {
 
 function requiresTenantResolution(pathname: string) {
   return pathname.startsWith('/api/') && !tenantOptionalPaths.has(pathname)
-}
-
-function requiresDefaultTenantRuntime(pathname: string) {
-  if (tenantPublicPaths.has(pathname)) {
-    return false
-  }
-
-  return customerRuntimePathPrefixes.some((prefix) =>
-    pathname.startsWith(prefix),
-  )
 }
 
 export function requireTenantContext(
@@ -74,10 +57,6 @@ export function registerTenantContext(
     })
 
     request.tenant = tenant
-
-    if (requiresDefaultTenantRuntime(pathname)) {
-      tenantsService.assertDefaultTenantRuntime(tenant)
-    }
   })
 }
 

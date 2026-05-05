@@ -35,6 +35,12 @@ type TenantInput = {
   status?: TenantStatus
 }
 
+type UpdateTenantWebhookSecretInput = {
+  chatwootWebhookSecretCiphertext: string
+  tenantId: number
+  updatedAt?: Date
+}
+
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const domainPattern =
   /^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)$/
@@ -192,6 +198,30 @@ export function createTenantsRepository(db: AppDatabase) {
         .select()
         .from(portalTenants)
         .orderBy(sql`${portalTenants.slug} asc`)
+    },
+
+    async updateChatwootWebhookSecretCiphertext({
+      chatwootWebhookSecretCiphertext,
+      tenantId,
+      updatedAt = new Date(),
+    }: UpdateTenantWebhookSecretInput) {
+      const [tenant] = await db
+        .update(portalTenants)
+        .set({
+          chatwootWebhookSecretCiphertext: normalizeNonEmptyString(
+            chatwootWebhookSecretCiphertext,
+            'chatwootWebhookSecretCiphertext',
+          ),
+          updatedAt,
+        })
+        .where(eq(portalTenants.id, tenantId))
+        .returning()
+
+      if (!tenant) {
+        throw new Error('Failed to update tenant Chatwoot webhook secret.')
+      }
+
+      return tenant
     },
 
     async upsertTenantBySlug(input: TenantInput) {

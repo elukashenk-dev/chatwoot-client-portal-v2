@@ -287,3 +287,11 @@
   chat realtime subscriptions and publications ключуются по `tenant_id + portal_user_id + primary_conversation_id`. Chat context repository, conversation mapping repository и send ledger уже создаются с tenant scope, а SSE hub теперь также не может доставить event подписчику из другого tenant даже при совпадении user/conversation identifiers
 - причина:
   realtime fanout - это отдельная runtime boundary, не просто DB lookup. Без `tenant_id` в ключе подписки future schema/import/provisioning changes могли бы создать скрытый cross-tenant delivery risk, даже если persistence layer уже tenant-scoped
+
+## D-037. Tenant webhook provisioning хранит secret в tenant record
+
+- дата: `2026-05-05`
+- решение:
+  после закрытия `MT-4`-`MT-7` transitional hard-fail для non-default customer runtime снят. Chatwoot webhook signature проверяется secret-ом current tenant, выбранного по Host. Tenant-aware webhook configure script использует Chatwoot connection из `portal_tenants`, строит callback URL из `tenant.public_base_url`, настраивает account webhook через Chatwoot account API и сохраняет возвращенный webhook secret обратно в `portal_tenants.chatwoot_webhook_secret_ciphertext`
+- причина:
+  webhook secret больше не является global env authority. Для shared SaaS один portal deploy должен принимать события от разных Chatwoot accounts/installations и проверять каждое событие secret-ом того tenant, на чей host пришел callback

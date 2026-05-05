@@ -7,7 +7,7 @@ export const DEFAULT_WEBHOOK_SUBSCRIPTIONS = [
   'message_updated',
 ]
 
-type ChatwootAccountWebhookClient = {
+export type ChatwootAccountWebhookClient = {
   createAccountWebhook(options: {
     name?: string | null
     subscriptions: string[]
