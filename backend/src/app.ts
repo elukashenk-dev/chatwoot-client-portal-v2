@@ -125,6 +125,8 @@ export function buildApp({ database, env }: BuildAppOptions) {
 
     return createChatwootWebhookService({
       chatMessagesService: createChatMessagesServiceForRequest(request),
+      chatwootAccountId: tenant.chatwoot.accountId,
+      chatwootPortalInboxId: tenant.chatwoot.portalInboxId,
       realtimeHub: chatRealtimeHub,
       tenantId: tenant.id,
       webhookRepository: createChatwootWebhookRepository(database.db, {

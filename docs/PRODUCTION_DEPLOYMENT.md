@@ -473,7 +473,7 @@ docker compose \
   --env-file .env.production \
   -f infra/production/compose.yaml \
   exec portal-backend \
-  node backend/dist/scripts/ensure-chatwoot-portal-inbox-routing.js
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=default
 ```
 
 Создать/синхронизировать account webhook:

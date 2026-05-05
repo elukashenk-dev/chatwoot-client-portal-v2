@@ -28,13 +28,16 @@ describe('verifyTenantChatwootConnection', () => {
   it('loads tenant Chatwoot config, decrypts runtime token, and verifies the portal inbox', async () => {
     const key = decodeTenantSecretKey(tenantSecretKey)
     const repository = createTenantsRepository(database.db)
-    const verifyPortalInboxConnection = vi.fn().mockResolvedValue({
-      channelType: 'Channel::Api',
-      id: 6,
-      lockToSingleConversation: true,
-    })
+    const ensurePortalInboxSingleConversationRouting = vi
+      .fn()
+      .mockResolvedValue({
+        channelType: 'Channel::Api',
+        id: 6,
+        lockToSingleConversation: true,
+        updated: false,
+      })
     const forTenant = vi.fn().mockReturnValue({
-      verifyPortalInboxConnection,
+      ensurePortalInboxSingleConversationRouting,
     })
 
     await repository.createTenant({
@@ -77,6 +80,7 @@ describe('verifyTenantChatwootConnection', () => {
         channelType: 'Channel::Api',
         id: 6,
         lockToSingleConversation: true,
+        updated: false,
       },
     })
     expect(forTenant).toHaveBeenCalledWith({
@@ -85,7 +89,57 @@ describe('verifyTenantChatwootConnection', () => {
       baseUrl: 'https://chatwoot.shared.example.com',
       portalInboxId: 6,
     })
-    expect(verifyPortalInboxConnection).toHaveBeenCalledTimes(1)
+    expect(ensurePortalInboxSingleConversationRouting).toHaveBeenCalledTimes(1)
+  })
+
+  it('repairs tenant portal inbox single-conversation routing during verification', async () => {
+    const key = decodeTenantSecretKey(tenantSecretKey)
+    const repository = createTenantsRepository(database.db)
+    const ensurePortalInboxSingleConversationRouting = vi
+      .fn()
+      .mockResolvedValue({
+        channelType: 'Channel::Api',
+        id: 6,
+        lockToSingleConversation: true,
+        updated: true,
+      })
+
+    await repository.createTenant({
+      chatwootAccountId: 3,
+      chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+        'tenant-api-token',
+        key,
+      ),
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: encryptTenantSecret(
+        'tenant-webhook-secret',
+        key,
+      ),
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru',
+      slug: 'buhfirma',
+    })
+
+    await expect(
+      verifyTenantChatwootConnection({
+        chatwootClientFactory: {
+          forTenant: vi.fn().mockReturnValue({
+            ensurePortalInboxSingleConversationRouting,
+          }),
+        },
+        tenantSecretKey,
+        tenantsRepository: repository,
+        tenantSlug: 'buhfirma',
+      }),
+    ).resolves.toMatchObject({
+      verifiedInbox: {
+        lockToSingleConversation: true,
+        updated: true,
+      },
+    })
+    expect(ensurePortalInboxSingleConversationRouting).toHaveBeenCalledTimes(1)
   })
 
   it('fails clearly when tenant slug does not exist', async () => {

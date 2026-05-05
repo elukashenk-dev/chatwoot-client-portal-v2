@@ -95,7 +95,7 @@ cd /home/evluk/projects/chatwoot-client-portal-v2
 set -a && source .env && set +a
 pnpm --dir backend db:migrate
 pnpm --dir backend tenant:bootstrap-default
-pnpm --dir backend tenant:chatwoot:verify
+pnpm --dir backend tenant:chatwoot:ensure-portal-inbox
 ```
 
 ## 6. Запустить frontend

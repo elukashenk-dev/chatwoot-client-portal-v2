@@ -111,4 +111,44 @@ describe('tenants repository', () => {
       }),
     ).rejects.toThrow(TenantValidationError)
   })
+
+  it('rejects tenants whose public URL belongs to a different host', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    await expect(
+      repository.createTenant({
+        chatwootAccountId: 1,
+        chatwootApiAccessTokenCiphertext: 'v1:api-token',
+        chatwootBaseUrl: 'https://chatwoot.example.com',
+        chatwootPortalInboxId: 1,
+        chatwootWebhookSecretCiphertext: 'v1:webhook-secret',
+        displayName: 'Bad Tenant',
+        primaryDomain: 'lk.example.com',
+        publicBaseUrl: 'https://lk.other-example.com',
+        slug: 'bad-tenant',
+      }),
+    ).rejects.toThrow(TenantValidationError)
+
+    await expect(repository.listTenants()).resolves.toHaveLength(0)
+  })
+
+  it('rejects default tenant upserts whose public URL belongs to a different host', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    await expect(
+      repository.upsertTenantBySlug({
+        chatwootAccountId: 1,
+        chatwootApiAccessTokenCiphertext: 'v1:api-token',
+        chatwootBaseUrl: 'https://chatwoot.example.com',
+        chatwootPortalInboxId: 1,
+        chatwootWebhookSecretCiphertext: 'v1:webhook-secret',
+        displayName: 'Default Tenant',
+        primaryDomain: 'lk.example.com',
+        publicBaseUrl: 'https://lk.other-example.com',
+        slug: 'default',
+      }),
+    ).rejects.toThrow(TenantValidationError)
+
+    await expect(repository.listTenants()).resolves.toHaveLength(0)
+  })
 })

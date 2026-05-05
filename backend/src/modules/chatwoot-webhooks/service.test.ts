@@ -97,6 +97,8 @@ function createService(
     chatMessagesService: {
       getCurrentUserChatMessages,
     },
+    chatwootAccountId: 3,
+    chatwootPortalInboxId: 9,
     now: () => now,
     realtimeHub: {
       publishMessages,
@@ -211,6 +213,59 @@ describe('createChatwootWebhookService', () => {
     expect(publishMessages).not.toHaveBeenCalled()
   })
 
+  it('rejects signed webhook payloads from another Chatwoot account before recording delivery', async () => {
+    const { recordDelivery, service } = createService()
+    const webhook = createSignedWebhook({
+      account: {
+        id: 4,
+      },
+      conversation: {
+        account_id: 4,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).rejects.toMatchObject({
+      code: 'chatwoot_webhook_tenant_mismatch',
+      statusCode: 403,
+    })
+    expect(recordDelivery).not.toHaveBeenCalled()
+  })
+
+  it('rejects signed webhook payloads from another Chatwoot inbox before publishing', async () => {
+    const { publishMessages, recordDelivery, service } = createService()
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        contact_inbox: {
+          inbox_id: 10,
+        },
+        id: 101,
+        inbox_id: 10,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 10,
+      },
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).rejects.toMatchObject({
+      code: 'chatwoot_webhook_tenant_mismatch',
+      statusCode: 403,
+    })
+    expect(recordDelivery).not.toHaveBeenCalled()
+    expect(publishMessages).not.toHaveBeenCalled()
+  })
+
   it('publishes the canonical latest snapshot for a mapped message event', async () => {
     const {
       getCurrentUserChatMessages,
@@ -219,11 +274,19 @@ describe('createChatwootWebhookService', () => {
       service,
     } = createService()
     const webhook = createSignedWebhook({
+      account: {
+        id: '3',
+      },
       conversation: {
+        account_id: 3,
         id: 101,
+        inbox_id: 9,
       },
       event: 'message_updated',
       id: 501,
+      inbox: {
+        id: 9,
+      },
       private: false,
     })
 

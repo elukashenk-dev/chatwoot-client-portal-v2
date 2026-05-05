@@ -9,7 +9,11 @@ import {
 } from '../modules/tenants/secrets.js'
 
 type TenantChatwootVerificationClient = {
-  verifyPortalInboxConnection: () => Promise<ChatwootPortalInboxRouting>
+  ensurePortalInboxSingleConversationRouting: () => Promise<
+    ChatwootPortalInboxRouting & {
+      updated: boolean
+    }
+  >
 }
 
 type TenantChatwootVerificationClientFactory = {
@@ -66,7 +70,7 @@ export async function verifyTenantChatwootConnection({
   }
   const inbox = await chatwootClientFactory
     .forTenant(config)
-    .verifyPortalInboxConnection()
+    .ensurePortalInboxSingleConversationRouting()
 
   return {
     result: 'verified' as const,
@@ -81,6 +85,7 @@ export async function verifyTenantChatwootConnection({
       channelType: inbox.channelType,
       id: inbox.id,
       lockToSingleConversation: inbox.lockToSingleConversation,
+      updated: inbox.updated,
     },
   }
 }

@@ -5,6 +5,7 @@ import type { DatabaseClient } from '../db/client.js'
 import {
   createTenantsRepository,
   type Tenant,
+  TenantValidationError,
 } from '../modules/tenants/repository.js'
 import {
   decodeTenantSecretKey,
@@ -124,5 +125,17 @@ describe('bootstrapDefaultTenant', () => {
         }),
       }),
     ).rejects.toThrow(DefaultTenantBootstrapConfigError)
+  })
+
+  it('rejects a default tenant whose public URL host does not match its primary domain', async () => {
+    await expect(
+      bootstrapDefaultTenant({
+        db: database.db,
+        env: createBootstrapEnv({
+          DEFAULT_TENANT_PRIMARY_DOMAIN: 'lk.example.com',
+          DEFAULT_TENANT_PUBLIC_BASE_URL: 'https://lk.other-example.com',
+        }),
+      }),
+    ).rejects.toThrow(TenantValidationError)
   })
 })

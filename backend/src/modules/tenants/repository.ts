@@ -97,6 +97,30 @@ function normalizeUrl(url: string, fieldName: string) {
   return parsedUrl.toString().replace(/\/$/, '')
 }
 
+function readUrlHostname(url: string, fieldName: string) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/\.$/, '')
+  } catch {
+    throw new TenantValidationError(`${fieldName} must be a valid URL.`)
+  }
+}
+
+function assertPublicBaseUrlMatchesPrimaryDomain({
+  primaryDomain,
+  publicBaseUrl,
+}: {
+  primaryDomain: string
+  publicBaseUrl: string
+}) {
+  const publicHostname = readUrlHostname(publicBaseUrl, 'publicBaseUrl')
+
+  if (publicHostname !== primaryDomain) {
+    throw new TenantValidationError(
+      'Tenant publicBaseUrl hostname must match primaryDomain.',
+    )
+  }
+}
+
 function normalizePositiveInteger(value: number, fieldName: string) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TenantValidationError(`${fieldName} must be a positive integer.`)
@@ -126,6 +150,14 @@ function normalizeTenantStatus(status: TenantStatus | undefined) {
 }
 
 function normalizeTenantInput(input: TenantInput) {
+  const primaryDomain = normalizeDomain(input.primaryDomain)
+  const publicBaseUrl = normalizeUrl(input.publicBaseUrl, 'publicBaseUrl')
+
+  assertPublicBaseUrlMatchesPrimaryDomain({
+    primaryDomain,
+    publicBaseUrl,
+  })
+
   return {
     chatwootAccountId: normalizePositiveInteger(
       input.chatwootAccountId,
@@ -145,8 +177,8 @@ function normalizeTenantInput(input: TenantInput) {
       'chatwootWebhookSecretCiphertext',
     ),
     displayName: normalizeNonEmptyString(input.displayName, 'displayName'),
-    primaryDomain: normalizeDomain(input.primaryDomain),
-    publicBaseUrl: normalizeUrl(input.publicBaseUrl, 'publicBaseUrl'),
+    primaryDomain,
+    publicBaseUrl,
     slug: normalizeSlug(input.slug),
     status: normalizeTenantStatus(input.status),
   }

@@ -13,6 +13,7 @@ import type {
   ChatwootWebhookDeliveryStatus,
   ChatwootWebhookRepository,
 } from './repository.js'
+import { assertChatwootWebhookPayloadTenantInvariants } from './payloadTenantInvariants.js'
 
 const CHATWOOT_SIGNATURE_HEADER = 'x-chatwoot-signature'
 const CHATWOOT_TIMESTAMP_HEADER = 'x-chatwoot-timestamp'
@@ -35,6 +36,8 @@ type CreateChatwootWebhookServiceOptions = {
       userId: number
     }) => Promise<ChatMessagesSnapshot>
   }
+  chatwootAccountId: number
+  chatwootPortalInboxId: number
   now?: () => Date
   realtimeHub: ChatRealtimeHub
   tenantId: number
@@ -86,7 +89,15 @@ function readString(value: unknown) {
 }
 
 function readInteger(value: unknown) {
-  return typeof value === 'number' && Number.isInteger(value) ? value : null
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    return Number(value)
+  }
+
+  return null
 }
 
 function readObject(value: unknown) {
@@ -269,6 +280,8 @@ async function publishCurrentSnapshot({
 
 export function createChatwootWebhookService({
   chatMessagesService,
+  chatwootAccountId,
+  chatwootPortalInboxId,
   now = () => new Date(),
   realtimeHub,
   tenantId,
@@ -313,6 +326,12 @@ export function createChatwootWebhookService({
           'Chatwoot webhook payload is invalid.',
         )
       }
+
+      assertChatwootWebhookPayloadTenantInvariants({
+        chatwootAccountId,
+        chatwootPortalInboxId,
+        payload,
+      })
 
       const eventName = readEventName(payload)
 
