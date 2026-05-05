@@ -1,4 +1,4 @@
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { PasswordResetVerifyForm } from '../components/PasswordResetVerifyForm'
 import { getStoredPasswordResetRequest } from '../lib/passwordResetFlow'
 
@@ -6,7 +6,7 @@ export function PasswordResetVerifyPage() {
   const passwordResetRequest = getStoredPasswordResetRequest()
 
   return (
-    <AuthShell
+    <TenantAuthShell
       description={
         <>
           <span className="block">Мы отправили 6-значный код на</span>
@@ -18,6 +18,6 @@ export function PasswordResetVerifyPage() {
       title="Подтверждение Email"
     >
       <PasswordResetVerifyForm />
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

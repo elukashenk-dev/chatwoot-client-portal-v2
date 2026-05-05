@@ -4,7 +4,9 @@
 
 ## Browser Tab
 
-- `manifest.webmanifest` доступен и содержит `display: standalone`.
+- `/api/tenant/manifest.webmanifest` доступен и содержит
+  `display: standalone`.
+- `/api/tenant/apple-touch-icon.png` доступен для iOS Home Screen metadata.
 - `sw.js` отдается с frontend origin.
 - production `sw.js` содержит build-specific revision, чтобы installed PWA мог обнаруживать новые deploy-версии.
 - `/api/health` проходит через frontend origin и не кэшируется service worker.
@@ -38,6 +40,8 @@
 ## iOS Home Screen Web App
 
 - страница добавляется на Home Screen.
+- Home Screen title/icon берутся из tenant-aware metadata или fallback-safe
+  assets.
 - после открытия из Home Screen запускается как отдельное web app окно.
 - header/footer/composer не конфликтуют с safe area.
 - app update banner не упирается в верхнюю системную зону.

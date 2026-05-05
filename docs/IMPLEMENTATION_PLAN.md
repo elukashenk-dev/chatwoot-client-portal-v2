@@ -203,12 +203,16 @@
 - frontend consumes public tenant/branding context;
 - dynamic tenant-aware manifest endpoint;
 - tenant-specific `id`, `start_url`, `scope`, name, colors and icons;
+- dynamic tenant-aware `apple-touch-icon` endpoint for iOS/iPadOS Home
+  Screen installs;
 - service worker no-store/network-first handling for tenant dynamic metadata;
 - local multi-host testing guide.
 
 #### Exit Criteria
 
 - two tenant hosts can show different public tenant/PWA identity safely.
+- manifest and iOS Home Screen icon metadata can differ by tenant, with
+  fallback icons until full tenant branding returns in MT-9.
 
 ### MT-9. Tenant Admin And Branding Rebuild
 

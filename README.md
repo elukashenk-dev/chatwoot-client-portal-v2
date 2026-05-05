@@ -2,12 +2,12 @@
 
 Новая версия клиентского портала для Chatwoot.
 
-Этот проект создается с нуля как отдельная кодовая база рядом с `chatwoot-client-portal`, но без копирования старого кода. Старая версия остается только источником продуктового контекста, найденных багов, бизнес-правил и антипримеров.
+Этот проект создается с нуля как отдельная кодовая база рядом со старым порталом, но без копирования старого кода и без использования старого проекта как reference.
 
 ## Базовые правила
 
 - `v2` не наследует код из `v1`
-- старый проект нельзя читать, нельзя копировать из него модули, страницы и решения "как есть"
+- старый проект нельзя читать, запускать или использовать как источник решений
 - браузер не работает с Chatwoot напрямую
 - портал backend является единственной authority-зоной для auth, session, access control, send и realtime fanout
 - Chatwoot остается system of record для contacts, conversations и messages
@@ -50,7 +50,22 @@ Bootstrap уже лежит в репозитории:
 
 1. `cp .env.example .env`
 2. `pnpm db:up`
-3. `set -a && source .env && set +a`
-4. `pnpm --dir backend dev`
+3. Заполнить в `.env` `PORTAL_TENANT_SECRET_KEY` и `DEFAULT_TENANT_*` значения.
+4. `set -a && source .env && set +a`
+5. `pnpm --dir backend db:migrate`
+6. `pnpm --dir backend tenant:bootstrap-default`
+7. `pnpm dev:backend`
+8. В другом терминале: `set -a && source .env && set +a && pnpm dev:web --host 0.0.0.0`
+
+Если локальная база была создана до multi-tenant foundation, старые данные в
+этом pre-production проекте не мигрируются вперед. Правильный local reset:
+
+```bash
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml down -v
+pnpm db:up
+set -a && source .env && set +a
+pnpm --dir backend db:migrate
+pnpm --dir backend tenant:bootstrap-default
+```
 
 `pnpm db:down` останавливает только `v2` database container и не трогает `Chatwoot`.

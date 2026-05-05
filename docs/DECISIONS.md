@@ -295,3 +295,11 @@
   после закрытия `MT-4`-`MT-7` transitional hard-fail для non-default customer runtime снят. Chatwoot webhook signature проверяется secret-ом current tenant, выбранного по Host. Tenant-aware webhook configure script использует Chatwoot connection из `portal_tenants`, строит callback URL из `tenant.public_base_url`, настраивает account webhook через Chatwoot account API и сохраняет возвращенный webhook secret обратно в `portal_tenants.chatwoot_webhook_secret_ciphertext`
 - причина:
   webhook secret больше не является global env authority. Для shared SaaS один portal deploy должен принимать события от разных Chatwoot accounts/installations и проверять каждое событие secret-ом того tenant, на чей host пришел callback
+
+## D-038. PWA install identity резолвится по tenant
+
+- дата: `2026-05-05`
+- решение:
+  PWA install identity больше не задается одним static `manifest.webmanifest`. `MT-8` использует tenant-aware `/api/tenant/manifest.webmanifest` для `id`, `name`, `short_name`, `start_url`, `scope`, colors и icon URLs. Для iOS/iPadOS Home Screen installs HTML metadata также tenant-aware: `apple-mobile-web-app-title` обновляется на frontend, а `<link rel="apple-touch-icon">` указывает на `/api/tenant/apple-touch-icon.png`. До возвращения полноценного tenant branding в `MT-9` endpoints могут отдавать fallback assets, но browser contract уже должен быть tenant-owned
+- причина:
+  Android/Chrome устанавливают PWA на основе manifest identity, а Safari/iOS использует HTML touch icon/title metadata для Home Screen web clips. Если оставить один global manifest или одну global install icon, две разные компании в shared SaaS могут получить одинаковую установленную app identity или stale branding. Host-based tenant resolution и no-store dynamic metadata сохраняют безопасную границу до полноценного branding/admin слоя

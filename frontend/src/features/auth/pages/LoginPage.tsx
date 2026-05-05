@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { LoginForm } from '../components/LoginForm'
 
 export function LoginPage() {
   return (
-    <AuthShell
+    <TenantAuthShell
       description="Войдите, чтобы продолжить работу с сообщениями и обращениями."
       title="Клиентский портал"
     >
@@ -32,6 +32,6 @@ export function LoginPage() {
         Если у вас еще нет доступа, запросите его по email, который уже известен
         вашей компании.
       </div>
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

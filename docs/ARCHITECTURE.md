@@ -185,6 +185,7 @@ one portal deploy -> one tenant -> one Chatwoot account/inbox
 - `voice recording and send`;
 - backend-authenticated realtime.
 - tenant-aware PWA manifest/metadata foundation.
+- tenant-aware iOS Home Screen icon metadata foundation.
 
 ### Out Of Scope
 
@@ -244,6 +245,8 @@ one portal deploy -> one tenant -> one Chatwoot account/inbox
 - web app manifest обязателен;
 - `display: standalone` обязателен;
 - нужны app icons для install flow;
+- в multi-tenant runtime manifest и iOS `apple-touch-icon` должны
+  резолвиться по current tenant, а не быть одним глобальным static build file;
 - service worker нужен как foundation для installability и дальнейшего offline/app-like поведения;
 - Chrome/Edge/Android install prompt зависит от installability criteria;
 - iOS/iPadOS устанавливают web app через Add to Home Screen, а не через Chromium-style install prompt;

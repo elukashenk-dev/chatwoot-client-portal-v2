@@ -223,7 +223,7 @@ export function getAuthorInitials(authorName: string) {
   const words = authorName.trim().split(/\s+/).filter(Boolean)
 
   if (words.length === 0) {
-    return 'PG'
+    return 'ЛК'
   }
 
   if (words.length === 1) {

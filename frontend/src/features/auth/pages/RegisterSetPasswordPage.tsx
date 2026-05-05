@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { RegisterSetPasswordForm } from '../components/RegisterSetPasswordForm'
 
 export function RegisterSetPasswordPage() {
   return (
-    <AuthShell
+    <TenantAuthShell
       description="Придумайте пароль для безопасного входа в клиентский портал."
       title="Создание пароля"
     >
@@ -27,6 +27,6 @@ export function RegisterSetPasswordPage() {
           Перейти ко входу
         </Link>
       </div>
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

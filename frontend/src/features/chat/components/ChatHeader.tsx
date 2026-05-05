@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
+import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
+import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPrimaryConversation } from '../types'
@@ -16,6 +18,7 @@ type ChatHeaderProps = {
 export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
+  const { tenant } = useTenantIdentity()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
 
@@ -34,6 +37,9 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   }
 
   const presenceLabel = isReady ? 'Онлайн' : 'Подключение'
+  const supportTeamName = tenant
+    ? `Команда ${tenant.displayName}`
+    : 'Команда поддержки'
 
   return (
     <header className="app-safe-top chat-header-background relative z-10 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
@@ -51,7 +57,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
 
           <div className="flex min-w-0 items-center gap-[15px]">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white">
-              PG
+              {tenant ? createTenantMonogram(tenant.displayName) : 'ЛК'}
             </div>
 
             <div className="min-w-0 py-0.5">
@@ -60,7 +66,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
               </h1>
               <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-slate-500 sm:mt-1 sm:text-[13px]">
                 <span className="min-w-0 truncate">
-                  Агент: {conversation?.assigneeName ?? 'Команда ProvGroup'}
+                  Агент: {conversation?.assigneeName ?? supportTeamName}
                 </span>
                 <span
                   aria-label={presenceLabel}

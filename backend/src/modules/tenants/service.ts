@@ -106,6 +106,22 @@ function toTenantRequestContext({
   }
 }
 
+function assertTenantRuntimeIsActive(
+  tenant: NonNullable<
+    Awaited<ReturnType<TenantsRepository['findByPrimaryDomain']>>
+  >,
+) {
+  if (tenant.status === 'active') {
+    return
+  }
+
+  throw new ApiError(
+    503,
+    'TENANT_RUNTIME_DISABLED',
+    'Личный кабинет для этого домена сейчас недоступен.',
+  )
+}
+
 export function createTenantsService({
   defaultTenantSlug: configuredDefaultTenantSlug,
   tenantSecretKey: rawTenantSecretKey,
@@ -207,6 +223,8 @@ export function createTenantsService({
           'Личный кабинет для этого домена не найден.',
         )
       }
+
+      assertTenantRuntimeIsActive(tenant)
 
       return buildTenantRequestContext(tenant)
     },

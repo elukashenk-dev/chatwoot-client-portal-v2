@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [tailwindcss(), react()],
     server: {
+      allowedHosts: ['.127.0.0.1.nip.io'],
       proxy: {
         '/api': {
           changeOrigin: false,

@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { PasswordResetRequestForm } from '../components/PasswordResetRequestForm'
 
 export function PasswordResetRequestPage() {
   return (
-    <AuthShell
+    <TenantAuthShell
       description="Введите email, на который зарегистрирован доступ. Мы отправим код подтверждения для восстановления пароля."
       title="Восстановление пароля"
     >
@@ -27,6 +27,6 @@ export function PasswordResetRequestPage() {
           Новый аккаунт
         </Link>
       </div>
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

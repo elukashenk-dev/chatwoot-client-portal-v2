@@ -975,7 +975,7 @@ Both are resolved by backend using host.
 Manifest must become tenant-aware:
 
 ```text
-GET /api/branding/manifest.webmanifest
+GET /api/tenant/manifest.webmanifest
 ```
 
 This endpoint must resolve tenant by host and return tenant-specific:
@@ -1004,18 +1004,21 @@ Required PWA identity rules:
 - icon URLs should include a tenant asset version or content hash to avoid stale installed icons after branding changes;
 - manifest response must include no-store or short-cache headers until cache behavior is proven;
 - manifest endpoint must never return another tenant's name, colors or icons.
+- `MT-8` may use fallback icon assets, but icon URLs must already be
+  tenant-aware so `MT-9` can swap in tenant-owned branding assets without
+  changing the browser contract.
 
 Examples:
 
 ```text
-https://lk.buhfirma.ru/api/branding/manifest.webmanifest
+https://lk.buhfirma.ru/api/tenant/manifest.webmanifest
   id: https://lk.buhfirma.ru/
   name: Бухфирма
   short_name: Бухфирма
   start_url: /
   scope: /
 
-https://lk.stroyfirma.ru/api/branding/manifest.webmanifest
+https://lk.stroyfirma.ru/api/tenant/manifest.webmanifest
   id: https://lk.stroyfirma.ru/
   name: Стройфирма
   short_name: Стройка
@@ -1081,14 +1084,19 @@ Requirements:
 
 - `document.title` must update from tenant branding as soon as branding loads;
 - `<meta name="theme-color">` must update from tenant branding;
-- if we support iOS install polish, `apple-mobile-web-app-title` and
-  `apple-touch-icon` must be tenant-aware or intentionally fallback-safe;
+- `apple-mobile-web-app-title` must update from tenant branding;
+- `apple-touch-icon` must be tenant-aware through a dynamic endpoint, because
+  Safari/iOS Home Screen installs use this HTML metadata for the main app icon;
 - static `index.html` values may be generic fallback only;
 - after tenant branding loads, the visible app shell must not keep old global
   brand text such as `ProvGroup`.
 
 Manual testing is required on real mobile browsers because installed PWA icon
 and title caching behavior differs between Chrome/Android and Safari/iOS.
+If a tenant changes its installed-app icon after users have already installed
+the PWA, some platforms may require reinstalling the Home Screen app before the
+new icon is visible. Tenant branding should therefore be configured before
+production rollout whenever possible.
 
 ## 11. Customer Auth Changes
 
@@ -1685,6 +1693,7 @@ Deliverables:
 - `GET /api/tenant`;
 - tenant-aware branding fallback model;
 - dynamic manifest resolved by tenant;
+- dynamic `apple-touch-icon` resolved by tenant for iOS/iPadOS;
 - service worker no-store/network-first handling for tenant dynamic metadata;
 - local multi-host testing guide.
 
@@ -1692,6 +1701,7 @@ Checks:
 
 - two local tenant hosts show different public tenant info;
 - manifest differs by host;
+- iOS touch icon endpoint is tenant-resolved and fallback-safe;
 - no stale cached manifest across tenant hosts.
 
 Exit criterion:
@@ -1783,6 +1793,8 @@ Required before production:
 - tenant A chat does not show tenant B data;
 - tenant-specific PWA manifest;
 - manifest `id`, `start_url`, `scope`, name, colors and icon URLs differ safely by host;
+- iOS `apple-touch-icon` URL resolves through current tenant and does not use
+  one static global install icon as the browser contract;
 - admin login isolation after MT-9.
 
 ## 18. Manual Acceptance Checklist

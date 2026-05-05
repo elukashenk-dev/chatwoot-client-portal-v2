@@ -539,7 +539,10 @@ docker compose \
 - `/api/health` возвращает `production`.
 - В browser devtools нет mixed content.
 - Service worker registered.
-- Manifest доступен: `https://portal.example.com/manifest.webmanifest`.
+- Tenant-aware manifest доступен:
+  `https://portal.example.com/api/tenant/manifest.webmanifest`.
+- Tenant-aware iOS touch icon доступна:
+  `https://portal.example.com/api/tenant/apple-touch-icon.png`.
 
 ### 9.2. Auth
 

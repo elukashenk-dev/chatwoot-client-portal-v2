@@ -2,9 +2,7 @@ const SERVICE_WORKER_REVISION = '__PORTAL_SERVICE_WORKER_REVISION__'
 const STATIC_CACHE = `provgroup-portal-static-${SERVICE_WORKER_REVISION}`
 const APP_SHELL_URLS = [
   '/',
-  '/manifest.webmanifest',
   '/favicon.svg',
-  '/apple-touch-icon.png',
   '/pwa-icons/icon-192.png',
   '/pwa-icons/icon-512.png',
   '/pwa-icons/icon-maskable-512.png',
@@ -50,7 +48,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (requestUrl.pathname.startsWith('/api/')) {
+  if (
+    requestUrl.pathname.startsWith('/api/') ||
+    isTenantDynamicMetadataRequest(requestUrl.pathname)
+  ) {
     return
   }
 
@@ -69,12 +70,26 @@ self.addEventListener('fetch', (event) => {
 function shouldHandleStaticRequest(request) {
   const requestUrl = new URL(request.url)
 
+  if (isTenantDynamicMetadataRequest(requestUrl.pathname)) {
+    return false
+  }
+
   if (APP_SHELL_URLS.includes(requestUrl.pathname)) {
     return true
   }
 
   return ['font', 'image', 'manifest', 'script', 'style', 'worker'].includes(
     request.destination,
+  )
+}
+
+function isTenantDynamicMetadataRequest(pathname) {
+  return (
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/apple-touch-icon.png' ||
+    pathname === '/api/tenant/manifest.webmanifest' ||
+    pathname === '/api/tenant/apple-touch-icon.png' ||
+    pathname.startsWith('/api/tenant/icons/')
   )
 }
 

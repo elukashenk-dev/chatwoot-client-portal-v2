@@ -3,34 +3,43 @@ import { expect, test } from '@playwright/test'
 test('serves the PWA manifest with installable app metadata', async ({
   request,
 }) => {
-  const response = await request.get('/manifest.webmanifest')
+  const response = await request.get('/api/tenant/manifest.webmanifest')
 
   expect(response.ok()).toBe(true)
+  expect(response.headers()['cache-control']).toBe('no-store')
 
   const manifest = (await response.json()) as {
     display?: string
+    id?: string
     icons?: Array<{ purpose?: string; sizes?: string; src?: string }>
     name?: string
     scope?: string
+    short_name?: string
     start_url?: string
+    theme_color?: string
   }
 
   expect(manifest).toMatchObject({
     display: 'standalone',
-    name: 'ProvGroup Клиентский портал',
     scope: '/',
     start_url: '/',
+    theme_color: '#112540',
   })
+  expect(manifest.id).toMatch(/\/$/)
+  expect(manifest.name).toContain('Личный кабинет')
+  expect(manifest.short_name).toBeTruthy()
   expect(manifest.icons).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         sizes: '192x192',
-        src: '/pwa-icons/icon-192.png',
+        src: expect.stringMatching(/^\/api\/tenant\/icons\/icon-192\.png\?v=/),
       }),
       expect.objectContaining({
         purpose: 'maskable',
         sizes: '512x512',
-        src: '/pwa-icons/icon-maskable-512.png',
+        src: expect.stringMatching(
+          /^\/api\/tenant\/icons\/icon-maskable-512\.png\?v=/,
+        ),
       }),
     ]),
   )
@@ -44,6 +53,8 @@ test('serves PWA icon assets referenced by the manifest', async ({
     '/pwa-icons/icon-512.png',
     '/pwa-icons/icon-maskable-512.png',
     '/apple-touch-icon.png',
+    '/api/tenant/apple-touch-icon.png',
+    '/api/tenant/icons/icon-192.png?v=fallback',
   ]) {
     const response = await request.get(iconPath)
 
@@ -65,6 +76,7 @@ test('serves service worker foundation without intercepting API routes', async (
     "requestUrl.pathname.startsWith('/api/')",
   )
   expect(serviceWorkerSource).toContain('return')
+  expect(serviceWorkerSource).toContain('isTenantDynamicMetadataRequest')
   expect(serviceWorkerSource).toContain('handleNavigationRequest')
   expect(serviceWorkerSource).toContain('handleStaticRequest')
   expect(serviceWorkerSource).toContain("event.data?.type === 'SKIP_WAITING'")

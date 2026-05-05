@@ -14,9 +14,16 @@ cd /home/evluk/projects/chatwoot-client-portal-v2
 
 ```bash
 SESSION_SECRET=любой-длинный-секрет-32+символа
-CHATWOOT_BASE_URL=http://127.0.0.1:3000
-CHATWOOT_ACCOUNT_ID=1
-CHATWOOT_API_ACCESS_TOKEN=токен-из-chatwoot
+PORTAL_TENANT_SECRET_KEY=base64-ключ-32-byte
+DEFAULT_TENANT_SLUG=default
+DEFAULT_TENANT_DISPLAY_NAME="Local Default Tenant"
+DEFAULT_TENANT_PRIMARY_DOMAIN=127.0.0.1
+DEFAULT_TENANT_PUBLIC_BASE_URL=http://127.0.0.1:5173
+DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000
+DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=1
+DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=1
+DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=токен-из-chatwoot
+DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET=chatwoot-webhook-secret
 SMTP_HOST=127.0.0.1
 SMTP_PORT=1025
 SMTP_FROM=noreply@example.com
@@ -48,6 +55,17 @@ Chatwoot и Mailpit эта шпаргалка не запускает.
 pnpm db:up
 ```
 
+Если локальная база была создана до multi-tenant foundation и старые данные не
+нужны, пересоздать ее полностью:
+
+```bash
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml down -v
+pnpm db:up
+set -a && source .env && set +a
+pnpm --dir backend db:migrate
+pnpm --dir backend tenant:bootstrap-default
+```
+
 Логи БД:
 
 ```bash
@@ -76,6 +94,8 @@ Backend применяет миграции сам при старте. Ручн
 cd /home/evluk/projects/chatwoot-client-portal-v2
 set -a && source .env && set +a
 pnpm --dir backend db:migrate
+pnpm --dir backend tenant:bootstrap-default
+pnpm --dir backend tenant:chatwoot:verify
 ```
 
 ## 6. Запустить frontend
@@ -85,7 +105,7 @@ pnpm --dir backend db:migrate
 ```bash
 cd /home/evluk/projects/chatwoot-client-portal-v2
 set -a && source .env && set +a
-pnpm dev:web
+pnpm dev:web --host 0.0.0.0
 ```
 
 Открывать:

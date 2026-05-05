@@ -6,6 +6,7 @@ import type { DatabaseClient } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { chatwootWebhookTestInternals } from '../chatwoot-webhooks/service.js'
+import type { TenantStatus } from './repository.js'
 import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
 
 const tenantSecretKey = Buffer.alloc(32, 5).toString('base64')
@@ -41,11 +42,13 @@ async function seedTenant(
     primaryDomain,
     publicBaseUrl,
     slug,
+    status = 'active',
   }: {
     displayName: string
     primaryDomain: string
     publicBaseUrl: string
     slug: string
+    status?: TenantStatus
   },
 ) {
   const key = decodeTenantSecretKey(tenantSecretKey)
@@ -66,6 +69,7 @@ async function seedTenant(
     primaryDomain,
     publicBaseUrl,
     slug,
+    status,
   })
 }
 
@@ -143,12 +147,130 @@ describe('tenant routes and request context', () => {
       })
 
       expect(response.statusCode).toBe(200)
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.headers.vary).toBe('Host')
       expect(response.json()).toEqual({
         tenant: {
           displayName: 'Default Tenant',
           primaryDomain: 'lk.default.test',
           publicBaseUrl: 'https://lk.default.test',
           slug: 'default',
+        },
+      })
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('serves tenant-specific PWA manifests by Host without cache storage', async () => {
+    const { app } = await createTenantApp()
+
+    try {
+      const defaultResponse = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/manifest.webmanifest',
+      })
+      const secondResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/manifest.webmanifest',
+      })
+
+      expect(defaultResponse.statusCode).toBe(200)
+      expect(defaultResponse.headers['content-type']).toContain(
+        'application/manifest+json',
+      )
+      expect(defaultResponse.headers['cache-control']).toBe('no-store')
+      expect(defaultResponse.headers.vary).toBe('Host')
+      expect(defaultResponse.json()).toMatchObject({
+        display: 'standalone',
+        id: 'https://lk.default.test/',
+        name: 'Default Tenant Личный кабинет',
+        scope: '/',
+        short_name: 'Default Tenant',
+        start_url: '/',
+        theme_color: '#112540',
+      })
+      expect(defaultResponse.json().icons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sizes: '192x192',
+            src: '/api/tenant/icons/icon-192.png?v=default-fallback-v1',
+          }),
+          expect.objectContaining({
+            purpose: 'maskable',
+            sizes: '512x512',
+            src: '/api/tenant/icons/icon-maskable-512.png?v=default-fallback-v1',
+          }),
+        ]),
+      )
+
+      expect(secondResponse.statusCode).toBe(200)
+      expect(secondResponse.json()).toMatchObject({
+        id: 'https://lk.second.test/',
+        name: 'Second Tenant Личный кабинет',
+        short_name: 'Second Tenant',
+      })
+      expect(secondResponse.json().icons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            src: '/api/tenant/icons/icon-192.png?v=second-fallback-v1',
+          }),
+        ]),
+      )
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('serves tenant-aware PWA icon redirects for manifest and iOS metadata', async () => {
+    const { app } = await createTenantApp()
+
+    try {
+      const appleIconResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/apple-touch-icon.png',
+      })
+      const manifestIconResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/icon-maskable-512.png?v=second-fallback-v1',
+      })
+      const missingIconResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/not-found.png',
+      })
+
+      expect(appleIconResponse.statusCode).toBe(302)
+      expect(appleIconResponse.headers.location).toBe('/apple-touch-icon.png')
+      expect(appleIconResponse.headers['cache-control']).toBe('no-store')
+      expect(appleIconResponse.headers.vary).toBe('Host')
+
+      expect(manifestIconResponse.statusCode).toBe(302)
+      expect(manifestIconResponse.headers.location).toBe(
+        '/pwa-icons/icon-maskable-512.png',
+      )
+      expect(manifestIconResponse.headers['cache-control']).toBe('no-store')
+      expect(manifestIconResponse.headers.vary).toBe('Host')
+
+      expect(missingIconResponse.statusCode).toBe(404)
+      expect(missingIconResponse.json()).toEqual({
+        error: {
+          code: 'TENANT_PWA_ICON_NOT_FOUND',
+          message: 'Иконка не найдена.',
         },
       })
     } finally {
@@ -179,6 +301,79 @@ describe('tenant routes and request context', () => {
       await app.close()
     }
   }, 15_000)
+
+  it('blocks non-active tenants before public, auth, chat and webhook runtime', async () => {
+    const { app, database } = await createTenantApp()
+    const blockedStatuses: Exclude<TenantStatus, 'active'>[] = [
+      'suspended',
+      'provisioning',
+      'archived',
+    ]
+
+    try {
+      for (const status of blockedStatuses) {
+        const primaryDomain = `lk.${status}.test`
+
+        await seedTenant(database, {
+          displayName: `${status} Tenant`,
+          primaryDomain,
+          publicBaseUrl: `https://${primaryDomain}`,
+          slug: status,
+          status,
+        })
+
+        const responses = await Promise.all([
+          app.inject({
+            headers: {
+              host: primaryDomain,
+            },
+            method: 'GET',
+            url: '/api/tenant',
+          }),
+          app.inject({
+            headers: {
+              host: primaryDomain,
+              origin: `https://${primaryDomain}`,
+            },
+            method: 'POST',
+            payload: {
+              email: 'name@example.test',
+              password: 'Secret123',
+            },
+            url: '/api/auth/login',
+          }),
+          app.inject({
+            headers: {
+              host: primaryDomain,
+            },
+            method: 'GET',
+            url: '/api/chat/context',
+          }),
+          app.inject({
+            headers: {
+              'content-type': 'application/json',
+              host: primaryDomain,
+            },
+            method: 'POST',
+            payload: Buffer.from('{}'),
+            url: '/api/integrations/chatwoot/webhooks/account',
+          }),
+        ])
+
+        for (const response of responses) {
+          expect(response.statusCode).toBe(503)
+          expect(response.json()).toEqual({
+            error: {
+              code: 'TENANT_RUNTIME_DISABLED',
+              message: 'Личный кабинет для этого домена сейчас недоступен.',
+            },
+          })
+        }
+      }
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
 
   it('uses X-Forwarded-Host only when trusted proxy mode is enabled', async () => {
     const trustedProxyApp = await createTenantApp({

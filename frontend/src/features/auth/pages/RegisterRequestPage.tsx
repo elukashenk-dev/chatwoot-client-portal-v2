@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { RegisterRequestForm } from '../components/RegisterRequestForm'
 
 export function RegisterRequestPage() {
   return (
-    <AuthShell
+    <TenantAuthShell
       description="Укажите имя и email. Мы проверим доступ и отправим код подтверждения."
       title="Новый аккаунт"
     >
@@ -27,6 +27,6 @@ export function RegisterRequestPage() {
           У меня уже есть аккаунт
         </Link>
       </div>
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

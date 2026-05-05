@@ -4,8 +4,8 @@ type BrandMarkProps = {
 }
 
 export function BrandMark({
-  monogram = 'PG',
-  name = 'ProvGroup',
+  monogram = 'ЛК',
+  name = 'Клиентский портал',
 }: BrandMarkProps) {
   return (
     <>

@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { PasswordResetSetPasswordForm } from '../components/PasswordResetSetPasswordForm'
 
 export function PasswordResetSetPasswordPage() {
   return (
-    <AuthShell
+    <TenantAuthShell
       description="Придумайте новый пароль для безопасного входа в клиентский портал."
       title="Создание пароля"
     >
@@ -27,6 +27,6 @@ export function PasswordResetSetPasswordPage() {
           Перейти ко входу
         </Link>
       </div>
-    </AuthShell>
+    </TenantAuthShell>
   )
 }

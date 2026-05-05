@@ -1,4 +1,4 @@
-import { AuthShell } from '../../../shared/ui/AuthShell'
+import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { RegisterVerifyForm } from '../components/RegisterVerifyForm'
 import { getStoredRegistrationRequest } from '../lib/registrationFlow'
 
@@ -6,7 +6,7 @@ export function RegisterVerifyPage() {
   const registrationRequest = getStoredRegistrationRequest()
 
   return (
-    <AuthShell
+    <TenantAuthShell
       description={
         <>
           <span className="block">Мы отправили 6-значный код на</span>
@@ -18,6 +18,6 @@ export function RegisterVerifyPage() {
       title="Подтверждение Email"
     >
       <RegisterVerifyForm />
-    </AuthShell>
+    </TenantAuthShell>
   )
 }
