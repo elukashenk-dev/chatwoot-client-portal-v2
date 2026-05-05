@@ -6,6 +6,7 @@ import { ApiError } from '../../lib/errors.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatContextService } from '../chat-context/service.js'
+import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatRealtimeEvent, ChatRealtimeHub } from './hub.js'
 
 const chatRealtimeQuerySchema = z.object({
@@ -46,6 +47,7 @@ export function registerChatRealtimeRoutes(
       request,
     })
     const query = chatRealtimeQuerySchema.parse(request.query)
+    const tenant = requireTenantContext(request)
     const context = await createChatContextService(
       request,
     ).getCurrentUserChatContext({
@@ -83,6 +85,7 @@ export function registerChatRealtimeRoutes(
       send: (event) => {
         writeSseEvent(reply.raw, event)
       },
+      tenantId: tenant.id,
       userId: user.id,
     })
     const keepaliveTimer = setInterval(() => {

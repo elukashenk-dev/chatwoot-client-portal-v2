@@ -53,7 +53,8 @@
 - Реализован `MT-3 Tenant-Aware Chatwoot Client`: runtime Chatwoot client создается из `request.tenant.chatwoot`, tenant secrets расшифровываются backend-only через `PORTAL_TENANT_SECRET_KEY`, registration/chat/webhook services получают tenant config per request, добавлен tenant Chatwoot verification script; backend build/lint/test, Prettier и `git diff --check` пройдены.
 - Реализован `MT-4 Tenant-Scoped Persistence`: tenant-owned tables получили `tenant_id`, unique/index scope стал tenant-aware, repositories/services/routes протаскивают tenant scope, добавлены tests для одинаковых email/contact/conversation/delivery values across tenants; backend build/lint/test, code-health, Prettier и `git diff --check` пройдены.
 - Реализован `MT-5 Tenant-Aware Customer Auth`: добавлены regression tests для same-email login/session isolation, tenant-scoped registration verification/continuation tokens и tenant-scoped password reset code/continuation tokens; non-default HTTP runtime guard оставлен до `MT-6`/`MT-7`; backend build/lint/test, code-health, Prettier и `git diff --check` пройдены.
+- Реализован `MT-6 Tenant-Aware Chat Runtime`: realtime hub теперь ключует subscribe/publish по `tenant_id + user_id + primary_conversation_id`, webhook snapshot fanout передает tenant scope, chat repository tests доказывают, что tenant A не читает tenant B chat context; backend build/lint/test, code-health, Prettier и `git diff --check` пройдены.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `MT-5 Tenant-Aware Customer Auth`; затем перейти к `MT-6 Tenant-Aware Chat Runtime`.
+- Сделать checkpoint commit для `MT-6 Tenant-Aware Chat Runtime`; затем перейти к `MT-7 Tenant-Aware Webhooks And Provisioning`.

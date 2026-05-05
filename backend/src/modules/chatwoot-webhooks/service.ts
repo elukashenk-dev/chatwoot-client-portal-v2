@@ -37,6 +37,7 @@ type CreateChatwootWebhookServiceOptions = {
   }
   now?: () => Date
   realtimeHub: ChatRealtimeHub
+  tenantId: number
   webhookSecret: string
   webhookRepository: ChatwootWebhookRepository
 }
@@ -245,11 +246,13 @@ async function publishCurrentSnapshot({
   mapping,
   primaryConversationId,
   realtimeHub,
+  tenantId,
 }: {
   chatMessagesService: CreateChatwootWebhookServiceOptions['chatMessagesService']
   mapping: ChatwootWebhookMapping
   primaryConversationId: number
   realtimeHub: ChatRealtimeHub
+  tenantId: number
 }) {
   const snapshot = await chatMessagesService.getCurrentUserChatMessages({
     primaryConversationId,
@@ -259,6 +262,7 @@ async function publishCurrentSnapshot({
   return realtimeHub.publishMessages({
     primaryConversationId,
     snapshot,
+    tenantId,
     userId: mapping.userId,
   })
 }
@@ -267,6 +271,7 @@ export function createChatwootWebhookService({
   chatMessagesService,
   now = () => new Date(),
   realtimeHub,
+  tenantId,
   webhookSecret,
   webhookRepository,
 }: CreateChatwootWebhookServiceOptions) {
@@ -422,6 +427,7 @@ export function createChatwootWebhookService({
         mapping,
         primaryConversationId: chatwootConversationId,
         realtimeHub,
+        tenantId,
       })
 
       return {

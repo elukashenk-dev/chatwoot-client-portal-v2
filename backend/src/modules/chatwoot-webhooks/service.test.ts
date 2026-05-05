@@ -105,6 +105,7 @@ function createService(
           CreateChatwootWebhookServiceOptions['realtimeHub']['subscribe']
         >(),
     },
+    tenantId: 1,
     webhookRepository: {
       findConversationMappingByChatwootConversationId,
       recordDelivery,
@@ -246,6 +247,7 @@ describe('createChatwootWebhookService', () => {
     expect(publishMessages).toHaveBeenCalledWith({
       primaryConversationId: 101,
       snapshot: readySnapshot,
+      tenantId: 1,
       userId: 7,
     })
   })

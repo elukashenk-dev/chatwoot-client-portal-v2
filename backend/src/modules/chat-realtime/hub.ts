@@ -3,6 +3,7 @@ import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 type RealtimeSubscription = {
   primaryConversationId: number
   send: (event: ChatRealtimeEvent) => void
+  tenantId: number
   userId: number
 }
 
@@ -18,12 +19,14 @@ export type ChatRealtimeEvent =
 
 function buildSubscriptionKey({
   primaryConversationId,
+  tenantId,
   userId,
 }: {
   primaryConversationId: number
+  tenantId: number
   userId: number
 }) {
-  return `${userId}:${primaryConversationId}`
+  return `${tenantId}:${userId}:${primaryConversationId}`
 }
 
 export function createChatRealtimeHub() {
@@ -48,15 +51,18 @@ export function createChatRealtimeHub() {
     publishMessages({
       primaryConversationId,
       snapshot,
+      tenantId,
       userId,
     }: {
       primaryConversationId: number
       snapshot: ChatMessagesSnapshot
+      tenantId: number
       userId: number
     }) {
       const subscriptions = subscriptionsByKey.get(
         buildSubscriptionKey({
           primaryConversationId,
+          tenantId,
           userId,
         }),
       )

@@ -117,5 +117,12 @@ describe('createChatContextRepository', () => {
       chatwootConversationId: 101,
       userId: userB.id,
     })
+    await expect(repositoryA.findPortalUserById(userB.id)).resolves.toBeNull()
+    await expect(
+      repositoryA.findContactLinkByUserId(userB.id),
+    ).resolves.toBeNull()
+    await expect(
+      repositoryA.findConversationMappingByUserId(userB.id),
+    ).resolves.toBeNull()
   })
 })

@@ -279,3 +279,11 @@
   customer auth state проверяется через tenant-aware service/repository boundary: login ищет пользователя по `tenant_id + email`, session lookup требует current tenant, registration verification records и password reset records используют tenant-scoped locks/lookups/continuation tokens. Non-default HTTP customer runtime guard остается включенным до завершения `MT-6`/`MT-7`, поэтому cross-tenant auth isolation дополнительно закреплена service-level regression tests
 - причина:
   пока shared SaaS runtime еще закрыт transitional guard-ом, нельзя полагаться только на HTTP happy-path tests для non-default tenants. Но auth boundary уже должен быть доказуемо tenant-safe, чтобы следующий chat/runtime слой строился поверх правильной основы
+
+## D-036. Chat realtime fanout требует tenant key
+
+- дата: `2026-05-05`
+- решение:
+  chat realtime subscriptions and publications ключуются по `tenant_id + portal_user_id + primary_conversation_id`. Chat context repository, conversation mapping repository и send ledger уже создаются с tenant scope, а SSE hub теперь также не может доставить event подписчику из другого tenant даже при совпадении user/conversation identifiers
+- причина:
+  realtime fanout - это отдельная runtime boundary, не просто DB lookup. Без `tenant_id` в ключе подписки future schema/import/provisioning changes могли бы создать скрытый cross-tenant delivery risk, даже если persistence layer уже tenant-scoped
