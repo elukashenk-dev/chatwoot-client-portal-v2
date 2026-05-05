@@ -41,7 +41,14 @@
 - Создан подробный multi-tenant architecture plan для tenant-aware портала с поддержкой dedicated и shared SaaS режимов; production domain convention зафиксирован как `lk.<client-domain>`; код не менялся.
 - Выполнено архитектурное ревью multi-tenant плана: усилены host/origin boundary, trusted proxy rule, Chatwoot token policy, tenant Chatwoot verification и tenant-scoped verification locks; код не менялся.
 - Уточнены PWA multi-tenant требования: tenant-specific manifest `id`, `start_url`, `scope`, icons, dynamic title/theme-color и manual install checks для Chrome Android/Safari iOS; код не менялся.
+- Сделан docs-only checkpoint commit `248137f` для multi-tenant architecture plan.
+- Выполнен `MT-0 governance update`: multi-tenant direction закреплен в `ARCHITECTURE.md`, `DECISIONS.md` и `IMPLEMENTATION_PLAN.md`; single-tenant target model помечена superseded, global Chatwoot env runtime authority запрещена, branding/admin branch оставлена unmerged; код/schema/runtime не менялись.
+- Закрыт finding `F-MT-001`: зафиксирован transitional runtime gate, запрещающий shared SaaS customer runtime для non-default tenants до завершения tenant-scoped persistence/auth/chat/webhooks; код/schema/runtime не менялись.
+- Закрыт finding `F-MT-002`: `portal_tenants.mode` убран из MT-1 schema target, `hybrid` зафиксирован только как deployment description, shared/dedicated определяется фактической Chatwoot-связкой; код/schema/runtime не менялись.
+- Закрыт finding `F-MT-003`: password reset остается в `verification_records` с `purpose = password_reset`, отдельная `password_reset_records` table не создается, MT-1 tenant scope добавляется в `verification_records`; код/schema/runtime не менялись.
+- Уточнен deferred finding `F-MT-004`: MT-1 schema не включает admin-verification token, runtime token не становится master-key, перед MT-9 обязателен Chatwoot permissions spike и выбор admin verification token strategy; код/schema/runtime не менялись.
+- Выполнен smoke review MT-0 плана перед checkpoint commit: stale `Open Decisions Before Coding` заменен на initial decisions before MT-1, новых блокеров для MT-1 не найдено; код/schema/runtime не менялись.
 
 ## Recommended Next Step
 
-- Сделать docs-only checkpoint commit ветки `docs/multi-tenant-portal-architecture-plan`; затем подтвердить MT-0 decisions перед любыми schema/code changes.
+- Сделать docs-only checkpoint commit для MT-0 governance/review updates; затем перейти к `MT-1 Tenant Schema Foundation`: `portal_tenants` schema/migration без `mode`, tenant secret handling design, default tenant bootstrap и repository/bootstrap tests.

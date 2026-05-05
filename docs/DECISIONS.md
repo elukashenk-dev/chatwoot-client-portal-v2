@@ -108,7 +108,7 @@
 
 - дата: `2026-04-21`
 - решение:
-  клиентский чат портала строится как один вечный `primary conversation` на `portal_user/contact` внутри выделенного `Channel::Api` inbox. Portal inbox в Chatwoot должен быть настроен как `Conversation Routing -> Reopen same conversation` (`lock_to_single_conversation = true`). Если Chatwoot уже содержит несколько portal conversations для этого contact/inbox из-за старой настройки или ручных/API-действий, это считается legacy/config/data anomaly: backend выбирает authoritative primary conversation и дальше работает через persisted mapping, а не делает synthetic transcript из нескольких Chatwoot conversations
+  клиентский чат портала строится как один вечный `primary conversation` на `portal_user/contact` внутри выделенного `Channel::Api` inbox. Portal inbox в Chatwoot должен быть настроен как `Conversation Routing -> Reopen same conversation` (`lock_to_single_conversation = true`). Если Chatwoot уже содержит несколько portal conversations для этого contact/inbox из-за старой настройки или ручных/API-действий, это считается legacy/config/data anomaly: backend выбирает authoritative primary conversation и дальше работает через persisted mapping, а не делает synthetic transcript из нескольких Chatwoot conversations. После перехода к multi-tenant target model это правило применяется внутри одного tenant: `primary conversation` является per tenant user, а не per global email
 - причина:
   для клиента портал должен вести себя как обычный мессенджер с одной непрерывной лентой, а не как CRM с несколькими тикетами. Для операторов Chatwoot может показывать previous conversations в своем интерфейсе, но это не становится клиентской моделью портала. Один authoritative conversation упрощает send, pagination, realtime, idempotency и восстановление после retry
 
@@ -116,7 +116,7 @@
 
 - дата: `2026-04-21`
 - решение:
-  после первого deploy portal backend должен один раз принудительно проверить и включить `lock_to_single_conversation = true` для configured `CHATWOOT_PORTAL_INBOX_ID`. В обычной работе backend не проверяет эту настройку на каждом запросе. Повторная runtime-проверка и auto-fix выполняются только если chat read model обнаруживает anomaly: больше одного portal conversation для одного linked contact в выделенном inbox. При recovery valid persisted mapping остается главным; если mapping нет или он невалиден, backend выбирает canonical conversation по правилу: самый свежий active conversation, иначе самый свежий resolved conversation
+  после первого deploy portal backend должен один раз принудительно проверить и включить `lock_to_single_conversation = true` для tenant configured portal inbox. В обычной работе backend не проверяет эту настройку на каждом запросе. Повторная runtime-проверка и auto-fix выполняются только если chat read model обнаруживает anomaly: больше одного portal conversation для одного linked contact в выделенном inbox. При recovery valid persisted mapping остается главным; если mapping нет или он невалиден, backend выбирает canonical conversation по правилу: самый свежий active conversation, иначе самый свежий resolved conversation
 - причина:
   это защищает портал от случайной админской смены `Conversation Routing -> Create new conversations`, но не добавляет лишний Chatwoot roundtrip на каждый chat request. Anomaly-driven recovery чинит настройку ровно тогда, когда неправильная конфигурация уже проявилась в данных
 
@@ -167,3 +167,75 @@
   верхняя quick emoji лента, отдельная emoji-кнопка в composer и hardcoded emoji/preset picker не входят в текущий chat UX; ввод emoji остается за системной клавиатурой или OS-level средствами пользователя
 - причина:
   кастомные emoji controls загромождают composer на мобильных экранах и дублируют системный ввод, особенно в iOS/PWA-контексте
+
+## D-022. Multi-tenant portal становится целевой архитектурой
+
+- дата: `2026-05-05`
+- решение:
+  `chatwoot-client-portal-v2` переходит от single-tenant target model к tenant-aware multi-tenant target model. Один portal deploy может обслуживать много B2B tenants в shared SaaS режиме; dedicated install остается поддерживаемым как portal deploy с одним tenant. Старое правило "один portal deploy = один business = один Chatwoot account" superseded как целевая architecture rule и остается только частным dedicated режимом
+- причина:
+  продукт должен поддерживать малых клиентов в shared SaaS модели и крупных клиентов в dedicated модели без двух разных кодовых баз. В проекте еще нет production clients, поэтому foundation можно переделать правильно до появления compatibility debt
+
+## D-023. Tenant определяется по Host/domain
+
+- дата: `2026-05-05`
+- решение:
+  production tenant resolution строится по normalized `Host`/domain до auth/session/chat/admin runtime. Принята domain convention `lk.<client-domain>`, например `lk.buhfirma.ru`, `lk.stroyfirma.ru`, `lk.zubi.ru`. Unknown host должен получать controlled failure без fallback к default tenant. Path-based tenancy и explicit tenant headers допустимы только для dev/test diagnostics, а не как production browser model
+- причина:
+  host-based tenancy дает естественные browser origin boundaries для cookies, service worker, PWA install identity и same-origin API. Body/query-based tenant selection легче spoof-ить и проще забыть в отдельном endpoint
+
+## D-024. Chatwoot runtime config принадлежит tenant
+
+- дата: `2026-05-05`
+- решение:
+  runtime больше не должен строиться вокруг глобальных `CHATWOOT_ACCOUNT_ID` и `CHATWOOT_PORTAL_INBOX_ID`. Chatwoot base URL, account ID, portal inbox ID, API token и webhook secret должны приходить из current tenant runtime config. Старые `CHATWOOT_*` env names могут временно использоваться только как bootstrap/dev input для default tenant, но не как runtime authority
+- причина:
+  каждый tenant связан со своим Chatwoot account/inbox и потенциально со своей Chatwoot installation. Глобальные Chatwoot env неизбежно возвращают single-tenant assumptions и создают риск cross-tenant routing/data leaks
+
+## D-025. Tenant scope обязателен для customer/chat persistence
+
+- дата: `2026-05-05`
+- решение:
+  portal-owned rows, которые принадлежат компании или пользователю компании, должны быть tenant-scoped. `portal_users.email` не является глобально уникальным; корректная уникальность - `tenant_id + email`. Sessions, verification/reset records, contact links, conversation mappings, send ledger и webhook deliveries должны хранить/использовать tenant scope
+- причина:
+  один и тот же email, Chatwoot contact ID, conversation ID или webhook delivery key может легитимно существовать в разных tenants, особенно при разных Chatwoot installations/accounts. Без tenant scope persistence layer не может доказуемо защищать cross-tenant isolation
+
+## D-026. Branding/admin старая ветка не мержится как есть
+
+- дата: `2026-05-05`
+- решение:
+  `feature/phase-10-portal-branding-admin` не мержится как есть, потому что branch построена на single-tenant assumptions. Branding/admin work возвращается позже как `MT-9. Tenant Admin And Branding Rebuild`: branding становится tenant-owned, tenant admin login проверяет administrator role inside tenant Chatwoot account, а platform admin остается отдельной operator-зоной или CLI/scripts на раннем этапе
+- причина:
+  global branding/admin session model небезопасна для shared SaaS. До tenant foundation любая branding/admin реализация рискует закрепить неправильные authority boundaries
+
+## D-027. Shared SaaS runtime не включается в промежуточном MT-состоянии
+
+- дата: `2026-05-05`
+- решение:
+  во время multi-tenant migration возможно промежуточное unsafe-состояние: tenant уже определяется по Host и Chatwoot config уже tenant-specific, но portal users, sessions, verification records, chat mappings, send ledger или webhook deliveries еще не tenant-scoped. До завершения tenant-scoped persistence, customer auth, chat runtime и webhooks customer runtime работает только в default-tenant/one-tenant режиме. Non-default tenants могут использоваться для schema/repository/provisioning tests, но обычные HTTP customer flows должны hard-fail или быть отключены
+- причина:
+  это защищает реализацию и тесты от случайного запуска shared SaaS раньше полной изоляции данных. Иначе один слой уже может работать как multi-tenant, а другой все еще будет global, что создает риск смешивания пользователей, сессий, verification state, chat mappings или webhook deliveries разных компаний
+
+## D-028. `portal_tenants.mode` не добавляем
+
+- дата: `2026-05-05`
+- решение:
+  у tenant не будет поля `mode`. Tenant определяется как company + domain + точная Chatwoot-связка: `chatwoot_base_url`, `chatwoot_account_id`, `chatwoot_portal_inbox_id`, encrypted API token и encrypted webhook secret. Shared/dedicated определяется фактически по Chatwoot connection. `Hybrid` остается только описанием всей установки, где один portal deploy обслуживает tenants с разными типами Chatwoot connection, и не попадает в `portal_tenants`
+- причина:
+  один tenant в первой модели связан ровно с одним Chatwoot account и одним portal inbox, поэтому `hybrid` не является свойством tenant. Поле `mode` добавило бы лишний enum и риск runtime branching по ярлыку вместо фактической связи. Если позже понадобится operational reporting, можно добавить отдельное необязательное поле вроде `chatwoot_connection_label`
+
+## D-029. Password reset остается в `verification_records`
+
+- дата: `2026-05-05`
+- решение:
+  отдельную таблицу `password_reset_records` не создаем. `verification_records` остается общим persistence layer для email-code flows: registration использует `purpose = registration`, password reset использует `purpose = password_reset`. В multi-tenant migration `tenant_id` добавляется именно в `verification_records`, continuation token поля остаются там же, advisory lock key строится как `purpose + tenant_id + normalized email`
+- причина:
+  текущий backend уже реализует password reset через `verification_records`, а отдельная таблица добавила бы лишнюю схему без новой domain-границы. Для multi-tenant isolation достаточно tenant-aware индексов и lookup по `tenant_id`, `email`, `purpose`, `status`
+
+## D-030. Admin verification token strategy откладываем до MT-9
+
+- дата: `2026-05-05`
+- решение:
+  `F-MT-004` не блокирует `MT-1` и остается deferred до `MT-9 Tenant Admin And Branding Rebuild`. В `MT-1` schema не добавляем отдельный admin-verification token и храним только runtime Chatwoot connection secrets, нужные для работы портала. Runtime Chatwoot token и admin-verification authority считаются отдельными security concerns. Перед `MT-9` обязателен Chatwoot permissions spike и выбор стратегии: тот же tenant runtime token, если его прав достаточно и он не слишком широкий; отдельный tenant admin-verification token; или provisioning/platform-admin подход
+- причина:
+  сейчас не нужно усложнять tenant schema будущим admin-token полем, но нельзя молча использовать один сверхширокий Chatwoot token для chat runtime, admin verification и provisioning. Если проверка Chatwoot administrators требует более широких прав, чем обычный chat runtime, предпочтительное направление - отдельный tenant admin-verification token

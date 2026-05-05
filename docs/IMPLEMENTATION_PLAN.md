@@ -13,6 +13,244 @@
 
 Пока фаза не закрыта, следующая не начинается.
 
+## Current Program Status
+
+Фазы `0`-`9` уже дали рабочий single-tenant baseline: auth/session, registration, password reset, protected shell, chat read/send/attachments/realtime, PWA hardening и production deployment foundation.
+
+Этот single-tenant runtime model теперь superseded как целевая архитектура. Дальнейшее движение идет через Multi-Tenant Program:
+
+- shared SaaS: один portal deploy обслуживает много B2B tenants;
+- dedicated install: один portal deploy обслуживает одного tenant и остается поддерживаемой business-моделью;
+- tenant определяется по `Host`/domain до auth/session/chat/admin runtime;
+- production domain convention: `lk.<client-domain>`;
+- runtime больше не строится вокруг глобальных `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`;
+- shared SaaS runtime не включается во время промежуточных MT-фаз: пока `MT-4`, `MT-5`, `MT-6` и `MT-7` не закрыты, customer runtime разрешен только для default tenant / one-tenant mode или должен hard-fail для non-default tenants;
+- schema/code/runtime changes начинаются только после MT-0 governance update.
+
+Подробная архитектурная программа хранится в `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md`. Этот файл фиксирует короткий roadmap и mandatory phase order.
+
+## Multi-Tenant Program
+
+### MT-0. Governance Update
+
+#### Цель
+
+Зафиксировать multi-tenant direction в устойчивых документах до любых schema/code/runtime changes.
+
+#### Deliverables
+
+- `docs/ARCHITECTURE.md` помечает старую single-tenant model как superseded;
+- `docs/DECISIONS.md` фиксирует tenant-aware architecture decisions;
+- `docs/IMPLEMENTATION_PLAN.md` получает MT-\* roadmap;
+- old branch `feature/phase-10-portal-branding-admin` явно остается unmerged as-is;
+- branding/admin возвращается позже как tenant-owned feature после tenant foundation.
+
+#### Checks
+
+- docs review;
+- `pnpm exec prettier --check` по измененным docs;
+- `git diff --check`.
+
+#### Exit Criteria
+
+- governance docs согласованы;
+- код, schema, migrations и runtime не менялись;
+- следующий implementation scope - `MT-1. Tenant Schema Foundation`.
+
+### MT-1. Tenant Schema Foundation
+
+#### Цель
+
+Добавить базовую persistence-модель tenant без переписывания всех runtime flows сразу.
+
+#### Deliverables
+
+- `portal_tenants` schema и migration;
+- no `portal_tenants.mode`; tenant identity is company + domain + exact Chatwoot connection;
+- no admin-verification token in MT-1 schema; store only runtime Chatwoot connection secrets needed for portal operation;
+- решение по `portal_tenant_domains` для первого implementation pass;
+- encrypted tenant secret helper design;
+- default tenant bootstrap script for dedicated compatibility;
+- tenant repository/bootstrap tests.
+
+#### Exit Criteria
+
+- один default tenant можно создать и загрузить;
+- existing dedicated flow имеет понятный путь через one-tenant model.
+
+### MT-2. Tenant Resolution Middleware
+
+#### Цель
+
+Научить backend reliably определять tenant до auth и остальных tenant-owned routes.
+
+#### Deliverables
+
+- host normalization;
+- host-based tenant resolver;
+- trusted proxy / forwarded host rule;
+- transitional runtime guard: non-default tenants cannot use customer runtime while persistence/auth/chat/webhooks are still not fully tenant-scoped;
+- typed `request.tenant`;
+- public `GET /api/tenant`;
+- tenant-aware origin guard;
+- controlled unknown-host response;
+- dev/test host strategy.
+
+#### Exit Criteria
+
+- backend может identify tenant before auth routes;
+- non-default tenant customer runtime remains disabled or hard-fails until tenant isolation phases are complete;
+- tenant A origin не может mutating request against tenant B host;
+- неизвестный host не fallback-ится в default tenant.
+
+### MT-3. Tenant-Aware Chatwoot Client
+
+#### Цель
+
+Убрать runtime authority из глобальных Chatwoot env и передать Chatwoot config через current tenant.
+
+#### Deliverables
+
+- Chatwoot client принимает tenant config;
+- registration/chat/webhook services получают tenant Chatwoot account/inbox/token;
+- tenant Chatwoot verification script проверяет account/inbox/token match;
+- старые `CHATWOOT_*` env names остаются только bootstrap/dev input where needed.
+
+#### Exit Criteria
+
+- runtime service не использует global `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID` as authority.
+
+### MT-4. Tenant-Scoped Persistence
+
+#### Цель
+
+Сделать customer/chat persistence tenant-safe.
+
+#### Deliverables
+
+- `tenant_id` в tenant-owned tables;
+- tenant-scoped unique constraints;
+- default tenant backfill;
+- repositories require tenant scope;
+- tests for same email/contact/conversation IDs across tenants.
+
+#### Exit Criteria
+
+- persistence layer не может читать customer/chat records без tenant scope.
+
+### MT-5. Tenant-Aware Customer Auth
+
+#### Цель
+
+Изолировать registration/login/session/password reset по tenant.
+
+#### Deliverables
+
+- registration uses resolved tenant;
+- login uses `tenant_id + email`;
+- sessions store and validate `tenant_id`;
+- `/api/auth/me` verifies current tenant;
+- password reset, verification locks and continuation tokens are tenant-scoped.
+
+#### Exit Criteria
+
+- same email can exist independently in tenant A and tenant B;
+- tenant A session/code/token rejected on tenant B host.
+
+### MT-6. Tenant-Aware Chat Runtime
+
+#### Цель
+
+Изолировать chat context, send, attachments and SSE by tenant.
+
+#### Deliverables
+
+- tenant-scoped contact links;
+- tenant-scoped primary conversation mappings;
+- tenant-scoped send ledger;
+- attachment/text send uses tenant Chatwoot config;
+- SSE stream and fanout include tenant identity.
+
+#### Exit Criteria
+
+- tenant A user cannot see or affect tenant B chat runtime.
+
+### MT-7. Tenant-Aware Webhooks And Provisioning
+
+#### Цель
+
+Изолировать inbound Chatwoot events и provisioning scripts.
+
+#### Deliverables
+
+- tenant-specific webhook endpoint or resolver;
+- tenant-specific webhook secret verification;
+- webhook delivery dedupe includes `tenant_id`;
+- tenant webhook configure and health scripts.
+
+#### Exit Criteria
+
+- Chatwoot event from tenant A cannot fan out or dedupe against tenant B.
+
+### MT-8. Tenant-Aware Frontend/PWA
+
+#### Цель
+
+Сделать browser/PWA identity tenant-specific.
+
+#### Deliverables
+
+- frontend consumes public tenant/branding context;
+- dynamic tenant-aware manifest endpoint;
+- tenant-specific `id`, `start_url`, `scope`, name, colors and icons;
+- service worker no-store/network-first handling for tenant dynamic metadata;
+- local multi-host testing guide.
+
+#### Exit Criteria
+
+- two tenant hosts can show different public tenant/PWA identity safely.
+
+### MT-9. Tenant Admin And Branding Rebuild
+
+#### Цель
+
+Вернуть branding/admin только после tenant foundation.
+
+#### Deliverables
+
+- revisit archived `feature/phase-10-portal-branding-admin`;
+- port only useful ideas that fit tenant-aware model;
+- run Chatwoot permissions spike and choose admin verification token strategy before implementation;
+- tenant-scoped admin login via Chatwoot administrator role;
+- tenant-scoped branding settings and audit events.
+
+#### Exit Criteria
+
+- tenant A admin/branding cannot authenticate or mutate tenant B.
+
+### MT-10. Deployment And Runbook Update
+
+#### Цель
+
+Описать repeatable production operations для dedicated и shared modes.
+
+#### Deliverables
+
+- deployment docs for dedicated and shared modes;
+- tenant provisioning runbook;
+- custom domain runbook;
+- secret rotation note;
+- backup/restore note for tenant config and portal DB;
+- acceptance checklist.
+
+#### Exit Criteria
+
+- dedicated one-tenant install and shared SaaS install can be explained and repeated.
+
+## Historical Product Phases
+
+Фазы ниже остаются историей already-built product baseline и источником feature intent. Для нового runtime work они подчиняются MT-\* программе.
+
 ## Phase 0. Project Foundation
 
 ### Цель
@@ -348,7 +586,21 @@
 
 ## Phase Order Is Mandatory
 
-Обязательная последовательность:
+Обязательная последовательность для следующей работы:
+
+1. MT-0 Governance Update
+2. MT-1 Tenant Schema Foundation
+3. MT-2 Tenant Resolution Middleware
+4. MT-3 Tenant-Aware Chatwoot Client
+5. MT-4 Tenant-Scoped Persistence
+6. MT-5 Tenant-Aware Customer Auth
+7. MT-6 Tenant-Aware Chat Runtime
+8. MT-7 Tenant-Aware Webhooks And Provisioning
+9. MT-8 Tenant-Aware Frontend/PWA
+10. MT-9 Tenant Admin And Branding Rebuild
+11. MT-10 Deployment And Runbook Update
+
+Historical product baseline order:
 
 1. Foundation
 2. PWA Foundation
@@ -364,12 +616,15 @@
 12. Push Notifications
 13. Hardening
 
-Мы не перепрыгиваем сразу к realtime или "красивому чату", пока не собрали auth, session, protected shell и backend authority.
+Мы не начинаем новые branding/admin/push/product-growth slices поверх single-tenant assumptions. Сначала закрываем tenant foundation и только потом возвращаемся к tenant-owned branding/admin.
 
 ## Что Нельзя Делать По Ходу Реализации
 
 - тащить куски кода из `v1`;
 - смешивать старую и новую архитектуру;
+- продолжать runtime вокруг global `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`;
+- использовать request body как production tenant selector;
+- merge `feature/phase-10-portal-branding-admin` as-is;
 - брать тяжелые библиотеки "на всякий случай";
 - строить многоуровневые абстракции до появления реальной боли;
 - считать фазу завершенной без тестов и ручной проверки.

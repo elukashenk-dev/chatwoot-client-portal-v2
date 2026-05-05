@@ -66,6 +66,17 @@ lk.client-b.com
   -> Chatwoot account 1
 ```
 
+In this plan, `hybrid` is only a deployment description:
+
+```text
+one portal deploy serves tenants,
+some connected to shared Chatwoot,
+some connected to dedicated Chatwoot
+```
+
+`hybrid` is not a tenant runtime mode and must not be stored in
+`portal_tenants`.
+
 This is the important compatibility rule:
 
 ```text
@@ -357,7 +368,6 @@ id
 slug
 display_name
 status
-mode
 primary_domain
 public_base_url
 chatwoot_base_url
@@ -373,13 +383,30 @@ Recommended notes:
 
 - `slug` is stable and human-readable: `clinic-zdorovie`, `acme-legal`.
 - `status` values: `active`, `suspended`, `provisioning`, `archived`.
-- `mode` values: `dedicated`, `shared`, `hybrid`. This is mostly operational metadata, not runtime branching.
 - `primary_domain` is the canonical host for tenant resolution.
 - `public_base_url` is the canonical URL used in emails, magic links, manifest URLs and webhook setup.
 - `chatwoot_base_url` can differ per tenant.
 - `chatwoot_account_id` is tenant-specific.
 - `chatwoot_portal_inbox_id` is tenant-specific.
 - secrets must not be stored plaintext.
+
+Do not add `portal_tenants.mode` in `MT-1`.
+
+Runtime identity is factual:
+
+```text
+Tenant = company + domain + exact Chatwoot connection
+```
+
+Shared/dedicated is inferred operationally:
+
+- if multiple tenants point to the same `chatwoot_base_url` with different
+  accounts, they use a shared Chatwoot instance;
+- if a tenant points to a separate Chatwoot installation, that tenant uses a
+  dedicated Chatwoot instance.
+
+If operational reporting later needs labels, add a separate optional field such
+as `chatwoot_connection_label` in a later phase. Do not add it in `MT-1`.
 
 ### 7.2 Optional Table: `portal_tenant_domains`
 
@@ -427,6 +454,16 @@ portal_chat_message_sends
 chatwoot_webhook_deliveries
 verification_records
 ```
+
+`verification_records` is the shared persistence table for email-code flows:
+
+```text
+purpose = registration
+purpose = password_reset
+```
+
+Do not create a separate `password_reset_records` table in `MT-1`.
+Tenant scope for password reset is added through `verification_records.tenant_id`.
 
 Future or archived-branch tables must also be tenant-scoped:
 
@@ -583,6 +620,9 @@ Preferred policy:
 - store one Chatwoot Application API token per tenant;
 - do not reuse one broad multi-account user token across unrelated tenants unless there is no alternative;
 - token owner should have the smallest practical access needed for that tenant account;
+- runtime Chatwoot token and admin-verification authority are separate security concerns;
+- do not add an admin-verification token to `portal_tenants` in `MT-1`;
+- do not let one overly broad Chatwoot token become the implicit master key for chat runtime, tenant admin verification and provisioning;
 - provisioning must verify that the token can access the configured `chatwoot_account_id`;
 - provisioning must verify that the configured `chatwoot_portal_inbox_id` belongs to that tenant account;
 - admin-auth checks must use the tenant's configured account and must still require `role === "administrator"` and `confirmed === true`.
@@ -591,6 +631,21 @@ Reason:
 
 - Chatwoot Application API tokens are user access tokens and follow that user's permissions;
 - if the same powerful token is reused everywhere, one tenant configuration mistake can become cross-tenant access.
+
+Before `MT-9 Tenant Admin And Branding Rebuild`, run a short Chatwoot
+permissions spike and choose the tenant admin verification token strategy.
+
+Allowed options for `MT-9`:
+
+1. use the same tenant runtime token only if its permissions are sufficient and
+   not broader than acceptable for normal chat runtime;
+2. add a separate tenant admin-verification token;
+3. use a provisioning/platform-admin approach.
+
+Preferred direction:
+
+- if checking Chatwoot administrators requires broader permissions than normal
+  chat runtime, use a separate tenant admin-verification token.
 
 ## 8. Tenant Resolution Strategy
 
@@ -1082,16 +1137,23 @@ tenant + email + password -> tenant user
 Current:
 
 ```text
-email -> global verification/reset record
+email -> global verification_records row with purpose = password_reset
 ```
 
 Target:
 
 ```text
-tenant + email -> tenant reset record
+tenant + email -> tenant verification_records row with purpose = password_reset
 ```
 
 Response remains generic to avoid account disclosure.
+
+Password reset continuation tokens stay in `verification_records`:
+
+```text
+continuation_token_hash
+continuation_token_expires_at
+```
 
 ### 11.4 Auth Tests
 
@@ -1256,7 +1318,8 @@ Flow:
 
 1. Resolve tenant by host.
 2. Admin enters email.
-3. Backend calls tenant Chatwoot Agents API.
+3. Backend calls tenant Chatwoot Agents API using the `MT-9` decision-gated
+   admin verification token strategy.
 4. Require:
    - `account_id === tenant.chatwoot_account_id`;
    - `role === administrator`;
@@ -1386,6 +1449,9 @@ chatwoot_webhook_deliveries
 verification_records
 ```
 
+Do not add `tenant_id` to `password_reset_records`; that table does not exist
+and is not part of the target model.
+
 ### Step C. Backfill
 
 Backfill all rows to default tenant.
@@ -1405,6 +1471,32 @@ After schema supports tenant, rewrite service/repository code to require tenant.
 ### Step G. Remove Runtime Dependence On Old Global Chatwoot Env
 
 Global env can remain only for bootstrap and dev convenience.
+
+### Transitional Runtime Gate
+
+During the migration, some layers can become tenant-aware earlier than others.
+This intermediate state is unsafe for shared SaaS customer runtime.
+
+Unsafe example:
+
+```text
+Host resolves tenant A or tenant B
+Chatwoot config is tenant-specific
+portal users/sessions/chat mappings are still global
+```
+
+Rule:
+
+- until tenant-scoped persistence, customer auth, chat runtime and webhooks are
+  complete, customer runtime must stay in default-tenant / one-tenant mode;
+- non-default tenants may exist for schema, repository, provisioning or isolated
+  tests, but normal HTTP customer flows must hard-fail or stay disabled for
+  them;
+- `MT-2` tenant resolution and `MT-3` tenant-aware Chatwoot client do not mean
+  shared SaaS runtime is enabled;
+- tests that create multiple tenants before `MT-4`/`MT-5`/`MT-6`/`MT-7` must
+  verify the guard instead of exercising real customer auth/chat flows across
+  multiple runtime tenants.
 
 ## 16. Implementation Phases
 
@@ -1436,6 +1528,8 @@ Deliverables:
 - `portal_tenants` schema;
 - optional `portal_tenant_domains` if we decide to support multiple domains immediately;
 - tenant status enum or text validation strategy;
+- no tenant `mode` field; shared/dedicated/hybrid stay deployment descriptions inferred from the exact Chatwoot connection;
+- no admin-verification token field in `MT-1`; store only runtime Chatwoot connection secrets needed for portal operation;
 - encrypted secret helper design;
 - migrations;
 - default tenant bootstrap script;
@@ -1457,6 +1551,7 @@ Deliverables:
 - host-based tenant resolver;
 - host normalization and unknown-host hard fail;
 - trusted proxy/forwarded-host rule documented and covered by tests;
+- transitional runtime guard for non-default tenants;
 - `request.tenant` typing;
 - public `GET /api/tenant`;
 - tenant-aware browser origin guard;
@@ -1468,6 +1563,8 @@ Checks:
 
 - backend integration tests with multiple host headers;
 - backend integration test where tenant A `Origin` attempts to mutate tenant B host;
+- backend integration test proving non-default tenant customer runtime hard-fails
+  until tenant isolation phases are complete;
 - no tenant fallback in normal HTTP flow.
 
 Exit criterion:
@@ -1501,6 +1598,7 @@ Exit criterion:
 Deliverables:
 
 - add `tenant_id` to tenant-owned tables;
+- add `tenant_id` to `verification_records` for both registration and password reset email-code flows;
 - update unique constraints;
 - backfill default tenant;
 - update repositories to require tenant ID;
@@ -1606,6 +1704,8 @@ Deliverables:
 
 - revisit archived branding-admin branch;
 - port useful ideas only after tenant foundation is complete;
+- run Chatwoot permissions spike;
+- choose and document admin verification token strategy: runtime token if safe, separate admin-verification token, or provisioning/platform-admin approach;
 - tenant-scoped admin login via Chatwoot administrator role;
 - tenant-scoped branding settings;
 - tenant-scoped audit events.
@@ -1794,53 +1894,32 @@ Do not:
 - move portal data into Chatwoot runtime database;
 - use old `../chatwoot-client-portal` as reference.
 
-## 21. Open Decisions Before Coding
+## 21. Initial Decisions Before MT-1
 
-Need explicit decisions:
-
-1. Production tenant resolution:
-   - accepted convention: `lk.<client-domain>`;
-   - path-based tenancy only for local/dev diagnostics, not production runtime;
-   - optional additional custom domains can be added later through `portal_tenant_domains`.
-2. Secret storage:
-   - DB encrypted with `PORTAL_TENANT_SECRET_KEY`?
-   - external secret manager later?
-3. Tenant provisioning:
-   - CLI first?
-   - minimal platform admin UI later?
-4. Local dev hostnames:
-   - `*.localhost`?
-   - `*.127.0.0.1.nip.io`?
-5. Migration style:
-   - forward migrations only?
-   - allow local DB reset because no production clients?
-6. Platform APIs:
-   - do we need them for provisioning Chatwoot accounts/users?
-   - or do we manually configure Chatwoot and only store resulting account/inbox/token in portal tenant?
-
-Recommended initial answers:
+These decisions are sufficient to start `MT-1 Tenant Schema Foundation`.
 
 ```text
 tenant resolution: accepted production convention is lk.<client-domain>; path only dev
-secret storage: encrypted DB fields with env master key
+tenant mode: no portal_tenants.mode; shared/dedicated/hybrid inferred from exact Chatwoot connection/deployment description
+transitional runtime: shared SaaS customer runtime disabled until tenant-scoped persistence/auth/chat/webhooks are complete
+password reset persistence: verification_records with purpose = password_reset; no password_reset_records table
+secret storage: encrypted DB fields with PORTAL_TENANT_SECRET_KEY
 tenant provisioning: CLI/scripts first
 local dev: nip.io or documented hosts file
 migration style: forward migrations unless explicitly resetting local DB
 platform APIs: optional later, not required for first tenant-aware runtime
+admin verification token: deferred to MT-9 through F-MT-004; no admin-verification token in MT-1 schema
 ```
+
+Deferred before `MT-9`:
+
+- `F-MT-004`: run Chatwoot permissions spike and choose tenant admin
+  verification token strategy before tenant admin/branding implementation.
 
 ## 22. Immediate Next Step
 
-Do not start by coding all modules.
-
-Recommended next step after accepting this plan:
-
 ```text
-MT-0 docs/governance update:
-  - update ARCHITECTURE.md
-  - update DECISIONS.md
-  - update IMPLEMENTATION_PLAN.md
-  - define exact MT-1 scope
+docs-only checkpoint commit for MT-0 governance/review updates
 ```
 
 Then:
