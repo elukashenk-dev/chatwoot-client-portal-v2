@@ -38,7 +38,10 @@
 - Убрана планшетная card-оболочка portal shell: public/auth и protected app layouts теперь без `sm` padding, rounded corners, shadow и `750px` shell, общий максимум ширины ограничен `500px`; targeted layout/auth/chat tests, frontend typecheck/build, lint и полный test-suite пройдены.
 - Удален декоративный `portal-dot-grid` из auth и app shell; выполнен markup review auth/chat разметки, заведены findings `F-CHAT-UI-002` и `F-CHAT-UI-003`; frontend typecheck, targeted auth/chat tests, frontend build, lint и полный test-suite пройдены.
 - Зафиксирована B2B product goal рамка: проект описан как брендируемый клиентский PWA-слой поверх Chatwoot для компаний-покупателей услуги, а не единый общий чат.
+- Создан подробный multi-tenant architecture plan для tenant-aware портала с поддержкой dedicated и shared SaaS режимов; production domain convention зафиксирован как `lk.<client-domain>`; код не менялся.
+- Выполнено архитектурное ревью multi-tenant плана: усилены host/origin boundary, trusted proxy rule, Chatwoot token policy, tenant Chatwoot verification и tenant-scoped verification locks; код не менялся.
+- Уточнены PWA multi-tenant требования: tenant-specific manifest `id`, `start_url`, `scope`, icons, dynamic title/theme-color и manual install checks для Chrome Android/Safari iOS; код не менялся.
 
 ## Recommended Next Step
 
-- Задеплоить ветку `fix/auth-shell-dot-grid-markup-review` на production для ручной проверки auth/chat shell без tablet-card и dot-grid; затем выбрать следующий маленький chat/auth UI polish finding.
+- Сделать docs-only checkpoint commit ветки `docs/multi-tenant-portal-architecture-plan`; затем подтвердить MT-0 decisions перед любыми schema/code changes.
