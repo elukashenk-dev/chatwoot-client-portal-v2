@@ -49,7 +49,8 @@
 - Уточнен deferred finding `F-MT-004`: MT-1 schema не включает admin-verification token, runtime token не становится master-key, перед MT-9 обязателен Chatwoot permissions spike и выбор admin verification token strategy; код/schema/runtime не менялись.
 - Выполнен smoke review MT-0 плана перед checkpoint commit: stale `Open Decisions Before Coding` заменен на initial decisions before MT-1, новых блокеров для MT-1 не найдено; код/schema/runtime не менялись.
 - Реализован `MT-1 Tenant Schema Foundation`: добавлены `portal_tenants` schema/migration без `mode` и admin-verification token, tenant secret AES-GCM helper, default tenant bootstrap, repository/bootstrap tests; `portal_tenant_domains` отложен, проверки backend tests/build/lint, Prettier и `git diff --check` пройдены.
+- Реализован `MT-2 Tenant Resolution Middleware`: backend резолвит tenant по normalized Host до auth/chat routes, добавлен `/api/tenant`, tenant-aware origin guard, `PORTAL_TRUST_PROXY` rule для `X-Forwarded-Host`, non-default customer runtime hard-fail до завершения isolation phases; backend build/lint/test пройдены.
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для `MT-1 Tenant Schema Foundation`; затем перейти к `MT-2 Tenant Resolution Middleware`.
+- Сделать checkpoint commit для `MT-2 Tenant Resolution Middleware`; затем перейти к `MT-3 Tenant-Aware Chatwoot Client`.

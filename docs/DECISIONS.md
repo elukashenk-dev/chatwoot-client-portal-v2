@@ -247,3 +247,11 @@
   в `MT-1` tenant foundation храним один canonical domain в `portal_tenants.primary_domain`. Отдельную таблицу `portal_tenant_domains` не создаем в первом implementation pass. Multi-domain/custom-domain поддержку оставляем на будущий slice, когда появится реальная потребность в нескольких доменах на один tenant
 - причина:
   текущая production convention `lk.<client-domain>` требует одного основного host для tenant resolution. Отдельная таблица доменов уже нужна только для secondary/custom domains, verified domains и domain ownership flow. Добавлять ее сейчас означало бы расширить scope MT-1 без runtime-пользы
+
+## D-032. Forwarded host доверяем только в trusted proxy режиме
+
+- дата: `2026-05-05`
+- решение:
+  tenant resolution использует normalized request host. `X-Forwarded-Host` учитывается только когда backend запущен с `PORTAL_TRUST_PROXY=true`. По умолчанию `PORTAL_TRUST_PROXY=false`, и backend берет обычный `Host`. В production включать trusted proxy mode можно только если backend недоступен напрямую из интернета и получает traffic через контролируемый Caddy/Nginx boundary
+- причина:
+  host выбирает tenant до auth/session/chat runtime. Если публичный клиент сможет произвольно подставить forwarded host, он сможет попытаться выбрать чужой tenant. Поэтому forwarded headers допустимы только как часть явно контролируемой reverse proxy схемы

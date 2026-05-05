@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
-import { assertAllowedOrigin } from '../../lib/origin.js'
+import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { AuthService } from './service.js'
 import {
   clearSessionCookie,
@@ -32,7 +32,7 @@ export function registerAuthRoutes(
   { authService, env }: RegisterAuthRoutesOptions,
 ) {
   app.post('/api/auth/login', async (request, reply) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = loginBodySchema.parse(request.body)
     const session = await authService.login(body)
@@ -49,7 +49,7 @@ export function registerAuthRoutes(
   })
 
   app.post('/api/auth/logout', async (request, reply) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const sessionToken = getSessionToken(request, env)
 

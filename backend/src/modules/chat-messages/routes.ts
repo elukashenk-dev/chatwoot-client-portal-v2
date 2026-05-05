@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
-import { assertAllowedOrigin } from '../../lib/origin.js'
+import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
@@ -238,7 +238,7 @@ export function registerChatMessagesRoutes(
   })
 
   app.post('/api/chat/messages', async (request, reply) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const user = await resolveAuthenticatedPortalUser({
       authService,
@@ -263,7 +263,7 @@ export function registerChatMessagesRoutes(
       bodyLimit: CHAT_ATTACHMENT_REQUEST_MAX_BYTES,
     },
     async (request, reply) => {
-      assertAllowedOrigin(request, env.APP_ORIGIN)
+      assertAllowedTenantOrigin(request)
 
       const user = await resolveAuthenticatedPortalUser({
         authService,

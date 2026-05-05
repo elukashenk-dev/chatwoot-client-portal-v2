@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-import type { AppEnv } from '../../config/env.js'
-import { assertAllowedOrigin } from '../../lib/origin.js'
+import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { PasswordResetService } from './service.js'
 
 const passwordResetRequestBodySchema = z.object({
@@ -39,16 +38,15 @@ const passwordResetSetPasswordBodySchema = z.object({
 })
 
 type RegisterPasswordResetRoutesOptions = {
-  env: AppEnv
   passwordResetService: PasswordResetService
 }
 
 export function registerPasswordResetRoutes(
   app: FastifyInstance,
-  { env, passwordResetService }: RegisterPasswordResetRoutesOptions,
+  { passwordResetService }: RegisterPasswordResetRoutesOptions,
 ) {
   app.post('/api/auth/password-reset/request', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = passwordResetRequestBodySchema.parse(request.body)
 
@@ -58,7 +56,7 @@ export function registerPasswordResetRoutes(
   })
 
   app.post('/api/auth/password-reset/verify', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = passwordResetVerifyBodySchema.parse(request.body)
 
@@ -69,7 +67,7 @@ export function registerPasswordResetRoutes(
   })
 
   app.post('/api/auth/password-reset/set-password', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = passwordResetSetPasswordBodySchema.parse(request.body)
 

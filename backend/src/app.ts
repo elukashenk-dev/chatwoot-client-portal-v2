@@ -31,6 +31,12 @@ import { createPortalUsersRepository } from './modules/portal-users/repository.j
 import { createRegistrationRepository } from './modules/registration/repository.js'
 import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
+import { createTenantsRepository } from './modules/tenants/repository.js'
+import {
+  registerTenantContext,
+  registerTenantRoutes,
+} from './modules/tenants/routes.js'
+import { createTenantsService } from './modules/tenants/service.js'
 
 type BuildAppOptions = {
   database: DatabaseClient
@@ -45,6 +51,7 @@ export function buildApp({ database, env }: BuildAppOptions) {
         : {
             level: env.NODE_ENV === 'development' ? 'info' : 'warn',
           },
+    trustProxy: env.PORTAL_TRUST_PROXY,
   })
 
   app.register(cookie, {
@@ -81,14 +88,19 @@ export function buildApp({ database, env }: BuildAppOptions) {
     chatwootClient,
   })
   const chatRealtimeHub = createChatRealtimeHub()
+  const tenantsService = createTenantsService({
+    defaultTenantSlug: env.DEFAULT_TENANT_SLUG,
+    tenantsRepository: createTenantsRepository(database.db),
+  })
 
   registerHealthRoutes(app, { env })
+  registerTenantContext(app, { tenantsService })
+  registerTenantRoutes(app, { tenantsService })
   registerAuthRoutes(app, {
     authService,
     env,
   })
   registerRegistrationRoutes(app, {
-    env,
     registrationService: createRegistrationService({
       chatwootClient,
       emailDelivery: createSmtpEmailDelivery({ env }),
@@ -97,7 +109,6 @@ export function buildApp({ database, env }: BuildAppOptions) {
     }),
   })
   registerPasswordResetRoutes(app, {
-    env,
     passwordResetService: createPasswordResetService({
       emailDelivery: createSmtpEmailDelivery({ env }),
       passwordResetRepository: createPasswordResetRepository(database.db),

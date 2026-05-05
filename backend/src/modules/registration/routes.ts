@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-import type { AppEnv } from '../../config/env.js'
-import { assertAllowedOrigin } from '../../lib/origin.js'
+import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { RegistrationService } from './service.js'
 
 const registerRequestBodySchema = z.object({
@@ -44,16 +43,15 @@ const registerSetPasswordBodySchema = z.object({
 })
 
 type RegisterRegistrationRoutesOptions = {
-  env: AppEnv
   registrationService: RegistrationService
 }
 
 export function registerRegistrationRoutes(
   app: FastifyInstance,
-  { env, registrationService }: RegisterRegistrationRoutesOptions,
+  { registrationService }: RegisterRegistrationRoutesOptions,
 ) {
   app.post('/api/auth/register/request', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = registerRequestBodySchema.parse(request.body)
 
@@ -64,7 +62,7 @@ export function registerRegistrationRoutes(
   })
 
   app.post('/api/auth/register/verify', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = registerVerifyBodySchema.parse(request.body)
 
@@ -75,7 +73,7 @@ export function registerRegistrationRoutes(
   })
 
   app.post('/api/auth/register/set-password', async (request) => {
-    assertAllowedOrigin(request, env.APP_ORIGIN)
+    assertAllowedTenantOrigin(request)
 
     const body = registerSetPasswordBodySchema.parse(request.body)
 

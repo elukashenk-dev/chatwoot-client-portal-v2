@@ -84,6 +84,7 @@ const envSchema = z
       .enum(['development', 'test', 'production'])
       .default('development'),
     PORT: z.coerce.number().int().positive().default(3301),
+    PORTAL_TRUST_PROXY: booleanFromStringWithDefaultFalse,
     APP_ORIGIN: z.string().url().default('http://127.0.0.1:5173'),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
     SESSION_COOKIE_NAME: z.string().min(1).default('portal_session'),

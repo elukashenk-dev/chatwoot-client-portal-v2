@@ -7,6 +7,7 @@ import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
 import {
   portalSessions,
+  portalTenants,
   portalUserContactLinks,
   portalUsers,
   verificationRecords,
@@ -24,6 +25,7 @@ const testEnv: AppEnv = {
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
   NODE_ENV: 'test',
   PORT: 3301,
+  PORTAL_TRUST_PROXY: false,
   SESSION_COOKIE_NAME: 'portal_session',
   SESSION_SECRET: 'test-session-secret-with-at-least-thirty-two-characters',
   SESSION_TTL_DAYS: 14,
@@ -33,6 +35,20 @@ const testEnv: AppEnv = {
   SMTP_PORT: 1025,
   SMTP_SECURE: false,
   SMTP_USER: undefined,
+}
+
+async function seedDefaultTenant(database: DatabaseClient) {
+  await database.db.insert(portalTenants).values({
+    chatwootAccountId: 1,
+    chatwootApiAccessTokenCiphertext: 'v1:test-api-token',
+    chatwootBaseUrl: 'https://chatwoot.example.test',
+    chatwootPortalInboxId: 1,
+    chatwootWebhookSecretCiphertext: 'v1:test-webhook-secret',
+    displayName: 'Local Test Tenant',
+    primaryDomain: 'localhost',
+    publicBaseUrl: testEnv.APP_ORIGIN,
+    slug: 'default',
+  })
 }
 
 async function waitForBackgroundTasks() {
@@ -107,6 +123,7 @@ describe('buildApp', () => {
 
   beforeEach(async () => {
     database = await createTestDatabase()
+    await seedDefaultTenant(database)
     app = buildApp({
       database,
       env: testEnv,
