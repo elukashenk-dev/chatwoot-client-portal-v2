@@ -195,6 +195,39 @@
   проверка админа не должна ломать чат. Если admin-verification token шире, он
   не должен участвовать в обычном chat runtime.
 
+## D-014A. Branding assets хранятся через object storage
+
+- дата: `2026-05-06`
+- решение:
+  branding-файлы tenant-а, включая logo и PWA app icon, не хранятся как local
+  filesystem files внутри portal backend/frontend контейнера. Production-модель:
+  metadata в portal DB, binary content в S3-compatible object storage. Для
+  локальной разработки используется тот же подход через MinIO или совместимый
+  local object storage, а не временная альтернативная схема.
+- причина:
+  shared SaaS и dedicated install должны использовать одну архитектуру. Local
+  files в контейнере легко потерять при redeploy, трудно масштабировать на
+  несколько инстансов и опасно кешировать между tenants. Tenant isolation
+  обеспечивается не bucket naming вручную, а связкой `tenant_id`, `asset_id`,
+  tenant-scoped DB lookup, tenant-prefixed object key, content hash/version и
+  backend-controlled read endpoints.
+
+## D-014B. Refactoring перед MT-9 выполняется только controlled slices
+
+- дата: `2026-05-06`
+- решение:
+  перед `MT-8.5` и `MT-9` добавлен `MT-8R Codebase Audit And Refactoring
+Readiness`. Сначала выполняется audit/assessment, затем только выбранные
+  bounded refactoring slices. Каждый candidate классифицируется как
+  `must-fix-before-MT-9`, `safe-pre-MT-9-cleanup`, `defer` или `do-not-touch`.
+  Dead code удаляется только при наличии evidence. Refactoring не должен
+  скрыто менять product behavior, schema или runtime contracts.
+- причина:
+  после `MT-1`-`MT-8` проект уже достаточно большой, чтобы хаотичный cleanup
+  стал опаснее накопленного долга. Перед admin/branding важнее сохранить
+  tenant isolation и regression safety, чем делать широкую перепись кода без
+  понятного риска и проверок.
+
 ## D-015. Feature boundaries не смешиваем в `shared`
 
 - дата: `2026-04-23`

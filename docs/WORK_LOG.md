@@ -29,6 +29,9 @@
 - `MT-7 Tenant-Aware Webhooks And Provisioning` завершен: webhook signature, delivery bookkeeping и webhook setup стали tenant-aware.
 - `MT-8 Tenant-Aware Frontend/PWA` завершен: frontend, document metadata, manifest, app identity и PWA assets стали tenant-aware.
 - Post-MT runtime review закрыт: tenant URL/domain, portal inbox routing и webhook payload validation приведены к tenant-safe модели.
+- Для `MT-9` зафиксировано решение по branding assets: metadata хранится в portal DB, файлы logo/PWA icon - в S3-compatible object storage; локально используется MinIO/compatible object storage, local-files fallback не делаем.
+- Перед `MT-8.5`/`MT-9` добавлен `MT-8R Codebase Audit And Refactoring Readiness`: сначала audit/assessment, затем только выбранные bounded refactoring slices с targeted checks; broad "improve everything" refactor запрещен.
+- Перед `MT-9` добавлен обязательный `MT-8.5 Portal UI/UX Baseline Review`: сначала утверждаем текущий customer-facing shell, brandable элементы и реальные preview screens для branding admin.
 
 ## Current Baseline
 
@@ -40,4 +43,4 @@
 
 ## Recommended Next Step
 
-- Перейти к `MT-9 Tenant Admin And Branding Rebuild`: сначала провести Chatwoot permissions spike по выбранной separate per-tenant admin-verification token strategy, затем реализовать token boundary, tenant admin login и tenant-owned branding.
+- Перейти к `MT-8R Codebase Audit And Refactoring Readiness`: провести controlled audit, составить technical debt/refactoring assessment, выбрать bounded slices и не начинать broad cleanup без findings, risk class и targeted checks.

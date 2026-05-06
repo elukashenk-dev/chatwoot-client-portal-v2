@@ -357,7 +357,74 @@ Portal inbox requirements:
 If multiple portal conversations exist for one contact/inbox, treat that as
 data/config anomaly rather than target UX.
 
-## 9. MT-9 Admin And Branding Reference
+## 9. MT-8R Codebase Readiness, MT-8.5 UI/UX Baseline And MT-9 Admin/Branding Reference
+
+### MT-8R Codebase Audit And Refactoring Readiness
+
+Before UI/UX baseline and MT-9 admin/branding work, run a controlled codebase
+audit and refactoring readiness pass.
+
+Purpose:
+
+- understand the current backend/frontend/shared/tests structure after
+  `MT-1`-`MT-8`;
+- identify technical debt and code smells without starting broad refactoring;
+- protect tenant isolation, auth/session, persistence, Chatwoot runtime,
+  webhook/realtime and PWA identity boundaries before adding admin/branding.
+
+Control rules:
+
+- audit first, refactor later;
+- no "improve everything" branch;
+- every candidate is classified as `must-fix-before-MT-9`,
+  `safe-pre-MT-9-cleanup`, `defer` or `do-not-touch`;
+- every approved refactoring is a bounded slice with targeted tests;
+- dead code is removed only after evidence from code search, typecheck/build,
+  tests or explicit stale docs/runtime references;
+- behavior changes, schema changes and runtime changes require explicit scope
+  approval and must not be hidden inside cleanup.
+
+Exit:
+
+- audit summary and refactoring plan are documented;
+- actionable risks are in `docs/Findings/`;
+- selected cleanup/refactoring slices are complete or explicitly deferred;
+- no open `must-fix-before-MT-9` finding remains.
+
+### MT-8.5 UI/UX Baseline
+
+After `MT-8R` and before `MT-9`, the current portal UI/UX must be reviewed and
+accepted as the branding baseline.
+
+Review scope:
+
+- auth/login;
+- registration and verification forms;
+- password reset;
+- access denied and error states;
+- app shell;
+- chat empty state;
+- chat with messages;
+- attachments and voice messages;
+- mobile PWA behavior;
+- desktop behavior;
+- tenant identity differences across multiple tenants.
+
+Decisions before `MT-9`:
+
+- which UI parts are fixed product shell;
+- which UI parts are tenant-brandable;
+- which screens appear in branding admin preview;
+- preview must render real portal components with draft branding, not a
+  separate static mock.
+
+Exit:
+
+- UI shell accepted as branding baseline;
+- brandable/non-brandable list agreed;
+- open UI findings fixed or explicitly deferred before `MT-9`.
+
+## 10. MT-9 Admin And Branding Reference
 
 The archived branch `feature/phase-10-portal-branding-admin` must not be merged
 as-is.
@@ -417,10 +484,32 @@ Admin branding writes:
 Branding assets:
 
 - PWA manifest can reuse existing tenant-aware endpoint contract;
+- store asset metadata in portal DB and binary content in S3-compatible object
+  storage;
+- local development should use the same object-storage model through MinIO or a
+  compatible local service, not local filesystem storage inside the portal
+  container;
+- every asset row must belong to exactly one `tenant_id`;
+- object keys must be tenant-prefixed and asset-id based, for example
+  `tenants/{tenant_id}/branding/{asset_id}/{content_hash}`;
+- reads and writes must resolve tenant by Host, load the asset by
+  `tenant_id + asset_id`, then read the matching object key;
 - icon URLs should include tenant asset version/content hash;
+- browser-facing branding/icon endpoints must not accept arbitrary object keys
+  from the client;
 - fallback assets remain allowed until tenant-specific assets are uploaded.
 
-## 10. Platform/Admin Operations
+Asset isolation requirements:
+
+- tenant A cannot read tenant B asset metadata;
+- tenant A cannot fetch tenant B object through a guessed URL/key;
+- tenant A cannot overwrite tenant B object key;
+- deleting/replacing an asset updates only the current tenant's branding record;
+- object storage is treated as blob storage, while portal DB remains the source
+  of truth for ownership, kind, content type, checksum and active branding
+  references.
+
+## 11. Platform/Admin Operations
 
 Platform admin is for us as service operator.
 

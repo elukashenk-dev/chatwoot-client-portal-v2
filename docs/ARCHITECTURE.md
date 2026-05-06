@@ -359,15 +359,50 @@ chatwoot-client-portal-v2/
 
 ## Deferred And Future Areas
 
+### MT-8R Codebase Audit And Refactoring Readiness
+
+Перед `MT-8.5` и `MT-9` нужно провести controlled codebase audit после
+`MT-1`-`MT-8`.
+
+Цель:
+
+- понять состояние backend/frontend/shared/tests areas;
+- найти technical debt и code smells без немедленного хаотичного refactoring;
+- классифицировать candidates как `must-fix-before-MT-9`,
+  `safe-pre-MT-9-cleanup`, `defer` или `do-not-touch`;
+- выполнять только bounded refactoring slices с targeted checks;
+- удалить dead code только при наличии evidence, что он не используется;
+- после refactoring повторно проверить tenant isolation, auth/session,
+  webhooks/realtime and PWA tenant identity boundaries.
+
+### MT-8.5 Portal UI/UX Baseline Review
+
+Перед `MT-9`, после `MT-8R`, нужно утвердить текущий customer-facing UI shell
+как branding baseline.
+
+Цель:
+
+- проверить реальные auth/forms/chat/PWA states на mobile и desktop;
+- решить, какие части портала являются fixed product shell;
+- решить, какие части станут tenant-brandable;
+- определить preview screens для branding admin: login, registration/forms,
+  chat и PWA/app identity;
+- зафиксировать, что preview в `MT-9` использует реальные portal components, а
+  не отдельную приблизительную копию интерфейса.
+
 ### MT-9 Tenant Admin And Branding
 
-Branding/admin возвращается после tenant foundation.
+Branding/admin возвращается после tenant foundation и `MT-8.5` UI/UX baseline.
 
 Старая ветка `feature/phase-10-portal-branding-admin` не мержится как есть.
 
 Зафиксированное направление:
 
 - branding tenant-owned;
+- branding asset metadata хранится в portal DB, binary content - в
+  S3-compatible object storage;
+- локальная разработка использует тот же object-storage подход через
+  MinIO/compatible service, без local-files storage внутри portal контейнера;
 - tenant admin login отдельный от customer login;
 - для admin verification нужен отдельный encrypted per-tenant Chatwoot admin-verification token;
 - перед MT-9 выполняется Chatwoot permissions spike;
