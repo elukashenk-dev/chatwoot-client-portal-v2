@@ -16,6 +16,7 @@ import {
 import { normalizeEmail } from '../../lib/email.js'
 import { ApiError } from '../../lib/errors.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
+import { assertValidPortalPassword } from '../../lib/passwordPolicy.js'
 import type { PortalUsersRepository } from '../portal-users/repository.js'
 import type { RegistrationRepository } from './repository.js'
 
@@ -227,20 +228,6 @@ function createAccountExistsError() {
 
 function hashContinuationToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
-}
-
-function validatePassword(password: string) {
-  const hasLength = password.trim().length >= 8
-  const hasLetter = /[A-Za-zА-Яа-яЁё]/.test(password)
-  const hasNumber = /\d/.test(password)
-
-  if (!hasLength || !hasLetter || !hasNumber) {
-    throw new ApiError(
-      400,
-      'INVALID_REQUEST',
-      'Пароль должен содержать не менее 8 символов, букву и цифру.',
-    )
-  }
 }
 
 function verifyContinuationToken({
@@ -763,7 +750,7 @@ export function createRegistrationService({
       const normalizedContinuationToken = continuationToken.trim()
       const completedAt = now()
 
-      validatePassword(newPassword)
+      assertValidPortalPassword(newPassword)
 
       try {
         const completionResult =

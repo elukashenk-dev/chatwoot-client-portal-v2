@@ -35,7 +35,13 @@ describe('tenant secret encryption', () => {
     const ciphertextParts = ciphertext.split(':')
     const encodedCiphertext = ciphertextParts[3] ?? ''
     const tamperedCiphertextBytes = Buffer.from(encodedCiphertext, 'base64url')
-    tamperedCiphertextBytes[0] ^= 0xff
+    const firstByte = tamperedCiphertextBytes[0]
+
+    if (firstByte === undefined) {
+      throw new Error('Expected encrypted tenant secret ciphertext bytes.')
+    }
+
+    tamperedCiphertextBytes[0] = firstByte ^ 0xff
     ciphertextParts[3] = tamperedCiphertextBytes.toString('base64url')
     const tamperedCiphertext = ciphertextParts.join(':')
 

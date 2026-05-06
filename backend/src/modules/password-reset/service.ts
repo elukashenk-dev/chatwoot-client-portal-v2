@@ -11,6 +11,7 @@ import {
 import { normalizeEmail } from '../../lib/email.js'
 import { ApiError } from '../../lib/errors.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
+import { assertValidPortalPassword } from '../../lib/passwordPolicy.js'
 import type {
   PasswordResetRecord,
   PasswordResetRepository,
@@ -189,16 +190,6 @@ function createContinuationInvalidError() {
     'PASSWORD_RESET_CONTINUATION_INVALID',
     'Подтверждение восстановления больше недействительно. Запросите новый код и попробуйте еще раз.',
   )
-}
-
-function validatePassword(password: string) {
-  if (password.trim().length < 8) {
-    throw new ApiError(
-      400,
-      'INVALID_REQUEST',
-      'Пароль должен содержать не менее 8 символов.',
-    )
-  }
 }
 
 function verifyContinuationToken({
@@ -606,7 +597,7 @@ export function createPasswordResetService({
       const normalizedContinuationToken = continuationToken.trim()
       const completedAt = now()
 
-      validatePassword(newPassword)
+      assertValidPortalPassword(newPassword)
 
       const completionResult =
         await passwordResetRepository.transactionWithScopedLock(

@@ -381,6 +381,69 @@ describe('password reset service', () => {
     })
   })
 
+  it('rejects set-password when password misses a letter or number', async () => {
+    const sendEmail = vi.fn().mockResolvedValue(undefined)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
+
+    await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('OldPass123'),
+      tenantId,
+    })
+
+    const service = createPasswordResetService({
+      emailDelivery: {
+        send: sendEmail,
+      },
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+      passwordResetRepository,
+    })
+
+    await service.requestPasswordReset({
+      email: 'name@company.ru',
+    })
+    await waitForBackgroundDelivery()
+
+    const emailMessage = sendEmail.mock.calls[0]?.[0]
+    const resetCode = extractResetCode(emailMessage?.text ?? '')
+    const verification = await service.confirmPasswordReset({
+      code: resetCode,
+      email: 'name@company.ru',
+    })
+
+    for (const newPassword of ['12345678', 'Password']) {
+      await expect(
+        service.setPassword({
+          continuationToken: verification.continuationToken,
+          email: 'name@company.ru',
+          newPassword,
+        }),
+      ).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+        statusCode: 400,
+      })
+    }
+
+    const unchangedUser = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId,
+    })
+    const latestRecord =
+      await passwordResetRepository.findLatestResetByEmail('name@company.ru')
+
+    expect(
+      await verifyPassword('OldPass123', unchangedUser?.passwordHash ?? ''),
+    ).toBe(true)
+    expect(latestRecord).toMatchObject({
+      status: 'verified',
+    })
+    expect(latestRecord?.continuationTokenHash).not.toBeNull()
+  })
+
   it('does not await SMTP delivery before returning a generic request response', async () => {
     let resolveDelivery!: () => void
     const sendEmail = vi.fn(

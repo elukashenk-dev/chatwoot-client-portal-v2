@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
+import { portalPasswordSchema } from '../../lib/passwordPolicy.js'
 import type { PasswordResetService } from './service.js'
 
 const passwordResetRequestBodySchema = z.object({
@@ -34,7 +35,7 @@ const passwordResetSetPasswordBodySchema = z.object({
     .trim()
     .min(1, 'Введите email')
     .email('Введите email в корректном формате'),
-  newPassword: z.string().min(8, 'Пароль должен содержать не менее 8 символов'),
+  newPassword: portalPasswordSchema,
 })
 
 type RegisterPasswordResetRoutesOptions = {

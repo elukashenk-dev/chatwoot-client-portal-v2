@@ -955,4 +955,67 @@ describe('buildApp', () => {
     expect(oldPasswordLoginResponse.statusCode).toBe(401)
     expect(newPasswordLoginResponse.statusCode).toBe(200)
   })
+
+  it('rejects weak passwords in password reset set-password route validation', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('OldPass123'),
+      tenantId,
+    })
+
+    const continuationToken = 'continuation-token-for-password-reset-completion'
+
+    await database.db.insert(verificationRecords).values({
+      attemptsCount: 0,
+      codeHash: await hashPassword('123456'),
+      continuationTokenExpiresAt: minutesFromNow(15),
+      continuationTokenHash: createHash('sha256')
+        .update(continuationToken)
+        .digest('hex'),
+      email: 'name@company.ru',
+      expiresAt: minutesFromNow(15),
+      lastSentAt: minutesFromNow(-1),
+      maxAttempts: 5,
+      portalUserId: 1,
+      purpose: 'password_reset',
+      resendCount: 0,
+      resendNotBefore: minutesFromNow(1),
+      status: 'verified',
+      tenantId,
+      verifiedAt: minutesFromNow(-1),
+    })
+
+    for (const { message, newPassword } of [
+      {
+        message: 'Пароль должен содержать букву',
+        newPassword: '12345678',
+      },
+      {
+        message: 'Пароль должен содержать цифру',
+        newPassword: 'Password',
+      },
+    ]) {
+      const response = await app.inject({
+        headers: {
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          continuationToken,
+          email: 'name@company.ru',
+          newPassword,
+        },
+        url: '/api/auth/password-reset/set-password',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({
+        error: {
+          code: 'INVALID_REQUEST',
+          message,
+        },
+      })
+    }
+  })
 })

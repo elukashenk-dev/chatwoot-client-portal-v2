@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
+import { portalPasswordSchema } from '../../lib/passwordPolicy.js'
 import type { RegistrationService } from './service.js'
 
 const registerRequestBodySchema = z.object({
@@ -35,11 +36,7 @@ const registerSetPasswordBodySchema = z.object({
     .trim()
     .min(1, 'Введите email')
     .email('Введите email в корректном формате'),
-  newPassword: z
-    .string()
-    .min(8, 'Пароль должен содержать не менее 8 символов')
-    .regex(/[A-Za-zА-Яа-яЁё]/, 'Пароль должен содержать букву')
-    .regex(/\d/, 'Пароль должен содержать цифру'),
+  newPassword: portalPasswordSchema,
 })
 
 type RegisterRegistrationRoutesOptions = {

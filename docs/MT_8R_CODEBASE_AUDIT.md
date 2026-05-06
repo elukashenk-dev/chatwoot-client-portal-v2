@@ -586,3 +586,53 @@ Scope:
 - align backend password policy between registration and password reset;
 - keep the change backend-only unless tests prove frontend drift;
 - no schema, tenant runtime, Chatwoot runtime or UI shell changes.
+
+## MT-8R-5A. Password Policy Alignment
+
+Дата: `2026-05-06`
+
+Finding closed:
+
+- `F-AUTH-002`
+
+Scope completed:
+
+- added one shared backend portal password policy helper;
+- registration and password reset route schemas now use the same backend password
+  schema;
+- registration and password reset services now use the same backend password
+  assertion;
+- password reset backend now rejects passwords missing a letter or missing a
+  digit;
+- no schema, tenant runtime, Chatwoot runtime or UI shell changes were made.
+
+Additional safety fix:
+
+- `backend/src/modules/tenants/secrets.test.ts` now guards the ciphertext byte
+  before tampering it, so backend TypeScript build stays green with strict
+  indexed access checks.
+
+Checks passed:
+
+- targeted:
+  `pnpm --dir backend test src/modules/password-reset/service.test.ts src/modules/registration/service.test.ts src/app.test.ts`;
+- targeted: `pnpm --dir backend test src/modules/tenants/secrets.test.ts`;
+- full: `pnpm --dir backend test` - `22` files, `134` tests passed;
+- `pnpm --dir backend build`;
+- `pnpm --dir backend lint`.
+
+### MT-8R-5A Result
+
+`F-AUTH-002` is closed.
+
+The only approved pre-`MT-9` code fix from `MT-8R-4` is complete.
+
+## Next Step After MT-8R-5A
+
+`MT-8R Final Review`
+
+Scope:
+
+- confirm no open `must-fix-before-MT-9` code findings remain;
+- confirm deferred findings are assigned to `MT-8.5`, `MT-9` or `MT-10`;
+- run final lightweight docs/checkpoint review before moving to `MT-8.5`.
