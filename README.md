@@ -37,7 +37,7 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 Следующий активный scope:
 
 ```text
-MT-9 Tenant Admin And Branding Rebuild
+MT-8R Codebase Audit And Refactoring Readiness
 ```
 
 ## Карта документации

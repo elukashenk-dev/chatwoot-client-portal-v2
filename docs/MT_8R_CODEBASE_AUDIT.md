@@ -142,3 +142,179 @@ Scope:
   - `do-not-touch`.
 
 No refactoring should start until candidates are classified.
+
+## MT-8R-2. Technical Debt Analysis
+
+Дата: `2026-05-06`
+
+Scope:
+
+- module size;
+- dependency direction;
+- test coverage distribution;
+- duplicate tenant/runtime logic;
+- fragile provisioning/local-dev paths;
+- weak spots before `MT-9`.
+
+No production-code refactoring was performed in this step.
+
+### Module Size Map
+
+Largest backend production files:
+
+| File                                             | Lines | Assessment                                                                                                                                        |
+| ------------------------------------------------ | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/src/integrations/chatwoot/client.ts`    |  1572 | Large Chatwoot resource client, already code-health allowlisted. Relevant before `MT-9` because admin verification will need Chatwoot Agents API. |
+| `backend/src/modules/chat-messages/service.ts`   |  1143 | Large chat read/send/idempotency/attachment service. Not directly in `MT-9` path unless branding/admin touches chat preview runtime.              |
+| `backend/src/modules/registration/service.ts`    |   941 | Large email-code registration flow. Shares concepts with password reset and future admin login, but a broad refactor here is risky.               |
+| `backend/src/modules/password-reset/service.ts`  |   747 | Large email-code password reset flow. Same duplication family as registration.                                                                    |
+| `backend/src/modules/chat-context/service.ts`    |   636 | Chat context recovery/bootstrap logic. Stable but sensitive; avoid touching without chat-specific tests.                                          |
+| `backend/src/modules/registration/repository.ts` |   511 | Large tenant-scoped verification/contact/user repository.                                                                                         |
+
+Largest frontend production files:
+
+| File                                                                      | Lines | Assessment                                                                                                                                        |
+| ------------------------------------------------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/features/chat/pages/ChatPage.tsx`                           |   461 | Route shell plus runtime orchestration. Below production limit, already close enough that new chat route features should split hooks/state first. |
+| `frontend/src/features/chat/components/MessageComposer.tsx`               |   461 | Dense composer UI/control surface. Touch only with targeted composer tests and mobile checks.                                                     |
+| `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx` |   440 | Dense message UI and gestures; existing accessibility finding is tracked separately.                                                              |
+| `frontend/src/shared/ui/icons.tsx`                                        |   369 | Many inline icons in one file. Not a current risk while icons stay stable.                                                                        |
+| `frontend/src/features/chat/components/ChatTranscript.tsx`                |   348 | Transcript grouping/scroll/action orchestration.                                                                                                  |
+
+Largest tests:
+
+| File                                                     | Lines | Assessment                                                    |
+| -------------------------------------------------------- | ----: | ------------------------------------------------------------- |
+| `backend/src/modules/registration/service.test.ts`       |   997 | At the test limit; do not add many admin-login tests here.    |
+| `frontend/src/features/chat/pages/ChatPage.test.tsx`     |   896 | Large but under current allowlist baseline.                   |
+| `backend/src/modules/chat-messages/service.test.ts`      |   893 | Large chat behavior suite.                                    |
+| `frontend/src/features/auth/pages/RequestPages.test.tsx` |   785 | Registration/password-reset page flows share one large suite. |
+| `tests/e2e/chat-read-model.spec.ts`                      |   521 | Largest Playwright spec.                                      |
+
+### Dependency Direction
+
+Backend:
+
+- runtime composition is centralized in `backend/src/app.ts`;
+- tenant context is registered before auth/chat/webhook routes;
+- tenant-critical repositories accept tenant scope in their factory or method
+  inputs;
+- cross-module dependencies are mostly expected:
+  - chat messages depends on chat context;
+  - realtime/webhooks depend on chat message snapshots;
+  - auth/chat routes depend on tenant context and auth session helpers;
+  - scripts depend on tenant repository/secrets for provisioning.
+
+Frontend:
+
+- `app` composes providers/routes;
+- `auth` pages depend on `tenant` shell for tenant identity;
+- `chat` depends on `auth` session and `tenant` identity for header/runtime;
+- `shared` stays generic;
+- no broad `shared` product-domain leakage found in this pass.
+
+### Test Coverage Distribution
+
+Current automated coverage shape:
+
+- backend unit/integration tests cover tenant resolution, auth/session,
+  registration, password reset, chat context, chat messages, realtime hub,
+  webhooks, Chatwoot client, tenant scripts and repositories;
+- frontend tests cover tenant provider, auth pages/forms, chat page/runtime,
+  transcript, composer, PWA runtime and viewport lock;
+- Playwright specs exist in `tests/e2e` and cover auth smoke/session/guards,
+  auth email flows, chat read model and PWA runtime smoke.
+
+Observation:
+
+- Playwright support currently uses default/global Chatwoot env and
+  `bootstrapDefaultTenant`, so browser e2e is not yet shaped for multi-tenant
+  two-host scenarios;
+- this is acceptable for current baseline, but `MT-8.5` and `MT-9` should add
+  browser coverage only after choosing exact UI/admin flows.
+
+### Technical Debt Candidates
+
+#### `must-fix-before-MT-9`
+
+- `F-MT-004` remains the only must-fix security gate before `MT-9`
+  implementation: run Chatwoot permissions spike and implement separate
+  per-tenant admin-verification token boundary.
+- No new production-code refactoring blocker was found that must be completed
+  before `MT-9`.
+
+#### `safe-pre-MT-9-cleanup`
+
+1. Chatwoot client resource boundary:
+   - current file: `backend/src/integrations/chatwoot/client.ts`;
+   - reason: `MT-9` will add Agents/Admin verification API behavior;
+   - recommended shape: add the new Agents API through a small focused helper or
+     resource slice, with tests, rather than growing unrelated message/contact
+     code;
+   - risk: medium because Chatwoot client is central, but manageable with
+     existing client tests.
+
+2. README roadmap pointer:
+   - `README.md` still pointed to `MT-9`;
+   - fixed in this step to point to `MT-8R`.
+
+#### `defer`
+
+1. Production installer and compose still use global Chatwoot env:
+   - finding: `F-MT-008`;
+   - defer until `MT-10`, because production deploy is already blocked and this
+     is not part of customer runtime/admin branding implementation.
+
+2. Registration/password-reset email-code duplication:
+   - duplicated concepts: code generation, continuation token hashing,
+     seconds-until helpers, attempt errors, delivery cleanup shape;
+   - do not merge the two large services before `MT-9`;
+   - for admin login, prefer a small new admin-challenge implementation or
+     narrow pure helper extraction only if it clearly reduces duplication
+     without changing existing registration/password-reset behavior.
+
+3. Playwright multi-tenant host scenarios:
+   - current e2e uses default tenant/global Chatwoot env shape;
+   - defer until `MT-8.5`/`MT-9` defines exact UI/admin browser flows.
+
+4. Chat UI accessibility and narrow-audio issues:
+   - already tracked as `F-CHAT-UI-002` and `F-CHAT-UI-003`;
+   - defer to focused UI polish or `MT-8.5` decisions, not codebase-wide
+     refactoring.
+
+5. iOS keyboard viewport pan:
+   - already tracked as `F-IOS-001`;
+   - do not reopen without focused iOS experiment.
+
+#### `do-not-touch`
+
+- Tenant resolution/auth/session boundaries that are already covered and stable.
+- Chat context recovery/bootstrap logic unless a chat-specific finding requires
+  it.
+- Message send idempotency/ledger behavior unless backed by targeted tests.
+- Production installer behavior before `MT-10`, except for documentation/finding
+  updates.
+
+### MT-8R-2 Result
+
+The codebase has debt, but no evidence supports a broad refactor before
+`MT-8.5`/`MT-9`.
+
+Recommended control rule:
+
+- proceed to focused review of the `safe-pre-MT-9-cleanup` candidates only if
+  they directly protect `MT-9`;
+- otherwise move to `MT-8.5` after confirming no `must-fix-before-MT-9`
+  production-code debt remains.
+
+## Next Step After MT-8R-2
+
+`MT-8R-3. Code Smells Review`
+
+Scope:
+
+- inspect the classified candidate areas in more detail;
+- create findings only for concrete actionable bugs/risks;
+- decide whether the Chatwoot client boundary needs a small pre-`MT-9` cleanup
+  slice or can be handled inside `MT-9` with strict tests;
+- do not refactor yet.
