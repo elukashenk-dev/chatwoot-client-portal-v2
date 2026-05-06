@@ -318,3 +318,108 @@ Scope:
 - decide whether the Chatwoot client boundary needs a small pre-`MT-9` cleanup
   slice or can be handled inside `MT-9` with strict tests;
 - do not refactor yet.
+
+## MT-8R-3. Code Smells Review
+
+Дата: `2026-05-06`
+
+Scope:
+
+- inspect classified candidate areas in more detail;
+- create findings only for concrete actionable bugs/risks;
+- decide whether a pre-`MT-9` cleanup slice is needed;
+- do not refactor production code.
+
+No production-code refactoring was performed in this step.
+
+### Reviewed Areas
+
+#### Chatwoot Client Boundary
+
+Current shape:
+
+- `backend/src/integrations/chatwoot/client.ts` remains a large resource client;
+- tenant runtime uses `createChatwootClientFactory().forTenant(config)`;
+- the old env-based `createChatwootClient({ env })` path still exists for tests and
+  legacy production tooling.
+
+Assessment:
+
+- runtime tenant boundary is acceptable for `MT-9`;
+- do not split the whole client before `MT-9`;
+- when adding Chatwoot Agents/Admin verification behavior, add it as a focused
+  method/resource slice with tests;
+- old env-based production tooling remains covered by `F-MT-008` and is deferred to
+  `MT-10`.
+
+#### Email-Code And Password Policy Family
+
+Concrete smell found:
+
+- registration backend enforces password length + letter + digit;
+- password reset frontend enforces the same rule;
+- password reset backend currently enforces length only.
+
+Finding created:
+
+- `F-AUTH-002` - password reset backend password policy drift.
+
+Assessment:
+
+- this is not a broad refactor candidate;
+- fix it with a narrow backend policy alignment slice before adding new admin
+  password/challenge flows in `MT-9`;
+- do not merge registration and password reset services as part of this fix.
+
+#### Playwright And E2E Tenant Shape
+
+Current shape:
+
+- Playwright uses one `PLAYWRIGHT_BASE_URL`;
+- global setup bootstraps a default tenant;
+- Chatwoot e2e helper still reads global `CHATWOOT_*` env for contact creation.
+
+Assessment:
+
+- this is acceptable for current smoke/session/chat tests;
+- no new finding is needed because production runtime is already protected and
+  production tooling debt is tracked by `F-MT-008`;
+- before or during `MT-9`, add targeted browser coverage for admin/branding flows
+  using explicit tenant host/domain setup.
+
+#### Frontend Tenant And Route Shell
+
+Current shape:
+
+- `TenantProvider` loads public tenant context once and applies document metadata;
+- route guards stay session-owned and backend still resolves tenant by Host;
+- lazy route fallback is `null`, but current route chunks are small enough that this
+  is not a blocking smell.
+
+Assessment:
+
+- no new tenant route/provider finding was opened;
+- `MT-8.5` should review the visible loading/error states as part of the customer
+  UI/UX baseline, not as a hidden refactor.
+
+### MT-8R-3 Result
+
+`MT-8R-3` found one concrete actionable issue: `F-AUTH-002`.
+
+No broad code smell justifies a general refactor before `MT-8.5`/`MT-9`.
+
+`F-AUTH-002` should be fixed as a small auth safety slice before implementing new
+admin password/challenge behavior.
+
+## Next Step After MT-8R-3
+
+`MT-8R-4. Refactoring Assessment`
+
+Scope:
+
+- turn `MT-8R-1` through `MT-8R-3` evidence into a bounded refactoring plan;
+- classify what must be fixed before `MT-9`, what can be deferred, and what should
+  stay untouched;
+- include `F-AUTH-002` as a narrow pre-`MT-9` safety fix candidate;
+- do not start refactoring until the assessment defines exact slices, checks and
+  stop conditions.

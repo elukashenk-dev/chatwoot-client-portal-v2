@@ -34,6 +34,7 @@
 - Перед `MT-9` добавлен обязательный `MT-8.5 Portal UI/UX Baseline Review`: сначала утверждаем текущий customer-facing shell, brandable элементы и реальные preview screens для branding admin.
 - Выполнен `MT-8R-1 Baseline Inventory And Safety Check`: создан `docs/MT_8R_CODEBASE_AUDIT.md`, зафиксирована карта backend/frontend/e2e areas, стабилизирован flaky tenant secret tamper test без production-code changes; backend tests/build/lint, frontend typecheck/tests/build, code-health/root lint, Prettier и `git diff --check` пройдены.
 - Выполнен `MT-8R-2 Technical Debt Analysis`: зафиксирована module/test size map, dependency direction и candidate classification; создан deferred finding `F-MT-008` по production installer/compose global Chatwoot env до `MT-10`; broad refactoring не начинался.
+- Выполнен `MT-8R-3 Code Smells Review`: детально проверены Chatwoot client boundary, email-code/password policy family, e2e tenant shape и frontend tenant route shell; создан finding `F-AUTH-002` по расхождению password reset backend policy; production-code refactoring не начинался.
 
 ## Current Baseline
 
@@ -45,4 +46,4 @@
 
 ## Recommended Next Step
 
-- Перейти к `MT-8R-3 Code Smells Review`: детально проверить classified candidate areas, создавать findings только для concrete actionable risks, решить нужен ли маленький pre-`MT-9` Chatwoot client boundary cleanup slice; refactoring пока не начинать.
+- Перейти к `MT-8R-4 Refactoring Assessment`: разложить findings и code smells на bounded slices, явно выбрать must-fix-before-`MT-9` пункты, checks и stop conditions; refactoring пока не начинать.
