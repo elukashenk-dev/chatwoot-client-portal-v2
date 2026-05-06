@@ -32,6 +32,7 @@
 - Для `MT-9` зафиксировано решение по branding assets: metadata хранится в portal DB, файлы logo/PWA icon - в S3-compatible object storage; локально используется MinIO/compatible object storage, local-files fallback не делаем.
 - Перед `MT-8.5`/`MT-9` добавлен `MT-8R Codebase Audit And Refactoring Readiness`: сначала audit/assessment, затем только выбранные bounded refactoring slices с targeted checks; broad "improve everything" refactor запрещен.
 - Перед `MT-9` добавлен обязательный `MT-8.5 Portal UI/UX Baseline Review`: сначала утверждаем текущий customer-facing shell, brandable элементы и реальные preview screens для branding admin.
+- Выполнен `MT-8R-1 Baseline Inventory And Safety Check`: создан `docs/MT_8R_CODEBASE_AUDIT.md`, зафиксирована карта backend/frontend/e2e areas, стабилизирован flaky tenant secret tamper test без production-code changes; backend tests/build/lint, frontend typecheck/tests/build, code-health/root lint, Prettier и `git diff --check` пройдены.
 
 ## Current Baseline
 
@@ -43,4 +44,4 @@
 
 ## Recommended Next Step
 
-- Перейти к `MT-8R Codebase Audit And Refactoring Readiness`: провести controlled audit, составить technical debt/refactoring assessment, выбрать bounded slices и не начинать broad cleanup без findings, risk class и targeted checks.
+- Перейти к `MT-8R-2 Technical Debt Analysis`: read-only анализ module size, dependency direction, coverage distribution, duplicate tenant/runtime logic и fragile provisioning/local-dev paths; refactoring не начинать до классификации candidates.

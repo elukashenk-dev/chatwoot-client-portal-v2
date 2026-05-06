@@ -34,9 +34,9 @@ describe('tenant secret encryption', () => {
     const ciphertext = encryptTenantSecret('chatwoot-webhook-secret', key)
     const ciphertextParts = ciphertext.split(':')
     const encodedCiphertext = ciphertextParts[3] ?? ''
-    ciphertextParts[3] = `${encodedCiphertext.slice(0, -1)}${
-      encodedCiphertext.endsWith('A') ? 'B' : 'A'
-    }`
+    const tamperedCiphertextBytes = Buffer.from(encodedCiphertext, 'base64url')
+    tamperedCiphertextBytes[0] ^= 0xff
+    ciphertextParts[3] = tamperedCiphertextBytes.toString('base64url')
     const tamperedCiphertext = ciphertextParts.join(':')
 
     expect(() => decodeTenantSecretKey('not-base64')).toThrow(
