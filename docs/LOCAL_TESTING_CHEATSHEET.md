@@ -1,78 +1,154 @@
-# Local Manual Testing Cheatsheet
+# Local Testing Cheatsheet
 
-Короткая шпаргалка для регулярного ручного тестирования уже установленного `chatwoot-client-portal-v2`.
+Короткая актуальная шпаргалка для ручного запуска
+`chatwoot-client-portal-v2` в multi-tenant режиме.
 
-## 1. Перейти в проект
+## Что Должно Быть Уже Поднято
+
+Эти сервисы живут отдельно от портала:
+
+- Node.js 24.x;
+- Docker Desktop;
+- Chatwoot: `http://127.0.0.1:3000`;
+- Mailpit UI: `http://127.0.0.1:8025`;
+- Mailpit SMTP: `127.0.0.1:1025`.
+
+`v2` сам использует только свой isolated Postgres на `127.0.0.1:55433`.
+
+## 1. Перейти В Проект
 
 ```bash
 cd /home/evluk/projects/chatwoot-client-portal-v2
 ```
 
-## 2. Проверить `.env`
-
-Обычно `.env` уже есть. Перед ручным тестом важно, чтобы в нем были актуальные значения:
+Если зависимости еще не установлены:
 
 ```bash
-SESSION_SECRET=любой-длинный-секрет-32+символа
-PORTAL_TENANT_SECRET_KEY=base64-ключ-32-byte
-DEFAULT_TENANT_SLUG=default
-DEFAULT_TENANT_DISPLAY_NAME="Local Default Tenant"
-DEFAULT_TENANT_PRIMARY_DOMAIN=127.0.0.1
-DEFAULT_TENANT_PUBLIC_BASE_URL=http://127.0.0.1:5173
-DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000
-DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=1
-DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=1
-DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=токен-из-chatwoot
-DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET=chatwoot-webhook-secret
-SMTP_HOST=127.0.0.1
-SMTP_PORT=1025
-SMTP_FROM=noreply@example.com
+pnpm install
 ```
 
-Если `.env` вдруг отсутствует:
+## 2. Проверить `.env`
+
+Если `.env` отсутствует:
 
 ```bash
 cp .env.example .env
 ```
 
-## 3. Убедиться, что внешние сервисы уже подняты
-
-Для живого ручного тестирования должны работать отдельно:
-
-```text
-Chatwoot: http://127.0.0.1:3000
-Mailpit UI: http://127.0.0.1:8025
-Mailpit SMTP: 127.0.0.1:1025
-```
-
-Chatwoot и Mailpit эта шпаргалка не запускает.
-
-## 4. Поднять Postgres для `v2`
-
-Это отдельная БД только для `chatwoot-client-portal-v2`.
+Минимально важное для локального запуска:
 
 ```bash
-pnpm db:up
+DATABASE_URL=postgresql://portal_v2:portal_v2_local_dev_password@127.0.0.1:55433/chatwoot_client_portal_v2
+PORT=3301
+SESSION_SECRET=любой-длинный-секрет-32+символа
+PORTAL_TENANT_SECRET_KEY=base64-ключ-32-byte
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+SMTP_FROM=noreply@example.com
 ```
 
-Если локальная база была создана до multi-tenant foundation и старые данные не
-нужны, пересоздать ее полностью:
+Если нужен новый `PORTAL_TENANT_SECRET_KEY`:
+
+```bash
+openssl rand -base64 32
+```
+
+## 3. Пересоздать Чистую Portal DB
+
+Делать это, когда старые локальные portal данные не нужны.
 
 ```bash
 docker --context default compose --env-file .env -f infra/postgres/compose.yaml down -v
 pnpm db:up
+```
+
+Подождать готовность Postgres:
+
+```bash
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml exec db pg_isready -U portal_v2 -d chatwoot_client_portal_v2
+```
+
+Если Postgres еще не готов, повторить эту команду через пару секунд.
+
+Прогнать миграции:
+
+```bash
 set -a && source .env && set +a
 pnpm --dir backend db:migrate
+```
+
+Если сразу после `pnpm db:up` миграция упала с connection error, Postgres еще
+не успел стартовать. Подождать пару секунд и повторить `pnpm --dir backend
+db:migrate`.
+
+## 4. Подготовить Tenant Secrets В Терминале
+
+Chatwoot API tokens не записывать в docs и не коммитить.
+
+```bash
+read -rsp "BUHFIRMA Chatwoot token: " BUHFIRMA_TOKEN; echo
+read -rsp "ZUBI Chatwoot token: " ZUBI_TOKEN; echo
+
+BUHFIRMA_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+ZUBI_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+```
+
+## 5. Создать Локальные Tenants
+
+Текущий удобный local host pattern:
+
+```text
+buhfirma.127.0.0.1.nip.io
+zubi.127.0.0.1.nip.io
+```
+
+`nip.io` резолвит оба hostnames в `127.0.0.1`, но для browser/backend это
+разные tenant hosts.
+
+### buhfirma
+
+```bash
+DEFAULT_TENANT_SLUG=buhfirma \
+DEFAULT_TENANT_DISPLAY_NAME="Бухфирма" \
+DEFAULT_TENANT_PRIMARY_DOMAIN=buhfirma.127.0.0.1.nip.io \
+DEFAULT_TENANT_PUBLIC_BASE_URL=http://buhfirma.127.0.0.1.nip.io:5173 \
+DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=3 \
+DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=6 \
+DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$BUHFIRMA_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$BUHFIRMA_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
 
-Логи БД:
+### zubi
 
 ```bash
-pnpm db:logs
+DEFAULT_TENANT_SLUG=zubi \
+DEFAULT_TENANT_DISPLAY_NAME="Зуби" \
+DEFAULT_TENANT_PRIMARY_DOMAIN=zubi.127.0.0.1.nip.io \
+DEFAULT_TENANT_PUBLIC_BASE_URL=http://zubi.127.0.0.1.nip.io:5173 \
+DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=1 \
+DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=8 \
+DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$ZUBI_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$ZUBI_WEBHOOK_SECRET" \
+pnpm --dir backend tenant:bootstrap-default
 ```
 
-## 5. Запустить backend
+## 6. Проверить Chatwoot Связку Tenants
+
+```bash
+pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=buhfirma
+pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=zubi
+```
+
+Ожидание:
+
+- result: `verified`;
+- inbox type: `Channel::Api`;
+- `lockToSingleConversation: true`.
+
+## 7. Запустить Backend
 
 В отдельном терминале:
 
@@ -82,23 +158,19 @@ set -a && source .env && set +a
 pnpm dev:backend
 ```
 
-Backend:
+Backend URL:
 
 ```text
 http://127.0.0.1:3301
 ```
 
-Backend применяет миграции сам при старте. Ручной вариант:
+Health check:
 
 ```bash
-cd /home/evluk/projects/chatwoot-client-portal-v2
-set -a && source .env && set +a
-pnpm --dir backend db:migrate
-pnpm --dir backend tenant:bootstrap-default
-pnpm --dir backend tenant:chatwoot:ensure-portal-inbox
+curl http://127.0.0.1:3301/api/health
 ```
 
-## 6. Запустить frontend
+## 8. Запустить Frontend
 
 В отдельном терминале:
 
@@ -111,34 +183,78 @@ pnpm dev:web --host 0.0.0.0
 Открывать:
 
 ```text
-http://127.0.0.1:5173
+http://buhfirma.127.0.0.1.nip.io:5173
+http://zubi.127.0.0.1.nip.io:5173
 ```
 
-## 7. Быстрый тестовый login user
+## 9. Настроить Chatwoot Webhooks
 
-Если нужен пользователь без прохождения registration:
+После запуска frontend/backend:
 
 ```bash
-cd /home/evluk/projects/chatwoot-client-portal-v2
-set -a && source .env && set +a
-pnpm --dir backend user:create -- --email=name@company.ru --full-name="Portal User" --password='PortalPass123!'
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=buhfirma
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=zubi
 ```
 
-Вход:
+Ожидание:
+
+- action: `created` или `updated`;
+- callback URL идет на tenant host;
+- `secretStored: true`.
+
+## 10. Быстрый Smoke Руками
+
+Проверить public tenant context:
 
 ```text
-/auth/login
-email: name@company.ru
-password: PortalPass123!
+http://buhfirma.127.0.0.1.nip.io:5173/api/tenant
+http://zubi.127.0.0.1.nip.io:5173/api/tenant
 ```
 
-## 8. Где брать коды регистрации/reset
+Проверить PWA manifest:
+
+```text
+http://buhfirma.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
+http://zubi.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
+```
+
+Основной ручной сценарий:
+
+- открыть оба tenant hosts в разных вкладках;
+- убедиться, что видны разные порталы;
+- зарегистрировать пользователя buhfirma;
+- зарегистрировать пользователя zubi;
+- в каждом tenant дойти до чата;
+- отправить сообщение и получить ответ от агента;
+- проверить isolation: email из tenant A должен получать отказ в tenant B.
+
+Коды registration/password reset смотреть в Mailpit:
 
 ```text
 http://127.0.0.1:8025
 ```
 
-## 9. Автопроверки перед/после ручного теста
+## 11. Создать Portal User Без Registration
+
+Использовать только для быстрых локальных проверок.
+
+```bash
+printf 'PortalPass123!\n' | pnpm --dir backend user:create -- \
+  --tenant=buhfirma \
+  --email=name@company.test \
+  --full-name="Portal User" \
+  --password-stdin
+```
+
+Login:
+
+```text
+http://buhfirma.127.0.0.1.nip.io:5173/auth/login
+```
+
+## 12. Автопроверки
+
+Полезный общий набор:
 
 ```bash
 pnpm test
@@ -150,54 +266,42 @@ pnpm build
 
 ```bash
 pnpm --dir backend test
-pnpm --dir frontend test
 pnpm --dir backend build
+pnpm --dir frontend test
 pnpm --dir frontend typecheck
 pnpm --dir frontend build
 ```
 
-## 10. Playwright e2e проверки
+## 13. Playwright E2E
 
-Playwright нужен для автоматических браузерных сценариев, которые проверяют UI глубже, чем ручной быстрый просмотр.
+Перед запуском должны быть подняты:
 
-Перед запуском Playwright окружение должно быть уже поднято:
+- Postgres v2;
+- backend `http://127.0.0.1:3301`;
+- frontend на нужном tenant host;
+- Chatwoot/Mailpit, если сценарий их требует.
 
-```text
-Postgres v2
-backend: http://127.0.0.1:3301
-frontend: http://127.0.0.1:5173
-Chatwoot/Mailpit, если сценарий их требует
-```
-
-При запуске e2e Playwright сам читает `.env`, прогоняет миграции и пересоздает отдельного пользователя `e2e.portal.user@example.test` в БД `v2`.
-
-Проверить версию:
+Для конкретного tenant host:
 
 ```bash
-pnpm exec playwright --version
-```
-
-Запустить e2e:
-
-```bash
+PLAYWRIGHT_BASE_URL=http://buhfirma.127.0.0.1.nip.io:5173 \
+E2E_TENANT_SLUG=buhfirma \
 pnpm test:e2e
 ```
 
-Запустить с видимым браузером:
+Для второго tenant:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://zubi.127.0.0.1.nip.io:5173 \
+E2E_TENANT_SLUG=zubi \
+pnpm test:e2e
+```
+
+Дополнительные режимы:
 
 ```bash
 pnpm test:e2e:headed
-```
-
-Открыть Playwright UI:
-
-```bash
 pnpm test:e2e:ui
-```
-
-Открыть последний HTML report:
-
-```bash
 pnpm test:e2e:report
 ```
 
@@ -207,7 +311,7 @@ pnpm test:e2e:report
 pnpm exec playwright install chromium
 ```
 
-## 11. Остановить окружение
+## 14. Остановить
 
 Backend/frontend остановить через `Ctrl+C`.
 
@@ -217,4 +321,8 @@ Backend/frontend остановить через `Ctrl+C`.
 pnpm db:down
 ```
 
-`pnpm db:down` не трогает Chatwoot.
+Удалить local portal DB полностью:
+
+```bash
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml down -v
+```
