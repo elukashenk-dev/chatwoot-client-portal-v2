@@ -423,3 +423,166 @@ Scope:
 - include `F-AUTH-002` as a narrow pre-`MT-9` safety fix candidate;
 - do not start refactoring until the assessment defines exact slices, checks and
   stop conditions.
+
+## MT-8R-4. Refactoring Assessment
+
+Дата: `2026-05-06`
+
+Scope:
+
+- turn `MT-8R-1` through `MT-8R-3` evidence into a bounded refactoring plan;
+- classify candidates by urgency and risk;
+- define exact next slices, checks and stop conditions;
+- do not refactor production code in this step.
+
+No production-code refactoring was performed in this step.
+
+### Assessment Decision
+
+There is no evidence for a broad pre-`MT-9` refactor.
+
+The only approved pre-`MT-9` code slice from `MT-8R` is a narrow backend password
+policy alignment for `F-AUTH-002`.
+
+`F-MT-004` remains the first security gate inside `MT-9`: run the Chatwoot
+permissions spike and implement the separate encrypted tenant admin-verification
+token boundary before tenant admin login is considered complete.
+
+### Candidate Classification
+
+| Category               | Candidate                                     | Area                                       | Decision                                                                                    |
+| ---------------------- | --------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `must-fix-before-MT-9` | `F-AUTH-002` password reset policy drift      | backend auth/password reset                | Fix as `MT-8R-5A` before new admin password/challenge work.                                 |
+| `MT-9-entry-gate`      | `F-MT-004` admin verification token boundary  | tenant admin, Chatwoot permissions         | Keep deferred to `MT-9`, but it must be the first `MT-9` security spike/implementation.     |
+| `safe-inside-MT-9`     | Chatwoot Agents/Admin verification API method | `backend/src/integrations/chatwoot`        | Add as focused resource/method with tests inside `MT-9`; do not split the whole client now. |
+| `defer`                | `F-MT-008` production global Chatwoot env     | production installer/compose/runbook       | Fix in `MT-10`; production deploy is already blocked until runbook update.                  |
+| `defer-to-MT-8.5`      | `F-CHAT-UI-002`, `F-CHAT-UI-003`              | chat UI accessibility/attachment rendering | Re-evaluate during UI/UX baseline; fix only as focused UI polish if still required.         |
+| `defer`                | `F-AUTH-001` password reset copy              | password reset UX copy                     | Keep deferred; account-enumeration-safe copy polish is not a refactoring blocker.           |
+| `defer`                | `F-IOS-001` keyboard viewport pan             | iOS composer/viewport behavior             | Keep deferred until a focused iOS experiment.                                               |
+| `defer`                | Playwright multi-host scenarios               | browser e2e                                | Add targeted coverage when `MT-8.5`/`MT-9` defines exact UI/admin flows.                    |
+| `defer`                | Registration/password-reset service merge     | backend email-code services                | Do not merge services before `MT-9`; duplication is less risky than a broad auth rewrite.   |
+| `do-not-touch`         | Tenant resolution/auth/session/chat runtime   | runtime tenant boundaries                  | Leave stable boundaries alone unless a tested bug requires a focused fix.                   |
+
+### Approved Refactoring/Fix Slices
+
+#### `MT-8R-5A. Password Policy Alignment`
+
+Finding:
+
+- `F-AUTH-002`
+
+Affected area:
+
+- `backend/src/modules/registration/routes.ts`;
+- `backend/src/modules/registration/service.ts`;
+- `backend/src/modules/password-reset/routes.ts`;
+- `backend/src/modules/password-reset/service.ts`;
+- backend auth/password-reset tests.
+
+Expected behavior impact:
+
+- password reset backend will reject new passwords that do not contain a letter
+  or do not contain a digit;
+- existing valid passwords such as `NewPass123` remain accepted;
+- frontend behavior should not change, because frontend already enforces the
+  stronger rule.
+
+Implementation shape:
+
+- use one backend password policy rule for registration and password reset;
+- a small pure helper is acceptable if it removes the current backend rule drift;
+- do not merge registration and password reset services;
+- do not change database schema, sessions, tenant resolution or Chatwoot runtime.
+
+Required checks:
+
+- backend tests for password reset missing-letter and missing-digit rejection;
+- targeted backend test run for password reset and registration/auth affected
+  tests;
+- `pnpm --dir backend test`;
+- `pnpm --dir backend build`;
+- `pnpm --dir backend lint`;
+- Prettier for changed files;
+- `git diff --check`.
+
+Rollback strategy:
+
+- revert the small password policy helper/validation edits and tests;
+- no migration or data rollback should be needed.
+
+Stop conditions:
+
+- if the fix starts touching tenant resolution, session model, Chatwoot client,
+  email delivery or verification persistence, stop and split the work;
+- if registration behavior changes beyond sharing the same password rule, stop
+  and review separately;
+- do not close `F-AUTH-002` until tests prove registration and password reset
+  enforce the same backend rule.
+
+### Deferred Slices
+
+#### Chatwoot Client Boundary
+
+Decision:
+
+- no separate pre-`MT-9` Chatwoot client refactor;
+- add Agents/Admin verification behavior inside `MT-9` as a focused method or
+  resource slice;
+- keep tests close to the new Chatwoot API parsing/failure behavior.
+
+Reason:
+
+- the current tenant factory path is already runtime-safe;
+- splitting a 1500+ line client before knowing the exact Agents API shape would
+  add risk without protecting users.
+
+#### UI Findings
+
+Decision:
+
+- defer `F-CHAT-UI-002` and `F-CHAT-UI-003` to `MT-8.5`;
+- do not fix chat UI accessibility/audio layout during backend refactoring.
+
+Reason:
+
+- `MT-8.5` is the dedicated UI/UX baseline review and will decide whether these
+  are blockers before branding.
+
+#### Production Tooling
+
+Decision:
+
+- defer `F-MT-008` to `MT-10`;
+- do not touch production installer/compose in `MT-8R-5A`.
+
+Reason:
+
+- production deployment is already marked blocked until the multi-tenant runbook
+  update;
+- `MT-9` can proceed locally against tenant-aware runtime without changing the
+  production installer.
+
+### MT-8R-4 Result
+
+Approved next code slice:
+
+```text
+MT-8R-5A. Password Policy Alignment
+```
+
+After `MT-8R-5A` is fixed, tested and committed, `MT-8R` can either:
+
+- finish with no additional refactoring slices; or
+- run a short final review confirming that no open `must-fix-before-MT-9` code
+  finding remains.
+
+## Next Step After MT-8R-4
+
+`MT-8R-5A. Password Policy Alignment`
+
+Scope:
+
+- close `F-AUTH-002`;
+- align backend password policy between registration and password reset;
+- keep the change backend-only unless tests prove frontend drift;
+- no schema, tenant runtime, Chatwoot runtime or UI shell changes.
