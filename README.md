@@ -37,7 +37,7 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 Следующий активный scope:
 
 ```text
-MT-8R Codebase Audit And Refactoring Readiness
+MT-8.5 Portal UI/UX Baseline Review
 ```
 
 ## Карта документации

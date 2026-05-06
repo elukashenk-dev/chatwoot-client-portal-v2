@@ -30,7 +30,8 @@
 - production deployment baseline;
 - `MT-0`-`MT-8` multi-tenant program;
 - post-MT runtime review fixes для tenant URL/domain, portal inbox routing и
-  webhook payload validation.
+  webhook payload validation;
+- `MT-8R Codebase Audit And Refactoring Readiness`.
 
 Текущий baseline:
 
@@ -45,12 +46,18 @@
 Следующий активный scope:
 
 ```text
-MT-8R. Codebase Audit And Refactoring Readiness
+MT-8.5. Portal UI/UX Baseline Review
 ```
 
 ## Active Roadmap
 
 ### MT-8R. Codebase Audit And Refactoring Readiness
+
+Status:
+
+- completed on `2026-05-06`;
+- `F-AUTH-002` was closed by `MT-8R-5A`;
+- no open `must-fix-before-MT-9` code finding remains.
 
 Цель:
 

@@ -636,3 +636,69 @@ Scope:
 - confirm no open `must-fix-before-MT-9` code findings remain;
 - confirm deferred findings are assigned to `MT-8.5`, `MT-9` or `MT-10`;
 - run final lightweight docs/checkpoint review before moving to `MT-8.5`.
+
+## MT-8R Final Review
+
+Дата: `2026-05-06`
+
+Scope:
+
+- review open/deferred findings after `MT-8R-5A`;
+- confirm `MT-8R` exit criteria;
+- update roadmap pointers to the next active scope;
+- do not change production code.
+
+No production-code changes were made in this step.
+
+### Findings Review
+
+Closed during `MT-8R`:
+
+- `F-AUTH-002` - password reset backend password policy drift.
+
+Deferred findings after final review:
+
+| Finding         | Target                          | Final review decision                                                                 |
+| --------------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| `F-AUTH-001`    | future auth/password reset UX   | Deferred copy polish; not a security/code blocker.                                    |
+| `F-CHAT-UI-002` | `MT-8.5`                        | Deferred to UI/UX baseline review and possible focused accessibility polish.          |
+| `F-CHAT-UI-003` | `MT-8.5`                        | Deferred to UI/UX baseline review and possible focused attachment/voice polish.       |
+| `F-IOS-001`     | future focused iOS experiment   | Deferred; previous broad viewport mitigation regressed into a worse empty-screen bug. |
+| `F-MT-004`      | `MT-9` first security gate      | Deferred to `MT-9`; separate admin-verification token strategy is already selected.   |
+| `F-MT-008`      | `MT-10` deployment/runbook work | Deferred to `MT-10`; production deployment remains blocked until runbook update.      |
+
+Final finding state:
+
+- no open `must-fix-before-MT-9` code finding remains;
+- no `MT-8R` cleanup candidate remains approved for immediate refactoring;
+- remaining findings have explicit target phases or future focused experiments.
+
+### Exit Criteria Review
+
+`MT-8R` exit criteria status:
+
+- codebase inventory and risk map: complete;
+- technical debt analysis: complete;
+- concrete code smells/findings review: complete;
+- bounded refactoring assessment: complete;
+- approved pre-`MT-9` fix slice: complete;
+- dead code removal: no approved evidence-based removal slice was found;
+- repeated review after the selected fix: complete;
+- baseline checks after refactoring: green from `MT-8R-5A`;
+- transition to `MT-8.5`: allowed.
+
+### MT-8R Final Result
+
+`MT-8R Codebase Audit And Refactoring Readiness` is complete.
+
+The project can move to:
+
+```text
+MT-8.5 Portal UI/UX Baseline Review
+```
+
+Before starting `MT-9`, still required:
+
+- finish `MT-8.5` UI/UX baseline review;
+- start `MT-9` with `F-MT-004` Chatwoot permissions spike and separate
+  admin-verification token boundary.

@@ -1,9 +1,9 @@
 # F-CHAT-UI-002 Context Menu Keyboard Accessibility
 
-- `status`: `open`
+- `status`: `deferred`
 - `found_in`: auth shell markup cleanup and chat markup review
 - `risk`: `low`
-- `urgency`: fix in a focused chat accessibility polish slice, before relying on message actions as primary workflow
+- `urgency`: re-evaluate in `MT-8.5 Portal UI/UX Baseline Review`; fix in a focused chat accessibility polish slice before relying on message actions as a primary workflow
 - `area`: frontend chat transcript, message context menu, message reply/copy actions
 - `evidence`:
   - `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx` opens message actions through `onContextMenu` and swipe gestures.

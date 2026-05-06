@@ -1,9 +1,9 @@
 # F-CHAT-UI-003 Audio Attachment Narrow Width
 
-- `status`: `open`
+- `status`: `deferred`
 - `found_in`: auth shell markup cleanup and chat markup review
 - `risk`: `low`
-- `urgency`: fix in a focused chat attachment UI polish slice, especially if supporting very narrow mobile widths below ~360px
+- `urgency`: re-evaluate in `MT-8.5 Portal UI/UX Baseline Review`; fix in a focused chat attachment UI polish slice if narrow mobile audio/voice states remain in the accepted baseline
 - `area`: frontend chat transcript, audio attachment rendering, voice messages
 - `evidence`:
   - `frontend/src/features/chat/components/chat-transcript/AttachmentCard.tsx` renders audio controls with `className="mt-3 w-full min-w-[220px] max-w-full"`.

@@ -37,6 +37,7 @@
 - Выполнен `MT-8R-3 Code Smells Review`: детально проверены Chatwoot client boundary, email-code/password policy family, e2e tenant shape и frontend tenant route shell; создан finding `F-AUTH-002` по расхождению password reset backend policy; production-code refactoring не начинался.
 - Выполнен `MT-8R-4 Refactoring Assessment`: утвержден единственный pre-`MT-9` code slice `MT-8R-5A Password Policy Alignment` для закрытия `F-AUTH-002`; Chatwoot client cleanup отложен внутрь `MT-9`, UI findings - в `MT-8.5`, production installer - в `MT-10`.
 - Выполнен `MT-8R-5A Password Policy Alignment`: registration и password reset backend теперь используют единое правило пароля; `F-AUTH-002` закрыт и удален из `docs/Findings/`; backend targeted tests, full backend test, backend build и backend lint пройдены.
+- Выполнен `MT-8R Final Review`: открытых `must-fix-before-MT-9` code findings не осталось; remaining findings назначены на `MT-8.5`, `MT-9`, `MT-10` или future focused experiments; переход к `MT-8.5 Portal UI/UX Baseline Review` разрешен.
 
 ## Current Baseline
 
@@ -48,4 +49,4 @@
 
 ## Recommended Next Step
 
-- Перейти к `MT-8R Final Review`: подтвердить, что открытых `must-fix-before-MT-9` code findings больше нет, deferred findings назначены на `MT-8.5`/`MT-9`/`MT-10`, и затем готовить переход к `MT-8.5 Portal UI/UX Baseline Review`.
+- Перейти к `MT-8.5 Portal UI/UX Baseline Review`: проверить реальные customer-facing states на desktop/mobile/PWA, утвердить portal shell как branding baseline, определить brandable vs non-brandable элементы и preview screens для `MT-9`.
