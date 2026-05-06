@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 
 import type { NodeAppDatabase } from '../db/client.js'
 import {
@@ -15,6 +15,76 @@ export const E2E_PORTAL_USER = {
   password: 'PortalPass123!',
 } as const
 
+export function resolveE2eTenantLookupFromEnv() {
+  const explicitSlug = process.env.E2E_TENANT_SLUG?.trim().toLowerCase()
+
+  if (explicitSlug) {
+    return {
+      slug: explicitSlug,
+    }
+  }
+
+  const baseUrl = process.env.PLAYWRIGHT_BASE_URL?.trim()
+
+  if (baseUrl) {
+    try {
+      const hostname = new URL(baseUrl).hostname.trim().toLowerCase()
+
+      if (hostname) {
+        return {
+          primaryDomain: hostname,
+        }
+      }
+    } catch {
+      throw new Error('PLAYWRIGHT_BASE_URL must be a valid URL.')
+    }
+  }
+
+  const defaultPrimaryDomain =
+    process.env.DEFAULT_TENANT_PRIMARY_DOMAIN?.trim().toLowerCase()
+
+  if (defaultPrimaryDomain) {
+    return {
+      primaryDomain: defaultPrimaryDomain,
+    }
+  }
+
+  return null
+}
+
+export async function findE2eTenantId(db: NodeAppDatabase) {
+  const lookup = resolveE2eTenantLookupFromEnv()
+
+  if (!lookup) {
+    const [tenant] = await db
+      .select({
+        id: portalTenants.id,
+      })
+      .from(portalTenants)
+      .orderBy(sql`${portalTenants.id} asc`)
+      .limit(1)
+
+    return tenant?.id ?? null
+  }
+
+  const [tenant] = await db
+    .select({
+      id: portalTenants.id,
+    })
+    .from(portalTenants)
+    .where(
+      or(
+        'slug' in lookup ? eq(portalTenants.slug, lookup.slug) : undefined,
+        'primaryDomain' in lookup
+          ? eq(portalTenants.primaryDomain, lookup.primaryDomain)
+          : undefined,
+      ),
+    )
+    .limit(1)
+
+  return tenant?.id ?? null
+}
+
 export async function seedE2ePortalUser(
   db: NodeAppDatabase,
   user = E2E_PORTAL_USER,
@@ -24,15 +94,9 @@ export async function seedE2ePortalUser(
   const passwordHash = await hashPassword(user.password)
 
   return db.transaction(async (transaction) => {
-    const [tenant] = await transaction
-      .select({
-        id: portalTenants.id,
-      })
-      .from(portalTenants)
-      .orderBy(sql`${portalTenants.id} asc`)
-      .limit(1)
+    const tenantId = await findE2eTenantId(transaction)
 
-    if (!tenant) {
+    if (!tenantId) {
       throw new Error('Seed a portal tenant before seeding e2e portal users.')
     }
 
@@ -40,7 +104,7 @@ export async function seedE2ePortalUser(
       .delete(verificationRecords)
       .where(
         and(
-          eq(verificationRecords.tenantId, tenant.id),
+          eq(verificationRecords.tenantId, tenantId),
           sql`lower(${verificationRecords.email}) = ${email}`,
         ),
       )
@@ -48,7 +112,7 @@ export async function seedE2ePortalUser(
       .delete(portalUsers)
       .where(
         and(
-          eq(portalUsers.tenantId, tenant.id),
+          eq(portalUsers.tenantId, tenantId),
           sql`lower(${portalUsers.email}) = ${email}`,
         ),
       )
@@ -60,7 +124,7 @@ export async function seedE2ePortalUser(
         fullName: user.fullName,
         isActive: true,
         passwordHash,
-        tenantId: tenant.id,
+        tenantId,
         updatedAt: now,
       })
       .returning({

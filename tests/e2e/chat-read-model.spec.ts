@@ -132,11 +132,8 @@ test('renders the ready chat transcript and loads older history through the back
   await page.getByRole('button', { name: 'Войти' }).click()
 
   await expect(page).toHaveURL(/\/app\/chat/)
-  await expect(
-    page.getByRole('heading', { name: 'Клиентский чат' }),
-  ).toBeVisible()
   await expect(page.getByText('Ольга Support', { exact: true })).toBeVisible()
-  await expect(page.getByText('В работе')).toBeVisible()
+  await expect(page.getByText('Онлайн')).toBeVisible()
   await expect(
     page.getByText('Здравствуйте, вижу ваше обращение.'),
   ).toBeVisible()

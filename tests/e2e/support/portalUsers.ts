@@ -1,12 +1,14 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { createDatabaseClient } from '../../../backend/src/db/client.ts'
 import {
   portalUserContactLinks,
-  portalTenants,
   portalUsers,
 } from '../../../backend/src/db/schema.ts'
-import { seedE2ePortalUser } from '../../../backend/src/test/e2ePortalUser.ts'
+import {
+  findE2eTenantId,
+  seedE2ePortalUser,
+} from '../../../backend/src/test/e2ePortalUser.ts'
 import { loadE2eEnv } from './runtimeEnv.ts'
 
 export async function seedPortalUserForE2e(user: {
@@ -33,15 +35,9 @@ export async function findPortalUserContactLinkForE2e(email: string) {
   })
 
   try {
-    const [tenant] = await database.db
-      .select({
-        id: portalTenants.id,
-      })
-      .from(portalTenants)
-      .orderBy(sql`${portalTenants.id} asc`)
-      .limit(1)
+    const tenantId = await findE2eTenantId(database.db)
 
-    if (!tenant) {
+    if (!tenantId) {
       return null
     }
 
@@ -58,8 +54,8 @@ export async function findPortalUserContactLinkForE2e(email: string) {
       )
       .where(
         and(
-          eq(portalUsers.tenantId, tenant.id),
-          eq(portalUserContactLinks.tenantId, tenant.id),
+          eq(portalUsers.tenantId, tenantId),
+          eq(portalUserContactLinks.tenantId, tenantId),
           eq(portalUsers.email, email),
         ),
       )
