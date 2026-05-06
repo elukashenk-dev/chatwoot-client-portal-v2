@@ -632,20 +632,20 @@ Reason:
 - Chatwoot Application API tokens are user access tokens and follow that user's permissions;
 - if the same powerful token is reused everywhere, one tenant configuration mistake can become cross-tenant access.
 
-Before `MT-9 Tenant Admin And Branding Rebuild`, run a short Chatwoot
-permissions spike and choose the tenant admin verification token strategy.
+Selected strategy for `MT-9 Tenant Admin And Branding Rebuild`:
 
-Allowed options for `MT-9`:
+- tenant admin verification uses a separate per-tenant Chatwoot
+  admin-verification token;
+- add encrypted tenant secret storage for it in `MT-9`, for example
+  `chatwoot_admin_verification_token_ciphertext`;
+- use this token only backend-side to call the current tenant's Chatwoot Agents
+  API and verify `role === "administrator"` and `confirmed === true`;
+- do not reuse the runtime Chatwoot token as implicit admin authority;
+- do not use a provisioning/platform-admin token for tenant admin login.
 
-1. use the same tenant runtime token only if its permissions are sufficient and
-   not broader than acceptable for normal chat runtime;
-2. add a separate tenant admin-verification token;
-3. use a provisioning/platform-admin approach.
-
-Preferred direction:
-
-- if checking Chatwoot administrators requires broader permissions than normal
-  chat runtime, use a separate tenant admin-verification token.
+Before implementing `MT-9`, still run a short Chatwoot permissions spike to
+verify the exact Agents API permissions, response fields and failure modes for
+the separate admin-verification token.
 
 ## 8. Tenant Resolution Strategy
 
@@ -1326,8 +1326,8 @@ Flow:
 
 1. Resolve tenant by host.
 2. Admin enters email.
-3. Backend calls tenant Chatwoot Agents API using the `MT-9` decision-gated
-   admin verification token strategy.
+3. Backend calls tenant Chatwoot Agents API using the tenant's separate
+   admin-verification token.
 4. Require:
    - `account_id === tenant.chatwoot_account_id`;
    - `role === administrator`;
@@ -1714,8 +1714,10 @@ Deliverables:
 
 - revisit archived branding-admin branch;
 - port useful ideas only after tenant foundation is complete;
-- run Chatwoot permissions spike;
-- choose and document admin verification token strategy: runtime token if safe, separate admin-verification token, or provisioning/platform-admin approach;
+- run Chatwoot permissions spike for the selected separate per-tenant
+  admin-verification token strategy;
+- add encrypted tenant admin-verification token storage, for example
+  `chatwoot_admin_verification_token_ciphertext`;
 - tenant-scoped admin login via Chatwoot administrator role;
 - tenant-scoped branding settings;
 - tenant-scoped audit events.
@@ -1920,13 +1922,14 @@ tenant provisioning: CLI/scripts first
 local dev: nip.io or documented hosts file
 migration style: forward migrations unless explicitly resetting local DB
 platform APIs: optional later, not required for first tenant-aware runtime
-admin verification token: deferred to MT-9 through F-MT-004; no admin-verification token in MT-1 schema
+admin verification token: selected for MT-9 through F-MT-004; no admin-verification token in MT-1 schema; add separate encrypted per-tenant admin-verification token in MT-9
 ```
 
 Deferred before `MT-9`:
 
-- `F-MT-004`: run Chatwoot permissions spike and choose tenant admin
-  verification token strategy before tenant admin/branding implementation.
+- `F-MT-004`: run Chatwoot permissions spike for the selected separate
+  per-tenant admin-verification token strategy, implement the token boundary
+  and tests, then close the finding.
 
 ## 22. Immediate Next Step
 

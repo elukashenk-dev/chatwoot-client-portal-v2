@@ -232,13 +232,13 @@
 - причина:
   текущий backend уже реализует password reset через `verification_records`, а отдельная таблица добавила бы лишнюю схему без новой domain-границы. Для multi-tenant isolation достаточно tenant-aware индексов и lookup по `tenant_id`, `email`, `purpose`, `status`
 
-## D-030. Admin verification token strategy откладываем до MT-9
+## D-030. Tenant admin verification uses separate token
 
-- дата: `2026-05-05`
+- дата: `2026-05-06`
 - решение:
-  `F-MT-004` не блокирует `MT-1` и остается deferred до `MT-9 Tenant Admin And Branding Rebuild`. В `MT-1` schema не добавляем отдельный admin-verification token и храним только runtime Chatwoot connection secrets, нужные для работы портала. Runtime Chatwoot token и admin-verification authority считаются отдельными security concerns. Перед `MT-9` обязателен Chatwoot permissions spike и выбор стратегии: тот же tenant runtime token, если его прав достаточно и он не слишком широкий; отдельный tenant admin-verification token; или provisioning/platform-admin подход
+  `F-MT-004` не блокирует `MT-1` и остается deferred до `MT-9 Tenant Admin And Branding Rebuild`, но strategy уже выбрана: tenant admin verification использует отдельный per-tenant Chatwoot admin-verification token. В `MT-1` schema admin-verification token не добавляли. В `MT-9` нужно добавить encrypted tenant secret, например `chatwoot_admin_verification_token_ciphertext`, и использовать его только backend-side для проверки Chatwoot administrator внутри текущего `tenant.chatwoot_account_id`. Runtime Chatwoot token не переиспользуется как implicit admin authority, а provisioning/platform-admin token не используется для tenant admin login
 - причина:
-  сейчас не нужно усложнять tenant schema будущим admin-token полем, но нельзя молча использовать один сверхширокий Chatwoot token для chat runtime, admin verification и provisioning. Если проверка Chatwoot administrators требует более широких прав, чем обычный chat runtime, предпочтительное направление - отдельный tenant admin-verification token
+  Chatwoot Agents API использует `api_access_token`, а доступ к endpoint зависит от прав пользователя-владельца token. Для admin login это отдельная security boundary: если обычный runtime token слишком узкий, проверка админа не должна ломать чат; если admin-verification token шире, он не должен участвовать в обычном chat runtime. Отдельный per-tenant token дает более понятную ротацию, аудит и tenant isolation
 
 ## D-031. `portal_tenant_domains` не добавляем в MT-1
 

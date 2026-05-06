@@ -224,7 +224,8 @@
 
 - revisit archived `feature/phase-10-portal-branding-admin`;
 - port only useful ideas that fit tenant-aware model;
-- run Chatwoot permissions spike and choose admin verification token strategy before implementation;
+- run Chatwoot permissions spike to verify Chatwoot Agents API permissions for the selected separate per-tenant admin-verification token strategy;
+- add encrypted tenant admin-verification token storage, for example `chatwoot_admin_verification_token_ciphertext`;
 - tenant-scoped admin login via Chatwoot administrator role;
 - tenant-scoped branding settings and audit events.
 
