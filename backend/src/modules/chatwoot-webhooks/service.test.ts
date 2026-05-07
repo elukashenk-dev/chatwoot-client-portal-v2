@@ -150,6 +150,47 @@ describe('createChatwootWebhookService', () => {
     })
   })
 
+  it('accepts Chatwoot v4.13 webhook signature headers signed over timestamp and raw body', async () => {
+    const { service } = createService()
+    const payload = {
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    }
+    const rawBody = Buffer.from(JSON.stringify(payload))
+
+    await expect(
+      service.handleWebhook({
+        headers: {
+          'X-Chatwoot-Delivery': 'delivery-v4-13',
+          'X-Chatwoot-Signature':
+            chatwootWebhookTestInternals.createSignatureDigest({
+              rawBody,
+              secret: webhookSecret,
+              timestamp,
+            }),
+          'X-Chatwoot-Timestamp': timestamp,
+        },
+        payload,
+        rawBody,
+      }),
+    ).resolves.toEqual({
+      deliveredClients: 2,
+      result: 'accepted',
+    })
+  })
+
   it('deduplicates a signed delivery before publishing to SSE subscribers', async () => {
     const {
       getCurrentUserChatMessages,

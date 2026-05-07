@@ -311,6 +311,8 @@ describe('createChatwootClient', () => {
       channelType: 'Channel::Api',
       id: 9,
       lockToSingleConversation: true,
+      webhookSecret: null,
+      webhookUrl: null,
       updated: false,
     })
     expect(fetchFn).toHaveBeenCalledTimes(1)
@@ -349,6 +351,8 @@ describe('createChatwootClient', () => {
       channelType: 'Channel::Api',
       id: 9,
       lockToSingleConversation: true,
+      webhookSecret: null,
+      webhookUrl: null,
       updated: true,
     })
     expect(fetchFn).toHaveBeenNthCalledWith(
@@ -764,6 +768,65 @@ describe('createChatwootClient', () => {
     )
     expect(String(fetchFn.mock.calls[0]?.[0])).toBe(
       'http://127.0.0.1:3000/api/v1/accounts/3/webhooks/2',
+    )
+  })
+
+  it('configures the API channel webhook URL and returns its dedicated signing secret', async () => {
+    const callbackUrl =
+      'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account'
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          channel_type: 'Channel::Api',
+          id: 9,
+          lock_to_single_conversation: true,
+          secret: 'old-api-channel-secret',
+          webhook_url: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          channel_type: 'Channel::Api',
+          id: 9,
+          lock_to_single_conversation: true,
+          secret: 'api-channel-secret',
+          webhook_url: callbackUrl,
+        }),
+      )
+    const client = createChatwootClient({
+      env: {
+        CHATWOOT_ACCOUNT_ID: 3,
+        CHATWOOT_API_ACCESS_TOKEN: 'token',
+        CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+        CHATWOOT_PORTAL_INBOX_ID: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(
+      client.configurePortalInboxWebhook({
+        url: callbackUrl,
+      }),
+    ).resolves.toEqual({
+      id: 9,
+      secret: 'api-channel-secret',
+      url: callbackUrl,
+    })
+    expect(fetchFn).toHaveBeenNthCalledWith(
+      2,
+      expect.any(URL),
+      expect.objectContaining({
+        body: JSON.stringify({
+          channel: {
+            webhook_url: callbackUrl,
+          },
+        }),
+        method: 'PATCH',
+      }),
+    )
+    expect(String(fetchFn.mock.calls[1]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/inboxes/9',
     )
   })
 })

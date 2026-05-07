@@ -198,8 +198,11 @@ pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=zubi
 
 Ожидание:
 
-- action: `created` или `updated`;
+- action: `updated`;
+- команда обновляет `webhook_url` tenant portal API Channel inbox;
 - callback URL идет на tenant host;
+- secret sync использует API Channel `secret` (`channel_api.secret` в
+  Chatwoot v4.13+);
 - `secretStored: true`.
 
 ## 10. Быстрый Smoke Руками

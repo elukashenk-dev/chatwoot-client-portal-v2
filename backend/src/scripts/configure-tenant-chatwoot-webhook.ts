@@ -34,29 +34,6 @@ function readTenantSecretKey(tenantSecretKey?: string | undefined) {
   return tenantSecretKey
 }
 
-function readPositiveIntegerArgument(flag: string) {
-  const value = Number(readArgument(flag))
-
-  return Number.isInteger(value) && value > 0 ? value : null
-}
-
-function readSubscriptions() {
-  const rawSubscriptions = readArgument('--subscriptions')
-
-  if (!rawSubscriptions) {
-    return undefined
-  }
-
-  return [
-    ...new Set(
-      rawSubscriptions
-        .split(',')
-        .map((subscription) => subscription.trim())
-        .filter(Boolean),
-    ),
-  ]
-}
-
 const env = loadEnv()
 const database = createDatabaseClient({
   connectionString: env.DATABASE_URL,
@@ -66,8 +43,6 @@ try {
   const result = await configureTenantChatwootWebhook({
     callbackUrl: readArgument('--callback-url'),
     createChatwootClient: (config) => createChatwootClient({ config }),
-    explicitWebhookId: readPositiveIntegerArgument('--webhook-id'),
-    subscriptions: readSubscriptions(),
     tenantSecretKey: readTenantSecretKey(env.PORTAL_TENANT_SECRET_KEY),
     tenantsRepository: createTenantsRepository(database.db),
     tenantSlug: readTenantSlug(env.DEFAULT_TENANT_SLUG),

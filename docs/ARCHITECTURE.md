@@ -217,6 +217,9 @@ Chatwoot signed webhook -> portal backend -> tenant-scoped SSE fanout -> browser
 Правила:
 
 - Chatwoot webhook secret tenant-specific;
+- для tenant portal `Channel::Api` inbox source of truth для подписи - API
+  Channel webhook secret (`channel_api.secret` в Chatwoot v4.13+), а не account
+  webhook secret;
 - webhook tenant определяется по host callback URL;
 - webhook signature валидируется tenant webhook secret;
 - payload account/inbox должен соответствовать tenant Chatwoot config;

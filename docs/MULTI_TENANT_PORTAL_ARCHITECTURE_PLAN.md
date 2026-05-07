@@ -535,6 +535,11 @@ pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=<slug>
 pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
 ```
 
+`tenant:chatwoot:webhook:configure` configures the tenant portal
+`Channel::Api` inbox `webhook_url` and stores the API Channel webhook signing
+secret returned by Chatwoot. For Chatwoot v4.13+ this is the dedicated
+`channel_api.secret`, not an account webhook secret.
+
 Tenant provisioning inputs:
 
 ```text

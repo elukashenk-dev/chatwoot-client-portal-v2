@@ -88,6 +88,14 @@ export type ChatwootPortalInboxRouting = {
   channelType: string | null
   id: number
   lockToSingleConversation: boolean
+  webhookSecret: string | null
+  webhookUrl: string | null
+}
+
+export type ChatwootPortalInboxWebhook = {
+  id: number
+  secret: string | null
+  url: string | null
 }
 
 export type ChatwootAttachmentUpload = {
@@ -190,6 +198,12 @@ function readString(value: unknown) {
   return typeof value === 'string' ? value : null
 }
 
+function readTrimmedString(value: unknown) {
+  const stringValue = readString(value)?.trim()
+
+  return stringValue || null
+}
+
 function readObject(value: unknown) {
   return isPlainObject(value) ? value : null
 }
@@ -281,6 +295,8 @@ function mapPortalInboxRouting(payload: unknown): ChatwootPortalInboxRouting {
     channelType,
     id,
     lockToSingleConversation,
+    webhookSecret: readTrimmedString(payload.secret),
+    webhookUrl: readTrimmedString(payload.webhook_url),
   }
 }
 
@@ -1037,6 +1053,64 @@ export function createChatwootClient({
         url,
         webhookId,
       })
+    },
+
+    async configurePortalInboxWebhook({
+      url,
+    }: {
+      url: string
+    }): Promise<ChatwootPortalInboxWebhook> {
+      const resolvedConfig = assertConfigured()
+      const normalizedUrl = normalizeWebhookUrl(url)
+      const currentRouting = await getPortalInboxRouting()
+
+      if (
+        currentRouting.id !== resolvedConfig.portalInboxId ||
+        currentRouting.channelType !== PORTAL_CONVERSATION_CHANNEL_TYPE
+      ) {
+        throw new ChatwootClientRequestError(
+          'Configured Chatwoot portal inbox is not a Channel::Api inbox.',
+        )
+      }
+
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/inboxes/${resolvedConfig.portalInboxId}`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot portal inbox webhook update is unavailable.',
+        {
+          body: {
+            channel: {
+              webhook_url: normalizedUrl,
+            },
+          },
+          method: 'PATCH',
+        },
+      )
+      const updatedRouting = mapPortalInboxRouting(payload)
+
+      if (
+        updatedRouting.id !== resolvedConfig.portalInboxId ||
+        updatedRouting.channelType !== PORTAL_CONVERSATION_CHANNEL_TYPE
+      ) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot portal inbox webhook update returned an invalid inbox.',
+        )
+      }
+
+      if (updatedRouting.webhookUrl !== normalizedUrl) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot portal inbox webhook update did not persist the callback URL.',
+        )
+      }
+
+      return {
+        id: updatedRouting.id,
+        secret: updatedRouting.webhookSecret,
+        url: updatedRouting.webhookUrl,
+      }
     },
 
     async verifyPortalInboxConnection() {

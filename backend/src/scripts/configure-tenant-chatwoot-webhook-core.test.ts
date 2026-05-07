@@ -55,18 +55,14 @@ describe('configureTenantChatwootWebhook', () => {
     }
   }
 
-  it('configures a tenant webhook from tenant Chatwoot config and stores the returned secret encrypted', async () => {
+  it('configures the tenant API channel webhook and stores the returned signing secret encrypted', async () => {
     const { key, repository } = await seedTenant()
     const chatwootClient = {
-      createAccountWebhook: vi.fn().mockResolvedValue({
-        id: 11,
-        name: 'Portal realtime',
+      configurePortalInboxWebhook: vi.fn().mockResolvedValue({
+        id: 9,
         secret: 'new-webhook-secret',
-        subscriptions: ['message_created', 'message_updated'],
         url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
       }),
-      listAccountWebhooks: vi.fn().mockResolvedValue([]),
-      updateAccountWebhook: vi.fn(),
     }
     const createChatwootClient = vi
       .fn<(config: ChatwootClientConfig) => typeof chatwootClient>()
@@ -74,7 +70,6 @@ describe('configureTenantChatwootWebhook', () => {
 
     const result = await configureTenantChatwootWebhook({
       createChatwootClient,
-      explicitWebhookId: null,
       tenantSecretKey,
       tenantsRepository: repository,
       tenantSlug: 'BUHFIRMA',
@@ -86,13 +81,12 @@ describe('configureTenantChatwootWebhook', () => {
       baseUrl: 'https://chatwoot.tenant.test',
       portalInboxId: 9,
     })
-    expect(chatwootClient.createAccountWebhook).toHaveBeenCalledWith({
-      name: 'Portal realtime',
-      subscriptions: ['message_created', 'message_updated'],
+    expect(chatwootClient.configurePortalInboxWebhook).toHaveBeenCalledWith({
       url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
     })
     expect(result).toMatchObject({
-      action: 'created',
+      action: 'updated',
+      secretSource: 'api-channel-inbox',
       secretStored: true,
       tenant: {
         chatwootAccountId: 3,
@@ -100,7 +94,7 @@ describe('configureTenantChatwootWebhook', () => {
       },
       webhook: {
         hasSecret: true,
-        id: 11,
+        id: 9,
       },
     })
 
@@ -117,30 +111,25 @@ describe('configureTenantChatwootWebhook', () => {
     )
   })
 
-  it('does not overwrite the stored tenant secret when Chatwoot omits a webhook secret', async () => {
+  it('does not overwrite the stored tenant secret when Chatwoot omits the API channel webhook secret', async () => {
     const { key, repository } = await seedTenant()
     const createChatwootClient = vi.fn().mockReturnValue({
-      createAccountWebhook: vi.fn().mockResolvedValue({
-        id: 11,
-        name: 'Portal realtime',
+      configurePortalInboxWebhook: vi.fn().mockResolvedValue({
+        id: 9,
         secret: null,
-        subscriptions: ['message_created', 'message_updated'],
         url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
       }),
-      listAccountWebhooks: vi.fn().mockResolvedValue([]),
-      updateAccountWebhook: vi.fn(),
     })
 
     await expect(
       configureTenantChatwootWebhook({
         createChatwootClient,
-        explicitWebhookId: null,
         tenantSecretKey,
         tenantsRepository: repository,
         tenantSlug: 'buhfirma',
       }),
     ).rejects.toThrow(
-      'Chatwoot did not return a webhook secret for tenant "buhfirma".',
+      'Chatwoot did not return an API Channel webhook secret for tenant "buhfirma".',
     )
 
     const unchangedTenant = await repository.findBySlug('buhfirma')

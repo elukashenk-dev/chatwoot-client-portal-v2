@@ -43,6 +43,8 @@
 - Расширен `MT-8.5` UI/UX audit spec: добавлены screen-by-screen cleanup, brandable matrix, text limits, fallback logic, chat header/transcript/composer разбор, removal list и UI cleanup acceptance.
 - Выполнен финальный polish `MT-8.5` UI cleanup spec: уточнены content ownership, system/security-sensitive copy, visual hierarchy, branding intensity, Chat Header left/center/right layout и account enumeration-safe password reset OTP copy.
 - Уточнен `MT-8.5` UI cleanup readiness: accent color ограничен low-intensity ролью, header accent выключен по умолчанию, password reset OTP copy дополнительно смягчен, добавлен Implementation Done Checklist.
+- Выполнен compatibility fix для Chatwoot `v4.13.0` API Channel webhook signing: tenant webhook sync теперь настраивает `Channel::Api` inbox `webhook_url` и сохраняет `channel_api.secret`; verifier покрыт `X-Chatwoot-*` headers и `{timestamp}.{raw_body}` HMAC; backend targeted/full tests, build, lint, root lint, Prettier и `git diff --check` пройдены.
+- Локально после запуска Chatwoot `v4.13.0` API Channel webhook sync выполнен для `buhfirma`, `stroyfirma` и `zubi`; Chatwoot -> portal webhook deliveries, transcript fetch и SSE realtime smoke пройдены; `F-MT-009` закрыт архивацией local `default` tenant и проверкой отсутствия duplicate active API Channel inbox tuples.
 
 ## Current Baseline
 
@@ -54,4 +56,4 @@
 
 ## Recommended Next Step
 
-- Продолжить `MT-8.5` auth copy/layout polish: password reset generic copy, duplicate registration links и first-pass auth screen hierarchy.
+- Вернуться к следующему согласованному product/UI scope после Chatwoot `v4.13.0` compatibility checkpoint.

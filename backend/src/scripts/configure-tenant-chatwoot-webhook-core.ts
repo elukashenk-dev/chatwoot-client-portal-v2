@@ -1,24 +1,22 @@
-import type { ChatwootClientConfig } from '../integrations/chatwoot/client.js'
+import type {
+  ChatwootClientConfig,
+  ChatwootPortalInboxWebhook,
+} from '../integrations/chatwoot/client.js'
 import type { TenantsRepository } from '../modules/tenants/repository.js'
 import {
   decodeTenantSecretKey,
   decryptTenantSecret,
   encryptTenantSecret,
 } from '../modules/tenants/secrets.js'
-import {
-  DEFAULT_WEBHOOK_PATH,
-  DEFAULT_WEBHOOK_SUBSCRIPTIONS,
-  configureAccountWebhook,
-  type ChatwootAccountWebhookClient,
-} from './configure-chatwoot-account-webhook-core.js'
+import { DEFAULT_WEBHOOK_PATH } from './configure-chatwoot-account-webhook-core.js'
 
 type ConfigureTenantWebhookOptions = {
   callbackUrl?: string | undefined
-  createChatwootClient: (
-    config: ChatwootClientConfig,
-  ) => ChatwootAccountWebhookClient
-  explicitWebhookId: number | null
-  subscriptions?: string[] | undefined
+  createChatwootClient: (config: ChatwootClientConfig) => {
+    configurePortalInboxWebhook: (options: {
+      url: string
+    }) => Promise<ChatwootPortalInboxWebhook>
+  }
   tenantSecretKey: string
   tenantsRepository: Pick<
     TenantsRepository,
@@ -28,11 +26,10 @@ type ConfigureTenantWebhookOptions = {
 }
 
 export type ConfigureTenantWebhookResult = {
-  action: 'created' | 'updated'
+  action: 'updated'
   callbackUrl: string
-  secretSource: 'matched-webhook' | 'refreshed-list' | 'save-response'
+  secretSource: 'api-channel-inbox'
   secretStored: true
-  subscriptions: string[]
   tenant: {
     chatwootAccountId: number
     chatwootBaseUrl: string
@@ -57,20 +54,6 @@ function normalizeTenantSlug(slug: string) {
   return normalizedSlug
 }
 
-function normalizeSubscriptions(subscriptions: string[] | undefined) {
-  const normalizedSubscriptions = [
-    ...new Set(
-      (subscriptions ?? DEFAULT_WEBHOOK_SUBSCRIPTIONS)
-        .map((subscription) => subscription.trim())
-        .filter(Boolean),
-    ),
-  ]
-
-  return normalizedSubscriptions.length > 0
-    ? normalizedSubscriptions
-    : DEFAULT_WEBHOOK_SUBSCRIPTIONS
-}
-
 function buildCallbackUrl({
   callbackUrl,
   publicBaseUrl,
@@ -88,8 +71,6 @@ function buildCallbackUrl({
 export async function configureTenantChatwootWebhook({
   callbackUrl,
   createChatwootClient,
-  explicitWebhookId,
-  subscriptions,
   tenantSecretKey,
   tenantsRepository,
   tenantSlug,
@@ -106,24 +87,27 @@ export async function configureTenantChatwootWebhook({
     callbackUrl,
     publicBaseUrl: tenant.publicBaseUrl,
   })
-  const result = await configureAccountWebhook({
-    callbackUrl: resolvedCallbackUrl,
-    chatwootClient: createChatwootClient({
-      accountId: tenant.chatwootAccountId,
-      apiAccessToken: decryptTenantSecret(
-        tenant.chatwootApiAccessTokenCiphertext,
-        key,
-      ),
-      baseUrl: tenant.chatwootBaseUrl,
-      portalInboxId: tenant.chatwootPortalInboxId,
-    }),
-    explicitWebhookId,
-    subscriptions: normalizeSubscriptions(subscriptions),
+  const result = await createChatwootClient({
+    accountId: tenant.chatwootAccountId,
+    apiAccessToken: decryptTenantSecret(
+      tenant.chatwootApiAccessTokenCiphertext,
+      key,
+    ),
+    baseUrl: tenant.chatwootBaseUrl,
+    portalInboxId: tenant.chatwootPortalInboxId,
+  }).configurePortalInboxWebhook({
+    url: resolvedCallbackUrl,
   })
 
-  if (!result.secret || result.secretSource === 'missing') {
+  if (!result.secret) {
     throw new Error(
-      `Chatwoot did not return a webhook secret for tenant "${tenant.slug}".`,
+      `Chatwoot did not return an API Channel webhook secret for tenant "${tenant.slug}".`,
+    )
+  }
+
+  if (!result.url) {
+    throw new Error(
+      `Chatwoot did not return an API Channel webhook URL for tenant "${tenant.slug}".`,
     )
   }
 
@@ -133,11 +117,10 @@ export async function configureTenantChatwootWebhook({
   })
 
   return {
-    action: result.action,
-    callbackUrl: result.callbackUrl,
-    secretSource: result.secretSource,
+    action: 'updated',
+    callbackUrl: result.url,
+    secretSource: 'api-channel-inbox',
     secretStored: true,
-    subscriptions: result.subscriptions,
     tenant: {
       chatwootAccountId: tenant.chatwootAccountId,
       chatwootBaseUrl: tenant.chatwootBaseUrl,
@@ -145,7 +128,11 @@ export async function configureTenantChatwootWebhook({
       publicBaseUrl: tenant.publicBaseUrl,
       slug: tenant.slug,
     },
-    webhook: result.webhook,
+    webhook: {
+      hasSecret: true,
+      id: result.id,
+      url: result.url,
+    },
   }
 }
 

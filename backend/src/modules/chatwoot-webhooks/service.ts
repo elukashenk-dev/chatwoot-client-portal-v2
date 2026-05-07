@@ -71,7 +71,11 @@ type HandleChatwootWebhookResult =
     }
 
 function readHeader(headers: IncomingHttpHeaders, name: string) {
-  const value = headers[name]
+  const value =
+    headers[name] ??
+    Object.entries(headers).find(
+      ([headerName]) => headerName.toLowerCase() === name,
+    )?.[1]
 
   if (Array.isArray(value)) {
     return value[0] ?? null
