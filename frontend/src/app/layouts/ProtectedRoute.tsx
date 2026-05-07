@@ -2,28 +2,21 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { routePaths } from '../routePaths'
 import { useAuthSession } from '../../features/auth/lib/authSessionContext'
+import { AppWelcomeScreen } from '../../features/tenant/components/AppWelcomeScreen'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../shared/ui/PortalFrame'
 import { RefreshIcon } from '../../shared/ui/icons'
 
-function ProtectedSessionCheck() {
+function ProtectedSessionCheck({ userName }: { userName?: string | null }) {
   return (
-    <PortalFrame>
-      <section className="mx-auto w-full max-w-md space-y-5 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[0.8rem] bg-brand-50 text-brand-800">
-          <RefreshIcon className="h-5 w-5 animate-spin" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-            Проверяем сессию
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
-            Открываем защищенную клиентскую зону.
-          </p>
-        </div>
-      </section>
-    </PortalFrame>
+    <AppWelcomeScreen
+      description="Проверяем доступ и готовим защищенную зону."
+      mode="screen"
+      statusLabel="Проверяем сессию"
+      title={userName ? undefined : 'Открываем кабинет'}
+      userName={userName}
+    />
   )
 }
 
@@ -64,7 +57,7 @@ export function ProtectedRoute() {
   const { errorMessage, refreshSession, status, user } = useAuthSession()
 
   if (status === 'checking') {
-    return <ProtectedSessionCheck />
+    return <ProtectedSessionCheck userName={user?.fullName} />
   }
 
   if (status === 'error') {
@@ -80,11 +73,7 @@ export function ProtectedRoute() {
 
   if (status !== 'authenticated' || !user) {
     return (
-      <Navigate
-        replace
-        state={{ from: location }}
-        to={routePaths.auth.login}
-      />
+      <Navigate replace state={{ from: location }} to={routePaths.auth.login} />
     )
   }
 

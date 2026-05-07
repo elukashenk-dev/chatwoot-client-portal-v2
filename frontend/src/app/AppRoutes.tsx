@@ -5,6 +5,7 @@ import { AppShellLayout } from './layouts/AppShellLayout'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
+import { TenantSplashScreen } from '../features/tenant/components/TenantSplashScreen'
 
 function lazyRouteComponent<TProps extends object>(
   loadComponent: () => Promise<ComponentType<TProps>>,
@@ -52,7 +53,19 @@ const ChatPage = lazyRouteComponent(() =>
 )
 
 function LazyRoute({ children }: { children: ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>
+  return (
+    <Suspense
+      fallback={
+        <TenantSplashScreen
+          description="Загружаем экран."
+          mode="inline"
+          title="Открываем кабинет"
+        />
+      }
+    >
+      {children}
+    </Suspense>
+  )
 }
 
 export function AppRoutes() {

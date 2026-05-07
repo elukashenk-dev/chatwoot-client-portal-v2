@@ -12,6 +12,7 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
+import { TenantSplashScreen } from '../components/TenantSplashScreen'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -70,7 +71,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   return (
     <TenantIdentityContext.Provider value={value}>
-      {children}
+      {status === 'loading' ? <TenantSplashScreen /> : children}
     </TenantIdentityContext.Provider>
   )
 }

@@ -52,6 +52,22 @@ describe('TenantProvider', () => {
     fetchMock.mockReset()
   })
 
+  it('shows the boot splash while tenant identity is loading', () => {
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    render(
+      <TenantProvider>
+        <TenantProbe />
+      </TenantProvider>,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Загружаем настройки.')).toBeInTheDocument()
+    expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
+  })
+
   it('loads public tenant context and applies document metadata', async () => {
     fetchMock.mockResolvedValueOnce(
       createJsonResponse({

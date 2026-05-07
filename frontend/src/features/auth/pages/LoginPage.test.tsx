@@ -211,6 +211,17 @@ describe('LoginPage', () => {
     expect(screen.queryByText('Поддержка клиентов')).not.toBeInTheDocument()
   })
 
+  it('shows the app welcome screen while protected session is checking', () => {
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    renderAuthRoutes(['/app/chat'])
+
+    expect(
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
+  })
+
   it.each([
     ['/auth/register', 'Новый аккаунт'],
     ['/auth/password-reset/request', 'Восстановление пароля'],

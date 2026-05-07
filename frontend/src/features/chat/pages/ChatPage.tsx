@@ -35,7 +35,7 @@ const OFFLINE_RUNTIME_MESSAGE =
 
 export function ChatPage() {
   const isMountedRef = useRef(false)
-  const { refreshSession } = useAuthSession()
+  const { refreshSession, user } = useAuthSession()
   const [pageState, setPageState] = useState<ChatPageState>({
     snapshot: null,
     status: 'loading',
@@ -402,7 +402,9 @@ export function ChatPage() {
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
-        {pageState.status === 'loading' ? <ChatLoadingState /> : null}
+        {pageState.status === 'loading' ? (
+          <ChatLoadingState userName={user?.fullName} />
+        ) : null}
 
         {pageState.status === 'error' ? (
           <ChatNotReadyState

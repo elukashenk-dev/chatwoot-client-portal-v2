@@ -140,9 +140,10 @@ Exit criteria:
 
 Цель:
 
-Внимательно проверить текущий portal UI/UX и зафиксировать базовый visual/layout
-каркас до начала `MT-9` branding/admin. Branding должен настраивать уже
-принятый продуктовый интерфейс, а не строиться поверх еще спорного shell.
+Провести полный UI/UX-аудит и продуктовую переработку customer-facing PWA-чата
+до начала `MT-9` branding/admin. Branding должен настраивать уже принятый
+брендируемый продуктовый интерфейс, а не строиться поверх рабочего, но еще
+неоформленного shell.
 
 Scope:
 
@@ -150,13 +151,19 @@ Scope:
   email-code verification, password reset, отказ/ошибка доступа, loading/error
   states, app shell, chat empty state, chat with messages, attachments, voice и
   realtime states;
+- переписать customer-facing copy так, чтобы дефолты были нейтральными,
+  понятными и пригодными для разных B2B tenants;
 - проверить mobile/PWA и desktop поведение для нескольких tenants;
 - решить, какие элементы являются baseline layout и не должны меняться через
   branding;
 - решить, какие элементы станут tenant-brandable в `MT-9`: display name, logo,
-  PWA icon, colors, support copy, auth/chat header accents;
+  PWA icon, splash/loading/welcome identity, colors, support copy,
+  auth/chat header accents;
+- определить системные ограничения для branding: contrast, text length,
+  editable copy slots, locked security/validation states and layout boundaries;
 - определить набор preview screens для `MT-9` branding admin: login,
-  registration/forms, chat и PWA/app identity preview;
+  registration/forms, OTP, password reset, chat, splash и PWA/app identity
+  preview;
 - зафиксировать findings или UI polish slices до `MT-9`, если текущий shell не
   подходит как branding baseline.
 
@@ -174,6 +181,8 @@ Exit criteria:
 
 - portal UI shell принят как baseline для branding;
 - список brandable vs non-brandable элементов согласован;
+- дефолтные тексты и tenant-editable text slots определены;
+- splash/loading/welcome behavior принят как часть PWA baseline;
 - preview screens для `MT-9` определены и должны использовать реальные portal
   components, а не отдельную нарисованную копию;
 - blocker/finding список перед `MT-9` пуст или явно deferred отдельным решением.

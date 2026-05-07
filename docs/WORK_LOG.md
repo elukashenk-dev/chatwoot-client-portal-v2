@@ -38,6 +38,11 @@
 - Выполнен `MT-8R-4 Refactoring Assessment`: утвержден единственный pre-`MT-9` code slice `MT-8R-5A Password Policy Alignment` для закрытия `F-AUTH-002`; Chatwoot client cleanup отложен внутрь `MT-9`, UI findings - в `MT-8.5`, production installer - в `MT-10`.
 - Выполнен `MT-8R-5A Password Policy Alignment`: registration и password reset backend теперь используют единое правило пароля; `F-AUTH-002` закрыт и удален из `docs/Findings/`; backend targeted tests, full backend test, backend build и backend lint пройдены.
 - Выполнен `MT-8R Final Review`: открытых `must-fix-before-MT-9` code findings не осталось; remaining findings назначены на `MT-8.5`, `MT-9`, `MT-10` или future focused experiments; переход к `MT-8.5 Portal UI/UX Baseline Review` разрешен.
+- Выполнен старт `MT-8.5 Product UI Spec And Splash/Welcome Baseline`: создана спецификация branded UI-system, roadmap расширен под product UI/UX переработку, добавлены tenant bootstrap/lazy route splash и app loading/welcome screen; frontend tests/typecheck/build/lint, Prettier, `git diff --check` и root lint/code-health пройдены.
+- Закрыт `F-CH-001`: app-level backend test helper вынесен из `backend/src/app.test.ts`, targeted backend app tests, backend build/lint и root lint/code-health пройдены; finding удален из `docs/Findings/`.
+- Расширен `MT-8.5` UI/UX audit spec: добавлены screen-by-screen cleanup, brandable matrix, text limits, fallback logic, chat header/transcript/composer разбор, removal list и UI cleanup acceptance.
+- Выполнен финальный polish `MT-8.5` UI cleanup spec: уточнены content ownership, system/security-sensitive copy, visual hierarchy, branding intensity, Chat Header left/center/right layout и account enumeration-safe password reset OTP copy.
+- Уточнен `MT-8.5` UI cleanup readiness: accent color ограничен low-intensity ролью, header accent выключен по умолчанию, password reset OTP copy дополнительно смягчен, добавлен Implementation Done Checklist.
 
 ## Current Baseline
 
@@ -49,4 +54,4 @@
 
 ## Recommended Next Step
 
-- Перейти к `MT-8.5 Portal UI/UX Baseline Review`: проверить реальные customer-facing states на desktop/mobile/PWA, утвердить portal shell как branding baseline, определить brandable vs non-brandable элементы и preview screens для `MT-9`.
+- Продолжить `MT-8.5` auth copy/layout polish: password reset generic copy, duplicate registration links и first-pass auth screen hierarchy.
