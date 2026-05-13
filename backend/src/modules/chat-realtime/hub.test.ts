@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
-import { createChatRealtimeHub } from './hub.js'
+import {
+  CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
+  createChatRealtimeHub,
+} from './hub.js'
 
 const readySnapshot: ChatMessagesSnapshot = {
   hasMoreOlder: false,
@@ -53,5 +56,52 @@ describe('createChatRealtimeHub', () => {
       type: 'messages',
     })
     expect(sendTenantB).not.toHaveBeenCalled()
+  })
+
+  it('rejects subscriptions above the per user conversation limit and allows another after cleanup', () => {
+    const hub = createChatRealtimeHub()
+    const subscriptions: Array<() => void> = []
+
+    for (
+      let index = 0;
+      index < CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY;
+      index += 1
+    ) {
+      const result = hub.subscribe({
+        primaryConversationId: 101,
+        send: vi.fn(),
+        tenantId: 1,
+        userId: 7,
+      })
+
+      expect(result.status).toBe('subscribed')
+
+      if (result.status === 'subscribed') {
+        subscriptions.push(result.unsubscribe)
+      }
+    }
+
+    expect(
+      hub.subscribe({
+        primaryConversationId: 101,
+        send: vi.fn(),
+        tenantId: 1,
+        userId: 7,
+      }),
+    ).toEqual({
+      limit: CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
+      status: 'limit_exceeded',
+    })
+
+    subscriptions[0]?.()
+
+    const afterCleanup = hub.subscribe({
+      primaryConversationId: 101,
+      send: vi.fn(),
+      tenantId: 1,
+      userId: 7,
+    })
+
+    expect(afterCleanup.status).toBe('subscribed')
   })
 })

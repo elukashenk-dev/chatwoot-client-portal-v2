@@ -7,6 +7,18 @@ type RealtimeSubscription = {
   userId: number
 }
 
+export const CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY = 5
+
+type RealtimeSubscribeResult =
+  | {
+      status: 'limit_exceeded'
+      limit: number
+    }
+  | {
+      status: 'subscribed'
+      unsubscribe: () => void
+    }
+
 export type ChatRealtimeEvent =
   | {
       data: ChatMessagesSnapshot
@@ -81,15 +93,25 @@ export function createChatRealtimeHub() {
       return subscriptions.size
     },
 
-    subscribe(subscription: RealtimeSubscription) {
+    subscribe(subscription: RealtimeSubscription): RealtimeSubscribeResult {
       const key = buildSubscriptionKey(subscription)
       const subscriptions = subscriptionsByKey.get(key) ?? new Set()
+
+      if (subscriptions.size >= CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY) {
+        return {
+          limit: CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
+          status: 'limit_exceeded',
+        }
+      }
 
       subscriptions.add(subscription)
       subscriptionsByKey.set(key, subscriptions)
 
-      return () => {
-        unsubscribe(subscription)
+      return {
+        status: 'subscribed',
+        unsubscribe: () => {
+          unsubscribe(subscription)
+        },
       }
     },
   }

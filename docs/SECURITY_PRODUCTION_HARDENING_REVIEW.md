@@ -6,11 +6,16 @@
 - `mode`: read-only security and production posture review
 - `result`: no critical/high findings found
 
+Post-review update:
+
+- `2026-05-13`: `F-SSE-001` closed by adding a per tenant/user/conversation
+  realtime subscription cap and backend tests.
+
 ## Executive Summary
 
 Backend architecture is in good shape for the current dedicated one-tenant production deployment on a tenant-aware foundation. The strongest areas are backend-owned Chatwoot authority, tenant-scoped persistence, signed `HttpOnly` session cookies, origin checks on state-changing browser endpoints, Chatwoot webhook signature validation, and encrypted tenant Chatwoot secrets.
 
-The highest remaining risks are availability and production hardening rather than direct data compromise: unbounded authenticated SSE subscriptions, missing browser security headers in production, release-source drift between deployed `main` and `origin/main`, and a legacy webhook helper that can still print a webhook secret if manually used.
+The highest remaining risks are production hardening rather than direct data compromise: missing browser security headers in production, release-source drift between deployed `main` and `origin/main`, and a legacy webhook helper that can still print a webhook secret if manually used.
 
 ## Threat Model
 
@@ -45,7 +50,7 @@ Severity calibration:
 
 | Severity | Finding | Area | Summary |
 | --- | --- | --- | --- |
-| medium | `F-SSE-001` | SSE realtime | Authenticated users can open unbounded concurrent SSE subscriptions for the same chat. |
+| medium | `F-SSE-001` | SSE realtime | Closed after review: realtime subscriptions are capped per tenant/user/conversation. |
 | medium | `F-MT-004` | MT-9 admin auth | Tenant admin verification still requires the planned separate encrypted admin-verification token boundary before MT-9 admin login. |
 | low | `F-PROD-001` | production headers | Current production responses lack HSTS, CSP and Permissions-Policy. |
 | low | `F-PROD-002` | release control | Production deployed commit is clean locally but not present on `origin/main`. |
@@ -76,7 +81,7 @@ Severity calibration:
 
 Current production can continue without a critical/high blocker. MT-9 can start only if its first backend slice closes or explicitly gates `F-MT-004`: tenant admin verification must use a separate encrypted per-tenant admin-verification token and must not reuse the runtime Chatwoot token as implicit admin authority.
 
-`F-SSE-001` is not specific to MT-9, but should be prioritized before heavier production usage because tenant admins and normal users will increase concurrent browser sessions.
+`F-SSE-001` has been closed and no longer blocks heavier browser usage.
 
 ## Test And Coverage Notes
 
@@ -84,7 +89,7 @@ Existing automated coverage is strong around tenant-aware auth, chat runtime, Ch
 
 Recommended additional tests:
 
-- SSE cap behavior and disconnect cleanup for `F-SSE-001`;
+- SSE cap behavior and disconnect cleanup are covered by backend chat-realtime tests;
 - production header smoke check after `F-PROD-001`;
 - script output redaction test for `F-SCRIPT-001`;
 - MT-9 admin-token boundary tests before tenant admin implementation.
@@ -99,4 +104,4 @@ Recommended additional tests:
 
 ## Recommendation
 
-No critical/high security blocker was found. Current production hardening is acceptable for the dedicated one-tenant deployment, with the findings above tracked before broader usage. For MT-9, close `F-MT-004` first, then handle `F-SSE-001` and the low production hardening backlog in priority order.
+No critical/high security blocker was found. Current production hardening is acceptable for the dedicated one-tenant deployment, with the findings above tracked before broader usage. For MT-9, close `F-MT-004` first, then handle the low production hardening backlog in priority order.

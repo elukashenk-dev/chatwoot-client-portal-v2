@@ -71,6 +71,34 @@ export function registerChatRealtimeRoutes(
       )
     }
 
+    const subscriptionResult = realtimeHub.subscribe({
+      primaryConversationId: context.primaryConversation.id,
+      send: (event) => {
+        writeSseEvent(reply.raw, event)
+      },
+      tenantId: tenant.id,
+      userId: user.id,
+    })
+
+    if (subscriptionResult.status === 'limit_exceeded') {
+      throw new ApiError(
+        429,
+        'CHAT_REALTIME_SUBSCRIPTION_LIMIT_EXCEEDED',
+        'Открыто слишком много realtime-подключений к этому чату.',
+      )
+    }
+
+    let keepaliveTimer: NodeJS.Timeout | null = null
+    const cleanup = () => {
+      if (keepaliveTimer) {
+        clearInterval(keepaliveTimer)
+      }
+
+      subscriptionResult.unsubscribe()
+    }
+
+    request.raw.on('close', cleanup)
+
     reply.hijack()
     reply.raw.writeHead(200, {
       'Cache-Control': 'no-cache, no-transform',
@@ -80,21 +108,8 @@ export function registerChatRealtimeRoutes(
     })
     reply.raw.write(': connected\n\n')
 
-    const unsubscribe = realtimeHub.subscribe({
-      primaryConversationId: context.primaryConversation.id,
-      send: (event) => {
-        writeSseEvent(reply.raw, event)
-      },
-      tenantId: tenant.id,
-      userId: user.id,
-    })
-    const keepaliveTimer = setInterval(() => {
+    keepaliveTimer = setInterval(() => {
       reply.raw.write(': keepalive\n\n')
     }, 25_000)
-
-    request.raw.on('close', () => {
-      clearInterval(keepaliveTimer)
-      unsubscribe()
-    })
   })
 }

@@ -122,6 +122,11 @@
   `F-SSE-001`, `F-PROD-001`, `F-PROD-002` и `F-SCRIPT-001`; backend/frontend
   проверки, `code-health`, production read-only checks и `git diff --check`
   прошли.
+- `F-SSE-001` закрыт: chat realtime hub получил лимит 5 SSE subscriptions на
+  tenant/user/conversation, `/api/chat/realtime` возвращает controlled `429` до
+  открытия SSE stream при превышении лимита, cleanup по disconnect сохранен;
+  backend chat-realtime tests, backend typecheck/lint/full tests,
+  `code-health` и `git diff --check` прошли.
 
 ## Current Baseline
 
@@ -140,4 +145,4 @@
 ## Recommended Next Step
 
 - Начинать `MT-9` только с закрытия или явного gating решения по `F-MT-004`;
-  следующим production-hardening follow-up держать `F-SSE-001`.
+  следующим production-hardening follow-up держать `F-PROD-001`.
