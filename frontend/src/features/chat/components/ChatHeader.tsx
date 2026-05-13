@@ -107,7 +107,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
             aria-label={
               isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
             }
-            className="inline-flex h-10 w-10 items-center justify-center rounded-[0.7rem] text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={() => {
               setIsNavMenuOpen((currentValue) => !currentValue)
               setIsChatMenuOpen(false)
@@ -120,7 +120,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
 
           {isNavMenuOpen ? (
             <div
-              className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-[0.8rem] border border-slate-200/80 bg-white/[0.98] p-1.5 text-sm text-slate-700 shadow-[0_14px_32px_rgb(15_45_87_/_0.14)] backdrop-blur"
+              className="portal-menu-surface absolute left-0 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-chat-nav-menu border border-slate-200/80 p-1.5 text-sm text-slate-700 shadow-chat-nav-menu"
               role="menu"
             >
               <button
@@ -188,7 +188,7 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
 
           {isChatMenuOpen ? (
             <div
-              className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[0.85rem] border border-slate-200/90 bg-white/[0.98] p-2 text-slate-700 shadow-[0_16px_36px_rgb(15_45_87_/_0.16)] backdrop-blur"
+              className="portal-menu-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-chat-menu border border-slate-200/90 p-2 text-slate-700 shadow-chat-menu"
               role="menu"
             >
               <ChatMenuItem

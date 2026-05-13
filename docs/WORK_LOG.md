@@ -52,6 +52,9 @@
 - Frontend review cleanup Task 2 закрыт: auth field/link style variants
   вынесены в shared UI без изменения UX; focused auth tests, frontend
   typecheck/tests/build, root lint и `git diff --check` прошли.
+- Frontend review cleanup Task 4 закрыт: повторяемые Tailwind radius/shadow/text
+  значения вынесены в CSS-first tokens/utilities без redesign; frontend
+  typecheck/tests/build, root lint и `git diff --check` прошли.
 
 ## MT-8.5 UI/UX Baseline
 
@@ -108,5 +111,4 @@
 
 ## Recommended Next Step
 
-- После checkpoint commit для Task 2 перейти к Task 3:
-  Chat Menu Accessibility, без визуального redesign меню.
+- Вернуться к Task 3: Chat Menu Accessibility, без визуального redesign меню.

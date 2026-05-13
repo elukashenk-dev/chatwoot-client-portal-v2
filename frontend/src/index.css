@@ -15,6 +15,22 @@
   --color-chat-incoming: #f7f7f7;
   --color-chat-incoming-border: #c0c0c029;
   --color-chat-outgoing: #465a72;
+  --radius-auth-control: 0.6rem;
+  --radius-auth-link: 0.4rem;
+  --radius-chat-control: 0.7rem;
+  --radius-chat-menu: 0.85rem;
+  --radius-chat-nav-menu: 0.8rem;
+  --shadow-auth-filled: 0 6px 14px rgb(15 45 87 / 0.06);
+  --shadow-chat-menu: 0 16px 36px rgb(15 45 87 / 0.16);
+  --shadow-chat-nav-menu: 0 14px 32px rgb(15 45 87 / 0.14);
+  --text-chat-message: 0.9375rem;
+  --text-chat-message--line-height: 1.45;
+}
+
+@utility portal-menu-surface {
+  background: rgb(255 255 255 / 0.98);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 :root {

@@ -128,7 +128,7 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.3rem]')
     expect(getBubble(container, 1)).toHaveClass(
       'chat-outgoing-surface',
-      'leading-[1.45]',
+      'text-chat-message',
       'text-white',
     )
     expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
@@ -221,7 +221,7 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).toHaveClass(
       'border-chat-incoming-border',
       'chat-incoming-surface',
-      'leading-[1.45]',
+      'text-chat-message',
       'text-slate-700',
     )
     expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
