@@ -10,12 +10,19 @@ Post-review update:
 
 - `2026-05-13`: `F-SSE-001` closed by adding a per tenant/user/conversation
   realtime subscription cap and backend tests.
+- `2026-05-13`: repo-side `F-PROD-001` fix prepared by adding HSTS, CSP and
+  Permissions-Policy to the production Caddyfile plus a `code-health`
+  regression check; finding remains open until production deploy verification.
 
 ## Executive Summary
 
 Backend architecture is in good shape for the current dedicated one-tenant production deployment on a tenant-aware foundation. The strongest areas are backend-owned Chatwoot authority, tenant-scoped persistence, signed `HttpOnly` session cookies, origin checks on state-changing browser endpoints, Chatwoot webhook signature validation, and encrypted tenant Chatwoot secrets.
 
-The highest remaining risks are production hardening rather than direct data compromise: missing browser security headers in production, release-source drift between deployed `main` and `origin/main`, and a legacy webhook helper that can still print a webhook secret if manually used.
+The highest remaining risks are production hardening rather than direct data
+compromise: production deployment/verification for the prepared security
+headers fix, release-source drift between deployed `main` and `origin/main`, a
+legacy webhook helper that can still print a webhook secret if manually used,
+and authenticated chat send abuse tracked separately after this review.
 
 ## Threat Model
 
@@ -48,15 +55,15 @@ Severity calibration:
 
 ## Validated Findings
 
-| Severity | Finding | Area | Summary |
-| --- | --- | --- | --- |
-| medium | `F-SSE-001` | SSE realtime | Closed after review: realtime subscriptions are capped per tenant/user/conversation. |
-| medium | `F-MT-004` | MT-9 admin auth | Tenant admin verification still requires the planned separate encrypted admin-verification token boundary before MT-9 admin login. |
-| low | `F-PROD-001` | production headers | Current production responses lack HSTS, CSP and Permissions-Policy. |
-| low | `F-PROD-002` | release control | Production deployed commit is clean locally but not present on `origin/main`. |
-| low | `F-SCRIPT-001` | scripts/secrets | Legacy global webhook helper can print plaintext webhook secret if manually run in installer-output mode. |
-| low | `F-AUTH-001` | auth rate limiting | In-memory auth rate limit is acceptable for one backend process, not multi-instance global limiting. |
-| low | `F-CHATWOOT-001` | Chatwoot requests | Chatwoot request timeout is fixed at 15 seconds, not env-tunable. |
+| Severity | Finding          | Area               | Summary                                                                                                                            |
+| -------- | ---------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| medium   | `F-SSE-001`      | SSE realtime       | Closed after review: realtime subscriptions are capped per tenant/user/conversation.                                               |
+| medium   | `F-MT-004`       | MT-9 admin auth    | Tenant admin verification still requires the planned separate encrypted admin-verification token boundary before MT-9 admin login. |
+| low      | `F-PROD-001`     | production headers | Repo-side fix prepared after review; production deploy and `curl -I` verification still pending.                                   |
+| low      | `F-PROD-002`     | release control    | Production deployed commit is clean locally but not present on `origin/main`.                                                      |
+| low      | `F-SCRIPT-001`   | scripts/secrets    | Legacy global webhook helper can print plaintext webhook secret if manually run in installer-output mode.                          |
+| low      | `F-AUTH-001`     | auth rate limiting | In-memory auth rate limit is acceptable for one backend process, not multi-instance global limiting.                               |
+| low      | `F-CHATWOOT-001` | Chatwoot requests  | Chatwoot request timeout is fixed at 15 seconds, not env-tunable.                                                                  |
 
 ## Suppressed Candidates
 
@@ -72,7 +79,10 @@ Severity calibration:
 - `https://chat.provgroup.ru/api`: `queue_services=ok`, `data_services=ok`, Chatwoot `4.13.0`.
 - `https://lk.provgroup.ru/api/health`: production health `ok`.
 - `https://lk.provgroup.ru/api/tenant`: tenant `provgroup`.
-- `https://lk.provgroup.ru/auth/login`: HTTP 200, `Cache-Control: no-store`, `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options`; missing HSTS/CSP/Permissions-Policy.
+- `https://lk.provgroup.ru/auth/login`: HTTP 200, `Cache-Control: no-store`,
+  `Referrer-Policy`, `X-Content-Type-Options`, `X-Frame-Options`; at review
+  time HSTS/CSP/Permissions-Policy were missing and later fixed in the
+  production Caddyfile.
 - Production `DEPLOY_SOURCE.txt`: clean deploy from `main@7bf94fe9159c9bc7a05fc0ffd79863f3cb01a71a`.
 - Production compose: `portal-backend` and `portal-db` healthy; `portal-web` running; backend and Postgres are not publicly bound by compose.
 - Host nginx: public TLS terminates at nginx and proxies to `127.0.0.1:8088`.

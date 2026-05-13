@@ -97,6 +97,25 @@ function formatFailureMessage(failure) {
   return `- ${failure.relativePath}: ${failure.lineCount} lines (${label} ${failure.limit}, +${overshoot})`
 }
 
+async function checkProductionSecurityHeaders(failures) {
+  const caddyfilePath = 'infra/production/Caddyfile'
+  const caddyfile = await readFile(path.join(repoRoot, caddyfilePath), 'utf8')
+  const requiredHeaders = [
+    'Content-Security-Policy',
+    'Permissions-Policy',
+    'Strict-Transport-Security',
+  ]
+
+  for (const headerName of requiredHeaders) {
+    if (!caddyfile.includes(headerName)) {
+      failures.push({
+        relativePath: caddyfilePath,
+        message: `missing production security header: ${headerName}`,
+      })
+    }
+  }
+}
+
 async function main() {
   const relativePaths = (
     await Promise.all(codeHealthConfig.roots.map((root) => listFiles(root)))
@@ -126,9 +145,21 @@ async function main() {
     }
   }
 
+  await checkProductionSecurityHeaders(failures)
+
   if (failures.length > 0) {
     console.error('Code health check failed.\n')
-    console.error(failures.map(formatFailureMessage).join('\n\n'))
+    console.error(
+      failures
+        .map((failure) => {
+          if ('message' in failure) {
+            return `- ${failure.relativePath}: ${failure.message}`
+          }
+
+          return formatFailureMessage(failure)
+        })
+        .join('\n\n'),
+    )
     process.exitCode = 1
     return
   }
