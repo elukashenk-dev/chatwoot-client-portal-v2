@@ -15,6 +15,9 @@ Post-review update:
   verifying public response headers.
 - `2026-05-13`: `F-SCRIPT-001` closed by removing the legacy global account
   webhook helper and adding a `code-health` guard against reintroducing it.
+- `2026-05-13`: `F-CHATWOOT-001` closed by adding validated
+  `CHATWOOT_REQUEST_TIMEOUT_MS` configuration and wiring it into runtime
+  Chatwoot client creation.
 
 ## Executive Summary
 
@@ -63,7 +66,7 @@ Severity calibration:
 | low      | `F-PROD-002`     | release control    | Production deployed commit is clean locally but not present on `origin/main`.                                                      |
 | low      | `F-SCRIPT-001`   | scripts/secrets    | Closed after review: legacy global webhook helper was removed and guarded against reintroduction by `code-health`.                 |
 | low      | `F-AUTH-001`     | auth rate limiting | In-memory auth rate limit is acceptable for one backend process, not multi-instance global limiting.                               |
-| low      | `F-CHATWOOT-001` | Chatwoot requests  | Chatwoot request timeout is fixed at 15 seconds, not env-tunable.                                                                  |
+| low      | `F-CHATWOOT-001` | Chatwoot requests  | Closed after review: request timeout is configurable through validated `CHATWOOT_REQUEST_TIMEOUT_MS`.                              |
 
 ## Suppressed Candidates
 

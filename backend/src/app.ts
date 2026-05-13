@@ -42,11 +42,27 @@ import {
 import { createTenantsService } from './modules/tenants/service.js'
 
 type BuildAppOptions = {
+  chatwootFetchFn?: typeof fetch
   database: DatabaseClient
   env: AppEnv
 }
 
-export function buildApp({ database, env }: BuildAppOptions) {
+type RuntimeChatwootClientFactoryOptions = {
+  chatwootFetchFn?: typeof fetch | undefined
+  env: Pick<AppEnv, 'CHATWOOT_REQUEST_TIMEOUT_MS'>
+}
+
+export function createRuntimeChatwootClientFactory({
+  chatwootFetchFn,
+  env,
+}: RuntimeChatwootClientFactoryOptions) {
+  return createChatwootClientFactory({
+    ...(chatwootFetchFn ? { fetchFn: chatwootFetchFn } : {}),
+    requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
+  })
+}
+
+export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   const app = Fastify({
     logger:
       env.NODE_ENV === 'test'
@@ -80,7 +96,10 @@ export function buildApp({ database, env }: BuildAppOptions) {
     db: database.db,
     env,
   })
-  const chatwootClientFactory = createChatwootClientFactory()
+  const chatwootClientFactory = createRuntimeChatwootClientFactory({
+    chatwootFetchFn,
+    env,
+  })
   const chatRealtimeHub = createChatRealtimeHub()
   const tenantsService = createTenantsService({
     defaultTenantSlug: env.DEFAULT_TENANT_SLUG,

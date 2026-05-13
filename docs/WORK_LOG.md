@@ -112,10 +112,8 @@
   requests получили `AbortController` timeout helper с controlled unavailable
   errors; focused Chatwoot client/app tests, backend typecheck/lint/full test
   suite, code-health и `git diff --check` прошли.
-- Backend follow-up findings зафиксированы как deferred low risks:
-  `F-AUTH-001` для shared-store rate limiting перед multi-instance deployment и
-  `F-CHATWOOT-001` для env-configurable Chatwoot request timeout при production
-  tuning.
+- Backend follow-up finding `F-AUTH-001` зафиксирован как deferred low risk для
+  shared-store rate limiting перед multi-instance deployment.
 - Security & Production Hardening Review для `main@7bf94fe` и production
   `lk.provgroup.ru` завершен: high/critical findings не найдено, создан
   `docs/SECURITY_PRODUCTION_HARDENING_REVIEW.md`, добавлены actionable findings
@@ -136,6 +134,11 @@
   печатать raw webhook secret и писать секрет в parent `.env`, удален;
   tenant-aware helper больше не зависит от legacy core, `code-health` запрещает
   reintroduce старых helper-файлов.
+- `F-CHATWOOT-001` закрыт: Chatwoot outbound request timeout вынесен в
+  валидируемый `CHATWOOT_REQUEST_TIMEOUT_MS` env setting с текущим 15s baseline
+  в env examples; app передает настройку в Chatwoot client factory, focused
+  env/app tests, backend typecheck/lint/full tests, root lint, `code-health` и
+  `git diff --check` прошли.
 
 ## Current Baseline
 
