@@ -7,6 +7,12 @@ import {
 } from './errors.js'
 import { mapMessage } from './messagePayload.js'
 import type { ChatwootMessage, ChatwootMessagesPage } from './messagePayload.js'
+import {
+  createChatwootFetch,
+  normalizeChatwootRequestTimeoutMs,
+  readChatwootJson,
+  requestChatwootJson,
+} from './request.js'
 
 export {
   ChatwootClientConfigurationError,
@@ -136,10 +142,12 @@ type CreateChatwootClientOptions = {
   config?: ChatwootClientConfig | null | undefined
   env?: ChatwootEnvConfig | undefined
   fetchFn?: typeof fetch
+  requestTimeoutMs?: number | undefined
 }
 
 type CreateChatwootClientFactoryOptions = {
   fetchFn?: typeof fetch
+  requestTimeoutMs?: number | undefined
 }
 
 function resolveConfigFromEnv(env: ChatwootEnvConfig) {
@@ -498,11 +506,14 @@ export function createChatwootClient({
   config: initialConfig,
   env,
   fetchFn = fetch,
+  requestTimeoutMs: inputRequestTimeoutMs,
 }: CreateChatwootClientOptions) {
   const config = resolveInitialConfig({
     config: initialConfig,
     env,
   })
+  const requestTimeoutMs = normalizeChatwootRequestTimeoutMs(inputRequestTimeoutMs)
+  const fetchChatwoot = createChatwootFetch({ fetchFn, requestTimeoutMs })
 
   function assertConfigured(): {
     accountId: number
@@ -534,35 +545,14 @@ export function createChatwootClient({
     } = {},
   ): Promise<unknown> {
     const resolvedConfig = assertConfigured()
-    let response: Response
-
-    try {
-      response = await fetchFn(requestUrl, {
-        headers: {
-          Accept: 'application/json',
-          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-          api_access_token: resolvedConfig.apiAccessToken,
-        },
-        method,
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      })
-    } catch {
-      throw new ChatwootClientRequestError(unavailableMessage)
-    }
-
-    if (!response.ok) {
-      throw new ChatwootClientRequestError(
-        `${unavailableMessage} Status: ${response.status}.`,
-      )
-    }
-
-    try {
-      return await response.json()
-    } catch {
-      throw new ChatwootClientRequestError(
-        'Chatwoot returned an invalid JSON response.',
-      )
-    }
+    return requestChatwootJson({
+      apiAccessToken: resolvedConfig.apiAccessToken,
+      body,
+      fetchChatwoot,
+      method,
+      requestUrl,
+      unavailableMessage,
+    })
   }
 
   async function fetchContactDetails(contactId: number) {
@@ -762,49 +752,46 @@ export function createChatwootClient({
       requestUrl.searchParams.set('before', String(beforeMessageId))
     }
 
-    let response: Response
-
-    try {
-      response = await fetchFn(requestUrl, {
+    const request = await fetchChatwoot(
+      requestUrl,
+      'Chatwoot messages lookup is unavailable.',
+      {
         headers: {
           Accept: 'application/json',
           api_access_token: resolvedConfig.apiAccessToken,
         },
         method: 'GET',
-      })
-    } catch {
-      throw new ChatwootClientRequestError(
-        'Chatwoot messages lookup is unavailable.',
-      )
-    }
-
-    if (response.status === 404) {
-      return null
-    }
-
-    if (!response.ok) {
-      throw new ChatwootClientRequestError(
-        `Chatwoot messages lookup failed with status ${response.status}.`,
-      )
-    }
-
-    let payload: unknown
+      },
+    )
+    const { response } = request
 
     try {
-      payload = await response.json()
-    } catch {
-      throw new ChatwootClientRequestError(
-        'Chatwoot messages lookup returned invalid JSON.',
-      )
-    }
+      if (response.status === 404) {
+        return null
+      }
 
-    return sortMessages(
-      parseMessagesResponse(payload).payload.map((message) =>
-        mapMessage(message, {
-          baseUrl: resolvedConfig.baseUrl,
-        }),
-      ),
-    )
+      if (!response.ok) {
+        throw new ChatwootClientRequestError(
+          `Chatwoot messages lookup failed with status ${response.status}.`,
+        )
+      }
+
+      const payload = await readChatwootJson({
+        invalidJsonMessage: 'Chatwoot messages lookup returned invalid JSON.',
+        request,
+        unavailableMessage: 'Chatwoot messages lookup is unavailable.',
+      })
+
+      return sortMessages(
+        parseMessagesResponse(payload).payload.map((message) =>
+          mapMessage(message, {
+            baseUrl: resolvedConfig.baseUrl,
+          }),
+        ),
+      )
+    } finally {
+      request.clearTimeout()
+    }
   }
 
   function createAttachmentBlob(attachment: ChatwootAttachmentUpload) {
@@ -832,10 +819,10 @@ export function createChatwootClient({
       resolvedConfig.baseUrl,
     )
 
-    let response: Response
-
-    try {
-      response = await fetchFn(requestUrl, {
+    const request = await fetchChatwoot(
+      requestUrl,
+      'Chatwoot message send is unavailable.',
+      {
         body: JSON.stringify({
           content,
           content_attributes: replyToMessageId
@@ -852,35 +839,42 @@ export function createChatwootClient({
           api_access_token: resolvedConfig.apiAccessToken,
         },
         method: 'POST',
-      })
-    } catch {
-      throw new ChatwootClientRequestError(
-        'Chatwoot message send is unavailable.',
-      )
-    }
-
-    if (response.status === 404) {
-      return null
-    }
-
-    if (!response.ok) {
-      throw new ChatwootClientRequestError(
-        `Chatwoot message send failed with status ${response.status}.`,
-      )
-    }
+      },
+    )
+    const { response } = request
 
     try {
-      return mapMessage(await response.json(), {
-        baseUrl: resolvedConfig.baseUrl,
-      })
-    } catch (error) {
-      if (error instanceof ChatwootClientRequestError) {
-        throw error
+      if (response.status === 404) {
+        return null
       }
 
-      throw new ChatwootClientRequestError(
-        'Chatwoot message send returned invalid JSON.',
-      )
+      if (!response.ok) {
+        throw new ChatwootClientRequestError(
+          `Chatwoot message send failed with status ${response.status}.`,
+        )
+      }
+
+      const payload = await readChatwootJson({
+        invalidJsonMessage: 'Chatwoot message send returned invalid JSON.',
+        request,
+        unavailableMessage: 'Chatwoot message send is unavailable.',
+      })
+
+      try {
+        return mapMessage(payload, {
+          baseUrl: resolvedConfig.baseUrl,
+        })
+      } catch (error) {
+        if (error instanceof ChatwootClientRequestError) {
+          throw error
+        }
+
+        throw new ChatwootClientRequestError(
+          'Chatwoot message send returned invalid JSON.',
+        )
+      }
+    } finally {
+      request.clearTimeout()
     }
   }
 
@@ -923,45 +917,52 @@ export function createChatwootClient({
       attachment.fileName,
     )
 
-    let response: Response
-
-    try {
-      response = await fetchFn(requestUrl, {
+    const request = await fetchChatwoot(
+      requestUrl,
+      'Chatwoot attachment send is unavailable.',
+      {
         body: formData,
         headers: {
           Accept: 'application/json',
           api_access_token: resolvedConfig.apiAccessToken,
         },
         method: 'POST',
-      })
-    } catch {
-      throw new ChatwootClientRequestError(
-        'Chatwoot attachment send is unavailable.',
-      )
-    }
-
-    if (response.status === 404) {
-      return null
-    }
-
-    if (!response.ok) {
-      throw new ChatwootClientRequestError(
-        `Chatwoot attachment send failed with status ${response.status}.`,
-      )
-    }
+      },
+    )
+    const { response } = request
 
     try {
-      return mapMessage(await response.json(), {
-        baseUrl: resolvedConfig.baseUrl,
-      })
-    } catch (error) {
-      if (error instanceof ChatwootClientRequestError) {
-        throw error
+      if (response.status === 404) {
+        return null
       }
 
-      throw new ChatwootClientRequestError(
-        'Chatwoot attachment send returned invalid JSON.',
-      )
+      if (!response.ok) {
+        throw new ChatwootClientRequestError(
+          `Chatwoot attachment send failed with status ${response.status}.`,
+        )
+      }
+
+      const payload = await readChatwootJson({
+        invalidJsonMessage: 'Chatwoot attachment send returned invalid JSON.',
+        request,
+        unavailableMessage: 'Chatwoot attachment send is unavailable.',
+      })
+
+      try {
+        return mapMessage(payload, {
+          baseUrl: resolvedConfig.baseUrl,
+        })
+      } catch (error) {
+        if (error instanceof ChatwootClientRequestError) {
+          throw error
+        }
+
+        throw new ChatwootClientRequestError(
+          'Chatwoot attachment send returned invalid JSON.',
+        )
+      }
+    } finally {
+      request.clearTimeout()
     }
   }
 
@@ -1630,12 +1631,14 @@ export type ChatwootClient = ReturnType<typeof createChatwootClient>
 
 export function createChatwootClientFactory({
   fetchFn = fetch,
+  requestTimeoutMs,
 }: CreateChatwootClientFactoryOptions = {}) {
   return {
     forTenant(config: ChatwootClientConfig) {
       return createChatwootClient({
         config,
         fetchFn,
+        requestTimeoutMs,
       })
     },
   }

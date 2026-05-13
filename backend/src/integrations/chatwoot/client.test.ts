@@ -2,6 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createChatwootClient, createChatwootClientFactory } from './client.js'
 
+const testChatwootEnv = {
+  CHATWOOT_ACCOUNT_ID: 3,
+  CHATWOOT_API_ACCESS_TOKEN: 'token',
+  CHATWOOT_BASE_URL: 'http://127.0.0.1:3000',
+  CHATWOOT_PORTAL_INBOX_ID: 9,
+}
+
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -12,6 +19,165 @@ function createJsonResponse(body: unknown, status = 200) {
 }
 
 describe('createChatwootClient', () => {
+  it('aborts slow Chatwoot JSON requests after the configured timeout', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const fetchFn = vi.fn<typeof fetch>((_url, options) => {
+        const signal = options?.signal
+
+        if (!(signal instanceof AbortSignal)) {
+          return Promise.resolve(
+            createJsonResponse({
+              payload: [],
+            }),
+          )
+        }
+
+        return new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(signal.reason ?? new Error('Request aborted.')),
+            { once: true },
+          )
+        })
+      })
+      const client = createChatwootClient({
+        env: testChatwootEnv,
+        fetchFn,
+        requestTimeoutMs: 25,
+      })
+
+      const lookup = client.findContactByEmail('user@example.com')
+      const lookupExpectation = expect(lookup).rejects.toMatchObject({
+        message: 'Chatwoot contact search is unavailable.',
+        name: 'ChatwootClientRequestError',
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await lookupExpectation
+
+      const signal = fetchFn.mock.calls[0]?.[1]?.signal
+
+      expect(signal).toBeInstanceOf(AbortSignal)
+      expect(signal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts slow Chatwoot message send requests after the configured timeout', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const fetchFn = vi.fn<typeof fetch>((_url, options) => {
+        const signal = options?.signal
+
+        if (!(signal instanceof AbortSignal)) {
+          return Promise.resolve(
+            createJsonResponse({
+              attachments: [],
+              content: 'Portal text',
+              content_type: 'text',
+              created_at: 1_776_000_010,
+              id: 501,
+              message_type: 0,
+              private: false,
+              sender: {
+                id: 7,
+                name: 'Portal User',
+                type: 'contact',
+              },
+              status: 'sent',
+            }),
+          )
+        }
+
+        return new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => reject(signal.reason ?? new Error('Request aborted.')),
+            { once: true },
+          )
+        })
+      })
+      const client = createChatwootClient({
+        env: testChatwootEnv,
+        fetchFn,
+        requestTimeoutMs: 25,
+      })
+
+      const send = client.createConversationIncomingMessage({
+        content: 'Portal text',
+        conversationId: 101,
+      })
+      const sendExpectation = expect(send).rejects.toMatchObject({
+        message: 'Chatwoot message send is unavailable.',
+        name: 'ChatwootClientRequestError',
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await sendExpectation
+
+      const signal = fetchFn.mock.calls[0]?.[1]?.signal
+
+      expect(signal).toBeInstanceOf(AbortSignal)
+      expect(signal?.aborted).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the Chatwoot timeout active while reading JSON response bodies', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const fetchFn = vi.fn<typeof fetch>((_url, options) => {
+        const signal = options?.signal
+
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            new Promise<unknown>((resolve, reject) => {
+              if (signal instanceof AbortSignal) {
+                signal.addEventListener(
+                  'abort',
+                  () => reject(signal.reason ?? new Error('Request aborted.')),
+                  { once: true },
+                )
+              }
+
+              setTimeout(
+                () =>
+                  resolve({
+                    payload: [],
+                  }),
+                1000,
+              )
+            }),
+        } as Response)
+      })
+      const client = createChatwootClient({
+        env: testChatwootEnv,
+        fetchFn,
+        requestTimeoutMs: 25,
+      })
+
+      const lookup = client.findContactByEmail('user@example.com')
+      const lookupExpectation = expect(lookup).rejects.toMatchObject({
+        message: 'Chatwoot contact search is unavailable.',
+        name: 'ChatwootClientRequestError',
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await vi.advanceTimersByTimeAsync(1000)
+      await lookupExpectation
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('creates clients from explicit tenant Chatwoot config instead of global env authority', async () => {
     const fetchFn = vi
       .fn<typeof fetch>()

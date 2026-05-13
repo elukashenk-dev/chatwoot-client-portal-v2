@@ -542,7 +542,6 @@ describe('buildApp', () => {
 
   it('rate limits repeated login attempts for the same tenant client', async () => {
     const responses = []
-
     for (let attempt = 0; attempt < 6; attempt += 1) {
       responses.push(
         await app.inject({
@@ -559,9 +558,9 @@ describe('buildApp', () => {
       )
     }
 
-    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
-      [401, 401, 401, 401, 401],
-    )
+    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual([
+      401, 401, 401, 401, 401,
+    ])
     expect(responses[5]?.statusCode).toBe(429)
     expect(responses[5]?.headers['retry-after']).toBeDefined()
     expect(responses[5]?.json()).toEqual({
@@ -574,7 +573,6 @@ describe('buildApp', () => {
 
   it('rate limits repeated registration verification attempts', async () => {
     const responses = []
-
     for (let attempt = 0; attempt < 6; attempt += 1) {
       responses.push(
         await app.inject({
@@ -605,7 +603,6 @@ describe('buildApp', () => {
 
   it('rate limits repeated password reset requests', async () => {
     const responses = []
-
     for (let attempt = 0; attempt < 6; attempt += 1) {
       responses.push(
         await app.inject({

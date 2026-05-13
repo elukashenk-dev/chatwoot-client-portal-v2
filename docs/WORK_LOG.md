@@ -108,6 +108,10 @@
   password reset POST endpoints ограничены по tenant/host + IP + route group;
   targeted app test, backend typecheck, lint, full test suite и
   `git diff --check` прошли.
+- Backend Chatwoot outbound timeout fix закрыт: Chatwoot API fetch/body-read
+  requests получили `AbortController` timeout helper с controlled unavailable
+  errors; focused Chatwoot client/app tests, backend typecheck/lint/full test
+  suite, code-health и `git diff --check` прошли.
 
 ## Current Baseline
 
@@ -125,4 +129,4 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit: `fix: rate limit public auth endpoints`.
+- Сделать checkpoint commit: `fix: add chatwoot request timeouts`.
