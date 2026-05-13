@@ -1,0 +1,40 @@
+import type { RefObject } from 'react'
+
+type ComposerTextareaProps = {
+  disabled: boolean
+  draft: string
+  onDraftChange: (value: string) => void
+  onSubmit: () => void
+  placeholder: string
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+}
+
+export function ComposerTextarea({
+  disabled,
+  draft,
+  onDraftChange,
+  onSubmit,
+  placeholder,
+  textareaRef,
+}: ComposerTextareaProps) {
+  return (
+    <textarea
+      aria-label="Сообщение"
+      className="max-h-32 min-h-10 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
+      disabled={disabled}
+      onChange={(event) => {
+        onDraftChange(event.target.value)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault()
+          onSubmit()
+        }
+      }}
+      placeholder={placeholder}
+      ref={textareaRef}
+      rows={1}
+      value={draft}
+    />
+  )
+}

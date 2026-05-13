@@ -60,6 +60,11 @@
   message action trigger без изменения chat bubble baseline; finding
   `F-CHAT-UI-002` закрыт, targeted chat tests, frontend typecheck/tests/build,
   root lint и `git diff --check` прошли.
+- Frontend review cleanup Task 5 закрыт узким composer split: textarea rendering
+  и textarea ref/resize/focus behavior вынесены в `ComposerTextarea` и
+  `useComposerTextarea`; `ChatPage`, `MessageBubble`, send/attachment/voice
+  orchestration и визуальный baseline не менялись; focused composer tests,
+  frontend typecheck/tests/build, root lint и `git diff --check` прошли.
 
 ## MT-8.5 UI/UX Baseline
 
@@ -116,5 +121,5 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для Task 3:
-  `fix: improve chat menu keyboard accessibility`.
+- Сделать checkpoint commit для Task 5:
+  `refactor: split chat composer responsibilities`.

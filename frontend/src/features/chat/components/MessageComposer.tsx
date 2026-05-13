@@ -10,19 +10,20 @@ import {
 import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
 import { ComposerSideControl } from './message-composer/ComposerSideControl'
+import { ComposerTextarea } from './message-composer/ComposerTextarea'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
 import type {
   MessageComposerReplyTarget,
   SendAttachmentInput,
   SendMessageInput,
 } from './message-composer/types'
+import { useComposerTextarea } from './message-composer/useComposerTextarea'
 import { useVisualViewportKeyboardOpen } from './message-composer/useVisualViewportKeyboardOpen'
 import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
 import {
   createAttachmentSignature,
   createClientMessageKey,
   formatRecordingDuration,
-  resizeComposerTextarea,
 } from './message-composer/utils'
 
 export type { MessageComposerReplyTarget } from './message-composer/types'
@@ -54,7 +55,7 @@ export function MessageComposer({
   )
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const { focusTextarea, resizeTextarea, textareaRef } = useComposerTextarea()
   const pendingAttachmentClientMessageKeyRef = useRef<string | null>(null)
   const pendingAttachmentContentRef = useRef<string | null>(null)
   const pendingAttachmentReplyToMessageIdRef = useRef<number | null>(null)
@@ -117,20 +118,16 @@ export function MessageComposer({
   }, [replyToMessageId])
 
   useLayoutEffect(() => {
-    if (!textareaRef.current) {
-      return
-    }
-
-    resizeComposerTextarea(textareaRef.current)
-  }, [draft])
+    resizeTextarea()
+  }, [draft, resizeTextarea])
 
   useLayoutEffect(() => {
     if (!replyTarget || disabled || isSending) {
       return
     }
 
-    textareaRef.current?.focus()
-  }, [disabled, isSending, replyTarget])
+    focusTextarea()
+  }, [disabled, focusTextarea, isSending, replyTarget])
 
   useLayoutEffect(() => {
     if (!shouldRestoreFocusRef.current || disabled || isSending) {
@@ -138,8 +135,15 @@ export function MessageComposer({
     }
 
     shouldRestoreFocusRef.current = false
-    textareaRef.current?.focus()
-  }, [disabled, draft, isSending, replyTarget, selectedAttachment])
+    focusTextarea()
+  }, [
+    disabled,
+    draft,
+    focusTextarea,
+    isSending,
+    replyTarget,
+    selectedAttachment,
+  ])
 
   function resetPendingTextSendIfPayloadChanged(
     nextDraft: string,
@@ -304,6 +308,12 @@ export function MessageComposer({
     setSelectedAttachment(file)
   }
 
+  function updateDraft(nextDraft: string) {
+    clearVoiceErrorMessage()
+    resetPendingTextSendIfPayloadChanged(nextDraft, replyToMessageId)
+    setDraft(nextDraft)
+  }
+
   return (
     <footer
       className={cn(
@@ -381,32 +391,17 @@ export function MessageComposer({
               </button>
             </ComposerSideControl>
 
-            <textarea
-              aria-label="Сообщение"
-              className="max-h-32 min-h-10 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
+            <ComposerTextarea
               disabled={disabled || isSending || isVoiceRecorderBusy}
-              onChange={(event) => {
-                const nextDraft = event.target.value
-
-                clearVoiceErrorMessage()
-                resetPendingTextSendIfPayloadChanged(
-                  nextDraft,
-                  replyToMessageId,
-                )
-                setDraft(nextDraft)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault()
-                  void submitCurrentDraft()
-                }
+              draft={draft}
+              onDraftChange={updateDraft}
+              onSubmit={() => {
+                void submitCurrentDraft()
               }}
               placeholder={
                 disabled ? 'Чат временно недоступен' : 'Сообщение...'
               }
-              ref={textareaRef}
-              rows={1}
-              value={draft}
+              textareaRef={textareaRef}
             />
 
             <ComposerSideControl
