@@ -127,11 +127,11 @@
   открытия SSE stream при превышении лимита, cleanup по disconnect сохранен;
   backend chat-realtime tests, backend typecheck/lint/full tests,
   `code-health` и `git diff --check` прошли.
-- `F-PROD-001` repo-side fix подготовлен: production Caddyfile получил HSTS,
-  CSP и Permissions-Policy baseline без блокировки voice recorder microphone
-  flow; `code-health` теперь проверяет наличие этих headers, Caddyfile
-  validation, frontend build, targeted formatting check и `git diff --check`
-  прошли. Finding остается open до production deploy и `curl -I` verification.
+- `F-PROD-001` закрыт: production Caddyfile получил HSTS, CSP и
+  Permissions-Policy baseline без блокировки voice recorder microphone flow,
+  `code-health` проверяет наличие этих headers, stack задеплоен на
+  `lk.provgroup.ru`; public health/tenant/API/SSE/PWA/static asset checks и
+  `curl -I` headers verification прошли.
 
 ## Current Baseline
 
@@ -150,5 +150,4 @@
 ## Recommended Next Step
 
 - Начинать `MT-9` только с закрытия или явного gating решения по `F-MT-004`;
-  следующим production-hardening follow-up держать deploy/verification для
-  `F-PROD-001`.
+  следующим security-hardening follow-up держать `F-CHAT-SEC-001`.
