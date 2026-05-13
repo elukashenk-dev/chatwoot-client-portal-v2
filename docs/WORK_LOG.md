@@ -116,6 +116,12 @@
   `F-AUTH-001` для shared-store rate limiting перед multi-instance deployment и
   `F-CHATWOOT-001` для env-configurable Chatwoot request timeout при production
   tuning.
+- Security & Production Hardening Review для `main@7bf94fe` и production
+  `lk.provgroup.ru` завершен: high/critical findings не найдено, создан
+  `docs/SECURITY_PRODUCTION_HARDENING_REVIEW.md`, добавлены actionable findings
+  `F-SSE-001`, `F-PROD-001`, `F-PROD-002` и `F-SCRIPT-001`; backend/frontend
+  проверки, `code-health`, production read-only checks и `git diff --check`
+  прошли.
 
 ## Current Baseline
 
@@ -133,5 +139,5 @@
 
 ## Recommended Next Step
 
-- Слить текущий проверенный стек в `main`, выполнить финальные проверки на
-  `main` и задеплоить production preview для проверки на реальном устройстве.
+- Начинать `MT-9` только с закрытия или явного gating решения по `F-MT-004`;
+  следующим production-hardening follow-up держать `F-SSE-001`.
