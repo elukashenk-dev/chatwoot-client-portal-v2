@@ -38,6 +38,8 @@
 - Chat UI перешел к customer-support baseline: компактный header, tenant mark,
   support center entry point, action menu, composer alignment и более компактный
   transcript.
+- Chat composer footer упрощен до чистого input-row без лишней внутренней
+  bordered surface; icon controls остаются без постоянной внешней декорации.
 - Default auth branding assets добавлены в `frontend/public/default-branding/`.
 
 ## Production Runtime

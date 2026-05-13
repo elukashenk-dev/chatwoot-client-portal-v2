@@ -34,6 +34,13 @@ function getSideControl(
 }
 
 describe('MessageComposer', () => {
+  it('renders the primary input row without an extra bordered surface wrapper', () => {
+    renderComposer()
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    expect(textarea.closest('.rounded-chat-menu')).toBeNull()
+  })
+
   it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
     const user = userEvent.setup()
     const { container } = renderComposer()
@@ -59,7 +66,7 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toHaveClass('hover:text-chat-outgoing/80')
-    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+    expect(screen.getByRole('button', { name: 'Отправить' })).not.toHaveClass(
       'bg-chat-outgoing',
     )
 
@@ -88,6 +95,12 @@ describe('MessageComposer', () => {
       }),
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+      'text-chat-outgoing',
+    )
+    expect(screen.getByRole('button', { name: 'Отправить' })).not.toHaveClass(
+      'bg-chat-outgoing',
+    )
 
     await user.clear(textarea)
 

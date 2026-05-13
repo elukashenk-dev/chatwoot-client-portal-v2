@@ -317,7 +317,7 @@ export function MessageComposer({
   return (
     <footer
       className={cn(
-        'border-t border-slate-200/90 bg-white/95 px-4 pt-3 backdrop-blur-sm sm:px-6',
+        'border-t border-slate-200/70 bg-white px-4 pt-3 sm:px-6',
         isVisualKeyboardOpen
           ? 'pb-1.5'
           : 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
@@ -330,129 +330,130 @@ export function MessageComposer({
           </div>
         ) : null}
 
-        <div className="rounded-chat-menu border border-slate-200 bg-slate-50/90 p-1">
-          {replyTarget ? (
-            <ComposerReplyPreview
-              disabled={isSending || isVoiceRecorderBusy}
-              onCancel={handleCancelReply}
-              replyTarget={replyTarget}
-            />
-          ) : null}
-
-          {selectedAttachment ? (
-            <ComposerAttachmentPreview
-              disabled={isSending || isVoiceRecorderBusy}
-              file={selectedAttachment}
-              onRemove={() => {
-                selectAttachment(null)
-
-                if (fileInputRef.current) {
-                  fileInputRef.current.value = ''
-                }
-              }}
-            />
-          ) : null}
-
-          <VoiceRecordingPanel
-            durationLabel={recordingDuration}
-            onCancel={cancelVoiceRecording}
-            onSend={finishVoiceRecording}
-            status={voiceRecorderStatus}
+        {replyTarget ? (
+          <ComposerReplyPreview
+            disabled={isSending || isVoiceRecorderBusy}
+            onCancel={handleCancelReply}
+            replyTarget={replyTarget}
           />
+        ) : null}
 
-          <div className="flex items-end gap-1.5">
-            <input
-              accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
-              aria-label="Файл вложения"
-              className="sr-only"
-              disabled={isAttachmentControlDisabled}
-              onChange={(event) => {
-                selectAttachment(event.target.files?.[0] ?? null)
-              }}
-              ref={fileInputRef}
-              type="file"
-            />
-            <ComposerSideControl
-              control="attachment"
-              isCollapsed={shouldPrioritizeTextDraft}
-            >
-              <button
-                aria-label="Прикрепить файл"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-400 transition hover:bg-white hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-                disabled={isAttachmentControlDisabled}
-                onClick={() => {
-                  fileInputRef.current?.click()
-                }}
-                tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
-                title="Прикрепить файл"
-                type="button"
-              >
-                <PaperclipIcon className="h-5 w-5" />
-              </button>
-            </ComposerSideControl>
+        {selectedAttachment ? (
+          <ComposerAttachmentPreview
+            disabled={isSending || isVoiceRecorderBusy}
+            file={selectedAttachment}
+            onRemove={() => {
+              selectAttachment(null)
 
-            <ComposerTextarea
-              disabled={disabled || isSending || isVoiceRecorderBusy}
-              draft={draft}
-              onDraftChange={updateDraft}
-              onSubmit={() => {
-                void submitCurrentDraft()
-              }}
-              placeholder={
-                disabled ? 'Чат временно недоступен' : 'Сообщение...'
+              if (fileInputRef.current) {
+                fileInputRef.current.value = ''
               }
-              textareaRef={textareaRef}
-            />
+            }}
+          />
+        ) : null}
 
-            <ComposerSideControl
-              control="voice"
-              isCollapsed={shouldPrioritizeTextDraft}
-            >
-              <button
-                aria-label="Голосовое сообщение"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-                disabled={!canStartVoiceRecording}
-                onClick={() => {
-                  void startVoiceRecording()
-                }}
-                tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
-                title="Записать голосовое"
-                type="button"
-              >
-                <MicrophoneIcon
-                  className={
-                    voiceRecorderStatus === 'starting'
-                      ? 'h-5 w-5 animate-pulse'
-                      : 'h-5 w-5'
-                  }
-                />
-              </button>
-            </ComposerSideControl>
+        <VoiceRecordingPanel
+          durationLabel={recordingDuration}
+          onCancel={cancelVoiceRecording}
+          onSend={finishVoiceRecording}
+          status={voiceRecorderStatus}
+        />
+
+        <div className="flex items-end gap-2">
+          <input
+            accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
+            aria-label="Файл вложения"
+            className="sr-only"
+            disabled={isAttachmentControlDisabled}
+            onChange={(event) => {
+              selectAttachment(event.target.files?.[0] ?? null)
+            }}
+            ref={fileInputRef}
+            type="file"
+          />
+          <ComposerSideControl
+            control="attachment"
+            isCollapsed={shouldPrioritizeTextDraft}
+          >
             <button
-              aria-label={
-                isSending
-                  ? 'Отправляем'
-                  : selectedAttachment
-                    ? 'Отправить файл'
-                    : 'Отправить'
-              }
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
-              disabled={!canSend || isVoiceRecorderBusy}
+              aria-label="Прикрепить файл"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-400 transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled={isAttachmentControlDisabled}
               onClick={() => {
-                void submitCurrentDraft()
+                fileInputRef.current?.click()
               }}
-              title="Отправить"
+              tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
+              title="Прикрепить файл"
               type="button"
             >
-              <SendIcon
+              <PaperclipIcon className="h-5 w-5" />
+            </button>
+          </ComposerSideControl>
+
+          <ComposerTextarea
+            disabled={disabled || isSending || isVoiceRecorderBusy}
+            draft={draft}
+            onDraftChange={updateDraft}
+            onSubmit={() => {
+              void submitCurrentDraft()
+            }}
+            placeholder={disabled ? 'Чат временно недоступен' : 'Сообщение...'}
+            textareaRef={textareaRef}
+          />
+
+          <ComposerSideControl
+            control="voice"
+            isCollapsed={shouldPrioritizeTextDraft}
+          >
+            <button
+              aria-label="Голосовое сообщение"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled={!canStartVoiceRecording}
+              onClick={() => {
+                void startVoiceRecording()
+              }}
+              tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
+              title="Записать голосовое"
+              type="button"
+            >
+              <MicrophoneIcon
                 className={
-                  isSending
-                    ? 'h-[18px] w-[18px] animate-pulse'
-                    : 'h-[18px] w-[18px]'
+                  voiceRecorderStatus === 'starting'
+                    ? 'h-5 w-5 animate-pulse'
+                    : 'h-5 w-5'
                 }
               />
             </button>
-          </div>
+          </ComposerSideControl>
+          <button
+            aria-label={
+              isSending
+                ? 'Отправляем'
+                : selectedAttachment
+                  ? 'Отправить файл'
+                  : 'Отправить'
+            }
+            className={cn(
+              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed',
+              canSend && !isVoiceRecorderBusy
+                ? 'text-chat-outgoing hover:bg-slate-100 hover:text-brand-900'
+                : 'text-slate-300',
+            )}
+            disabled={!canSend || isVoiceRecorderBusy}
+            onClick={() => {
+              void submitCurrentDraft()
+            }}
+            title="Отправить"
+            type="button"
+          >
+            <SendIcon
+              className={
+                isSending
+                  ? 'h-[18px] w-[18px] animate-pulse'
+                  : 'h-[18px] w-[18px]'
+              }
+            />
+          </button>
         </div>
 
         {composerErrorMessage ? (
