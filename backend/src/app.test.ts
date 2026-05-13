@@ -540,6 +540,101 @@ describe('buildApp', () => {
     })
   })
 
+  it('rate limits repeated login attempts for the same tenant client', async () => {
+    const responses = []
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      responses.push(
+        await app.inject({
+          headers: {
+            origin: testEnv.APP_ORIGIN,
+          },
+          method: 'POST',
+          payload: {
+            email: 'missing@company.ru',
+            password: 'WrongSecret',
+          },
+          url: '/api/auth/login',
+        }),
+      )
+    }
+
+    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
+      [401, 401, 401, 401, 401],
+    )
+    expect(responses[5]?.statusCode).toBe(429)
+    expect(responses[5]?.headers['retry-after']).toBeDefined()
+    expect(responses[5]?.json()).toEqual({
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Попробуйте позже.',
+      },
+    })
+  })
+
+  it('rate limits repeated registration verification attempts', async () => {
+    const responses = []
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      responses.push(
+        await app.inject({
+          headers: {
+            origin: testEnv.APP_ORIGIN,
+          },
+          method: 'POST',
+          payload: {
+            code: '000000',
+            email: 'missing@company.ru',
+          },
+          url: '/api/auth/register/verify',
+        }),
+      )
+    }
+
+    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
+      [409, 409, 409, 409, 409],
+    )
+    expect(responses[5]?.statusCode).toBe(429)
+    expect(responses[5]?.json()).toEqual({
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Попробуйте позже.',
+      },
+    })
+  })
+
+  it('rate limits repeated password reset requests', async () => {
+    const responses = []
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      responses.push(
+        await app.inject({
+          headers: {
+            origin: testEnv.APP_ORIGIN,
+          },
+          method: 'POST',
+          payload: {
+            email: 'missing@company.ru',
+          },
+          url: '/api/auth/password-reset/request',
+        }),
+      )
+    }
+
+    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
+      [200, 200, 200, 200, 200],
+    )
+    expect(responses[5]?.statusCode).toBe(429)
+    expect(responses[5]?.json()).toEqual({
+      error: {
+        code: 'RATE_LIMITED',
+        message: 'Слишком много запросов. Попробуйте позже.',
+      },
+    })
+
+    await waitForBackgroundTasks()
+  })
+
   it('rejects mutating auth requests from an unexpected origin', async () => {
     const response = await app.inject({
       headers: {

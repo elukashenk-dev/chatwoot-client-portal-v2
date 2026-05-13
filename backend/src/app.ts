@@ -8,6 +8,7 @@ import type { DatabaseClient } from './db/client.js'
 import { createChatwootClientFactory } from './integrations/chatwoot/client.js'
 import { createSmtpEmailDelivery } from './integrations/email/smtp.js'
 import { registerApiErrorHandler } from './lib/errors.js'
+import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
 import { createChatContextRepository } from './modules/chat-context/repository.js'
@@ -138,6 +139,7 @@ export function buildApp({ database, env }: BuildAppOptions) {
 
   registerHealthRoutes(app, { env })
   registerTenantContext(app, { tenantsService })
+  registerAuthRateLimit(app)
   registerTenantRoutes(app, { tenantsService })
   registerAuthRoutes(app, {
     authService,

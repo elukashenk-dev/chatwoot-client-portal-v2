@@ -104,6 +104,10 @@
 - Production PWA cache headers обновлены для preview loop: SPA routes no-store,
   `/sw.js` no-cache/no-store, hashed assets immutable, missing assets возвращают
   404 вместо SPA fallback.
+- Backend rate limiting fix закрыт: публичные auth login, registration и
+  password reset POST endpoints ограничены по tenant/host + IP + route group;
+  targeted app test, backend typecheck, lint, full test suite и
+  `git diff --check` прошли.
 
 ## Current Baseline
 
@@ -121,5 +125,4 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для Task 5:
-  `refactor: split chat composer responsibilities`.
+- Сделать checkpoint commit: `fix: rate limit public auth endpoints`.
