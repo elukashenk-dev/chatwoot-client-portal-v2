@@ -40,7 +40,7 @@
   transcript.
 - Chat composer footer упрощен до чистого input-row без лишней внутренней
   bordered surface; attachment/voice icon controls остаются без постоянной
-  внешней декорации, а enabled send остается primary action.
+  внешней декорации, а send остается primary action.
 - Default auth branding assets добавлены в `frontend/public/default-branding/`.
 
 ## Production Runtime

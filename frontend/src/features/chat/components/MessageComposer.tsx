@@ -433,12 +433,7 @@ export function MessageComposer({
                   ? 'Отправить файл'
                   : 'Отправить'
             }
-            className={cn(
-              'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed',
-              canSend && !isVoiceRecorderBusy
-                ? 'bg-chat-outgoing text-white hover:bg-brand-900'
-                : 'text-slate-300',
-            )}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
             disabled={!canSend || isVoiceRecorderBusy}
             onClick={() => {
               void submitCurrentDraft()

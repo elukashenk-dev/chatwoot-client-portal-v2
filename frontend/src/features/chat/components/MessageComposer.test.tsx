@@ -66,8 +66,11 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toHaveClass('hover:text-chat-outgoing/80')
-    expect(screen.getByRole('button', { name: 'Отправить' })).not.toHaveClass(
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
       'bg-chat-outgoing',
+    )
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+      'disabled:bg-slate-200',
     )
 
     await user.type(textarea, 'П')
