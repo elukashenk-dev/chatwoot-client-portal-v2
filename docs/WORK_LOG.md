@@ -46,6 +46,9 @@
   backend используют единое правило пароля.
 - Открытых `must-fix-before-MT-9` code findings не осталось; remaining findings
   назначены на `MT-8.5`, `MT-9`, `MT-10` или future focused experiments.
+- Frontend review cleanup Task 1 закрыт: неиспользуемая зависимость
+  `@preline/collapse` удалена после usage audit; frontend typecheck, tests,
+  build и `git diff --check` прошли.
 
 ## MT-8.5 UI/UX Baseline
 
@@ -102,5 +105,5 @@
 
 ## Recommended Next Step
 
-- Перейти к bounded cleanup по результатам frontend review: начать с
-  Preline/Tailwind hygiene и не смешивать это с новым product scope.
+- После checkpoint commit для Task 1 перейти к Task 2:
+  Auth UI Style Variants.
