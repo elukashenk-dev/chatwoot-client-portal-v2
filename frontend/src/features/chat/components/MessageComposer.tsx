@@ -436,7 +436,7 @@ export function MessageComposer({
             className={cn(
               'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed',
               canSend && !isVoiceRecorderBusy
-                ? 'text-chat-outgoing hover:bg-slate-100 hover:text-brand-900'
+                ? 'bg-chat-outgoing text-white hover:bg-brand-900'
                 : 'text-slate-300',
             )}
             disabled={!canSend || isVoiceRecorderBusy}

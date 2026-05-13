@@ -96,10 +96,10 @@ describe('MessageComposer', () => {
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'text-chat-outgoing',
-    )
-    expect(screen.getByRole('button', { name: 'Отправить' })).not.toHaveClass(
       'bg-chat-outgoing',
+    )
+    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
+      'text-white',
     )
 
     await user.clear(textarea)
