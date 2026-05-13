@@ -41,6 +41,8 @@
 - Chat composer footer упрощен до чистого input-row без лишней внутренней
   bordered surface; attachment/voice icon controls остаются без постоянной
   внешней декорации, а send остается primary action.
+- Mobile chat transcript скрывает визуальный scrollbar, сохраняя scroll
+  behavior; desktop scrollbar остается доступным.
 - Default auth branding assets добавлены в `frontend/public/default-branding/`.
 
 ## Production Runtime
