@@ -36,11 +36,15 @@ Non-goals:
   название, монограмма, основной цвет и PWA icon уже дают рабочий baseline.
 - Brand preview в админке должен использовать реальные portal components, а не
   отдельную нарисованную копию.
+- Auth header images always receive a system-owned bottom fade into the page
+  background; auth footer images always receive a system-owned top fade into
+  the page background. Tenants upload artwork, not manually faded layout assets.
 
 ## Content Ownership
 
 Tenant-owned copy:
 
+- controlled auth title and subtitle slots explicitly listed as brandable;
 - controlled helper/welcome body slots explicitly listed as brandable;
 - support label and optional legal/support link labels;
 - safe chat empty helper when it does not promise SLA, agent availability or
@@ -48,9 +52,9 @@ Tenant-owned copy:
 
 System-owned copy:
 
-- screen titles by default;
 - CTA labels by default;
 - form labels, field hints and validation messages;
+- screen titles outside explicitly brandable auth title slots;
 - loading/status labels, offline labels, retry labels and success handoff copy;
 - message metadata, delivery status, resend countdown and password rules.
 
@@ -65,9 +69,9 @@ Security-sensitive copy that must not be exposed to branding admin:
 
 Rule:
 
-- Tenant can change only controlled helper/welcome body slots when the screen
-  explicitly allows it. Titles, CTA labels and security-sensitive copy stay
-  system-owned unless a future decision adds a narrow safe slot.
+- Tenant can change only controlled auth title/subtitle and helper/welcome body
+  slots when the screen explicitly allows it. CTA labels, field labels and
+  security-sensitive copy stay system-owned.
 
 ## Design System Rules
 
@@ -77,18 +81,24 @@ Brandable:
 
 - `brand.display_name`;
 - `brand.logo` или fallback monogram;
+- `brand.auth_brand_position`: left, center, right;
+- `brand.auth_header_image` shared across auth screens with default fallback;
+- `brand.auth_footer_image` shared across auth screens with default fallback;
+- `brand.auth_title`;
 - `brand.primary_color`;
 - `brand.accent_color` optional; used only for narrow decorative highlights
   after contrast checks, never for critical states;
 - `brand.app_icon`;
-- `brand.auth_helper_body`;
+- `brand.auth_subtitle`;
+- `brand.auth_helper_body` where a screen needs additional safe helper copy;
 - `brand.welcome_body`;
 - `brand.support_team_label`;
 - optional legal links: privacy, terms, support policy.
 
 Locked/system:
 
-- screen titles and CTA labels by default;
+- CTA labels by default;
+- form labels and placeholders unless explicitly listed per screen;
 - форма и порядок auth steps;
 - validation and error semantics;
 - OTP length, resend timer and lockout behavior;
@@ -110,7 +120,10 @@ Locked/system:
 ### Branding Intensity Rules
 
 - Auth screens can carry brand more strongly through logo, tenant name, primary
-  color and controlled helper body.
+  color, header/footer art and controlled title/subtitle body.
+- Auth header art is shared across auth screens. Brand mark overlays that art at
+  a controlled left/center/right position.
+- Auth footer art is decorative and must not contain required copy or controls.
 - Splash and app welcome can show brand clearly, but remain short loading states.
 - Chat header can carry moderate brand expression through support label and
   avatar/logo fallback.
@@ -151,9 +164,19 @@ Locked/system:
 
 - Primary button: one main action per screen.
 - Secondary actions: text links or quiet buttons, never competing with primary.
-- Form field: label, optional short hint, validation error.
-- Inline alert: system-owned state with accessible role.
-- OTP input: six digits, resend timer, clear error path.
+- Form field: label, optional short hint, validation error; filled fields keep
+  a subtle non-error highlight even in installed PWA/autofill contexts. Empty
+  required fields can show only soft error highlighting when the placeholder
+  already explains what to enter.
+- Inline alert: system-owned state with accessible role; error tone uses normal
+  red text with soft border/background, not visually louder than the primary
+  CTA.
+- OTP verification layout: registration and password reset share one visual
+  structure for OTP cells, helper card, primary CTA, change-email action and
+  inline resend cooldown; only scenario copy/API handlers differ.
+- Password setup layout: registration and password reset share one visual
+  structure for password fields, generated rules, primary CTA and recovery
+  action placement; scenario copy/API handlers and continuation routes differ.
 - Chat composer: attachment, voice, textarea, send; disabled state must explain
   why sending is unavailable.
 - Message bubble: readable content, timestamp/status, attachment preview,
@@ -169,8 +192,8 @@ Purpose:
 
 Default copy:
 
-- Title: `Клиентский портал`
-- Body: `Войдите, чтобы продолжить работу с сообщениями и обращениями.`
+- Title: `Центр поддержки`
+- Body: `Войдите, чтобы продолжить общение с поддержкой.`
 - Primary CTA: `Войти`
 - Secondary links: password reset, registration.
 
@@ -178,7 +201,10 @@ Brandable:
 
 - logo/monogram;
 - tenant display name;
-- optional welcome body;
+- header/footer auth art;
+- brand mark position;
+- title;
+- subtitle;
 - primary button/focus color;
 - optional legal/support links below the form.
 
@@ -203,8 +229,8 @@ Purpose:
 
 Default copy:
 
-- Title: `Новый аккаунт`
-- Body: `Укажите имя и рабочий email. Если доступ активен, мы отправим код подтверждения.`
+- Title: `Создать аккаунт`
+- Body: `Укажите имя и рабочий email, чтобы получить код подтверждения.`
 - Primary CTA: `Продолжить`
 
 Brandable:
@@ -262,7 +288,7 @@ Purpose:
 Default copy:
 
 - Title: `Создание пароля`
-- Body: `Придумайте пароль для безопасного входа.`
+- Body: `Создайте пароль, чтобы входить в Центр поддержки.`
 - Primary CTA: `Сохранить пароль`
 
 Brandable:
@@ -288,7 +314,7 @@ Purpose:
 
 Default copy:
 
-- Title: `Восстановление доступа`
+- Title: `Восстановить пароль`
 - Body: `Введите email. Если доступ активен, мы отправим код восстановления.`
 - Primary CTA: `Получить код`
 
@@ -316,9 +342,9 @@ Purpose:
 
 Default copy:
 
-- Title: `Подтверждение email`
+- Title: `Подтверждение Email`
 - Body:
-  `Введите 6-значный код, если письмо восстановления пришло на ваш email. Мы проверим код безопасно.`
+  `Если доступ активен, код восстановления отправлен на {email}.`
 
 Brandable:
 
@@ -344,7 +370,7 @@ Purpose:
 Default copy:
 
 - Title: `Новый пароль`
-- Body: `Придумайте новый пароль для входа.`
+- Body: `Создайте новый пароль для входа в Центр поддержки.`
 - Primary CTA: `Сохранить пароль`
 
 Brandable:
@@ -526,44 +552,67 @@ Audit notes:
 ### Login Cleanup
 
 - Цель: быстро и спокойно войти в уже созданный клиентский аккаунт.
-- Layout сверху вниз: brand mark, tenant name, короткий title, короткий body,
-  email, password, primary CTA, secondary auth links, optional legal/support
-  links.
-- Actions: primary `Войти`; secondary `Забыли пароль?`; tertiary `Новый аккаунт`.
-- Оставить: email/password, password reveal, single primary CTA, password reset
-  path, registration path.
+- Layout сверху вниз: auth header art на всю ширину, brand mark overlay
+  left/center/right, короткий title, короткий subtitle, email с системной
+  иконкой, password с системной иконкой и reveal, primary CTA without icon,
+  low-emphasis secondary auth links, low-emphasis access info panel, optional
+  legal/support links, decorative footer art.
+- Actions: primary `Войти`; secondary `Забыли пароль?`; tertiary
+  `Создать аккаунт`.
+- Оставить: email/password, password reveal, field icons, icon-free single
+  primary CTA, password reset path, registration path, concise access info
+  panel below auth links, bottom-aligned through flexible layout rather than
+  absolute positioning.
 - Удалить/упростить: отдельный eligibility helper под формой, если он повторяет
-  registration context; любые декоративные blocks, которые не объясняют вход.
-- Заменить тексты: body должен говорить о входе, не о полном продукте; ошибки
-  должны быть короткими и не раскрывать лишние детали.
-- Brandable: logo/monogram, tenant name, intro body, primary color, legal links.
-- Locked/system: поля, password reveal, invalid credentials copy, session
-  redirect, validation.
+  registration context; email hint под полем; visible field labels на login;
+  decorative divider between CTA and auth links.
+- Заменить тексты: default title - `Центр поддержки`; default subtitle -
+  `Войдите, чтобы продолжить общение с поддержкой.`; ошибки должны быть короткими и не
+  раскрывать лишние детали.
+- Brandable: logo/monogram, tenant name, brand mark position, auth header image,
+  auth footer image, title, subtitle, primary color, legal links, access info
+  title/body/contact phone. Default access title - `Нет доступа к чату?`;
+  default access body - `Поддержка: +7 (906) 12-955-12`.
+- Locked/system: поля, hidden labels for accessibility, placeholders, field
+  icons, password reveal, auth header bottom fade, auth footer top fade,
+  invalid credentials copy, session redirect, validation.
 - States: loading session, submitting, invalid field, invalid credentials,
-  backend/network error, disabled submit.
-- Mobile 320px: links wrap without overlap; password reveal button не сжимает
-  input; CTA full-width; no horizontal overflow.
+  backend/network error, disabled submit. Email format error appears after blur
+  or submit, not immediately while the user is still typing. Empty required
+  email/password states show field highlighting without duplicate
+  `Введите email` / `Введите пароль` copy.
+- Mobile 320px: auth header height about 260px; larger shell about 320px; links
+  wrap without overlap; password reveal button не сжимает input; CTA full-width;
+  support phone is clickable; no horizontal overflow.
 - Branding risks: длинное tenant name ломает header; слишком светлый primary
-  color делает CTA нечитаемым; лишний welcome text создает marketing-screen
-  вместо login.
+  color делает CTA нечитаемым; poorly cropped auth art hides brand mark; лишний
+  welcome text создает marketing-screen вместо login.
 
 ### Registration Request Cleanup
 
 - Цель: дать известному tenant contact запросить portal account.
 - Layout сверху вниз: brand mark, title, safe helper body, full name, email,
   primary CTA, one secondary link to login, optional support fallback.
-- Actions: primary `Продолжить`; secondary `У меня уже есть аккаунт`; tertiary
+- Actions: primary `Продолжить`; secondary `Войти`; tertiary
   support contact link if configured.
-- Оставить: full name, email, eligibility-safe explanation, primary CTA.
+- Оставить: full name, email, eligibility-safe explanation, primary CTA, one
+  quiet login return link.
 - Удалить/упростить: два разных login links на одном экране; повторяющиеся
   explanations про known email.
-- Заменить тексты: recommended default - Укажите имя и рабочий email. Если
-  доступ активен, мы отправим код подтверждения.
+- Заменить тексты: recommended default - `Укажите имя и рабочий email, чтобы
+получить код подтверждения.`; helper - `Введите email, указанный при создании
+вашего профиля.`
+- Default access-denied copy:
+  `Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.`
 - Brandable: intro body within safe template, support link label/url.
 - Locked/system: field structure, backend eligibility check, account existence
   behavior, next route.
 - States: submitting, validation errors, access denied/generic error,
-  resend/not applicable, disabled submit.
+  resend/not applicable, disabled submit. Email format error appears after blur
+  or submit, not immediately while the user is still typing. Empty required
+  name/email states show field highlighting without duplicate `Введите имя` /
+  `Введите email` copy. The support phone in access-denied copy is clickable
+  when present.
 - Mobile 320px: secondary link must wrap below form; helper text max two short
   lines where possible.
 - Branding risks: tenant-written copy может обещать доступ всем пользователям;
@@ -572,35 +621,41 @@ Audit notes:
 ### Registration OTP Cleanup
 
 - Цель: подтвердить email before password creation.
-- Layout сверху вниз: brand mark, title, email summary, OTP input, primary CTA,
-  helper, resend row, change email link.
+- Layout сверху вниз: brand mark, title, email summary, OTP input, helper,
+  primary CTA, quiet change-email/resend row.
 - Actions: primary `Продолжить`; secondary `Отправить код повторно`; tertiary
   `Изменить email`.
 - Оставить: six-digit OTP, countdown, resend, change email, invalid/expired
   code alert.
-- Удалить/упростить: длинные paragraphs вокруг OTP; duplicate email mention if
-  the address already sits in the summary.
-- Заменить тексты: title `Подтверждение email`; helper
-  `Если письма нет, проверьте "Спам" или запросите новый код.`
+- Удалить/упростить: visible OTP label on mobile auth layout; длинные
+  paragraphs вокруг OTP; duplicate email mention if the address already sits in
+  the summary; separate bottom resend countdown block.
+- Заменить тексты: title `Подтверждение Email`; summary
+  `Код подтверждения отправлен на {email}`; helper
+  `Если письма нет, проверьте «Спам» или запросите новый код после таймера.`
 - Brandable: intro body only within safe template.
 - Locked/system: OTP length, resend timer, attempts, error semantics,
   continuation storage.
 - States: missing stored request, submitting, invalid code, expired code,
   resend pending, resend disabled, resend success.
-- Mobile 320px: OTP cells stay inside width; resend row can stack vertically.
+- Mobile 320px: OTP cells use compact 52px height and fit without horizontal
+  scroll; resend cooldown appears inline in the resend action, not as a
+  separate bottom timer block.
 - Branding risks: custom copy may imply code never expires or hide resend timer.
 
 ### Registration Set Password Cleanup
 
 - Цель: завершить создание аккаунта безопасным паролем.
 - Layout сверху вниз: brand mark, title, short body, password, confirm password,
-  password rules, error/success, primary CTA, back/login links.
-- Actions: primary `Сохранить пароль`; secondary `Вернуться к подтверждению`;
-  tertiary `Перейти ко входу` only after success or relevant error.
+  password rules, error/success, primary CTA.
+- Actions: primary `Сохранить пароль`; secondary `Вернуться к подтверждению`
+  only when continuation is invalid; tertiary `Перейти ко входу` only after
+  success or relevant error.
 - Оставить: generated password rules, two fields, success handoff.
 - Удалить/упростить: permanent login link before success if it distracts from
   completion.
-- Заменить тексты: body `Придумайте пароль для безопасного входа.`
+- Заменить тексты: body
+  `Создайте пароль, чтобы входить в Центр поддержки.`
 - Brandable: intro body only.
 - Locked/system: password policy, validation, continuation handling, success
   semantics.
@@ -617,14 +672,21 @@ Audit notes:
   CTA, secondary login link, optional support fallback.
 - Actions: primary `Получить код`; secondary `Вернуться ко входу`; tertiary
   support contact link if configured.
-- Оставить: email field, generic accepted behavior, login link.
+- Оставить: email field with system icon, generic accepted behavior, login
+  link, one short safe helper card.
 - Удалить/упростить: `Новый аккаунт` link if it competes with recovery goal;
-  repeated paragraphs about known email.
-- Заменить тексты: recommended default - Введите email. Если доступ активен, мы
-  отправим код восстановления.
+  repeated paragraphs about known email; visible field label on mobile auth
+  layout.
+- Заменить тексты: recommended default - `Введите email. Если доступ активен, мы
+отправим код восстановления.`; helper - `Введите email, указанный при создании
+вашего профиля.`
 - Brandable: intro body only within enumeration-safe template, support link.
-- Locked/system: generic response, missing-account behavior, error semantics.
+- Locked/system: generic response, missing-account behavior, error semantics,
+  field structure, field icon and email placeholder.
 - States: submitting, validation, accepted, backend/network error, disabled.
+  Empty required email state shows field highlighting without duplicate
+  `Введите email` copy. Email format error appears after blur or submit, not
+  immediately while the user is still typing.
 - Mobile 320px: no two-link row if labels wrap; stack secondary actions.
 - Branding risks: tenant copy can accidentally disclose account existence.
 
@@ -638,14 +700,18 @@ Audit notes:
 - Оставить: OTP, countdown, resend, generic success copy.
 - Удалить/упростить: definite delivery wording like `Мы отправили код`, unless
   backend guarantees a registered active account path.
-- Заменить тексты: recommended default - Введите 6-значный код, если письмо
-  восстановления пришло на ваш email. Мы проверим код безопасно.
+- Заменить тексты: recommended default -
+  `Если доступ активен, код восстановления отправлен на {email}.`; helper -
+  `Если письма нет, проверьте «Спам» или запросите новый код после таймера.`;
+  resend success - `Если доступ активен, новый код отправлен на {email}.`
 - Brandable: intro body only within enumeration-safe template.
 - Locked/system: OTP length, resend timer, invalid/expired handling,
-  continuation storage.
+  continuation storage, OTP input layout.
 - States: missing request, submitting, invalid code, expired code, resend
   disabled, resend accepted, network error.
-- Mobile 320px: OTP cells and resend timer fit without horizontal scroll.
+- Mobile 320px: OTP cells use compact 52px height and fit without horizontal
+  scroll; resend cooldown appears inline in the resend action, not as a
+  separate bottom timer block.
 - Branding risks: custom copy may break enumeration safety.
 
 ### Password Reset Set Password Cleanup
@@ -653,12 +719,12 @@ Audit notes:
 - Цель: сохранить новый пароль после valid recovery continuation.
 - Layout сверху вниз: brand mark, title, short body, password, confirm password,
   rules, errors/success, primary CTA.
-- Actions: primary `Сохранить пароль`; secondary `Вернуться к подтверждению`;
-  tertiary `Перейти ко входу` after success.
+- Actions: primary `Сохранить пароль`; secondary `Вернуться к подтверждению`
+  only when continuation is invalid; tertiary `Перейти ко входу` after success.
 - Оставить: generated rules, continuation checks, success handoff.
 - Удалить/упростить: duplicate navigation links before success.
-- Заменить тексты: title `Новый пароль`; body - Придумайте новый пароль для
-  входа.
+- Заменить тексты: title `Новый пароль`; body -
+  `Создайте новый пароль для входа в Центр поддержки.`
 - Brandable: intro body only.
 - Locked/system: password policy, validation, invalid continuation handling.
 - States: missing continuation, invalid/expired continuation, validation,
@@ -703,21 +769,20 @@ Audit notes:
 ### Chat Header Cleanup
 
 - Цель: identify support conversation and expose only useful top-level actions.
-- Layout left/center/right:
-  - left: optional menu/action slot only when real actions exist;
-  - center: support avatar/logo fallback, support title, assignee/status row;
-  - right: logout action.
-- Actions: primary none; secondary logout; tertiary menu only if it has real
-  actions.
-- Оставить: support title, assignee/team label, online/connecting status, logout.
-- Удалить/упростить: disabled menu button until it opens a real menu; decorative
+- Layout: hamburger navigation affordance, tenant brand mark, support title,
+  assignee/status row, chat action menu.
+- Actions: primary none; secondary chat menu; tertiary placeholder navigation
+  menu for future `Чат / Центр поддержки`.
+- Оставить: support title, assignee/team label without `Агент:` prefix,
+  online/connecting status, logout through `Завершить диалог`.
+- Удалить/упростить: disabled menu button, standalone logout icon, decorative
   header image if it conflicts with tenant colors.
 - Заменить тексты: `Поддержка клиентов` may become safe support label; status
   remains system-owned.
 - Brandable: support label, logo/avatar fallback, primary color; header accent
   stays disabled by default.
-- Locked/system: logout placement, status semantics, assignee fallback,
-  accessibility labels.
+- Locked/system: status semantics, assignee fallback, accessibility labels,
+  logout behavior behind `Завершить диалог`.
 - States: ready, connecting, logout submitting, logout error.
 - Mobile 320px: title and assignee truncate predictably; buttons remain 40-44px.
 - Branding risks: long tenant/support label hides status or logout; low-contrast
@@ -771,45 +836,52 @@ Audit notes:
 
 ## Branding Matrix
 
-| Screen / area               | Brandable elements                                                               | Locked/system elements                                    |
-| --------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Login                       | logo, tenant name, intro body, primary color, legal/support links                | fields, validation, invalid credentials, redirect         |
-| Registration request        | logo, tenant name, safe intro body, support link, primary color                  | eligibility, field order, generic errors                  |
-| Registration OTP            | logo, tenant name, safe intro body, primary color                                | OTP length, resend timer, attempts, continuation          |
-| Registration set password   | logo, tenant name, short intro body, primary color                               | password policy, fields, success/error semantics          |
-| Password reset request      | logo, tenant name, enumeration-safe intro, support link, primary color           | generic accepted behavior, field order                    |
-| Password reset OTP          | logo, tenant name, enumeration-safe intro, primary color                         | OTP length, resend timer, account enumeration safety      |
-| Password reset set password | logo, tenant name, short intro body, primary color                               | password policy, continuation handling                    |
-| Tenant splash               | logo/monogram, tenant name, primary color, future app icon                       | no CTA, no free HTML, loading semantics                   |
-| App welcome/loading         | logo/monogram, tenant name, welcome body, primary color                          | no CTA, session/chat status semantics                     |
-| Chat header                 | support label, logo/avatar fallback, primary color; header accent off by default | logout, status semantics, assignee fallback               |
-| Chat transcript             | outgoing color, support avatar fallback, safe empty helper                       | ownership, metadata, retry, attachment safety             |
-| Chat composer               | send color, short placeholder                                                    | file/voice policy, disabled/offline logic, send semantics |
-| PWA identity                | app name, short name, icon, manifest background/theme color                      | scope, start URL, tenant host, cache/no-store behavior    |
+| Screen / area               | Brandable elements                                                                                                                        | Locked/system elements                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Login                       | logo, tenant name, brand position, auth header/footer art, title, subtitle, access info/contact phone, primary color, legal/support links | fields, placeholders, field icons, validation, invalid credentials, redirect |
+| Registration request        | logo, tenant name, brand position, auth header/footer art, title, safe intro body, support link, primary color                            | eligibility, field order, generic errors                                     |
+| Registration OTP            | logo, tenant name, brand position, auth header/footer art, title, safe intro body, primary color                                          | OTP length, resend timer, attempts, continuation                             |
+| Registration set password   | logo, tenant name, brand position, auth header/footer art, title, short intro body, primary color                                         | password policy, fields, success/error semantics                             |
+| Password reset request      | logo, tenant name, brand position, auth header/footer art, title, enumeration-safe intro, support link, primary color                     | generic accepted behavior, field order                                       |
+| Password reset OTP          | logo, tenant name, brand position, auth header/footer art, title, enumeration-safe intro, primary color                                   | OTP length, resend timer, account enumeration safety                         |
+| Password reset set password | logo, tenant name, brand position, auth header/footer art, title, short intro body, primary color                                         | password policy, continuation handling                                       |
+| Tenant splash               | logo/monogram, tenant name, primary color, future app icon                                                                                | no CTA, no free HTML, loading semantics                                      |
+| App welcome/loading         | logo/monogram, tenant name, welcome body, primary color                                                                                   | no CTA, session/chat status semantics                                        |
+| Chat header                 | support label, logo/avatar fallback, primary color; header accent off by default                                                          | logout, status semantics, assignee fallback                                  |
+| Chat transcript             | outgoing color, support avatar fallback, safe empty helper                                                                                | ownership, metadata, retry, attachment safety                                |
+| Chat composer               | send color, short placeholder                                                                                                             | file/voice policy, disabled/offline logic, send semantics                    |
+| PWA identity                | app name, short name, icon, manifest background/theme color                                                                               | scope, start URL, tenant host, cache/no-store behavior                       |
 
 ## Brandable Text Limits
 
 These are UI cleanup limits for future controlled slots. They are not tenant
 admin implementation.
 
-| Slot                     | Limit       | Fallback / rule                         |
-| ------------------------ | ----------- | --------------------------------------- |
-| Tenant display name      | 2-32 chars  | truncate in UI after one line           |
-| PWA short name           | 2-12 chars  | derive from display name, then truncate |
-| Auth helper body         | 0-120 chars | use system body if empty                |
-| Registration helper      | 0-140 chars | must preserve access-active wording     |
-| Password reset helper    | 0-140 chars | must preserve enumeration-safe wording  |
-| Support team label       | 0-32 chars  | `Поддержка клиентов`                    |
-| Chat empty helper        | 0-120 chars | system empty text                       |
-| Welcome body             | 0-100 chars | `Готовим личный кабинет.`               |
-| Splash body              | 0-80 chars  | `Загружаем настройки.`                  |
-| Legal/support link label | 0-24 chars  | hide link if label or URL is missing    |
-| Composer placeholder     | 0-28 chars  | `Сообщение...`                          |
+| Slot                     | Limit       | Fallback / rule                                   |
+| ------------------------ | ----------- | ------------------------------------------------- |
+| Tenant display name      | 2-32 chars  | truncate in UI after one line                     |
+| PWA short name           | 2-12 chars  | derive from display name, then truncate           |
+| Auth title               | 2-32 chars  | `Центр поддержки`                                 |
+| Auth subtitle            | 0-90 chars  | `Войдите, чтобы продолжить общение с поддержкой.` |
+| Auth helper body         | 0-120 chars | use system body if empty                          |
+| Login access info body   | 0-140 chars | use system body/contact phone if empty            |
+| Registration helper      | 0-140 chars | must preserve access-active wording               |
+| Password reset helper    | 0-140 chars | must preserve enumeration-safe wording            |
+| Support team label       | 0-32 chars  | `Поддержка клиентов`                              |
+| Chat empty helper        | 0-120 chars | system empty text                                 |
+| Welcome body             | 0-100 chars | `Готовим личный кабинет.`                         |
+| Splash body              | 0-80 chars  | `Загружаем настройки.`                            |
+| Legal/support link label | 0-24 chars  | hide link if label or URL is missing              |
+| Composer placeholder     | 0-28 chars  | `Сообщение...`                                    |
 
 ## Branding Fallback Logic
 
 - Logo missing: render generated monogram from tenant display name.
 - Logo fails to load: hide broken image and render monogram.
+- Auth header image missing: use default artwork
+  `/default-branding/auth-header.png`; recommended source size `1445x925`.
+- Auth footer image missing: use default decorative artwork
+  `/default-branding/auth-footer.png`; recommended source size `1500x528`.
 - Display name missing or blank: use `Клиентский портал` in UI fallback and
   block tenant publish later.
 - Display name too long: keep full value for accessible title metadata, but
@@ -829,7 +901,7 @@ admin implementation.
 
 - Disabled chat header menu button until it has real user-facing actions.
 - Duplicate login links on registration request.
-- Login eligibility helper if registration already explains known-email access.
+- CTA/auth links divider on login when it creates unnecessary visual separation.
 - Definite password reset delivery copy that conflicts with generic backend
   behavior.
 - Decorative auth/chat accents that do not survive tenant colors or compete
@@ -865,6 +937,10 @@ Implementation of `MT-8.5` customer-facing UI cleanup is done only when:
 - Registration request has one login return path and concise access-active
   helper copy.
 - Password reset request and OTP copy are account enumeration-safe.
+- Registration OTP and password reset OTP use the same shared visual layout, so
+  future cleanup/branding changes cannot drift between the two screens.
+- Registration set-password and password reset set-password use the same shared
+  visual layout, with duplicate pre-success navigation removed.
 - Screen titles and CTA labels remain system-owned by default.
 - Tenant-owned copy is limited to explicitly allowed helper/welcome body slots.
 - Brand mark is visually supportive and does not dominate auth screens.
@@ -873,8 +949,8 @@ Implementation of `MT-8.5` customer-facing UI cleanup is done only when:
 - Accent color is optional, low-intensity and disabled when missing, invalid or
   visually noisy.
 - Header accent remains disabled by default.
-- Chat header uses left/center/right structure and has no disabled menu button
-  without real actions.
+- Chat header uses the accepted customer-support header pattern and has no
+  disabled menu button without visible purpose.
 - Transcript remains mostly neutral and readable; outgoing color passes contrast.
 - Composer controls fit and remain understandable at 320px.
 - Audio attachments do not overflow narrow incoming bubbles, or the finding is
@@ -921,9 +997,12 @@ Required `MT-9` previews must use real components:
 - chat empty/not-ready;
 - PWA app identity and splash.
 
+Auth previews must show uploaded header/footer art with real crop, brand mark
+left/center/right placement, system-owned header bottom fade and system-owned
+footer top fade before a tenant can publish branding changes.
+
 ## Open UI Findings
 
-- `F-AUTH-001`: password reset generic copy, should be closed by auth copy pass.
 - `F-CHAT-UI-002`: context menu keyboard accessibility.
 - `F-CHAT-UI-003`: audio attachment narrow width.
 - `F-IOS-001`: iOS keyboard textarea viewport pan, focused experiment only.

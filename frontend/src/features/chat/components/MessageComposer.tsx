@@ -49,7 +49,9 @@ export function MessageComposer({
   replyTarget,
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null)
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
+    null,
+  )
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -89,9 +91,15 @@ export function MessageComposer({
 
   const isVoiceRecorderBusy = voiceRecorderStatus !== 'idle'
   const canSendText =
-    normalizedDraft.length > 0 && !disabled && !isSending && !isVoiceRecorderBusy
+    normalizedDraft.length > 0 &&
+    !disabled &&
+    !isSending &&
+    !isVoiceRecorderBusy
   const canSendAttachment =
-    selectedAttachment !== null && !disabled && !isSending && !isVoiceRecorderBusy
+    selectedAttachment !== null &&
+    !disabled &&
+    !isSending &&
+    !isVoiceRecorderBusy
   const canSend = canSendAttachment || canSendText
   const canStartVoiceRecording =
     !disabled &&
@@ -299,8 +307,10 @@ export function MessageComposer({
   return (
     <footer
       className={cn(
-        'border-t border-slate-200/90 bg-white/95 px-4 pt-4 backdrop-blur-sm sm:px-6',
-        isVisualKeyboardOpen ? 'pb-2' : 'app-safe-bottom',
+        'border-t border-slate-200/90 bg-white/95 px-4 pt-3 backdrop-blur-sm sm:px-6',
+        isVisualKeyboardOpen
+          ? 'pb-1.5'
+          : 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
       )}
     >
       <div className="mx-auto w-full max-w-[620px]">
@@ -310,7 +320,7 @@ export function MessageComposer({
           </div>
         ) : null}
 
-        <div className="rounded-[1rem] border border-slate-200 bg-slate-50/90 p-2">
+        <div className="rounded-[0.85rem] border border-slate-200 bg-slate-50/90 p-1">
           {replyTarget ? (
             <ComposerReplyPreview
               disabled={isSending || isVoiceRecorderBusy}
@@ -340,7 +350,7 @@ export function MessageComposer({
             status={voiceRecorderStatus}
           />
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-1.5">
             <input
               accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
               aria-label="Файл вложения"
@@ -358,7 +368,7 @@ export function MessageComposer({
             >
               <button
                 aria-label="Прикрепить файл"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-chat-outgoing focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[0.7rem] text-slate-400 transition hover:bg-white hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
                 disabled={isAttachmentControlDisabled}
                 onClick={() => {
                   fileInputRef.current?.click()
@@ -367,13 +377,13 @@ export function MessageComposer({
                 title="Прикрепить файл"
                 type="button"
               >
-                <PaperclipIcon className="h-[18px] w-[18px]" />
+                <PaperclipIcon className="h-5 w-5" />
               </button>
             </ComposerSideControl>
 
             <textarea
               aria-label="Сообщение"
-              className="max-h-32 min-h-[44px] min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
+              className="max-h-32 min-h-10 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
               disabled={disabled || isSending || isVoiceRecorderBusy}
               onChange={(event) => {
                 const nextDraft = event.target.value
@@ -405,7 +415,7 @@ export function MessageComposer({
             >
               <button
                 aria-label="Голосовое сообщение"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-[0.75rem] text-slate-500 transition hover:bg-white hover:text-chat-outgoing focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
                 disabled={!canStartVoiceRecording}
                 onClick={() => {
                   void startVoiceRecording()
@@ -417,8 +427,8 @@ export function MessageComposer({
                 <MicrophoneIcon
                   className={
                     voiceRecorderStatus === 'starting'
-                      ? 'h-[18px] w-[18px] animate-pulse'
-                      : 'h-[18px] w-[18px]'
+                      ? 'h-5 w-5 animate-pulse'
+                      : 'h-5 w-5'
                   }
                 />
               </button>
@@ -431,7 +441,7 @@ export function MessageComposer({
                     ? 'Отправить файл'
                     : 'Отправить'
               }
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
               disabled={!canSend || isVoiceRecorderBusy}
               onClick={() => {
                 void submitCurrentDraft()

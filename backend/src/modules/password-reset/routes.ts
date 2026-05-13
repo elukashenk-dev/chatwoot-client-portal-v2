@@ -10,7 +10,7 @@ const passwordResetRequestBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
 })
 
 const passwordResetVerifyBodySchema = z.object({
@@ -22,7 +22,7 @@ const passwordResetVerifyBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
 })
 
 const passwordResetSetPasswordBodySchema = z.object({
@@ -34,7 +34,7 @@ const passwordResetSetPasswordBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
   newPassword: portalPasswordSchema,
 })
 

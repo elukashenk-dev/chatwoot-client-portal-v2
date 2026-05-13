@@ -133,7 +133,10 @@ www.chat.provgroup.ru
 - это правило относится только к старому клиентскому порталу;
 - production Chatwoot, его database, uploads, services, Nginx site и runtime
   artifacts не удалять и не менять без отдельного explicit Chatwoot maintenance
-  plan.
+  plan;
+- исключение для `MT-10`: installer может только настроить tenant API Channel
+  inbox - включить single-conversation режим, прописать webhook URL и сохранить
+  возвращенный `Channel::Api.secret` в portal DB.
 
 ## Старый Dry Run: Что Важно Запомнить
 
@@ -152,37 +155,35 @@ www.chat.provgroup.ru
 
 ## Важное Ограничение После MT-8
 
-Текущие production docs/installer/compose еще нужно привести к multi-tenant
-модели.
+Production docs/installer/compose приведены к tenant-aware dedicated
+one-tenant flow в рамках `MT-10`.
 
-До этого:
+Актуальный clean reinstall runbook:
 
-- не запускать новый `v2` production deploy на реальном сервере;
+```text
+docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
+```
+
+Ограничения остаются:
+
 - не использовать старые global `CHATWOOT_*` как production runtime authority;
-- не менять production Chatwoot ради portal deploy;
+- не менять production Chatwoot ради portal deploy за пределами явно
+  разрешенной tenant API Channel настройки;
 - не переносить данные из старого портала в `v2`.
 
 ## План Будущего Развертывания
 
-Будущий production rollout должен идти после `MT-10 Deployment And Runbook
-Update`.
+Production rollout должен идти по `MT-10 Production Clean Reinstall Runbook`.
 
-Минимальный план для `MT-10`:
+Коротко:
 
-1. Обновить `.env.production.example` под multi-tenant runtime.
-2. Обновить `infra/production/compose.yaml`, чтобы backend получал tenant env:
-   `PORTAL_TENANT_SECRET_KEY` и `DEFAULT_TENANT_*`.
-3. Обновить `scripts/install-production.sh` под dedicated one-tenant bootstrap и
-   shared SaaS provisioning.
-4. Обновить `docs/PRODUCTION_DEPLOYMENT.md`.
-5. Подготовить clean replacement plan для старого test portal runtime на VM.
-6. Перед новой установкой удалить все старое, что относится к прежнему portal
-   runtime, не затрагивая production Chatwoot.
-7. Перед любыми действиями на VM сделать backup/snapshot.
-8. Проверить, что Chatwoot продолжает работать на `chat.provgroup.ru`.
-9. Поднять portal v2 на `lk.provgroup.ru`.
-10. Проверить tenant bootstrap, Chatwoot account/inbox verification, webhook
-    setup, auth, registration, chat, realtime and PWA identity.
+1. Проверить, что Chatwoot работает на `chat.provgroup.ru`.
+2. Удалить только старый portal runtime.
+3. Залить актуальный `v2`.
+4. Запустить tenant-aware installer.
+5. Поднять portal v2 на `lk.provgroup.ru`.
+6. Проверить tenant bootstrap, Chatwoot account/inbox verification, API Channel
+   webhook setup, auth, registration, chat, realtime and PWA identity.
 
 ## Что Не Хранить В Этом Файле
 

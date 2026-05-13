@@ -1,13 +1,18 @@
-import type { InputHTMLAttributes } from 'react'
+import type { InputHTMLAttributes, ReactNode } from 'react'
 import { useState } from 'react'
 
 import { cn } from '../lib/cn'
 import { inputClassName } from './inputStyles'
 import { EyeClosedIcon, EyeOpenIcon } from './icons'
 
-type PasswordFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
+type PasswordFieldProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type'
+> & {
   hasError?: boolean
   hideLabel?: string
+  isFilled?: boolean
+  leadingIcon?: ReactNode
   showLabel?: string
 }
 
@@ -16,6 +21,8 @@ export function PasswordField({
   hasError,
   hideLabel = 'Скрыть пароль',
   id,
+  isFilled,
+  leadingIcon,
   showLabel = 'Показать пароль',
   ...props
 }: PasswordFieldProps) {
@@ -23,9 +30,21 @@ export function PasswordField({
 
   return (
     <div className="relative">
+      {leadingIcon ? (
+        <span className="pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-slate-500">
+          {leadingIcon}
+        </span>
+      ) : null}
+
       <input
         {...props}
-        className={cn(inputClassName(Boolean(hasError)), 'pr-16', className)}
+        className={cn(
+          inputClassName(Boolean(hasError), Boolean(isFilled)),
+          Boolean(leadingIcon) && 'pl-16',
+          'pr-16',
+          className,
+        )}
+        data-filled={isFilled ? 'true' : undefined}
         id={id}
         type={isVisible ? 'text' : 'password'}
       />

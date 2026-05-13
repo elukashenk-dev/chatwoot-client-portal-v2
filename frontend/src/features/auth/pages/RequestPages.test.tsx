@@ -79,18 +79,32 @@ describe('Auth flow pages', () => {
     renderAuthRoutes(['/auth/register'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Новый аккаунт' }),
+      await screen.findByRole('heading', { name: 'Создать аккаунт' }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText(/Имя и фамилия/)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Email/)).toBeInTheDocument()
+    const nameInput = screen.getByLabelText(/Имя и фамилия/)
+    const emailInput = screen.getByLabelText(/Email/)
+
+    expect(nameInput).toBeInTheDocument()
+    expect(emailInput).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Укажите имя и рабочий email, чтобы получить код подтверждения.',
+      ),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))
 
-    expect(screen.getByText('Введите имя')).toBeInTheDocument()
-    expect(screen.getByText('Введите email')).toBeInTheDocument()
+    expect(screen.queryByText('Введите имя')).not.toBeInTheDocument()
+    expect(screen.queryByText('Введите email')).not.toBeInTheDocument()
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true')
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute(
+      'href',
+      '/auth/login',
+    )
     expect(
-      screen.getByRole('link', { name: 'Вернуться ко входу' }),
-    ).toHaveAttribute('href', '/auth/login')
+      screen.queryByRole('link', { name: 'У меня уже есть аккаунт' }),
+    ).not.toBeInTheDocument()
   })
 
   it('submits the registration request page against the backend and navigates to verify', async () => {
@@ -141,9 +155,87 @@ describe('Auth flow pages', () => {
       await screen.findByRole('heading', { name: 'Подтверждение Email' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Мы отправили 6-значный код на/),
+      screen.getByText('Код подтверждения отправлен на'),
     ).toBeInTheDocument()
+    expect(screen.getByTestId('otp-verification-form')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Если письма нет, проверьте «Спам» или запросите новый код после таймера.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Повторить через/ }),
+    ).toBeDisabled()
+    expect(
+      screen.queryByText(/Повторная отправка будет доступна через/),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Мы отправили 6-значный код на/),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
+  })
+
+  it('shows a clickable support phone when registration contact is missing', async () => {
+    const user = userEvent.setup()
+
+    mockUnauthenticatedSession()
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          error: {
+            code: 'REGISTRATION_CONTACT_NOT_FOUND',
+            message:
+              'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+          },
+        },
+        403,
+      ),
+    )
+
+    renderAuthRoutes(['/auth/register'])
+
+    await user.type(
+      await screen.findByLabelText(/Имя и фамилия/),
+      'Portal User',
+    )
+    await user.type(screen.getByLabelText(/Email/), 'missing@company.ru')
+    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+    )
+    expect(
+      screen.getByRole('link', { name: '+7 (906) 12-955-12' }),
+    ).toHaveAttribute('href', 'tel:+79061295512')
+  })
+
+  it('renders the password reset request page and validates empty email softly', async () => {
+    const user = userEvent.setup()
+
+    mockUnauthenticatedSession()
+    renderAuthRoutes(['/auth/password-reset/request'])
+
+    expect(
+      await screen.findByRole('heading', { name: 'Восстановить пароль' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Введите email. Если доступ активен, мы отправим код восстановления.',
+      ),
+    ).toBeInTheDocument()
+
+    const emailInput = screen.getByLabelText(/Email/)
+
+    await user.click(screen.getByRole('button', { name: 'Получить код' }))
+
+    expect(screen.queryByText('Введите email')).not.toBeInTheDocument()
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
+    expect(
+      screen.getByRole('link', { name: 'Вернуться ко входу' }),
+    ).toHaveAttribute('href', '/auth/login')
+    expect(
+      screen.queryByRole('link', { name: 'Новый аккаунт' }),
+    ).not.toBeInTheDocument()
   })
 
   it('guards the registration verify page when the request step was skipped', async () => {
@@ -333,10 +425,22 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/register/set-password'])
 
-    await user.type(
-      await screen.findByLabelText(/Новый пароль/),
-      'PortalPass123',
-    )
+    expect(
+      await screen.findByRole('heading', { name: 'Создание пароля' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Создайте пароль, чтобы входить в Центр поддержки.'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('password-setup-form')).toBeInTheDocument()
+    expect(screen.getByTestId('password-rules-card')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Вернуться назад' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Перейти ко входу' }),
+    ).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/Новый пароль/), 'PortalPass123')
     await user.type(
       screen.getByLabelText(/Подтвердите пароль/),
       'PortalPass123',
@@ -509,6 +613,12 @@ describe('Auth flow pages', () => {
     expect(
       await screen.findByRole('heading', { name: 'Подтверждение Email' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Если доступ активен, код восстановления отправлен на'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Мы отправили 6-значный код на/),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Изменить email' }),
@@ -585,6 +695,21 @@ describe('Auth flow pages', () => {
       name: 'Продолжить',
     })
 
+    expect(
+      screen.getByText('Если доступ активен, код восстановления отправлен на'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('otp-verification-form')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Если письма нет, проверьте «Спам» или запросите новый код после таймера.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Повторить через/ }),
+    ).toBeDisabled()
+    expect(
+      screen.queryByText(/Повторная отправка будет доступна через/),
+    ).not.toBeInTheDocument()
     expect(submitButton).toBeDisabled()
 
     await user.click(screen.getByLabelText('Код из письма'))
@@ -607,7 +732,7 @@ describe('Auth flow pages', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Создание пароля' }),
+      await screen.findByRole('heading', { name: 'Новый пароль' }),
     ).toBeInTheDocument()
   })
 
@@ -646,8 +771,46 @@ describe('Auth flow pages', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', { name: 'Создание пароля' }),
+      screen.queryByRole('heading', { name: 'Новый пароль' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('uses enumeration-safe copy when password reset code is resent', async () => {
+    const user = userEvent.setup()
+
+    savePasswordResetRequest({
+      email: 'name@company.ru',
+      expiresInSeconds: 900,
+      resendAvailableInSeconds: 0,
+    })
+
+    mockUnauthenticatedSession()
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          accepted: true,
+          email: 'name@company.ru',
+          expiresInSeconds: 900,
+          nextStep: 'verify_code',
+          purpose: 'password_reset',
+          resendAvailableInSeconds: 60,
+          result: 'password_reset_requested',
+        },
+        200,
+      ),
+    )
+
+    renderAuthRoutes(['/auth/password-reset/verify'])
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Отправить код повторно' }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Если доступ активен, новый код отправлен на name@company.ru.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('completes password reset set-password and shows success feedback', async () => {
@@ -679,7 +842,22 @@ describe('Auth flow pages', () => {
 
     renderAuthRoutes(['/auth/password-reset/set-password'])
 
-    await user.type(await screen.findByLabelText(/Новый пароль/), 'NewPass123')
+    expect(
+      await screen.findByRole('heading', { name: 'Новый пароль' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Создайте новый пароль для входа в Центр поддержки.'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('password-setup-form')).toBeInTheDocument()
+    expect(screen.getByTestId('password-rules-card')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Вернуться назад' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Перейти ко входу' }),
+    ).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/Новый пароль/), 'NewPass123')
     await user.type(screen.getByLabelText(/Подтвердите пароль/), 'NewPass123')
     await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }))
 

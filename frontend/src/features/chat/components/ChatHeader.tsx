@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
@@ -8,7 +9,15 @@ import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPrimaryConversation } from '../types'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
-import { LogOutIcon, MenuIcon } from '../../../shared/ui/icons'
+import {
+  BellOffIcon,
+  ImageIcon,
+  InfoIcon,
+  LogOutIcon,
+  MenuIcon,
+  MoreHorizontalIcon,
+  SearchIcon,
+} from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
   conversation: ChatPrimaryConversation | null
@@ -19,8 +28,51 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
   const { tenant } = useTenantIdentity()
+  const chatMenuRef = useRef<HTMLDivElement | null>(null)
+  const navMenuRef = useRef<HTMLDivElement | null>(null)
+  const [isChatMenuOpen, setIsChatMenuOpen] = useState(false)
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isChatMenuOpen && !isNavMenuOpen) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target
+
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (
+        chatMenuRef.current?.contains(target) ||
+        navMenuRef.current?.contains(target)
+      ) {
+        return
+      }
+
+      setIsChatMenuOpen(false)
+      setIsNavMenuOpen(false)
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsChatMenuOpen(false)
+        setIsNavMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isChatMenuOpen, isNavMenuOpen])
 
   async function handleLogout() {
     setIsLoggingOut(true)
@@ -40,61 +92,139 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   const supportTeamName = tenant
     ? `Команда ${tenant.displayName}`
     : 'Команда поддержки'
+  const assigneeName = conversation?.assigneeName ?? supportTeamName
+  const tenantMonogram = tenant
+    ? createTenantMonogram(tenant.displayName)
+    : 'ЛК'
 
   return (
-    <header className="app-safe-top chat-header-background relative z-10 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
-      <div className="flex min-h-10 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
+      <div className="flex min-h-10 items-center gap-3">
+        <div className="relative shrink-0" ref={navMenuRef}>
           <button
-            aria-label="Меню"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] text-slate-600 transition hover:bg-slate-100/70 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-default"
-            disabled
+            aria-expanded={isNavMenuOpen}
+            aria-haspopup="menu"
+            aria-label={
+              isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
+            }
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[0.7rem] text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            onClick={() => {
+              setIsNavMenuOpen((currentValue) => !currentValue)
+              setIsChatMenuOpen(false)
+            }}
             title="Меню"
             type="button"
           >
             <MenuIcon className="h-6 w-6" />
           </button>
 
-          <div className="flex min-w-0 items-center gap-[15px]">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white">
-              {tenant ? createTenantMonogram(tenant.displayName) : 'ЛК'}
+          {isNavMenuOpen ? (
+            <div
+              className="absolute left-0 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-[0.8rem] border border-slate-200/80 bg-white/[0.98] p-1.5 text-sm text-slate-700 shadow-[0_14px_32px_rgb(15_45_87_/_0.14)] backdrop-blur"
+              role="menu"
+            >
+              <button
+                className="flex w-full items-center rounded-[0.6rem] px-3 py-2 text-left font-medium text-brand-800"
+                role="menuitem"
+                type="button"
+              >
+                Чат
+              </button>
+              <button
+                aria-disabled="true"
+                className="flex w-full items-center justify-between rounded-[0.6rem] px-3 py-2 text-left text-slate-500"
+                role="menuitem"
+                type="button"
+              >
+                <span>Центр поддержки</span>
+                <span className="text-xs text-slate-400">скоро</span>
+              </button>
             </div>
+          ) : null}
+        </div>
 
-            <div className="min-w-0 py-0.5">
-              <h1 className="truncate text-[16px] font-semibold text-slate-900 sm:text-[17px]">
-                Поддержка клиентов
-              </h1>
-              <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] text-slate-500 sm:mt-1 sm:text-[13px]">
-                <span className="min-w-0 truncate">
-                  Агент: {conversation?.assigneeName ?? supportTeamName}
-                </span>
-                <span
-                  aria-label={presenceLabel}
-                  className="inline-flex shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium leading-4 text-emerald-700"
-                  role="status"
-                  title={presenceLabel}
-                >
-                  {presenceLabel}
-                </span>
-              </div>
-            </div>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white">
+          {tenantMonogram}
+        </div>
+
+        <div className="min-w-0 flex-1 py-0.5">
+          <h1 className="truncate text-[16px] font-semibold leading-tight text-slate-900 sm:text-[17px]">
+            Поддержка клиентов
+          </h1>
+          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-slate-500 sm:text-[13px]">
+            <span className="min-w-0 truncate">{assigneeName}</span>
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#76a878] shadow-[0_0_0_2px_rgb(118_168_120_/_0.14)]"
+            />
+            <span
+              aria-label={presenceLabel}
+              className="shrink-0 font-normal text-[#5f8b62]"
+              role="status"
+              title={presenceLabel}
+            >
+              {presenceLabel}
+            </span>
           </div>
         </div>
 
-        <button
-          aria-label={isLoggingOut ? 'Выходим...' : 'Выйти'}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] text-slate-600 transition hover:bg-slate-100/70 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
-          disabled={isLoggingOut}
-          onClick={() => {
-            void handleLogout()
-          }}
-          title="Выйти"
-          type="button"
-        >
-          <LogOutIcon
-            className={isLoggingOut ? 'h-5 w-5 animate-pulse' : 'h-5 w-5'}
-          />
-        </button>
+        <div className="relative shrink-0" ref={chatMenuRef}>
+          <button
+            aria-expanded={isChatMenuOpen}
+            aria-haspopup="menu"
+            aria-label={
+              isChatMenuOpen ? 'Закрыть меню чата' : 'Открыть меню чата'
+            }
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/60 bg-slate-50/60 text-slate-500 transition hover:border-slate-300/80 hover:bg-slate-100/80 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            onClick={() => {
+              setIsChatMenuOpen((currentValue) => !currentValue)
+              setIsNavMenuOpen(false)
+            }}
+            title="Меню чата"
+            type="button"
+          >
+            <MoreHorizontalIcon className="h-5 w-5" />
+          </button>
+
+          {isChatMenuOpen ? (
+            <div
+              className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-[0.85rem] border border-slate-200/90 bg-white/[0.98] p-2 text-slate-700 shadow-[0_16px_36px_rgb(15_45_87_/_0.16)] backdrop-blur"
+              role="menu"
+            >
+              <ChatMenuItem
+                icon={<SearchIcon className="h-5 w-5" />}
+                label="Поиск по чату"
+              />
+              <ChatMenuItem
+                icon={<ImageIcon className="h-5 w-5" />}
+                label="Медиа и файлы"
+              />
+              <ChatMenuItem
+                icon={<BellOffIcon className="h-5 w-5" />}
+                label="Отключить уведомления"
+              />
+              <ChatMenuItem
+                icon={<InfoIcon className="h-5 w-5" />}
+                label="Информация о чате"
+              />
+              <ChatMenuItem
+                destructive
+                disabled={isLoggingOut}
+                icon={
+                  <LogOutIcon
+                    className={
+                      isLoggingOut ? 'h-5 w-5 animate-pulse' : 'h-5 w-5'
+                    }
+                  />
+                }
+                label={isLoggingOut ? 'Завершаем...' : 'Завершить диалог'}
+                onSelect={() => {
+                  void handleLogout()
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {logoutError ? (
@@ -103,5 +233,40 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
         </div>
       ) : null}
     </header>
+  )
+}
+
+function ChatMenuItem({
+  destructive = false,
+  disabled = false,
+  icon,
+  label,
+  onSelect,
+}: {
+  destructive?: boolean
+  disabled?: boolean
+  icon: ReactNode
+  label: string
+  onSelect?: () => void
+}) {
+  return (
+    <button
+      aria-disabled={disabled || !onSelect ? true : undefined}
+      className={[
+        'flex min-h-10 w-full items-center gap-3 whitespace-nowrap border-b border-slate-200/80 px-1 py-2 text-left text-[15px] leading-5 transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60',
+        destructive
+          ? 'text-red-600 hover:text-red-700'
+          : 'text-slate-700 hover:text-brand-800',
+      ].join(' ')}
+      disabled={disabled}
+      onClick={onSelect}
+      role="menuitem"
+      type="button"
+    >
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center">
+        {icon}
+      </span>
+      <span>{label}</span>
+    </button>
   )
 }

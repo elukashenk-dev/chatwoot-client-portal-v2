@@ -1,5 +1,8 @@
 import { isValidEmail } from '../../../shared/lib/validation'
-import type { RegisterRequestFormErrors, RegisterRequestFormValues } from '../types'
+import type {
+  RegisterRequestFormErrors,
+  RegisterRequestFormValues,
+} from '../types'
 
 export function validateRegisterRequestForm(
   values: RegisterRequestFormValues,
@@ -15,7 +18,7 @@ export function validateRegisterRequestForm(
   if (!email) {
     nextErrors.email = 'Введите email'
   } else if (!isValidEmail(email)) {
-    nextErrors.email = 'Введите email в корректном формате'
+    nextErrors.email = 'Проверьте формат email'
   }
 
   return nextErrors

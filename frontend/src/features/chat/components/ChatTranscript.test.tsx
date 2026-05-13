@@ -113,28 +113,31 @@ describe('ChatTranscript', () => {
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
-      'border-brand-100',
-      'bg-brand-50',
-      'text-brand-700',
+      'border-slate-200/80',
+      'bg-white/80',
+      'text-slate-500',
     )
-    expect(dayDividerLabel.parentElement).toHaveClass('max-w-[520px]', 'gap-3')
+    expect(dayDividerLabel.parentElement).toHaveClass(
+      'max-w-[500px]',
+      'gap-2.5',
+    )
 
     expect(container.querySelector('[data-agent-avatar]')).toBeNull()
-    expect(getBubble(container, 1)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 1)).toHaveClass('rounded-[0.7rem]')
     expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
-    expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.4rem]')
+    expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.3rem]')
     expect(getBubble(container, 1)).toHaveClass(
       'chat-outgoing-surface',
       'leading-[1.45]',
       'text-white',
     )
     expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
-    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.7rem]')
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tr-[0.4rem]')
-    expect(getBubble(container, 2)).not.toHaveClass('rounded-br-[0.4rem]')
-    expect(getBubble(container, 3)).toHaveClass('rounded-[0.9rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-br-[0.3rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-[0.7rem]')
     expect(getBubble(container, 3)).not.toHaveClass('rounded-tr-[0.4rem]')
-    expect(getBubble(container, 3)).toHaveClass('rounded-br-[0.4rem]')
+    expect(getBubble(container, 3)).toHaveClass('rounded-br-[0.3rem]')
     const firstMeta = getMessageMeta(container, 1)
     const secondMeta = getMessageMeta(container, 2)
     const thirdMeta = getMessageMeta(container, 3)
@@ -166,8 +169,8 @@ describe('ChatTranscript', () => {
     ])
 
     expect(getBubble(container, 1)).toHaveClass(
-      'rounded-[0.9rem]',
-      'rounded-br-[0.4rem]',
+      'rounded-[0.7rem]',
+      'rounded-br-[0.3rem]',
     )
     expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
   })
@@ -212,8 +215,8 @@ describe('ChatTranscript', () => {
       'https://chatwoot.example.test/agent-avatar.png',
     )
     expect(getBubble(container, 1)).toHaveClass(
-      'rounded-[0.9rem]',
-      'rounded-tl-[0.4rem]',
+      'rounded-[0.7rem]',
+      'rounded-tl-[0.3rem]',
     )
     expect(getBubble(container, 1)).toHaveClass(
       'border-chat-incoming-border',
@@ -222,8 +225,8 @@ describe('ChatTranscript', () => {
       'text-slate-700',
     )
     expect(getBubble(container, 1)).not.toHaveClass('shadow-sm')
-    expect(getBubble(container, 2)).toHaveClass('rounded-[0.9rem]')
-    expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.4rem]')
+    expect(getBubble(container, 2)).toHaveClass('rounded-[0.7rem]')
+    expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.3rem]')
   })
 
   it('renders reply previews inside bubbles without persistent reply buttons', () => {

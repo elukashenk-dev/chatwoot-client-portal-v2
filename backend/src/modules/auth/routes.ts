@@ -17,7 +17,7 @@ const loginBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
   password: z.string().refine((value) => value.trim().length > 0, {
     message: 'Введите пароль',
   }),

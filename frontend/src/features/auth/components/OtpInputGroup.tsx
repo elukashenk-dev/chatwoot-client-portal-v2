@@ -1,4 +1,9 @@
-import type { ClipboardEvent, FocusEvent, InputHTMLAttributes, KeyboardEvent } from 'react'
+import type {
+  ClipboardEvent,
+  FocusEvent,
+  InputHTMLAttributes,
+  KeyboardEvent,
+} from 'react'
 import { useMemo, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
@@ -33,7 +38,11 @@ export function OtpInputGroup({
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const normalizedValue = normalizeOtpValue(value)
   const digits = useMemo(
-    () => Array.from({ length: OTP_LENGTH }, (_, index) => normalizedValue[index] ?? ''),
+    () =>
+      Array.from(
+        { length: OTP_LENGTH },
+        (_, index) => normalizedValue[index] ?? '',
+      ),
     [normalizedValue],
   )
 
@@ -64,7 +73,10 @@ export function OtpInputGroup({
     }
   }
 
-  function handleKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
     if (event.key === 'Backspace' && !digits[index] && index > 0) {
       focusInput(index - 1)
       return
@@ -103,7 +115,10 @@ export function OtpInputGroup({
 
     commitDigits(nextDigits)
 
-    const lastFilledIndex = Math.min(index + pastedDigits.length - 1, OTP_LENGTH - 1)
+    const lastFilledIndex = Math.min(
+      index + pastedDigits.length - 1,
+      OTP_LENGTH - 1,
+    )
     focusInput(lastFilledIndex)
   }
 
@@ -113,16 +128,18 @@ export function OtpInputGroup({
   }
 
   return (
-    <div className={cn('grid grid-cols-6 gap-2.5 sm:gap-3', className)}>
+    <div className={cn('grid grid-cols-6 gap-2 sm:gap-2.5', className)}>
       {digits.map((digit, index) => (
         <input
           {...props}
           aria-describedby={index === 0 ? ariaDescribedBy : undefined}
           aria-invalid={index === 0 ? ariaInvalid : undefined}
-          aria-label={index === 0 ? ariaLabel : `Код из письма, цифра ${index + 1}`}
+          aria-label={
+            index === 0 ? ariaLabel : `Код из письма, цифра ${index + 1}`
+          }
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
           className={cn(
-            'block h-16 w-full rounded-[1rem] border text-center text-[22px] font-semibold text-slate-900 shadow-sm transition focus:outline-none',
+            'block h-[52px] w-full rounded-[0.6rem] border text-center text-[20px] font-semibold text-slate-900 shadow-sm transition focus:outline-none',
             focusedIndex === index
               ? 'border-brand-700 bg-slate-50 ring-4 ring-brand-100'
               : 'border-slate-300',

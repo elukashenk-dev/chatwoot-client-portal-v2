@@ -7,6 +7,7 @@ import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
+import { MailIcon } from '../../../shared/ui/icons'
 import { ApiClientError, requestPasswordReset } from '../api/authClient'
 import { savePasswordResetRequest } from '../lib/passwordResetFlow'
 import { validatePasswordResetRequestForm } from '../lib/passwordResetRequestValidation'
@@ -21,6 +22,14 @@ const DEFAULT_VALUES: PasswordResetRequestFormValues = {
 
 const RESET_ERROR_MESSAGE =
   'Мы не смогли выполнить запрос. Попробуйте еще раз чуть позже.'
+
+function getVisibleFieldError(error?: string) {
+  if (error === 'Введите email') {
+    return undefined
+  }
+
+  return error
+}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
@@ -37,6 +46,9 @@ export function PasswordResetRequestForm() {
   const [touched, setTouched] = useState<TouchedPasswordResetRequestFields>({
     email: false,
   })
+  const [focused, setFocused] = useState<TouchedPasswordResetRequestFields>({
+    email: false,
+  })
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
@@ -44,11 +56,26 @@ export function PasswordResetRequestForm() {
   const fieldErrors = validatePasswordResetRequestForm(values)
   const visibleEmailError =
     touched.email || hasSubmitted ? fieldErrors.email : undefined
+  const suppressEmailFormatError =
+    focused.email && visibleEmailError === 'Проверьте формат email'
+  const visibleEmailErrorMessage = suppressEmailFormatError
+    ? undefined
+    : getVisibleFieldError(visibleEmailError)
+  const emailHasError = Boolean(visibleEmailError) && !suppressEmailFormatError
   const emailErrorId = 'password-reset-email-error'
 
   function setFieldValue(nextValue: string) {
     setValues({ email: nextValue })
     setGlobalError(null)
+  }
+
+  function markFieldTouched() {
+    setFocused({ email: false })
+    setTouched({ email: true })
+  }
+
+  function markFieldFocused() {
+    setFocused({ email: true })
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -82,24 +109,29 @@ export function PasswordResetRequestForm() {
   }
 
   return (
-    <form className="space-y-6" noValidate onSubmit={handleSubmit}>
+    <form className="space-y-4" noValidate onSubmit={handleSubmit}>
       <FormField
-        error={visibleEmailError}
+        error={visibleEmailErrorMessage}
         errorId={emailErrorId}
         htmlFor="password-reset-email"
         label="Email"
+        labelHidden
         required
       >
         <TextField
-          aria-describedby={visibleEmailError ? emailErrorId : undefined}
-          aria-invalid={Boolean(visibleEmailError)}
+          aria-describedby={visibleEmailErrorMessage ? emailErrorId : undefined}
+          aria-invalid={emailHasError}
           autoComplete="email"
-          hasError={Boolean(visibleEmailError)}
+          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          hasError={emailHasError}
           id="password-reset-email"
           inputMode="email"
+          isFilled={values.email.trim().length > 0}
+          leadingIcon={<MailIcon className="h-6 w-6" />}
           name="email"
-          onBlur={() => setTouched({ email: true })}
+          onBlur={markFieldTouched}
           onChange={(event) => setFieldValue(event.target.value)}
+          onFocus={markFieldFocused}
           placeholder="name@company.ru"
           required
           type="email"
@@ -107,9 +139,8 @@ export function PasswordResetRequestForm() {
         />
       </FormField>
 
-      <div className="rounded-[0.9rem] border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
-        Используйте email, который уже известен вашей компании. Если доступ не
-        найден, обратитесь в вашу компанию.
+      <div className="rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-sm leading-5 text-slate-500 shadow-sm">
+        Введите email, указанный при создании вашего профиля.
       </div>
 
       <InlineAlert message={globalError} tone="error" />

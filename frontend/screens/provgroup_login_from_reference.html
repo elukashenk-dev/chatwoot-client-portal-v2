@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>ProvGroup Клиентский портал — Вход</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: '#0f2d57',
+              muted: '#657796',
+              line: '#dce3ef',
+              field: '#fbfcfe',
+              brand: {
+                50: '#edf6ef',
+                100: '#dcecdf',
+                500: '#3d796c',
+                600: '#2f655e',
+                900: '#102f5b',
+              },
+            },
+            fontFamily: {
+              sans: [
+                'Segoe UI Variable',
+                'Segoe UI',
+                'Helvetica Neue',
+                'Arial',
+                'BlinkMacSystemFont',
+                'system-ui',
+                'sans-serif',
+              ],
+            },
+            boxShadow: {
+              input: '0 6px 14px rgba(15, 45, 87, 0.07)',
+              button: '0 8px 16px rgba(16, 47, 91, 0.16)',
+              soft: '0 16px 34px rgba(16, 47, 91, 0.08)',
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      .header-art {
+        height: 340px;
+        background-image: url('../main-header.png');
+        background-position: center top;
+        background-repeat: no-repeat;
+        background-size: cover;
+      }
+
+      .header-art::after {
+        content: '';
+        position: absolute;
+        inset: auto 0 0;
+        height: 54px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0) 0%,
+          #fff 76%
+        );
+        pointer-events: none;
+      }
+
+      .form-icon {
+        pointer-events: none;
+      }
+
+      .screen-shell {
+        min-height: 100vh;
+        background:
+          linear-gradient(
+            180deg,
+            #fff 0%,
+            #fff 58%,
+            rgba(255, 255, 255, 0.98) 68%,
+            rgba(255, 255, 255, 0.72) 82%,
+            rgba(255, 255, 255, 0) 100%
+          ),
+          url('../main-yt.png') center bottom / 100% auto no-repeat,
+          #fff;
+      }
+
+      .content-panel {
+        padding-left: 28px;
+        padding-right: 28px;
+      }
+
+      .page-title {
+        font-size: 32px;
+      }
+
+      .brand-mark {
+        left: 51px;
+        top: 64px;
+      }
+
+      .brand-logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        font-size: 18px;
+      }
+
+      .brand-name {
+        margin-top: 12px;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+      }
+
+      .brand-line {
+        margin-top: 10px;
+        width: 56px;
+      }
+
+      .access-card {
+        gap: 18px;
+        padding: 24px 48px 18px 17px;
+        touch-action: none;
+        transform: translateY(var(--notice-y, 0px));
+        user-select: none;
+      }
+
+      .access-icon {
+        width: 76px;
+        height: 76px;
+      }
+
+      .access-icon svg {
+        width: 38px;
+        height: 46px;
+      }
+
+      .access-title {
+        font-size: 14px;
+        line-height: 1.35;
+      }
+
+      .access-copy {
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .notice-shell {
+        position: fixed;
+        left: 50%;
+        top: 205px;
+        z-index: 50;
+        width: min(440px, calc(100vw - 56px));
+        transform: translateX(-50%);
+      }
+
+      @media (max-width: 390px) {
+        .content-panel {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        .access-card {
+          gap: 14px;
+          padding: 16px 38px 12px 12px;
+        }
+
+        .notice-shell {
+          top: 92px;
+          width: calc(100vw - 40px);
+        }
+
+        .access-icon {
+          width: 44px;
+          height: 44px;
+        }
+
+        .access-icon svg {
+          width: 24px;
+          height: 30px;
+        }
+
+        .access-title {
+          font-size: 13px;
+          line-height: 1.2;
+        }
+
+        .access-copy {
+          font-size: 12px;
+          line-height: 1.35;
+        }
+
+        .page-title {
+          font-size: 28px;
+        }
+
+        .header-art {
+          height: 270px;
+          background-size: 410px auto;
+          background-position: center top;
+        }
+
+        .brand-mark {
+          left: 28px;
+          top: 42px;
+        }
+
+        .brand-logo {
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          font-size: 16px;
+        }
+
+        .brand-name {
+          margin-top: 10px;
+          font-size: 11px;
+          letter-spacing: 0.14em;
+        }
+
+        .brand-line {
+          margin-top: 8px;
+          width: 48px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .page-title {
+          font-size: 27px;
+        }
+
+        .header-art {
+          height: 260px;
+          background-size: 394px auto;
+        }
+
+        .brand-mark {
+          left: 24px;
+          top: 40px;
+        }
+
+        .notice-shell {
+          top: 78px;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-white text-ink antialiased">
+    <main class="mx-auto flex w-full justify-center">
+      <section
+        class="screen-shell relative w-full max-w-[496px] overflow-hidden rounded-none"
+        aria-label="Вход в клиентский портал"
+      >
+        <div class="header-art relative z-10">
+          <div class="brand-mark absolute flex w-max flex-col items-center">
+            <div
+              class="brand-logo flex items-center justify-center bg-ink font-semibold leading-none tracking-wide text-white shadow-sm"
+            >
+              PG
+            </div>
+            <div
+              class="brand-name font-semibold uppercase leading-none text-ink/85"
+            >
+              ProvGroup
+            </div>
+            <div
+              class="brand-line h-px bg-gradient-to-r from-transparent via-line to-transparent"
+            ></div>
+          </div>
+        </div>
+
+        <aside
+          id="accessNotice"
+          class="notice-shell"
+          aria-label="Информация о доступе"
+        >
+          <div
+            id="accessNoticeCard"
+            class="access-card relative flex items-center rounded-[20px] border border-[#dde2da] bg-[#fbfcf9]/95 shadow-[0_14px_34px_rgba(15,45,87,0.12)] backdrop-blur-sm"
+          >
+            <div
+              class="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-line"
+              aria-hidden="true"
+            ></div>
+            <button
+              id="closeAccessNotice"
+              type="button"
+              class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-white hover:text-ink focus:outline-none focus:ring-4 focus:ring-[#dfe9f8]"
+              aria-label="Закрыть уведомление"
+            >
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18"></path>
+                <path d="m6 6 12 12"></path>
+              </svg>
+            </button>
+            <div
+              class="access-icon flex shrink-0 items-center justify-center rounded-full bg-brand-50 text-ink"
+              aria-hidden="true"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.45"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M12 1.9 19.6 5.75v6.65c0 4.6-2.9 8.04-7.6 9.3-4.7-1.26-7.6-4.7-7.6-9.3V5.75L12 1.9Z"
+                ></path>
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <h2 class="access-title font-semibold text-ink">
+                Безопасность и доступ
+              </h2>
+              <p class="access-copy mt-[5px] text-muted">
+                Доступ предоставляется для email, который уже известен вашей
+                компании.
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        <div class="content-panel relative z-10 pb-[18px]">
+          <header class="text-center">
+            <h1
+              class="page-title font-semibold leading-none tracking-tight text-ink"
+            >
+              Клиентский портал
+            </h1>
+            <p
+              class="mx-auto mt-[18px] max-w-[355px] text-[15px] leading-7 text-muted"
+            >
+              Войдите, чтобы продолжить работу с сообщениями и обращениями.
+            </p>
+          </header>
+
+          <form id="loginForm" class="mt-[30px]" novalidate>
+            <div>
+              <label
+                for="email"
+                class="block text-sm font-medium leading-none text-ink"
+                >Email</label
+              >
+              <div class="relative mt-[12px]">
+                <span
+                  class="form-icon absolute left-[19px] top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-muted"
+                  aria-hidden="true"
+                >
+                  <svg
+                    class="h-[26px] w-[26px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.45"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="20" height="16" x="2" y="4" rx="2.5"></rect>
+                    <path d="m22 7-8.97 5.7a2 2 0 0 1-2.06 0L2 7"></path>
+                  </svg>
+                </span>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  placeholder="name@company.ru"
+                  class="block h-[68px] w-full rounded-[16px] border border-line bg-field pl-[63px] pr-5 font-sans text-[18px] font-normal text-ink outline-none transition placeholder:font-normal placeholder:text-[#8190ad] focus:border-ink focus:ring-4 focus:ring-[#dfe9f8]"
+                />
+              </div>
+            </div>
+
+            <div class="mt-[24px]">
+              <label
+                for="password"
+                class="block text-sm font-medium leading-none text-ink"
+                >Пароль</label
+              >
+              <div class="relative mt-[12px]">
+                <span
+                  class="form-icon absolute left-[19px] top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-muted"
+                  aria-hidden="true"
+                >
+                  <svg
+                    class="h-[25px] w-[25px]"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.45"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect width="18" height="12" x="3" y="10" rx="2.5"></rect>
+                    <path d="M7 10V7a5 5 0 0 1 10 0v3"></path>
+                    <path d="M12 15.5v2"></path>
+                  </svg>
+                </span>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autocomplete="current-password"
+                  placeholder="Введите пароль"
+                  class="block h-[68px] w-full rounded-[16px] border border-line bg-field pl-[63px] pr-[63px] font-sans text-[18px] font-normal text-ink outline-none transition placeholder:font-normal placeholder:text-[#8190ad] focus:border-ink focus:ring-4 focus:ring-[#dfe9f8]"
+                />
+                <button
+                  id="togglePassword"
+                  type="button"
+                  class="absolute right-[19px] top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#697b99] transition hover:text-ink focus:outline-none focus:ring-4 focus:ring-[#dfe9f8]"
+                  aria-controls="password"
+                  aria-label="Показать пароль"
+                  aria-pressed="false"
+                  data-hs-tooltip="#passwordTooltip"
+                >
+                  <svg
+                    id="eyeOpen"
+                    class="h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.45"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M2.06 12.35a1 1 0 0 1 0-.7C3.31 8.15 6.7 5.5 12 5.5s8.69 2.65 9.94 6.15a1 1 0 0 1 0 .7C20.69 15.85 17.3 18.5 12 18.5s-8.69-2.65-9.94-6.15Z"
+                    ></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                  <svg
+                    id="eyeClosed"
+                    class="hidden h-5 w-5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.45"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m3 3 18 18"></path>
+                    <path d="M10.58 10.58a2 2 0 0 0 2.83 2.83"></path>
+                    <path
+                      d="M9.88 5.82A10.5 10.5 0 0 1 12 5.5c5.3 0 8.69 2.65 9.94 6.15a1 1 0 0 1 0 .7 10.7 10.7 0 0 1-3.19 4.31"
+                    ></path>
+                    <path
+                      d="M6.1 6.6a10.7 10.7 0 0 0-4.04 5.05 1 1 0 0 0 0 .7C3.31 15.85 6.7 18.5 12 18.5a10.5 10.5 0 0 0 4.08-.76"
+                    ></path>
+                  </svg>
+                </button>
+                <div
+                  id="passwordTooltip"
+                  class="hs-tooltip-content invisible absolute z-20 rounded-lg bg-ink px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity"
+                  role="tooltip"
+                >
+                  Показать пароль
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="submitButton"
+              type="submit"
+              class="mt-[26px] inline-flex min-h-14 w-full items-center justify-center gap-[12px] rounded-[0.6em] bg-ink px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#0a2449] focus:outline-none focus:ring-4 focus:ring-[#dfe9f8]"
+            >
+              <span
+                class="inline-flex h-7 w-7 items-center justify-center"
+                aria-hidden="true"
+              >
+                <svg class="h-7 w-7 text-white" viewBox="0 0 32 32" fill="none">
+                  <path
+                    d="M16 2 27.35 6.75v8.95c0 7.45-4.85 12.55-11.35 15-6.5-2.45-11.35-7.55-11.35-15V6.75L16 2Z"
+                    stroke="currentColor"
+                    stroke-width="2.05"
+                    stroke-linejoin="round"
+                  ></path>
+                  <path
+                    d="M13.65 16v-1.65A2.35 2.35 0 0 1 16 12a2.35 2.35 0 0 1 2.35 2.35V16"
+                    stroke="currentColor"
+                    stroke-width="1.55"
+                    stroke-linecap="round"
+                  ></path>
+                  <rect
+                    x="12.55"
+                    y="15.45"
+                    width="6.9"
+                    height="5.75"
+                    rx="1.2"
+                    stroke="currentColor"
+                    stroke-width="1.55"
+                    stroke-linejoin="round"
+                  ></rect>
+                  <path
+                    d="M16 18.05v1.25"
+                    stroke="currentColor"
+                    stroke-width="1.55"
+                    stroke-linecap="round"
+                  ></path>
+                </svg>
+              </span>
+              <span>Войти</span>
+            </button>
+          </form>
+
+          <div
+            class="mt-[28px] h-px w-full bg-gradient-to-r from-transparent via-line to-transparent"
+            aria-hidden="true"
+          ></div>
+
+          <div class="flex items-center justify-between gap-4 text-sm">
+            <a
+              href="#"
+              class="inline-flex min-h-11 items-center rounded-[0.6em] text-[#0646a8] transition hover:text-ink focus:outline-none focus:ring-4 focus:ring-[#dfe9f8]"
+              >Забыли пароль?</a
+            >
+            <a
+              href="#"
+              class="inline-flex min-h-11 items-center rounded-[0.6em] text-[#0646a8] transition hover:text-ink focus:outline-none focus:ring-4 focus:ring-[#dfe9f8]"
+              >Создать аккаунт</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/preline@2.7.0/dist/preline.js"></script>
+    <script>
+      const password = document.getElementById('password')
+      const togglePassword = document.getElementById('togglePassword')
+      const eyeOpen = document.getElementById('eyeOpen')
+      const eyeClosed = document.getElementById('eyeClosed')
+      const accessNotice = document.getElementById('accessNotice')
+      const accessNoticeCard = document.getElementById('accessNoticeCard')
+      const closeAccessNotice = document.getElementById('closeAccessNotice')
+      const noticeViewportGap = 12
+      let noticeStartY = 0
+      let noticeStartOffsetY = 0
+      let noticeOffsetY = 0
+      let activePointerId = null
+
+      togglePassword.addEventListener('click', () => {
+        const isHidden = password.type === 'password'
+        password.type = isHidden ? 'text' : 'password'
+        togglePassword.setAttribute('aria-pressed', String(isHidden))
+        togglePassword.setAttribute(
+          'aria-label',
+          isHidden ? 'Скрыть пароль' : 'Показать пароль',
+        )
+        eyeOpen.classList.toggle('hidden', isHidden)
+        eyeClosed.classList.toggle('hidden', !isHidden)
+      })
+
+      closeAccessNotice.addEventListener('click', () => {
+        accessNotice.classList.add('hidden')
+      })
+
+      function setNoticePosition(y) {
+        const cardRect = accessNoticeCard.getBoundingClientRect()
+        const baseTop = cardRect.top - noticeOffsetY
+        const baseBottom = cardRect.bottom - noticeOffsetY
+        const minY = noticeViewportGap - baseTop
+        const maxY = window.innerHeight - noticeViewportGap - baseBottom
+
+        noticeOffsetY = Math.min(maxY, Math.max(minY, y))
+        accessNoticeCard.style.setProperty('--notice-y', `${noticeOffsetY}px`)
+      }
+
+      accessNoticeCard.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return
+        activePointerId = event.pointerId
+        noticeStartY = event.clientY
+        noticeStartOffsetY = noticeOffsetY
+        accessNoticeCard.setPointerCapture(activePointerId)
+      })
+
+      accessNoticeCard.addEventListener('pointermove', (event) => {
+        if (event.pointerId !== activePointerId) return
+        setNoticePosition(noticeStartOffsetY + event.clientY - noticeStartY)
+      })
+
+      function finishNoticeDrag(event) {
+        if (event.pointerId !== activePointerId) return
+        accessNoticeCard.releasePointerCapture(activePointerId)
+        activePointerId = null
+      }
+
+      accessNoticeCard.addEventListener('pointerup', finishNoticeDrag)
+      accessNoticeCard.addEventListener('pointercancel', finishNoticeDrag)
+    </script>
+  </body>
+</html>

@@ -68,15 +68,25 @@ describe('LoginPage', () => {
 
     expect(await screen.findByLabelText(/Email/)).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Клиентский портал' }),
+      screen.getByRole('heading', { name: 'Центр поддержки' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Войдите, чтобы продолжить общение с поддержкой.'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Забыли пароль?' }),
     ).toHaveAttribute('href', '/auth/password-reset/request')
-    expect(screen.getByRole('link', { name: 'Новый аккаунт' })).toHaveAttribute(
-      'href',
-      '/auth/register',
-    )
+    expect(
+      screen.getByRole('link', { name: 'Создать аккаунт' }),
+    ).toHaveAttribute('href', '/auth/register')
+    expect(screen.getByText('Нет доступа к чату?')).toBeInTheDocument()
+    expect(screen.getByText(/Поддержка/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: '+7 (906) 12-955-12' }),
+    ).toHaveAttribute('href', 'tel:+79061295512')
+    expect(
+      screen.queryByText(/Используйте рабочий email/),
+    ).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Сайт' })).not.toBeInTheDocument()
     expect(screen.queryByText('Поддержка')).not.toBeInTheDocument()
     expect(
@@ -124,11 +134,27 @@ describe('LoginPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Войти' }))
 
-    expect(screen.getByText('Введите email')).toBeInTheDocument()
-    expect(screen.getByText('Введите пароль')).toBeInTheDocument()
+    expect(screen.queryByText('Введите email')).not.toBeInTheDocument()
+    expect(screen.queryByText('Введите пароль')).not.toBeInTheDocument()
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
+    expect(passwordInput).toHaveAttribute('aria-invalid', 'true')
+
+    fireEvent.focus(emailInput)
+    fireEvent.change(emailInput, { target: { value: 'bad-email' } })
+    expect(screen.queryByText('Проверьте формат email')).not.toBeInTheDocument()
+    expect(emailInput).not.toHaveAttribute('aria-invalid', 'true')
+
+    fireEvent.blur(emailInput)
+    expect(screen.getByText('Проверьте формат email')).toBeInTheDocument()
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
+
+    fireEvent.change(passwordInput, { target: { value: 'Secret123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+
+    expect(screen.getByText('Проверьте формат email')).toBeInTheDocument()
+    expect(emailInput).toHaveAttribute('aria-invalid', 'true')
 
     fireEvent.change(emailInput, { target: { value: 'name@company.ru' } })
-    fireEvent.change(passwordInput, { target: { value: 'Secret123' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
 
@@ -177,7 +203,10 @@ describe('LoginPage', () => {
       await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Завершить диалог' }),
+    )
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
@@ -206,7 +235,7 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/app/chat'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Клиентский портал' }),
+      await screen.findByRole('heading', { name: 'Центр поддержки' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('Поддержка клиентов')).not.toBeInTheDocument()
   })
@@ -223,7 +252,7 @@ describe('LoginPage', () => {
   })
 
   it.each([
-    ['/auth/register', 'Новый аккаунт'],
+    ['/auth/register', 'Создать аккаунт'],
     ['/auth/password-reset/request', 'Восстановление пароля'],
   ])(
     'redirects authenticated public auth route %s to the app shell',

@@ -13,6 +13,8 @@ ARCHIVE_PATH=""
 ACTIVATE="false"
 SYNC_WEBHOOK_SECRET="false"
 KEEP_REMOTE_ARCHIVE="false"
+ALLOW_DIRTY_PREVIEW="false"
+PREVIEW_LABEL=""
 
 usage() {
   cat <<'EOF'
@@ -29,15 +31,21 @@ Options:
   --remote-archive-dir Remote temp directory for the uploaded archive. Default: /tmp.
   --activate           After unpacking on the VM, run docker compose up -d --build.
   --sync-webhook-secret
-                       After --activate, run scripts/install-production.sh --sync-webhook-secret.
+                       After --activate, configure the tenant API Channel webhook through scripts/install-production.sh --sync-webhook-secret.
+  --allow-dirty-preview
+                       Allow deploying uncommitted local changes for an explicit device-review preview.
+  --preview-label=<label>
+                       Short label for a preview deploy, for example mt-8-5-auth-ui-mobile.
   --keep-remote-archive
                        Do not delete the uploaded archive from the VM after unpack.
   --help               Show this help.
 
 Notes:
-  - The archive is built from the current working tree, so it includes local uncommitted code changes.
+  - Clean production deploys should come from a reviewed commit.
+  - Dirty working tree deploys are blocked unless --allow-dirty-preview and --preview-label are provided.
+  - Every archive includes DEPLOY_SOURCE.txt with branch, commit, dirty status, preview label and git status.
   - The VM update preserves .env.production, .install, logs, backups, and any local .git directory.
-  - Use this helper for feature-slice validation on an already bootstrapped VM.
+  - Use this helper for feature-slice validation on an already bootstrapped tenant-aware VM.
 EOF
 }
 
@@ -66,6 +74,16 @@ for arg in "$@"; do
     --sync-webhook-secret)
       SYNC_WEBHOOK_SECRET="true"
       ;;
+    --allow-dirty-preview)
+      ALLOW_DIRTY_PREVIEW="true"
+      ;;
+    --preview-label=*)
+      PREVIEW_LABEL="${arg#*=}"
+      ;;
+    --preview-label)
+      echo "--preview-label requires a value, for example --preview-label=mt-8-5-auth-ui-mobile." >&2
+      exit 2
+      ;;
     --keep-remote-archive)
       KEEP_REMOTE_ARCHIVE="true"
       ;;
@@ -92,6 +110,16 @@ if [[ "$SYNC_WEBHOOK_SECRET" == "true" && "$ACTIVATE" != "true" ]]; then
   exit 2
 fi
 
+if [[ "$ALLOW_DIRTY_PREVIEW" == "true" && -z "$PREVIEW_LABEL" ]]; then
+  echo "--allow-dirty-preview requires --preview-label=<label>." >&2
+  exit 2
+fi
+
+if [[ -n "$PREVIEW_LABEL" && ! "$PREVIEW_LABEL" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "--preview-label may contain only letters, numbers, dots, underscores and hyphens." >&2
+  exit 2
+fi
+
 require_command() {
   local command_name="$1"
 
@@ -99,6 +127,65 @@ require_command() {
     echo "Required command not found: $command_name" >&2
     exit 1
   fi
+}
+
+git_output() {
+  git -C "$REPO_ROOT" "$@" 2>/dev/null || true
+}
+
+git_status_short() {
+  git_output status --short
+}
+
+assert_release_source_is_approved() {
+  local status_short
+
+  status_short="$(git_status_short)"
+
+  if [[ -z "$status_short" ]]; then
+    return
+  fi
+
+  if [[ "$ALLOW_DIRTY_PREVIEW" == "true" ]]; then
+    echo "Dirty working tree approved for preview deploy: $PREVIEW_LABEL"
+    echo
+    echo "$status_short"
+    return
+  fi
+
+  echo "Refusing to build a production archive from a dirty working tree." >&2
+  echo "Current git status:" >&2
+  echo "$status_short" >&2
+  echo >&2
+  echo "For an intentional device-review WIP deploy, rerun with:" >&2
+  echo "  --allow-dirty-preview --preview-label=<short-label>" >&2
+  echo >&2
+  echo "For a clean production deploy, commit/stash unrelated changes first." >&2
+  exit 1
+}
+
+write_deploy_source_manifest() {
+  local manifest_path="$1"
+  local status_short
+
+  status_short="$(git_status_short)"
+
+  {
+    printf 'app=%s\n' "$APP_NAME"
+    printf 'created_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'source_branch=%s\n' "$(git_output branch --show-current)"
+    printf 'source_commit=%s\n' "$(git_output rev-parse HEAD)"
+    printf 'source_dirty=%s\n' "$([[ -n "$status_short" ]] && printf true || printf false)"
+    printf 'allow_dirty_preview=%s\n' "$ALLOW_DIRTY_PREVIEW"
+    printf 'preview_label=%s\n' "$PREVIEW_LABEL"
+    printf '\n'
+    printf 'git_status_short:\n'
+    if [[ -n "$status_short" ]]; then
+      printf '%s\n' "$status_short"
+    else
+      printf '(clean)\n'
+    fi
+  } >"$manifest_path"
 }
 
 create_archive() {
@@ -136,6 +223,8 @@ create_archive() {
       "$REPO_ROOT"/ \
       "$tmp_dir"/
 
+    write_deploy_source_manifest "$tmp_dir/DEPLOY_SOURCE.txt"
+
     tar -czf "$ARCHIVE_PATH" -C "$tmp_dir" .
   )
 }
@@ -148,9 +237,15 @@ require_command ssh
 require_command scp
 require_command rsync
 require_command tar
+require_command git
+
+assert_release_source_is_approved
 
 echo "Building archive from current working tree:"
 echo "  $ARCHIVE_PATH"
+if [[ -n "$PREVIEW_LABEL" ]]; then
+  echo "Preview label: $PREVIEW_LABEL"
+fi
 create_archive
 
 REMOTE_ARCHIVE_PATH="${REMOTE_ARCHIVE_DIR%/}/$(basename "$ARCHIVE_PATH")"
@@ -191,6 +286,24 @@ require_remote_command() {
 require_remote_command tar
 require_remote_command rsync
 
+ensure_app_path() {
+  if mkdir -p "$app_path" 2>/dev/null; then
+    return
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Cannot create $app_path and sudo is not available on the VM." >&2
+    exit 1
+  fi
+
+  local remote_user
+  local remote_group
+
+  remote_user="$(id -un)"
+  remote_group="$(id -gn)"
+  sudo install -d -m 0755 -o "$remote_user" -g "$remote_group" "$app_path"
+}
+
 if [[ ! -f "$remote_archive_path" ]]; then
   echo "Archive not found on VM: $remote_archive_path" >&2
   exit 1
@@ -206,7 +319,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$app_path"
+ensure_app_path
 tar -xzf "$remote_archive_path" -C "$tmp_dir"
 mkdir -p "$app_path/backups" "$app_path/logs" "$app_path/.install"
 

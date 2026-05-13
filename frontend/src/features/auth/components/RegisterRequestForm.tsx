@@ -7,13 +7,17 @@ import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
+import { MailIcon, UserPlusIcon } from '../../../shared/ui/icons'
 import {
   ApiClientError,
   requestRegistrationVerification,
 } from '../api/authClient'
 import { saveRegistrationRequest } from '../lib/registrationFlow'
 import { validateRegisterRequestForm } from '../lib/registerRequestValidation'
-import type { RegisterRequestFormValues, TouchedRegisterRequestFields } from '../types'
+import type {
+  RegisterRequestFormValues,
+  TouchedRegisterRequestFields,
+} from '../types'
 
 const DEFAULT_VALUES: RegisterRequestFormValues = {
   fullName: '',
@@ -22,6 +26,14 @@ const DEFAULT_VALUES: RegisterRequestFormValues = {
 
 const DEFAULT_REQUEST_ERROR_MESSAGE =
   'Мы не смогли выполнить запрос. Если вы считаете, что у вас должен быть доступ, обратитесь в вашу компанию.'
+
+function getVisibleFieldError(error?: string) {
+  if (error === 'Введите email' || error === 'Введите имя') {
+    return undefined
+  }
+
+  return error
+}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ApiClientError) {
@@ -33,8 +45,13 @@ function getErrorMessage(error: unknown) {
 
 export function RegisterRequestForm() {
   const navigate = useNavigate()
-  const [values, setValues] = useState<RegisterRequestFormValues>(DEFAULT_VALUES)
+  const [values, setValues] =
+    useState<RegisterRequestFormValues>(DEFAULT_VALUES)
   const [touched, setTouched] = useState<TouchedRegisterRequestFields>({
+    fullName: false,
+    email: false,
+  })
+  const [focused, setFocused] = useState<TouchedRegisterRequestFields>({
     fullName: false,
     email: false,
   })
@@ -43,8 +60,18 @@ export function RegisterRequestForm() {
   const [globalError, setGlobalError] = useState<string | null>(null)
 
   const fieldErrors = validateRegisterRequestForm(values)
-  const visibleNameError = touched.fullName || hasSubmitted ? fieldErrors.fullName : undefined
-  const visibleEmailError = touched.email || hasSubmitted ? fieldErrors.email : undefined
+  const visibleNameError =
+    touched.fullName || hasSubmitted ? fieldErrors.fullName : undefined
+  const visibleEmailError =
+    touched.email || hasSubmitted ? fieldErrors.email : undefined
+  const suppressEmailFormatError =
+    focused.email && visibleEmailError === 'Проверьте формат email'
+  const visibleNameErrorMessage = getVisibleFieldError(visibleNameError)
+  const visibleEmailErrorMessage = suppressEmailFormatError
+    ? undefined
+    : getVisibleFieldError(visibleEmailError)
+  const nameHasError = Boolean(visibleNameError)
+  const emailHasError = Boolean(visibleEmailError) && !suppressEmailFormatError
 
   const nameErrorId = 'register-name-error'
   const emailErrorId = 'register-email-error'
@@ -61,8 +88,19 @@ export function RegisterRequestForm() {
   }
 
   function markFieldTouched(field: keyof TouchedRegisterRequestFields) {
+    setFocused((currentFocused) => ({
+      ...currentFocused,
+      [field]: false,
+    }))
     setTouched((currentTouched) => ({
       ...currentTouched,
+      [field]: true,
+    }))
+  }
+
+  function markFieldFocused(field: keyof TouchedRegisterRequestFields) {
+    setFocused((currentFocused) => ({
+      ...currentFocused,
       [field]: true,
     }))
   }
@@ -97,24 +135,29 @@ export function RegisterRequestForm() {
   }
 
   return (
-    <form className="space-y-6" noValidate onSubmit={handleSubmit}>
+    <form className="space-y-4" noValidate onSubmit={handleSubmit}>
       <FormField
-        error={visibleNameError}
+        error={visibleNameErrorMessage}
         errorId={nameErrorId}
         htmlFor="register-full-name"
         label="Имя и фамилия"
+        labelHidden
         required
       >
         <TextField
-          aria-describedby={visibleNameError ? nameErrorId : undefined}
-          aria-invalid={Boolean(visibleNameError)}
+          aria-describedby={visibleNameErrorMessage ? nameErrorId : undefined}
+          aria-invalid={nameHasError}
           autoComplete="name"
-          hasError={Boolean(visibleNameError)}
+          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          hasError={nameHasError}
           id="register-full-name"
+          isFilled={values.fullName.trim().length > 0}
+          leadingIcon={<UserPlusIcon className="h-6 w-6" />}
           name="fullName"
           onBlur={() => markFieldTouched('fullName')}
           onChange={(event) => setFieldValue('fullName', event.target.value)}
-          placeholder="Введите ваше имя"
+          onFocus={() => markFieldFocused('fullName')}
+          placeholder="Имя и фамилия"
           required
           type="text"
           value={values.fullName}
@@ -122,22 +165,27 @@ export function RegisterRequestForm() {
       </FormField>
 
       <FormField
-        error={visibleEmailError}
+        error={visibleEmailErrorMessage}
         errorId={emailErrorId}
         htmlFor="register-email"
         label="Email"
+        labelHidden
         required
       >
         <TextField
-          aria-describedby={visibleEmailError ? emailErrorId : undefined}
-          aria-invalid={Boolean(visibleEmailError)}
+          aria-describedby={visibleEmailErrorMessage ? emailErrorId : undefined}
+          aria-invalid={emailHasError}
           autoComplete="email"
-          hasError={Boolean(visibleEmailError)}
+          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          hasError={emailHasError}
           id="register-email"
           inputMode="email"
+          isFilled={values.email.trim().length > 0}
+          leadingIcon={<MailIcon className="h-6 w-6" />}
           name="email"
           onBlur={() => markFieldTouched('email')}
           onChange={(event) => setFieldValue('email', event.target.value)}
+          onFocus={() => markFieldFocused('email')}
           placeholder="name@company.ru"
           required
           type="email"
@@ -145,8 +193,8 @@ export function RegisterRequestForm() {
         />
       </FormField>
 
-      <div className="rounded-[0.9rem] border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
-        Доступ предоставляется для email, который уже известен вашей компании.
+      <div className="rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-sm leading-5 text-slate-500 shadow-sm">
+        Введите email, указанный при создании вашего профиля.
       </div>
 
       <InlineAlert message={globalError} tone="error" />

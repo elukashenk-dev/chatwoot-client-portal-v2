@@ -9,7 +9,9 @@ export function PasswordResetVerifyPage() {
     <TenantAuthShell
       description={
         <>
-          <span className="block">Мы отправили 6-значный код на</span>
+          <span className="block">
+            Если доступ активен, код восстановления отправлен на
+          </span>
           <span className="mt-1.5 block font-medium text-slate-700">
             {passwordResetRequest?.email ?? 'ваш email'}
           </span>

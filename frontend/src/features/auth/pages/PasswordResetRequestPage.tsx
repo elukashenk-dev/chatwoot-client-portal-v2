@@ -7,24 +7,17 @@ import { PasswordResetRequestForm } from '../components/PasswordResetRequestForm
 export function PasswordResetRequestPage() {
   return (
     <TenantAuthShell
-      description="Введите email, на который зарегистрирован доступ. Мы отправим код подтверждения для восстановления пароля."
-      title="Восстановление пароля"
+      description="Введите email. Если доступ активен, мы отправим код восстановления."
+      title="Восстановить пароль"
     >
       <PasswordResetRequestForm />
 
-      <div className="mt-5 flex items-center justify-between gap-4 text-sm sm:text-[15px]">
+      <div className="mt-4 text-center text-sm text-slate-500 sm:text-[15px]">
         <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] text-slate-700 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+          className="rounded-[0.4rem] font-normal text-brand-700 underline-offset-4 transition hover:text-brand-800 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
           to={routePaths.auth.login}
         >
           Вернуться ко входу
-        </Link>
-
-        <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] text-brand-800 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={routePaths.auth.register}
-        >
-          Новый аккаунт
         </Link>
       </div>
     </TenantAuthShell>

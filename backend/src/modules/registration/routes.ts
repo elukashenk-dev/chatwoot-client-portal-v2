@@ -10,7 +10,7 @@ const registerRequestBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
   fullName: z.string().trim().min(1, 'Введите имя'),
 })
 
@@ -23,7 +23,7 @@ const registerVerifyBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
 })
 
 const registerSetPasswordBodySchema = z.object({
@@ -35,7 +35,7 @@ const registerSetPasswordBodySchema = z.object({
     .string()
     .trim()
     .min(1, 'Введите email')
-    .email('Введите email в корректном формате'),
+    .email('Проверьте формат email'),
   newPassword: portalPasswordSchema,
 })
 

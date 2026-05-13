@@ -4,6 +4,7 @@ import { cn } from '../lib/cn'
 
 type PrimaryButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode
+  leadingIcon?: ReactNode
   loading?: boolean
   loadingLabel?: string
 }
@@ -12,6 +13,7 @@ export function PrimaryButton({
   children,
   className,
   disabled,
+  leadingIcon,
   loading = false,
   loadingLabel,
   type = 'button',
@@ -27,6 +29,12 @@ export function PrimaryButton({
       disabled={disabled || loading}
       type={type}
     >
+      {leadingIcon && !loading ? (
+        <span className="mr-3 inline-flex h-7 w-7 items-center justify-center">
+          {leadingIcon}
+        </span>
+      ) : null}
+
       <span>{loading && loadingLabel ? loadingLabel : children}</span>
 
       {loading ? (

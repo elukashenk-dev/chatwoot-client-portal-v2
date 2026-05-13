@@ -5,15 +5,15 @@ import { getPostLoginPath } from '../../features/auth/lib/postLoginRedirect'
 import { AuthShell } from '../../shared/ui/AuthShell'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
-import { PortalFrame } from '../../shared/ui/PortalFrame'
+import { AuthFrame } from './AuthFrame'
 import { AuthLayout } from './AuthLayout'
 
 function AuthSessionCheck() {
   return (
-    <PortalFrame>
+    <AuthFrame>
       <AuthShell
         description="Проверяем, нужно ли открыть форму входа или защищенную клиентскую зону."
-        title="Клиентский портал"
+        title="Центр поддержки"
       >
         <div className="space-y-4">
           <InlineAlert message="Проверяем текущую сессию..." tone="info" />
@@ -23,7 +23,7 @@ function AuthSessionCheck() {
           </PrimaryButton>
         </div>
       </AuthShell>
-    </PortalFrame>
+    </AuthFrame>
   )
 }
 

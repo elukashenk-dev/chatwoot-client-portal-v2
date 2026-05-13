@@ -457,7 +457,7 @@ describe('ChatPage runtime hardening', () => {
     })
 
     expect(
-      await screen.findByRole('heading', { name: 'Клиентский портал' }),
+      await screen.findByRole('heading', { name: 'Центр поддержки' }),
     ).toBeInTheDocument()
     expect(screen.getByLabelText(/Email/)).toBeInTheDocument()
     expect(

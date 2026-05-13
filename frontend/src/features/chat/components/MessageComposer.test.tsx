@@ -51,14 +51,14 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).not.toBeDisabled()
-    expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(voiceControl).toHaveClass('w-11', 'opacity-100')
+    expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
+    expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toHaveClass(
-      'hover:text-chat-outgoing',
+      'hover:text-chat-outgoing/80',
     )
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
-    ).toHaveClass('hover:text-chat-outgoing')
+    ).toHaveClass('hover:text-chat-outgoing/80')
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
       'bg-chat-outgoing',
     )
@@ -99,8 +99,8 @@ describe('MessageComposer', () => {
     ).not.toBeDisabled()
     expect(attachmentControl).not.toHaveAttribute('aria-hidden')
     expect(voiceControl).not.toHaveAttribute('aria-hidden')
-    expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(voiceControl).toHaveClass('w-11', 'opacity-100')
+    expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
+    expect(voiceControl).toHaveClass('w-10', 'opacity-100')
   })
 
   it('keeps side controls visible for a whitespace-only draft', async () => {
@@ -118,8 +118,8 @@ describe('MessageComposer', () => {
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).not.toBeDisabled()
-    expect(attachmentControl).toHaveClass('w-11', 'opacity-100')
-    expect(voiceControl).toHaveClass('w-11', 'opacity-100')
+    expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
+    expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
   })
 })

@@ -2,16 +2,20 @@
 
 ## Status
 
-Production deployment for the current multi-tenant portal is **blocked until
-`MT-10 Deployment And Runbook Update`**.
+Production deployment for the current multi-tenant portal must use the `MT-10`
+tenant-aware clean reinstall runbook:
 
-This file intentionally does not contain executable production deploy
-instructions right now.
+```text
+docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
+```
 
-## Why This Is Blocked
+This file is the high-level guardrail. The MT-10 runbook is the executable
+operator checklist.
 
-The previous production runbook was written before the multi-tenant
-architecture update.
+## Why The Old Runbook Is Retired
+
+The previous production runbook was written before the multi-tenant architecture
+update.
 
 It described an older single-tenant/dedicated deployment model based on global
 Chatwoot env values such as:
@@ -29,57 +33,66 @@ That model is now superseded.
 Current runtime must use tenant-owned Chatwoot config from `portal_tenants`, not
 global Chatwoot env as authority.
 
-## Do Not Use The Old Runbook
+## Do Not Use The Old Single-Tenant Flow
 
-Until `MT-10` is completed:
+The old flow remains unsupported:
 
-- do not deploy the new `v2` portal to the real production server;
 - do not run old production installer steps;
 - do not rely on global `CHATWOOT_*` as production runtime authority;
 - do not point the new portal at production Chatwoot using the old single-tenant
   flow;
-- do not modify production Chatwoot core, database, uploads, services or Nginx
-  config as part of portal work;
+- do not modify production Chatwoot core, database, uploads, services or
+  `chat.provgroup.ru` Nginx config as part of portal work;
 - do not migrate or reuse old portal test data.
 
-The real production Chatwoot serves real users and must remain untouched unless
-there is a separate explicit Chatwoot maintenance plan.
+The real production Chatwoot serves real users and must remain untouched by
+portal deploy work unless the change is the explicitly approved tenant API
+Channel configuration below or there is a separate explicit Chatwoot maintenance
+plan.
 
-## What Must Be Rebuilt In MT-10
+Allowed MT-10 Chatwoot-side changes are limited to the tenant API Channel inbox:
 
-`MT-10 Deployment And Runbook Update` must produce the new production runbook
-for both supported business modes:
+- verify the inbox belongs to the tenant Chatwoot account and is `Channel::Api`;
+- enable `lock_to_single_conversation=true` if needed;
+- set the portal webhook URL;
+- read the returned `Channel::Api.secret` and store it encrypted in the portal
+  tenant record.
 
-- shared SaaS: one portal deploy with multiple tenants;
-- dedicated install: one portal deploy with exactly one tenant.
+## Current MT-10 Flow
 
-Required MT-10 updates:
+The tenant-aware production flow now uses:
 
-1. Update `.env.production.example` for multi-tenant runtime.
-2. Update `infra/production/compose.yaml` so backend receives:
-   - `PORTAL_TENANT_SECRET_KEY`;
-   - required `DEFAULT_TENANT_*` bootstrap values for dedicated/one-tenant
-     install;
-   - infrastructure env only where global env is still valid.
-3. Update `scripts/install-production.sh` so it provisions tenant records instead
-   of treating global `CHATWOOT_*` as runtime authority.
-4. Replace old global Chatwoot setup commands with tenant-aware commands:
-   - `tenant:bootstrap-default`;
-   - `tenant:chatwoot:verify`;
-   - `tenant:chatwoot:ensure-portal-inbox`;
-   - `tenant:chatwoot:webhook:configure`.
-5. Document clean removal of old portal runtime before installing the new portal.
-6. Document backup/snapshot before any server changes.
-7. Document reverse-proxy setup for `lk.<client-domain>`.
-8. Document tenant provisioning, webhook setup, secret rotation and rollback.
-9. Add production validation checklist for:
-   - tenant resolution;
-   - registration/login/password reset;
-   - chat send/realtime;
-   - webhook isolation;
-   - PWA manifest/icon identity;
-   - dedicated one-tenant install;
-   - shared SaaS multi-tenant install.
+- `PORTAL_TENANT_SECRET_KEY`;
+- `DEFAULT_TENANT_*` bootstrap values;
+- isolated portal Postgres;
+- tenant-owned encrypted Chatwoot runtime config;
+- tenant API Channel webhook configuration;
+- Chatwoot `v4.13+` `Channel::Api.secret` as webhook signature secret source.
+- an explicit deploy source gate: clean production deploys come from a reviewed
+  commit, while WIP device-preview deploys must use `--allow-dirty-preview` and
+  `--preview-label`.
+
+Installer steps:
+
+1. collect production infrastructure and tenant bootstrap env;
+2. build and start the isolated portal stack;
+3. bootstrap the default tenant;
+4. verify public health and tenant resolution;
+5. ask for operator approval before tenant API Channel changes;
+6. verify and, if needed, enable Chatwoot API Channel single-conversation
+   routing;
+7. configure tenant API Channel webhook and store the returned secret in the
+   tenant record;
+8. validate auth, chat, webhook/realtime and PWA endpoints.
+
+For MT-8.5 mobile/PWA design review, repeated WIP deploys to
+`lk.provgroup.ru` are allowed only as explicit preview deploys. The deploy
+archive records `DEPLOY_SOURCE.txt` so we can always tell which branch, commit
+and dirty files produced the currently visible UI.
+
+For the current production rollout, the supported business mode is dedicated
+one-tenant install. Shared SaaS production rollout can reuse the same runtime
+model, but needs a separate multi-tenant provisioning runbook.
 
 ## Real Server Notes
 
@@ -94,10 +107,8 @@ state, domains and cleanup requirements.
 
 ## Next Action
 
-Do not perform production deployment work until `MT-10`.
-
-Before `MT-10`, continue feature work on:
+Review and execute:
 
 ```text
-MT-9 Tenant Admin And Branding Rebuild
+docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
 ```

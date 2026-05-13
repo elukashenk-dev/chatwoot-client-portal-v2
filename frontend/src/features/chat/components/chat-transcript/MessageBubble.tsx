@@ -69,7 +69,7 @@ function isLocalTextSend(message: ChatMessage) {
 function AgentNameHeader({ message }: { message: ChatMessage }) {
   return (
     <div
-      className="mb-[7px] flex items-center justify-start px-1 text-[12px] font-medium leading-none text-slate-700"
+      className="mb-1.5 flex items-center justify-start px-1 text-[12px] font-normal leading-none text-slate-500"
       data-message-header
     >
       {message.authorName}
@@ -172,7 +172,7 @@ function AgentAvatar({
       {isVisible ? (
         <div
           aria-label={`Агент ${authorName}`}
-          className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-[0.75rem] bg-brand-900 text-[11px] font-semibold leading-none text-white shadow-sm shadow-slate-900/10 sm:h-9 sm:w-9 sm:text-[12px]"
+          className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[11px] font-medium leading-none text-slate-500 sm:h-9 sm:w-9 sm:text-[12px]"
           data-agent-avatar
           title={authorName}
         >
@@ -406,8 +406,8 @@ export function MessageBubble({
             data-chat-bubble
             className={
               isOutgoing
-                ? `${radiusClassName} chat-outgoing-surface flow-root break-words px-4 py-3 text-[15px] leading-[1.45] text-white`
-                : `${radiusClassName} chat-incoming-surface flow-root break-words border border-chat-incoming-border px-4 py-3 text-[15px] leading-[1.45] text-slate-700`
+                ? `${radiusClassName} chat-outgoing-surface flow-root break-words px-4 py-2.5 text-[15px] leading-[1.45] text-white`
+                : `${radiusClassName} chat-incoming-surface flow-root break-words border border-chat-incoming-border px-4 py-2.5 text-[15px] leading-[1.45] text-slate-700`
             }
           >
             {message.replyTo ? (

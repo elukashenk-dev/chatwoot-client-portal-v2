@@ -24,7 +24,6 @@ Usage:
   scripts/install-production.sh --install
   scripts/install-production.sh --install --reconfigure
   scripts/install-production.sh --sync-webhook-secret
-  scripts/install-production.sh --paste-webhook-secret
   scripts/install-production.sh --status
   scripts/install-production.sh --logs
   scripts/install-production.sh --reset-state
@@ -32,8 +31,8 @@ Usage:
 Options:
   --install             Run or resume the production installer.
   --reconfigure         Ask all env questions again and reset installer state.
-  --sync-webhook-secret Re-provision the Chatwoot webhook, sync its actual secret, recreate backend, and check health.
-  --paste-webhook-secret Prompt for the Chatwoot webhook secret, recreate backend, and check health.
+  --sync-webhook-secret Configure the tenant API Channel webhook, store its secret in portal DB, and check health.
+  --paste-webhook-secret Unsupported legacy option. Use --sync-webhook-secret.
   --yes                 Use defaults for yes/no prompts when possible.
   --skip-public-health  Skip the public HTTPS health check step.
   --status              Show installer state and compose status.
@@ -132,7 +131,7 @@ on_error() {
       retry_command="scripts/install-production.sh --sync-webhook-secret"
       ;;
     paste-webhook-secret)
-      retry_command="scripts/install-production.sh --paste-webhook-secret"
+      retry_command="scripts/install-production.sh --sync-webhook-secret"
       ;;
   esac
 
@@ -316,41 +315,6 @@ write_env_line() {
   printf '%s=%s\n' "$key" "$(env_quote "$value")"
 }
 
-upsert_env_value() {
-  local key="$1"
-  local value="$2"
-  local next_line
-  local tmp_file
-
-  next_line="$(write_env_line "$key" "$value")"
-  tmp_file="$(mktemp)"
-
-  if [[ -f "$ENV_FILE" ]]; then
-    awk -v key="$key" -v next_line="$next_line" '
-      BEGIN { replaced = 0 }
-      index($0, key "=") == 1 {
-        if (replaced == 0) {
-          print next_line
-          replaced = 1
-        }
-        next
-      }
-      { print }
-      END {
-        if (replaced == 0) {
-          print next_line
-        }
-      }
-    ' "$ENV_FILE" >"$tmp_file"
-    cat "$tmp_file" >"$ENV_FILE"
-  else
-    printf '%s\n' "$next_line" >"$ENV_FILE"
-  fi
-
-  chmod 600 "$ENV_FILE"
-  rm -f "$tmp_file"
-}
-
 strip_trailing_slash() {
   local value="$1"
   while [[ "$value" == */ ]]; do
@@ -525,6 +489,11 @@ collect_env() {
     prompt_value LETSENCRYPT_EMAIL "Email for Let's Encrypt notifications" "$(env_value LETSENCRYPT_EMAIL)" optional
   fi
 
+  local existing_trust_proxy
+  existing_trust_proxy="$(env_value PORTAL_TRUST_PROXY)"
+  existing_trust_proxy="${existing_trust_proxy:-true}"
+  prompt_value PORTAL_TRUST_PROXY "Trust proxy headers from portal reverse proxy true/false" "$existing_trust_proxy"
+
   local existing_session_secret
   existing_session_secret="$(env_value SESSION_SECRET)"
   existing_session_secret="${existing_session_secret:-$(random_base64 48)}"
@@ -548,22 +517,45 @@ collect_env() {
   fi
   DATABASE_URL="postgresql://${PORTAL_V2_POSTGRES_USER}:${PORTAL_V2_POSTGRES_PASSWORD}@portal-db:5432/${PORTAL_V2_POSTGRES_DB}"
 
-  prompt_value CHATWOOT_BASE_URL "Existing Chatwoot base URL" "$(env_value CHATWOOT_BASE_URL)"
-  CHATWOOT_BASE_URL="$(strip_trailing_slash "$CHATWOOT_BASE_URL")"
-  prompt_value CHATWOOT_ACCOUNT_ID "Chatwoot account ID" "$(env_value CHATWOOT_ACCOUNT_ID)"
-  prompt_secret CHATWOOT_API_ACCESS_TOKEN "Dedicated Chatwoot API access token" "$(env_value CHATWOOT_API_ACCESS_TOKEN)"
-  prompt_value CHATWOOT_PORTAL_INBOX_ID "Chatwoot portal inbox ID" "$(env_value CHATWOOT_PORTAL_INBOX_ID)"
+  local existing_tenant_secret_key
+  existing_tenant_secret_key="$(env_value PORTAL_TENANT_SECRET_KEY)"
+  existing_tenant_secret_key="${existing_tenant_secret_key:-$(random_base64 32)}"
+  prompt_secret PORTAL_TENANT_SECRET_KEY "Tenant encryption secret key" "$existing_tenant_secret_key"
 
-  CHATWOOT_WEBHOOK_CALLBACK_URL_DEFAULT="$(env_value CHATWOOT_WEBHOOK_CALLBACK_URL)"
-  CHATWOOT_WEBHOOK_CALLBACK_URL_DEFAULT="${CHATWOOT_WEBHOOK_CALLBACK_URL_DEFAULT:-$APP_ORIGIN/api/integrations/chatwoot/webhooks/account}"
-  prompt_value CHATWOOT_WEBHOOK_CALLBACK_URL "Chatwoot webhook callback URL" "$CHATWOOT_WEBHOOK_CALLBACK_URL_DEFAULT"
-  local existing_webhook_secret
-  existing_webhook_secret="$(env_value CHATWOOT_WEBHOOK_SECRET)"
-  CHATWOOT_WEBHOOK_SECRET="${existing_webhook_secret:-$(random_base64 32)}"
-  if [[ -n "$existing_webhook_secret" ]]; then
-    echo "Keeping existing bootstrap Chatwoot webhook secret until the sync step reads the actual secret from Chatwoot."
+  local existing_tenant_slug
+  existing_tenant_slug="$(env_value DEFAULT_TENANT_SLUG)"
+  existing_tenant_slug="${existing_tenant_slug:-default}"
+  prompt_value DEFAULT_TENANT_SLUG "Default tenant slug" "$existing_tenant_slug"
+
+  local existing_tenant_display_name
+  existing_tenant_display_name="$(env_value DEFAULT_TENANT_DISPLAY_NAME)"
+  existing_tenant_display_name="${existing_tenant_display_name:-Default Tenant}"
+  prompt_value DEFAULT_TENANT_DISPLAY_NAME "Default tenant display name" "$existing_tenant_display_name"
+
+  local existing_tenant_primary_domain
+  existing_tenant_primary_domain="$(env_value DEFAULT_TENANT_PRIMARY_DOMAIN)"
+  existing_tenant_primary_domain="${existing_tenant_primary_domain:-$PORTAL_DOMAIN}"
+  prompt_value DEFAULT_TENANT_PRIMARY_DOMAIN "Default tenant primary domain" "$existing_tenant_primary_domain"
+
+  local existing_tenant_public_base_url
+  existing_tenant_public_base_url="$(env_value DEFAULT_TENANT_PUBLIC_BASE_URL)"
+  existing_tenant_public_base_url="${existing_tenant_public_base_url:-$APP_ORIGIN}"
+  prompt_value DEFAULT_TENANT_PUBLIC_BASE_URL "Default tenant public base URL" "$existing_tenant_public_base_url"
+  DEFAULT_TENANT_PUBLIC_BASE_URL="$(strip_trailing_slash "$DEFAULT_TENANT_PUBLIC_BASE_URL")"
+
+  prompt_value DEFAULT_TENANT_CHATWOOT_BASE_URL "Default tenant Chatwoot base URL" "$(env_value DEFAULT_TENANT_CHATWOOT_BASE_URL)"
+  DEFAULT_TENANT_CHATWOOT_BASE_URL="$(strip_trailing_slash "$DEFAULT_TENANT_CHATWOOT_BASE_URL")"
+  prompt_value DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID "Default tenant Chatwoot account ID" "$(env_value DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID)"
+  prompt_secret DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN "Default tenant Chatwoot API access token" "$(env_value DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN)"
+  prompt_value DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID "Default tenant Chatwoot API Channel inbox ID" "$(env_value DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID)"
+
+  local existing_tenant_webhook_secret
+  existing_tenant_webhook_secret="$(env_value DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET)"
+  DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="${existing_tenant_webhook_secret:-$(random_base64 32)}"
+  if [[ -n "$existing_tenant_webhook_secret" ]]; then
+    echo "Keeping existing bootstrap tenant webhook secret until the tenant webhook configure step stores Chatwoot's actual API Channel secret."
   else
-    echo "Generated a temporary bootstrap Chatwoot webhook secret. The sync step will replace it with Chatwoot's actual webhook secret."
+    echo "Generated a temporary bootstrap tenant webhook secret. The tenant webhook configure step will replace the stored tenant secret with Chatwoot's actual API Channel secret."
   fi
 
   prompt_value SMTP_HOST "SMTP host" "$(env_value SMTP_HOST)"
@@ -593,6 +585,7 @@ collect_env() {
     write_env_line LETSENCRYPT_EMAIL "$LETSENCRYPT_EMAIL"
     write_env_line NODE_ENV production
     write_env_line PORT 3301
+    write_env_line PORTAL_TRUST_PROXY "$PORTAL_TRUST_PROXY"
     write_env_line SESSION_COOKIE_NAME portal_session
     write_env_line SESSION_SECRET "$SESSION_SECRET"
     write_env_line SESSION_TTL_DAYS 14
@@ -600,12 +593,16 @@ collect_env() {
     write_env_line PORTAL_V2_POSTGRES_USER "$PORTAL_V2_POSTGRES_USER"
     write_env_line PORTAL_V2_POSTGRES_PASSWORD "$PORTAL_V2_POSTGRES_PASSWORD"
     write_env_line DATABASE_URL "$DATABASE_URL"
-    write_env_line CHATWOOT_BASE_URL "$CHATWOOT_BASE_URL"
-    write_env_line CHATWOOT_ACCOUNT_ID "$CHATWOOT_ACCOUNT_ID"
-    write_env_line CHATWOOT_API_ACCESS_TOKEN "$CHATWOOT_API_ACCESS_TOKEN"
-    write_env_line CHATWOOT_PORTAL_INBOX_ID "$CHATWOOT_PORTAL_INBOX_ID"
-    write_env_line CHATWOOT_WEBHOOK_CALLBACK_URL "$CHATWOOT_WEBHOOK_CALLBACK_URL"
-    write_env_line CHATWOOT_WEBHOOK_SECRET "$CHATWOOT_WEBHOOK_SECRET"
+    write_env_line PORTAL_TENANT_SECRET_KEY "$PORTAL_TENANT_SECRET_KEY"
+    write_env_line DEFAULT_TENANT_SLUG "$DEFAULT_TENANT_SLUG"
+    write_env_line DEFAULT_TENANT_DISPLAY_NAME "$DEFAULT_TENANT_DISPLAY_NAME"
+    write_env_line DEFAULT_TENANT_PRIMARY_DOMAIN "$DEFAULT_TENANT_PRIMARY_DOMAIN"
+    write_env_line DEFAULT_TENANT_PUBLIC_BASE_URL "$DEFAULT_TENANT_PUBLIC_BASE_URL"
+    write_env_line DEFAULT_TENANT_CHATWOOT_BASE_URL "$DEFAULT_TENANT_CHATWOOT_BASE_URL"
+    write_env_line DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID "$DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID"
+    write_env_line DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN "$DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN"
+    write_env_line DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID "$DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID"
+    write_env_line DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET "$DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET"
     write_env_line SMTP_HOST "$SMTP_HOST"
     write_env_line SMTP_PORT "$SMTP_PORT"
     write_env_line SMTP_SECURE "$SMTP_SECURE"
@@ -630,6 +627,7 @@ load_runtime_env() {
   APP_ORIGIN="$(env_value APP_ORIGIN)"
   PORTAL_HTTP_PORT="$(env_value PORTAL_HTTP_PORT)"
   LETSENCRYPT_EMAIL="$(env_value LETSENCRYPT_EMAIL)"
+  DEFAULT_TENANT_SLUG="$(env_value DEFAULT_TENANT_SLUG)"
 }
 
 validate_compose_config() {
@@ -753,16 +751,54 @@ wait_for_public_health() {
   exit 1
 }
 
-configure_chatwoot_routing() {
-  docker_compose exec -T portal-backend node backend/dist/scripts/ensure-chatwoot-portal-inbox-routing.js
+wait_for_public_tenant() {
+  if [[ "$SKIP_PUBLIC_HEALTH" == "true" ]]; then
+    echo "Public tenant check skipped by --skip-public-health."
+    return
+  fi
+
+  load_runtime_env
+  local url="${APP_ORIGIN}/api/tenant"
+  echo "Waiting for tenant context at $url"
+
+  for attempt in $(seq 1 60); do
+    if curl -fsS "$url" >/tmp/chatwoot-client-portal-v2-tenant.json 2>/dev/null; then
+      cat /tmp/chatwoot-client-portal-v2-tenant.json
+      echo
+      return
+    fi
+    echo "Tenant check attempt $attempt/60 failed; retrying..."
+    sleep 3
+  done
+
+  echo "Public tenant check failed for $url" >&2
+  exit 1
 }
 
-extract_machine_value() {
-  local key="$1"
-  local content="$2"
+bootstrap_default_tenant() {
+  docker_compose exec -T portal-backend node backend/dist/scripts/bootstrap-default-tenant.js
+}
 
-  printf '%s\n' "$content" |
-    awk -v key="$key" 'index($0, key "=") == 1 { value = substr($0, length(key) + 2) } END { print value }'
+configure_chatwoot_routing() {
+  load_runtime_env
+  docker_compose exec -T portal-backend node backend/dist/scripts/verify-tenant-chatwoot-connection.js "--tenant=${DEFAULT_TENANT_SLUG:-default}"
+}
+
+approve_chatwoot_api_channel_changes() {
+  load_runtime_env
+
+  echo "The next installer steps will make these Chatwoot API Channel changes for tenant '${DEFAULT_TENANT_SLUG:-default}':"
+  echo "  - verify the configured inbox belongs to the tenant Chatwoot account and is Channel::Api;"
+  echo "  - enable lock_to_single_conversation=true if it is currently disabled;"
+  echo "  - set the API Channel webhook URL to the portal callback URL;"
+  echo "  - store Chatwoot's returned Channel::Api.secret encrypted in the portal tenant record."
+  echo
+  echo "The installer will not stop, restart, migrate or edit Chatwoot core, database, uploads, services, or the chat.provgroup.ru Nginx site."
+
+  if ! confirm "Approve these tenant API Channel configuration changes?" yes; then
+    echo "Tenant Chatwoot API Channel configuration was not approved." >&2
+    exit 1
+  fi
 }
 
 require_env_file() {
@@ -773,95 +809,42 @@ require_env_file() {
   fi
 }
 
-recreate_portal_backend() {
-  if ! select_docker_command; then
-    echo "Docker Engine or Compose plugin is required for backend recreate." >&2
-    exit 1
-  fi
-
-  echo "Recreating portal-backend with the synced webhook secret."
-  docker_compose up -d --force-recreate --no-deps portal-backend
-  docker_compose ps portal-backend
-}
-
-print_webhook_secret_fallback() {
-  echo
-  echo "Chatwoot did not return the webhook secret through the account webhook API."
-  echo "Open the Chatwoot webhook edit form, copy the secret, then run:"
-  echo "  scripts/install-production.sh --paste-webhook-secret"
-  echo
-  echo "The installer stopped before marking webhook secret sync as completed."
-}
-
 sync_chatwoot_webhook_secret() {
   require_env_file
   if ! select_docker_command; then
-    echo "Docker Engine or Compose plugin is required for webhook secret sync." >&2
+    echo "Docker Engine or Compose plugin is required for tenant webhook configuration." >&2
     exit 1
+  fi
+
+  load_runtime_env
+
+  if ! step_done chatwoot_api_channel_approval; then
+    approve_chatwoot_api_channel_changes
+    mark_step_done chatwoot_api_channel_approval
   fi
 
   local webhook_output
-  if ! webhook_output="$(docker_compose exec -T portal-backend node backend/dist/scripts/configure-chatwoot-account-webhook.js --installer-output)"; then
-    echo "Chatwoot webhook provisioning failed." >&2
+  if ! webhook_output="$(
+    docker_compose exec -T portal-backend \
+      node backend/dist/scripts/configure-tenant-chatwoot-webhook.js \
+      "--tenant=${DEFAULT_TENANT_SLUG:-default}"
+  )"; then
+    echo "Tenant Chatwoot webhook configuration failed." >&2
     exit 1
   fi
 
-  local action
-  local callback_url
-  local has_secret
-  local secret
-  local secret_source
-  local subscriptions
-  local webhook_id
-  local webhook_url
-
-  action="$(extract_machine_value ACTION "$webhook_output")"
-  callback_url="$(extract_machine_value CALLBACK_URL "$webhook_output")"
-  has_secret="$(extract_machine_value WEBHOOK_HAS_SECRET "$webhook_output")"
-  secret="$(extract_machine_value WEBHOOK_SECRET "$webhook_output")"
-  secret_source="$(extract_machine_value SECRET_SOURCE "$webhook_output")"
-  subscriptions="$(extract_machine_value SUBSCRIPTIONS "$webhook_output")"
-  webhook_id="$(extract_machine_value WEBHOOK_ID "$webhook_output")"
-  webhook_url="$(extract_machine_value WEBHOOK_URL "$webhook_output")"
+  echo "$webhook_output"
   unset webhook_output
 
-  if [[ "$has_secret" != "true" || -z "$secret" ]]; then
-    unset secret
-    print_webhook_secret_fallback
-    exit 1
-  fi
-
-  upsert_env_value CHATWOOT_WEBHOOK_SECRET "$secret"
-  unset secret
-
-  echo "Chatwoot account webhook ${action:-configured}."
-  echo "Webhook id: ${webhook_id:-unknown}"
-  echo "Webhook URL: ${webhook_url:-$callback_url}"
-  echo "Subscriptions: ${subscriptions:-unknown}"
-  echo "Webhook secret source: ${secret_source:-unknown}"
-  echo "Updated CHATWOOT_WEBHOOK_SECRET in $ENV_FILE."
-
-  recreate_portal_backend
+  echo "Tenant API Channel webhook configured and its secret was stored in the portal tenant record."
   wait_for_public_health
+  wait_for_public_tenant
 }
 
 paste_chatwoot_webhook_secret() {
-  require_env_file
-
-  local pasted_secret
-  prompt_secret pasted_secret "Paste Chatwoot webhook secret" ""
-  if [[ -z "$pasted_secret" ]]; then
-    echo "Chatwoot webhook secret is required." >&2
-    exit 1
-  fi
-
-  upsert_env_value CHATWOOT_WEBHOOK_SECRET "$pasted_secret"
-  unset pasted_secret
-  echo "Updated CHATWOOT_WEBHOOK_SECRET in $ENV_FILE."
-
-  recreate_portal_backend
-  wait_for_public_health
-  mark_step_done chatwoot_webhook_secret_sync
+  echo "--paste-webhook-secret is no longer supported for the tenant-aware production flow." >&2
+  echo "Use scripts/install-production.sh --sync-webhook-secret so the installer stores the Chatwoot v4.13+ API Channel secret in the tenant record." >&2
+  exit 2
 }
 
 print_summary() {
@@ -879,7 +862,6 @@ print_summary() {
   echo "  scripts/install-production.sh --status"
   echo "  scripts/install-production.sh --logs"
   echo "  scripts/install-production.sh --sync-webhook-secret"
-  echo "  scripts/install-production.sh --paste-webhook-secret"
   echo "  docker compose --env-file .env.production -f infra/production/compose.yaml ps"
   echo "  docker compose --env-file .env.production -f infra/production/compose.yaml logs -f portal-backend portal-web"
 }
@@ -933,8 +915,11 @@ run_step reverse_proxy_deps "Install or verify reverse proxy dependencies" insta
 run_step build "Build production images" build_images
 run_step up "Start production stack" start_stack
 run_step reverse_proxy "Configure host reverse proxy when needed" configure_nginx_proxy
+run_step tenant_bootstrap "Bootstrap default tenant" bootstrap_default_tenant
 run_step public_health "Verify public health endpoint" wait_for_public_health
-run_step chatwoot_routing "Verify Chatwoot portal inbox routing" configure_chatwoot_routing
-run_step chatwoot_webhook_secret_sync "Create or update Chatwoot account webhook and sync secret" sync_chatwoot_webhook_secret
+run_step public_tenant "Verify public tenant endpoint" wait_for_public_tenant
+run_step chatwoot_api_channel_approval "Approve tenant Chatwoot API Channel configuration changes" approve_chatwoot_api_channel_changes
+run_step chatwoot_routing "Verify or enable tenant Chatwoot API Channel single-conversation routing" configure_chatwoot_routing
+run_step chatwoot_webhook_secret_sync "Configure tenant API Channel webhook URL and store secret" sync_chatwoot_webhook_secret
 
 print_summary

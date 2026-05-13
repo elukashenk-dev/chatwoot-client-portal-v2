@@ -7,24 +7,18 @@ import { RegisterRequestForm } from '../components/RegisterRequestForm'
 export function RegisterRequestPage() {
   return (
     <TenantAuthShell
-      description="Укажите имя и email. Мы проверим доступ и отправим код подтверждения."
-      title="Новый аккаунт"
+      description="Укажите имя и рабочий email, чтобы получить код подтверждения."
+      title="Создать аккаунт"
     >
       <RegisterRequestForm />
 
-      <div className="mt-5 flex items-center justify-between gap-4 text-sm sm:text-[15px]">
+      <div className="mt-4 text-center text-sm text-slate-500 sm:text-[15px]">
+        Уже есть аккаунт?{' '}
         <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] text-slate-700 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+          className="rounded-[0.4rem] font-normal text-brand-700 underline-offset-4 transition hover:text-brand-800 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
           to={routePaths.auth.login}
         >
-          Вернуться ко входу
-        </Link>
-
-        <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] text-brand-800 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={routePaths.auth.login}
-        >
-          У меня уже есть аккаунт
+          Войти
         </Link>
       </div>
     </TenantAuthShell>

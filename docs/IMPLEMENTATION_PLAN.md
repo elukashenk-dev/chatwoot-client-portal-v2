@@ -231,6 +231,12 @@ Exit criteria:
 
 ### MT-10. Deployment And Runbook Update
 
+Status:
+
+- dedicated one-tenant clean reinstall flow prepared for production review;
+- shared SaaS rollout docs remain future expansion of the same tenant-aware
+  runtime model.
+
 Цель:
 
 Описать repeatable production operations для shared SaaS и dedicated installs.

@@ -13,7 +13,7 @@ export function validatePasswordResetRequestForm(
   if (!email) {
     nextErrors.email = 'Введите email'
   } else if (!isValidEmail(email)) {
-    nextErrors.email = 'Введите email в корректном формате'
+    nextErrors.email = 'Проверьте формат email'
   }
 
   return nextErrors

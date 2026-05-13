@@ -228,8 +228,15 @@ describe('ChatPage', () => {
       await screen.findByText('Здравствуйте, вижу ваше обращение.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toHaveClass('chat-header-background')
-    expect(screen.getByText('Ольга Support')).toBeInTheDocument()
+    expect(screen.getAllByText('Ольга Support').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Агент:/)).not.toBeInTheDocument()
     expect(screen.getByRole('status', { name: 'Онлайн' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Открыть навигацию' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Открыть меню чата' }),
+    ).toBeInTheDocument()
     expect(screen.queryByText('В работе')).not.toBeInTheDocument()
     expect(screen.queryByText('Календарь сообщений')).not.toBeInTheDocument()
     expect(screen.queryByText(/Показаны последние/)).not.toBeInTheDocument()

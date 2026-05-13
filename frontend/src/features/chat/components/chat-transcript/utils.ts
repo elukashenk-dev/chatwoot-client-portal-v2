@@ -245,23 +245,23 @@ export function getBubbleRadiusClass({
 }) {
   if (blockPosition === 'single') {
     return isOutgoing
-      ? 'rounded-[0.9rem] rounded-br-[0.4rem]'
-      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
+      ? 'rounded-[0.7rem] rounded-br-[0.3rem]'
+      : 'rounded-[0.7rem] rounded-tl-[0.3rem]'
   }
 
   if (blockPosition === 'first') {
     return isOutgoing
-      ? 'rounded-[0.9rem]'
-      : 'rounded-[0.9rem] rounded-tl-[0.4rem]'
+      ? 'rounded-[0.7rem]'
+      : 'rounded-[0.7rem] rounded-tl-[0.3rem]'
   }
 
   if (blockPosition === 'last') {
     return isOutgoing
-      ? 'rounded-[0.9rem] rounded-br-[0.4rem]'
-      : 'rounded-[0.9rem]'
+      ? 'rounded-[0.7rem] rounded-br-[0.3rem]'
+      : 'rounded-[0.7rem]'
   }
 
-  return 'rounded-[0.9rem]'
+  return 'rounded-[0.7rem]'
 }
 
 export function getMessageWrapperSpacingClass({

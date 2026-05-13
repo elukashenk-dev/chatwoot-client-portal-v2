@@ -1,11 +1,11 @@
 import { Outlet } from 'react-router-dom'
 
-import { PortalFrame } from '../../shared/ui/PortalFrame'
+import { AuthFrame } from './AuthFrame'
 
 export function AuthLayout() {
   return (
-    <PortalFrame>
+    <AuthFrame>
       <Outlet />
-    </PortalFrame>
+    </AuthFrame>
   )
 }

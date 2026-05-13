@@ -7,6 +7,7 @@ import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PasswordField } from '../../../shared/ui/PasswordField'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
+import { LockIcon, MailIcon } from '../../../shared/ui/icons'
 import { getAuthRequestErrorMessage } from '../lib/authErrors'
 import { useAuthSession } from '../lib/authSessionContext'
 import { validateLoginForm } from '../lib/loginValidation'
@@ -18,12 +19,24 @@ const DEFAULT_VALUES: LoginFormValues = {
   password: '',
 }
 
+function getVisibleFieldError(error?: string) {
+  if (error === 'Введите email' || error === 'Введите пароль') {
+    return undefined
+  }
+
+  return error
+}
+
 export function LoginForm() {
   const location = useLocation()
   const navigate = useNavigate()
   const { errorMessage, signIn, status } = useAuthSession()
   const [values, setValues] = useState<LoginFormValues>(DEFAULT_VALUES)
   const [touched, setTouched] = useState<TouchedLoginFields>({
+    email: false,
+    password: false,
+  })
+  const [focused, setFocused] = useState<TouchedLoginFields>({
     email: false,
     password: false,
   })
@@ -38,19 +51,23 @@ export function LoginForm() {
     touched.email || hasSubmitted ? fieldErrors.email : undefined
   const visiblePasswordError =
     touched.password || hasSubmitted ? fieldErrors.password : undefined
+  const suppressEmailFormatError =
+    focused.email && visibleEmailError === 'Проверьте формат email'
+  const visibleEmailErrorMessage = suppressEmailFormatError
+    ? undefined
+    : getVisibleFieldError(visibleEmailError)
+  const visiblePasswordErrorMessage = getVisibleFieldError(visiblePasswordError)
+  const emailHasError = Boolean(visibleEmailError) && !suppressEmailFormatError
+  const passwordHasError = Boolean(visiblePasswordError)
 
-  const emailHintId = 'login-email-hint'
   const emailErrorId = 'login-email-error'
   const passwordErrorId = 'login-password-error'
 
-  const emailDescribedBy = [
-    emailHintId,
-    visibleEmailError ? emailErrorId : undefined,
-  ]
+  const emailDescribedBy = [visibleEmailErrorMessage ? emailErrorId : undefined]
     .filter(Boolean)
     .join(' ')
   const passwordDescribedBy = [
-    visiblePasswordError ? passwordErrorId : undefined,
+    visiblePasswordErrorMessage ? passwordErrorId : undefined,
   ]
     .filter(Boolean)
     .join(' ')
@@ -67,8 +84,19 @@ export function LoginForm() {
   }
 
   function markFieldTouched(field: keyof TouchedLoginFields) {
+    setFocused((currentFocused) => ({
+      ...currentFocused,
+      [field]: false,
+    }))
     setTouched((currentTouched) => ({
       ...currentTouched,
+      [field]: true,
+    }))
+  }
+
+  function markFieldFocused(field: keyof TouchedLoginFields) {
+    setFocused((currentFocused) => ({
+      ...currentFocused,
       [field]: true,
     }))
   }
@@ -116,26 +144,29 @@ export function LoginForm() {
   }
 
   return (
-    <form className="space-y-6" noValidate onSubmit={handleSubmit}>
+    <form className="space-y-4" noValidate onSubmit={handleSubmit}>
       <FormField
-        error={visibleEmailError}
+        error={visibleEmailErrorMessage}
         errorId={emailErrorId}
-        hint="Используйте рабочий email, который уже известен вашей компании."
-        hintId={emailHintId}
         htmlFor="login-email"
         label="Email"
+        labelHidden
         required
       >
         <TextField
           aria-describedby={emailDescribedBy || undefined}
-          aria-invalid={Boolean(visibleEmailError)}
+          aria-invalid={emailHasError}
           autoComplete="email"
-          hasError={Boolean(visibleEmailError)}
+          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          hasError={emailHasError}
           id="login-email"
           inputMode="email"
+          isFilled={values.email.trim().length > 0}
+          leadingIcon={<MailIcon className="h-6 w-6" />}
           name="email"
           onBlur={() => markFieldTouched('email')}
           onChange={(event) => setFieldValue('email', event.target.value)}
+          onFocus={() => markFieldFocused('email')}
           placeholder="name@company.ru"
           required
           type="email"
@@ -144,21 +175,26 @@ export function LoginForm() {
       </FormField>
 
       <FormField
-        error={visiblePasswordError}
+        error={visiblePasswordErrorMessage}
         errorId={passwordErrorId}
         htmlFor="login-password"
         label="Пароль"
+        labelHidden
         required
       >
         <PasswordField
           aria-describedby={passwordDescribedBy || undefined}
-          aria-invalid={Boolean(visiblePasswordError)}
+          aria-invalid={passwordHasError}
           autoComplete="current-password"
-          hasError={Boolean(visiblePasswordError)}
+          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          hasError={passwordHasError}
           id="login-password"
+          isFilled={values.password.length > 0}
+          leadingIcon={<LockIcon className="h-6 w-6" />}
           name="password"
           onBlur={() => markFieldTouched('password')}
           onChange={(event) => setFieldValue('password', event.target.value)}
+          onFocus={() => markFieldFocused('password')}
           placeholder="Введите пароль"
           required
           value={values.password}
@@ -168,6 +204,7 @@ export function LoginForm() {
       <InlineAlert message={visibleGlobalError} tone="error" />
 
       <PrimaryButton
+        className="min-h-14 rounded-[0.6rem] bg-brand-900 text-base hover:bg-brand-800"
         disabled={isSubmitting}
         loading={isSubmitting}
         loadingLabel="Вход..."

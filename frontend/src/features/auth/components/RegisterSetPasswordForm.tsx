@@ -3,10 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
-import { PasswordField } from '../../../shared/ui/PasswordField'
-import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import {
   ApiClientError,
   completeRegistrationSetPassword,
@@ -24,7 +21,7 @@ import type {
   RegisterSetPasswordFormValues,
   TouchedRegisterSetPasswordFields,
 } from '../types'
-import { PasswordRulesCard } from './PasswordRulesCard'
+import { PasswordSetupFormLayout } from './PasswordSetupFormLayout'
 
 const DEFAULT_VALUES: RegisterSetPasswordFormValues = {
   confirmPassword: '',
@@ -70,6 +67,18 @@ function getErrorDetails(error: unknown): {
   }
 }
 
+function getVisibleFieldError(error?: string) {
+  if (
+    error === 'Введите новый пароль' ||
+    error === 'Повторите пароль' ||
+    error === 'Пароль не соответствует требованиям'
+  ) {
+    return undefined
+  }
+
+  return error
+}
+
 export function RegisterSetPasswordForm() {
   const registrationRequest = getStoredRegistrationRequest()
   const registrationVerification = getStoredRegistrationVerification()
@@ -93,6 +102,8 @@ export function RegisterSetPasswordForm() {
     touched.confirmPassword || hasSubmitted
       ? fieldErrors.confirmPassword
       : undefined
+  const visiblePasswordErrorMessage = getVisibleFieldError(visiblePasswordError)
+  const visibleConfirmErrorMessage = getVisibleFieldError(visibleConfirmError)
 
   const passwordErrorId = 'register-set-password-error'
   const confirmPasswordErrorId = 'register-set-confirm-password-error'
@@ -179,9 +190,9 @@ export function RegisterSetPasswordForm() {
   if (completionSuccess) {
     return (
       <div className="space-y-5">
-        <div className="rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+        <div className="rounded-[0.6rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900 shadow-sm">
           Пароль сохранен для {completionSuccess.email}. Теперь вы можете войти
-          в клиентский портал.
+          в Центр поддержки.
         </div>
 
         <Link
@@ -216,88 +227,42 @@ export function RegisterSetPasswordForm() {
   }
 
   return (
-    <form className="space-y-6" noValidate onSubmit={handleSubmit}>
-      <FormField
-        error={visiblePasswordError}
-        errorId={passwordErrorId}
-        htmlFor="register-set-password"
-        label="Новый пароль"
-        required
-      >
-        <PasswordField
-          aria-describedby={visiblePasswordError ? passwordErrorId : undefined}
-          aria-invalid={Boolean(visiblePasswordError)}
-          autoComplete="new-password"
-          hasError={Boolean(visiblePasswordError)}
-          id="register-set-password"
-          name="newPassword"
-          onBlur={() => markFieldTouched('newPassword')}
-          onChange={(event) => setFieldValue('newPassword', event.target.value)}
-          placeholder="Введите новый пароль"
-          required
-          value={values.newPassword}
-        />
-      </FormField>
-
-      <FormField
-        error={visibleConfirmError}
-        errorId={confirmPasswordErrorId}
-        htmlFor="register-set-confirm-password"
-        label="Подтвердите пароль"
-        required
-      >
-        <PasswordField
-          aria-describedby={
-            visibleConfirmError ? confirmPasswordErrorId : undefined
-          }
-          aria-invalid={Boolean(visibleConfirmError)}
-          autoComplete="new-password"
-          hasError={Boolean(visibleConfirmError)}
-          id="register-set-confirm-password"
-          name="confirmPassword"
-          onBlur={() => markFieldTouched('confirmPassword')}
-          onChange={(event) =>
-            setFieldValue('confirmPassword', event.target.value)
-          }
-          placeholder="Повторите пароль"
-          required
-          value={values.confirmPassword}
-        />
-      </FormField>
-
-      <PasswordRulesCard
-        confirmPassword={values.confirmPassword}
-        password={values.newPassword}
-      />
-
-      <InlineAlert message={globalError} tone="error" />
-
-      {nextAction === 'verify' ? (
-        <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] px-3 text-sm font-medium text-brand-800 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={routePaths.auth.registerVerify}
-        >
-          Вернуться к подтверждению email
-        </Link>
-      ) : null}
-
-      {nextAction === 'login' && !completionSuccess ? (
-        <Link
-          className="inline-flex min-h-11 items-center rounded-[0.75rem] px-3 text-sm font-medium text-brand-800 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={routePaths.auth.login}
-        >
-          Перейти ко входу
-        </Link>
-      ) : null}
-
-      <PrimaryButton
-        disabled={!canSubmit || isSubmitting}
-        loading={isSubmitting}
-        loadingLabel="Сохранение..."
-        type="submit"
-      >
-        Сохранить пароль
-      </PrimaryButton>
-    </form>
+    <PasswordSetupFormLayout
+      canSubmit={Boolean(canSubmit)}
+      confirmPassword={values.confirmPassword}
+      confirmPasswordError={visibleConfirmErrorMessage}
+      confirmPasswordErrorId={confirmPasswordErrorId}
+      confirmPasswordHasError={Boolean(visibleConfirmError)}
+      confirmPasswordInputId="register-set-confirm-password"
+      errorMessage={globalError}
+      isSubmitting={isSubmitting}
+      newPassword={values.newPassword}
+      onConfirmPasswordBlur={() => markFieldTouched('confirmPassword')}
+      onConfirmPasswordChange={(nextValue) =>
+        setFieldValue('confirmPassword', nextValue)
+      }
+      onNewPasswordBlur={() => markFieldTouched('newPassword')}
+      onNewPasswordChange={(nextValue) =>
+        setFieldValue('newPassword', nextValue)
+      }
+      onSubmit={handleSubmit}
+      passwordError={visiblePasswordErrorMessage}
+      passwordErrorId={passwordErrorId}
+      passwordHasError={Boolean(visiblePasswordError)}
+      passwordInputId="register-set-password"
+      recoveryAction={
+        nextAction === 'verify'
+          ? {
+              label: 'Вернуться к подтверждению email',
+              to: routePaths.auth.registerVerify,
+            }
+          : nextAction === 'login'
+            ? {
+                label: 'Перейти ко входу',
+                to: routePaths.auth.login,
+              }
+            : null
+      }
+    />
   )
 }
