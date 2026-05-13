@@ -112,6 +112,10 @@
   requests получили `AbortController` timeout helper с controlled unavailable
   errors; focused Chatwoot client/app tests, backend typecheck/lint/full test
   suite, code-health и `git diff --check` прошли.
+- Backend follow-up findings зафиксированы как deferred low risks:
+  `F-AUTH-001` для shared-store rate limiting перед multi-instance deployment и
+  `F-CHATWOOT-001` для env-configurable Chatwoot request timeout при production
+  tuning.
 
 ## Current Baseline
 
@@ -129,4 +133,5 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit: `fix: add chatwoot request timeouts`.
+- Слить текущий проверенный стек в `main`, выполнить финальные проверки на
+  `main` и задеплоить production preview для проверки на реальном устройстве.
