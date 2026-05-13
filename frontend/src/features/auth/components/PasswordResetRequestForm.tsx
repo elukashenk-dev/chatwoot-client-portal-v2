@@ -8,6 +8,10 @@ import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
 import { MailIcon } from '../../../shared/ui/icons'
+import {
+  authFieldClassName,
+  authFieldIconClassName,
+} from '../../../shared/ui/inputStyles'
 import { ApiClientError, requestPasswordReset } from '../api/authClient'
 import { savePasswordResetRequest } from '../lib/passwordResetFlow'
 import { validatePasswordResetRequestForm } from '../lib/passwordResetRequestValidation'
@@ -122,12 +126,12 @@ export function PasswordResetRequestForm() {
           aria-describedby={visibleEmailErrorMessage ? emailErrorId : undefined}
           aria-invalid={emailHasError}
           autoComplete="email"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={emailHasError}
           id="password-reset-email"
           inputMode="email"
           isFilled={values.email.trim().length > 0}
-          leadingIcon={<MailIcon className="h-6 w-6" />}
+          leadingIcon={<MailIcon className={authFieldIconClassName} />}
           name="email"
           onBlur={markFieldTouched}
           onChange={(event) => setFieldValue(event.target.value)}

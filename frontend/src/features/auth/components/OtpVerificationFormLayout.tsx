@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom'
 import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
+import {
+  authPrimaryLinkClassName,
+  authSecondaryLinkClassName,
+} from '../../../shared/ui/inputStyles'
 import { OtpInputGroup } from './OtpInputGroup'
 
 type OtpVerificationFormLayoutProps = {
@@ -99,15 +103,12 @@ export function OtpVerificationFormLayout({
       </PrimaryButton>
 
       <div className="flex flex-col items-center gap-2 text-center text-sm sm:flex-row sm:justify-between sm:text-[15px]">
-        <Link
-          className="rounded-[0.4rem] font-normal text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={changeEmailTo}
-        >
+        <Link className={authSecondaryLinkClassName} to={changeEmailTo}>
           {changeEmailLabel}
         </Link>
 
         <button
-          className="rounded-[0.4rem] font-normal text-brand-700 underline-offset-4 transition hover:text-brand-800 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+          className={`${authPrimaryLinkClassName} disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline`}
           disabled={isSubmitting || isResending || isCooldownActive}
           onClick={onResend}
           type="button"

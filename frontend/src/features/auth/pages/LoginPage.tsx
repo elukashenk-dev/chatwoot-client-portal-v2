@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
 import { PhoneIcon } from '../../../shared/ui/icons'
+import { authSecondaryLinkClassName } from '../../../shared/ui/inputStyles'
 import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { LoginForm } from '../components/LoginForm'
 
@@ -15,14 +16,14 @@ export function LoginPage() {
 
       <div className="mt-4 flex items-center justify-between gap-4 text-sm sm:text-[15px]">
         <Link
-          className="rounded-[0.4rem] text-sm font-normal text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 sm:text-[15px]"
+          className={authSecondaryLinkClassName}
           to={routePaths.auth.passwordResetRequest}
         >
           Забыли пароль?
         </Link>
 
         <Link
-          className="rounded-[0.4rem] text-right text-sm font-normal text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 sm:text-[15px]"
+          className={`${authSecondaryLinkClassName} text-right`}
           to={routePaths.auth.register}
         >
           Создать аккаунт

@@ -8,6 +8,10 @@ import { PasswordField } from '../../../shared/ui/PasswordField'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
 import { LockIcon, MailIcon } from '../../../shared/ui/icons'
+import {
+  authFieldClassName,
+  authFieldIconClassName,
+} from '../../../shared/ui/inputStyles'
 import { getAuthRequestErrorMessage } from '../lib/authErrors'
 import { useAuthSession } from '../lib/authSessionContext'
 import { validateLoginForm } from '../lib/loginValidation'
@@ -157,12 +161,12 @@ export function LoginForm() {
           aria-describedby={emailDescribedBy || undefined}
           aria-invalid={emailHasError}
           autoComplete="email"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={emailHasError}
           id="login-email"
           inputMode="email"
           isFilled={values.email.trim().length > 0}
-          leadingIcon={<MailIcon className="h-6 w-6" />}
+          leadingIcon={<MailIcon className={authFieldIconClassName} />}
           name="email"
           onBlur={() => markFieldTouched('email')}
           onChange={(event) => setFieldValue('email', event.target.value)}
@@ -186,11 +190,11 @@ export function LoginForm() {
           aria-describedby={passwordDescribedBy || undefined}
           aria-invalid={passwordHasError}
           autoComplete="current-password"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={passwordHasError}
           id="login-password"
           isFilled={values.password.length > 0}
-          leadingIcon={<LockIcon className="h-6 w-6" />}
+          leadingIcon={<LockIcon className={authFieldIconClassName} />}
           name="password"
           onBlur={() => markFieldTouched('password')}
           onChange={(event) => setFieldValue('password', event.target.value)}

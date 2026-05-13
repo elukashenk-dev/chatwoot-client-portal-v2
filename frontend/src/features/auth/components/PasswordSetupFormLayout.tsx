@@ -6,6 +6,11 @@ import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PasswordField } from '../../../shared/ui/PasswordField'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { LockIcon } from '../../../shared/ui/icons'
+import {
+  authFieldClassName,
+  authFieldIconClassName,
+  authPrimaryLinkClassName,
+} from '../../../shared/ui/inputStyles'
 import { PasswordRulesCard } from './PasswordRulesCard'
 
 type PasswordSetupRecoveryAction = {
@@ -75,11 +80,11 @@ export function PasswordSetupFormLayout({
           aria-describedby={passwordError ? passwordErrorId : undefined}
           aria-invalid={passwordHasError}
           autoComplete="new-password"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={passwordHasError}
           id={passwordInputId}
           isFilled={newPassword.length > 0}
-          leadingIcon={<LockIcon className="h-6 w-6" />}
+          leadingIcon={<LockIcon className={authFieldIconClassName} />}
           name="newPassword"
           onBlur={onNewPasswordBlur}
           onChange={(event) => onNewPasswordChange(event.target.value)}
@@ -103,11 +108,11 @@ export function PasswordSetupFormLayout({
           }
           aria-invalid={confirmPasswordHasError}
           autoComplete="new-password"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={confirmPasswordHasError}
           id={confirmPasswordInputId}
           isFilled={confirmPassword.length > 0}
-          leadingIcon={<LockIcon className="h-6 w-6" />}
+          leadingIcon={<LockIcon className={authFieldIconClassName} />}
           name="confirmPassword"
           onBlur={onConfirmPasswordBlur}
           onChange={(event) => onConfirmPasswordChange(event.target.value)}
@@ -126,7 +131,7 @@ export function PasswordSetupFormLayout({
 
       {recoveryAction ? (
         <Link
-          className="inline-flex min-h-10 items-center rounded-[0.4rem] text-sm font-normal text-brand-700 underline-offset-4 transition hover:text-brand-800 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+          className={`${authPrimaryLinkClassName} inline-flex min-h-10 items-center text-sm`}
           to={recoveryAction.to}
         >
           {recoveryAction.label}

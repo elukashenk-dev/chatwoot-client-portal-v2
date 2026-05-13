@@ -9,6 +9,10 @@ import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
 import { MailIcon, UserPlusIcon } from '../../../shared/ui/icons'
 import {
+  authFieldClassName,
+  authFieldIconClassName,
+} from '../../../shared/ui/inputStyles'
+import {
   ApiClientError,
   requestRegistrationVerification,
 } from '../api/authClient'
@@ -148,11 +152,11 @@ export function RegisterRequestForm() {
           aria-describedby={visibleNameErrorMessage ? nameErrorId : undefined}
           aria-invalid={nameHasError}
           autoComplete="name"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={nameHasError}
           id="register-full-name"
           isFilled={values.fullName.trim().length > 0}
-          leadingIcon={<UserPlusIcon className="h-6 w-6" />}
+          leadingIcon={<UserPlusIcon className={authFieldIconClassName} />}
           name="fullName"
           onBlur={() => markFieldTouched('fullName')}
           onChange={(event) => setFieldValue('fullName', event.target.value)}
@@ -176,12 +180,12 @@ export function RegisterRequestForm() {
           aria-describedby={visibleEmailErrorMessage ? emailErrorId : undefined}
           aria-invalid={emailHasError}
           autoComplete="email"
-          className="h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400"
+          className={authFieldClassName}
           hasError={emailHasError}
           id="register-email"
           inputMode="email"
           isFilled={values.email.trim().length > 0}
-          leadingIcon={<MailIcon className="h-6 w-6" />}
+          leadingIcon={<MailIcon className={authFieldIconClassName} />}
           name="email"
           onBlur={() => markFieldTouched('email')}
           onChange={(event) => setFieldValue('email', event.target.value)}

@@ -1,5 +1,16 @@
 import { cn } from '../lib/cn'
 
+export const authFieldClassName =
+  'h-[52px] rounded-[0.6rem] bg-slate-50/80 text-[17px] placeholder:text-slate-400'
+
+export const authFieldIconClassName = 'h-6 w-6'
+
+export const authSecondaryLinkClassName =
+  'rounded-[0.4rem] font-normal text-slate-500 underline-offset-4 transition hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
+
+export const authPrimaryLinkClassName =
+  'rounded-[0.4rem] font-normal text-brand-700 underline-offset-4 transition hover:text-brand-800 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
+
 export function inputClassName(hasError: boolean, isFilled = false) {
   return cn(
     'auth-input block h-16 w-full rounded-[0.6rem] border bg-white px-5 text-[17px] text-slate-900 placeholder:text-slate-400 transition focus:outline-none disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500',
