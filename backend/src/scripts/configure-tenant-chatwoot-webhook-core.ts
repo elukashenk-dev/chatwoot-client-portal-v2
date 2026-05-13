@@ -8,7 +8,9 @@ import {
   decryptTenantSecret,
   encryptTenantSecret,
 } from '../modules/tenants/secrets.js'
-import { DEFAULT_WEBHOOK_PATH } from './configure-chatwoot-account-webhook-core.js'
+
+const TENANT_CHATWOOT_WEBHOOK_PATH =
+  '/api/integrations/chatwoot/webhooks/account'
 
 type ConfigureTenantWebhookOptions = {
   callbackUrl?: string | undefined
@@ -65,7 +67,7 @@ function buildCallbackUrl({
     return callbackUrl.trim()
   }
 
-  return new URL(DEFAULT_WEBHOOK_PATH, `${publicBaseUrl}/`).toString()
+  return new URL(TENANT_CHATWOOT_WEBHOOK_PATH, `${publicBaseUrl}/`).toString()
 }
 
 export async function configureTenantChatwootWebhook({

@@ -13,15 +13,16 @@ Post-review update:
 - `2026-05-13`: `F-PROD-001` closed by adding HSTS, CSP and
   Permissions-Policy to the production Caddyfile, deploying the stack and
   verifying public response headers.
+- `2026-05-13`: `F-SCRIPT-001` closed by removing the legacy global account
+  webhook helper and adding a `code-health` guard against reintroducing it.
 
 ## Executive Summary
 
 Backend architecture is in good shape for the current dedicated one-tenant production deployment on a tenant-aware foundation. The strongest areas are backend-owned Chatwoot authority, tenant-scoped persistence, signed `HttpOnly` session cookies, origin checks on state-changing browser endpoints, Chatwoot webhook signature validation, and encrypted tenant Chatwoot secrets.
 
 The highest remaining risks are production hardening rather than direct data
-compromise: release-source drift between deployed `main` and `origin/main`, a
-legacy webhook helper that can still print a webhook secret if manually used,
-and authenticated chat send abuse tracked separately after this review.
+compromise: release-source drift between deployed `main` and `origin/main` and
+authenticated chat send abuse tracked separately after this review.
 
 ## Threat Model
 
@@ -60,7 +61,7 @@ Severity calibration:
 | medium   | `F-MT-004`       | MT-9 admin auth    | Tenant admin verification still requires the planned separate encrypted admin-verification token boundary before MT-9 admin login. |
 | low      | `F-PROD-001`     | production headers | Closed after review: production Caddyfile now sets HSTS, CSP and Permissions-Policy and public headers were verified.              |
 | low      | `F-PROD-002`     | release control    | Production deployed commit is clean locally but not present on `origin/main`.                                                      |
-| low      | `F-SCRIPT-001`   | scripts/secrets    | Legacy global webhook helper can print plaintext webhook secret if manually run in installer-output mode.                          |
+| low      | `F-SCRIPT-001`   | scripts/secrets    | Closed after review: legacy global webhook helper was removed and guarded against reintroduction by `code-health`.                 |
 | low      | `F-AUTH-001`     | auth rate limiting | In-memory auth rate limit is acceptable for one backend process, not multi-instance global limiting.                               |
 | low      | `F-CHATWOOT-001` | Chatwoot requests  | Chatwoot request timeout is fixed at 15 seconds, not env-tunable.                                                                  |
 
@@ -100,7 +101,8 @@ Recommended additional tests:
 
 - SSE cap behavior and disconnect cleanup are covered by backend chat-realtime tests;
 - production header smoke check after `F-PROD-001`;
-- script output redaction test for `F-SCRIPT-001`;
+- legacy webhook helper reintroduction is covered by `code-health` after
+  `F-SCRIPT-001`;
 - MT-9 admin-token boundary tests before tenant admin implementation.
 
 ## Do Not Touch

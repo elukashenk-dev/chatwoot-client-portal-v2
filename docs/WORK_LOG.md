@@ -132,6 +132,10 @@
   `code-health` проверяет наличие этих headers, stack задеплоен на
   `lk.provgroup.ru`; public health/tenant/API/SSE/PWA/static asset checks и
   `curl -I` headers verification прошли.
+- `F-SCRIPT-001` закрыт: legacy global account webhook helper, который мог
+  печатать raw webhook secret и писать секрет в parent `.env`, удален;
+  tenant-aware helper больше не зависит от legacy core, `code-health` запрещает
+  reintroduce старых helper-файлов.
 
 ## Current Baseline
 
