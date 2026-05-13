@@ -12,7 +12,7 @@ docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
 This file is the high-level guardrail. The MT-10 runbook is the executable
 operator checklist.
 
-## Why The Old Runbook Is Retired
+## Why The Previous Runbook Is Superseded
 
 The previous production runbook was written before the multi-tenant architecture
 update.
@@ -33,17 +33,17 @@ That model is now superseded.
 Current runtime must use tenant-owned Chatwoot config from `portal_tenants`, not
 global Chatwoot env as authority.
 
-## Do Not Use The Old Single-Tenant Flow
+## Do Not Use The Superseded Single-Tenant Flow
 
-The old flow remains unsupported:
+The previous single-tenant flow remains unsupported:
 
-- do not run old production installer steps;
+- do not run superseded production installer steps;
 - do not rely on global `CHATWOOT_*` as production runtime authority;
-- do not point the new portal at production Chatwoot using the old single-tenant
-  flow;
+- do not point the new portal at production Chatwoot using the superseded
+  single-tenant flow;
 - do not modify production Chatwoot core, database, uploads, services or
   `chat.provgroup.ru` Nginx config as part of portal work;
-- do not migrate or reuse old portal test data.
+- do not migrate or reuse disposable portal test data.
 
 The real production Chatwoot serves real users and must remain untouched by
 portal deploy work unless the change is the explicitly approved tenant API

@@ -55,7 +55,7 @@ openssl rand -base64 32
 
 ## 3. Пересоздать Чистую Portal DB
 
-Делать это, когда старые локальные portal данные не нужны.
+Делать это, когда локальные portal данные можно удалить.
 
 ```bash
 docker --context default compose --env-file .env -f infra/postgres/compose.yaml down -v

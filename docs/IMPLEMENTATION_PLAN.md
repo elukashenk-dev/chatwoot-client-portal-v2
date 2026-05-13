@@ -73,7 +73,7 @@ Non-goals:
 - не переписывать модули "потому что можно красивее";
 - не смешивать refactoring, new feature work, schema/runtime changes и dead
   code removal в один большой commit;
-- не читать и не использовать старый `../chatwoot-client-portal`.
+- не подменять audit сравнением с внешними клиентскими portal-проектами.
 
 Шаги:
 
@@ -207,8 +207,8 @@ Scope:
   S3-compatible object storage, локально через MinIO/compatible service без
   local-files fallback;
 - подключить tenant-scoped audit events для admin/branding действий;
-- использовать старую `feature/phase-10-portal-branding-admin` только как
-  архив идей, не мержить ее как есть.
+- archived branch `feature/phase-10-portal-branding-admin` можно использовать
+  только как архив идей, не мержить ее как есть.
 
 Required checks:
 

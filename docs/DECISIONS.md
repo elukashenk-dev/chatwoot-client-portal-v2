@@ -24,7 +24,7 @@
 - причина:
   shared и dedicated режимы должны жить в одной архитектуре без двух кодовых
   баз. Проект еще не в production, поэтому foundation можно менять правильно,
-  не сохраняя старую single-tenant модель ради совместимости.
+  не сохраняя single-tenant модель ради совместимости.
 
 ## D-002. Browser не получает Chatwoot authority
 
@@ -173,12 +173,12 @@
 
 - дата: `2026-05-05`
 - решение:
-  старая ветка `feature/phase-10-portal-branding-admin` не мержится как есть.
+  archived branch `feature/phase-10-portal-branding-admin` не мержится как есть.
   Branding/admin возвращается в `MT-9` только поверх tenant foundation:
   tenant-scoped admin login, tenant-owned branding settings и tenant-scoped audit
   events.
 - причина:
-  старая branding/admin branch была построена на single-tenant assumptions.
+  archived branding/admin branch была построена на single-tenant assumptions.
   Global branding/admin session model небезопасна для shared SaaS.
 
 ## D-014. Tenant admin verification использует отдельный token

@@ -12,7 +12,7 @@ Portal app path: `/opt/chatwoot-client-portal-v2`
 
 ## Goal
 
-Cleanly remove the old portal runtime and install the current
+Cleanly replace any existing portal-owned runtime with the current
 `chatwoot-client-portal-v2` production stack as a tenant-aware one-tenant
 deployment.
 
@@ -38,17 +38,17 @@ configuration step for the tenant:
 - Do not edit the existing `chat.provgroup.ru` Nginx site.
 - Do not edit production Chatwoot outside the tenant API Channel configuration
   explicitly listed above.
-- Do not reuse old portal database data.
+- Do not reuse disposable portal database data.
 - Do not use global `CHATWOOT_*` env as portal runtime authority.
 - Do not expose portal backend or portal Postgres ports publicly.
 
 Only these portal-owned resources may be removed/recreated:
 
-- old portal containers;
-- old portal Docker volumes;
-- old portal app directory;
-- old portal `.env.production`, `.install`, logs and generated artifacts;
-- old portal Nginx site for `lk.provgroup.ru`, if present.
+- portal-owned containers;
+- portal-owned Docker volumes;
+- portal-owned app directory;
+- portal-owned `.env.production`, `.install`, logs and generated artifacts;
+- portal-owned Nginx site for `lk.provgroup.ru`, if present.
 
 ## Current Production Assumptions
 
@@ -110,7 +110,7 @@ webhook and stores Chatwoot's actual API Channel secret in the tenant record.
 
 ## Step 1. Create A Portal Runtime Backup Snapshot
 
-The user may decide that old portal data is disposable, but still capture a
+The user may decide that existing portal data is disposable, but still capture a
 small operational snapshot before removal. This is not a Chatwoot backup.
 
 ```bash
@@ -136,15 +136,15 @@ systemctl is-active chatwoot-web.1.service chatwoot-worker.1.service postgresql 
 
 Stop here if Chatwoot is not healthy.
 
-## Step 3. Remove Old Portal Runtime Only
+## Step 3. Reset Portal-Owned Runtime Only
 
-Go to the old portal app path if it exists:
+Go to the portal app path if it exists:
 
 ```bash
 cd /opt/chatwoot-client-portal-v2 2>/dev/null || true
 ```
 
-If old compose files are present, stop only the portal stack:
+If compose files are present, stop only the portal stack:
 
 ```bash
 if [ -f infra/production/compose.yaml ] && [ -f .env.production ]; then
@@ -152,7 +152,7 @@ if [ -f infra/production/compose.yaml ] && [ -f .env.production ]; then
 fi
 ```
 
-Remove old portal containers if any survived:
+Remove portal-owned containers if any survived:
 
 ```bash
 docker ps -a --format '{{.Names}}' \
@@ -160,7 +160,7 @@ docker ps -a --format '{{.Names}}' \
   | xargs -r docker rm -f
 ```
 
-Remove old portal volumes:
+Remove portal-owned volumes:
 
 ```bash
 docker volume ls --format '{{.Name}}' \
@@ -168,7 +168,7 @@ docker volume ls --format '{{.Name}}' \
   | xargs -r docker volume rm
 ```
 
-Remove old portal app directory:
+Remove portal app directory:
 
 ```bash
 sudo rm -rf /opt/chatwoot-client-portal-v2
@@ -497,8 +497,8 @@ Do not rollback or reset Chatwoot as part of portal rollback.
 
 The clean reinstall is complete when:
 
-- old portal containers are gone;
-- old portal volumes are gone;
+- stale portal-owned containers are gone;
+- stale portal-owned volumes are gone;
 - new portal app exists at `/opt/chatwoot-client-portal-v2`;
 - `DEPLOY_SOURCE.txt` exists and matches the intended clean release or explicit
   preview deploy;

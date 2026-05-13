@@ -1,8 +1,8 @@
 # Multi-Tenant Portal Architecture Reference
 
 Этот файл больше не является пошаговым планом миграции. `MT-0`-`MT-8` уже
-реализованы, поэтому подробная история phases, old migration steps и устаревшие
-next steps удалены.
+реализованы, поэтому подробная история phases, superseded migration steps и
+устаревшие next steps удалены.
 
 Роль этого файла сейчас:
 

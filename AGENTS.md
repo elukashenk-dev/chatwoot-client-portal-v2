@@ -6,15 +6,16 @@
 ## Scope
 
 - Работать только внутри `chatwoot-client-portal-v2`.
-- Старый `../chatwoot-client-portal` больше не использовать даже как reference.
-- Старый `../chatwoot-client-portal` не читать, не редактировать, не запускать и не трогать.
-- В runtime- и infra-задачах не трогать backend, env, migrations и Postgres старого портала.
-- Код, идеи, зависимости, runtime-подходы и данные из старой версии не переносить.
+- `chatwoot-client-portal-v2` является единственным клиентским portal-проектом
+  в текущем scope.
+- Код, идеи, зависимости, runtime-подходы и данные из внешних клиентских
+  portal-проектов не переносить.
 
 ## Git Repository Rule
 
 - `chatwoot-client-portal-v2` ведется как отдельный git repository.
-- Старый `../chatwoot-client-portal` остается отдельным retired repository, не является parent/upstream для `v2` и больше не используется как источник контекста.
+- Этот repository самодостаточный и не имеет parent/upstream среди локальных
+  клиентских portal-проектов.
 - Не коммитить secrets, `.env`, локальные runtime artifacts, `node_modules`, `dist`, `playwright-report`, `test-results` и прочие generated outputs.
 - Если перед началом задачи `git status` не clean, сначала понять ownership изменений:
   - свои незакрытые изменения можно продолжать;
@@ -82,7 +83,7 @@
 
 ## Product And Architecture Rules
 
-- `v2` — это новый отдельный проект, а не рефакторинг `v1`.
+- `v2` — это самостоятельный tenant-aware клиентский portal.
 - Browser не получает direct Chatwoot authority.
 - Portal backend остается единственной authority-зоной для auth, session, send и realtime.
 - `v2` использует только свой отдельный isolated `Postgres`; runtime-базу работающего `Chatwoot` использовать нельзя.
@@ -106,9 +107,10 @@
 
 - Перед каждым значимым шагом реализации обязательно сверяться с официальной документацией по затронутой технологии или интеграции.
 - Для Chatwoot сначала смотреть официальную документацию, и только если ответа недостаточно — смотреть `../chatwoot-ce-stable`.
-- Старый `../chatwoot-client-portal` не использовать для сверки решений, product context, edge cases или implementation hints.
-- Запрещено читать, редактировать, запускать старый проект, запускать его миграции, делать against него `psql`/readiness checks или иным образом использовать его runtime/Postgres как часть работы над `v2`.
-- Код, идеи, выводы, принципы реализации и runtime-зависимости из старого проекта не переносить.
+- Для portal-specific решений source of truth — текущий код и документы
+  `chatwoot-client-portal-v2`.
+- Runtime/Postgres/миграции других клиентских portal-проектов не использовать
+  как часть работы над `v2`.
 
 ## Workflow Rule
 
