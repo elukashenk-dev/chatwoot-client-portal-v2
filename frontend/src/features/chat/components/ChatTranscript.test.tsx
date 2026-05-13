@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessage } from '../types'
@@ -313,6 +314,86 @@ describe('ChatTranscript', () => {
         id: 2,
       }),
     )
+  })
+
+  it('opens message actions from the keyboard and restores focus on Escape', async () => {
+    const user = userEvent.setup()
+    const onReplyToMessage = vi.fn()
+
+    renderTranscript(
+      [
+        createMessage({
+          content: 'Сообщение для действий',
+          id: 2,
+        }),
+      ],
+      {
+        onReplyToMessage,
+      },
+    )
+
+    const actionsButton = screen.getByRole('button', {
+      name: /Действия с сообщением/,
+    })
+
+    expect(actionsButton).toHaveClass('opacity-0')
+
+    actionsButton.focus()
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByRole('menuitem', { name: 'Ответить' })).toHaveFocus()
+    expect(
+      screen.getByRole('menuitem', { name: 'Копировать' }),
+    ).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+    expect(actionsButton).toHaveFocus()
+    expect(onReplyToMessage).not.toHaveBeenCalled()
+  })
+
+  it('copies message text from the keyboard action menu', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    })
+
+    renderTranscript([
+      createMessage({
+        content: 'Текст для клавиатурного копирования',
+        id: 2,
+      }),
+    ])
+
+    const actionsButton = screen.getByRole('button', {
+      name: /Действия с сообщением/,
+    })
+
+    actionsButton.focus()
+    await user.keyboard('{Enter}')
+    await user.keyboard('{Tab}')
+
+    expect(screen.getByRole('menuitem', { name: 'Копировать' })).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'Текст для клавиатурного копирования',
+      )
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+    expect(actionsButton).toHaveFocus()
   })
 
   it('copies message text from the desktop context menu', async () => {

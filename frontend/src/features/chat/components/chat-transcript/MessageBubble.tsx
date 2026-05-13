@@ -4,6 +4,7 @@ import { cn } from '../../../../shared/lib/cn'
 import {
   CheckIcon,
   ClockIcon,
+  MoreHorizontalIcon,
   RefreshIcon,
   ReplyIcon,
 } from '../../../../shared/ui/icons'
@@ -36,6 +37,7 @@ type MessageBubbleProps = {
   index: number
   isConnectionAvailable: boolean
   message: ChatMessage
+  onOpenActionMenu: (message: ChatMessage, triggerElement: HTMLElement) => void
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
   onReplyToMessage: (message: ChatMessage) => void
   onRetryTextMessage: (clientMessageKey: string) => void
@@ -220,6 +222,7 @@ export function MessageBubble({
   index,
   isConnectionAvailable,
   message,
+  onOpenActionMenu,
   onOpenContextMenu,
   onReplyToMessage,
   onRetryTextMessage,
@@ -347,7 +350,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        'flex',
+        'group flex',
         isOutgoing ? 'items-end' : 'items-start',
         isOutgoing ? 'justify-end' : 'justify-start',
         getMessageWrapperSpacingClass({
@@ -374,6 +377,23 @@ export function MessageBubble({
         )}
       >
         <SwipeReplyIndicator swipeOffset={swipeOffset} />
+        {canReplyToMessage ? (
+          <button
+            aria-label={`Действия с сообщением ${message.authorName}`}
+            className={cn(
+              'absolute top-1 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/70 bg-white/95 text-slate-500 opacity-0 shadow-sm transition hover:opacity-100 hover:text-brand-800 focus:opacity-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 group-focus-within:opacity-100 group-hover:opacity-100',
+              isOutgoing ? '-left-10' : '-right-10',
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenActionMenu(message, event.currentTarget)
+            }}
+            title="Действия"
+            type="button"
+          >
+            <MoreHorizontalIcon className="h-4 w-4" />
+          </button>
+        ) : null}
         <div
           className={cn(
             'relative z-10 min-w-0',

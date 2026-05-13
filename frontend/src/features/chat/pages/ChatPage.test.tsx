@@ -256,6 +256,40 @@ describe('ChatPage', () => {
     )
   })
 
+  it('restores focus to the chat menu trigger when Escape closes the menu', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+
+    renderChatRoute()
+
+    const chatMenuButton = await screen.findByRole(
+      'button',
+      {
+        name: 'Открыть меню чата',
+      },
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    chatMenuButton.focus()
+    await user.keyboard('{Enter}')
+
+    const chatMenu = await screen.findByRole('menu')
+
+    await waitFor(() => {
+      expect(chatMenu).toHaveFocus()
+    })
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+    expect(chatMenuButton).toHaveFocus()
+  })
+
   it('loads older messages through the bounded history cursor', async () => {
     const user = userEvent.setup()
 

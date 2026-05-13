@@ -55,6 +55,11 @@
 - Frontend review cleanup Task 4 закрыт: повторяемые Tailwind radius/shadow/text
   значения вынесены в CSS-first tokens/utilities без redesign; frontend
   typecheck/tests/build, root lint и `git diff --check` прошли.
+- Frontend review cleanup Task 3 закрыт: chat header/message action menus
+  получили keyboard focus entry, Escape/focus restore и hover/focus-only
+  message action trigger без изменения chat bubble baseline; finding
+  `F-CHAT-UI-002` закрыт, targeted chat tests, frontend typecheck/tests/build,
+  root lint и `git diff --check` прошли.
 
 ## MT-8.5 UI/UX Baseline
 
@@ -111,4 +116,5 @@
 
 ## Recommended Next Step
 
-- Вернуться к Task 3: Chat Menu Accessibility, без визуального redesign меню.
+- Сделать checkpoint commit для Task 3:
+  `fix: improve chat menu keyboard accessibility`.

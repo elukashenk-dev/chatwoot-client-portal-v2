@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -66,6 +67,12 @@ function DayDivider({
   )
 }
 
+function restoreFocusToElement(element: HTMLElement | null | undefined) {
+  if (element && document.contains(element)) {
+    element.focus({ preventScroll: true })
+  }
+}
+
 export function ChatTranscript({
   hasMoreOlder,
   historyErrorMessage,
@@ -86,6 +93,20 @@ export function ChatTranscript({
   )
   const shouldAutoFollowNewMessagesRef = useRef(true)
 
+  const closeContextMenu = useCallback(
+    ({
+      restoreFocus = false,
+    }: {
+      restoreFocus?: boolean
+    } = {}) => {
+      const returnFocusTo = restoreFocus ? contextMenu?.returnFocusTo : null
+
+      setContextMenu(null)
+      restoreFocusToElement(returnFocusTo)
+    },
+    [contextMenu],
+  )
+
   useEffect(() => {
     if (!contextMenu) {
       return
@@ -98,17 +119,18 @@ export function ChatTranscript({
         return
       }
 
-      setContextMenu(null)
+      closeContextMenu()
     }
 
     function handleDocumentKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setContextMenu(null)
+        event.preventDefault()
+        closeContextMenu({ restoreFocus: true })
       }
     }
 
     function handleWindowResize() {
-      setContextMenu(null)
+      closeContextMenu()
     }
 
     document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -120,7 +142,7 @@ export function ChatTranscript({
       document.removeEventListener('keydown', handleDocumentKeyDown)
       window.removeEventListener('resize', handleWindowResize)
     }
-  }, [contextMenu])
+  }, [closeContextMenu, contextMenu])
 
   useLayoutEffect(() => {
     const scrollElement = scrollElementRef.current
@@ -236,7 +258,28 @@ export function ChatTranscript({
     })
 
     setContextMenu({
+      focusOnOpen: false,
       message,
+      returnFocusTo: null,
+      x: position.x,
+      y: position.y,
+    })
+  }
+
+  function handleOpenActionMenu(
+    message: ChatMessage,
+    triggerElement: HTMLElement,
+  ) {
+    const triggerBounds = triggerElement.getBoundingClientRect()
+    const position = getContextMenuPosition({
+      clientX: triggerBounds.left,
+      clientY: triggerBounds.bottom + 8,
+    })
+
+    setContextMenu({
+      focusOnOpen: true,
+      message,
+      returnFocusTo: triggerElement,
       x: position.x,
       y: position.y,
     })
@@ -247,7 +290,7 @@ export function ChatTranscript({
 
     if (wasCopied) {
       setCopyStatusText('Сообщение скопировано.')
-      setContextMenu(null)
+      closeContextMenu({ restoreFocus: true })
       window.setTimeout(() => {
         setCopyStatusText('')
       }, 1600)
@@ -320,6 +363,7 @@ export function ChatTranscript({
                   index={index}
                   isConnectionAvailable={isConnectionAvailable}
                   message={message}
+                  onOpenActionMenu={handleOpenActionMenu}
                   onOpenContextMenu={handleOpenContextMenu}
                   onReplyToMessage={onReplyToMessage}
                   onRetryTextMessage={onRetryTextMessage}
@@ -334,9 +378,7 @@ export function ChatTranscript({
         <MessageContextMenu
           menu={contextMenu}
           menuRef={contextMenuRef}
-          onClose={() => {
-            setContextMenu(null)
-          }}
+          onClose={closeContextMenu}
           onCopyMessage={(message) => {
             void handleCopyMessage(message)
           }}

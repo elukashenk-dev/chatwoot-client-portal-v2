@@ -4,7 +4,9 @@ import type { ChatAttachment, ChatMessage } from '../../types'
 export type MessageBlockPosition = 'first' | 'last' | 'middle' | 'single'
 
 export type MessageContextMenuState = {
+  focusOnOpen?: boolean
   message: ChatMessage
+  returnFocusTo?: HTMLElement | null
   x: number
   y: number
 } | null
