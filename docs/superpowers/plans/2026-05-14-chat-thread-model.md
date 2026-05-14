@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the current one-user/one-primary-conversation chat runtime with portal-owned chat threads: one private thread plus optional shared company threads configured through Chatwoot contact custom attributes.
+**Goal:** Add portal-owned chat threads as the public chat contract while keeping Chatwoot conversation IDs as backend-only mappings: one private thread plus optional shared company threads configured through Chatwoot contact custom attributes.
 
-**Architecture:** Chatwoot remains the system of record for contacts, conversations, messages and attachments. Portal backend owns thread access, thread-to-conversation mappings, send idempotency, Markdown author formatting for company messages and realtime fanout. Browser uses `threadId` only and never receives Chatwoot conversation authority.
+**Architecture:** Chatwoot remains the system of record for contacts, conversations, messages and attachments. Portal backend owns thread access, thread-to-conversation mappings, send idempotency, Markdown author formatting for company messages and realtime fanout. Browser uses `threadId` only and never receives Chatwoot conversation authority; `primaryConversationId` stays an internal backend compatibility detail until the thread abstraction is verified and cleanup is safe.
 
 **Tech Stack:** Fastify, TypeScript, Drizzle/Postgres, Vitest, React, Vite, EventSource/SSE, Chatwoot API Channel.
 
@@ -14,7 +14,7 @@
 
 - Spec: `docs/superpowers/specs/2026-05-14-chat-thread-model-design.md`
 - Branch: `feature/chat-thread-model-spec`
-- Current baseline to replace: `primaryConversationId` across backend, frontend and realtime.
+- Current baseline to wrap first, then internalize: `primaryConversationId` across backend, frontend and realtime.
 
 ## File Structure
 
@@ -151,6 +151,110 @@ Company thread Chatwoot content format:
 **Иван Петров**
 Добрый день, нужна сверка.
 ```
+
+---
+
+## Safety Strategy
+
+This feature must not be implemented as a big-bang rewrite. The safe sequence is:
+
+1. Protect the existing private-chat baseline with targeted tests.
+2. Introduce `threadId` as the browser-facing selector while mapping `private:me`
+   to the current primary conversation logic.
+3. Keep `primaryConversationId` in backend persistence and internal service
+   boundaries during the migration.
+4. Stop accepting browser-selected `primaryConversationId` only after the
+   `private:me` thread path is verified.
+5. Add company threads only after private thread compatibility passes.
+6. Treat `F-CHAT-SEC-001` as a company-thread rollout gate: authenticated send
+   rate limiting must be closed or explicitly deferred by the user before
+   company sends are enabled.
+
+Security invariant:
+
+```text
+browser threadId -> backend validates tenant + session + membership -> backend
+resolves internal Chatwoot conversation ID -> Chatwoot API
+```
+
+Never invert this flow. Browser input must never select a Chatwoot conversation
+directly.
+
+---
+
+## Task 0: Private Chat Safety Gate
+
+**Files:**
+- Inspect: `backend/src/modules/chat-context/service.test.ts`
+- Inspect: `backend/src/modules/chat-messages/service.test.ts`
+- Inspect: `backend/src/modules/chat-realtime/routes.test.ts`
+- Inspect: `backend/src/modules/chatwoot-webhooks/service.test.ts`
+- Inspect: `frontend/src/features/chat/pages/ChatPage.test.tsx`
+- Inspect: `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx`
+- Inspect: `frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx`
+- Inspect: `docs/Findings/F-CHAT-SEC-001-authenticated-chat-send-rate-limit.md`
+- Modify only if needed: failing test files or related implementation files
+  uncovered by this safety gate.
+
+- [ ] **Step 1: Run backend private-chat baseline tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-context/service.test.ts src/modules/chat-messages/service.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/service.test.ts
+```
+
+Expected: PASS. If a non-chat suite is unexpectedly pulled into the run or a
+timeout appears, stop and fix the test selection/configuration before starting
+Task 1.
+
+- [ ] **Step 2: Run frontend private-chat baseline tests**
+
+Run:
+
+```bash
+pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx src/features/chat/components/MessageComposer.test.tsx
+```
+
+Expected: PASS. If unrelated auth/page tests time out during this targeted run,
+stop and fix the test selection/configuration before starting Task 1.
+
+- [ ] **Step 3: Document or close current baseline blockers**
+
+If either baseline command fails:
+
+1. determine whether the failure is a real chat regression or a test-runner
+   selection/configuration issue;
+2. fix it in a separate checkpoint if it blocks reliable thread work;
+3. record any intentionally deferred blocker in `docs/Findings/`;
+4. do not continue to Task 1 until the private-chat baseline is trustworthy.
+
+- [ ] **Step 4: Confirm send-rate-limit gate**
+
+Review `docs/Findings/F-CHAT-SEC-001-authenticated-chat-send-rate-limit.md`.
+
+Before enabling company sends in Task 5, one of these must be true:
+
+```text
+F-CHAT-SEC-001 is closed by implementation and backend tests
+```
+
+or:
+
+```text
+User explicitly defers F-CHAT-SEC-001 for the first company-thread rollout
+```
+
+- [ ] **Step 5: Commit Task 0 if fixes were needed**
+
+If Step 1 or Step 2 required code/test changes, commit them before Task 1:
+
+```bash
+git add backend/src frontend/src docs/Findings docs/WORK_LOG.md
+git commit -m "test: protect private chat baseline"
+```
+
+If no changes were needed, do not create an empty commit.
 
 ---
 
@@ -737,7 +841,10 @@ portalChatThreadId: integer('portal_chat_thread_id').references(
 authorDisplayNameSnapshot: text('author_display_name_snapshot'),
 ```
 
-Keep `primaryConversationId` during migration. New code stops using it after Task 5.
+Keep `primaryConversationId` during migration as an internal backend field. After
+Task 5, new browser-facing code stops sending or accepting
+`primaryConversationId`, but backend persistence can keep it until a later
+cleanup migration.
 
 - [ ] **Step 4: Generate migration**
 
@@ -1633,6 +1740,23 @@ git commit -m "feat: resolve writable chat thread context"
 - Modify: `backend/src/test/appTestHelpers.ts`
 - Modify: `backend/src/app.test.ts`
 
+- [ ] **Step 0: Confirm send-rate-limit gate before company sends**
+
+Before implementing company-thread send behavior, check the current decision for
+`F-CHAT-SEC-001`.
+
+Run:
+
+```bash
+test ! -f docs/Findings/F-CHAT-SEC-001-authenticated-chat-send-rate-limit.md
+```
+
+Expected: PASS if authenticated send rate limiting is already closed. If this
+command fails, either close `F-CHAT-SEC-001` with implementation and backend
+tests in a separate checkpoint or get explicit user approval to defer it for the
+first company-thread rollout. Do not silently enable company sends while this
+finding is still open.
+
 - [ ] **Step 1: Add formatting tests**
 
 In `backend/src/modules/chat-messages/service.test.ts`, add:
@@ -1784,7 +1908,7 @@ In `backend/src/modules/chat-messages/repository.ts`:
 - Keep `userId` on inserted rows as author.
 - Insert `portalChatThreadId`.
 - Set `authorDisplayNameSnapshot` on insert.
-- Keep setting legacy `primaryConversationId` to the resolved Chatwoot conversation ID until the column is removed in a later cleanup.
+- Keep setting legacy `primaryConversationId` to the resolved Chatwoot conversation ID until the column is removed in a later cleanup. Public API code must stop accepting browser-selected `primaryConversationId`, but backend persistence can keep this column as an internal compatibility field.
 
 Expected insert shape:
 
