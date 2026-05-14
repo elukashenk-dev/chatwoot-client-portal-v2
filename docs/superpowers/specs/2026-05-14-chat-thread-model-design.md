@@ -1,41 +1,41 @@
-# Chat Thread Model Design
+# Дизайн Модели Chat Threads
 
-Date: 2026-05-14
+Дата: 2026-05-14
 
-## Status
+## Статус
 
-Design approved for planning. No implementation has started in this branch.
+Дизайн принят для планирования. Реализация в этой ветке еще не начата.
 
-## Goal
+## Цель
 
-Support multiple customer-side chat threads in the portal without adding a new
-portal admin UI for client companies and members.
+Поддержать несколько клиентских чатов в portal без новой отдельной админки для
+клиентских компаний и участников.
 
-The tenant admin continues to use Chatwoot Contacts and Chatwoot contact custom
-attributes as the configuration surface. The portal backend reads that
-configuration, validates it, and owns runtime mappings, send authority, history
-access and realtime delivery.
+Администратор tenant-а продолжает использовать Contacts и пользовательские
+атрибуты контактов в Chatwoot как поверхность настройки. Portal backend читает
+эту конфигурацию, валидирует ее и владеет runtime mappings, правом отправки,
+доступом к истории и realtime-доставкой.
 
-## Terms
+## Термины
 
-- `tenant`: the company that owns the portal and Chatwoot account, for example
+- `tenant`: компания, которая владеет portal и Chatwoot account, например
   PROVGROUP.
-- `person contact`: a Chatwoot contact representing a real portal user, for
-  example Ivan Petrov.
-- `company contact`: a Chatwoot contact representing a client company, for
-  example ООО "Ромашка".
-- `thread`: a portal-owned chat target visible to the current portal user.
-  Chatwoot does not have a `thread` object. A portal thread maps to one
-  Chatwoot contact and eventually to one Chatwoot conversation.
+- `person contact`: Chatwoot contact, который представляет реального
+  пользователя portal, например Иван Петров.
+- `company contact`: Chatwoot contact, который представляет клиентскую
+  компанию, например ООО "Ромашка".
+- `thread`: portal-owned цель чата, доступная текущему portal user. В Chatwoot
+  объекта `thread` нет. Portal thread мапится на один Chatwoot contact и со
+  временем на один Chatwoot conversation.
 
-## Product Model
+## Продуктовая Модель
 
-One portal user can have:
+У одного portal user может быть:
 
-- one private thread for the whole tenant;
-- zero or more shared company threads.
+- один личный thread на весь tenant;
+- ноль или больше общих company threads.
 
-Example:
+Пример:
 
 ```text
 Tenant: PROVGROUP
@@ -45,15 +45,16 @@ Tenant: PROVGROUP
     company thread: ИП Петров
 ```
 
-There are no private chats between client users. A private thread is only
-between one portal user and the tenant support team.
+Приватных чатов между клиентскими пользователями нет. Личный thread существует
+только между одним portal user и командой поддержки tenant-а.
 
-## Chatwoot Configuration
+## Конфигурация Chatwoot
 
-All attributes below are Chatwoot contact custom attributes. In the Chatwoot
-custom attribute form, `Применить к` must be `Контакт`.
+Все атрибуты ниже являются пользовательскими атрибутами контакта в Chatwoot. В
+форме создания пользовательского атрибута поле `Применить к` должно быть
+`Контакт`.
 
-### Тип контакта
+### Тип Контакта
 
 ```text
 Отображаемое имя: Тип контакта
@@ -62,12 +63,13 @@ custom attribute form, `Применить к` must be `Контакт`.
 Значения: person, company
 ```
 
-Rules:
+Правила:
 
-- `person` means the contact represents a real portal user.
-- `company` means the contact represents a client company with a shared chat.
+- `person` означает, что contact представляет реального portal user.
+- `company` означает, что contact представляет клиентскую компанию с общим
+  чатом.
 
-### Доступен в портале
+### Доступен В Портале
 
 ```text
 Отображаемое имя: Доступен в портале
@@ -75,13 +77,13 @@ Rules:
 Тип: Флажок
 ```
 
-Rules:
+Правила:
 
-- `true` allows the portal backend to use this contact.
-- `false` makes the portal ignore this contact for login, thread listing,
-  history, send and realtime access.
+- `true` разрешает portal backend использовать этот contact.
+- `false` заставляет portal игнорировать этот contact для login, списка
+  threads, истории, отправки и realtime-доступа.
 
-### ID компаний для общих чатов
+### ID Компаний Для Общих Чатов
 
 ```text
 Отображаемое имя: ID компаний для общих чатов
@@ -90,21 +92,22 @@ Rules:
 Тип: Текст
 ```
 
-Rules:
+Правила:
 
-- This field is filled only on `person` contacts.
-- Values are Chatwoot contact IDs of company contacts.
-- Values are comma-separated integers, for example `154` or `154,203`.
-- Spaces after commas are accepted by the backend, but the recommended format
-  is without spaces.
-- This field stays empty on `company` contacts.
+- Поле заполняется только у `person` contacts.
+- Значения - это Chatwoot contact IDs company contacts.
+- Значения указываются как integers через запятую, например `154` или
+  `154,203`.
+- Backend принимает пробелы после запятых, но рекомендуемый формат - без
+  пробелов.
+- У `company` contacts это поле остается пустым.
 
-The contact ID is the numeric `id` in the Chatwoot contact route and API. For
-example, `/app/accounts/3/contacts/154` refers to contact ID `154` in account
-`3`. The backend must always validate contact IDs in the current tenant's
-Chatwoot account scope.
+Contact ID - это числовой `id` в route и API контакта Chatwoot. Например,
+`/app/accounts/3/contacts/154` указывает на contact ID `154` в account `3`.
+Backend всегда должен валидировать contact IDs в scope текущего tenant Chatwoot
+account.
 
-## Chatwoot Contact Examples
+## Примеры Контактов В Chatwoot
 
 Company contact:
 
@@ -116,7 +119,7 @@ Identifier: optional
 Custom attributes:
   portal_contact_type = company
   portal_enabled = true
-  portal_client_company_contact_ids = empty
+  portal_client_company_contact_ids = пусто
 ```
 
 Person contact:
@@ -132,47 +135,48 @@ Custom attributes:
   portal_client_company_contact_ids = 154,203
 ```
 
-## Registration And Login
+## Регистрация И Login
 
-The portal registration eligibility check uses the current tenant's Chatwoot
-account and the submitted email.
+Проверка права на регистрацию использует Chatwoot account текущего tenant-а и
+email, который ввел пользователь.
 
-For `ivan@example.com`, the backend must:
+Для `ivan@example.com` backend должен:
 
-1. Find the Chatwoot contact by email in the current tenant Chatwoot account.
-2. Require `portal_contact_type = person`.
-3. Require `portal_enabled = true`.
-4. Complete the existing email-code and password flow.
-5. Link the portal user to the person Chatwoot contact.
+1. Найти Chatwoot contact по email внутри текущего tenant Chatwoot account.
+2. Потребовать `portal_contact_type = person`.
+3. Потребовать `portal_enabled = true`.
+4. Завершить существующий email-code и password flow.
+5. Связать portal user с person Chatwoot contact.
 
-The portal must not allow a user to self-declare company access during
-registration. Company access comes only from
-`portal_client_company_contact_ids` on the Chatwoot person contact.
+Portal не должен разрешать пользователю самостоятельно заявлять доступ к
+компаниям во время регистрации. Доступ к компаниям берется только из
+`portal_client_company_contact_ids` на Chatwoot person contact.
 
-## Thread Listing
+## Список Threads
 
-After login, the frontend requests the available portal threads.
+После login frontend запрашивает доступные portal threads.
 
-Conceptual endpoint:
+Концептуальный endpoint:
 
 ```text
 GET /api/chat/threads
 ```
 
-The backend:
+Backend:
 
-1. Resolves the current tenant from host.
-2. Resolves the current portal user from session.
-3. Loads the linked Chatwoot person contact.
-4. Validates `portal_contact_type = person` and `portal_enabled = true`.
-5. Parses `portal_client_company_contact_ids`.
-6. Loads each referenced Chatwoot contact by ID in the current tenant Chatwoot
-   account.
-7. Requires each referenced contact to have
-   `portal_contact_type = company` and `portal_enabled = true`.
-8. Returns one private thread and one company thread per valid company contact.
+1. Резолвит текущий tenant по host.
+2. Резолвит текущего portal user по session.
+3. Загружает связанный Chatwoot person contact.
+4. Валидирует `portal_contact_type = person` и `portal_enabled = true`.
+5. Парсит `portal_client_company_contact_ids`.
+6. Загружает каждый указанный Chatwoot contact по ID внутри текущего tenant
+   Chatwoot account.
+7. Требует, чтобы каждый указанный contact имел
+   `portal_contact_type = company` и `portal_enabled = true`.
+8. Возвращает один private thread и один company thread на каждый валидный
+   company contact.
 
-Example response:
+Пример ответа:
 
 ```json
 {
@@ -194,142 +198,145 @@ Example response:
 }
 ```
 
-The frontend must not receive or use Chatwoot conversation IDs as authority.
-Thread IDs are portal IDs. The backend validates every operation by thread.
+Frontend не должен получать или использовать Chatwoot conversation IDs как
+authority. Thread IDs - это portal IDs. Backend валидирует каждую операцию по
+thread.
 
 Default active thread:
 
-1. Use the last selected thread if still accessible.
-2. Otherwise use `private:me`.
-3. If the private thread is unavailable due to configuration failure, use the
-   first accessible company thread.
+1. Использовать последний выбранный thread, если он все еще доступен.
+2. Иначе использовать `private:me`.
+3. Если private thread недоступен из-за ошибки конфигурации, использовать первый
+   доступный company thread.
 
 ## Runtime Persistence
 
-Chatwoot custom attributes are the configuration source of truth. Portal DB
-stores runtime state only.
+Пользовательские атрибуты Chatwoot являются source of truth для конфигурации.
+Portal DB хранит только runtime state.
 
-Required runtime concept:
+Нужная runtime-концепция:
 
 ```text
 portal_chat_threads
   tenant_id
   thread_type: private | company
-  portal_user_id: nullable, set for private threads
-  chatwoot_contact_id: target person/company contact for this thread
+  portal_user_id: nullable, заполнено для private threads
+  chatwoot_contact_id: target person/company contact для этого thread
   chatwoot_inbox_id
-  chatwoot_conversation_id: nullable until first conversation exists
+  chatwoot_conversation_id: nullable, пока conversation еще не создан
   created_at
   updated_at
 ```
 
-Uniqueness:
+Уникальность:
 
-- one private thread per `tenant_id + portal_user_id`;
-- one company thread per `tenant_id + chatwoot_contact_id`.
+- один private thread на `tenant_id + portal_user_id`;
+- один company thread на `tenant_id + chatwoot_contact_id`.
 
-Existing user-level contact and conversation mappings should be refactored into
-thread-level mappings. The browser still has no direct Chatwoot authority.
+Существующие user-level contact и conversation mappings нужно рефакторить в
+thread-level mappings. Browser по-прежнему не получает direct Chatwoot authority.
 
-## Lazy Conversation Bootstrap
+## Ленивое Создание Conversation
 
-Threads can exist before Chatwoot conversations exist.
+Threads могут существовать до появления Chatwoot conversations.
 
-When a user opens a thread with no mapped conversation, the portal can show an
-empty state. It should not create a Chatwoot conversation just for viewing an
-empty chat.
+Когда пользователь открывает thread без mapped conversation, portal может
+показать empty state. Portal не должен создавать Chatwoot conversation только
+для просмотра пустого чата.
 
-On first send, the backend:
+При первой отправке backend:
 
-1. Validates the user's access to the thread.
-2. Resolves or creates the Chatwoot `ContactInbox`/source ID for the target
-   contact in the tenant portal inbox.
-3. Creates or recovers the Chatwoot conversation for that contact.
-4. Persists `chatwoot_conversation_id` in `portal_chat_threads`.
-5. Sends the message to that conversation.
+1. Валидирует доступ пользователя к thread.
+2. Резолвит или создает Chatwoot `ContactInbox`/source ID для target contact в
+   tenant portal inbox.
+3. Создает или восстанавливает Chatwoot conversation для этого contact.
+4. Сохраняет `chatwoot_conversation_id` в `portal_chat_threads`.
+5. Отправляет сообщение в этот conversation.
 
-For company threads, the Chatwoot contact is the company contact. For private
-threads, the Chatwoot contact is the person contact.
+Для company threads Chatwoot contact - это company contact. Для private threads
+Chatwoot contact - это person contact.
 
-## Message Author Attribution
+## Автор Сообщения
 
-For private threads, the Chatwoot conversation belongs to the person contact, so
-the agent can already see who wrote.
+В private threads Chatwoot conversation принадлежит person contact, поэтому
+агент уже видит, кто написал.
 
-For company threads, the Chatwoot conversation belongs to the company contact.
-The backend must preserve the real sender in portal-owned send ledger and make
-the sender clear in Chatwoot.
+В company threads Chatwoot conversation принадлежит company contact. Backend
+должен сохранить реального автора в portal-owned send ledger и сделать автора
+понятным в Chatwoot.
 
-Recommended company message content in Chatwoot:
+Рекомендуемый content сообщения в Chatwoot для company thread:
 
 ```text
 Иван Петров:
 Добрый день, нужна сверка.
 ```
 
-The portal UI can render the same message with structured author metadata:
+Portal UI может отрисовать то же сообщение через структурированные author
+metadata:
 
 ```text
 Иван Петров
 Добрый день, нужна сверка.
 ```
 
-The send ledger should store at least:
+Send ledger должен хранить минимум:
 
 - tenant ID;
 - thread ID;
 - portal user ID;
 - client message key;
 - Chatwoot conversation ID;
-- Chatwoot message ID when available;
+- Chatwoot message ID, если он уже известен;
 - send status;
-- author display name snapshot.
+- snapshot display name автора.
 
-## History Access
+## Доступ К Истории
 
-All history reads must validate thread access at request time.
+Все чтения истории должны валидировать доступ к thread в момент запроса.
 
-Private thread access:
+Доступ к private thread:
 
-- current portal user must own the private thread;
-- linked person contact must still be `person` and `portal_enabled = true`.
+- текущий portal user должен владеть private thread;
+- связанный person contact все еще должен быть `person` и
+  `portal_enabled = true`.
 
-Company thread access:
+Доступ к company thread:
 
-- current portal user's person contact must still be `person` and
+- person contact текущего portal user все еще должен быть `person` и
   `portal_enabled = true`;
-- `portal_client_company_contact_ids` must still include the company contact ID;
-- the company contact must still be `company` and `portal_enabled = true`.
+- `portal_client_company_contact_ids` все еще должен содержать contact ID
+  компании;
+- company contact все еще должен быть `company` и `portal_enabled = true`.
 
-If access is removed in Chatwoot, old runtime mappings remain but no longer
-grant access.
+Если доступ удалили в Chatwoot, старые runtime mappings остаются, но больше не
+дают доступ.
 
-## Realtime And Webhooks
+## Realtime И Webhooks
 
-Chatwoot webhooks arrive by tenant-scoped callback and are still validated with
-tenant webhook secret and account/inbox invariants.
+Chatwoot webhooks приходят на tenant-scoped callback и по-прежнему валидируются
+tenant webhook secret и account/inbox invariants.
 
-After a valid webhook, the backend maps the Chatwoot conversation to a portal
-thread:
+После валидного webhook backend мапит Chatwoot conversation на portal thread:
 
-- if the conversation is mapped to a private thread, fan out only to that portal
-  user;
-- if the conversation is mapped to a company thread, fan out to active sessions
-  of portal users whose current Chatwoot person contact includes that company
-  contact ID;
-- if no thread mapping exists, the backend may recover/create a mapping from the
-  webhook conversation contact when the contact is a valid enabled `person` or
-  `company` portal contact.
+- если conversation mapped на private thread, событие отправляется только этому
+  portal user;
+- если conversation mapped на company thread, событие отправляется active
+  sessions portal users, у которых текущий Chatwoot person contact содержит этот
+  company contact ID;
+- если thread mapping еще нет, backend может восстановить/создать mapping из
+  contact webhook conversation, когда contact является валидным enabled
+  `person` или `company` portal contact.
 
-Realtime subscriptions must be scoped by tenant and thread, not only by user and
-conversation.
+Realtime subscriptions должны быть scoped по tenant и thread, а не только по
+user и conversation.
 
 ## UI
 
-The post-login chat UI uses the existing left menu as the thread switcher. There
-is no separate chat list screen.
+Post-login chat UI использует существующее левое меню как thread switcher.
+Отдельного экрана списка чатов нет.
 
-Menu:
+Меню:
 
 ```text
 Чаты
@@ -340,12 +347,12 @@ Menu:
 Центр поддержки      скоро
 ```
 
-Rules:
+Правила:
 
-- the current thread is marked with `✓`;
-- clicking a thread switches the active chat;
-- if many threads exist, they still live in the menu;
-- the support center entry remains separate.
+- текущий thread отмечен `✓`;
+- клик по thread переключает активный чат;
+- если threads много, они все равно живут в меню;
+- вход в центр поддержки остается отдельным пунктом.
 
 Header:
 
@@ -354,88 +361,89 @@ Header:
 Личный чат · Онлайн
 ```
 
-or:
+или:
 
 ```text
 Поддержка клиентов
 ООО "Ромашка" · Онлайн
 ```
 
-The active thread must be visible in both the menu and header. The composer
-always sends to the active thread.
+Активный thread должен быть виден и в меню, и в header. Composer всегда
+отправляет в активный thread.
 
-## Configuration Errors
+## Ошибки Конфигурации
 
-Strict configuration behavior is preferred for production.
+Для production предпочтительно строгое поведение при ошибках конфигурации.
 
-Examples:
+Примеры:
 
-- person contact is missing `portal_contact_type = person`;
-- person contact has `portal_enabled = false`;
-- `portal_client_company_contact_ids` contains a non-integer value;
-- referenced contact ID does not exist in the current Chatwoot account;
-- referenced contact is not `portal_contact_type = company`;
-- referenced company contact has `portal_enabled = false`.
+- у person contact нет `portal_contact_type = person`;
+- у person contact `portal_enabled = false`;
+- `portal_client_company_contact_ids` содержит не-integer значение;
+- указанный contact ID не существует в текущем Chatwoot account;
+- указанный contact не имеет `portal_contact_type = company`;
+- у указанного company contact `portal_enabled = false`.
 
-The user-facing message should stay controlled and non-technical:
+Пользовательское сообщение должно оставаться controlled и не раскрывать
+технические детали:
 
 ```text
 Доступ к порталу настроен некорректно. Обратитесь в поддержку.
 ```
 
-Backend logs should contain the concrete misconfiguration.
+Backend logs должны содержать конкретную misconfiguration.
 
-## Security Rules
+## Правила Безопасности
 
-- Browser never receives Chatwoot tokens.
-- Browser never chooses a Chatwoot conversation directly.
-- Every route validates tenant, session, thread access and current Chatwoot
-  attributes.
-- Chatwoot contact IDs are valid only in the current tenant's
-  `chatwoot_base_url + chatwoot_account_id` scope.
-- Old runtime mappings do not grant access after Chatwoot attributes are changed.
-- Unknown thread IDs return controlled `403`/configuration errors.
+- Browser никогда не получает Chatwoot tokens.
+- Browser никогда не выбирает Chatwoot conversation напрямую.
+- Каждый route валидирует tenant, session, доступ к thread и актуальные
+  Chatwoot attributes.
+- Chatwoot contact IDs валидны только в scope текущего tenant
+  `chatwoot_base_url + chatwoot_account_id`.
+- Старые runtime mappings не дают доступ после изменения Chatwoot attributes.
+- Unknown thread IDs возвращают controlled `403`/configuration errors.
 
-## Testing Strategy
+## Стратегия Тестирования
 
 Backend unit/integration tests:
 
-- registration permits only enabled `person` contacts;
-- registration rejects disabled contacts, company contacts and missing
-  Chatwoot contacts;
-- thread listing returns private plus referenced company threads;
-- thread listing rejects malformed company contact IDs;
-- thread listing rejects missing/disabled/non-company referenced contacts;
-- private send bootstraps one private conversation;
-- company send bootstraps one company conversation and prefixes author for
-  Chatwoot;
-- history access is denied after company ID is removed from the person contact;
-- webhook fanout routes private events only to the user;
-- webhook fanout routes company events only to users whose current contact
-  attributes reference the company contact ID.
+- registration разрешает только enabled `person` contacts;
+- registration отклоняет disabled contacts, company contacts и missing Chatwoot
+  contacts;
+- thread listing возвращает private thread плюс указанные company threads;
+- thread listing отклоняет malformed company contact IDs;
+- thread listing отклоняет missing/disabled/non-company referenced contacts;
+- private send bootstraps один private conversation;
+- company send bootstraps один company conversation и добавляет prefix автора
+  для Chatwoot;
+- доступ к истории запрещается после удаления company ID из person contact;
+- webhook fanout отправляет private events только пользователю;
+- webhook fanout отправляет company events только пользователям, у которых
+  текущие contact attributes ссылаются на company contact ID.
 
 Frontend tests:
 
-- menu renders available threads and active marker;
-- thread switch updates header subtitle;
-- composer sends using the active portal thread ID;
-- configuration error state is shown without leaking internals.
+- menu отображает available threads и active marker;
+- переключение thread обновляет subtitle в header;
+- composer отправляет active portal thread ID;
+- configuration error state показывается без раскрытия внутренних деталей.
 
 Rendered QA:
 
-- mobile left menu with 1, 3 and many threads;
-- header subtitle fit for long company names;
-- switching between private and company threads;
-- empty thread before first message;
+- mobile left menu с 1, 3 и большим числом threads;
+- header subtitle помещается для длинных названий компаний;
+- переключение между private и company threads;
+- empty thread до первого сообщения;
 - first-send bootstrap flow.
 
 ## References
 
-- Chatwoot Contacts API `Show Contact` uses
-  `/api/v1/accounts/{account_id}/contacts/{id}` where `id` is the contact ID:
+- Chatwoot Contacts API `Show Contact` использует
+  `/api/v1/accounts/{account_id}/contacts/{id}`, где `id` - contact ID:
   https://developers.chatwoot.com/api-reference/contacts/show-contact
-- Chatwoot Contacts API `List Contacts` returns contact objects with `id`:
+- Chatwoot Contacts API `List Contacts` возвращает contact objects с `id`:
   https://developers.chatwoot.com/api-reference/contacts/list-contacts
-- Local Chatwoot CE source confirms dashboard contact routes use
-  `/accounts/:accountId/contacts/:contactId` and backend loads contacts with
-  `Current.account.contacts.find(params[:id])`.
+- Локальный Chatwoot CE source подтверждает, что dashboard contact routes
+  используют `/accounts/:accountId/contacts/:contactId`, а backend загружает
+  contacts через `Current.account.contacts.find(params[:id])`.
