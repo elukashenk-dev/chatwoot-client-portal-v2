@@ -335,15 +335,23 @@ Chatwoot contact - это person contact.
 должен сохранить реального автора в portal-owned send ledger и сделать автора
 понятным в Chatwoot.
 
-Рекомендуемый content сообщения в Chatwoot для company thread:
+Обязательный content сообщения в Chatwoot для company thread:
 
-```text
-Иван Петров:
+```md
+**Иван Петров**
 Добрый день, нужна сверка.
 ```
 
-Portal UI может отрисовать то же сообщение через структурированные author
-metadata:
+Правила:
+
+- Имя автора отправляется Markdown-strong через `**...**`.
+- Исходный текст пользователя идет со следующей строки без Markdown-цитаты.
+- HTML-разметку не отправлять.
+- Blockquote через `>` не использовать как основной формат: визуально это
+  выглядит как цитата и не является стабильной частью API-channel контракта.
+
+Portal UI должен отрисовать то же сообщение через структурированные author
+metadata, без Chatwoot Markdown-prefix:
 
 ```text
 Иван Петров
@@ -506,8 +514,8 @@ Backend unit/integration tests:
 - thread listing отклоняет malformed company contact IDs;
 - thread listing отклоняет missing/disabled/non-company referenced contacts;
 - private send bootstraps один private conversation;
-- company send bootstraps один company conversation и добавляет prefix автора
-  для Chatwoot;
+- company send bootstraps один company conversation и добавляет Markdown-author
+  prefix для Chatwoot;
 - доступ к истории запрещается после удаления company ID из person contact;
 - webhook fanout отправляет private events только пользователю;
 - webhook fanout отправляет company events только пользователям, у которых
