@@ -1,0 +1,2570 @@
+# Chat Thread Model Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the current one-user/one-primary-conversation chat runtime with portal-owned chat threads: one private thread plus optional shared company threads configured through Chatwoot contact custom attributes.
+
+**Architecture:** Chatwoot remains the system of record for contacts, conversations, messages and attachments. Portal backend owns thread access, thread-to-conversation mappings, send idempotency, Markdown author formatting for company messages and realtime fanout. Browser uses `threadId` only and never receives Chatwoot conversation authority.
+
+**Tech Stack:** Fastify, TypeScript, Drizzle/Postgres, Vitest, React, Vite, EventSource/SSE, Chatwoot API Channel.
+
+---
+
+## Source Spec
+
+- Spec: `docs/superpowers/specs/2026-05-14-chat-thread-model-design.md`
+- Branch: `feature/chat-thread-model-spec`
+- Current baseline to replace: `primaryConversationId` across backend, frontend and realtime.
+
+## File Structure
+
+Backend files to create:
+
+- `backend/src/modules/chat-threads/contactAttributes.ts` - parse and validate Chatwoot portal custom attributes.
+- `backend/src/modules/chat-threads/contactAttributes.test.ts` - unit coverage for strict attribute parsing.
+- `backend/src/modules/chat-threads/types.ts` - public thread contracts and internal runtime context types.
+- `backend/src/modules/chat-threads/repository.ts` - `portal_chat_threads` persistence and message author lookup helpers.
+- `backend/src/modules/chat-threads/repository.test.ts` - repository tests with PGlite.
+- `backend/src/modules/chat-threads/service.ts` - thread listing, access validation, lazy conversation bootstrap.
+- `backend/src/modules/chat-threads/service.test.ts` - service tests for private/company access and bootstrap.
+- `backend/src/modules/chat-threads/routes.ts` - `GET /api/chat/threads`.
+- `backend/src/modules/chat-threads/routes.test.ts` - auth and route contract tests.
+
+Backend files to modify:
+
+- `backend/src/db/schema.ts` - add `portal_chat_threads`, thread-scoped send ledger columns and indexes.
+- `backend/drizzle/*.sql`, `backend/drizzle/meta/*.json`, `backend/drizzle/meta/_journal.json` - generated migration artifacts.
+- `backend/src/integrations/chatwoot/client.ts` - return contact custom attributes and add lookup by contact ID.
+- `backend/src/integrations/chatwoot/client.test.ts` - cover contact attributes and contact ID lookup.
+- `backend/src/modules/registration/service.ts` - require `portal_contact_type=person` and `portal_enabled=true`.
+- `backend/src/modules/registration/service.test.ts` - reject disabled/company/missing-attribute contacts.
+- `backend/src/modules/chat-context/service.ts` and `backend/src/modules/chat-context/routes.ts` - shrink or bridge old primary-conversation behavior while messages move to threads.
+- `backend/src/modules/chat-messages/types.ts` - replace public `primaryConversation` dependency with `activeThread` and add message `authorRole`.
+- `backend/src/modules/chat-messages/repository.ts` - change send ledger scope from `primaryConversationId` to `portalChatThreadId`.
+- `backend/src/modules/chat-messages/repository.test.ts` - cover thread-scoped idempotency.
+- `backend/src/modules/chat-messages/service.ts` - load/send by `threadId`, format company author Markdown for Chatwoot, strip it for portal UI.
+- `backend/src/modules/chat-messages/service.test.ts` - cover private send, company send, history mapping and stripped author prefix.
+- `backend/src/modules/chat-messages/routes.ts` - accept `threadId`, stop accepting browser `primaryConversationId` after frontend migration.
+- `backend/src/modules/chat-realtime/hub.ts` - key subscriptions by `threadId`, not Chatwoot conversation ID.
+- `backend/src/modules/chat-realtime/hub.test.ts` - cover private/company subscription fanout.
+- `backend/src/modules/chat-realtime/routes.ts` - accept `threadId` and validate it through thread service.
+- `backend/src/modules/chat-realtime/routes.test.ts` - route-level coverage for unauthorized/unavailable thread realtime.
+- `backend/src/modules/chatwoot-webhooks/repository.ts` - map Chatwoot conversation ID to portal thread.
+- `backend/src/modules/chatwoot-webhooks/repository.test.ts` - repository mapping tests.
+- `backend/src/modules/chatwoot-webhooks/service.ts` - publish snapshots by thread to active validated subscribers.
+- `backend/src/modules/chatwoot-webhooks/service.test.ts` - private and company fanout coverage.
+- `backend/src/app.ts` - register thread repository/service/routes and update dependency wiring.
+- `backend/src/app.test.ts` - integration API contract updates.
+- `backend/src/test/appTestHelpers.ts` - replace `primaryConversationId` helpers with `threadId` helpers.
+
+Frontend files to modify:
+
+- `frontend/src/features/chat/types.ts` - add `ChatThreadSummary`, `activeThread`, `authorRole`; remove public `ChatPrimaryConversation`.
+- `frontend/src/features/chat/api/chatClient.ts` - add `getChatThreads`, change messages/send/attachment to `threadId`.
+- `frontend/src/features/chat/api/chatRealtimeClient.ts` - realtime URL uses `threadId`.
+- `frontend/src/features/chat/pages/ChatPage.tsx` - load threads, own selected thread state, switch threads, reset reply/optimistic sends on switch.
+- `frontend/src/features/chat/pages/chatPageState.ts` - state includes selected thread and thread list loading errors.
+- `frontend/src/features/chat/pages/useChatRealtimeConnection.ts` - subscribe by `threadId`.
+- `frontend/src/features/chat/pages/useOptimisticTextSend.ts` - optimistic sends carry `threadId`.
+- `frontend/src/features/chat/lib/optimisticTextMessages.ts` - remove `primaryConversationId`, add `threadId`.
+- `frontend/src/features/chat/lib/chatSnapshot.ts` - merge snapshots by active thread ID.
+- `frontend/src/features/chat/components/ChatHeader.tsx` - render thread switcher in left menu and active thread title in subtitle.
+- `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx` - render company member author names correctly.
+- `frontend/src/features/chat/pages/*.test.tsx`, `frontend/src/features/chat/components/*.test.tsx` - update mocked contracts and add thread switching tests.
+
+Docs to modify after verified implementation:
+
+- `docs/ARCHITECTURE.md`
+- `docs/DECISIONS.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md`
+- `docs/WORK_LOG.md`
+
+---
+
+## Public API Target
+
+Thread list:
+
+```http
+GET /api/chat/threads
+```
+
+```json
+{
+  "threads": [
+    {
+      "id": "private:me",
+      "type": "private",
+      "title": "Личный чат",
+      "subtitle": "Только вы и поддержка"
+    },
+    {
+      "id": "company:154",
+      "type": "company",
+      "title": "ООО \"Ромашка\"",
+      "subtitle": "Общий чат компании"
+    }
+  ],
+  "activeThreadId": "private:me"
+}
+```
+
+Messages:
+
+```http
+GET /api/chat/messages?threadId=company:154
+GET /api/chat/messages?threadId=company:154&beforeMessageId=205
+POST /api/chat/messages
+POST /api/chat/messages/attachment
+GET /api/chat/realtime?threadId=company:154
+```
+
+Message snapshot shape:
+
+```ts
+type ChatMessagesSnapshot = {
+  activeThread: ChatThreadSummary | null
+  hasMoreOlder: boolean
+  messages: ChatMessage[]
+  nextOlderCursor: number | null
+  reason: ChatContextReason
+  result: ChatContextResult
+}
+```
+
+Message author roles:
+
+```ts
+type ChatMessageAuthorRole = 'agent' | 'current_user' | 'company_member'
+```
+
+UI alignment rule:
+
+```ts
+const isOutgoing = message.authorRole === 'current_user'
+```
+
+Company thread Chatwoot content format:
+
+```md
+**Иван Петров**
+Добрый день, нужна сверка.
+```
+
+---
+
+## Task 1: Chatwoot Contact Attributes And Registration Gate
+
+**Files:**
+- Create: `backend/src/modules/chat-threads/contactAttributes.ts`
+- Create: `backend/src/modules/chat-threads/contactAttributes.test.ts`
+- Modify: `backend/src/integrations/chatwoot/client.ts`
+- Modify: `backend/src/integrations/chatwoot/client.test.ts`
+- Modify: `backend/src/modules/registration/service.ts`
+- Modify: `backend/src/modules/registration/service.test.ts`
+
+- [ ] **Step 1: Write failing attribute parser tests**
+
+Create `backend/src/modules/chat-threads/contactAttributes.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest'
+
+import {
+  assertPortalPersonContactEnabled,
+  parsePortalContactAttributes,
+} from './contactAttributes.js'
+
+describe('portal contact attributes', () => {
+  it('parses enabled person contacts with company contact IDs', () => {
+    expect(
+      parsePortalContactAttributes({
+        portal_client_company_contact_ids: '154, 203',
+        portal_contact_type: 'person',
+        portal_enabled: true,
+      }),
+    ).toEqual({
+      companyContactIds: [154, 203],
+      enabled: true,
+      type: 'person',
+    })
+  })
+
+  it('parses enabled company contacts without company memberships', () => {
+    expect(
+      parsePortalContactAttributes({
+        portal_client_company_contact_ids: '',
+        portal_contact_type: 'company',
+        portal_enabled: true,
+      }),
+    ).toEqual({
+      companyContactIds: [],
+      enabled: true,
+      type: 'company',
+    })
+  })
+
+  it('rejects malformed company contact IDs', () => {
+    expect(() =>
+      parsePortalContactAttributes({
+        portal_client_company_contact_ids: '154, bad',
+        portal_contact_type: 'person',
+        portal_enabled: true,
+      }),
+    ).toThrow('portal_client_company_contact_ids')
+  })
+
+  it('requires person contacts to be portal enabled', () => {
+    expect(() =>
+      assertPortalPersonContactEnabled({
+        customAttributes: {
+          portal_contact_type: 'company',
+          portal_enabled: true,
+        },
+        id: 154,
+      }),
+    ).toThrow('portal_contact_type')
+
+    expect(() =>
+      assertPortalPersonContactEnabled({
+        customAttributes: {
+          portal_contact_type: 'person',
+          portal_enabled: false,
+        },
+        id: 155,
+      }),
+    ).toThrow('portal_enabled')
+  })
+})
+```
+
+- [ ] **Step 2: Run parser test to verify it fails**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/contactAttributes.test.ts
+```
+
+Expected: FAIL because `contactAttributes.ts` does not exist.
+
+- [ ] **Step 3: Implement strict parser**
+
+Create `backend/src/modules/chat-threads/contactAttributes.ts`:
+
+```ts
+import { ApiError } from '../../lib/errors.js'
+
+export type PortalContactType = 'person' | 'company'
+
+export type PortalContactAttributes = {
+  companyContactIds: number[]
+  enabled: boolean
+  type: PortalContactType
+}
+
+export type ChatwootContactWithAttributes = {
+  customAttributes?: Record<string, unknown> | null
+  id: number
+}
+
+function readType(value: unknown): PortalContactType {
+  if (value === 'person' || value === 'company') {
+    return value
+  }
+
+  throw new ApiError(
+    403,
+    'portal_contact_type_invalid',
+    'Контакт не настроен для доступа к порталу.',
+  )
+}
+
+function readEnabled(value: unknown) {
+  if (value === true) {
+    return true
+  }
+
+  if (value === false || value === undefined || value === null) {
+    return false
+  }
+
+  throw new ApiError(
+    403,
+    'portal_enabled_invalid',
+    'Доступ контакта к порталу настроен некорректно.',
+  )
+}
+
+function parseCompanyContactIds(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return []
+  }
+
+  if (typeof value !== 'string') {
+    throw new ApiError(
+      403,
+      'portal_client_company_contact_ids_invalid',
+      'Список компаний для портала настроен некорректно.',
+    )
+  }
+
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const parsed = Number(part)
+
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new ApiError(
+          403,
+          'portal_client_company_contact_ids_invalid',
+          'Список компаний для портала настроен некорректно.',
+        )
+      }
+
+      return parsed
+    })
+}
+
+export function parsePortalContactAttributes(
+  customAttributes: Record<string, unknown> | null | undefined,
+): PortalContactAttributes {
+  const attributes = customAttributes ?? {}
+
+  return {
+    companyContactIds: parseCompanyContactIds(
+      attributes.portal_client_company_contact_ids,
+    ),
+    enabled: readEnabled(attributes.portal_enabled),
+    type: readType(attributes.portal_contact_type),
+  }
+}
+
+export function assertPortalPersonContactEnabled(
+  contact: ChatwootContactWithAttributes,
+) {
+  const attributes = parsePortalContactAttributes(contact.customAttributes)
+
+  if (attributes.type !== 'person') {
+    throw new ApiError(
+      403,
+      'portal_contact_type_invalid',
+      'Контакт не настроен как пользователь портала.',
+    )
+  }
+
+  if (!attributes.enabled) {
+    throw new ApiError(
+      403,
+      'portal_contact_disabled',
+      'Доступ к порталу для этого контакта отключен.',
+    )
+  }
+
+  return attributes
+}
+```
+
+- [ ] **Step 4: Run parser test to verify it passes**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/contactAttributes.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Extend Chatwoot contact client tests**
+
+In `backend/src/integrations/chatwoot/client.test.ts`, add tests covering:
+
+```ts
+it('maps contact custom attributes from email search', async () => {
+  // Mock /contacts/search payload with custom_attributes.
+  // Expect findContactByEmail() to return customAttributes.
+})
+
+it('fetches a contact by id with custom attributes', async () => {
+  // Mock /contacts/154?include_contact_inboxes=true.
+  // Expect findContactById(154) to return id, email, name and customAttributes.
+})
+```
+
+Expected failure before implementation: returned contact has no `customAttributes` and `findContactById` is missing.
+
+- [ ] **Step 6: Extend Chatwoot client**
+
+Modify `backend/src/integrations/chatwoot/client.ts`:
+
+```ts
+export type ChatwootContact = {
+  customAttributes: Record<string, unknown>
+  email: string | null
+  id: number
+  name: string | null
+}
+```
+
+Add helper:
+
+```ts
+function mapContact(payload: unknown): ChatwootContact {
+  if (!isPlainObject(payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact lookup returned an invalid contact payload.',
+    )
+  }
+
+  const id = readInteger(payload.id)
+
+  if (id === null) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact lookup returned an invalid contact payload.',
+    )
+  }
+
+  return {
+    customAttributes: readObject(payload.custom_attributes) ?? {},
+    email: readString(payload.email),
+    id,
+    name: readString(payload.name),
+  }
+}
+```
+
+Update `findContactByEmail()` to return `mapContact(exactMatch)`.
+
+Add:
+
+```ts
+async function findContactById(contactId: number): Promise<ChatwootContact | null> {
+  const resolvedConfig = assertConfigured()
+
+  if (!Number.isInteger(contactId) || contactId <= 0) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact lookup requires a valid contact id.',
+    )
+  }
+
+  const requestUrl = new URL(
+    `/api/v1/accounts/${resolvedConfig.accountId}/contacts/${contactId}`,
+    resolvedConfig.baseUrl,
+  )
+  requestUrl.searchParams.set('include_contact_inboxes', 'true')
+
+  try {
+    const contact = await requestJson(
+      requestUrl,
+      'Chatwoot contact lookup is unavailable.',
+    )
+
+    return mapContact(parseContactDetailsResponse(contact).payload)
+  } catch (error) {
+    if (
+      error instanceof ChatwootClientRequestError &&
+      error.message.includes('404')
+    ) {
+      return null
+    }
+
+    throw error
+  }
+}
+```
+
+Expose `findContactById` from the returned client object.
+
+- [ ] **Step 7: Run Chatwoot client tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/integrations/chatwoot/client.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Add registration gate tests**
+
+In `backend/src/modules/registration/service.test.ts`, add cases:
+
+```ts
+it('rejects registration when contact is not a portal person contact', async () => {
+  const service = createRegistrationServiceForTest({
+    chatwootClient: {
+      findContactByEmail: vi.fn().mockResolvedValue({
+        customAttributes: {
+          portal_contact_type: 'company',
+          portal_enabled: true,
+        },
+        email: 'ivan@example.com',
+        id: 154,
+        name: 'ООО "Ромашка"',
+      }),
+    },
+    emailDelivery: {
+      send: vi.fn(),
+    },
+    now: () => new Date('2026-05-14T12:00:00.000Z'),
+    portalUsersRepository: createPortalUsersRepository(database.db, {
+      tenantId,
+    }),
+    registrationRepository: createRegistrationRepository(database.db, {
+      tenantId,
+    }),
+  })
+
+  await expect(
+    service.requestVerification({
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+    }),
+  ).rejects.toMatchObject({
+    code: 'portal_contact_type_invalid',
+  })
+})
+
+it('rejects registration when portal access is disabled on the person contact', async () => {
+  const service = createRegistrationServiceForTest({
+    chatwootClient: {
+      findContactByEmail: vi.fn().mockResolvedValue({
+        customAttributes: {
+          portal_contact_type: 'person',
+          portal_enabled: false,
+        },
+        email: 'ivan@example.com',
+        id: 155,
+        name: 'Иван Петров',
+      }),
+    },
+    emailDelivery: {
+      send: vi.fn(),
+    },
+    now: () => new Date('2026-05-14T12:00:00.000Z'),
+    portalUsersRepository: createPortalUsersRepository(database.db, {
+      tenantId,
+    }),
+    registrationRepository: createRegistrationRepository(database.db, {
+      tenantId,
+    }),
+  })
+
+  await expect(
+    service.requestVerification({
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+    }),
+  ).rejects.toMatchObject({
+    code: 'portal_contact_disabled',
+  })
+})
+```
+
+- [ ] **Step 9: Enforce registration gate**
+
+In `backend/src/modules/registration/service.ts`, import and call `assertPortalPersonContactEnabled(contact)` immediately after the existing `if (!contact)` check.
+
+- [ ] **Step 10: Run registration tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/registration/service.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 11: Commit Task 1**
+
+Run:
+
+```bash
+git add backend/src/integrations/chatwoot/client.ts backend/src/integrations/chatwoot/client.test.ts backend/src/modules/chat-threads/contactAttributes.ts backend/src/modules/chat-threads/contactAttributes.test.ts backend/src/modules/registration/service.ts backend/src/modules/registration/service.test.ts
+git commit -m "feat: validate portal contact attributes"
+```
+
+---
+
+## Task 2: Thread Persistence And Send Ledger Migration
+
+**Files:**
+- Modify: `backend/src/db/schema.ts`
+- Create via Drizzle: `backend/drizzle/0009_*.sql`
+- Modify via Drizzle: `backend/drizzle/meta/0009_snapshot.json`
+- Modify via Drizzle: `backend/drizzle/meta/_journal.json`
+- Create: `backend/src/modules/chat-threads/repository.ts`
+- Create: `backend/src/modules/chat-threads/repository.test.ts`
+
+- [ ] **Step 1: Add failing repository tests**
+
+Create `backend/src/modules/chat-threads/repository.test.ts` with PGlite patterns from existing repository tests. Cover:
+
+```ts
+it('upserts one private thread per tenant user', async () => {
+  const repository = createChatThreadsRepository(database.db, { tenantId: 1 })
+
+  const first = await repository.upsertPrivateThread({
+    chatwootContactId: 44,
+    chatwootInboxId: 9,
+    now: new Date('2026-05-14T12:00:00.000Z'),
+    userId: 7,
+  })
+  const second = await repository.upsertPrivateThread({
+    chatwootContactId: 44,
+    chatwootInboxId: 9,
+    now: new Date('2026-05-14T12:01:00.000Z'),
+    userId: 7,
+  })
+
+  expect(second.id).toBe(first.id)
+  expect(second.threadType).toBe('private')
+})
+
+it('upserts one company thread per tenant company contact', async () => {
+  const repository = createChatThreadsRepository(database.db, { tenantId: 1 })
+
+  const thread = await repository.upsertCompanyThread({
+    chatwootContactId: 154,
+    chatwootInboxId: 9,
+    now: new Date('2026-05-14T12:00:00.000Z'),
+  })
+
+  expect(thread.portalUserId).toBeNull()
+  expect(thread.threadType).toBe('company')
+})
+
+it('updates a thread conversation mapping after lazy bootstrap', async () => {
+  const repository = createChatThreadsRepository(database.db, { tenantId: 1 })
+  const thread = await repository.upsertPrivateThread({
+    chatwootContactId: 44,
+    chatwootInboxId: 9,
+    now: new Date('2026-05-14T12:00:00.000Z'),
+    userId: 7,
+  })
+
+  await repository.updateThreadConversation({
+    chatwootConversationId: 101,
+    chatwootInboxId: 9,
+    id: thread.id,
+    now: new Date('2026-05-14T12:01:00.000Z'),
+  })
+
+  await expect(repository.findThreadById(thread.id)).resolves.toMatchObject({
+    chatwootConversationId: 101,
+  })
+})
+```
+
+- [ ] **Step 2: Run repository test to verify it fails**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/repository.test.ts
+```
+
+Expected: FAIL because schema/repository do not exist.
+
+- [ ] **Step 3: Update schema**
+
+Modify `backend/src/db/schema.ts`:
+
+```ts
+export const portalChatThreads = pgTable(
+  'portal_chat_threads',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, { onDelete: 'restrict' }),
+    threadType: text('thread_type').notNull(),
+    portalUserId: integer('portal_user_id').references(() => portalUsers.id, {
+      onDelete: 'cascade',
+    }),
+    chatwootContactId: integer('chatwoot_contact_id').notNull(),
+    chatwootInboxId: integer('chatwoot_inbox_id').notNull(),
+    chatwootConversationId: integer('chatwoot_conversation_id'),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_chat_threads_tenant_private_user_unique')
+      .on(table.tenantId, table.portalUserId)
+      .where(sql`${table.threadType} = 'private'`),
+    uniqueIndex('portal_chat_threads_tenant_company_contact_unique')
+      .on(table.tenantId, table.chatwootContactId)
+      .where(sql`${table.threadType} = 'company'`),
+    uniqueIndex('portal_chat_threads_tenant_conversation_unique')
+      .on(table.tenantId, table.chatwootConversationId)
+      .where(sql`${table.chatwootConversationId} is not null`),
+    index('portal_chat_threads_tenant_contact_idx').on(
+      table.tenantId,
+      table.chatwootContactId,
+    ),
+    check(
+      'portal_chat_threads_type_check',
+      sql`${table.threadType} in ('private', 'company')`,
+    ),
+    check(
+      'portal_chat_threads_private_user_check',
+      sql`(${table.threadType} = 'private' and ${table.portalUserId} is not null) or (${table.threadType} = 'company' and ${table.portalUserId} is null)`,
+    ),
+  ],
+)
+```
+
+Change `portalChatMessageSends`:
+
+```ts
+portalChatThreadId: integer('portal_chat_thread_id').references(
+  () => portalChatThreads.id,
+  { onDelete: 'restrict' },
+),
+authorDisplayNameSnapshot: text('author_display_name_snapshot'),
+```
+
+Keep `primaryConversationId` during migration. New code stops using it after Task 5.
+
+- [ ] **Step 4: Generate migration**
+
+Run:
+
+```bash
+pnpm --dir backend db:generate
+```
+
+Expected: new `backend/drizzle/0009_*.sql` plus meta snapshot.
+
+- [ ] **Step 5: Manually inspect and amend migration SQL**
+
+Ensure the migration backfills private threads from existing mappings:
+
+```sql
+insert into portal_chat_threads (
+  tenant_id,
+  thread_type,
+  portal_user_id,
+  chatwoot_contact_id,
+  chatwoot_inbox_id,
+  chatwoot_conversation_id,
+  created_at,
+  updated_at
+)
+select
+  tenant_id,
+  'private',
+  user_id,
+  chatwoot_contact_id,
+  chatwoot_inbox_id,
+  chatwoot_conversation_id,
+  created_at,
+  updated_at
+from portal_user_chatwoot_conversations
+on conflict do nothing;
+
+update portal_chat_message_sends sends
+set portal_chat_thread_id = threads.id,
+    author_display_name_snapshot = users.full_name
+from portal_chat_threads threads
+join portal_users users
+  on users.tenant_id = threads.tenant_id
+ and users.id = threads.portal_user_id
+where sends.tenant_id = threads.tenant_id
+  and sends.user_id = threads.portal_user_id
+  and sends.primary_conversation_id = threads.chatwoot_conversation_id;
+```
+
+Do not drop `portal_user_chatwoot_conversations` in this task.
+
+- [ ] **Step 6: Implement repository**
+
+Create `backend/src/modules/chat-threads/repository.ts`:
+
+```ts
+import { and, eq, inArray } from 'drizzle-orm'
+
+import type { AppDatabase } from '../../db/client.js'
+import { portalChatMessageSends, portalChatThreads } from '../../db/schema.js'
+
+type TenantRepositoryScope = {
+  tenantId: number
+}
+
+export type PortalChatThreadRecord = {
+  chatwootContactId: number
+  chatwootConversationId: number | null
+  chatwootInboxId: number
+  id: number
+  portalUserId: number | null
+  threadType: 'private' | 'company'
+}
+
+const threadSelection = {
+  chatwootContactId: portalChatThreads.chatwootContactId,
+  chatwootConversationId: portalChatThreads.chatwootConversationId,
+  chatwootInboxId: portalChatThreads.chatwootInboxId,
+  id: portalChatThreads.id,
+  portalUserId: portalChatThreads.portalUserId,
+  threadType: portalChatThreads.threadType,
+}
+
+function mapThread(row: typeof threadSelection): PortalChatThreadRecord {
+  return row as PortalChatThreadRecord
+}
+
+export function createChatThreadsRepository(
+  db: AppDatabase,
+  { tenantId }: TenantRepositoryScope,
+) {
+  return {
+    async findSendLedgerAuthorsByMessageIds({
+      messageIds,
+      portalChatThreadId,
+    }: {
+      messageIds: number[]
+      portalChatThreadId: number
+    }) {
+      if (messageIds.length === 0) {
+        return new Map<number, { authorDisplayName: string | null; userId: number }>()
+      }
+
+      const rows = await db
+        .select({
+          authorDisplayName: portalChatMessageSends.authorDisplayNameSnapshot,
+          chatwootMessageId: portalChatMessageSends.chatwootMessageId,
+          userId: portalChatMessageSends.userId,
+        })
+        .from(portalChatMessageSends)
+        .where(
+          and(
+            eq(portalChatMessageSends.tenantId, tenantId),
+            eq(portalChatMessageSends.portalChatThreadId, portalChatThreadId),
+            inArray(portalChatMessageSends.chatwootMessageId, messageIds),
+          ),
+        )
+
+      return new Map(
+        rows
+          .filter((row) => row.chatwootMessageId !== null)
+          .map((row) => [
+            row.chatwootMessageId as number,
+            {
+              authorDisplayName: row.authorDisplayName,
+              userId: row.userId,
+            },
+          ]),
+      )
+    },
+
+    async findThreadByChatwootConversationId(chatwootConversationId: number) {
+      const [thread] = await db
+        .select(threadSelection)
+        .from(portalChatThreads)
+        .where(
+          and(
+            eq(portalChatThreads.tenantId, tenantId),
+            eq(portalChatThreads.chatwootConversationId, chatwootConversationId),
+          ),
+        )
+        .limit(1)
+
+      return thread ? mapThread(thread) : null
+    },
+
+    async findThreadById(id: number) {
+      const [thread] = await db
+        .select(threadSelection)
+        .from(portalChatThreads)
+        .where(
+          and(eq(portalChatThreads.tenantId, tenantId), eq(portalChatThreads.id, id)),
+        )
+        .limit(1)
+
+      return thread ? mapThread(thread) : null
+    },
+
+    async updateThreadConversation({
+      chatwootConversationId,
+      chatwootInboxId,
+      id,
+      now,
+    }: {
+      chatwootConversationId: number
+      chatwootInboxId: number
+      id: number
+      now: Date
+    }) {
+      const [thread] = await db
+        .update(portalChatThreads)
+        .set({
+          chatwootConversationId,
+          chatwootInboxId,
+          updatedAt: now,
+        })
+        .where(and(eq(portalChatThreads.tenantId, tenantId), eq(portalChatThreads.id, id)))
+        .returning(threadSelection)
+
+      return thread ? mapThread(thread) : null
+    },
+
+    async upsertCompanyThread({
+      chatwootContactId,
+      chatwootInboxId,
+      now,
+    }: {
+      chatwootContactId: number
+      chatwootInboxId: number
+      now: Date
+    }) {
+      const [thread] = await db
+        .insert(portalChatThreads)
+        .values({
+          chatwootContactId,
+          chatwootInboxId,
+          portalUserId: null,
+          tenantId,
+          threadType: 'company',
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          set: { chatwootInboxId, updatedAt: now },
+          target: [portalChatThreads.tenantId, portalChatThreads.chatwootContactId],
+        })
+        .returning(threadSelection)
+
+      return mapThread(thread)
+    },
+
+    async upsertPrivateThread({
+      chatwootContactId,
+      chatwootInboxId,
+      now,
+      userId,
+    }: {
+      chatwootContactId: number
+      chatwootInboxId: number
+      now: Date
+      userId: number
+    }) {
+      const [thread] = await db
+        .insert(portalChatThreads)
+        .values({
+          chatwootContactId,
+          chatwootInboxId,
+          portalUserId: userId,
+          tenantId,
+          threadType: 'private',
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          set: { chatwootContactId, chatwootInboxId, updatedAt: now },
+          target: [portalChatThreads.tenantId, portalChatThreads.portalUserId],
+        })
+        .returning(threadSelection)
+
+      return mapThread(thread)
+    },
+  }
+}
+
+export type ChatThreadsRepository = ReturnType<typeof createChatThreadsRepository>
+```
+
+Adjust the `onConflictDoUpdate` targets if Drizzle rejects partial unique index targets; use raw SQL migration plus `onConflictDoNothing()` followed by explicit `update/select`.
+
+- [ ] **Step 7: Run repository tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/repository.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Run schema-related tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-context/repository.test.ts src/modules/chat-messages/repository.test.ts src/modules/chatwoot-webhooks/repository.test.ts
+```
+
+Expected: PASS or only expected compile failures from new nullable columns. Fix compile errors without changing behavior.
+
+- [ ] **Step 9: Commit Task 2**
+
+Run:
+
+```bash
+git add backend/src/db/schema.ts backend/drizzle backend/src/modules/chat-threads/repository.ts backend/src/modules/chat-threads/repository.test.ts
+git commit -m "feat: add portal chat thread persistence"
+```
+
+---
+
+## Task 3: Thread Listing Service And Route
+
+**Files:**
+- Create: `backend/src/modules/chat-threads/types.ts`
+- Create: `backend/src/modules/chat-threads/service.ts`
+- Create: `backend/src/modules/chat-threads/service.test.ts`
+- Create: `backend/src/modules/chat-threads/routes.ts`
+- Create: `backend/src/modules/chat-threads/routes.test.ts`
+- Modify: `backend/src/app.ts`
+
+- [ ] **Step 1: Write service tests**
+
+Create `backend/src/modules/chat-threads/service.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from 'vitest'
+
+import { createChatThreadsService } from './service.js'
+
+describe('createChatThreadsService', () => {
+  it('returns private thread plus enabled company threads from person attributes', async () => {
+    const service = createChatThreadsService({
+      chatThreadsRepository: {
+        upsertCompanyThread: vi.fn().mockResolvedValue({
+          chatwootContactId: 154,
+          chatwootConversationId: null,
+          chatwootInboxId: 9,
+          id: 2,
+          portalUserId: null,
+          threadType: 'company',
+        }),
+        upsertPrivateThread: vi.fn().mockResolvedValue({
+          chatwootContactId: 44,
+          chatwootConversationId: null,
+          chatwootInboxId: 9,
+          id: 1,
+          portalUserId: 7,
+          threadType: 'private',
+        }),
+      },
+      chatwootClient: {
+        findContactById: vi.fn().mockResolvedValue({
+          customAttributes: {
+            portal_contact_type: 'company',
+            portal_enabled: true,
+          },
+          email: 'office@romashka.ru',
+          id: 154,
+          name: 'ООО "Ромашка"',
+        }),
+      },
+      linkedContactResolver: vi.fn().mockResolvedValue({
+        customAttributes: {
+          portal_client_company_contact_ids: '154',
+          portal_contact_type: 'person',
+          portal_enabled: true,
+        },
+        email: 'ivan@example.com',
+        id: 44,
+        name: 'Иван Петров',
+      }),
+      portalInboxId: 9,
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          id: 'private:me',
+          subtitle: 'Только вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+        },
+        {
+          id: 'company:154',
+          subtitle: 'Общий чат компании',
+          title: 'ООО "Ромашка"',
+          type: 'company',
+        },
+      ],
+    })
+  })
+
+  it('fails closed when a referenced company contact is missing', async () => {
+    // linked person references 154, findContactById returns null.
+    // Expect ApiError code portal_company_contact_missing.
+  })
+
+  it('fails closed when a referenced company contact is not enabled', async () => {
+    // findContactById returns portal_contact_type='company', portal_enabled=false.
+    // Expect ApiError code portal_company_contact_disabled.
+  })
+})
+```
+
+- [ ] **Step 2: Run service test to verify it fails**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+```
+
+Expected: FAIL because service/types do not exist.
+
+- [ ] **Step 3: Define public types**
+
+Create `backend/src/modules/chat-threads/types.ts`:
+
+```ts
+export type PortalChatThreadType = 'private' | 'company'
+
+export type PortalChatThreadSummary = {
+  id: string
+  subtitle: string
+  title: string
+  type: PortalChatThreadType
+}
+
+export type PortalChatThreadsResponse = {
+  activeThreadId: string
+  threads: PortalChatThreadSummary[]
+}
+
+export function privateThreadId() {
+  return 'private:me'
+}
+
+export function companyThreadId(chatwootCompanyContactId: number) {
+  return `company:${chatwootCompanyContactId}`
+}
+
+export function parseThreadId(threadId: string) {
+  if (threadId === privateThreadId()) {
+    return { type: 'private' as const }
+  }
+
+  const match = /^company:(\d+)$/.exec(threadId)
+
+  if (!match) {
+    return null
+  }
+
+  const chatwootContactId = Number(match[1])
+
+  return Number.isInteger(chatwootContactId) && chatwootContactId > 0
+    ? { chatwootContactId, type: 'company' as const }
+    : null
+}
+```
+
+- [ ] **Step 4: Implement list service**
+
+Create `backend/src/modules/chat-threads/service.ts`:
+
+```ts
+import type { ChatwootClient, ChatwootContact } from '../../integrations/chatwoot/client.js'
+import { ApiError } from '../../lib/errors.js'
+import {
+  assertPortalPersonContactEnabled,
+  parsePortalContactAttributes,
+} from './contactAttributes.js'
+import type { ChatThreadsRepository } from './repository.js'
+import { companyThreadId, privateThreadId } from './types.js'
+
+type CreateChatThreadsServiceOptions = {
+  chatThreadsRepository: Pick<
+    ChatThreadsRepository,
+    'upsertCompanyThread' | 'upsertPrivateThread'
+  >
+  chatwootClient: Pick<ChatwootClient, 'findContactById'>
+  linkedContactResolver: (userId: number) => Promise<ChatwootContact | null>
+  now?: () => Date
+  portalInboxId: number
+}
+
+function companyTitle(contact: ChatwootContact) {
+  return contact.name?.trim() || `Компания #${contact.id}`
+}
+
+export function createChatThreadsService({
+  chatThreadsRepository,
+  chatwootClient,
+  linkedContactResolver,
+  now = () => new Date(),
+  portalInboxId,
+}: CreateChatThreadsServiceOptions) {
+  return {
+    async listCurrentUserThreads({ userId }: { userId: number }) {
+      const personContact = await linkedContactResolver(userId)
+
+      if (!personContact) {
+        throw new ApiError(
+          403,
+          'portal_contact_missing',
+          'Контакт портала не найден.',
+        )
+      }
+
+      const personAttributes = assertPortalPersonContactEnabled(personContact)
+
+      await chatThreadsRepository.upsertPrivateThread({
+        chatwootContactId: personContact.id,
+        chatwootInboxId: portalInboxId,
+        now: now(),
+        userId,
+      })
+
+      const threads = [
+        {
+          id: privateThreadId(),
+          subtitle: 'Только вы и поддержка',
+          title: 'Личный чат',
+          type: 'private' as const,
+        },
+      ]
+
+      for (const companyContactId of personAttributes.companyContactIds) {
+        const companyContact = await chatwootClient.findContactById(companyContactId)
+
+        if (!companyContact) {
+          throw new ApiError(
+            403,
+            'portal_company_contact_missing',
+            'Общий чат компании настроен некорректно.',
+          )
+        }
+
+        const companyAttributes = parsePortalContactAttributes(
+          companyContact.customAttributes,
+        )
+
+        if (companyAttributes.type !== 'company') {
+          throw new ApiError(
+            403,
+            'portal_company_contact_type_invalid',
+            'Общий чат компании настроен некорректно.',
+          )
+        }
+
+        if (!companyAttributes.enabled) {
+          throw new ApiError(
+            403,
+            'portal_company_contact_disabled',
+            'Общий чат компании отключен.',
+          )
+        }
+
+        await chatThreadsRepository.upsertCompanyThread({
+          chatwootContactId: companyContact.id,
+          chatwootInboxId: portalInboxId,
+          now: now(),
+        })
+
+        threads.push({
+          id: companyThreadId(companyContact.id),
+          subtitle: 'Общий чат компании',
+          title: companyTitle(companyContact),
+          type: 'company',
+        })
+      }
+
+      return {
+        activeThreadId: privateThreadId(),
+        threads,
+      }
+    },
+  }
+}
+
+export type ChatThreadsService = ReturnType<typeof createChatThreadsService>
+```
+
+- [ ] **Step 5: Run service tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Add route and route tests**
+
+Create `backend/src/modules/chat-threads/routes.ts`:
+
+```ts
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+
+import type { AppEnv } from '../../config/env.js'
+import type { AuthService } from '../auth/service.js'
+import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
+import type { ChatThreadsService } from './service.js'
+
+type RegisterChatThreadsRoutesOptions = {
+  authService: AuthService
+  createChatThreadsService: (request: FastifyRequest) => ChatThreadsService
+  env: AppEnv
+}
+
+export function registerChatThreadsRoutes(
+  app: FastifyInstance,
+  { authService, createChatThreadsService, env }: RegisterChatThreadsRoutesOptions,
+) {
+  app.get('/api/chat/threads', async (request, reply) => {
+    const user = await resolveAuthenticatedPortalUser({
+      authService,
+      env,
+      reply,
+      request,
+    })
+
+    return createChatThreadsService(request).listCurrentUserThreads({
+      userId: user.id,
+    })
+  })
+}
+```
+
+Create route tests mirroring `chat-realtime/routes.test.ts`: unauthenticated returns 401, authenticated returns thread list.
+
+- [ ] **Step 7: Wire route in app**
+
+Modify `backend/src/app.ts`:
+
+```ts
+import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
+import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
+import { createChatThreadsService } from './modules/chat-threads/service.js'
+```
+
+Wire the factory with current tenant `chatwootPortalInboxId` and current request's Chatwoot client.
+
+- [ ] **Step 8: Run route/app tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/routes.test.ts src/app.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 9: Commit Task 3**
+
+Run:
+
+```bash
+git add backend/src/app.ts backend/src/modules/chat-threads/types.ts backend/src/modules/chat-threads/service.ts backend/src/modules/chat-threads/service.test.ts backend/src/modules/chat-threads/routes.ts backend/src/modules/chat-threads/routes.test.ts backend/src/app.test.ts
+git commit -m "feat: expose portal chat threads"
+```
+
+---
+
+## Task 4: Thread Runtime Context And Lazy Conversation Bootstrap
+
+**Files:**
+- Modify: `backend/src/modules/chat-threads/types.ts`
+- Modify: `backend/src/modules/chat-threads/service.ts`
+- Modify: `backend/src/modules/chat-threads/service.test.ts`
+- Modify: `backend/src/modules/chat-context/service.ts`
+- Modify: `backend/src/modules/chat-context/routes.ts`
+- Modify: `backend/src/modules/chat-context/service.test.ts`
+
+- [ ] **Step 1: Add runtime context tests**
+
+In `backend/src/modules/chat-threads/service.test.ts`, add:
+
+```ts
+function createCompanyThreadRuntimeService({
+  createConversation = vi.fn(),
+  threadConversationId = null,
+}: {
+  createConversation?: ReturnType<typeof vi.fn>
+  threadConversationId?: number | null
+} = {}) {
+  const updateThreadConversation = vi.fn().mockResolvedValue({
+    chatwootContactId: 154,
+    chatwootConversationId: 301,
+    chatwootInboxId: 9,
+    id: 2,
+    portalUserId: null,
+    threadType: 'company',
+  })
+
+  return {
+    service: createChatThreadsService({
+      chatThreadsRepository: createRepositoryStub({
+        findThreadById: vi.fn().mockResolvedValue({
+          chatwootContactId: 154,
+          chatwootConversationId: threadConversationId,
+          chatwootInboxId: 9,
+          id: 2,
+          portalUserId: null,
+          threadType: 'company',
+        }),
+        updateThreadConversation,
+      }),
+      chatwootClient: createChatwootClientStub({
+        createContactInbox: vi.fn().mockResolvedValue({
+          inboxId: 9,
+          sourceId: 'portal-contact:generated',
+        }),
+        createConversation,
+        findContactById: vi.fn().mockResolvedValue({
+          customAttributes: {
+            portal_contact_type: 'company',
+            portal_enabled: true,
+          },
+          email: 'office@romashka.ru',
+          id: 154,
+          name: 'ООО "Ромашка"',
+        }),
+        findContactPortalInboxSourceId: vi.fn().mockResolvedValue(null),
+      }),
+      linkedContactResolver: vi.fn().mockResolvedValue({
+        customAttributes: {
+          portal_client_company_contact_ids: '154',
+          portal_contact_type: 'person',
+          portal_enabled: true,
+        },
+        email: 'ivan@example.com',
+        id: 44,
+        name: 'Иван Петров',
+      }),
+      portalInboxId: 9,
+    }),
+    updateThreadConversation,
+  }
+}
+
+it('returns a company thread context without creating a Chatwoot conversation for read-only empty state', async () => {
+  const createConversation = vi.fn()
+  const { service } = createCompanyThreadRuntimeService({
+    createConversation,
+  })
+
+  await expect(
+    service.getCurrentUserThreadContext({
+      threadId: 'company:154',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    activeThread: {
+      id: 'company:154',
+      title: 'ООО "Ромашка"',
+      type: 'company',
+    },
+    chatwootConversation: null,
+    reason: 'conversation_missing',
+    result: 'not_ready',
+  })
+  expect(createConversation).not.toHaveBeenCalled()
+})
+
+it('bootstraps a company conversation only for writable context', async () => {
+  const createConversation = vi.fn().mockResolvedValue({
+    assigneeName: null,
+    channelType: 'Channel::Api',
+    createdAt: 1_776_000_000,
+    id: 301,
+    inboxId: 9,
+    lastActivityAt: 1_776_000_000,
+    status: 'open',
+  })
+
+  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
+    createConversation,
+  })
+
+  await expect(
+    service.ensureCurrentUserWritableThreadContext({
+      threadId: 'company:154',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    chatwootConversation: {
+      id: 301,
+    },
+    result: 'ready',
+  })
+  expect(createConversation).toHaveBeenCalledWith({
+    contactId: 154,
+    sourceId: 'portal-contact:generated',
+  })
+  expect(updateThreadConversation).toHaveBeenCalledWith(
+    expect.objectContaining({
+      chatwootConversationId: 301,
+      id: 2,
+    }),
+  )
+})
+```
+
+- [ ] **Step 2: Run runtime context tests to verify they fail**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+```
+
+Expected: FAIL because runtime methods do not exist.
+
+- [ ] **Step 3: Add runtime types**
+
+Extend `backend/src/modules/chat-threads/types.ts`:
+
+```ts
+export type PortalChatThreadRuntimeContext = {
+  activeThread: PortalChatThreadSummary | null
+  chatwootConversation: {
+    assigneeName: string | null
+    id: number
+    inboxId: number
+    lastActivityAt: number | null
+    status: string
+  } | null
+  linkedContactId: number | null
+  portalChatThreadId: number | null
+  reason:
+    | 'none'
+    | 'chatwoot_not_configured'
+    | 'chatwoot_unavailable'
+    | 'contact_link_missing'
+    | 'conversation_mapping_unavailable'
+    | 'conversation_missing'
+    | 'thread_access_denied'
+    | 'thread_invalid'
+  result: 'not_ready' | 'ready' | 'unavailable'
+  targetChatwootContactId: number | null
+  threadType: PortalChatThreadType | null
+}
+```
+
+- [ ] **Step 4: Implement runtime resolution**
+
+In `backend/src/modules/chat-threads/service.ts`, add methods:
+
+```ts
+async getCurrentUserThreadContext({
+  threadId,
+  userId,
+}: {
+  threadId: string
+  userId: number
+}): Promise<PortalChatThreadRuntimeContext>
+
+async ensureCurrentUserWritableThreadContext(input): Promise<PortalChatThreadRuntimeContext>
+```
+
+Rules:
+
+- Always validate person contact attributes first.
+- `private:me` targets the person contact.
+- `company:<id>` targets only a company contact listed in the current person contact's `portal_client_company_contact_ids`.
+- `getCurrentUserThreadContext` never creates a Chatwoot conversation.
+- `ensureCurrentUserWritableThreadContext` creates/reuses contact inbox source ID and Chatwoot conversation when missing.
+- Persist conversation ID with `chatThreadsRepository.updateThreadConversation`.
+
+Use existing logic from `chat-context/service.ts`:
+
+```ts
+const sourceId =
+  (await chatwootClient.findContactPortalInboxSourceId(targetContact.id)) ??
+  (
+    await chatwootClient.createContactInbox({
+      contactId: targetContact.id,
+      sourceId: `portal-contact:${randomUUID()}`,
+    })
+  ).sourceId
+
+const conversation = await chatwootClient.createConversation({
+  contactId: targetContact.id,
+  sourceId,
+})
+```
+
+- [ ] **Step 5: Keep `/api/chat/context` as compatibility shim**
+
+Modify `backend/src/modules/chat-context/routes.ts` so `/api/chat/context` calls `GET /api/chat/threads` equivalent and returns a controlled legacy-compatible not-ready/ready response only for private thread during transition. Do not add new frontend dependencies on this endpoint.
+
+- [ ] **Step 6: Run context and thread tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-threads/service.test.ts src/modules/chat-context/service.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Commit Task 4**
+
+Run:
+
+```bash
+git add backend/src/modules/chat-threads/types.ts backend/src/modules/chat-threads/service.ts backend/src/modules/chat-threads/service.test.ts backend/src/modules/chat-context/service.ts backend/src/modules/chat-context/routes.ts backend/src/modules/chat-context/service.test.ts
+git commit -m "feat: resolve writable chat thread context"
+```
+
+---
+
+## Task 5: Messages API, Thread-Scoped Ledger And Company Author Formatting
+
+**Files:**
+- Modify: `backend/src/modules/chat-messages/types.ts`
+- Modify: `backend/src/modules/chat-messages/repository.ts`
+- Modify: `backend/src/modules/chat-messages/repository.test.ts`
+- Modify: `backend/src/modules/chat-messages/service.ts`
+- Modify: `backend/src/modules/chat-messages/service.test.ts`
+- Modify: `backend/src/modules/chat-messages/routes.ts`
+- Modify: `backend/src/test/appTestHelpers.ts`
+- Modify: `backend/src/app.test.ts`
+
+- [ ] **Step 1: Add formatting tests**
+
+In `backend/src/modules/chat-messages/service.test.ts`, add:
+
+```ts
+it('formats company thread text messages for Chatwoot with a Markdown author prefix', async () => {
+  const createConversationIncomingMessage = vi.fn().mockResolvedValue({
+    ...sentChatwootMessage,
+    content: '**Иван Петров**\nДобрый день',
+  })
+  const service = createChatMessagesService({
+    chatThreadsService: createThreadServiceStub({
+      context: companyReadyContext,
+    }),
+    chatwootClient: createChatwootClientStub({
+      createConversationIncomingMessage,
+    }),
+  })
+
+  await service.sendCurrentUserTextMessage({
+    clientMessageKey: 'portal-send:key',
+    content: 'Добрый день',
+    threadId: 'company:154',
+    userId: 7,
+  })
+
+  expect(createConversationIncomingMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      content: '**Иван Петров**\nДобрый день',
+      conversationId: 301,
+    }),
+  )
+})
+
+it('strips company Markdown author prefix from portal history and exposes author role', async () => {
+  const service = createChatMessagesService({
+    chatMessagesRepository: null,
+    chatThreadsRepository: {
+      findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(
+        new Map([
+          [
+            501,
+            {
+              authorDisplayName: 'Иван Петров',
+              userId: 7,
+            },
+          ],
+        ]),
+      ),
+    },
+    chatThreadsService: createThreadServiceStub({
+      context: companyReadyContext,
+    }),
+    chatwootClient: createChatwootClientStub({
+      listConversationMessages: vi.fn().mockResolvedValue({
+        hasMoreOlder: false,
+        messages: [
+          {
+            ...sentChatwootMessage,
+            content: '**Иван Петров**\nДобрый день',
+            id: 501,
+          },
+        ],
+        nextOlderCursor: null,
+      }),
+    }),
+  })
+
+  await expect(
+    service.getCurrentUserChatMessages({
+      threadId: 'company:154',
+      userId: 8,
+    }),
+  ).resolves.toMatchObject({
+    messages: [
+      {
+        authorName: 'Иван Петров',
+        authorRole: 'company_member',
+        content: 'Добрый день',
+        direction: 'incoming',
+      },
+    ],
+  })
+})
+```
+
+- [ ] **Step 2: Run message tests to verify they fail**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-messages/service.test.ts
+```
+
+Expected: FAIL because `threadId`, `authorRole` and company formatting are not implemented.
+
+- [ ] **Step 3: Update message types**
+
+Modify `backend/src/modules/chat-messages/types.ts`:
+
+```ts
+import type {
+  PortalChatThreadRuntimeContext,
+  PortalChatThreadSummary,
+} from '../chat-threads/types.js'
+
+export type PortalChatMessageAuthorRole =
+  | 'agent'
+  | 'company_member'
+  | 'current_user'
+
+export type PortalChatMessage = {
+  attachments: PortalChatAttachment[]
+  authorAvatarUrl?: string | null
+  authorName: string
+  authorRole: PortalChatMessageAuthorRole
+  clientMessageKey?: string | null
+  content: string | null
+  contentType: string
+  createdAt: string
+  direction: 'incoming' | 'outgoing'
+  id: number
+  replyTo: PortalChatReplyPreview | null
+  status: string
+}
+
+export type ChatMessagesSnapshot = Pick<
+  PortalChatThreadRuntimeContext,
+  'activeThread' | 'reason' | 'result'
+> & {
+  hasMoreOlder: boolean
+  messages: PortalChatMessage[]
+  nextOlderCursor: number | null
+}
+
+export type ChatSendResult = Pick<
+  PortalChatThreadRuntimeContext,
+  'activeThread' | 'reason' | 'result'
+> & {
+  sentMessage: PortalChatMessage | null
+}
+```
+
+- [ ] **Step 4: Update repository ledger scope**
+
+In `backend/src/modules/chat-messages/repository.ts`:
+
+- Change `SendLedgerScope` to `{ clientMessageKey; portalChatThreadId }`.
+- Keep `userId` on inserted rows as author.
+- Insert `portalChatThreadId`.
+- Set `authorDisplayNameSnapshot` on insert.
+- Keep setting legacy `primaryConversationId` to the resolved Chatwoot conversation ID until the column is removed in a later cleanup.
+
+Expected insert shape:
+
+```ts
+.values({
+  authorDisplayNameSnapshot: input.authorDisplayNameSnapshot,
+  clientMessageKey: input.clientMessageKey,
+  messageKind: input.messageKind,
+  payloadSha256: input.payloadSha256,
+  portalChatThreadId: input.portalChatThreadId,
+  primaryConversationId: input.primaryConversationId,
+  processingToken: input.processingToken,
+  status: 'processing',
+  tenantId,
+  updatedAt: input.now,
+  userId: input.userId,
+})
+```
+
+- [ ] **Step 5: Update routes to accept threadId**
+
+Modify `backend/src/modules/chat-messages/routes.ts`:
+
+```ts
+const threadIdSchema = z.string().trim().min(1).max(80)
+
+const chatMessagesQuerySchema = z.object({
+  beforeMessageId: z.coerce.number().int().positive().optional(),
+  threadId: threadIdSchema.optional(),
+})
+
+const sendChatMessageBodySchema = z.object({
+  clientMessageKey: z.string().trim().min(1).max(200),
+  content: z.string().trim().min(1, 'Введите сообщение.').max(4000),
+  replyToMessageId: z.number().int().positive().optional(),
+  threadId: threadIdSchema,
+})
+
+const sendChatAttachmentFieldsSchema = z.object({
+  clientMessageKey: z.string().trim().min(1).max(200),
+  content: z.string().trim().max(4000).optional(),
+  replyToMessageId: z.coerce.number().int().positive().optional(),
+  threadId: threadIdSchema,
+})
+```
+
+Default `GET /api/chat/messages` without `threadId` to `private:me` during rollout. Require `threadId` for sends.
+
+- [ ] **Step 6: Update service to use thread runtime**
+
+Change `createChatMessagesService` options:
+
+```ts
+type CreateChatMessagesServiceOptions = {
+  chatThreadsRepository: Pick<
+    ChatThreadsRepository,
+    'findSendLedgerAuthorsByMessageIds'
+  >
+  chatThreadsService: Pick<
+    ChatThreadsService,
+    'ensureCurrentUserWritableThreadContext' | 'getCurrentUserThreadContext'
+  >
+  chatMessagesRepository?: ChatMessagesRepository | null
+  chatwootClient: Pick<
+    ChatwootClient,
+    | 'createConversationIncomingAttachmentMessage'
+    | 'createConversationIncomingMessage'
+    | 'findConversationMessageById'
+    | 'findConversationMessageBySourceId'
+    | 'listConversationMessages'
+  >
+  now?: () => Date
+}
+```
+
+Add helpers:
+
+```ts
+function escapeMarkdownStrongText(value: string) {
+  return value.replace(/[\\*_`[\]]/g, '\\$&').trim()
+}
+
+function formatCompanyThreadContent({
+  authorName,
+  content,
+}: {
+  authorName: string
+  content: string | null
+}) {
+  const prefix = `**${escapeMarkdownStrongText(authorName)}**`
+
+  return content?.trim() ? `${prefix}\n${content.trim()}` : prefix
+}
+
+function parseCompanyThreadContent(content: string | null) {
+  if (!content) {
+    return { authorName: null, content: null }
+  }
+
+  const match = /^\*\*(.+?)\*\*(?:\n([\s\S]*))?$/.exec(content)
+
+  if (!match) {
+    return { authorName: null, content }
+  }
+
+  return {
+    authorName: match[1].replace(/\\([\\*_`[\]])/g, '$1').trim() || null,
+    content: match[2]?.trim() || null,
+  }
+}
+```
+
+Mapping rules:
+
+- Agent messages: `authorRole='agent'`, `direction='incoming'`.
+- Private contact messages: `authorRole='current_user'`, `direction='outgoing'`.
+- Company contact messages with ledger `userId === current user`: `authorRole='current_user'`, `direction='outgoing'`.
+- Company contact messages with ledger `userId !== current user`: `authorRole='company_member'`, `direction='incoming'`.
+- Company contact messages without ledger: parse Markdown prefix and render as `company_member`.
+
+- [ ] **Step 7: Run message and route tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-messages/service.test.ts src/modules/chat-messages/repository.test.ts src/app.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit Task 5**
+
+Run:
+
+```bash
+git add backend/src/modules/chat-messages backend/src/test/appTestHelpers.ts backend/src/app.test.ts
+git commit -m "feat: send chat messages by portal thread"
+```
+
+---
+
+## Task 6: Thread Realtime And Chatwoot Webhook Fanout
+
+**Files:**
+- Modify: `backend/src/modules/chat-realtime/hub.ts`
+- Modify: `backend/src/modules/chat-realtime/hub.test.ts`
+- Modify: `backend/src/modules/chat-realtime/routes.ts`
+- Modify: `backend/src/modules/chat-realtime/routes.test.ts`
+- Modify: `backend/src/modules/chatwoot-webhooks/repository.ts`
+- Modify: `backend/src/modules/chatwoot-webhooks/repository.test.ts`
+- Modify: `backend/src/modules/chatwoot-webhooks/service.ts`
+- Modify: `backend/src/modules/chatwoot-webhooks/service.test.ts`
+
+- [ ] **Step 1: Write realtime hub tests**
+
+In `backend/src/modules/chat-realtime/hub.test.ts`, add:
+
+```ts
+it('publishes a company thread event to every subscriber on that thread', async () => {
+  const hub = createChatRealtimeHub()
+  const firstSend = vi.fn()
+  const secondSend = vi.fn()
+
+  hub.subscribe({
+    send: firstSend,
+    tenantId: 1,
+    threadId: 'company:154',
+    userId: 7,
+  })
+  hub.subscribe({
+    send: secondSend,
+    tenantId: 1,
+    threadId: 'company:154',
+    userId: 8,
+  })
+
+  await expect(
+    hub.publishThreadMessages({
+      createSnapshotForUser: vi.fn().mockResolvedValue({
+        activeThread: { id: 'company:154', title: 'ООО "Ромашка"', type: 'company' },
+        hasMoreOlder: false,
+        messages: [],
+        nextOlderCursor: null,
+        reason: 'none',
+        result: 'ready',
+      }),
+      tenantId: 1,
+      threadId: 'company:154',
+    }),
+  ).resolves.toBe(2)
+
+  expect(firstSend).toHaveBeenCalledTimes(1)
+  expect(secondSend).toHaveBeenCalledTimes(1)
+})
+```
+
+- [ ] **Step 2: Run realtime tests to verify they fail**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-realtime/hub.test.ts
+```
+
+Expected: FAIL because hub still keys by `primaryConversationId`.
+
+- [ ] **Step 3: Refactor realtime hub**
+
+Change subscription type:
+
+```ts
+type RealtimeSubscription = {
+  send: (event: ChatRealtimeEvent) => void
+  tenantId: number
+  threadId: string
+  userId: number
+}
+```
+
+Key by `tenantId:threadId:userId` for limit and by `tenantId:threadId` for publication.
+
+Add async publisher:
+
+```ts
+async publishThreadMessages({
+  createSnapshotForUser,
+  tenantId,
+  threadId,
+}: {
+  createSnapshotForUser: (userId: number) => Promise<ChatMessagesSnapshot>
+  tenantId: number
+  threadId: string
+}) {
+  const subscriptions = subscriptionsByThreadKey.get(`${tenantId}:${threadId}`)
+
+  if (!subscriptions) {
+    return 0
+  }
+
+  let delivered = 0
+
+  for (const subscription of subscriptions) {
+    const snapshot = await createSnapshotForUser(subscription.userId)
+
+    if (snapshot.result !== 'ready') {
+      continue
+    }
+
+    subscription.send({
+      data: snapshot,
+      type: 'messages',
+    })
+    delivered += 1
+  }
+
+  return delivered
+}
+```
+
+- [ ] **Step 4: Update realtime route**
+
+Modify `backend/src/modules/chat-realtime/routes.ts`:
+
+```ts
+const chatRealtimeQuerySchema = z.object({
+  threadId: z.string().trim().min(1).max(80),
+})
+```
+
+Validate through `chatThreadsService.getCurrentUserThreadContext({ threadId, userId })`.
+
+Subscribe with:
+
+```ts
+realtimeHub.subscribe({
+  send: (event) => writeSseEvent(reply.raw, event),
+  tenantId: tenant.id,
+  threadId: context.activeThread.id,
+  userId: user.id,
+})
+```
+
+- [ ] **Step 5: Update webhook repository mapping**
+
+Change `findConversationMappingByChatwootConversationId()` to read `portal_chat_threads` and return:
+
+```ts
+{
+  chatwootConversationId: number
+  portalChatThreadId: number
+  threadId: 'private:me' | `company:${number}`
+  threadType: 'private' | 'company'
+  userId: number | null
+}
+```
+
+For private thread, `userId` is the thread owner. For company thread, `userId` is null and fanout goes to active subscribers.
+
+- [ ] **Step 6: Update webhook service**
+
+In `publishCurrentSnapshot`, call:
+
+```ts
+await realtimeHub.publishThreadMessages({
+  createSnapshotForUser: (userId) =>
+    chatMessagesService.getCurrentUserChatMessages({
+      threadId: mapping.threadId,
+      userId,
+    }),
+  tenantId,
+  threadId: mapping.threadId,
+})
+```
+
+For private mappings, this still works because only the private owner can subscribe.
+
+- [ ] **Step 7: Run realtime/webhook tests**
+
+Run:
+
+```bash
+pnpm --dir backend test -- src/modules/chat-realtime/hub.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/repository.test.ts src/modules/chatwoot-webhooks/service.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit Task 6**
+
+Run:
+
+```bash
+git add backend/src/modules/chat-realtime backend/src/modules/chatwoot-webhooks
+git commit -m "feat: publish realtime by chat thread"
+```
+
+---
+
+## Task 7: Frontend Thread Switcher And Thread-Based Chat Runtime
+
+**Files:**
+- Modify: `frontend/src/features/chat/types.ts`
+- Modify: `frontend/src/features/chat/api/chatClient.ts`
+- Modify: `frontend/src/features/chat/api/chatRealtimeClient.ts`
+- Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
+- Modify: `frontend/src/features/chat/pages/chatPageState.ts`
+- Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.ts`
+- Modify: `frontend/src/features/chat/pages/useOptimisticTextSend.ts`
+- Modify: `frontend/src/features/chat/lib/optimisticTextMessages.ts`
+- Modify: `frontend/src/features/chat/lib/chatSnapshot.ts`
+- Modify: `frontend/src/features/chat/components/ChatHeader.tsx`
+- Modify: `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.test.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx`
+- Modify: `frontend/src/features/chat/components/ChatTranscript.test.tsx`
+
+- [ ] **Step 1: Update frontend contract tests first**
+
+In `frontend/src/features/chat/pages/ChatPage.test.tsx`, update mocks so initial load calls:
+
+```ts
+expect(fetch).toHaveBeenCalledWith('/api/chat/threads', expect.anything())
+expect(fetch).toHaveBeenCalledWith(
+  '/api/chat/messages?threadId=private%3Ame',
+  expect.anything(),
+)
+```
+
+Add switching test:
+
+```ts
+it('switches to a company thread from the header menu and reloads transcript by threadId', async () => {
+  mockChatThreads({
+    activeThreadId: 'private:me',
+    threads: [
+      { id: 'private:me', subtitle: 'Только вы и поддержка', title: 'Личный чат', type: 'private' },
+      { id: 'company:154', subtitle: 'Общий чат компании', title: 'ООО "Ромашка"', type: 'company' },
+    ],
+  })
+  mockChatMessages({ activeThreadId: 'private:me' })
+
+  render(<ChatPage />)
+  await user.click(screen.getByRole('button', { name: /открыть навигацию/i }))
+  await user.click(screen.getByRole('menuitem', { name: /ООО "Ромашка"/i }))
+
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/chat/messages?threadId=company%3A154',
+    expect.anything(),
+  )
+})
+```
+
+- [ ] **Step 2: Run frontend chat page tests to verify they fail**
+
+Run:
+
+```bash
+pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx
+```
+
+Expected: FAIL because frontend still uses `primaryConversationId`.
+
+- [ ] **Step 3: Update frontend types**
+
+Modify `frontend/src/features/chat/types.ts`:
+
+```ts
+export type ChatThreadType = 'private' | 'company'
+
+export type ChatThreadSummary = {
+  id: string
+  subtitle: string
+  title: string
+  type: ChatThreadType
+}
+
+export type ChatThreadsResponse = {
+  activeThreadId: string
+  threads: ChatThreadSummary[]
+}
+
+export type ChatMessageAuthorRole =
+  | 'agent'
+  | 'company_member'
+  | 'current_user'
+```
+
+Remove `ChatPrimaryConversation` from public snapshot types. Add `activeThread`.
+
+- [ ] **Step 4: Update frontend API client**
+
+Modify `frontend/src/features/chat/api/chatClient.ts`:
+
+```ts
+export async function getChatThreads() {
+  return request<ChatThreadsResponse>('/chat/threads')
+}
+
+export async function getChatMessages({
+  beforeMessageId,
+  threadId,
+}: {
+  beforeMessageId?: number | null
+  threadId: string
+}) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('threadId', threadId)
+
+  if (beforeMessageId) {
+    searchParams.set('beforeMessageId', String(beforeMessageId))
+  }
+
+  return request<ChatMessagesSnapshot>(`/chat/messages?${searchParams}`)
+}
+```
+
+Change `sendChatMessage` and `sendChatAttachment` to require `threadId`.
+
+- [ ] **Step 5: Update realtime client**
+
+Modify `frontend/src/features/chat/api/chatRealtimeClient.ts`:
+
+```ts
+type OpenChatRealtimeInput = {
+  onChatState: (snapshot: ChatMessagesSnapshot) => void
+  onOpen?: () => void
+  onMessages: (snapshot: ChatMessagesSnapshot) => void
+  threadId: string
+}
+
+function buildRealtimeUrl(threadId: string) {
+  const url = new URL(
+    `${API_BASE_URL.replace(/\/+$/, '')}/chat/realtime`,
+    window.location.origin,
+  )
+  url.searchParams.set('threadId', threadId)
+  return url.toString()
+}
+```
+
+- [ ] **Step 6: Update chat page state**
+
+Modify `frontend/src/features/chat/pages/chatPageState.ts`:
+
+```ts
+import type { ChatMessagesSnapshot, ChatThreadSummary } from '../types'
+
+export type ChatPageState =
+  | {
+      errorMessage: string
+      selectedThreadId: string | null
+      snapshot: ChatMessagesSnapshot | null
+      status: 'error'
+      threads: ChatThreadSummary[]
+    }
+  | {
+      selectedThreadId: string | null
+      snapshot: ChatMessagesSnapshot | null
+      status: 'loading'
+      threads: ChatThreadSummary[]
+    }
+  | {
+      selectedThreadId: string
+      snapshot: ChatMessagesSnapshot
+      status: 'ready'
+      threads: ChatThreadSummary[]
+    }
+```
+
+- [ ] **Step 7: Update ChatPage runtime**
+
+In `frontend/src/features/chat/pages/ChatPage.tsx`:
+
+- Load `getChatThreads()` before `getChatMessages()`.
+- Store `selectedThreadId`.
+- On thread change:
+  - clear `replyTarget`;
+  - clear send/history errors;
+  - clear optimistic sends or key them by thread;
+  - load messages with new `threadId`.
+
+Expected handler:
+
+```ts
+async function handleSelectThread(threadId: string) {
+  if (threadId === pageState.selectedThreadId) {
+    return
+  }
+
+  setReplyTarget(null)
+  setSendErrorMessage(null)
+  setHistoryErrorMessage(null)
+  setPageState((currentState) => ({
+    ...currentState,
+    selectedThreadId: threadId,
+    status: 'loading',
+  }))
+
+  const snapshot = await getChatMessages({ threadId })
+
+  if (!isMountedRef.current) {
+    return
+  }
+
+  setPageState((currentState) => ({
+    ...currentState,
+    selectedThreadId: threadId,
+    snapshot,
+    status: 'ready',
+  }))
+}
+```
+
+- [ ] **Step 8: Update header menu**
+
+Modify `frontend/src/features/chat/components/ChatHeader.tsx` props:
+
+```ts
+type ChatHeaderProps = {
+  activeThread: ChatThreadSummary | null
+  isReady: boolean
+  onSelectThread: (threadId: string) => void
+  selectedThreadId: string | null
+  threads: ChatThreadSummary[]
+}
+```
+
+Render left menu:
+
+```tsx
+<div className="px-3 py-2 text-left font-medium text-brand-800">
+  Чаты
+</div>
+{threads.map((thread) => (
+  <button
+    aria-current={thread.id === selectedThreadId ? 'true' : undefined}
+    className="flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-700"
+    key={thread.id}
+    onClick={() => onSelectThread(thread.id)}
+    role="menuitem"
+    type="button"
+  >
+    <span className="w-4 text-brand-800">
+      {thread.id === selectedThreadId ? '✓' : ''}
+    </span>
+    <span className="min-w-0 truncate">{thread.title}</span>
+  </button>
+))}
+<button disabled role="menuitem">Центр поддержки <span>скоро</span></button>
+```
+
+Header subtitle should use:
+
+```tsx
+const subtitleName = activeThread?.title ?? supportTeamName
+```
+
+- [ ] **Step 9: Update transcript bubble alignment**
+
+Modify `MessageBubble.tsx`:
+
+```ts
+const isOutgoing = message.authorRole === 'current_user'
+const shouldRenderAgentAvatar =
+  message.authorRole === 'agent' && shouldRenderAuthorName(blockPosition)
+const shouldRenderAuthorHeader =
+  message.authorRole !== 'current_user' && shouldRenderAuthorName(blockPosition)
+```
+
+Render `AgentNameHeader` for both `agent` and `company_member`, but avatar only for `agent`.
+
+- [ ] **Step 10: Run frontend chat tests**
+
+Run:
+
+```bash
+pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx
+```
+
+Expected: PASS.
+
+- [ ] **Step 11: Commit Task 7**
+
+Run:
+
+```bash
+git add frontend/src/features/chat
+git commit -m "feat: switch portal chat threads in ui"
+```
+
+---
+
+## Task 8: Full Verification, Docs Update And Cleanup
+
+**Files:**
+- Modify: `docs/ARCHITECTURE.md`
+- Modify: `docs/DECISIONS.md`
+- Modify: `docs/IMPLEMENTATION_PLAN.md`
+- Modify: `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md`
+- Modify: `docs/WORK_LOG.md`
+- Optionally modify: `docs/Findings/*.md` if implementation opens or closes findings.
+
+- [ ] **Step 1: Run backend tests**
+
+Run:
+
+```bash
+pnpm --dir backend test
+```
+
+Expected: PASS.
+
+- [ ] **Step 2: Run frontend tests**
+
+Run:
+
+```bash
+pnpm --dir frontend test
+```
+
+Expected: PASS.
+
+- [ ] **Step 3: Run typecheck/build/lint**
+
+Run:
+
+```bash
+pnpm --dir backend build
+pnpm --dir frontend typecheck
+pnpm --dir frontend build
+pnpm lint
+git diff --check
+```
+
+Expected: all PASS and `git diff --check` empty.
+
+- [ ] **Step 4: Runtime validation with user-started services**
+
+Do not start services from the agent. Ask the user to start the existing local portal/Chatwoot/Postgres stack. After the user confirms services are running, validate:
+
+```bash
+pnpm test:e2e
+```
+
+Expected: PASS. If Playwright is blocked by environment, record the blocker and run targeted frontend runtime tests already listed above.
+
+- [ ] **Step 5: Manual Chatwoot admin validation**
+
+With test Chatwoot contacts configured:
+
+```text
+Person:
+  portal_contact_type = person
+  portal_enabled = true
+  portal_client_company_contact_ids = 154
+
+Company:
+  portal_contact_type = company
+  portal_enabled = true
+```
+
+Validate:
+
+- Portal left menu shows `Личный чат` and `ООО "Ромашка"`.
+- Header subtitle changes to selected thread.
+- First send in `ООО "Ромашка"` creates one company Chatwoot conversation.
+- Chatwoot agent sees company contact in header.
+- Chatwoot message body starts with bold Markdown author name.
+- Portal transcript strips the Markdown prefix.
+- Another portal user with the same company ID receives company realtime events.
+- Removing company ID from a person contact blocks future history/send/realtime after reconnect.
+
+- [ ] **Step 6: Update stable docs**
+
+Update:
+
+- `docs/ARCHITECTURE.md`: replace `primary conversation per tenant user` with thread model.
+- `docs/DECISIONS.md`: supersede `D-009` or add `D-018. Portal chat uses portal-owned threads`.
+- `docs/IMPLEMENTATION_PLAN.md`: record chat-thread model as active/completed follow-up before MT-9.
+- `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md`: update data model/API/realtime sections.
+- `docs/WORK_LOG.md`: add one short completed bullet only after implementation and checks are complete; replace `Recommended Next Step`.
+
+`WORK_LOG.md` addition:
+
+```md
+- Chat runtime переведен с одного primary conversation на portal-owned threads:
+  личный чат и общие company-чаты через Chatwoot contact attributes.
+```
+
+Recommended next step:
+
+```md
+## Recommended Next Step
+
+- Провести production smoke deploy для chat-thread runtime и затем вернуться к
+  `MT-9` gate по `F-MT-004`.
+```
+
+- [ ] **Step 7: Final review**
+
+Review changed areas:
+
+```bash
+git diff --stat
+git diff -- backend/src/modules/chat-threads
+git diff -- backend/src/modules/chat-messages
+git diff -- backend/src/modules/chat-realtime
+git diff -- backend/src/modules/chatwoot-webhooks
+git diff -- frontend/src/features/chat
+```
+
+Look specifically for:
+
+- browser-visible Chatwoot conversation IDs;
+- any fallback that bypasses thread access validation;
+- company thread send without Markdown author prefix;
+- realtime fanout that publishes to a user without revalidating thread access;
+- stale `primaryConversationId` in frontend requests.
+
+- [ ] **Step 8: Commit Task 8**
+
+Run:
+
+```bash
+git add docs/ARCHITECTURE.md docs/DECISIONS.md docs/IMPLEMENTATION_PLAN.md docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md docs/WORK_LOG.md
+git commit -m "docs: document chat thread runtime"
+```
+
+---
+
+## Final Acceptance Criteria
+
+- Registration only accepts enabled Chatwoot `person` contacts.
+- `GET /api/chat/threads` returns private thread plus enabled company threads from Chatwoot attributes.
+- Browser sends `threadId`, not Chatwoot conversation ID.
+- Empty thread view does not create Chatwoot conversation.
+- First send lazily creates/reuses the correct Chatwoot conversation.
+- Company thread messages sent to Chatwoot use Markdown author prefix.
+- Portal UI strips company Markdown prefix and shows structured author metadata.
+- Company thread history/send/realtime validates current Chatwoot attributes.
+- Webhooks map Chatwoot conversation to portal thread and publish through thread subscriptions.
+- Existing one-chat user path works as private thread compatibility path.
+- Backend tests, frontend tests, typecheck/build/lint and `git diff --check` pass.
