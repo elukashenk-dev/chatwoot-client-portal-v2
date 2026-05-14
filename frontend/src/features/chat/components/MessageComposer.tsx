@@ -377,7 +377,7 @@ export function MessageComposer({
           >
             <button
               aria-label="Прикрепить файл"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-400 transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
               disabled={isAttachmentControlDisabled}
               onClick={() => {
                 fileInputRef.current?.click()
@@ -407,7 +407,7 @@ export function MessageComposer({
           >
             <button
               aria-label="Голосовое сообщение"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
               disabled={!canStartVoiceRecording}
               onClick={() => {
                 void startVoiceRecording()

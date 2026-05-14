@@ -61,11 +61,17 @@ describe('MessageComposer', () => {
     expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
     expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toHaveClass(
+      'text-chat-outgoing',
       'hover:text-chat-outgoing/80',
+      'disabled:text-slate-300',
     )
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
-    ).toHaveClass('hover:text-chat-outgoing/80')
+    ).toHaveClass(
+      'text-chat-outgoing',
+      'hover:text-chat-outgoing/80',
+      'disabled:text-slate-300',
+    )
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
       'bg-chat-outgoing',
     )
