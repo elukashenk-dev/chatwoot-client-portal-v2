@@ -16,6 +16,28 @@
 - Branch: `feature/chat-thread-model-spec`
 - Current baseline to wrap first, then internalize: `primaryConversationId` across backend, frontend and realtime.
 
+## Production Quality Bar
+
+This plan targets production-quality implementation from the first enabled
+slice. Incremental rollout is used to reduce blast radius and preserve rollback
+options, not to ship a weaker temporary architecture.
+
+Non-negotiables:
+
+- every slice that changes runtime behavior must be complete, tested and
+  deployable within its own scope;
+- browser input can select only a portal `threadId`, never Chatwoot authority;
+- backend must validate `tenant + session + thread membership` before every
+  history, send, attachment and realtime operation;
+- company sends and company realtime must not be enabled while
+  `F-CHAT-SEC-001` is open;
+- no fallback may grant history/send/realtime access when Chatwoot contact
+  attributes are missing, malformed, disabled or cross-tenant;
+- no Chatwoot secrets, conversation authority or membership authority may be
+  stored in frontend state, local storage or public API responses;
+- known security findings on the runtime path must be closed before enabling
+  the affected behavior.
+
 ## File Structure
 
 Backend files to create:
@@ -167,8 +189,7 @@ This feature must not be implemented as a big-bang rewrite. The safe sequence is
    `private:me` thread path is verified.
 5. Add company threads only after private thread compatibility passes.
 6. Treat `F-CHAT-SEC-001` as a company-thread rollout gate: authenticated send
-   rate limiting must be closed or explicitly deferred by the user before
-   company sends are enabled.
+   rate limiting must be closed before company sends are enabled.
 
 Security invariant:
 
@@ -226,23 +247,17 @@ If either baseline command fails:
 1. determine whether the failure is a real chat regression or a test-runner
    selection/configuration issue;
 2. fix it in a separate checkpoint if it blocks reliable thread work;
-3. record any intentionally deferred blocker in `docs/Findings/`;
+3. record any unresolved blocker in `docs/Findings/`;
 4. do not continue to Task 1 until the private-chat baseline is trustworthy.
 
 - [ ] **Step 4: Confirm send-rate-limit gate**
 
 Review `docs/Findings/F-CHAT-SEC-001-authenticated-chat-send-rate-limit.md`.
 
-Before enabling company sends in Task 5, one of these must be true:
+Before enabling company sends in Task 5, this must be true:
 
 ```text
 F-CHAT-SEC-001 is closed by implementation and backend tests
-```
-
-or:
-
-```text
-User explicitly defers F-CHAT-SEC-001 for the first company-thread rollout
 ```
 
 - [ ] **Step 5: Commit Task 0 if fixes were needed**
@@ -1752,9 +1767,8 @@ test ! -f docs/Findings/F-CHAT-SEC-001-authenticated-chat-send-rate-limit.md
 ```
 
 Expected: PASS if authenticated send rate limiting is already closed. If this
-command fails, either close `F-CHAT-SEC-001` with implementation and backend
-tests in a separate checkpoint or get explicit user approval to defer it for the
-first company-thread rollout. Do not silently enable company sends while this
+command fails, stop Task 5 and close `F-CHAT-SEC-001` with implementation and
+backend tests in a separate checkpoint. Do not enable company sends while this
 finding is still open.
 
 - [ ] **Step 1: Add formatting tests**

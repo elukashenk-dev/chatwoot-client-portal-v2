@@ -6,6 +6,29 @@
 
 Дизайн принят для планирования. Реализация в этой ветке еще не начата.
 
+## Production Quality Bar
+
+Эта модель проектируется сразу как production-grade runtime, а не как
+облегченный MVP.
+
+Инкрементальная реализация допустима только как способ снизить риск изменения,
+а не как разрешение на временные обходы, слабую безопасность или технический
+долг. Каждый merged slice должен быть законченным, тестируемым и безопасным в
+своем scope.
+
+Запрещено:
+
+- временно доверять `threadId`, `company contact id` или Chatwoot conversation
+  id из браузера без backend authority check;
+- включать company send/realtime до закрытия authenticated send rate limiting;
+- добавлять fallback, который показывает историю или открывает send при
+  невалидной Chatwoot contact configuration;
+- создавать скрытую portal admin surface для управления company memberships;
+- хранить Chatwoot secrets, conversation authority или membership authority во
+  frontend state/local storage;
+- оставлять known security finding как "потом исправим", если он находится на
+  пути включаемого runtime.
+
 ## Цель
 
 Поддержать несколько клиентских чатов в portal без новой отдельной админки для
