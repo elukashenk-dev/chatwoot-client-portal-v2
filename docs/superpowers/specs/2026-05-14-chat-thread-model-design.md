@@ -16,6 +16,11 @@
 эту конфигурацию, валидирует ее и владеет runtime mappings, правом отправки,
 доступом к истории и realtime-доставкой.
 
+Этот дизайн расширяет текущий архитектурный baseline `one portal user -> one
+primary conversation`. Новый baseline должен стать `portal user -> available
+threads -> authoritative conversation`. Старый один чат становится частным
+случаем нового `private` thread.
+
 ## Термины
 
 - `tenant`: компания, которая владеет portal и Chatwoot account, например
@@ -47,6 +52,11 @@ Tenant: PROVGROUP
 
 Приватных чатов между клиентскими пользователями нет. Личный thread существует
 только между одним portal user и командой поддержки tenant-а.
+
+Это соответствует B2B product goal: B2B-компания продолжает работать в
+Chatwoot, а конечные клиенты получают брендированный PWA-чат. Для управления
+доступом к общим чатам не добавляется новый portal admin UI; настройка остается
+в Chatwoot Contacts.
 
 ## Конфигурация Chatwoot
 
@@ -233,8 +243,68 @@ portal_chat_threads
 - один private thread на `tenant_id + portal_user_id`;
 - один company thread на `tenant_id + chatwoot_contact_id`.
 
-Существующие user-level contact и conversation mappings нужно рефакторить в
-thread-level mappings. Browser по-прежнему не получает direct Chatwoot authority.
+Существующий `portal_user_contact_links` может остаться как связь portal user с
+его Chatwoot `person` contact. Существующий
+`portal_user_chatwoot_conversations` больше не подходит как целевая модель,
+потому что company thread должен быть общим для нескольких portal users. Его
+нужно заменить или мигрировать в thread-level mappings.
+
+`portal_chat_message_sends` тоже должен перейти с user-level
+`primary_conversation_id` на thread-level scope, чтобы idempotency и audit
+работали одинаково для private и company threads. Browser по-прежнему не
+получает direct Chatwoot authority.
+
+## Совместимость С Текущей Моделью
+
+Текущий chat runtime построен вокруг одного `primaryConversation` на portal
+user. Новая модель не отменяет уже выбранные границы, но меняет ключевую
+единицу маршрутизации:
+
+```text
+было: portal user -> primary conversation
+стало: portal user -> thread -> authoritative conversation
+```
+
+Что сохраняется:
+
+- tenant resolution по host;
+- tenant-scoped portal DB;
+- registration/password reset через email-code flows;
+- Chatwoot как system of record для contacts, conversations, messages и
+  attachments;
+- backend-only Chatwoot authority;
+- lazy bootstrap conversation при первом send;
+- tenant portal inbox как `Channel::Api` с `lock_to_single_conversation = true`;
+- webhook validation и delivery dedupe в tenant scope.
+
+Что меняется:
+
+- `/api/chat/context`, `/api/chat/messages`, `/api/chat/messages/attachment` и
+  `/api/chat/realtime` должны принимать portal `threadId` вместо
+  `primaryConversationId` как browser-facing selector;
+- chat context должен резолвить не "чат текущего user", а "конкретный thread,
+  доступный текущему user";
+- webhook routing должен мапить `chatwoot_conversation_id -> portal thread`,
+  затем доставлять событие одному user для private thread или всем актуально
+  допущенным users для company thread;
+- frontend state должен хранить список threads и активный thread.
+
+Миграционный путь:
+
+1. Ввести чтение и строгую валидацию Chatwoot contact attributes.
+2. Добавить `portal_chat_threads` и создать private thread как совместимый
+   эквивалент текущего одного чата.
+3. Перевести backend API с `primaryConversationId` на `threadId`, сохранив
+   lazy bootstrap.
+4. Добавить company threads по `portal_client_company_contact_ids`.
+5. Перевести webhook/realtime fanout на thread model.
+6. Обновить UI: левое меню как thread switcher и активный thread в header.
+
+После реализации этой модели нужно обновить устойчивые source-of-truth docs:
+`docs/ARCHITECTURE.md`, `docs/DECISIONS.md`,
+`docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md` и при необходимости
+`docs/IMPLEMENTATION_PLAN.md`. В них сейчас зафиксирован старый baseline "один
+primary conversation per tenant user".
 
 ## Ленивое Создание Conversation
 
@@ -331,6 +401,12 @@ tenant webhook secret и account/inbox invariants.
 Realtime subscriptions должны быть scoped по tenant и thread, а не только по
 user и conversation.
 
+Для company thread fanout нельзя полагаться только на старые subscriptions.
+Перед публикацией backend должен проверять актуальные Chatwoot attributes
+получателей или использовать свежий валидированный cache, чтобы пользователь,
+которого убрали из `portal_client_company_contact_ids`, не получил новые
+события из общего чата.
+
 ## UI
 
 Post-login chat UI использует существующее левое меню как thread switcher.
@@ -393,6 +469,21 @@ Header:
 
 Backend logs должны содержать конкретную misconfiguration.
 
+## Operational Notes
+
+Поскольку Chatwoot Contacts являются поверхностью настройки, tenant admin в
+Chatwoot должен поддерживать три пользовательских атрибута:
+
+- `portal_contact_type`;
+- `portal_enabled`;
+- `portal_client_company_contact_ids`.
+
+Если эти attribute definitions отсутствуют или заполнены неправильно, portal
+должен fail closed. Для production полезен backend diagnostic check, который
+проверяет наличие definitions и валидность ссылок `person -> company contact`.
+Этот check не является новой админкой и не дает browser-у Chatwoot authority; он
+нужен для support/debugging.
+
 ## Правила Безопасности
 
 - Browser никогда не получает Chatwoot tokens.
@@ -421,6 +512,7 @@ Backend unit/integration tests:
 - webhook fanout отправляет private events только пользователю;
 - webhook fanout отправляет company events только пользователям, у которых
   текущие contact attributes ссылаются на company contact ID.
+- старый one-chat сценарий покрывается как private thread compatibility path.
 
 Frontend tests:
 
