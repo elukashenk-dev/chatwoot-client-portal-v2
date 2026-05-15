@@ -1,4 +1,6 @@
-import { and, eq } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+
+import { and, eq, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -24,6 +26,19 @@ type TenantRepositoryScope = {
   tenantId: number
 }
 
+function createConversationBootstrapLockKey(
+  tenantId: number,
+  chatwootContactId: number,
+) {
+  const digest = createHash('sha256')
+    .update(
+      `chat-context:conversation-bootstrap:${tenantId}:${chatwootContactId}`,
+    )
+    .digest()
+
+  return [digest.readInt32BE(0), digest.readInt32BE(4)] as const
+}
+
 export function createChatContextRepository(
   db: AppDatabase,
   { tenantId }: TenantRepositoryScope,
@@ -47,6 +62,22 @@ export function createChatContextRepository(
   }
 
   return {
+    async transactionWithConversationBootstrapLock<T>(
+      chatwootContactId: number,
+      handler: () => Promise<T>,
+    ) {
+      const [lockKeyPartOne, lockKeyPartTwo] =
+        createConversationBootstrapLockKey(tenantId, chatwootContactId)
+
+      return db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(${lockKeyPartOne}, ${lockKeyPartTwo})`,
+        )
+
+        return handler()
+      })
+    },
+
     async createContactLink({ chatwootContactId, userId }: ContactLinkInput) {
       const [link] = await db
         .insert(portalUserContactLinks)

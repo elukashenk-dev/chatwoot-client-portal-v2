@@ -202,8 +202,12 @@ Tenant со статусом не `active` не допускается до publ
 - Chatwoot contact/conversation IDs не считаются глобально уникальными без tenant scope;
 - portal inbox tenant должен быть `Channel::Api`;
 - portal inbox tenant должен иметь `lock_to_single_conversation = true`;
-- если contact существует, но portal conversation еще нет, первый send может bootstrap-нуть conversation;
-- если mapped primary conversation удален в Chatwoot и fresh resolve не находит оставшихся portal conversations, следующий send может bootstrap-нуть replacement conversation;
+- если contact существует, но portal conversation еще нет, первый send может
+  bootstrap-нуть conversation только под tenant-aware advisory lock, scoped by
+  target Chatwoot contact/thread;
+- если mapped primary conversation удален в Chatwoot и fresh resolve не находит
+  оставшихся portal conversations, следующий send может bootstrap-нуть
+  replacement conversation под тем же lock;
 - несколько portal conversations для одного contact внутри tenant portal inbox считаются anomaly, а не целевой UX.
 
 ### Realtime И Webhooks

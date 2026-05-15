@@ -125,7 +125,9 @@
   на portal user/contact внутри tenant portal `Channel::Api` inbox. Portal inbox
   должен иметь `lock_to_single_conversation = true`. Несколько portal
   conversations для одного contact внутри tenant portal inbox считаются data/config
-  anomaly, а не целевой UX.
+  anomaly, а не целевой UX. Lazy bootstrap нового или replacement conversation
+  выполняется под tenant-aware lock, scoped by target Chatwoot contact/thread, с
+  повторным resolve перед remote Chatwoot create.
 - причина:
   для клиента портал должен выглядеть как непрерывный мессенджер, а не как CRM с
   несколькими тикетами. Один authoritative conversation упрощает send,

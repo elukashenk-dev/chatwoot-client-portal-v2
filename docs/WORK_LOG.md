@@ -97,6 +97,10 @@
   по `tenant + user + conversation + clientMessageKey`, добавлен regression test
   для разных users с одинаковым key, а thread plan закрепляет будущий scope
   `tenant + portal_chat_thread + user + clientMessageKey`.
+- `F-CHAT-THREAD-006` закрыт: текущий private conversation lazy bootstrap теперь
+  сериализуется tenant-aware advisory lock по target Chatwoot contact, внутри
+  lock выполняется повторный resolve перед Chatwoot create; thread plan требует
+  такой же lock/re-read contract для будущих company threads.
 
 ## Current Baseline
 
@@ -114,7 +118,7 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-006`: спроектировать и покрыть безопасный lazy
-  bootstrap company conversation, чтобы параллельные первые sends/readiness
-  checks не создавали duplicate Chatwoot conversations. Company sends/realtime
-  не включать до закрытия оставшихся chat-thread findings.
+- Закрыть `F-CHAT-THREAD-005`: нормализовать Chatwoot-visible author prefix для
+  будущих company messages, чтобы multiline/long/empty display names не ломали
+  формат сообщений в админке Chatwoot. Company sends/realtime не включать до
+  закрытия оставшихся chat-thread findings.

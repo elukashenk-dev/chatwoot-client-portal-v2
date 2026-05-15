@@ -1835,6 +1835,37 @@ it('bootstraps a company conversation only for writable context', async () => {
   )
 })
 
+it('serializes parallel company conversation bootstrap attempts for one thread', async () => {
+  const createConversation = vi.fn().mockResolvedValue({
+    assigneeName: null,
+    channelType: 'Channel::Api',
+    createdAt: 1_776_000_000,
+    id: 301,
+    inboxId: 9,
+    lastActivityAt: 1_776_000_000,
+    status: 'open',
+  })
+  const { service, updateThreadConversation } =
+    createCompanyThreadRuntimeService({
+      createConversation,
+      conversationAppearsAfterPersist: true,
+    })
+
+  await Promise.all([
+    service.ensureCurrentUserWritableThreadContext({
+      threadId: 'company:154',
+      userId: 7,
+    }),
+    service.ensureCurrentUserWritableThreadContext({
+      threadId: 'company:154',
+      userId: 8,
+    }),
+  ])
+
+  expect(createConversation).toHaveBeenCalledTimes(1)
+  expect(updateThreadConversation).toHaveBeenCalledTimes(1)
+})
+
 it('fails closed for a forged company thread not listed on the current person contact', async () => {
   const createConversation = vi.fn()
   const { service, updateThreadConversation } =
@@ -1946,8 +1977,17 @@ Rules:
 - Forged or malformed public `threadId` values must fail closed before Chatwoot
   conversation lookup/create.
 - `getCurrentUserThreadContext` never creates a Chatwoot conversation.
-- `ensureCurrentUserWritableThreadContext` creates/reuses contact inbox source ID and Chatwoot conversation when missing.
-- Persist conversation ID with `chatThreadsRepository.updateThreadConversation`.
+- `ensureCurrentUserWritableThreadContext` creates/reuses contact inbox source ID
+  and Chatwoot conversation only inside a per-thread bootstrap lock when missing.
+- The bootstrap lock must be tenant-aware and scoped to the persisted
+  `portal_chat_threads` row / target company contact. Use a row lock or
+  transaction-scoped advisory lock, then re-read `chatwootConversationId` before
+  remote Chatwoot conversation create.
+- If a concurrent request created and persisted the conversation while the
+  current request waited, return the persisted mapping and do not call Chatwoot
+  conversation create again.
+- Persist conversation ID with `chatThreadsRepository.updateThreadConversation`
+  before releasing the lock.
 
 Use existing logic from `chat-context/service.ts`:
 

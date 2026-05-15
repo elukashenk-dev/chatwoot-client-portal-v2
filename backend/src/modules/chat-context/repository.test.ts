@@ -45,6 +45,19 @@ describe('createChatContextRepository', () => {
     await database.close()
   })
 
+  it('runs conversation bootstrap work under a scoped database lock', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const repository = createChatContextRepository(database.db, {
+      tenantId: tenant.id,
+    })
+
+    await expect(
+      repository.transactionWithConversationBootstrapLock(44, async () => {
+        return 'locked'
+      }),
+    ).resolves.toBe('locked')
+  })
+
   it('allows the same Chatwoot contact and conversation ids in different tenants', async () => {
     const tenantA = await seedTestTenant(database.db)
     const tenantB = await seedTestTenant(database.db, {

@@ -35,9 +35,19 @@ function createChatContextRepositoryStub(
       email: 'client@example.com',
       id: 7,
     }),
+    transactionWithConversationBootstrapLock: async <T>(
+      _chatwootContactId: number,
+      handler: () => Promise<T>,
+    ) => handler(),
     upsertConversationMapping: vi.fn(),
     ...overrides,
   }
+}
+
+async function waitForBackgroundWork() {
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve)
+  })
 }
 
 describe('createChatContextService', () => {
@@ -383,6 +393,98 @@ describe('createChatContextService', () => {
     })
   })
 
+  it('serializes parallel writable bootstrap attempts for one contact', async () => {
+    let persistedConversation: {
+      assigneeName: null
+      channelType: 'Channel::Api'
+      createdAt: number
+      id: number
+      inboxId: number
+      lastActivityAt: number
+      status: string
+    } | null = null
+    let persistedMapping: {
+      chatwootContactId: number
+      chatwootConversationId: number
+      chatwootInboxId: number
+      userId: number
+    } | null = null
+    let lockQueue = Promise.resolve()
+    const upsertConversationMapping = vi.fn(async () => {
+      persistedMapping = {
+        chatwootContactId: 44,
+        chatwootConversationId: persistedConversation?.id ?? 301,
+        chatwootInboxId: 9,
+        userId: 7,
+      }
+
+      return persistedMapping
+    })
+    const transactionWithConversationBootstrapLockCalls: number[] = []
+    async function transactionWithConversationBootstrapLock<T>(
+      contactId: number,
+      handler: () => Promise<T>,
+    ) {
+      transactionWithConversationBootstrapLockCalls.push(contactId)
+      const previousLock = lockQueue
+      let releaseLock!: () => void
+      lockQueue = new Promise<void>((resolve) => {
+        releaseLock = resolve
+      })
+
+      await previousLock
+
+      try {
+        return await handler()
+      } finally {
+        releaseLock()
+      }
+    }
+    const createConversation = vi.fn(async () => {
+      await waitForBackgroundWork()
+      const conversation = {
+        assigneeName: null,
+        channelType: 'Channel::Api' as const,
+        createdAt: 400,
+        id: 301,
+        inboxId: 9,
+        lastActivityAt: 400,
+        status: 'open',
+      }
+      persistedConversation = conversation
+
+      return conversation
+    })
+    const service = createChatContextService({
+      chatContextRepository: {
+        ...createChatContextRepositoryStub({
+          findConversationMappingByUserId: vi.fn(async () => persistedMapping),
+          upsertConversationMapping,
+        }),
+        transactionWithConversationBootstrapLock,
+      },
+      chatwootClient: createChatwootClientStub({
+        createConversation,
+        findContactPortalInboxSourceId: vi
+          .fn()
+          .mockResolvedValue('portal-contact-source'),
+        listContactConversations: vi.fn(async () =>
+          persistedConversation ? [persistedConversation] : [],
+        ),
+      }),
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+    })
+
+    await Promise.all([
+      service.ensureCurrentUserWritableChatContext({ userId: 7 }),
+      service.ensureCurrentUserWritableChatContext({ userId: 7 }),
+    ])
+
+    expect(transactionWithConversationBootstrapLockCalls).toEqual([44, 44])
+    expect(createConversation).toHaveBeenCalledTimes(1)
+    expect(upsertConversationMapping).toHaveBeenCalledTimes(1)
+  })
+
   it('bootstraps a replacement conversation when the selected primary was deleted and no portal conversations remain', async () => {
     const upsertConversationMapping = vi.fn().mockResolvedValue({
       chatwootContactId: 44,
@@ -439,7 +541,7 @@ describe('createChatContextService', () => {
       reason: 'none',
       result: 'ready',
     })
-    expect(listContactConversations).toHaveBeenCalledTimes(2)
+    expect(listContactConversations).toHaveBeenCalledTimes(3)
     expect(createConversation).toHaveBeenCalledWith({
       contactId: 44,
       sourceId: 'portal-contact-source',

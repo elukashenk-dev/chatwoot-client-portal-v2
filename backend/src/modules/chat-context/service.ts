@@ -8,6 +8,12 @@ import {
   ChatwootClientConfigurationError,
   ChatwootClientRequestError,
 } from '../../integrations/chatwoot/client.js'
+import {
+  findMappedConversation,
+  mapPrimaryConversation,
+  selectAuthoritativePrimaryConversation,
+  shouldPersistConversationMapping,
+} from './conversationSelection.js'
 import type { ChatContextRepository } from './repository.js'
 
 export type ChatContextReason =
@@ -47,6 +53,7 @@ type CreateChatContextServiceOptions = {
     | 'findContactLinkByUserId'
     | 'findConversationMappingByUserId'
     | 'findPortalUserById'
+    | 'transactionWithConversationBootstrapLock'
     | 'upsertConversationMapping'
   >
   chatwootClient: Pick<
@@ -78,90 +85,6 @@ function buildSnapshot({
     reason,
     result,
   }
-}
-
-function mapPrimaryConversation(
-  conversation: ChatwootConversation,
-): ChatContextPrimaryConversation {
-  return {
-    assigneeName: conversation.assigneeName,
-    id: conversation.id,
-    inboxId: conversation.inboxId,
-    lastActivityAt: conversation.lastActivityAt,
-    status: conversation.status,
-  }
-}
-
-function selectAuthoritativePrimaryConversation(
-  conversations: ChatwootConversation[],
-) {
-  const activeConversations = conversations.filter(
-    (conversation) => conversation.status !== 'resolved',
-  )
-  const candidates =
-    activeConversations.length > 0 ? activeConversations : conversations
-
-  return [...candidates].sort((left, right) => {
-    const leftLastActivityAt = left.lastActivityAt ?? left.createdAt ?? left.id
-    const rightLastActivityAt =
-      right.lastActivityAt ?? right.createdAt ?? right.id
-
-    if (leftLastActivityAt !== rightLastActivityAt) {
-      return rightLastActivityAt - leftLastActivityAt
-    }
-
-    const leftCreatedAt = left.createdAt ?? left.id
-    const rightCreatedAt = right.createdAt ?? right.id
-
-    if (leftCreatedAt !== rightCreatedAt) {
-      return rightCreatedAt - leftCreatedAt
-    }
-
-    return right.id - left.id
-  })[0]
-}
-
-function findMappedConversation(
-  conversations: ChatwootConversation[],
-  mapping: {
-    chatwootContactId: number
-    chatwootConversationId: number
-    chatwootInboxId: number
-  } | null,
-  linkedContact: ChatContextLinkedContact,
-) {
-  if (!mapping || mapping.chatwootContactId !== linkedContact.id) {
-    return null
-  }
-
-  return (
-    conversations.find(
-      (conversation) =>
-        conversation.id === mapping.chatwootConversationId &&
-        conversation.inboxId === mapping.chatwootInboxId,
-    ) ?? null
-  )
-}
-
-function shouldPersistConversationMapping({
-  mapping,
-  primaryConversation,
-  linkedContact,
-}: {
-  linkedContact: ChatContextLinkedContact
-  mapping: {
-    chatwootContactId: number
-    chatwootConversationId: number
-    chatwootInboxId: number
-  } | null
-  primaryConversation: ChatwootConversation
-}) {
-  return (
-    !mapping ||
-    mapping.chatwootContactId !== linkedContact.id ||
-    mapping.chatwootConversationId !== primaryConversation.id ||
-    mapping.chatwootInboxId !== primaryConversation.inboxId
-  )
 }
 
 function isChatwootUnavailableError(error: unknown) {
@@ -579,6 +502,41 @@ export function createChatContextService({
     })
   }
 
+  async function bootstrapPrimaryConversationWithLock({
+    linkedContact,
+    userId,
+  }: {
+    linkedContact: ChatContextLinkedContact
+    userId: number
+  }) {
+    return chatContextRepository.transactionWithConversationBootstrapLock(
+      linkedContact.id,
+      async () => {
+        const lockedContext = await getCurrentUserChatContext({
+          selectedPrimaryConversationId: null,
+          userId,
+        })
+
+        if (lockedContext.result === 'ready') {
+          return lockedContext
+        }
+
+        if (
+          lockedContext.result === 'not_ready' &&
+          lockedContext.reason === 'conversation_missing' &&
+          lockedContext.linkedContact
+        ) {
+          return bootstrapPrimaryConversation({
+            linkedContact: lockedContext.linkedContact,
+            userId,
+          })
+        }
+
+        return lockedContext
+      },
+    )
+  }
+
   return {
     getCurrentUserChatContext,
 
@@ -600,7 +558,7 @@ export function createChatContextService({
         currentContext.reason === 'conversation_missing' &&
         currentContext.linkedContact
       ) {
-        return bootstrapPrimaryConversation({
+        return bootstrapPrimaryConversationWithLock({
           linkedContact: currentContext.linkedContact,
           userId,
         })
@@ -621,7 +579,7 @@ export function createChatContextService({
           fallbackContext.reason === 'conversation_missing' &&
           fallbackContext.linkedContact
         ) {
-          return bootstrapPrimaryConversation({
+          return bootstrapPrimaryConversationWithLock({
             linkedContact: fallbackContext.linkedContact,
             userId,
           })
