@@ -15,6 +15,7 @@ export type OptimisticTextSend = {
   replyTo: ChatMessageReplyPreview | null
   replyToMessageId: number | null
   status: OptimisticTextSendStatus
+  threadId: string
 }
 
 export type CreateOptimisticTextSendInput = {
@@ -24,6 +25,7 @@ export type CreateOptimisticTextSendInput = {
   now: Date
   replyTarget: MessageComposerReplyTarget | null
   replyToMessageId: number | null
+  threadId: string
 }
 
 export function createOptimisticTextSend({
@@ -33,6 +35,7 @@ export function createOptimisticTextSend({
   now,
   replyTarget,
   replyToMessageId,
+  threadId,
 }: CreateOptimisticTextSendInput): OptimisticTextSend {
   return {
     clientMessageKey,
@@ -52,6 +55,7 @@ export function createOptimisticTextSend({
         : null,
     replyToMessageId,
     status: 'sending',
+    threadId,
   }
 }
 
@@ -60,6 +64,7 @@ export function toOptimisticChatMessage(send: OptimisticTextSend): ChatMessage {
     attachments: [],
     authorAvatarUrl: null,
     authorName: 'Вы',
+    authorRole: 'current_user',
     clientMessageKey: send.clientMessageKey,
     content: send.content,
     contentType: 'text',
@@ -87,9 +92,11 @@ function sortMessagesByTimeline(messages: ChatMessage[]) {
 export function mergeOptimisticTextMessages({
   messages,
   optimisticTextSends,
+  threadId,
 }: {
   messages: ChatMessage[]
   optimisticTextSends: OptimisticTextSend[]
+  threadId: string
 }) {
   const canonicalClientMessageKeys = new Set(
     messages
@@ -99,7 +106,11 @@ export function mergeOptimisticTextMessages({
       ),
   )
   const visibleOptimisticMessages = optimisticTextSends
-    .filter((send) => !canonicalClientMessageKeys.has(send.clientMessageKey))
+    .filter(
+      (send) =>
+        send.threadId === threadId &&
+        !canonicalClientMessageKeys.has(send.clientMessageKey),
+    )
     .map(toOptimisticChatMessage)
 
   return sortMessagesByTimeline([...messages, ...visibleOptimisticMessages])

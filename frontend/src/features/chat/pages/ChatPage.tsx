@@ -28,6 +28,7 @@ import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPageState } from './chatPageState'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
+import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
 const OFFLINE_RUNTIME_MESSAGE =
@@ -37,8 +38,10 @@ export function ChatPage() {
   const isMountedRef = useRef(false)
   const { refreshSession, user } = useAuthSession()
   const [pageState, setPageState] = useState<ChatPageState>({
+    selectedThreadId: null,
     snapshot: null,
     status: 'loading',
+    threads: [],
   })
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
     null,
@@ -82,58 +85,24 @@ export function ChatPage() {
     [markBrowserOffline],
   )
 
-  const loadInitialChat = useCallback(async () => {
-    setHistoryErrorMessage(null)
-    setPageState((currentState) => ({
-      snapshot: currentState.snapshot,
-      status: 'loading',
-    }))
-
-    try {
-      const snapshot = await getChatMessages({
-        threadId: PRIVATE_CHAT_THREAD_ID,
-      })
-
-      if (!isMountedRef.current) {
-        return
-      }
-
-      markBrowserOnline()
-      setPageState({
-        snapshot,
-        status: 'ready',
-      })
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
-      }
-
-      if (await handleUnauthorizedChatError(error)) {
-        return
-      }
-
-      handleConnectionUnavailableError(error)
-
-      setPageState({
-        errorMessage:
-          error instanceof Error
-            ? error.message
-            : 'Мы не смогли загрузить чат. Попробуйте еще раз.',
-        snapshot: null,
-        status: 'error',
-      })
-    }
-  }, [
+  const { handleSelectThread, loadInitialChat } = useChatThreadSelection({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
+    isMountedRef,
     markBrowserOnline,
-  ])
+    pageState,
+    setHistoryErrorMessage,
+    setPageState,
+    setReplyTarget,
+    setSendErrorMessage,
+  })
 
   async function handleLoadOlderMessages() {
     if (
       !isBrowserOnline ||
       pageState.status !== 'ready' ||
       !pageState.snapshot.activeThread ||
+      !pageState.selectedThreadId ||
       !pageState.snapshot.nextOlderCursor
     ) {
       return
@@ -141,11 +110,12 @@ export function ChatPage() {
 
     setIsLoadingOlder(true)
     setHistoryErrorMessage(null)
+    const threadId = pageState.selectedThreadId
 
     try {
       const olderSnapshot = await getChatMessages({
         beforeMessageId: pageState.snapshot.nextOlderCursor,
-        threadId: pageState.snapshot.activeThread.id,
+        threadId,
       })
 
       if (!isMountedRef.current) {
@@ -162,13 +132,19 @@ export function ChatPage() {
 
       markBrowserOnline()
       setPageState((currentState) => {
-        if (currentState.status !== 'ready') {
+        if (
+          currentState.status !== 'ready' ||
+          currentState.selectedThreadId !== threadId ||
+          olderSnapshot.activeThread?.id !== threadId
+        ) {
           return currentState
         }
 
         return {
           snapshot: mergeOlderMessages(currentState.snapshot, olderSnapshot),
+          selectedThreadId: currentState.selectedThreadId,
           status: 'ready',
+          threads: currentState.threads,
         }
       })
     } catch (error) {
@@ -203,9 +179,15 @@ export function ChatPage() {
     file: File
     replyToMessageId?: number | null
   }) {
-    if (!isBrowserOnline || pageState.status !== 'ready') {
+    if (
+      !isBrowserOnline ||
+      pageState.status !== 'ready' ||
+      !pageState.selectedThreadId
+    ) {
       return false
     }
+
+    const threadId = pageState.selectedThreadId
 
     setIsSending(true)
     setSendErrorMessage(null)
@@ -216,7 +198,7 @@ export function ChatPage() {
         content,
         file,
         replyToMessageId,
-        threadId: PRIVATE_CHAT_THREAD_ID,
+        threadId,
       })
 
       if (!isMountedRef.current) {
@@ -228,8 +210,17 @@ export function ChatPage() {
         return false
       }
 
+      if (sendResult.activeThread?.id !== threadId) {
+        setSendErrorMessage('Не удалось отправить файл. Попробуйте еще раз.')
+        return false
+      }
+
       markBrowserOnline()
       setPageState((currentState) => {
+        if (currentState.selectedThreadId !== threadId) {
+          return currentState
+        }
+
         const currentSnapshot =
           currentState.status === 'ready' ? currentState.snapshot : null
 
@@ -238,7 +229,9 @@ export function ChatPage() {
             currentSnapshot,
             sendResult,
           }),
+          selectedThreadId: currentState.selectedThreadId,
           status: 'ready',
+          threads: currentState.threads,
         }
       })
 
@@ -284,10 +277,11 @@ export function ChatPage() {
 
   const refreshChatSnapshot = useCallback(async () => {
     let latestSnapshot: ChatMessagesSnapshot
+    const threadId = pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID
 
     try {
       latestSnapshot = await getChatMessages({
-        threadId: PRIVATE_CHAT_THREAD_ID,
+        threadId,
       })
     } catch (error) {
       if (await handleUnauthorizedChatError(error)) {
@@ -307,6 +301,10 @@ export function ChatPage() {
 
     markBrowserOnline()
     setPageState((currentState) => {
+      if (currentState.selectedThreadId !== threadId) {
+        return currentState
+      }
+
       if (
         currentState.status === 'ready' &&
         currentState.snapshot.result === 'ready' &&
@@ -317,19 +315,24 @@ export function ChatPage() {
             currentSnapshot: currentState.snapshot,
             realtimeSnapshot: latestSnapshot,
           }),
+          selectedThreadId: currentState.selectedThreadId,
           status: 'ready',
+          threads: currentState.threads,
         }
       }
 
       return {
         snapshot: latestSnapshot,
+        selectedThreadId: currentState.selectedThreadId,
         status: 'ready',
+        threads: currentState.threads,
       }
     })
   }, [
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     markBrowserOnline,
+    pageState.selectedThreadId,
   ])
   const resyncStatus = useChatResumeResync({
     canAttemptResync: isBrowserOnline || navigatorHintIsOnline,
@@ -339,11 +342,16 @@ export function ChatPage() {
   })
 
   const snapshot = pageState.snapshot
+  const selectedThread =
+    pageState.threads.find((thread) => thread.id === pageState.selectedThreadId) ??
+    null
+  const headerThread = snapshot?.activeThread ?? selectedThread
   const realtimeThreadId =
     pageState.status === 'ready' &&
     pageState.snapshot.result === 'ready' &&
-    pageState.snapshot.activeThread
-      ? pageState.snapshot.activeThread.id
+    pageState.snapshot.activeThread &&
+    pageState.selectedThreadId
+      ? pageState.selectedThreadId
       : null
 
   useChatRealtimeConnection({
@@ -356,6 +364,7 @@ export function ChatPage() {
   const isReady = snapshot?.result === 'ready' && Boolean(snapshot.activeThread)
   const canSend =
     pageState.status === 'ready' &&
+    Boolean(pageState.selectedThreadId) &&
     (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
   const shouldRenderTranscript =
     pageState.status === 'ready' &&
@@ -374,21 +383,27 @@ export function ChatPage() {
       pageState,
       replyTarget,
       setPageState,
-      threadId: PRIVATE_CHAT_THREAD_ID,
+      threadId: pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID,
     })
   const visibleMessages =
-    pageState.status === 'ready'
+    pageState.status === 'ready' && pageState.selectedThreadId
       ? mergeOptimisticTextMessages({
           messages: pageState.snapshot.messages,
           optimisticTextSends,
+          threadId: pageState.selectedThreadId,
         })
       : []
 
   return (
     <>
       <ChatHeader
-        activeThread={snapshot?.activeThread ?? null}
+        activeThread={headerThread}
         isReady={isReady}
+        onSelectThread={(threadId) => {
+          void handleSelectThread(threadId)
+        }}
+        selectedThreadId={pageState.selectedThreadId}
+        threads={pageState.threads}
       />
       <ChatRuntimeAlerts
         isOnline={isBrowserOnline}

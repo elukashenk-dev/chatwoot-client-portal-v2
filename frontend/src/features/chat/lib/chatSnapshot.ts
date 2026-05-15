@@ -83,7 +83,7 @@ export function isFirstConversationBootstrapReady(
   return (
     snapshot.result === 'not_ready' &&
     snapshot.reason === 'conversation_missing' &&
-    snapshot.linkedContact !== null
+    snapshot.activeThread !== null
   )
 }
 
@@ -109,7 +109,6 @@ export function buildSnapshotFromSendResult({
   return {
     hasMoreOlder: currentSnapshot?.hasMoreOlder ?? false,
     activeThread: sendResult.activeThread,
-    linkedContact: sendResult.linkedContact,
     messages: sendResult.sentMessage
       ? appendSentMessage(
           currentSnapshot?.messages ?? [],

@@ -18,6 +18,13 @@ const privateThread = {
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
 
+function createThreadsResponse() {
+  return {
+    activeThreadId: privateThread.id,
+    threads: [privateThread],
+  }
+}
+
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -54,13 +61,11 @@ function createReadySnapshot(
 ): ChatMessagesSnapshot {
   return {
     hasMoreOlder: false,
-    linkedContact: {
-      id: 42,
-    },
     messages: [
       {
         attachments: [],
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Здравствуйте, вижу ваше обращение.',
         contentType: 'text',
         createdAt: '2026-04-21T09:12:00.000Z',
@@ -104,6 +109,7 @@ describe('ChatPage optimistic text send', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockReturnValueOnce(sendResponse.promise)
 
@@ -130,15 +136,13 @@ describe('ChatPage optimistic text send', () => {
     await act(async () => {
       sendResponse.resolve(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Новое сообщение',
             contentType: 'text',
             createdAt: '2026-04-21T09:30:00.000Z',
@@ -154,7 +158,7 @@ describe('ChatPage optimistic text send', () => {
       expect(screen.queryByLabelText('Отправляется')).not.toBeInTheDocument()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       clientMessageKey: string
       content: string
@@ -173,6 +177,7 @@ describe('ChatPage optimistic text send', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(
         createJsonResponse(
@@ -187,15 +192,13 @@ describe('ChatPage optimistic text send', () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Повтор после сбоя',
             contentType: 'text',
             createdAt: '2026-04-21T09:31:00.000Z',
@@ -230,10 +233,10 @@ describe('ChatPage optimistic text send', () => {
     expect(screen.getByText('Повтор после сбоя')).toBeInTheDocument()
 
     const firstRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[2]?.[1]?.body),
+      String(fetchMock.mock.calls[3]?.[1]?.body),
     ) as { clientMessageKey: string }
     const retryRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[3]?.[1]?.body),
+      String(fetchMock.mock.calls[4]?.[1]?.body),
     ) as { clientMessageKey: string }
 
     expect(retryRequestBody.clientMessageKey).toBe(

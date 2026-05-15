@@ -61,7 +61,7 @@ function clampValue(value: number, min: number, max: number) {
 
 function isLocalTextSend(message: ChatMessage) {
   return (
-    message.direction === 'outgoing' &&
+    message.authorRole === 'current_user' &&
     message.attachments.length === 0 &&
     Boolean(message.clientMessageKey) &&
     (message.status === 'sending' || message.status === 'failed')
@@ -104,7 +104,7 @@ function MessageStatusIcon({ message }: { message: ChatMessage }) {
 }
 
 function BubbleMetadata({ message }: { message: ChatMessage }) {
-  const isOutgoing = message.direction === 'outgoing'
+  const isOutgoing = message.authorRole === 'current_user'
   const timestamp = formatMessageMetadataTimestamp(message.createdAt)
 
   return (
@@ -227,14 +227,15 @@ export function MessageBubble({
   onReplyToMessage,
   onRetryTextMessage,
 }: MessageBubbleProps) {
-  const isOutgoing = message.direction === 'outgoing'
+  const isOutgoing = message.authorRole === 'current_user'
+  const hasAgentAvatarSlot = message.authorRole === 'agent'
   const canReplyToMessage = !isLocalTextSend(message)
   const [isSwipeActive, setIsSwipeActive] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeGestureRef = useRef<SwipeGesture>(EMPTY_SWIPE_GESTURE)
   const swipeOffsetRef = useRef(0)
   const shouldRenderAgentAvatar =
-    !isOutgoing && shouldRenderAuthorName(blockPosition)
+    hasAgentAvatarSlot && shouldRenderAuthorName(blockPosition)
   const radiusClassName = getBubbleRadiusClass({
     blockPosition,
     isOutgoing,
@@ -361,7 +362,7 @@ export function MessageBubble({
       )}
       data-message-id={message.id}
     >
-      {!isOutgoing ? (
+      {hasAgentAvatarSlot ? (
         <AgentAvatar
           avatarUrl={message.authorAvatarUrl}
           authorName={message.authorName}
@@ -373,7 +374,9 @@ export function MessageBubble({
           'relative min-w-0',
           isOutgoing
             ? 'max-w-[86%] sm:max-w-[78%]'
-            : 'max-w-[calc(86%_-_2.5rem)] sm:max-w-[calc(78%_-_2.75rem)]',
+            : hasAgentAvatarSlot
+              ? 'max-w-[calc(86%_-_2.5rem)] sm:max-w-[calc(78%_-_2.75rem)]'
+              : 'max-w-[86%] sm:max-w-[78%]',
         )}
       >
         <SwipeReplyIndicator swipeOffset={swipeOffset} />

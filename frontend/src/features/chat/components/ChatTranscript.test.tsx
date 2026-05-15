@@ -10,6 +10,7 @@ function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
   return {
     attachments: [],
     authorName: 'Вы',
+    authorRole: 'current_user',
     content: 'Сообщение',
     contentType: 'text',
     createdAt: '2026-04-21T10:00:00',
@@ -181,6 +182,7 @@ describe('ChatTranscript', () => {
       createMessage({
         authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Первый ответ агента',
         createdAt: '2026-04-21T10:00:00',
         direction: 'incoming',
@@ -189,6 +191,7 @@ describe('ChatTranscript', () => {
       createMessage({
         authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Последний ответ агента',
         createdAt: '2026-04-21T10:01:00',
         direction: 'incoming',
@@ -230,10 +233,30 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.3rem]')
   })
 
+  it('renders a company member header without an agent avatar', () => {
+    const { container } = renderTranscript([
+      createMessage({
+        authorName: 'Иван Петров',
+        authorRole: 'company_member',
+        content: 'Сообщение из общего чата',
+        direction: 'incoming',
+        id: 1,
+      }),
+    ])
+
+    expect(getMessageHeader(container, 1)).toHaveTextContent('Иван Петров')
+    expect(container.querySelector('[data-agent-avatar]')).toBeNull()
+    expect(getBubble(container, 1)).toHaveClass(
+      'chat-incoming-surface',
+      'text-slate-700',
+    )
+  })
+
   it('renders reply previews inside bubbles without persistent reply buttons', () => {
     renderTranscript([
       createMessage({
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Подпишите акт, пожалуйста.',
         direction: 'incoming',
         id: 1,

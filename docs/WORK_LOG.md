@@ -126,6 +126,12 @@
   `tenant + threadId`, webhook routing читает только `portal_chat_threads`,
   fanout пересобирает snapshot per subscriber и пропускает revoked access;
   `F-CHAT-RT-002` и `F-CHAT-WEBHOOK-003` закрыты.
+- Task 7 frontend thread runtime завершен: portal UI загружает
+  `GET /api/chat/threads`, переключает `Личный чат` и company threads в левом
+  меню, а messages/send/attachment/realtime работают через selected `threadId`.
+- Task 7 проверки: targeted chat tests `40/40`, frontend typecheck/build,
+  root lint/code-health и `git diff --check` прошли; Playwright e2e не запускался,
+  потому что local services для browser runtime validation запускает пользователь.
 
 ## Current Baseline
 
@@ -143,6 +149,6 @@
 
 ## Recommended Next Step
 
-- Реализовать Task 7 основного thread plan: frontend thread switcher и
-  thread-based chat runtime, чтобы UI мог переключать `Личный чат` и company
-  threads без public Chatwoot conversation authority.
+- Перейти к Task 8 основного thread plan: полная verification/docs update;
+  если local services уже подняты пользователем, сначала прогнать Playwright e2e
+  для browser runtime validation.

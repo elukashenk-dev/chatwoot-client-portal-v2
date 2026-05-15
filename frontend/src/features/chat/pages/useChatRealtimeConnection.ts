@@ -30,9 +30,21 @@ export function useChatRealtimeConnection({
         }
 
         markBrowserOnline()
-        setPageState({
-          snapshot: realtimeSnapshot,
-          status: 'ready',
+        setPageState((currentState) => {
+          if (
+            currentState.selectedThreadId !== threadId ||
+            (realtimeSnapshot.activeThread !== null &&
+              realtimeSnapshot.activeThread.id !== threadId)
+          ) {
+            return currentState
+          }
+
+          return {
+            snapshot: realtimeSnapshot,
+            selectedThreadId: currentState.selectedThreadId,
+            status: 'ready',
+            threads: currentState.threads,
+          }
         })
       },
       onMessages: (realtimeSnapshot) => {
@@ -42,7 +54,12 @@ export function useChatRealtimeConnection({
 
         markBrowserOnline()
         setPageState((currentState) => {
-          if (currentState.status !== 'ready') {
+          if (
+            currentState.status !== 'ready' ||
+            currentState.selectedThreadId !== threadId ||
+            (realtimeSnapshot.activeThread !== null &&
+              realtimeSnapshot.activeThread.id !== threadId)
+          ) {
             return currentState
           }
 
@@ -51,7 +68,9 @@ export function useChatRealtimeConnection({
               currentSnapshot: currentState.snapshot,
               realtimeSnapshot,
             }),
+            selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
+            threads: currentState.threads,
           }
         })
       },

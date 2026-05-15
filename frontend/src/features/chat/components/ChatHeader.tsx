@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
+import { cn } from '../../../shared/lib/cn'
 import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
@@ -23,6 +24,9 @@ import {
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
   isReady: boolean
+  onSelectThread: (threadId: string) => void
+  selectedThreadId: string | null
+  threads: ChatThreadSummary[]
 }
 
 function focusElement(element: HTMLElement | null) {
@@ -31,7 +35,13 @@ function focusElement(element: HTMLElement | null) {
   }
 }
 
-export function ChatHeader({ activeThread, isReady }: ChatHeaderProps) {
+export function ChatHeader({
+  activeThread,
+  isReady,
+  onSelectThread,
+  selectedThreadId,
+  threads,
+}: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
   const { tenant } = useTenantIdentity()
@@ -171,6 +181,8 @@ export function ChatHeader({ activeThread, isReady }: ChatHeaderProps) {
     : 'Команда поддержки'
   const threadTitle = activeThread?.title ?? 'Личный чат'
   const threadSubtitle = activeThread?.subtitle ?? supportTeamName
+  const availableThreads =
+    threads.length > 0 ? threads : activeThread ? [activeThread] : []
   const tenantMonogram = tenant
     ? createTenantMonogram(tenant.displayName)
     : 'ЛК'
@@ -208,16 +220,36 @@ export function ChatHeader({ activeThread, isReady }: ChatHeaderProps) {
               <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
                 Чаты
               </div>
-              <button
-                aria-current="page"
-                className="flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left font-medium text-brand-800"
-                disabled
-                role="menuitem"
-                type="button"
-              >
-                <CheckIcon className="h-4 w-4 shrink-0" />
-                <span className="min-w-0 truncate">{threadTitle}</span>
-              </button>
+              {availableThreads.map((thread) => {
+                const isSelected = thread.id === selectedThreadId
+
+                return (
+                  <button
+                    aria-current={isSelected ? 'page' : undefined}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left transition',
+                      isSelected
+                        ? 'font-medium text-brand-800'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100',
+                    )}
+                    disabled={isSelected}
+                    key={thread.id}
+                    onClick={() => {
+                      onSelectThread(thread.id)
+                      setIsNavMenuOpen(false)
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {isSelected ? (
+                      <CheckIcon className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <span className="h-4 w-4 shrink-0" />
+                    )}
+                    <span className="min-w-0 truncate">{thread.title}</span>
+                  </button>
+                )
+              })}
               <button
                 aria-disabled="true"
                 className="mt-1 flex w-full items-center justify-between rounded-[0.6rem] px-3 py-2 text-left text-slate-500"

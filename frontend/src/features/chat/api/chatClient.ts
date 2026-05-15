@@ -1,4 +1,8 @@
-import type { ChatMessagesSnapshot, ChatSendResult } from '../types'
+import type {
+  ChatMessagesSnapshot,
+  ChatSendResult,
+  ChatThreadsResponse,
+} from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const NETWORK_ERROR_MESSAGE =
@@ -120,6 +124,10 @@ export async function getChatMessages({
   return request<ChatMessagesSnapshot>(
     `/chat/messages${query ? `?${query}` : ''}`,
   )
+}
+
+export async function getChatThreads() {
+  return request<ChatThreadsResponse>('/chat/threads')
 }
 
 export async function sendChatMessage({

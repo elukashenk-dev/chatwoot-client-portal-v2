@@ -62,10 +62,11 @@ export function useOptimisticTextSend({
   >([])
 
   const markOptimisticTextSendFailed = useCallback(
-    (clientMessageKey: string, errorMessage: string) => {
+    (clientMessageKey: string, threadId: string, errorMessage: string) => {
       setOptimisticTextSends((currentSends) =>
         currentSends.map((send) =>
-          send.clientMessageKey === clientMessageKey
+          send.clientMessageKey === clientMessageKey &&
+          send.threadId === threadId
             ? {
                 ...send,
                 errorMessage,
@@ -85,7 +86,7 @@ export function useOptimisticTextSend({
           clientMessageKey: optimisticSend.clientMessageKey,
           content: optimisticSend.content,
           replyToMessageId: optimisticSend.replyToMessageId,
-          threadId,
+          threadId: optimisticSend.threadId,
         })
 
         if (!isMountedRef.current) {
@@ -95,6 +96,16 @@ export function useOptimisticTextSend({
         if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
           markOptimisticTextSendFailed(
             optimisticSend.clientMessageKey,
+            optimisticSend.threadId,
+            DEFAULT_TEXT_SEND_ERROR_MESSAGE,
+          )
+          return false
+        }
+
+        if (sendResult.activeThread?.id !== optimisticSend.threadId) {
+          markOptimisticTextSendFailed(
+            optimisticSend.clientMessageKey,
+            optimisticSend.threadId,
             DEFAULT_TEXT_SEND_ERROR_MESSAGE,
           )
           return false
@@ -103,10 +114,16 @@ export function useOptimisticTextSend({
         markBrowserOnline()
         setOptimisticTextSends((currentSends) =>
           currentSends.filter(
-            (send) => send.clientMessageKey !== optimisticSend.clientMessageKey,
+            (send) =>
+              send.clientMessageKey !== optimisticSend.clientMessageKey ||
+              send.threadId !== optimisticSend.threadId,
           ),
         )
         setPageState((currentState) => {
+          if (currentState.selectedThreadId !== optimisticSend.threadId) {
+            return currentState
+          }
+
           const currentSnapshot =
             currentState.status === 'ready' ? currentState.snapshot : null
 
@@ -115,7 +132,9 @@ export function useOptimisticTextSend({
               currentSnapshot,
               sendResult,
             }),
+            selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
+            threads: currentState.threads,
           }
         })
 
@@ -132,6 +151,7 @@ export function useOptimisticTextSend({
         handleConnectionUnavailableError(error)
         markOptimisticTextSendFailed(
           optimisticSend.clientMessageKey,
+          optimisticSend.threadId,
           getTextSendErrorMessage(error),
         )
 
@@ -145,7 +165,6 @@ export function useOptimisticTextSend({
       markBrowserOnline,
       markOptimisticTextSendFailed,
       setPageState,
-      threadId,
     ],
   )
 
@@ -162,13 +181,16 @@ export function useOptimisticTextSend({
         now: new Date(),
         replyTarget,
         replyToMessageId: replyToMessageId ?? null,
+        threadId,
       })
 
       onTextSendStarted?.()
       optimisticMessageIdRef.current -= 1
       setOptimisticTextSends((currentSends) => [
         ...currentSends.filter(
-          (send) => send.clientMessageKey !== clientMessageKey,
+          (send) =>
+            send.clientMessageKey !== clientMessageKey ||
+            send.threadId !== threadId,
         ),
         optimisticSend,
       ])
@@ -183,6 +205,7 @@ export function useOptimisticTextSend({
       pageState,
       replyTarget,
       sendOptimisticText,
+      threadId,
     ],
   )
 
@@ -193,7 +216,9 @@ export function useOptimisticTextSend({
       }
 
       const optimisticSend = optimisticTextSends.find(
-        (send) => send.clientMessageKey === clientMessageKey,
+        (send) =>
+          send.clientMessageKey === clientMessageKey &&
+          send.threadId === threadId,
       )
 
       if (!optimisticSend || optimisticSend.status === 'sending') {
@@ -208,12 +233,19 @@ export function useOptimisticTextSend({
 
       setOptimisticTextSends((currentSends) =>
         currentSends.map((send) =>
-          send.clientMessageKey === clientMessageKey ? retrySend : send,
+          send.clientMessageKey === clientMessageKey && send.threadId === threadId
+            ? retrySend
+            : send,
         ),
       )
       void sendOptimisticText(retrySend)
     },
-    [isBrowserOnline, optimisticTextSends, pageState, sendOptimisticText],
+    [
+      isBrowserOnline,
+      optimisticTextSends,
+      sendOptimisticText,
+      threadId,
+    ],
   )
 
   return {

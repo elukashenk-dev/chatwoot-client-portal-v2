@@ -69,6 +69,20 @@ function createAuthenticatedUserResponse() {
   })
 }
 
+const privateThread = {
+  id: 'private:me',
+  subtitle: 'Только вы и поддержка',
+  title: 'Личный чат',
+  type: 'private',
+} satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
+function createThreadsResponse() {
+  return {
+    activeThreadId: privateThread.id,
+    threads: [privateThread],
+  }
+}
+
 function createUnauthorizedSessionResponse() {
   return createJsonResponse(
     {
@@ -86,13 +100,11 @@ function createReadySnapshot(
 ): ChatMessagesSnapshot {
   return {
     hasMoreOlder: false,
-    linkedContact: {
-      id: 42,
-    },
     messages: [
       {
         attachments: [],
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Здравствуйте, вижу ваше обращение.',
         contentType: 'text',
         createdAt: '2026-04-21T09:12:00.000Z',
@@ -102,12 +114,7 @@ function createReadySnapshot(
       },
     ],
     nextOlderCursor: null,
-    activeThread: {
-      id: 'private:me',
-      subtitle: 'Только вы и поддержка',
-      title: 'Личный чат',
-      type: 'private',
-    },
+    activeThread: privateThread,
     reason: 'none',
     result: 'ready',
     ...overrides,
@@ -149,6 +156,7 @@ describe('ChatPage runtime hardening', () => {
   it('shows an offline state and disables composer actions while the browser is offline', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
 
     renderChatRoute()
@@ -183,6 +191,7 @@ describe('ChatPage runtime hardening', () => {
   it('resyncs the chat snapshot when the browser comes back online', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -190,6 +199,7 @@ describe('ChatPage runtime hardening', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Последнее сохраненное сообщение.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:12:00.000Z',
@@ -208,6 +218,7 @@ describe('ChatPage runtime hardening', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Последнее сохраненное сообщение.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:12:00.000Z',
@@ -218,6 +229,7 @@ describe('ChatPage runtime hardening', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Новый ответ после восстановления соединения.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:17:00.000Z',
@@ -252,7 +264,7 @@ describe('ChatPage runtime hardening', () => {
       await screen.findByText('Новый ответ после восстановления соединения.'),
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
@@ -266,6 +278,7 @@ describe('ChatPage runtime hardening', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
@@ -304,6 +317,7 @@ describe('ChatPage runtime hardening', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(
@@ -313,6 +327,7 @@ describe('ChatPage runtime hardening', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Здравствуйте, вижу ваше обращение.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:12:00.000Z',
@@ -323,6 +338,7 @@ describe('ChatPage runtime hardening', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Связь вернулась, чат снова обновляется.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:16:00.000Z',
@@ -376,6 +392,7 @@ describe('ChatPage runtime hardening', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
@@ -405,6 +422,7 @@ describe('ChatPage runtime hardening', () => {
             {
               attachments: [],
               authorName: 'Ольга Support',
+              authorRole: 'agent',
               content: 'Realtime снова доставляет сообщения.',
               contentType: 'text',
               createdAt: '2026-04-21T09:18:00.000Z',
@@ -433,6 +451,7 @@ describe('ChatPage runtime hardening', () => {
   it('returns to login when resume resync hits an expired backend session', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(createUnauthorizedSessionResponse())
       .mockResolvedValueOnce(createUnauthorizedSessionResponse())
@@ -465,7 +484,7 @@ describe('ChatPage runtime hardening', () => {
       ),
     ).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/auth/me',
       expect.objectContaining({
         credentials: 'include',

@@ -2749,7 +2749,7 @@ git commit -m "feat: publish realtime by chat thread"
 - Modify: `frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx`
 - Modify: `frontend/src/features/chat/components/ChatTranscript.test.tsx`
 
-- [ ] **Step 1: Update frontend contract tests first**
+- [x] **Step 1: Update frontend contract tests first**
 
 In `frontend/src/features/chat/pages/ChatPage.test.tsx`, update mocks so initial load calls:
 
@@ -2785,7 +2785,7 @@ it('switches to a company thread from the header menu and reloads transcript by 
 })
 ```
 
-- [ ] **Step 2: Run frontend chat page tests to verify they fail**
+- [x] **Step 2: Run frontend chat page tests to verify they fail**
 
 Run:
 
@@ -2795,7 +2795,7 @@ pnpm --dir frontend exec vitest run src/features/chat/pages/ChatPage.test.tsx
 
 Expected: FAIL because frontend still uses `primaryConversationId`.
 
-- [ ] **Step 3: Update frontend types**
+- [x] **Step 3: Update frontend types**
 
 Modify `frontend/src/features/chat/types.ts`:
 
@@ -2819,7 +2819,7 @@ export type ChatMessageAuthorRole = 'agent' | 'company_member' | 'current_user'
 
 Remove `ChatPrimaryConversation` from public snapshot types. Add `activeThread`.
 
-- [ ] **Step 4: Update frontend API client**
+- [x] **Step 4: Update frontend API client**
 
 Modify `frontend/src/features/chat/api/chatClient.ts`:
 
@@ -2848,7 +2848,7 @@ export async function getChatMessages({
 
 Change `sendChatMessage` and `sendChatAttachment` to require `threadId`.
 
-- [ ] **Step 5: Update realtime client**
+- [x] **Step 5: Update realtime client**
 
 Modify `frontend/src/features/chat/api/chatRealtimeClient.ts`:
 
@@ -2870,7 +2870,7 @@ function buildRealtimeUrl(threadId: string) {
 }
 ```
 
-- [ ] **Step 6: Update chat page state**
+- [x] **Step 6: Update chat page state**
 
 Modify `frontend/src/features/chat/pages/chatPageState.ts`:
 
@@ -2899,7 +2899,7 @@ export type ChatPageState =
     }
 ```
 
-- [ ] **Step 7: Update ChatPage runtime**
+- [x] **Step 7: Update ChatPage runtime**
 
 In `frontend/src/features/chat/pages/ChatPage.tsx`:
 
@@ -2943,7 +2943,7 @@ async function handleSelectThread(threadId: string) {
 }
 ```
 
-- [ ] **Step 8: Update header menu**
+- [x] **Step 8: Update header menu**
 
 Modify `frontend/src/features/chat/components/ChatHeader.tsx` props:
 
@@ -2989,7 +2989,7 @@ Header subtitle should use:
 const subtitleName = activeThread?.title ?? supportTeamName
 ```
 
-- [ ] **Step 9: Update transcript bubble alignment**
+- [x] **Step 9: Update transcript bubble alignment**
 
 Modify `MessageBubble.tsx`:
 
@@ -3003,7 +3003,7 @@ const shouldRenderAuthorHeader =
 
 Render `AgentNameHeader` for both `agent` and `company_member`, but avatar only for `agent`.
 
-- [ ] **Step 10: Run frontend chat tests**
+- [x] **Step 10: Run frontend chat tests**
 
 Run:
 
@@ -3013,7 +3013,7 @@ pnpm --dir frontend exec vitest run src/features/chat/pages/ChatPage.test.tsx sr
 
 Expected: PASS.
 
-- [ ] **Step 11: Commit Task 7**
+- [x] **Step 11: Commit Task 7**
 
 Run:
 

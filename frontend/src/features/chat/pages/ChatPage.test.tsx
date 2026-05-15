@@ -18,6 +18,14 @@ const privateThread = {
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
 
+function createThreadsResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    activeThreadId: privateThread.id,
+    threads: [privateThread],
+    ...overrides,
+  }
+}
+
 class MockEventSource {
   static instances: MockEventSource[] = []
 
@@ -114,13 +122,11 @@ function createReadySnapshot(
 ): ChatMessagesSnapshot {
   return {
     hasMoreOlder: false,
-    linkedContact: {
-      id: 42,
-    },
     messages: [
       {
         attachments: [],
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Здравствуйте, вижу ваше обращение.',
         contentType: 'text',
         createdAt: '2026-04-21T09:12:00.000Z',
@@ -140,6 +146,7 @@ function createReadySnapshot(
           },
         ],
         authorName: 'Вы',
+        authorRole: 'current_user',
         content: 'Спасибо, прикладываю файл.',
         contentType: 'text',
         createdAt: '2026-04-21T09:16:00.000Z',
@@ -214,6 +221,7 @@ describe('ChatPage', () => {
   it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
 
     renderChatRoute()
@@ -248,7 +256,7 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
@@ -287,12 +295,15 @@ describe('ChatPage', () => {
     })
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/chat/messages?threadId=private%3Ame',
+      '/api/chat/threads',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
       }),
     )
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('/chat/messages')),
+    ).toBe(false)
     expect(
       fetchMock.mock.calls.some(([url]) => String(url).includes('company%3A')),
     ).toBe(false)
@@ -303,6 +314,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
 
     renderChatRoute()
@@ -337,6 +349,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -345,6 +358,7 @@ describe('ChatPage', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Последнее сообщение.',
                 contentType: 'text',
                 createdAt: '2026-04-21T10:00:00.000Z',
@@ -365,6 +379,7 @@ describe('ChatPage', () => {
               {
                 attachments: [],
                 authorName: 'Вы',
+                authorRole: 'current_user',
                 content: 'Ранее отправленное сообщение.',
                 contentType: 'text',
                 createdAt: '2026-04-20T08:00:00.000Z',
@@ -395,7 +410,7 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Последнее сообщение.')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
       expect.objectContaining({
         credentials: 'include',
@@ -409,6 +424,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -417,6 +433,7 @@ describe('ChatPage', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Текущее сообщение остается на экране.',
                 contentType: 'text',
                 createdAt: '2026-04-21T10:00:00.000Z',
@@ -468,6 +485,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -476,6 +494,7 @@ describe('ChatPage', () => {
               {
                 attachments: [],
                 authorName: 'Ольга Support',
+                authorRole: 'agent',
                 content: 'Готовая история остается видимой.',
                 contentType: 'text',
                 createdAt: '2026-04-21T10:00:00.000Z',
@@ -495,7 +514,7 @@ describe('ChatPage', () => {
             messages: [],
             nextOlderCursor: null,
             activeThread: null,
-            reason: 'primary_conversation_missing',
+            reason: 'thread_invalid',
             result: 'not_ready',
           }),
         ),
@@ -528,18 +547,17 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Отвечаю на вопрос',
             contentType: 'text',
             createdAt: '2026-04-21T09:32:00.000Z',
@@ -594,7 +612,7 @@ describe('ChatPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       replyToMessageId: number
     }
@@ -613,12 +631,10 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
@@ -634,6 +650,7 @@ describe('ChatPage', () => {
               },
             ],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Черновик остается',
             contentType: 'text',
             createdAt: '2026-04-21T09:35:00.000Z',
@@ -668,12 +685,12 @@ describe('ChatPage', () => {
       expect(textarea).toHaveFocus()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -696,12 +713,10 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
@@ -717,6 +732,7 @@ describe('ChatPage', () => {
               },
             ],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: null,
             contentType: 'text',
             createdAt: '2026-04-21T09:36:00.000Z',
@@ -749,12 +765,12 @@ describe('ChatPage', () => {
     expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
     expect(stopTrack).toHaveBeenCalledTimes(1)
 
-    const [, requestOptions] = fetchMock.mock.calls[2] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -774,6 +790,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
       .mockResolvedValueOnce(
         createJsonResponse(
@@ -816,7 +833,7 @@ describe('ChatPage', () => {
     expect(
       screen.queryByText('Голосовая запись недоступна в этом браузере.'),
     ).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 
   it('allows the first text send to bootstrap a conversation without a selected conversation id', async () => {
@@ -824,12 +841,10 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
-            linkedContact: {
-              id: 42,
-            },
             messages: [],
             activeThread: privateThread,
             reason: 'conversation_missing',
@@ -839,15 +854,13 @@ describe('ChatPage', () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          linkedContact: {
-            id: 42,
-          },
           activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Первое сообщение',
             contentType: 'text',
             createdAt: '2026-04-21T09:32:00.000Z',
@@ -874,7 +887,7 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
 
     const requestBody = JSON.parse(
-      String(fetchMock.mock.calls[2]?.[1]?.body),
+      String(fetchMock.mock.calls[3]?.[1]?.body),
     ) as {
       threadId?: string
     }
@@ -887,6 +900,7 @@ describe('ChatPage', () => {
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -895,6 +909,7 @@ describe('ChatPage', () => {
               {
                 attachments: [],
                 authorName: 'Вы',
+                authorRole: 'current_user',
                 content: 'Старое сообщение остается.',
                 contentType: 'text',
                 createdAt: '2026-04-21T09:12:00.000Z',
@@ -931,6 +946,7 @@ describe('ChatPage', () => {
             {
               attachments: [],
               authorName: 'Ольга Support',
+              authorRole: 'agent',
               content: 'Новый ответ без ручного обновления.',
               contentType: 'text',
               createdAt: '2026-04-21T09:17:00.000Z',

@@ -5,22 +5,36 @@ export type ChatContextReason =
   | 'contact_link_missing'
   | 'conversation_mapping_unavailable'
   | 'conversation_missing'
-  | 'primary_conversation_missing'
+  | 'thread_access_denied'
+  | 'thread_invalid'
 
 export type ChatContextResult = 'not_ready' | 'ready' | 'unavailable'
 
-export type ChatLinkedContact = {
-  id: number
-}
-
 export const PRIVATE_CHAT_THREAD_ID = 'private:me'
 
-export type ChatThreadSummary = {
-  id: typeof PRIVATE_CHAT_THREAD_ID
-  subtitle: string
-  title: string
-  type: 'private'
+export type ChatThreadSummary =
+  | {
+      id: typeof PRIVATE_CHAT_THREAD_ID
+      subtitle: string
+      title: string
+      type: 'private'
+    }
+  | {
+      id: `company:${number}`
+      subtitle: string
+      title: string
+      type: 'company'
+    }
+
+export type ChatThreadsResponse = {
+  activeThreadId: typeof PRIVATE_CHAT_THREAD_ID
+  threads: ChatThreadSummary[]
 }
+
+export type ChatMessageAuthorRole =
+  | 'agent'
+  | 'company_member'
+  | 'current_user'
 
 export type ChatAttachment = {
   fileSize: number | null
@@ -43,6 +57,7 @@ export type ChatMessage = {
   attachments: ChatAttachment[]
   authorAvatarUrl?: string | null
   authorName: string
+  authorRole: ChatMessageAuthorRole
   clientMessageKey?: string | null
   content: string | null
   contentType: string
@@ -56,7 +71,6 @@ export type ChatMessage = {
 export type ChatMessagesSnapshot = {
   activeThread: ChatThreadSummary | null
   hasMoreOlder: boolean
-  linkedContact: ChatLinkedContact | null
   messages: ChatMessage[]
   nextOlderCursor: number | null
   reason: ChatContextReason
@@ -65,7 +79,6 @@ export type ChatMessagesSnapshot = {
 
 export type ChatSendResult = {
   activeThread: ChatThreadSummary | null
-  linkedContact: ChatLinkedContact | null
   reason: ChatContextReason
   result: ChatContextResult
   sentMessage: ChatMessage | null
