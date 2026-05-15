@@ -71,6 +71,13 @@
       "when": 1778841436632,
       "tag": "0009_unusual_wraith",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778851540987,
+      "tag": "0010_illegal_lady_ursula",
+      "breakpoints": true
     }
   ]
 }

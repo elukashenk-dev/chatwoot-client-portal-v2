@@ -101,6 +101,14 @@
   сериализуется tenant-aware advisory lock по target Chatwoot contact, внутри
   lock выполняется повторный resolve перед Chatwoot create; thread plan требует
   такой же lock/re-read contract для будущих company threads.
+- Chat thread rollout gates зафиксированы: `F-CHAT-THREAD-005` закрывать перед
+  company send/author formatting, `F-CHAT-RT-002` перед company realtime,
+  `F-CHAT-WEBHOOK-003` перед webhook routing/recovery; остальные implementation
+  slices идут по основному thread plan.
+- Task 2 thread persistence завершен: добавлена таблица `portal_chat_threads`,
+  migration `0010` с backfill private threads из legacy mappings, nullable
+  `portal_chat_thread_id`/author snapshot для send ledger и repository layer для
+  private/company thread records.
 
 ## Current Baseline
 
@@ -118,7 +126,7 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-005`: нормализовать Chatwoot-visible author prefix для
-  будущих company messages, чтобы multiline/long/empty display names не ломали
-  формат сообщений в админке Chatwoot. Company sends/realtime не включать до
-  закрытия оставшихся chat-thread findings.
+- Реализовать следующий slice основного thread plan: обновить текущий
+  `chat-threads` listing service/route так, чтобы он использовал
+  `portal_chat_threads` repository для private/company thread records. Company
+  send/formatting/realtime/webhook routing пока не включать.

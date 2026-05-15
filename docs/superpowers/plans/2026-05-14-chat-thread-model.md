@@ -202,10 +202,16 @@ the safe sequence is:
 4. Stop accepting browser-selected `primaryConversationId` only after the
    `private:me` thread path is verified.
 5. Add company threads only after private thread compatibility passes.
-6. Treat `F-CHAT-SEC-001`, `F-CHAT-THREAD-006` and
-   `F-CHAT-WEBHOOK-003` as company-thread rollout gates: authenticated send rate
-   limiting, lazy bootstrap concurrency and webhook mapping ownership must be
-   closed before the affected company-thread behavior is enabled.
+6. Close findings only as rollout gates for the concrete slice they protect,
+   not as a separate up-front queue. Current sequencing:
+   - before company send / Chatwoot-visible author formatting: close
+     `F-CHAT-THREAD-005`;
+   - before company realtime fanout: close `F-CHAT-RT-002`;
+   - before webhook routing / recovery changes: close `F-CHAT-WEBHOOK-003`.
+7. Already-closed foundational gates remain part of the baseline:
+   `F-CHAT-SEC-001`, `F-CHAT-THREAD-001`, `F-CHAT-THREAD-006`,
+   `F-CHAT-THREAD-002`, `F-CHAT-THREAD-003`, `F-CHAT-THREAD-004` and
+   `F-CHAT-THREAD-007`.
 
 Security invariant:
 
@@ -745,8 +751,8 @@ git commit -m "feat: validate portal contact attributes"
 **Files:**
 
 - Modify: `backend/src/db/schema.ts`
-- Create via Drizzle: `backend/drizzle/0009_*.sql`
-- Modify via Drizzle: `backend/drizzle/meta/0009_snapshot.json`
+- Create via Drizzle: next numbered `backend/drizzle/00xx_*.sql`
+- Modify via Drizzle: matching `backend/drizzle/meta/00xx_snapshot.json`
 - Modify via Drizzle: `backend/drizzle/meta/_journal.json`
 - Create: `backend/src/modules/chat-threads/repository.ts`
 - Create: `backend/src/modules/chat-threads/repository.test.ts`
@@ -890,15 +896,23 @@ authorDisplayNameSnapshot: text('author_display_name_snapshot'),
 ```
 
 The send ledger unique scope must stay user-aware after moving from
-`primaryConversationId` to `portalChatThreadId`:
+`primaryConversationId` to `portalChatThreadId`.
+
+During Task 2, keep the existing legacy unique index on
+`tenantId + userId + primaryConversationId + clientMessageKey` because the
+current send path still writes legacy `primaryConversationId`. Add a second
+partial thread-scope unique index that only applies after
+`portalChatThreadId` is set:
 
 ```ts
-uniqueIndex('portal_chat_message_sends_scope_unique').on(
-  table.tenantId,
-  table.portalChatThreadId,
-  table.userId,
-  table.clientMessageKey,
-)
+uniqueIndex('portal_chat_message_sends_thread_scope_unique')
+  .on(
+    table.tenantId,
+    table.portalChatThreadId,
+    table.userId,
+    table.clientMessageKey,
+  )
+  .where(sql`${table.portalChatThreadId} is not null`)
 ```
 
 This prevents two different members of the same company thread from replaying
@@ -918,7 +932,7 @@ Run:
 pnpm --dir backend db:generate
 ```
 
-Expected: new `backend/drizzle/0009_*.sql` plus meta snapshot.
+Expected: new next-numbered `backend/drizzle/00xx_*.sql` plus meta snapshot.
 
 - [ ] **Step 5: Manually inspect and amend migration SQL**
 
@@ -959,11 +973,13 @@ where sends.tenant_id = threads.tenant_id
   and sends.primary_conversation_id = threads.chatwoot_conversation_id;
 ```
 
-After `portal_chat_thread_id` is backfilled, replace the old
-`portal_chat_message_sends_scope_unique` definition with
-`tenant_id + portal_chat_thread_id + user_id + client_message_key`. Do not
-drop `user_id` from the unique scope; it is both the author/audit key and part
-of send idempotency.
+After `portal_chat_thread_id` is backfilled, keep the old
+`portal_chat_message_sends_scope_unique` until Task 5 switches the send
+repository to `portalChatThreadId`. The Task 2 migration must add
+`portal_chat_message_sends_thread_scope_unique` as
+`tenant_id + portal_chat_thread_id + user_id + client_message_key where
+portal_chat_thread_id is not null`. Do not drop `user_id` from either scope; it
+is both the author/audit key and part of send idempotency.
 
 Do not drop `portal_user_chatwoot_conversations` in this task.
 
@@ -2275,6 +2291,9 @@ In `backend/src/modules/chat-messages/repository.ts`:
 - Insert `portalChatThreadId`.
 - Set `authorDisplayNameSnapshot` on insert.
 - Keep setting legacy `primaryConversationId` to the resolved Chatwoot conversation ID until the column is removed in a later cleanup. Public API code must stop accepting browser-selected `primaryConversationId`, but backend persistence can keep this column as an internal compatibility field.
+- After this service/repository switch is complete and verified, the old
+  `portal_chat_message_sends_scope_unique` can be dropped in a cleanup
+  migration. Do not drop it in Task 2 while the legacy send path is still live.
 - Repository tests must prove both sides of idempotency:
   - same `tenantId + portalChatThreadId + userId + clientMessageKey` replays the
     existing send ledger row;

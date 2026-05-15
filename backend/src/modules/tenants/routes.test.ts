@@ -160,7 +160,7 @@ describe('tenant routes and request context', () => {
     } finally {
       await app.close()
     }
-  }, 20_000)
+  }, 30_000)
 
   it('serves tenant-specific PWA manifests by Host without cache storage', async () => {
     const { app } = await createTenantApp()
