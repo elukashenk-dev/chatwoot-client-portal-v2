@@ -142,6 +142,9 @@
   scope перед `MT-9`; создан design/spec для production smoke, read-only audit,
   findings classification, regression safety, bounded refactoring и dead-code
   removal.
+- Для `MT-8.6` создан implementation plan: сначала production provenance/smoke,
+  read-only audit, findings classification и regression safety matrix; конкретные
+  cleanup/refactoring/dead-code slices выбираются только после audit evidence.
 
 ## Current Baseline
 
@@ -159,6 +162,5 @@
 
 ## Recommended Next Step
 
-- Проверить `MT-8.6` spec и написать implementation plan для production smoke,
-  read-only audit, findings classification, regression safety gaps и решения,
-  нужны ли отдельные cleanup/refactoring/dead-code slices перед `MT-9`.
+- Исполнить `MT-8.6` plan: начать с branch/source check, production provenance
+  gate и production/local smoke или явно записанного blocker.
