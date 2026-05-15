@@ -109,6 +109,10 @@
   migration `0010` с backfill private threads из legacy mappings, nullable
   `portal_chat_thread_id`/author snapshot для send ledger и repository layer для
   private/company thread records.
+- Task 3 thread listing persistence завершен: `GET /api/chat/threads` теперь
+  upsert-ит validated private/company records в `portal_chat_threads` через
+  tenant-scoped repository; company send/realtime/webhook routing пока не
+  включены.
 
 ## Current Baseline
 
@@ -126,7 +130,7 @@
 
 ## Recommended Next Step
 
-- Реализовать следующий slice основного thread plan: обновить текущий
-  `chat-threads` listing service/route так, чтобы он использовал
-  `portal_chat_threads` repository для private/company thread records. Company
-  send/formatting/realtime/webhook routing пока не включать.
+- Реализовать Task 4 основного thread plan: thread runtime context и lazy
+  conversation bootstrap поверх `portal_chat_threads`, сохраняя browser contract
+  только через `threadId`; company send/formatting/realtime/webhook routing пока
+  не включать.

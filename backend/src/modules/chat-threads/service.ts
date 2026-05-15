@@ -9,13 +9,19 @@ import {
   assertPortalPersonContactEnabled,
 } from './contactAttributes.js'
 import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
+import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
 
 const CONFIGURATION_ERROR_MESSAGE =
   'Доступ к порталу настроен некорректно. Обратитесь в поддержку.'
 
-type ChatThreadsRepository = Pick<
+type ChatThreadsContactRepository = Pick<
   ChatContextRepository,
   'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
+>
+
+type ChatThreadsPersistenceRepository = Pick<
+  PortalChatThreadsRepository,
+  'upsertCompanyThread' | 'upsertPrivateThread'
 >
 
 type ChatThreadsChatwootClient = Pick<
@@ -43,8 +49,11 @@ export type CurrentUserChatThreads = {
 }
 
 type CreateChatThreadsServiceOptions = {
-  chatContextRepository: ChatThreadsRepository
+  chatContextRepository: ChatThreadsContactRepository
+  chatThreadsRepository: ChatThreadsPersistenceRepository
   chatwootClient: ChatThreadsChatwootClient
+  now?: () => Date
+  portalInboxId: number
 }
 
 function createContactConfigurationError(code: string) {
@@ -71,7 +80,10 @@ function buildCompanyThread(contact: ChatwootContact): PublicChatThreadSummary {
 
 export function createChatThreadsService({
   chatContextRepository,
+  chatThreadsRepository,
   chatwootClient,
+  now = () => new Date(),
+  portalInboxId,
 }: CreateChatThreadsServiceOptions) {
   async function findLinkedPersonContact(userId: number) {
     const contactLink =
@@ -127,7 +139,15 @@ export function createChatThreadsService({
     }): Promise<CurrentUserChatThreads> {
       const personContact = await findLinkedPersonContact(userId)
       const personAttributes = assertPortalPersonContactEnabled(personContact)
+      const refreshedAt = now()
       const threads: PublicChatThreadSummary[] = [buildPrivateThread()]
+
+      await chatThreadsRepository.upsertPrivateThread({
+        chatwootContactId: personContact.id,
+        chatwootInboxId: portalInboxId,
+        now: refreshedAt,
+        userId,
+      })
 
       for (const companyContactId of personAttributes.companyContactIds) {
         const companyContact =
@@ -140,6 +160,13 @@ export function createChatThreadsService({
         }
 
         assertPortalCompanyContactEnabled(companyContact)
+
+        await chatThreadsRepository.upsertCompanyThread({
+          chatwootContactId: companyContact.id,
+          chatwootInboxId: portalInboxId,
+          now: refreshedAt,
+        })
+
         threads.push(buildCompanyThread(companyContact))
       }
 

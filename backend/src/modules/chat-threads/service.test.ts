@@ -73,20 +73,78 @@ function createChatwootClientStub({
   }
 }
 
+function createChatThreadsPersistenceRepositoryStub() {
+  return {
+    upsertCompanyThread: vi.fn().mockResolvedValue({
+      chatwootContactId: 154,
+      chatwootConversationId: null,
+      chatwootInboxId: 9,
+      id: 2,
+      portalUserId: null,
+      threadType: 'company',
+    }),
+    upsertPrivateThread: vi.fn().mockResolvedValue({
+      chatwootContactId: 44,
+      chatwootConversationId: null,
+      chatwootInboxId: 9,
+      id: 1,
+      portalUserId: 7,
+      threadType: 'private',
+    }),
+  }
+}
+
 function createService({
+  chatThreadsRepository = createChatThreadsPersistenceRepositoryStub(),
   chatwootClient = createChatwootClientStub(),
+  now = () => new Date('2026-05-15T10:00:00.000Z'),
+  portalInboxId = 9,
   repository = createRepositoryStub(),
 }: {
+  chatThreadsRepository?: ReturnType<
+    typeof createChatThreadsPersistenceRepositoryStub
+  >
   chatwootClient?: ReturnType<typeof createChatwootClientStub>
+  now?: () => Date
+  portalInboxId?: number
   repository?: ReturnType<typeof createRepositoryStub>
 } = {}) {
   return createChatThreadsService({
     chatContextRepository: repository,
+    chatThreadsRepository,
     chatwootClient,
+    now,
+    portalInboxId,
   })
 }
 
 describe('createChatThreadsService', () => {
+  it('persists private and company thread records while listing available threads', async () => {
+    const now = new Date('2026-05-15T10:00:00.000Z')
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createChatThreadsService({
+      chatContextRepository: createRepositoryStub(),
+      chatThreadsRepository,
+      chatwootClient: createChatwootClientStub(),
+      now: () => now,
+      portalInboxId: 9,
+    })
+
+    await service.listCurrentUserThreads({ userId: 7 })
+
+    expect(chatThreadsRepository.upsertPrivateThread).toHaveBeenCalledWith({
+      chatwootContactId: 44,
+      chatwootInboxId: 9,
+      now,
+      userId: 7,
+    })
+    expect(chatThreadsRepository.upsertCompanyThread).toHaveBeenCalledWith({
+      chatwootContactId: 154,
+      chatwootInboxId: 9,
+      now,
+    })
+  })
+
   it('returns private thread plus enabled company threads from person attributes', async () => {
     const service = createService()
 

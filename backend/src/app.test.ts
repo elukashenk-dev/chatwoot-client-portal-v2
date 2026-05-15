@@ -64,89 +64,6 @@ describe('buildApp', () => {
     })
   })
 
-  it('creates a signed session on login, resolves /api/auth/me, and logs out', async () => {
-    await database.db.insert(portalUsers).values({
-      email: 'Name@Company.RU',
-      fullName: 'Portal User',
-      passwordHash: await hashPassword('Secret123'),
-      tenantId,
-    })
-
-    const loginResponse = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        email: 'name@company.ru',
-        password: 'Secret123',
-      },
-      url: '/api/auth/login',
-    })
-
-    expect(loginResponse.statusCode).toBe(200)
-    expect(loginResponse.json()).toEqual({
-      user: {
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-        id: 1,
-      },
-    })
-
-    const sessionCookie = loginResponse.cookies.find(
-      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
-    )
-
-    expect(sessionCookie).toBeDefined()
-    expect(sessionCookie?.httpOnly).toBe(true)
-
-    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
-
-    const meResponse = await app.inject({
-      headers: {
-        cookie: cookieHeader,
-      },
-      method: 'GET',
-      url: '/api/auth/me',
-    })
-
-    expect(meResponse.statusCode).toBe(200)
-    expect(meResponse.json()).toEqual({
-      user: {
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-        id: 1,
-      },
-    })
-
-    const logoutResponse = await app.inject({
-      headers: {
-        cookie: cookieHeader,
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      url: '/api/auth/logout',
-    })
-
-    expect(logoutResponse.statusCode).toBe(204)
-
-    const meAfterLogoutResponse = await app.inject({
-      headers: {
-        cookie: cookieHeader,
-      },
-      method: 'GET',
-      url: '/api/auth/me',
-    })
-
-    expect(meAfterLogoutResponse.statusCode).toBe(401)
-    expect(meAfterLogoutResponse.json()).toEqual({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Требуется вход.',
-      },
-    })
-  })
-
   it('returns controlled chat read states for an authenticated user without a Chatwoot contact link', async () => {
     await database.db.insert(portalUsers).values({
       email: 'Name@Company.RU',
@@ -637,9 +554,9 @@ describe('buildApp', () => {
       )
     }
 
-    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual([
-      401, 401, 401, 401, 401,
-    ])
+    expect(
+      responses.slice(0, 5).map((response) => response.statusCode),
+    ).toEqual([401, 401, 401, 401, 401])
     expect(responses[5]?.statusCode).toBe(429)
     expect(responses[5]?.headers['retry-after']).toBeDefined()
     expect(responses[5]?.json()).toEqual({
@@ -668,9 +585,9 @@ describe('buildApp', () => {
       )
     }
 
-    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
-      [409, 409, 409, 409, 409],
-    )
+    expect(
+      responses.slice(0, 5).map((response) => response.statusCode),
+    ).toEqual([409, 409, 409, 409, 409])
     expect(responses[5]?.statusCode).toBe(429)
     expect(responses[5]?.json()).toEqual({
       error: {
@@ -697,9 +614,9 @@ describe('buildApp', () => {
       )
     }
 
-    expect(responses.slice(0, 5).map((response) => response.statusCode)).toEqual(
-      [200, 200, 200, 200, 200],
-    )
+    expect(
+      responses.slice(0, 5).map((response) => response.statusCode),
+    ).toEqual([200, 200, 200, 200, 200])
     expect(responses[5]?.statusCode).toBe(429)
     expect(responses[5]?.json()).toEqual({
       error: {

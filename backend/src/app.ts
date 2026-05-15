@@ -26,6 +26,7 @@ import {
 } from './modules/chat-messages/service.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
+import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
 import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
 import { createChatThreadsService } from './modules/chat-threads/service.js'
 import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/repository.js'
@@ -124,13 +125,20 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       }),
       chatwootClient: createChatwootClientForRequest(request),
     })
-  const createChatThreadsServiceForRequest = (request: FastifyRequest) =>
-    createChatThreadsService({
+  const createChatThreadsServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatThreadsService({
       chatContextRepository: createChatContextRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
+        tenantId: tenant.id,
+      }),
+      chatThreadsRepository: createChatThreadsRepository(database.db, {
+        tenantId: tenant.id,
       }),
       chatwootClient: createChatwootClientForRequest(request),
+      portalInboxId: tenant.chatwoot.portalInboxId,
     })
+  }
   const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
     createChatMessagesService({
       chatContextService: createChatContextServiceForRequest(request),
