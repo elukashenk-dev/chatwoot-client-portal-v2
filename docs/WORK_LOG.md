@@ -68,6 +68,11 @@
   attributes, без выдачи Chatwoot authority в browser.
 - По chat thread plan зафиксированы design/security gates в `docs/Findings/`;
   company threads нельзя включать до закрытия affected findings.
+- Следующий implementation scope выбран как private-only safety gate:
+  `threadId = private:me`, без включения company threads, company sends и
+  company realtime.
+- Перед runtime-кодом нужно закрыть `F-CHAT-THREAD-003`: заменить общие
+  placeholder-тесты в плане на конкретные fail-closed cases.
 
 ## Current Baseline
 
@@ -85,6 +90,9 @@
 
 ## Recommended Next Step
 
-- Перед реализацией company chat threads закрыть chat-thread rollout gates:
-  `F-CHAT-SEC-001`, `F-CHAT-THREAD-006`, `F-CHAT-WEBHOOK-003` и
-  `F-CHAT-THREAD-007`.
+- Закрыть pre-code gate `F-CHAT-THREAD-003`, затем начинать отдельную ветку
+  `feature/phase-chat-thread-private-safety-gate` для private-only перехода на
+  `threadId = private:me`. Company behavior не включать до закрытия
+  `F-CHAT-SEC-001`, `F-CHAT-THREAD-001`, `F-CHAT-THREAD-004`,
+  `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`, `F-CHAT-THREAD-007`,
+  `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
