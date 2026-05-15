@@ -145,6 +145,11 @@
 - Для `MT-8.6` создан implementation plan: сначала production provenance/smoke,
   read-only audit, findings classification и regression safety matrix; конкретные
   cleanup/refactoring/dead-code slices выбираются только после audit evidence.
+- `MT-8.6 Post-Thread Runtime Audit And Cleanup` завершен: обязательный
+  cleanup/refactoring/dead-code slice перед `MT-9` не требуется, новых
+  chat/runtime `must-fix-before-MT-9` blockers не доказано; перед стартом `MT-9`
+  остаются evidence blockers по production provenance, authenticated production
+  smoke и local Playwright e2e.
 
 ## Current Baseline
 
@@ -162,5 +167,6 @@
 
 ## Recommended Next Step
 
-- Исполнить `MT-8.6` plan: начать с branch/source check, production provenance
-  gate и production/local smoke или явно записанного blocker.
+- Resolve `MT-8.6` evidence blockers before `MT-9`: production
+  `DEPLOY_SOURCE.txt` / `F-PROD-002` provenance, production authenticated
+  smoke/test account, and local Playwright e2e.

@@ -52,7 +52,7 @@
 Следующий активный scope:
 
 ```text
-MT-8.6. Post-Thread Runtime Audit And Cleanup
+MT-8.6 evidence blockers before MT-9
 ```
 
 ## Active Roadmap
@@ -233,8 +233,16 @@ Exit criteria:
 
 Status:
 
-- design accepted on `2026-05-15`;
-- spec: `docs/superpowers/specs/2026-05-15-post-thread-runtime-audit-design.md`.
+- completed on `2026-05-15` as a read-only audit/reporting gate;
+- report: `docs/MT_8_6_POST_THREAD_RUNTIME_AUDIT.md`;
+- no required cleanup/refactoring/dead-code slice was found before `MT-9`;
+- no proven chat/runtime `must-fix-before-MT-9` blocker remains;
+- evidence blockers remain before starting `MT-9` or treating production smoke
+  as release-valid: production `DEPLOY_SOURCE.txt` / `F-PROD-002` provenance,
+  production authenticated smoke/test account, Chatwoot admin prefix/realtime
+  smoke, and local Playwright e2e unavailable on `127.0.0.1:5173`;
+- after those blockers are resolved or explicitly accepted, `F-MT-004` remains
+  the first `MT-9` implementation gate.
 
 Цель:
 
@@ -264,7 +272,8 @@ Exit criteria:
 - final backend/frontend/e2e/build/lint checks pass or blocker is recorded;
 - `F-MT-004` is explicitly carried into `MT-9` as the first permissions-spike
   and admin-token-boundary task, not closed by `MT-8.6`;
-- project is ready to start `MT-9` on a reviewed baseline.
+- `MT-9` start is gated by any audit evidence blockers until they are resolved
+  or explicitly accepted.
 
 ### MT-9. Tenant Admin And Branding Rebuild
 
