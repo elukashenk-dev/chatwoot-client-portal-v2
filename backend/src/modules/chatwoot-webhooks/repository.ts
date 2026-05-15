@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm'
 import type { AppDatabase } from '../../db/client.js'
 import {
   chatwootWebhookDeliveries,
-  portalUserChatwootConversations,
+  portalChatThreads,
 } from '../../db/schema.js'
+import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 
 export type ChatwootWebhookDeliveryStatus =
   | 'accepted'
@@ -26,6 +27,22 @@ type TenantRepositoryScope = {
   tenantId: number
 }
 
+export type ChatwootConversationThreadMapping = {
+  chatwootConversationId: number
+  portalChatThreadId: number
+  threadId: typeof PRIVATE_CHAT_THREAD_ID | `company:${number}`
+  threadType: 'company' | 'private'
+  userId: number | null
+}
+
+function mapThreadType(threadType: string) {
+  if (threadType !== 'private' && threadType !== 'company') {
+    throw new Error('Unexpected portal chat thread type.')
+  }
+
+  return threadType
+}
+
 export function createChatwootWebhookRepository(
   db: AppDatabase,
   { tenantId }: TenantRepositoryScope,
@@ -36,25 +53,40 @@ export function createChatwootWebhookRepository(
     ) {
       const [mapping] = await db
         .select({
-          chatwootContactId: portalUserChatwootConversations.chatwootContactId,
-          chatwootConversationId:
-            portalUserChatwootConversations.chatwootConversationId,
-          chatwootInboxId: portalUserChatwootConversations.chatwootInboxId,
-          userId: portalUserChatwootConversations.userId,
+          chatwootContactId: portalChatThreads.chatwootContactId,
+          chatwootConversationId: portalChatThreads.chatwootConversationId,
+          id: portalChatThreads.id,
+          threadType: portalChatThreads.threadType,
+          userId: portalChatThreads.portalUserId,
         })
-        .from(portalUserChatwootConversations)
+        .from(portalChatThreads)
         .where(
           and(
-            eq(portalUserChatwootConversations.tenantId, tenantId),
+            eq(portalChatThreads.tenantId, tenantId),
             eq(
-              portalUserChatwootConversations.chatwootConversationId,
+              portalChatThreads.chatwootConversationId,
               chatwootConversationId,
             ),
           ),
         )
         .limit(1)
 
-      return mapping ?? null
+      if (!mapping || mapping.chatwootConversationId === null) {
+        return null
+      }
+
+      const threadType = mapThreadType(mapping.threadType)
+
+      return {
+        chatwootConversationId: mapping.chatwootConversationId,
+        portalChatThreadId: mapping.id,
+        threadId:
+          threadType === 'private'
+            ? PRIVATE_CHAT_THREAD_ID
+            : `company:${mapping.chatwootContactId}`,
+        threadType,
+        userId: mapping.userId,
+      } satisfies ChatwootConversationThreadMapping
     },
 
     async recordDelivery(input: RecordDeliveryInput) {

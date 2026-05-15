@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { DatabaseClient } from '../../db/client.js'
 import {
   chatwootWebhookDeliveries,
+  portalChatThreads,
   portalUserChatwootConversations,
   portalUsers,
 } from '../../db/schema.js'
@@ -41,7 +42,75 @@ describe('createChatwootWebhookRepository', () => {
     await database.close()
   })
 
-  it('resolves a portal user conversation mapping by Chatwoot conversation id', async () => {
+  it('resolves a private portal chat thread mapping by Chatwoot conversation id', async () => {
+    const [thread] = await database.db
+      .insert(portalChatThreads)
+      .values({
+        chatwootContactId: 44,
+        chatwootConversationId: 101,
+        chatwootInboxId: 9,
+        portalUserId: userId,
+        tenantId,
+        threadType: 'private',
+      })
+      .returning({
+        id: portalChatThreads.id,
+      })
+
+    if (!thread) {
+      throw new Error('Failed to create test portal chat thread.')
+    }
+
+    const repository = createChatwootWebhookRepository(database.db, {
+      tenantId,
+    })
+
+    await expect(
+      repository.findConversationMappingByChatwootConversationId(101),
+    ).resolves.toEqual({
+      chatwootConversationId: 101,
+      portalChatThreadId: thread.id,
+      threadId: 'private:me',
+      threadType: 'private',
+      userId,
+    })
+  })
+
+  it('resolves a company portal chat thread mapping by Chatwoot conversation id', async () => {
+    const [thread] = await database.db
+      .insert(portalChatThreads)
+      .values({
+        chatwootContactId: 154,
+        chatwootConversationId: 301,
+        chatwootInboxId: 9,
+        portalUserId: null,
+        tenantId,
+        threadType: 'company',
+      })
+      .returning({
+        id: portalChatThreads.id,
+      })
+
+    if (!thread) {
+      throw new Error('Failed to create test company portal chat thread.')
+    }
+
+    const repository = createChatwootWebhookRepository(database.db, {
+      tenantId,
+    })
+
+    await expect(
+      repository.findConversationMappingByChatwootConversationId(301),
+    ).resolves.toEqual({
+      chatwootConversationId: 301,
+      portalChatThreadId: thread.id,
+      threadId: 'company:154',
+      threadType: 'company',
+      userId: null,
+    })
+  })
+
+  it('does not recover an unmapped webhook conversation from the legacy contact mapping alone', async () => {
     await database.db.insert(portalUserChatwootConversations).values({
       chatwootContactId: 44,
       chatwootConversationId: 101,
@@ -55,12 +124,7 @@ describe('createChatwootWebhookRepository', () => {
 
     await expect(
       repository.findConversationMappingByChatwootConversationId(101),
-    ).resolves.toEqual({
-      chatwootContactId: 44,
-      chatwootConversationId: 101,
-      chatwootInboxId: 9,
-      userId,
-    })
+    ).resolves.toBeNull()
   })
 
   it('records each Chatwoot delivery key only once', async () => {

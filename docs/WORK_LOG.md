@@ -122,6 +122,10 @@
   `portalChatThreadId + user + clientMessageKey`, company messages получают
   безопасный Chatwoot-visible author prefix и portal `authorRole`;
   `F-CHAT-THREAD-005` закрыт.
+- Task 6 thread realtime/webhook fanout завершен: SSE hub перешел на
+  `tenant + threadId`, webhook routing читает только `portal_chat_threads`,
+  fanout пересобирает snapshot per subscriber и пропускает revoked access;
+  `F-CHAT-RT-002` и `F-CHAT-WEBHOOK-003` закрыты.
 
 ## Current Baseline
 
@@ -139,6 +143,6 @@
 
 ## Recommended Next Step
 
-- Реализовать Task 6 основного thread plan: thread realtime и Chatwoot webhook
-  fanout keyed by `threadId`; перед company realtime закрыть `F-CHAT-RT-002`,
-  перед webhook routing/recovery закрыть `F-CHAT-WEBHOOK-003`.
+- Реализовать Task 7 основного thread plan: frontend thread switcher и
+  thread-based chat runtime, чтобы UI мог переключать `Личный чат` и company
+  threads без public Chatwoot conversation authority.

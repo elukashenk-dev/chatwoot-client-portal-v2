@@ -5,22 +5,21 @@ import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
-import type { ChatContextService } from '../chat-context/service.js'
-import { resolveCurrentUserChatThread } from '../chat-threads/threadResolver.js'
+import type { ChatThreadsService } from '../chat-threads/service.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatRealtimeEvent, ChatRealtimeHub } from './hub.js'
 
 const chatRealtimeQuerySchema = z
   .object({
-    threadId: z.string().min(1).max(64),
+    threadId: z.string().trim().min(1).max(80),
   })
   .strict()
 
 type RegisterChatRealtimeRoutesOptions = {
   authService: AuthService
-  createChatContextService: (
+  createChatThreadsService: (
     request: FastifyRequest,
-  ) => Pick<ChatContextService, 'getCurrentUserChatContext'>
+  ) => Pick<ChatThreadsService, 'getCurrentUserThreadContext'>
   env: AppEnv
   realtimeHub: ChatRealtimeHub
 }
@@ -37,7 +36,7 @@ export function registerChatRealtimeRoutes(
   app: FastifyInstance,
   {
     authService,
-    createChatContextService,
+    createChatThreadsService,
     env,
     realtimeHub,
   }: RegisterChatRealtimeRoutesOptions,
@@ -52,27 +51,30 @@ export function registerChatRealtimeRoutes(
     const query = chatRealtimeQuerySchema.parse(request.query)
 
     const tenant = requireTenantContext(request)
-    const { context } = await resolveCurrentUserChatThread({
-      chatContextService: createChatContextService(request),
-      mode: 'read',
+    const context = await createChatThreadsService(
+      request,
+    ).getCurrentUserThreadContext({
       threadId: query.threadId,
       userId: user.id,
     })
 
-    if (context.result !== 'ready' || !context.primaryConversation) {
+    if (context.result !== 'ready' || !context.activeThread) {
       throw new ApiError(
         409,
         'chat_realtime_not_ready',
         'Realtime доступен только для готового чата.',
+        {
+          reason: context.reason,
+        },
       )
     }
 
     const subscriptionResult = realtimeHub.subscribe({
-      primaryConversationId: context.primaryConversation.id,
       send: (event) => {
         writeSseEvent(reply.raw, event)
       },
       tenantId: tenant.id,
+      threadId: context.activeThread.id,
       userId: user.id,
     })
 

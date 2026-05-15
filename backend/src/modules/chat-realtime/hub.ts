@@ -1,9 +1,9 @@
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 
 type RealtimeSubscription = {
-  primaryConversationId: number
   send: (event: ChatRealtimeEvent) => void
   tenantId: number
+  threadId: string
   userId: number
 }
 
@@ -29,73 +29,98 @@ export type ChatRealtimeEvent =
       type: 'chat-state'
     }
 
-function buildSubscriptionKey({
-  primaryConversationId,
+function buildThreadKey({
   tenantId,
+  threadId,
+}: {
+  tenantId: number
+  threadId: string
+}) {
+  return `${tenantId}:${threadId}`
+}
+
+function buildSubscriptionKey({
+  tenantId,
+  threadId,
   userId,
 }: {
-  primaryConversationId: number
   tenantId: number
+  threadId: string
   userId: number
 }) {
-  return `${tenantId}:${userId}:${primaryConversationId}`
+  return `${tenantId}:${threadId}:${userId}`
 }
 
 export function createChatRealtimeHub() {
   const subscriptionsByKey = new Map<string, Set<RealtimeSubscription>>()
+  const subscriptionsByThreadKey = new Map<string, Set<RealtimeSubscription>>()
 
   function unsubscribe(subscription: RealtimeSubscription) {
     const key = buildSubscriptionKey(subscription)
+    const threadKey = buildThreadKey(subscription)
     const subscriptions = subscriptionsByKey.get(key)
+    const threadSubscriptions = subscriptionsByThreadKey.get(threadKey)
 
-    if (!subscriptions) {
-      return
+    if (subscriptions) {
+      subscriptions.delete(subscription)
+
+      if (subscriptions.size === 0) {
+        subscriptionsByKey.delete(key)
+      }
     }
 
-    subscriptions.delete(subscription)
+    if (threadSubscriptions) {
+      threadSubscriptions.delete(subscription)
 
-    if (subscriptions.size === 0) {
-      subscriptionsByKey.delete(key)
+      if (threadSubscriptions.size === 0) {
+        subscriptionsByThreadKey.delete(threadKey)
+      }
     }
   }
 
   return {
-    publishMessages({
-      primaryConversationId,
-      snapshot,
+    async publishThreadMessages({
+      createSnapshotForUser,
       tenantId,
-      userId,
+      threadId,
     }: {
-      primaryConversationId: number
-      snapshot: ChatMessagesSnapshot
+      createSnapshotForUser: (userId: number) => Promise<ChatMessagesSnapshot>
       tenantId: number
-      userId: number
+      threadId: string
     }) {
-      const subscriptions = subscriptionsByKey.get(
-        buildSubscriptionKey({
-          primaryConversationId,
-          tenantId,
-          userId,
-        }),
+      const subscriptions = subscriptionsByThreadKey.get(
+        buildThreadKey({ tenantId, threadId }),
       )
 
       if (!subscriptions) {
         return 0
       }
 
+      let delivered = 0
+
       for (const subscription of subscriptions) {
+        const snapshot = await createSnapshotForUser(subscription.userId)
+
+        if (snapshot.result !== 'ready') {
+          continue
+        }
+
         subscription.send({
           data: snapshot,
-          type: snapshot.result === 'ready' ? 'messages' : 'chat-state',
+          type: 'messages',
         })
+        delivered += 1
       }
 
-      return subscriptions.size
+      return delivered
     },
 
     subscribe(subscription: RealtimeSubscription): RealtimeSubscribeResult {
       const key = buildSubscriptionKey(subscription)
+      const threadKey = buildThreadKey(subscription)
       const subscriptions = subscriptionsByKey.get(key) ?? new Set()
+      const threadSubscriptions =
+        subscriptionsByThreadKey.get(threadKey) ?? new Set()
 
       if (subscriptions.size >= CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY) {
         return {
@@ -105,7 +130,9 @@ export function createChatRealtimeHub() {
       }
 
       subscriptions.add(subscription)
+      threadSubscriptions.add(subscription)
       subscriptionsByKey.set(key, subscriptions)
+      subscriptionsByThreadKey.set(threadKey, threadSubscriptions)
 
       return {
         status: 'subscribed',

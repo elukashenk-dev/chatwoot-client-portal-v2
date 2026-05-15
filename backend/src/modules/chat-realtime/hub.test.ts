@@ -21,32 +21,138 @@ const readySnapshot: ChatMessagesSnapshot = {
 }
 
 describe('createChatRealtimeHub', () => {
-  it('fans out only to subscribers in the same tenant, user, and conversation', () => {
+  it('publishes a company thread event to every subscriber on that thread', async () => {
+    const hub = createChatRealtimeHub()
+    const firstSend = vi.fn()
+    const secondSend = vi.fn()
+
+    hub.subscribe({
+      send: firstSend,
+      tenantId: 1,
+      threadId: 'company:154',
+      userId: 7,
+    })
+    hub.subscribe({
+      send: secondSend,
+      tenantId: 1,
+      threadId: 'company:154',
+      userId: 8,
+    })
+
+    const companyReadySnapshot: ChatMessagesSnapshot = {
+      activeThread: {
+        id: 'company:154',
+        subtitle: 'Общий чат компании',
+        title: 'ООО "Ромашка"',
+        type: 'company',
+      },
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+      reason: 'none',
+      result: 'ready',
+    }
+
+    await expect(
+      hub.publishThreadMessages({
+        createSnapshotForUser: vi.fn().mockResolvedValue(companyReadySnapshot),
+        tenantId: 1,
+        threadId: 'company:154',
+      }),
+    ).resolves.toBe(2)
+
+    expect(firstSend).toHaveBeenCalledWith({
+      data: companyReadySnapshot,
+      type: 'messages',
+    })
+    expect(secondSend).toHaveBeenCalledWith({
+      data: companyReadySnapshot,
+      type: 'messages',
+    })
+  })
+
+  it('skips a subscribed user after company thread access is revoked', async () => {
+    const hub = createChatRealtimeHub()
+    const firstSend = vi.fn()
+    const secondSend = vi.fn()
+
+    hub.subscribe({
+      send: firstSend,
+      tenantId: 1,
+      threadId: 'company:154',
+      userId: 7,
+    })
+    hub.subscribe({
+      send: secondSend,
+      tenantId: 1,
+      threadId: 'company:154',
+      userId: 8,
+    })
+
+    const readyCompanySnapshot: ChatMessagesSnapshot = {
+      activeThread: {
+        id: 'company:154',
+        subtitle: 'Общий чат компании',
+        title: 'ООО "Ромашка"',
+        type: 'company',
+      },
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+      reason: 'none',
+      result: 'ready',
+    }
+    const revokedCompanySnapshot: ChatMessagesSnapshot = {
+      activeThread: null,
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+      reason: 'thread_access_denied',
+      result: 'not_ready',
+    }
+
+    await expect(
+      hub.publishThreadMessages({
+        createSnapshotForUser: vi.fn(async (userId) =>
+          userId === 7 ? revokedCompanySnapshot : readyCompanySnapshot,
+        ),
+        tenantId: 1,
+        threadId: 'company:154',
+      }),
+    ).resolves.toBe(1)
+
+    expect(firstSend).not.toHaveBeenCalled()
+    expect(secondSend).toHaveBeenCalledWith({
+      data: readyCompanySnapshot,
+      type: 'messages',
+    })
+  })
+
+  it('fans out only to subscribers in the same tenant and thread', async () => {
     const hub = createChatRealtimeHub()
     const sendTenantA = vi.fn()
     const sendTenantB = vi.fn()
 
     hub.subscribe({
-      primaryConversationId: 101,
       send: sendTenantA,
       tenantId: 1,
+      threadId: 'private:me',
       userId: 7,
     })
     hub.subscribe({
-      primaryConversationId: 101,
       send: sendTenantB,
       tenantId: 2,
+      threadId: 'private:me',
       userId: 7,
     })
 
-    expect(
-      hub.publishMessages({
-        primaryConversationId: 101,
-        snapshot: readySnapshot,
+    await expect(
+      hub.publishThreadMessages({
+        createSnapshotForUser: vi.fn().mockResolvedValue(readySnapshot),
         tenantId: 1,
-        userId: 7,
+        threadId: 'private:me',
       }),
-    ).toBe(1)
+    ).resolves.toBe(1)
     expect(sendTenantA).toHaveBeenCalledWith({
       data: readySnapshot,
       type: 'messages',
@@ -64,9 +170,9 @@ describe('createChatRealtimeHub', () => {
       index += 1
     ) {
       const result = hub.subscribe({
-        primaryConversationId: 101,
         send: vi.fn(),
         tenantId: 1,
+        threadId: 'private:me',
         userId: 7,
       })
 
@@ -79,9 +185,9 @@ describe('createChatRealtimeHub', () => {
 
     expect(
       hub.subscribe({
-        primaryConversationId: 101,
         send: vi.fn(),
         tenantId: 1,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).toEqual({
@@ -92,9 +198,9 @@ describe('createChatRealtimeHub', () => {
     subscriptions[0]?.()
 
     const afterCleanup = hub.subscribe({
-      primaryConversationId: 101,
       send: vi.fn(),
       tenantId: 1,
+      threadId: 'private:me',
       userId: 7,
     })
 

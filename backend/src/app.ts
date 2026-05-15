@@ -215,7 +215,7 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   })
   registerChatRealtimeRoutes(app, {
     authService,
-    createChatContextService: createChatContextServiceForRequest,
+    createChatThreadsService: createChatThreadsServiceForRequest,
     env,
     realtimeHub: chatRealtimeHub,
   })

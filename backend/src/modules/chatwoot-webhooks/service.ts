@@ -9,7 +9,6 @@ import type { IncomingHttpHeaders } from 'node:http'
 import { ApiError } from '../../lib/errors.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
-import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import type {
   ChatwootWebhookDeliveryStatus,
   ChatwootWebhookRepository,
@@ -260,26 +259,22 @@ async function recordDeliveryOrReturnDuplicate({
 async function publishCurrentSnapshot({
   chatMessagesService,
   mapping,
-  primaryConversationId,
   realtimeHub,
   tenantId,
 }: {
   chatMessagesService: CreateChatwootWebhookServiceOptions['chatMessagesService']
   mapping: ChatwootWebhookMapping
-  primaryConversationId: number
   realtimeHub: ChatRealtimeHub
   tenantId: number
 }) {
-  const snapshot = await chatMessagesService.getCurrentUserChatMessages({
-    threadId: PRIVATE_CHAT_THREAD_ID,
-    userId: mapping.userId,
-  })
-
-  return realtimeHub.publishMessages({
-    primaryConversationId,
-    snapshot,
+  return realtimeHub.publishThreadMessages({
+    createSnapshotForUser: (userId) =>
+      chatMessagesService.getCurrentUserChatMessages({
+        threadId: mapping.threadId,
+        userId,
+      }),
     tenantId,
-    userId: mapping.userId,
+    threadId: mapping.threadId,
   })
 }
 
@@ -449,7 +444,6 @@ export function createChatwootWebhookService({
       const deliveredClients = await publishCurrentSnapshot({
         chatMessagesService,
         mapping,
-        primaryConversationId: chatwootConversationId,
         realtimeHub,
         tenantId,
       })
