@@ -31,6 +31,9 @@ Non-negotiables:
   history, send, attachment and realtime operation;
 - company sends and company realtime must not be enabled while
   `F-CHAT-SEC-001` is open;
+- company sends must not be enabled while `F-CHAT-THREAD-006` is open;
+- company webhook fanout must not be enabled while `F-CHAT-WEBHOOK-003` is open;
+- company thread listing must not be enabled while `F-CHAT-THREAD-007` is open;
 - no fallback may grant history/send/realtime access when Chatwoot contact
   attributes are missing, malformed, disabled or cross-tenant;
 - no Chatwoot secrets, conversation authority or membership authority may be
@@ -188,8 +191,11 @@ This feature must not be implemented as a big-bang rewrite. The safe sequence is
 4. Stop accepting browser-selected `primaryConversationId` only after the
    `private:me` thread path is verified.
 5. Add company threads only after private thread compatibility passes.
-6. Treat `F-CHAT-SEC-001` as a company-thread rollout gate: authenticated send
-   rate limiting must be closed before company sends are enabled.
+6. Treat `F-CHAT-SEC-001`, `F-CHAT-THREAD-006`,
+   `F-CHAT-WEBHOOK-003` and `F-CHAT-THREAD-007` as company-thread rollout gates:
+   authenticated send rate limiting, lazy bootstrap concurrency, webhook mapping
+   ownership and membership-list bounds must be closed before the affected
+   company-thread behavior is enabled.
 
 Security invariant:
 

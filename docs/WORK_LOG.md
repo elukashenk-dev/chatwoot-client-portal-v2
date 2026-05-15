@@ -61,6 +61,14 @@
 - Production hardening review завершен без high/critical findings; активные
   follow-ups ведутся через `docs/Findings/`.
 
+## Chat Thread Planning
+
+- Принят production-grade план перехода от одного private chat к portal-owned
+  `threadId`: личный чат плюс optional company threads через Chatwoot contact
+  attributes, без выдачи Chatwoot authority в browser.
+- По chat thread plan зафиксированы design/security gates в `docs/Findings/`;
+  company threads нельзя включать до закрытия affected findings.
+
 ## Current Baseline
 
 - Текущий runtime baseline поддерживает shared SaaS модель и dedicated модель как
@@ -77,5 +85,6 @@
 
 ## Recommended Next Step
 
-- Начинать `MT-9` только с закрытия или явного gating решения по `F-MT-004`;
-  следующим security-hardening follow-up держать `F-CHAT-SEC-001`.
+- Перед реализацией company chat threads закрыть chat-thread rollout gates:
+  `F-CHAT-SEC-001`, `F-CHAT-THREAD-006`, `F-CHAT-WEBHOOK-003` и
+  `F-CHAT-THREAD-007`.

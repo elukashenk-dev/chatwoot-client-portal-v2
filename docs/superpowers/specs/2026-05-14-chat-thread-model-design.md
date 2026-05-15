@@ -425,9 +425,11 @@ tenant webhook secret и account/inbox invariants.
 - если conversation mapped на company thread, событие отправляется active
   sessions portal users, у которых текущий Chatwoot person contact содержит этот
   company contact ID;
-- если thread mapping еще нет, backend может восстановить/создать mapping из
-  contact webhook conversation, когда contact является валидным enabled
-  `person` или `company` portal contact.
+- если thread mapping еще нет, backend не создает mapping только из валидного
+  contact webhook conversation. Unmapped webhook conversations игнорируются,
+  пока conversation не имеет portal-owned bootstrap marker, созданный backend
+  при thread bootstrap и проверенный вместе с tenant/account/inbox/contact
+  invariants.
 
 Realtime subscriptions должны быть scoped по tenant и thread, а не только по
 user и conversation.
