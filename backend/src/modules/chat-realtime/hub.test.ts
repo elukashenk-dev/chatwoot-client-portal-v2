@@ -8,18 +8,17 @@ import {
 
 const readySnapshot: ChatMessagesSnapshot = {
   hasMoreOlder: false,
+  activeThread: {
+    id: 'private:me',
+    subtitle: 'Только вы и поддержка',
+    title: 'Личный чат',
+    type: 'private',
+  },
   linkedContact: {
     id: 44,
   },
   messages: [],
   nextOlderCursor: null,
-  primaryConversation: {
-    assigneeName: null,
-    id: 101,
-    inboxId: 9,
-    lastActivityAt: 1_776_000_000,
-    status: 'open',
-  },
   reason: 'none',
   result: 'ready',
 }

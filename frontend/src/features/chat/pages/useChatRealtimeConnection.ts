@@ -8,18 +8,18 @@ import type { ChatPageState } from './chatPageState'
 type UseChatRealtimeConnectionInput = {
   isMountedRef: MutableRefObject<boolean>
   markBrowserOnline: () => void
-  primaryConversationId: number | null
   setPageState: Dispatch<SetStateAction<ChatPageState>>
+  threadId: string | null
 }
 
 export function useChatRealtimeConnection({
   isMountedRef,
   markBrowserOnline,
-  primaryConversationId,
   setPageState,
+  threadId,
 }: UseChatRealtimeConnectionInput) {
   useEffect(() => {
-    if (!primaryConversationId) {
+    if (!threadId) {
       return
     }
 
@@ -62,11 +62,11 @@ export function useChatRealtimeConnection({
 
         markBrowserOnline()
       },
-      primaryConversationId,
+      threadId,
     })
 
     return () => {
       realtimeConnection.close()
     }
-  }, [isMountedRef, markBrowserOnline, primaryConversationId, setPageState])
+  }, [isMountedRef, markBrowserOnline, setPageState, threadId])
 }

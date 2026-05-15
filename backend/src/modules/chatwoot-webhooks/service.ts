@@ -9,6 +9,7 @@ import type { IncomingHttpHeaders } from 'node:http'
 import { ApiError } from '../../lib/errors.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
+import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import type {
   ChatwootWebhookDeliveryStatus,
   ChatwootWebhookRepository,
@@ -32,7 +33,7 @@ type ChatwootWebhookMapping = NonNullable<
 type CreateChatwootWebhookServiceOptions = {
   chatMessagesService: {
     getCurrentUserChatMessages: (input: {
-      primaryConversationId?: number | null
+      threadId?: string
       userId: number
     }) => Promise<ChatMessagesSnapshot>
   }
@@ -270,7 +271,7 @@ async function publishCurrentSnapshot({
   tenantId: number
 }) {
   const snapshot = await chatMessagesService.getCurrentUserChatMessages({
-    primaryConversationId,
+    threadId: PRIVATE_CHAT_THREAD_ID,
     userId: mapping.userId,
   })
 

@@ -1,4 +1,4 @@
-import type { ChatContextSnapshot } from '../chat-context/service.js'
+import type { PublicChatContextSnapshot } from '../chat-threads/privateThread.js'
 
 export type PortalChatAttachment = {
   fileSize: number | null
@@ -38,12 +38,12 @@ export type PortalChatMessage = {
   status: string
 }
 
-export type ChatMessagesSnapshot = ChatContextSnapshot & {
+export type ChatMessagesSnapshot = PublicChatContextSnapshot & {
   hasMoreOlder: boolean
   messages: PortalChatMessage[]
   nextOlderCursor: number | null
 }
 
-export type ChatSendResult = ChatContextSnapshot & {
+export type ChatSendResult = PublicChatContextSnapshot & {
   sentMessage: PortalChatMessage | null
 }

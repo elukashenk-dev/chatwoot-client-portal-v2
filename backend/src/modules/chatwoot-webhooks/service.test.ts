@@ -22,6 +22,12 @@ const timestamp = String(Math.floor(now.getTime() / 1000))
 
 const readySnapshot: ChatMessagesSnapshot = {
   hasMoreOlder: false,
+  activeThread: {
+    id: 'private:me',
+    subtitle: 'Только вы и поддержка',
+    title: 'Личный чат',
+    type: 'private',
+  },
   linkedContact: {
     id: 44,
   },
@@ -39,13 +45,6 @@ const readySnapshot: ChatMessagesSnapshot = {
     },
   ],
   nextOlderCursor: null,
-  primaryConversation: {
-    assigneeName: 'Анна Смирнова',
-    id: 101,
-    inboxId: 9,
-    lastActivityAt: 1_776_000_000,
-    status: 'open',
-  },
   reason: 'none',
   result: 'ready',
 }
@@ -345,7 +344,7 @@ describe('createChatwootWebhookService', () => {
       }),
     )
     expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      primaryConversationId: 101,
+      threadId: 'private:me',
       userId: 7,
     })
     expect(publishMessages).toHaveBeenCalledWith({

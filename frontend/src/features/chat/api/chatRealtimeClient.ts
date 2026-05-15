@@ -6,16 +6,16 @@ type OpenChatRealtimeInput = {
   onChatState: (snapshot: ChatMessagesSnapshot) => void
   onOpen?: () => void
   onMessages: (snapshot: ChatMessagesSnapshot) => void
-  primaryConversationId: number
+  threadId: string
 }
 
-function buildRealtimeUrl(primaryConversationId: number) {
+function buildRealtimeUrl(threadId: string) {
   const url = new URL(
     `${API_BASE_URL.replace(/\/+$/, '')}/chat/realtime`,
     window.location.origin,
   )
 
-  url.searchParams.set('primaryConversationId', String(primaryConversationId))
+  url.searchParams.set('threadId', threadId)
 
   return url.toString()
 }
@@ -30,7 +30,7 @@ export function openChatRealtime({
   onChatState,
   onOpen,
   onMessages,
-  primaryConversationId,
+  threadId,
 }: OpenChatRealtimeInput) {
   if (typeof EventSource === 'undefined') {
     return {
@@ -38,7 +38,7 @@ export function openChatRealtime({
     }
   }
 
-  const eventSource = new EventSource(buildRealtimeUrl(primaryConversationId), {
+  const eventSource = new EventSource(buildRealtimeUrl(threadId), {
     withCredentials: true,
   })
 

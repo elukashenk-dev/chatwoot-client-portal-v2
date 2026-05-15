@@ -13,12 +13,13 @@ export type ChatLinkedContact = {
   id: number
 }
 
-export type ChatPrimaryConversation = {
-  assigneeName: string | null
-  id: number
-  inboxId: number
-  lastActivityAt: number | null
-  status: string
+export const PRIVATE_CHAT_THREAD_ID = 'private:me'
+
+export type ChatThreadSummary = {
+  id: typeof PRIVATE_CHAT_THREAD_ID
+  subtitle: string
+  title: string
+  type: 'private'
 }
 
 export type ChatAttachment = {
@@ -53,18 +54,18 @@ export type ChatMessage = {
 }
 
 export type ChatMessagesSnapshot = {
+  activeThread: ChatThreadSummary | null
   hasMoreOlder: boolean
   linkedContact: ChatLinkedContact | null
   messages: ChatMessage[]
   nextOlderCursor: number | null
-  primaryConversation: ChatPrimaryConversation | null
   reason: ChatContextReason
   result: ChatContextResult
 }
 
 export type ChatSendResult = {
+  activeThread: ChatThreadSummary | null
   linkedContact: ChatLinkedContact | null
-  primaryConversation: ChatPrimaryConversation | null
   reason: ChatContextReason
   result: ChatContextResult
   sentMessage: ChatMessage | null

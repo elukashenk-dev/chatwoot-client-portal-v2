@@ -191,6 +191,25 @@ describe('createChatMessagesService', () => {
     expect(chatwootClient.listConversationMessages).not.toHaveBeenCalled()
   })
 
+  it('rejects unsupported public thread ids before resolving chat context', async () => {
+    const chatContextService = createChatContextServiceStub()
+    const service = createChatMessagesService({
+      chatContextService,
+      chatwootClient: createChatwootClientStub(),
+    })
+
+    await expect(
+      service.getCurrentUserChatMessages({
+        threadId: 'company:romashka',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({
+      code: 'chat_thread_unsupported',
+      statusCode: 400,
+    })
+    expect(chatContextService.getCurrentUserChatContext).not.toHaveBeenCalled()
+  })
+
   it('maps Chatwoot messages into the portal transcript contract', async () => {
     const service = createChatMessagesService({
       chatContextService: createChatContextServiceStub(),
@@ -255,7 +274,7 @@ describe('createChatMessagesService', () => {
     await expect(
       service.getCurrentUserChatMessages({
         beforeMessageId: 21,
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -346,7 +365,7 @@ describe('createChatMessagesService', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -398,7 +417,7 @@ describe('createChatMessagesService', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -427,7 +446,7 @@ describe('createChatMessagesService', () => {
     await expect(
       service.getCurrentUserChatMessages({
         beforeMessageId: 999,
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).rejects.toMatchObject({
@@ -455,7 +474,7 @@ describe('createChatMessagesService', () => {
       service.sendCurrentUserTextMessage({
         clientMessageKey: 'portal-send:test-key',
         content: ' Portal text ',
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -471,7 +490,7 @@ describe('createChatMessagesService', () => {
     expect(
       chatContextService.ensureCurrentUserWritableChatContext,
     ).toHaveBeenCalledWith({
-      selectedPrimaryConversationId: 101,
+      selectedPrimaryConversationId: null,
       userId: 7,
     })
     expect(createConversationIncomingMessage).toHaveBeenCalledWith({
@@ -537,6 +556,7 @@ describe('createChatMessagesService', () => {
         clientMessageKey: 'portal-send:test-key',
         content: 'Portal text',
         replyToMessageId: 21,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -575,6 +595,7 @@ describe('createChatMessagesService', () => {
         clientMessageKey: 'portal-send:test-key',
         content: 'Portal text',
         replyToMessageId: 999,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).rejects.toMatchObject({
@@ -620,6 +641,7 @@ describe('createChatMessagesService', () => {
       service.sendCurrentUserTextMessage({
         clientMessageKey: 'portal-send:test-key',
         content: 'Portal text',
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -651,6 +673,7 @@ describe('createChatMessagesService', () => {
       service.sendCurrentUserTextMessage({
         clientMessageKey: 'portal-send:test-key',
         content: 'Portal text',
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -699,7 +722,7 @@ describe('createChatMessagesService', () => {
         },
         clientMessageKey: 'portal-send:attachment-key',
         content: ' Подпись к файлу ',
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -778,7 +801,7 @@ describe('createChatMessagesService', () => {
           size: data.byteLength,
         },
         clientMessageKey: 'portal-send:voice-key',
-        primaryConversationId: 101,
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -826,6 +849,7 @@ describe('createChatMessagesService', () => {
           size: 9,
         },
         clientMessageKey: 'portal-send:attachment-key',
+        threadId: 'private:me',
         userId: 7,
       }),
     ).rejects.toMatchObject({
@@ -876,6 +900,7 @@ describe('createChatMessagesService', () => {
           size: 3,
         },
         clientMessageKey: 'portal-send:attachment-key',
+        threadId: 'private:me',
         userId: 7,
       }),
     ).resolves.toMatchObject({

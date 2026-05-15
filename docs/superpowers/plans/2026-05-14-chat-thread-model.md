@@ -249,7 +249,7 @@ Fail-closed coverage required before runtime behavior is enabled:
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-context/service.test.ts src/modules/chat-messages/service.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-context/service.test.ts src/modules/chat-messages/service.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/service.test.ts
 ```
 
 Expected: PASS. If a non-chat suite is unexpectedly pulled into the run or a
@@ -261,7 +261,7 @@ Task 1.
 Run:
 
 ```bash
-pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx src/features/chat/components/MessageComposer.test.tsx
+pnpm --dir frontend exec vitest run src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx src/features/chat/components/MessageComposer.test.tsx
 ```
 
 Expected: PASS. If unrelated auth/page tests time out during this targeted run,
@@ -390,7 +390,7 @@ describe('portal contact attributes', () => {
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/contactAttributes.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/contactAttributes.test.ts
 ```
 
 Expected: FAIL because `contactAttributes.ts` does not exist.
@@ -519,7 +519,7 @@ export function assertPortalPersonContactEnabled(
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/contactAttributes.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/contactAttributes.test.ts
 ```
 
 Expected: PASS.
@@ -629,7 +629,7 @@ Expose `findContactById` from the returned client object.
 Run:
 
 ```bash
-pnpm --dir backend test -- src/integrations/chatwoot/client.test.ts
+pnpm --dir backend exec vitest run src/integrations/chatwoot/client.test.ts
 ```
 
 Expected: PASS.
@@ -719,7 +719,7 @@ In `backend/src/modules/registration/service.ts`, import and call `assertPortalP
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/registration/service.test.ts
+pnpm --dir backend exec vitest run src/modules/registration/service.test.ts
 ```
 
 Expected: PASS.
@@ -810,7 +810,7 @@ it('updates a thread conversation mapping after lazy bootstrap', async () => {
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/repository.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/repository.test.ts
 ```
 
 Expected: FAIL because schema/repository do not exist.
@@ -1140,7 +1140,7 @@ Adjust the `onConflictDoUpdate` targets if Drizzle rejects partial unique index 
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/repository.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/repository.test.ts
 ```
 
 Expected: PASS.
@@ -1150,7 +1150,7 @@ Expected: PASS.
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-context/repository.test.ts src/modules/chat-messages/repository.test.ts src/modules/chatwoot-webhooks/repository.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-context/repository.test.ts src/modules/chat-messages/repository.test.ts src/modules/chatwoot-webhooks/repository.test.ts
 ```
 
 Expected: PASS or only expected compile failures from new nullable columns. Fix compile errors without changing behavior.
@@ -1355,7 +1355,7 @@ describe('createChatThreadsService', () => {
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/service.test.ts
 ```
 
 Expected: FAIL because service/types do not exist.
@@ -1533,7 +1533,7 @@ export type ChatThreadsService = ReturnType<typeof createChatThreadsService>
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/service.test.ts
 ```
 
 Expected: PASS.
@@ -1608,7 +1608,7 @@ Wire the factory with current tenant `chatwootPortalInboxId` and current request
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/routes.test.ts src/app.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/routes.test.ts src/app.test.ts
 ```
 
 Expected: PASS.
@@ -1814,7 +1814,7 @@ it('fails closed for malformed public thread IDs', async () => {
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/service.test.ts
 ```
 
 Expected: FAIL because runtime methods do not exist.
@@ -1904,7 +1904,7 @@ Modify `backend/src/modules/chat-context/routes.ts` so `/api/chat/context` calls
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-threads/service.test.ts src/modules/chat-context/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-threads/service.test.ts src/modules/chat-context/service.test.ts
 ```
 
 Expected: PASS.
@@ -2101,7 +2101,7 @@ it('does not send to Chatwoot after company membership is removed', async () => 
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-messages/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-messages/service.test.ts
 ```
 
 Expected: FAIL because `threadId`, `authorRole` and company formatting are not implemented.
@@ -2303,7 +2303,7 @@ Mapping rules:
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-messages/service.test.ts src/modules/chat-messages/repository.test.ts src/app.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-messages/service.test.ts src/modules/chat-messages/repository.test.ts src/app.test.ts
 ```
 
 Expected: PASS.
@@ -2431,7 +2431,7 @@ it('skips a subscribed user after company thread access is revoked', async () =>
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-realtime/hub.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-realtime/hub.test.ts
 ```
 
 Expected: FAIL because hub still keys by `primaryConversationId`.
@@ -2570,7 +2570,7 @@ Add webhook service tests:
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-realtime/hub.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/repository.test.ts src/modules/chatwoot-webhooks/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-realtime/hub.test.ts src/modules/chat-realtime/routes.test.ts src/modules/chatwoot-webhooks/repository.test.ts src/modules/chatwoot-webhooks/service.test.ts
 ```
 
 Expected: PASS.
@@ -2646,7 +2646,7 @@ it('switches to a company thread from the header menu and reloads transcript by 
 Run:
 
 ```bash
-pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx
+pnpm --dir frontend exec vitest run src/features/chat/pages/ChatPage.test.tsx
 ```
 
 Expected: FAIL because frontend still uses `primaryConversationId`.
@@ -2865,7 +2865,7 @@ Render `AgentNameHeader` for both `agent` and `company_member`, but avatar only 
 Run:
 
 ```bash
-pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx
+pnpm --dir frontend exec vitest run src/features/chat/pages/ChatPage.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/ChatPage.optimistic-send.test.tsx src/features/chat/components/ChatTranscript.test.tsx
 ```
 
 Expected: PASS.

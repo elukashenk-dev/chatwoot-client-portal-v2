@@ -14,6 +14,11 @@ import type {
   ChatContextService,
   ChatContextSnapshot,
 } from '../chat-context/service.js'
+import {
+  assertPrivateChatThreadId,
+  mapPublicChatContextSnapshot,
+  PRIVATE_CHAT_THREAD_ID,
+} from '../chat-threads/privateThread.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
 import type {
   ChatMessagesRepository,
@@ -91,7 +96,7 @@ function buildMessagesSnapshot(
   } = {},
 ): ChatMessagesSnapshot {
   return {
-    ...context,
+    ...mapPublicChatContextSnapshot(context),
     hasMoreOlder,
     messages,
     nextOlderCursor,
@@ -273,7 +278,7 @@ function buildSendResult(
   sentMessage: PortalChatMessage | null = null,
 ): ChatSendResult {
   return {
-    ...context,
+    ...mapPublicChatContextSnapshot(context),
     sentMessage,
   }
 }
@@ -865,15 +870,17 @@ export function createChatMessagesService({
   return {
     async getCurrentUserChatMessages({
       beforeMessageId = null,
-      primaryConversationId = null,
+      threadId = PRIVATE_CHAT_THREAD_ID,
       userId,
     }: {
       beforeMessageId?: number | null
-      primaryConversationId?: number | null
+      threadId?: string
       userId: number
     }): Promise<ChatMessagesSnapshot> {
+      assertPrivateChatThreadId(threadId)
+
       const context = await chatContextService.getCurrentUserChatContext({
-        selectedPrimaryConversationId: primaryConversationId,
+        selectedPrimaryConversationId: null,
         userId,
       })
 
@@ -936,19 +943,21 @@ export function createChatMessagesService({
     async sendCurrentUserTextMessage({
       clientMessageKey,
       content,
-      primaryConversationId = null,
       replyToMessageId = null,
+      threadId,
       userId,
     }: {
       clientMessageKey: string
       content: string
-      primaryConversationId?: number | null
       replyToMessageId?: number | null
+      threadId: string
       userId: number
     }): Promise<ChatSendResult> {
+      assertPrivateChatThreadId(threadId)
+
       const context =
         await chatContextService.ensureCurrentUserWritableChatContext({
-          selectedPrimaryConversationId: primaryConversationId,
+          selectedPrimaryConversationId: null,
           userId,
         })
 
@@ -1037,20 +1046,22 @@ export function createChatMessagesService({
       attachment,
       clientMessageKey,
       content = null,
-      primaryConversationId = null,
       replyToMessageId = null,
+      threadId,
       userId,
     }: {
       attachment: PortalAttachmentUpload
       clientMessageKey: string
       content?: string | null
-      primaryConversationId?: number | null
       replyToMessageId?: number | null
+      threadId: string
       userId: number
     }): Promise<ChatSendResult> {
+      assertPrivateChatThreadId(threadId)
+
       const context =
         await chatContextService.ensureCurrentUserWritableChatContext({
-          selectedPrimaryConversationId: primaryConversationId,
+          selectedPrimaryConversationId: null,
           userId,
         })
 

@@ -7,6 +7,7 @@ import { ApiError } from '../../lib/errors.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
+import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
@@ -15,30 +16,38 @@ const CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES = 256 * 1024
 const CHAT_ATTACHMENT_REQUEST_MAX_BYTES =
   CHAT_ATTACHMENT_MAX_BYTES + CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES
 
-const chatMessagesQuerySchema = z.object({
-  beforeMessageId: z.coerce.number().int().positive().optional(),
-  primaryConversationId: z.coerce.number().int().positive().optional(),
-})
+const privateThreadIdSchema = z.literal(PRIVATE_CHAT_THREAD_ID)
 
-const sendChatMessageBodySchema = z.object({
-  clientMessageKey: z.string().trim().min(1).max(200),
-  content: z.string().trim().min(1, 'Введите сообщение.').max(4000),
-  primaryConversationId: z.number().int().positive().optional(),
-  replyToMessageId: z.number().int().positive().optional(),
-})
+const chatMessagesQuerySchema = z
+  .object({
+    beforeMessageId: z.coerce.number().int().positive().optional(),
+    threadId: privateThreadIdSchema,
+  })
+  .strict()
 
-const sendChatAttachmentFieldsSchema = z.object({
-  clientMessageKey: z.string().trim().min(1).max(200),
-  content: z.string().trim().max(4000).optional(),
-  primaryConversationId: z.coerce.number().int().positive().optional(),
-  replyToMessageId: z.coerce.number().int().positive().optional(),
-})
+const sendChatMessageBodySchema = z
+  .object({
+    clientMessageKey: z.string().trim().min(1).max(200),
+    content: z.string().trim().min(1, 'Введите сообщение.').max(4000),
+    replyToMessageId: z.number().int().positive().optional(),
+    threadId: privateThreadIdSchema,
+  })
+  .strict()
+
+const sendChatAttachmentFieldsSchema = z
+  .object({
+    clientMessageKey: z.string().trim().min(1).max(200),
+    content: z.string().trim().max(4000).optional(),
+    replyToMessageId: z.coerce.number().int().positive().optional(),
+    threadId: privateThreadIdSchema,
+  })
+  .strict()
 
 type AttachmentMultipartFields = {
   clientMessageKey?: string
   content?: string
-  primaryConversationId?: string
   replyToMessageId?: string
+  threadId?: string
 }
 
 type RegisterChatMessagesRoutesOptions = {
@@ -66,10 +75,10 @@ function applyMultipartField(
   if (
     part.fieldname !== 'clientMessageKey' &&
     part.fieldname !== 'content' &&
-    part.fieldname !== 'primaryConversationId' &&
-    part.fieldname !== 'replyToMessageId'
+    part.fieldname !== 'replyToMessageId' &&
+    part.fieldname !== 'threadId'
   ) {
-    return
+    throw new ApiError(400, 'invalid_attachment_field', 'Некорректный запрос.')
   }
 
   const value = getMultipartFieldValue(part)
@@ -151,8 +160,8 @@ async function parseAttachmentUpload(
   attachment: PortalAttachmentUpload
   clientMessageKey: string
   content: string | null
-  primaryConversationId: number | null
   replyToMessageId: number | null
+  threadId: string
 }> {
   if (!request.isMultipart()) {
     throw new ApiError(
@@ -212,8 +221,8 @@ async function parseAttachmentUpload(
     attachment,
     clientMessageKey: parsedFields.clientMessageKey,
     content: parsedFields.content || null,
-    primaryConversationId: parsedFields.primaryConversationId ?? null,
     replyToMessageId: parsedFields.replyToMessageId ?? null,
+    threadId: parsedFields.threadId,
   }
 }
 
@@ -236,7 +245,7 @@ export function registerChatMessagesRoutes(
 
     return createChatMessagesService(request).getCurrentUserChatMessages({
       beforeMessageId: query.beforeMessageId ?? null,
-      primaryConversationId: query.primaryConversationId ?? null,
+      threadId: query.threadId,
       userId: user.id,
     })
   })
@@ -255,8 +264,8 @@ export function registerChatMessagesRoutes(
     return createChatMessagesService(request).sendCurrentUserTextMessage({
       clientMessageKey: body.clientMessageKey,
       content: body.content,
-      primaryConversationId: body.primaryConversationId ?? null,
       replyToMessageId: body.replyToMessageId ?? null,
+      threadId: body.threadId,
       userId: user.id,
     })
   })
@@ -283,8 +292,8 @@ export function registerChatMessagesRoutes(
         attachment: upload.attachment,
         clientMessageKey: upload.clientMessageKey,
         content: upload.content,
-        primaryConversationId: upload.primaryConversationId,
         replyToMessageId: upload.replyToMessageId,
+        threadId: upload.threadId,
         userId: user.id,
       })
     },

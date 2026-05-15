@@ -6,12 +6,18 @@ import { ApiError } from '../../lib/errors.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatContextService } from '../chat-context/service.js'
+import {
+  assertPrivateChatThreadId,
+  PRIVATE_CHAT_THREAD_ID,
+} from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatRealtimeEvent, ChatRealtimeHub } from './hub.js'
 
-const chatRealtimeQuerySchema = z.object({
-  primaryConversationId: z.coerce.number().int().positive(),
-})
+const chatRealtimeQuerySchema = z
+  .object({
+    threadId: z.literal(PRIVATE_CHAT_THREAD_ID),
+  })
+  .strict()
 
 type RegisterChatRealtimeRoutesOptions = {
   authService: AuthService
@@ -47,11 +53,13 @@ export function registerChatRealtimeRoutes(
       request,
     })
     const query = chatRealtimeQuerySchema.parse(request.query)
+    assertPrivateChatThreadId(query.threadId)
+
     const tenant = requireTenantContext(request)
     const context = await createChatContextService(
       request,
     ).getCurrentUserChatContext({
-      selectedPrimaryConversationId: query.primaryConversationId,
+      selectedPrimaryConversationId: null,
       userId: user.id,
     })
 
@@ -60,14 +68,6 @@ export function registerChatRealtimeRoutes(
         409,
         'chat_realtime_not_ready',
         'Realtime доступен только для готового чата.',
-      )
-    }
-
-    if (context.primaryConversation.id !== query.primaryConversationId) {
-      throw new ApiError(
-        409,
-        'chat_realtime_conversation_mismatch',
-        'Realtime conversation не совпадает с основным чатом.',
       )
     }
 

@@ -5,7 +5,7 @@ import {
   getChatMessages,
   sendChatAttachment,
 } from '../api/chatClient'
-import type { ChatMessagesSnapshot } from '../types'
+import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
@@ -90,7 +90,9 @@ export function ChatPage() {
     }))
 
     try {
-      const snapshot = await getChatMessages()
+      const snapshot = await getChatMessages({
+        threadId: PRIVATE_CHAT_THREAD_ID,
+      })
 
       if (!isMountedRef.current) {
         return
@@ -131,7 +133,7 @@ export function ChatPage() {
     if (
       !isBrowserOnline ||
       pageState.status !== 'ready' ||
-      !pageState.snapshot.primaryConversation ||
+      !pageState.snapshot.activeThread ||
       !pageState.snapshot.nextOlderCursor
     ) {
       return
@@ -143,7 +145,7 @@ export function ChatPage() {
     try {
       const olderSnapshot = await getChatMessages({
         beforeMessageId: pageState.snapshot.nextOlderCursor,
-        primaryConversationId: pageState.snapshot.primaryConversation.id,
+        threadId: pageState.snapshot.activeThread.id,
       })
 
       if (!isMountedRef.current) {
@@ -213,9 +215,8 @@ export function ChatPage() {
         clientMessageKey,
         content,
         file,
-        primaryConversationId:
-          pageState.snapshot.primaryConversation?.id ?? null,
         replyToMessageId,
+        threadId: PRIVATE_CHAT_THREAD_ID,
       })
 
       if (!isMountedRef.current) {
@@ -282,16 +283,11 @@ export function ChatPage() {
   }, [loadInitialChat])
 
   const refreshChatSnapshot = useCallback(async () => {
-    const primaryConversationId =
-      pageState.status === 'ready' && pageState.snapshot.primaryConversation
-        ? pageState.snapshot.primaryConversation.id
-        : null
-
     let latestSnapshot: ChatMessagesSnapshot
 
     try {
       latestSnapshot = await getChatMessages({
-        primaryConversationId,
+        threadId: PRIVATE_CHAT_THREAD_ID,
       })
     } catch (error) {
       if (await handleUnauthorizedChatError(error)) {
@@ -334,7 +330,6 @@ export function ChatPage() {
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     markBrowserOnline,
-    pageState,
   ])
   const resyncStatus = useChatResumeResync({
     canAttemptResync: isBrowserOnline || navigatorHintIsOnline,
@@ -344,22 +339,21 @@ export function ChatPage() {
   })
 
   const snapshot = pageState.snapshot
-  const realtimePrimaryConversationId =
+  const realtimeThreadId =
     pageState.status === 'ready' &&
     pageState.snapshot.result === 'ready' &&
-    pageState.snapshot.primaryConversation
-      ? pageState.snapshot.primaryConversation.id
+    pageState.snapshot.activeThread
+      ? pageState.snapshot.activeThread.id
       : null
 
   useChatRealtimeConnection({
     isMountedRef,
     markBrowserOnline,
-    primaryConversationId: realtimePrimaryConversationId,
     setPageState,
+    threadId: realtimeThreadId,
   })
 
-  const isReady =
-    snapshot?.result === 'ready' && Boolean(snapshot.primaryConversation)
+  const isReady = snapshot?.result === 'ready' && Boolean(snapshot.activeThread)
   const canSend =
     pageState.status === 'ready' &&
     (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
@@ -380,6 +374,7 @@ export function ChatPage() {
       pageState,
       replyTarget,
       setPageState,
+      threadId: PRIVATE_CHAT_THREAD_ID,
     })
   const visibleMessages =
     pageState.status === 'ready'
@@ -392,7 +387,7 @@ export function ChatPage() {
   return (
     <>
       <ChatHeader
-        conversation={snapshot?.primaryConversation ?? null}
+        activeThread={snapshot?.activeThread ?? null}
         isReady={isReady}
       />
       <ChatRuntimeAlerts

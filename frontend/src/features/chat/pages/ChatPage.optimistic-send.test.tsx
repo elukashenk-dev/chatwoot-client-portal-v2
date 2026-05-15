@@ -11,6 +11,13 @@ const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
 }
 
+const privateThread = {
+  id: 'private:me',
+  subtitle: 'Только вы и поддержка',
+  title: 'Личный чат',
+  type: 'private',
+} satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -63,13 +70,7 @@ function createReadySnapshot(
       },
     ],
     nextOlderCursor: null,
-    primaryConversation: {
-      assigneeName: 'Ольга Support',
-      id: 77,
-      inboxId: 9,
-      lastActivityAt: 1776762960,
-      status: 'open',
-    },
+    activeThread: privateThread,
     reason: 'none',
     result: 'ready',
     ...overrides,
@@ -132,13 +133,7 @@ describe('ChatPage optimistic text send', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763600,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -163,13 +158,13 @@ describe('ChatPage optimistic text send', () => {
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       clientMessageKey: string
       content: string
-      primaryConversationId: number
+      threadId: string
     }
 
     expect(requestBody).toEqual({
       clientMessageKey: expect.stringMatching(/^portal-send:/),
       content: 'Новое сообщение',
-      primaryConversationId: 77,
+      threadId: 'private:me',
     })
   })
 
@@ -195,13 +190,7 @@ describe('ChatPage optimistic text send', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763600,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {

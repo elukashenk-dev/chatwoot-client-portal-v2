@@ -11,6 +11,13 @@ const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
 }
 
+const privateThread = {
+  id: 'private:me',
+  subtitle: 'Только вы и поддержка',
+  title: 'Личный чат',
+  type: 'private',
+} satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
 class MockEventSource {
   static instances: MockEventSource[] = []
 
@@ -142,13 +149,7 @@ function createReadySnapshot(
       },
     ],
     nextOlderCursor: null,
-    primaryConversation: {
-      assigneeName: 'Ольга Support',
-      id: 77,
-      inboxId: 9,
-      lastActivityAt: 1776762960,
-      status: 'open',
-    },
+    activeThread: privateThread,
     reason: 'none',
     result: 'ready',
     ...overrides,
@@ -220,7 +221,7 @@ describe('ChatPage', () => {
     expect(
       await screen.findByRole(
         'heading',
-        { name: 'Поддержка клиентов' },
+        { name: 'Личный чат' },
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
     ).toBeInTheDocument()
@@ -248,7 +249,7 @@ describe('ChatPage', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/chat/messages',
+      '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
@@ -354,7 +355,7 @@ describe('ChatPage', () => {
     expect(screen.getByText('Последнее сообщение.')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      '/api/chat/messages?primaryConversationId=77&beforeMessageId=205',
+      '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
@@ -452,7 +453,7 @@ describe('ChatPage', () => {
             hasMoreOlder: false,
             messages: [],
             nextOlderCursor: null,
-            primaryConversation: null,
+            activeThread: null,
             reason: 'primary_conversation_missing',
             result: 'not_ready',
           }),
@@ -492,13 +493,7 @@ describe('ChatPage', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763700,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -566,7 +561,7 @@ describe('ChatPage', () => {
     expect(requestBody).toEqual(
       expect.objectContaining({
         content: 'Отвечаю на вопрос',
-        primaryConversationId: 77,
+        threadId: 'private:me',
         replyToMessageId: 101,
       }),
     )
@@ -583,13 +578,7 @@ describe('ChatPage', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763650,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -655,7 +644,7 @@ describe('ChatPage', () => {
       expect.stringMatching(/^portal-send:/),
     )
     expect(formData.get('content')).toBe('Черновик остается')
-    expect(formData.get('primaryConversationId')).toBe('77')
+    expect(formData.get('threadId')).toBe('private:me')
     expect(attachment.name).toBe('signed-act.pdf')
     expect(attachment.type).toBe('application/pdf')
   })
@@ -672,13 +661,7 @@ describe('ChatPage', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 9,
-            lastActivityAt: 1776763650,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -740,7 +723,7 @@ describe('ChatPage', () => {
     expect(formData.get('clientMessageKey')).toEqual(
       expect.stringMatching(/^portal-send:/),
     )
-    expect(formData.get('primaryConversationId')).toBe('77')
+    expect(formData.get('threadId')).toBe('private:me')
     expect(attachment.name).toMatch(/^voice-message-\d{8}-\d{6}\.webm$/)
     expect(attachment.type).toContain('audio/webm')
   })
@@ -807,7 +790,7 @@ describe('ChatPage', () => {
               id: 42,
             },
             messages: [],
-            primaryConversation: null,
+            activeThread: privateThread,
             reason: 'conversation_missing',
             result: 'not_ready',
           }),
@@ -818,13 +801,7 @@ describe('ChatPage', () => {
           linkedContact: {
             id: 42,
           },
-          primaryConversation: {
-            assigneeName: null,
-            id: 301,
-            inboxId: 9,
-            lastActivityAt: 1776763600,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -858,10 +835,10 @@ describe('ChatPage', () => {
     const requestBody = JSON.parse(
       String(fetchMock.mock.calls[2]?.[1]?.body),
     ) as {
-      primaryConversationId?: number
+      threadId?: string
     }
 
-    expect(requestBody.primaryConversationId).toBeUndefined()
+    expect(requestBody.threadId).toBe('private:me')
   })
 
   it('opens backend realtime and merges new message snapshots into the visible transcript', async () => {
@@ -900,7 +877,7 @@ describe('ChatPage', () => {
 
     expect(MockEventSource.instances).toHaveLength(1)
     expect(MockEventSource.instances[0]?.url).toContain(
-      '/api/chat/realtime?primaryConversationId=77',
+      '/api/chat/realtime?threadId=private%3Ame',
     )
     expect(MockEventSource.instances[0]?.withCredentials).toBe(true)
 

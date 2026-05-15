@@ -52,11 +52,10 @@ export function mergeRealtimeSnapshot({
 }): ChatMessagesSnapshot {
   if (
     currentSnapshot.result !== 'ready' ||
-    !currentSnapshot.primaryConversation ||
+    !currentSnapshot.activeThread ||
     realtimeSnapshot.result !== 'ready' ||
-    !realtimeSnapshot.primaryConversation ||
-    currentSnapshot.primaryConversation.id !==
-      realtimeSnapshot.primaryConversation.id
+    !realtimeSnapshot.activeThread ||
+    currentSnapshot.activeThread.id !== realtimeSnapshot.activeThread.id
   ) {
     return realtimeSnapshot
   }
@@ -109,6 +108,7 @@ export function buildSnapshotFromSendResult({
 }): ChatMessagesSnapshot {
   return {
     hasMoreOlder: currentSnapshot?.hasMoreOlder ?? false,
+    activeThread: sendResult.activeThread,
     linkedContact: sendResult.linkedContact,
     messages: sendResult.sentMessage
       ? appendSentMessage(
@@ -117,7 +117,6 @@ export function buildSnapshotFromSendResult({
         )
       : (currentSnapshot?.messages ?? []),
     nextOlderCursor: currentSnapshot?.nextOlderCursor ?? null,
-    primaryConversation: sendResult.primaryConversation,
     reason: sendResult.reason,
     result: sendResult.result,
   }

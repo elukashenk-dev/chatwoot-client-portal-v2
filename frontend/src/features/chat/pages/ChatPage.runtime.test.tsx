@@ -102,12 +102,11 @@ function createReadySnapshot(
       },
     ],
     nextOlderCursor: null,
-    primaryConversation: {
-      assigneeName: 'Ольга Support',
-      id: 77,
-      inboxId: 9,
-      lastActivityAt: 1776762960,
-      status: 'open',
+    activeThread: {
+      id: 'private:me',
+      subtitle: 'Только вы и поддержка',
+      title: 'Личный чат',
+      type: 'private',
     },
     reason: 'none',
     result: 'ready',
@@ -254,7 +253,7 @@ describe('ChatPage runtime hardening', () => {
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      '/api/chat/messages?primaryConversationId=77',
+      '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',

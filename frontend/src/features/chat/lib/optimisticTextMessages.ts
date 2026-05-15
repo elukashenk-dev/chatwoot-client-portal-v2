@@ -1,7 +1,6 @@
 import type {
   ChatMessage,
   ChatMessageReplyPreview,
-  ChatMessagesSnapshot,
 } from '../types'
 import type { MessageComposerReplyTarget } from '../components/message-composer/types'
 
@@ -13,7 +12,6 @@ export type OptimisticTextSend = {
   createdAt: string
   errorMessage: string | null
   id: number
-  primaryConversationId: number | null
   replyTo: ChatMessageReplyPreview | null
   replyToMessageId: number | null
   status: OptimisticTextSendStatus
@@ -24,7 +22,6 @@ export type CreateOptimisticTextSendInput = {
   content: string
   id: number
   now: Date
-  primaryConversationId: number | null
   replyTarget: MessageComposerReplyTarget | null
   replyToMessageId: number | null
 }
@@ -34,7 +31,6 @@ export function createOptimisticTextSend({
   content,
   id,
   now,
-  primaryConversationId,
   replyTarget,
   replyToMessageId,
 }: CreateOptimisticTextSendInput): OptimisticTextSend {
@@ -44,7 +40,6 @@ export function createOptimisticTextSend({
     createdAt: now.toISOString(),
     errorMessage: null,
     id,
-    primaryConversationId,
     replyTo:
       replyTarget && replyTarget.id === replyToMessageId
         ? {
@@ -108,10 +103,4 @@ export function mergeOptimisticTextMessages({
     .map(toOptimisticChatMessage)
 
   return sortMessagesByTimeline([...messages, ...visibleOptimisticMessages])
-}
-
-export function getSnapshotPrimaryConversationId(
-  snapshot: ChatMessagesSnapshot | null,
-) {
-  return snapshot?.primaryConversation?.id ?? null
 }

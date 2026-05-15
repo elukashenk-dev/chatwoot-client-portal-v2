@@ -70,16 +70,16 @@ export function createMultipartAttachmentPayload({
   fileContent,
   fileName,
   mimeType,
-  primaryConversationId,
   replyToMessageId,
+  threadId,
 }: {
   clientMessageKey: string
   content?: string
   fileContent: Buffer
   fileName: string
   mimeType: string
-  primaryConversationId?: number
   replyToMessageId?: number
+  threadId: string
 }) {
   const boundary = '----portal-test-boundary'
   const chunks: Buffer[] = []
@@ -97,9 +97,7 @@ export function createMultipartAttachmentPayload({
     appendField('content', content)
   }
 
-  if (primaryConversationId !== undefined) {
-    appendField('primaryConversationId', String(primaryConversationId))
-  }
+  appendField('threadId', threadId)
 
   if (replyToMessageId !== undefined) {
     appendField('replyToMessageId', String(replyToMessageId))

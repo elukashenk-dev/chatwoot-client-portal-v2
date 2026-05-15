@@ -183,23 +183,23 @@ describe('buildApp', () => {
         cookie: cookieHeader,
       },
       method: 'GET',
-      url: '/api/chat/messages',
+      url: '/api/chat/messages?threadId=private%3Ame',
     })
 
     expect(contextResponse.statusCode).toBe(200)
     expect(contextResponse.json()).toEqual({
+      activeThread: null,
       linkedContact: null,
-      primaryConversation: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
     })
     expect(messagesResponse.statusCode).toBe(200)
     expect(messagesResponse.json()).toEqual({
       hasMoreOlder: false,
+      activeThread: null,
       linkedContact: null,
       messages: [],
       nextOlderCursor: null,
-      primaryConversation: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
     })
@@ -239,14 +239,15 @@ describe('buildApp', () => {
         clientMessageKey: 'portal-send:test-key',
         content: 'Здравствуйте',
         replyToMessageId: 10,
+        threadId: 'private:me',
       },
       url: '/api/chat/messages',
     })
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
+      activeThread: null,
       linkedContact: null,
-      primaryConversation: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
       sentMessage: null,
@@ -283,6 +284,7 @@ describe('buildApp', () => {
       fileName: 'invoice.pdf',
       mimeType: 'application/pdf',
       replyToMessageId: 10,
+      threadId: 'private:me',
     })
 
     const response = await app.inject({
@@ -298,12 +300,87 @@ describe('buildApp', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
+      activeThread: null,
       linkedContact: null,
-      primaryConversation: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
       sentMessage: null,
     })
+  })
+
+  it('rejects legacy public primaryConversationId selectors', async () => {
+    await database.db.insert(portalUsers).values({
+      email: 'legacy-selector@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+      tenantId,
+    })
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'legacy-selector@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+    const sessionCookie = loginResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
+
+    const contextResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/context?primaryConversationId=101',
+    })
+    const messagesResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/messages?primaryConversationId=101',
+    })
+    const sendResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        clientMessageKey: 'portal-send:legacy-key',
+        content: 'Здравствуйте',
+        primaryConversationId: 101,
+        threadId: 'private:me',
+      },
+      url: '/api/chat/messages',
+    })
+    const realtimeResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/realtime?primaryConversationId=101',
+    })
+
+    for (const response of [
+      contextResponse,
+      messagesResponse,
+      sendResponse,
+      realtimeResponse,
+    ]) {
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toMatchObject({
+        error: {
+          code: 'INVALID_REQUEST',
+        },
+      })
+    }
   })
 
   it('accepts attachment requests larger than Fastify default body limit', async () => {
@@ -334,6 +411,7 @@ describe('buildApp', () => {
       fileContent: Buffer.alloc(1024 * 1024 + 64 * 1024, 0x25),
       fileName: 'large-invoice.pdf',
       mimeType: 'application/pdf',
+      threadId: 'private:me',
     })
 
     const response = await app.inject({
@@ -384,6 +462,7 @@ describe('buildApp', () => {
       fileContent: Buffer.from('%PDF-1.7\n'),
       fileName: 'invoice.pdf',
       mimeType: 'application/pdf',
+      threadId: 'private:me',
     })
 
     const response = await app.inject({

@@ -6,11 +6,18 @@ import { ApiError } from '../../lib/errors.js'
 import type { AuthService, PublicPortalUser } from '../auth/service.js'
 import { clearSessionCookie, getSessionToken } from '../auth/sessionCookie.js'
 import { requireTenantContext } from '../tenants/routes.js'
+import {
+  assertPrivateChatThreadId,
+  mapPublicChatContextSnapshot,
+  PRIVATE_CHAT_THREAD_ID,
+} from '../chat-threads/privateThread.js'
 import type { ChatContextService } from './service.js'
 
-const chatContextQuerySchema = z.object({
-  primaryConversationId: z.coerce.number().int().positive().optional(),
-})
+const chatContextQuerySchema = z
+  .object({
+    threadId: z.literal(PRIVATE_CHAT_THREAD_ID).optional(),
+  })
+  .strict()
 
 type RegisterChatContextRoutesOptions = {
   authService: AuthService
@@ -66,10 +73,16 @@ export function registerChatContextRoutes(
       request,
     })
     const query = chatContextQuerySchema.parse(request.query)
+    const threadId = query.threadId ?? PRIVATE_CHAT_THREAD_ID
+    assertPrivateChatThreadId(threadId)
 
-    return createChatContextService(request).getCurrentUserChatContext({
-      selectedPrimaryConversationId: query.primaryConversationId ?? null,
+    const context = await createChatContextService(
+      request,
+    ).getCurrentUserChatContext({
+      selectedPrimaryConversationId: null,
       userId: user.id,
     })
+
+    return mapPublicChatContextSnapshot(context)
   })
 }

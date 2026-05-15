@@ -11,7 +11,6 @@ import { sendChatMessage } from '../api/chatClient'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
 import {
   createOptimisticTextSend,
-  getSnapshotPrimaryConversationId,
   type OptimisticTextSend,
 } from '../lib/optimisticTextMessages'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
@@ -36,6 +35,7 @@ type UseOptimisticTextSendInput = {
   pageState: ChatPageState
   replyTarget: MessageComposerReplyTarget | null
   setPageState: Dispatch<SetStateAction<ChatPageState>>
+  threadId: string
 }
 
 function getTextSendErrorMessage(error: unknown) {
@@ -54,6 +54,7 @@ export function useOptimisticTextSend({
   pageState,
   replyTarget,
   setPageState,
+  threadId,
 }: UseOptimisticTextSendInput) {
   const optimisticMessageIdRef = useRef(-1)
   const [optimisticTextSends, setOptimisticTextSends] = useState<
@@ -83,8 +84,8 @@ export function useOptimisticTextSend({
         const sendResult = await sendChatMessage({
           clientMessageKey: optimisticSend.clientMessageKey,
           content: optimisticSend.content,
-          primaryConversationId: optimisticSend.primaryConversationId,
           replyToMessageId: optimisticSend.replyToMessageId,
+          threadId,
         })
 
         if (!isMountedRef.current) {
@@ -144,6 +145,7 @@ export function useOptimisticTextSend({
       markBrowserOnline,
       markOptimisticTextSendFailed,
       setPageState,
+      threadId,
     ],
   )
 
@@ -158,9 +160,6 @@ export function useOptimisticTextSend({
         content,
         id: optimisticMessageIdRef.current,
         now: new Date(),
-        primaryConversationId: getSnapshotPrimaryConversationId(
-          pageState.snapshot,
-        ),
         replyTarget,
         replyToMessageId: replyToMessageId ?? null,
       })
@@ -204,10 +203,6 @@ export function useOptimisticTextSend({
       const retrySend = {
         ...optimisticSend,
         errorMessage: null,
-        primaryConversationId:
-          getSnapshotPrimaryConversationId(
-            pageState.status === 'ready' ? pageState.snapshot : null,
-          ) ?? optimisticSend.primaryConversationId,
         status: 'sending' as const,
       }
 

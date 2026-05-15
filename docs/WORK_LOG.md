@@ -74,6 +74,12 @@
 - `F-CHAT-THREAD-003` закрыт: plan теперь содержит конкретную fail-closed
   coverage matrix и тесты для malformed attributes, missing/wrong/disabled
   contacts, forged `threadId` и membership removal.
+- Private-only safety gate реализован: browser/public chat API использует
+  `threadId = private:me` и `activeThread`, старые public
+  `primaryConversationId` selectors fail-closed, company threads пока не
+  включены.
+- Header и левое меню показывают текущий выбранный thread как `Личный чат`;
+  frontend больше не хранит Chatwoot conversation id как authority.
 
 ## Current Baseline
 
@@ -91,8 +97,8 @@
 
 ## Recommended Next Step
 
-- Создать отдельную ветку `feature/phase-chat-thread-private-safety-gate` и
-  начать private-only переход на `threadId = private:me`. Company behavior не
-  включать до закрытия `F-CHAT-SEC-001`, `F-CHAT-THREAD-001`,
-  `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`,
-  `F-CHAT-THREAD-007`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
+- Закрыть `F-CHAT-SEC-001` authenticated chat send rate limit перед следующей
+  chat-thread feature фазой. Company behavior не включать до закрытия
+  `F-CHAT-THREAD-001`, `F-CHAT-THREAD-002`, `F-CHAT-THREAD-004`,
+  `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`, `F-CHAT-THREAD-007`,
+  `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.

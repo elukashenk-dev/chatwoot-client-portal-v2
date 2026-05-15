@@ -7,10 +7,11 @@ import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
-import type { ChatPrimaryConversation } from '../types'
+import type { ChatThreadSummary } from '../types'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellOffIcon,
+  CheckIcon,
   ImageIcon,
   InfoIcon,
   LogOutIcon,
@@ -20,7 +21,7 @@ import {
 } from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
-  conversation: ChatPrimaryConversation | null
+  activeThread: ChatThreadSummary | null
   isReady: boolean
 }
 
@@ -30,7 +31,7 @@ function focusElement(element: HTMLElement | null) {
   }
 }
 
-export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
+export function ChatHeader({ activeThread, isReady }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
   const { tenant } = useTenantIdentity()
@@ -168,7 +169,8 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
   const supportTeamName = tenant
     ? `Команда ${tenant.displayName}`
     : 'Команда поддержки'
-  const assigneeName = conversation?.assigneeName ?? supportTeamName
+  const threadTitle = activeThread?.title ?? 'Личный чат'
+  const threadSubtitle = activeThread?.subtitle ?? supportTeamName
   const tenantMonogram = tenant
     ? createTenantMonogram(tenant.displayName)
     : 'ЛК'
@@ -203,17 +205,22 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
               role="menu"
               tabIndex={-1}
             >
+              <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+                Чаты
+              </div>
               <button
-                className="flex w-full items-center rounded-[0.6rem] px-3 py-2 text-left font-medium text-brand-800"
+                aria-current="page"
+                className="flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left font-medium text-brand-800"
                 disabled
                 role="menuitem"
                 type="button"
               >
-                Чат
+                <CheckIcon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 truncate">{threadTitle}</span>
               </button>
               <button
                 aria-disabled="true"
-                className="flex w-full items-center justify-between rounded-[0.6rem] px-3 py-2 text-left text-slate-500"
+                className="mt-1 flex w-full items-center justify-between rounded-[0.6rem] px-3 py-2 text-left text-slate-500"
                 disabled
                 role="menuitem"
                 type="button"
@@ -231,10 +238,10 @@ export function ChatHeader({ conversation, isReady }: ChatHeaderProps) {
 
         <div className="min-w-0 flex-1 py-0.5">
           <h1 className="truncate text-[16px] font-semibold leading-tight text-slate-900 sm:text-[17px]">
-            Поддержка клиентов
+            {threadTitle}
           </h1>
           <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-slate-500 sm:text-[13px]">
-            <span className="min-w-0 truncate">{assigneeName}</span>
+            <span className="min-w-0 truncate">{threadSubtitle}</span>
             <span
               aria-hidden="true"
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#76a878] shadow-[0_0_0_2px_rgb(118_168_120_/_0.14)]"

@@ -100,7 +100,7 @@ describe('registerChatRealtimeRoutes', () => {
           )}`,
         },
         method: 'GET',
-        url: '/api/chat/realtime?primaryConversationId=101',
+        url: '/api/chat/realtime?threadId=private%3Ame',
       })
 
       expect(response.statusCode).toBe(429)

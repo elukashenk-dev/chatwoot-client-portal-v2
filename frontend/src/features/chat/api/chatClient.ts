@@ -102,16 +102,14 @@ async function request<TResponse>(
 
 export async function getChatMessages({
   beforeMessageId,
-  primaryConversationId,
+  threadId,
 }: {
   beforeMessageId?: number | null
-  primaryConversationId?: number | null
-} = {}) {
+  threadId: string
+}) {
   const searchParams = new URLSearchParams()
 
-  if (primaryConversationId) {
-    searchParams.set('primaryConversationId', String(primaryConversationId))
-  }
+  searchParams.set('threadId', threadId)
 
   if (beforeMessageId) {
     searchParams.set('beforeMessageId', String(beforeMessageId))
@@ -127,28 +125,24 @@ export async function getChatMessages({
 export async function sendChatMessage({
   clientMessageKey,
   content,
-  primaryConversationId,
   replyToMessageId,
+  threadId,
 }: {
   clientMessageKey: string
   content: string
-  primaryConversationId?: number | null
   replyToMessageId?: number | null
+  threadId: string
 }) {
   return request<ChatSendResult>('/chat/messages', {
     body: {
       clientMessageKey,
       content,
-      ...(primaryConversationId
-        ? {
-            primaryConversationId,
-          }
-        : {}),
       ...(replyToMessageId
         ? {
             replyToMessageId,
           }
         : {}),
+      threadId,
     },
     method: 'POST',
     networkErrorMessage: 'Не удалось отправить сообщение. Попробуйте еще раз.',
@@ -159,14 +153,14 @@ export async function sendChatAttachment({
   clientMessageKey,
   content,
   file,
-  primaryConversationId,
   replyToMessageId,
+  threadId,
 }: {
   clientMessageKey: string
   content?: string | null
   file: File
-  primaryConversationId?: number | null
   replyToMessageId?: number | null
+  threadId: string
 }) {
   const formData = new FormData()
   const normalizedContent = content?.trim()
@@ -177,9 +171,7 @@ export async function sendChatAttachment({
     formData.append('content', normalizedContent)
   }
 
-  if (primaryConversationId) {
-    formData.append('primaryConversationId', String(primaryConversationId))
-  }
+  formData.append('threadId', threadId)
 
   if (replyToMessageId) {
     formData.append('replyToMessageId', String(replyToMessageId))

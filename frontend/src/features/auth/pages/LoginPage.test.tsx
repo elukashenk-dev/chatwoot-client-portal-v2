@@ -19,10 +19,10 @@ function createChatNotReadyResponse() {
   return createJsonResponse(
     {
       hasMoreOlder: false,
+      activeThread: null,
       linkedContact: null,
       messages: [],
       nextOlderCursor: null,
-      primaryConversation: null,
       reason: 'contact_link_missing',
       result: 'not_ready',
     },
@@ -173,7 +173,7 @@ describe('LoginPage', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
+      await screen.findByRole('heading', { name: 'Личный чат' }),
     ).toBeInTheDocument()
     expect(await screen.findByText('Чат не подключен')).toBeInTheDocument()
   })
@@ -200,7 +200,7 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/auth/login'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
+      await screen.findByRole('heading', { name: 'Личный чат' }),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
@@ -237,7 +237,7 @@ describe('LoginPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Центр поддержки' }),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Поддержка клиентов')).not.toBeInTheDocument()
+    expect(screen.queryByText('Личный чат')).not.toBeInTheDocument()
   })
 
   it('shows the app welcome screen while protected session is checking', () => {
@@ -274,7 +274,7 @@ describe('LoginPage', () => {
       renderAuthRoutes([initialEntry])
 
       expect(
-        await screen.findByRole('heading', { name: 'Поддержка клиентов' }),
+        await screen.findByRole('heading', { name: 'Личный чат' }),
       ).toBeInTheDocument()
       expect(
         screen.queryByRole('heading', { name: publicPageHeading }),
