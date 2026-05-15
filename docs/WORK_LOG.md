@@ -138,6 +138,10 @@
   portal-owned `threadId`, а local Chatwoot/API validation подтвердил company
   thread listing, first-send bootstrap, Chatwoot-visible Markdown author prefix,
   portal prefix stripping и controlled access removal.
+- `MT-8.6 Post-Thread Runtime Audit And Cleanup` подтвержден как отдельный
+  scope перед `MT-9`; создан design/spec для production smoke, read-only audit,
+  findings classification, regression safety, bounded refactoring и dead-code
+  removal.
 
 ## Current Baseline
 
@@ -155,5 +159,6 @@
 
 ## Recommended Next Step
 
-- Провести production smoke deploy для chat-thread runtime и затем вернуться к
-  `MT-9` gate по `F-MT-004`.
+- Проверить `MT-8.6` spec и написать implementation plan для production smoke,
+  read-only audit, findings classification, regression safety gaps и решения,
+  нужны ли отдельные cleanup/refactoring/dead-code slices перед `MT-9`.

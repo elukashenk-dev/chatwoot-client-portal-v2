@@ -52,7 +52,7 @@
 Следующий активный scope:
 
 ```text
-Production smoke deploy for chat-thread runtime, then MT-9 gate by F-MT-004
+MT-8.6. Post-Thread Runtime Audit And Cleanup
 ```
 
 ## Active Roadmap
@@ -228,6 +228,43 @@ Exit criteria:
 - first send lazily creates/reuses correct Chatwoot conversation under lock;
 - company history/send/realtime validates current Chatwoot attributes;
 - backend/frontend/e2e checks pass before checkpoint commit.
+
+### MT-8.6. Post-Thread Runtime Audit And Cleanup
+
+Status:
+
+- design accepted on `2026-05-15`;
+- spec: `docs/superpowers/specs/2026-05-15-post-thread-runtime-audit-design.md`.
+
+Цель:
+
+После большого chat-thread runtime rewrite провести production smoke,
+read-only audit, findings classification, regression safety assessment,
+controlled refactoring assessment и dead-code removal plan до начала `MT-9`.
+
+Scope:
+
+- проверить production preview или записать blocker;
+- составить audit map backend/frontend/tests/docs после thread runtime rewrite;
+- зафиксировать реальные risks в `docs/Findings/`;
+- классифицировать candidates как `must-fix-before-MT-9`,
+  `safe-pre-MT-9-cleanup`, `dead-code-candidate`, `defer` или
+  `do-not-touch`;
+- добавлять regression tests до refactoring, если audit нашел слабое покрытие
+  critical boundary;
+- выбирать bounded cleanup/refactoring/dead-code slices только после read-only
+  audit evidence и выполнять их отдельными checkpoint commits.
+
+Exit criteria:
+
+- no open `must-fix-before-MT-9` finding remains;
+- dead-code removals have evidence;
+- cleanup/refactoring did not weaken tenant/auth/session/chat/realtime/webhook
+  boundaries;
+- final backend/frontend/e2e/build/lint checks pass or blocker is recorded;
+- `F-MT-004` is explicitly carried into `MT-9` as the first permissions-spike
+  and admin-token-boundary task, not closed by `MT-8.6`;
+- project is ready to start `MT-9` on a reviewed baseline.
 
 ### MT-9. Tenant Admin And Branding Rebuild
 
