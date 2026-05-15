@@ -6,22 +6,21 @@ import { ApiError } from '../../lib/errors.js'
 import type { AuthService, PublicPortalUser } from '../auth/service.js'
 import { clearSessionCookie, getSessionToken } from '../auth/sessionCookie.js'
 import { requireTenantContext } from '../tenants/routes.js'
-import {
-  assertPrivateChatThreadId,
-  mapPublicChatContextSnapshot,
-  PRIVATE_CHAT_THREAD_ID,
-} from '../chat-threads/privateThread.js'
+import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
+import { resolveCurrentUserChatThread } from '../chat-threads/threadResolver.js'
 import type { ChatContextService } from './service.js'
 
 const chatContextQuerySchema = z
   .object({
-    threadId: z.literal(PRIVATE_CHAT_THREAD_ID).optional(),
+    threadId: z.string().min(1).max(64).optional(),
   })
   .strict()
 
 type RegisterChatContextRoutesOptions = {
   authService: AuthService
-  createChatContextService: (request: FastifyRequest) => ChatContextService
+  createChatContextService: (
+    request: FastifyRequest,
+  ) => Pick<ChatContextService, 'getCurrentUserChatContext'>
   env: AppEnv
 }
 
@@ -74,15 +73,14 @@ export function registerChatContextRoutes(
     })
     const query = chatContextQuerySchema.parse(request.query)
     const threadId = query.threadId ?? PRIVATE_CHAT_THREAD_ID
-    assertPrivateChatThreadId(threadId)
 
-    const context = await createChatContextService(
-      request,
-    ).getCurrentUserChatContext({
-      selectedPrimaryConversationId: null,
+    const { publicSnapshot } = await resolveCurrentUserChatThread({
+      chatContextService: createChatContextService(request),
+      mode: 'read',
+      threadId,
       userId: user.id,
     })
 
-    return mapPublicChatContextSnapshot(context)
+    return publicSnapshot
   })
 }

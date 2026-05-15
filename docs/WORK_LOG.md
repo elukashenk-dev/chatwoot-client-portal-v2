@@ -83,6 +83,9 @@
 - `F-CHAT-SEC-001` закрыт: authenticated chat send получил DB-backed fixed-window
   limiter для text/attachment sends, scoped by tenant/user/thread, с отдельным
   attachment budget и controlled `429` до Chatwoot outbound.
+- `F-CHAT-THREAD-002` закрыт для текущего private-only runtime: добавлен общий
+  public `threadId` parser/resolver boundary, `company:<id>` трактуется только
+  как Chatwoot company contact id и fail-closed до Chatwoot lookup/send/realtime.
 
 ## Current Baseline
 
@@ -100,8 +103,8 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-002`: ввести backend thread resolver authority boundary
-  для будущих private/company `threadId` и fail-closed membership checks. Company
-  behavior не включать до закрытия `F-CHAT-THREAD-001`,
-  `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`,
-  `F-CHAT-THREAD-007`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
+- Закрыть `F-CHAT-THREAD-007`: ввести строгий parser и cardinality bound для
+  `portal_client_company_contact_ids` перед любым `GET /api/chat/threads` с
+  company threads. Company behavior не включать до закрытия
+  `F-CHAT-THREAD-001`, `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`,
+  `F-CHAT-THREAD-006`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.

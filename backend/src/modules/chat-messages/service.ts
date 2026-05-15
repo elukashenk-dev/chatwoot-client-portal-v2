@@ -15,10 +15,10 @@ import type {
   ChatContextSnapshot,
 } from '../chat-context/service.js'
 import {
-  assertPrivateChatThreadId,
   mapPublicChatContextSnapshot,
   PRIVATE_CHAT_THREAD_ID,
 } from '../chat-threads/privateThread.js'
+import { resolveCurrentUserChatThread } from '../chat-threads/threadResolver.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
 import type {
   ChatMessagesRepository,
@@ -877,10 +877,10 @@ export function createChatMessagesService({
       threadId?: string
       userId: number
     }): Promise<ChatMessagesSnapshot> {
-      assertPrivateChatThreadId(threadId)
-
-      const context = await chatContextService.getCurrentUserChatContext({
-        selectedPrimaryConversationId: null,
+      const { context } = await resolveCurrentUserChatThread({
+        chatContextService,
+        mode: 'read',
+        threadId,
         userId,
       })
 
@@ -953,13 +953,12 @@ export function createChatMessagesService({
       threadId: string
       userId: number
     }): Promise<ChatSendResult> {
-      assertPrivateChatThreadId(threadId)
-
-      const context =
-        await chatContextService.ensureCurrentUserWritableChatContext({
-          selectedPrimaryConversationId: null,
-          userId,
-        })
+      const { context } = await resolveCurrentUserChatThread({
+        chatContextService,
+        mode: 'writable',
+        threadId,
+        userId,
+      })
 
       if (context.result !== 'ready' || !context.primaryConversation) {
         return buildSendResult(context)
@@ -1057,13 +1056,12 @@ export function createChatMessagesService({
       threadId: string
       userId: number
     }): Promise<ChatSendResult> {
-      assertPrivateChatThreadId(threadId)
-
-      const context =
-        await chatContextService.ensureCurrentUserWritableChatContext({
-          selectedPrimaryConversationId: null,
-          userId,
-        })
+      const { context } = await resolveCurrentUserChatThread({
+        chatContextService,
+        mode: 'writable',
+        threadId,
+        userId,
+      })
 
       if (context.result !== 'ready' || !context.primaryConversation) {
         return buildSendResult(context)

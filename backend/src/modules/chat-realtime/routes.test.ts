@@ -46,6 +46,63 @@ const readyContext: ChatContextSnapshot = {
 }
 
 describe('registerChatRealtimeRoutes', () => {
+  it('fails closed for company thread ids before resolving chat context or subscribing', async () => {
+    const app = Fastify({ logger: false })
+    const realtimeHub = createChatRealtimeHub()
+    const chatContextService = {
+      getCurrentUserChatContext: vi.fn(),
+    }
+    const authService = {
+      getCurrentUser: vi.fn(async () => ({
+        email: 'user@example.test',
+        fullName: 'Portal User',
+        id: 7,
+      })),
+    } as unknown as AuthService
+    const subscribeSpy = vi.spyOn(realtimeHub, 'subscribe')
+
+    app.register(cookie, {
+      hook: 'onRequest',
+      secret: testEnv.SESSION_SECRET,
+    })
+    app.decorateRequest('tenant', null)
+    app.addHook('onRequest', async (request) => {
+      request.tenant = tenant
+    })
+    registerApiErrorHandler(app)
+    registerChatRealtimeRoutes(app, {
+      authService,
+      createChatContextService: () => chatContextService,
+      env: testEnv,
+      realtimeHub,
+    })
+    await app.ready()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: `${testEnv.SESSION_COOKIE_NAME}=${app.signCookie(
+            'session-token',
+          )}`,
+        },
+        method: 'GET',
+        url: '/api/chat/realtime?threadId=company%3A154',
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({
+        error: {
+          code: 'chat_thread_unavailable',
+          message: 'Этот чат недоступен.',
+        },
+      })
+      expect(chatContextService.getCurrentUserChatContext).not.toHaveBeenCalled()
+      expect(subscribeSpy).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
   it('returns 429 before opening an SSE stream when the per chat subscription cap is reached', async () => {
     const app = Fastify({ logger: false })
     const realtimeHub = createChatRealtimeHub()

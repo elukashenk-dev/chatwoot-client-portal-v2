@@ -6,16 +6,13 @@ import { ApiError } from '../../lib/errors.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatContextService } from '../chat-context/service.js'
-import {
-  assertPrivateChatThreadId,
-  PRIVATE_CHAT_THREAD_ID,
-} from '../chat-threads/privateThread.js'
+import { resolveCurrentUserChatThread } from '../chat-threads/threadResolver.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatRealtimeEvent, ChatRealtimeHub } from './hub.js'
 
 const chatRealtimeQuerySchema = z
   .object({
-    threadId: z.literal(PRIVATE_CHAT_THREAD_ID),
+    threadId: z.string().min(1).max(64),
   })
   .strict()
 
@@ -53,13 +50,12 @@ export function registerChatRealtimeRoutes(
       request,
     })
     const query = chatRealtimeQuerySchema.parse(request.query)
-    assertPrivateChatThreadId(query.threadId)
 
     const tenant = requireTenantContext(request)
-    const context = await createChatContextService(
-      request,
-    ).getCurrentUserChatContext({
-      selectedPrimaryConversationId: null,
+    const { context } = await resolveCurrentUserChatThread({
+      chatContextService: createChatContextService(request),
+      mode: 'read',
+      threadId: query.threadId,
       userId: user.id,
     })
 

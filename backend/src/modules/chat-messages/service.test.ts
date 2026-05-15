@@ -191,7 +191,7 @@ describe('createChatMessagesService', () => {
     expect(chatwootClient.listConversationMessages).not.toHaveBeenCalled()
   })
 
-  it('rejects unsupported public thread ids before resolving chat context', async () => {
+  it('rejects unavailable company thread ids before resolving chat context', async () => {
     const chatContextService = createChatContextServiceStub()
     const service = createChatMessagesService({
       chatContextService,
@@ -200,12 +200,12 @@ describe('createChatMessagesService', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        threadId: 'company:romashka',
+        threadId: 'company:154',
         userId: 7,
       }),
     ).rejects.toMatchObject({
-      code: 'chat_thread_unsupported',
-      statusCode: 400,
+      code: 'chat_thread_unavailable',
+      statusCode: 403,
     })
     expect(chatContextService.getCurrentUserChatContext).not.toHaveBeenCalled()
   })
