@@ -93,6 +93,10 @@
 - `F-CHAT-THREAD-004` закрыт validation-only: текущий backend fail-closed
   валидирует person contact до company lookup, а frontend не делает fallback на
   company thread после backend configuration/access error.
+- `F-CHAT-THREAD-001` закрыт validation-only: текущий send ledger уже scope-ится
+  по `tenant + user + conversation + clientMessageKey`, добавлен regression test
+  для разных users с одинаковым key, а thread plan закрепляет будущий scope
+  `tenant + portal_chat_thread + user + clientMessageKey`.
 
 ## Current Baseline
 
@@ -110,8 +114,7 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-001`: подготовить thread-scoped send ledger так, чтобы
-  будущие company sends сохраняли idempotency в scope
-  `tenant + portal_chat_thread + user + clientMessageKey` и не могли replay-ить
-  отправки другого пользователя. Company history/send/bootstrap/realtime не
-  включать до закрытия оставшихся chat-thread findings.
+- Закрыть `F-CHAT-THREAD-006`: спроектировать и покрыть безопасный lazy
+  bootstrap company conversation, чтобы параллельные первые sends/readiness
+  checks не создавали duplicate Chatwoot conversations. Company sends/realtime
+  не включать до закрытия оставшихся chat-thread findings.

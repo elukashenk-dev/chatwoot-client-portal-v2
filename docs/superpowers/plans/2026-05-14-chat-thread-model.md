@@ -74,8 +74,8 @@ Backend files to modify:
 - `backend/src/modules/registration/service.test.ts` - reject disabled/company/missing-attribute contacts.
 - `backend/src/modules/chat-context/service.ts` and `backend/src/modules/chat-context/routes.ts` - shrink or bridge old primary-conversation behavior while messages move to threads.
 - `backend/src/modules/chat-messages/types.ts` - replace public `primaryConversation` dependency with `activeThread` and add message `authorRole`.
-- `backend/src/modules/chat-messages/repository.ts` - change send ledger scope from `primaryConversationId` to `portalChatThreadId`.
-- `backend/src/modules/chat-messages/repository.test.ts` - cover thread-scoped idempotency.
+- `backend/src/modules/chat-messages/repository.ts` - change send ledger scope from `primaryConversationId` to `portalChatThreadId`, while keeping `userId` in the idempotency scope.
+- `backend/src/modules/chat-messages/repository.test.ts` - cover thread-scoped idempotency, including same thread/key across different users.
 - `backend/src/modules/chat-messages/service.ts` - load/send by `threadId`, format company author Markdown for Chatwoot, strip it for portal UI.
 - `backend/src/modules/chat-messages/service.test.ts` - cover private send, company send, history mapping and stripped author prefix.
 - `backend/src/modules/chat-messages/routes.ts` - accept `threadId`, stop accepting browser `primaryConversationId` after frontend migration.
@@ -889,6 +889,22 @@ portalChatThreadId: integer('portal_chat_thread_id').references(
 authorDisplayNameSnapshot: text('author_display_name_snapshot'),
 ```
 
+The send ledger unique scope must stay user-aware after moving from
+`primaryConversationId` to `portalChatThreadId`:
+
+```ts
+uniqueIndex('portal_chat_message_sends_scope_unique').on(
+  table.tenantId,
+  table.portalChatThreadId,
+  table.userId,
+  table.clientMessageKey,
+)
+```
+
+This prevents two different members of the same company thread from replaying
+or colliding with each other if their clients generate the same
+`clientMessageKey`.
+
 Keep `primaryConversationId` during migration as an internal backend field. After
 Task 5, new browser-facing code stops sending or accepting
 `primaryConversationId`, but backend persistence can keep it until a later
@@ -942,6 +958,12 @@ where sends.tenant_id = threads.tenant_id
   and sends.user_id = threads.portal_user_id
   and sends.primary_conversation_id = threads.chatwoot_conversation_id;
 ```
+
+After `portal_chat_thread_id` is backfilled, replace the old
+`portal_chat_message_sends_scope_unique` definition with
+`tenant_id + portal_chat_thread_id + user_id + client_message_key`. Do not
+drop `user_id` from the unique scope; it is both the author/audit key and part
+of send idempotency.
 
 Do not drop `portal_user_chatwoot_conversations` in this task.
 
@@ -2208,11 +2230,17 @@ export type ChatSendResult = Pick<
 
 In `backend/src/modules/chat-messages/repository.ts`:
 
-- Change `SendLedgerScope` to `{ clientMessageKey; portalChatThreadId }`.
-- Keep `userId` on inserted rows as author.
+- Change `SendLedgerScope` to `{ clientMessageKey; portalChatThreadId; userId }`.
+- Keep `userId` on inserted rows as author and as part of the idempotency lookup/update scope.
 - Insert `portalChatThreadId`.
 - Set `authorDisplayNameSnapshot` on insert.
 - Keep setting legacy `primaryConversationId` to the resolved Chatwoot conversation ID until the column is removed in a later cleanup. Public API code must stop accepting browser-selected `primaryConversationId`, but backend persistence can keep this column as an internal compatibility field.
+- Repository tests must prove both sides of idempotency:
+  - same `tenantId + portalChatThreadId + userId + clientMessageKey` replays the
+    existing send ledger row;
+  - same `tenantId + portalChatThreadId + clientMessageKey` with different
+    `userId` creates an independent row and cannot replay another company
+    member's send.
 
 Expected insert shape:
 

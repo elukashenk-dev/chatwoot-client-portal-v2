@@ -116,6 +116,91 @@ describe('createChatMessagesRepository', () => {
     })
   })
 
+  it('keeps send key scope separate for different users in the same conversation', async () => {
+    const repository = createChatMessagesRepository(database.db, { tenantId })
+    const [otherUser] = await database.db
+      .insert(portalUsers)
+      .values({
+        email: 'partner@company.ru',
+        passwordHash: await hashPassword('Secret123'),
+        tenantId,
+      })
+      .returning({
+        id: portalUsers.id,
+      })
+
+    if (!otherUser) {
+      throw new Error('Failed to create other portal user.')
+    }
+
+    const now = new Date('2026-04-21T12:00:00.000Z')
+    const input = {
+      clientMessageKey: 'portal-send:shared-key',
+      messageKind: 'text',
+      now,
+      payloadSha256: 'payload-hash',
+      primaryConversationId: 101,
+      staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
+    }
+
+    await expect(
+      repository.acquireSendLedgerEntry({
+        ...input,
+        processingToken: 'processing-token-1',
+        userId,
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'acquired',
+    })
+    await expect(
+      repository.acquireSendLedgerEntry({
+        ...input,
+        processingToken: 'processing-token-2',
+        userId: otherUser.id,
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'acquired',
+    })
+
+    await repository.markSendLedgerEntryConfirmed({
+      chatwootMessageId: 501,
+      clientMessageKey: input.clientMessageKey,
+      now,
+      primaryConversationId: input.primaryConversationId,
+      processingToken: 'processing-token-1',
+      userId,
+    })
+    await repository.markSendLedgerEntryConfirmed({
+      chatwootMessageId: 502,
+      clientMessageKey: input.clientMessageKey,
+      now,
+      primaryConversationId: input.primaryConversationId,
+      processingToken: 'processing-token-2',
+      userId: otherUser.id,
+    })
+
+    await expect(
+      repository.findSendLedgerEntry({
+        clientMessageKey: input.clientMessageKey,
+        primaryConversationId: input.primaryConversationId,
+        userId,
+      }),
+    ).resolves.toMatchObject({
+      chatwootMessageId: 501,
+      status: 'confirmed',
+    })
+    await expect(
+      repository.findSendLedgerEntry({
+        clientMessageKey: input.clientMessageKey,
+        primaryConversationId: input.primaryConversationId,
+        userId: otherUser.id,
+      }),
+    ).resolves.toMatchObject({
+      chatwootMessageId: 502,
+      status: 'confirmed',
+    })
+  })
+
   it('allows the same send key scope in different tenants', async () => {
     const otherTenantId = (
       await seedTestTenant(database.db, {
