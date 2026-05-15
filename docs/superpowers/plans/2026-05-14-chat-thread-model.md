@@ -40,7 +40,6 @@ Non-negotiables:
   `F-CHAT-SEC-001` is open;
 - company sends must not be enabled while `F-CHAT-THREAD-006` is open;
 - company webhook fanout must not be enabled while `F-CHAT-WEBHOOK-003` is open;
-- company thread listing must not be enabled while `F-CHAT-THREAD-007` is open;
 - no fallback may grant history/send/realtime access when Chatwoot contact
   attributes are missing, malformed, disabled or cross-tenant;
 - `portal_client_company_contact_ids` must be parsed by the shared
@@ -70,7 +69,7 @@ Backend files to modify:
 - `backend/src/db/schema.ts` - add `portal_chat_threads`, thread-scoped send ledger columns and indexes.
 - `backend/drizzle/*.sql`, `backend/drizzle/meta/*.json`, `backend/drizzle/meta/_journal.json` - generated migration artifacts.
 - `backend/src/integrations/chatwoot/client.ts` - return contact custom attributes and add lookup by contact ID.
-- `backend/src/integrations/chatwoot/client.test.ts` - cover contact attributes and contact ID lookup.
+- `backend/src/integrations/chatwoot/contactLookup.test.ts` - cover contact attributes and contact ID lookup.
 - `backend/src/modules/registration/service.ts` - require `portal_contact_type=person` and `portal_enabled=true`.
 - `backend/src/modules/registration/service.test.ts` - reject disabled/company/missing-attribute contacts.
 - `backend/src/modules/chat-context/service.ts` and `backend/src/modules/chat-context/routes.ts` - shrink or bridge old primary-conversation behavior while messages move to threads.
@@ -203,11 +202,10 @@ the safe sequence is:
 4. Stop accepting browser-selected `primaryConversationId` only after the
    `private:me` thread path is verified.
 5. Add company threads only after private thread compatibility passes.
-6. Treat `F-CHAT-SEC-001`, `F-CHAT-THREAD-006`,
-   `F-CHAT-WEBHOOK-003` and `F-CHAT-THREAD-007` as company-thread rollout gates:
-   authenticated send rate limiting, lazy bootstrap concurrency, webhook mapping
-   ownership and membership-list bounds must be closed before the affected
-   company-thread behavior is enabled.
+6. Treat `F-CHAT-SEC-001`, `F-CHAT-THREAD-006` and
+   `F-CHAT-WEBHOOK-003` as company-thread rollout gates: authenticated send rate
+   limiting, lazy bootstrap concurrency and webhook mapping ownership must be
+   closed before the affected company-thread behavior is enabled.
 
 Security invariant:
 
@@ -221,21 +219,22 @@ directly.
 
 Fail-closed coverage required before runtime behavior is enabled:
 
-| Case | Required tests |
-| --- | --- |
-| Malformed `portal_client_company_contact_ids` | Task 1 parser tests reject non-integer values, empty tokens, unsafe integers and oversized lists. |
-| Referenced company contact is missing | Task 3 thread listing service test rejects with `portal_company_contact_missing`. |
-| Referenced company contact has wrong `portal_contact_type` | Task 3 thread listing service test rejects with `portal_company_contact_type_invalid`. |
-| Person contact is disabled or wrong type | Task 1 parser/assertion tests and Task 3 service tests reject before returning any thread list. |
-| Company contact is disabled | Task 3 thread listing service test rejects with `portal_company_contact_disabled`. |
+| Case                                                       | Required tests                                                                                                                            |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Malformed `portal_client_company_contact_ids`              | Task 1 parser tests reject non-integer values, empty tokens, unsafe integers and oversized lists.                                         |
+| Referenced company contact is missing                      | Task 3 thread listing service test rejects with `portal_company_contact_missing`.                                                         |
+| Referenced company contact has wrong `portal_contact_type` | Task 3 thread listing service test rejects with `portal_company_contact_type_invalid`.                                                    |
+| Person contact is disabled or wrong type                   | Task 1 parser/assertion tests and Task 3 service tests reject before returning any thread list.                                           |
+| Company contact is disabled                                | Task 3 thread listing service test rejects with `portal_company_contact_disabled`.                                                        |
 | Forged `company:<id>` not listed on current person contact | Task 4 runtime resolver test rejects before Chatwoot conversation lookup/create; Task 5 history/send route tests verify no outbound send. |
-| Membership removed after subscribe/open | Task 5 history/send tests and Task 6 realtime/webhook tests revalidate current attributes and block future delivery. |
+| Membership removed after subscribe/open                    | Task 5 history/send tests and Task 6 realtime/webhook tests revalidate current attributes and block future delivery.                      |
 
 ---
 
 ## Task 0: Private Chat Safety Gate
 
 **Files:**
+
 - Inspect: `backend/src/modules/chat-context/service.test.ts`
 - Inspect: `backend/src/modules/chat-messages/service.test.ts`
 - Inspect: `backend/src/modules/chat-realtime/routes.test.ts`
@@ -306,6 +305,7 @@ If no changes were needed, do not create an empty commit.
 ## Task 1: Chatwoot Contact Attributes And Registration Gate
 
 **Files:**
+
 - Create: `backend/src/modules/chat-threads/contactAttributes.ts`
 - Create: `backend/src/modules/chat-threads/contactAttributes.test.ts`
 - Modify: `backend/src/integrations/chatwoot/client.ts`
@@ -590,7 +590,9 @@ Update `findContactByEmail()` to return `mapContact(exactMatch)`.
 Add:
 
 ```ts
-async function findContactById(contactId: number): Promise<ChatwootContact | null> {
+async function findContactById(
+  contactId: number,
+): Promise<ChatwootContact | null> {
   const resolvedConfig = assertConfigured()
 
   if (!Number.isInteger(contactId) || contactId <= 0) {
@@ -741,6 +743,7 @@ git commit -m "feat: validate portal contact attributes"
 ## Task 2: Thread Persistence And Send Ledger Migration
 
 **Files:**
+
 - Modify: `backend/src/db/schema.ts`
 - Create via Drizzle: `backend/drizzle/0009_*.sql`
 - Modify via Drizzle: `backend/drizzle/meta/0009_snapshot.json`
@@ -991,7 +994,10 @@ export function createChatThreadsRepository(
       portalChatThreadId: number
     }) {
       if (messageIds.length === 0) {
-        return new Map<number, { authorDisplayName: string | null; userId: number }>()
+        return new Map<
+          number,
+          { authorDisplayName: string | null; userId: number }
+        >()
       }
 
       const rows = await db
@@ -1029,7 +1035,10 @@ export function createChatThreadsRepository(
         .where(
           and(
             eq(portalChatThreads.tenantId, tenantId),
-            eq(portalChatThreads.chatwootConversationId, chatwootConversationId),
+            eq(
+              portalChatThreads.chatwootConversationId,
+              chatwootConversationId,
+            ),
           ),
         )
         .limit(1)
@@ -1042,7 +1051,10 @@ export function createChatThreadsRepository(
         .select(threadSelection)
         .from(portalChatThreads)
         .where(
-          and(eq(portalChatThreads.tenantId, tenantId), eq(portalChatThreads.id, id)),
+          and(
+            eq(portalChatThreads.tenantId, tenantId),
+            eq(portalChatThreads.id, id),
+          ),
         )
         .limit(1)
 
@@ -1067,7 +1079,12 @@ export function createChatThreadsRepository(
           chatwootInboxId,
           updatedAt: now,
         })
-        .where(and(eq(portalChatThreads.tenantId, tenantId), eq(portalChatThreads.id, id)))
+        .where(
+          and(
+            eq(portalChatThreads.tenantId, tenantId),
+            eq(portalChatThreads.id, id),
+          ),
+        )
         .returning(threadSelection)
 
       return thread ? mapThread(thread) : null
@@ -1094,7 +1111,10 @@ export function createChatThreadsRepository(
         })
         .onConflictDoUpdate({
           set: { chatwootInboxId, updatedAt: now },
-          target: [portalChatThreads.tenantId, portalChatThreads.chatwootContactId],
+          target: [
+            portalChatThreads.tenantId,
+            portalChatThreads.chatwootContactId,
+          ],
         })
         .returning(threadSelection)
 
@@ -1133,7 +1153,9 @@ export function createChatThreadsRepository(
   }
 }
 
-export type ChatThreadsRepository = ReturnType<typeof createChatThreadsRepository>
+export type ChatThreadsRepository = ReturnType<
+  typeof createChatThreadsRepository
+>
 ```
 
 Adjust the `onConflictDoUpdate` targets if Drizzle rejects partial unique index targets; use raw SQL migration plus `onConflictDoNothing()` followed by explicit `update/select`.
@@ -1172,6 +1194,7 @@ git commit -m "feat: add portal chat thread persistence"
 ## Task 3: Thread Listing Service And Route
 
 **Files:**
+
 - Create: `backend/src/modules/chat-threads/types.ts`
 - Create: `backend/src/modules/chat-threads/service.ts`
 - Create: `backend/src/modules/chat-threads/service.test.ts`
@@ -1250,7 +1273,9 @@ describe('createChatThreadsService', () => {
   it('returns private thread plus enabled company threads from person attributes', async () => {
     const service = createThreadListService()
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).resolves.toEqual({
       activeThreadId: 'private:me',
       threads: [
         {
@@ -1272,7 +1297,9 @@ describe('createChatThreadsService', () => {
   it('fails closed when a referenced company contact is missing', async () => {
     const service = createThreadListService({ companyContact: null })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).rejects.toMatchObject({
       code: 'portal_company_contact_missing',
     })
   })
@@ -1290,7 +1317,9 @@ describe('createChatThreadsService', () => {
       },
     })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).rejects.toMatchObject({
       code: 'portal_company_contact_type_invalid',
     })
   })
@@ -1308,7 +1337,9 @@ describe('createChatThreadsService', () => {
       },
     })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).rejects.toMatchObject({
       code: 'portal_company_contact_disabled',
     })
   })
@@ -1327,7 +1358,9 @@ describe('createChatThreadsService', () => {
       },
     })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).rejects.toMatchObject({
       code: 'portal_contact_disabled',
     })
   })
@@ -1346,7 +1379,9 @@ describe('createChatThreadsService', () => {
       },
     })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).rejects.toMatchObject({
       code: 'portal_contact_type_invalid',
     })
   })
@@ -1414,7 +1449,10 @@ export function parseThreadId(threadId: string) {
 Create `backend/src/modules/chat-threads/service.ts`:
 
 ```ts
-import type { ChatwootClient, ChatwootContact } from '../../integrations/chatwoot/client.js'
+import type {
+  ChatwootClient,
+  ChatwootContact,
+} from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
 import {
   assertPortalPersonContactEnabled,
@@ -1476,7 +1514,8 @@ export function createChatThreadsService({
       ]
 
       for (const companyContactId of personAttributes.companyContactIds) {
-        const companyContact = await chatwootClient.findContactById(companyContactId)
+        const companyContact =
+          await chatwootClient.findContactById(companyContactId)
 
         if (!companyContact) {
           throw new ApiError(
@@ -1561,7 +1600,11 @@ type RegisterChatThreadsRoutesOptions = {
 
 export function registerChatThreadsRoutes(
   app: FastifyInstance,
-  { authService, createChatThreadsService, env }: RegisterChatThreadsRoutesOptions,
+  {
+    authService,
+    createChatThreadsService,
+    env,
+  }: RegisterChatThreadsRoutesOptions,
 ) {
   app.get('/api/chat/threads', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({
@@ -1630,6 +1673,7 @@ git commit -m "feat: expose portal chat threads"
 ## Task 4: Thread Runtime Context And Lazy Conversation Bootstrap
 
 **Files:**
+
 - Modify: `backend/src/modules/chat-threads/types.ts`
 - Modify: `backend/src/modules/chat-threads/service.ts`
 - Modify: `backend/src/modules/chat-threads/service.test.ts`
@@ -1741,9 +1785,10 @@ it('bootstraps a company conversation only for writable context', async () => {
     status: 'open',
   })
 
-  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
-    createConversation,
-  })
+  const { service, updateThreadConversation } =
+    createCompanyThreadRuntimeService({
+      createConversation,
+    })
 
   await expect(
     service.ensureCurrentUserWritableThreadContext({
@@ -1770,10 +1815,11 @@ it('bootstraps a company conversation only for writable context', async () => {
 
 it('fails closed for a forged company thread not listed on the current person contact', async () => {
   const createConversation = vi.fn()
-  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
-    createConversation,
-    personCompanyContactIds: '203',
-  })
+  const { service, updateThreadConversation } =
+    createCompanyThreadRuntimeService({
+      createConversation,
+      personCompanyContactIds: '203',
+    })
 
   await expect(
     service.getCurrentUserThreadContext({
@@ -1792,9 +1838,10 @@ it('fails closed for a forged company thread not listed on the current person co
 
 it('fails closed for malformed public thread IDs', async () => {
   const createConversation = vi.fn()
-  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
-    createConversation,
-  })
+  const { service, updateThreadConversation } =
+    createCompanyThreadRuntimeService({
+      createConversation,
+    })
 
   await expect(
     service.getCurrentUserThreadContext({
@@ -1926,6 +1973,7 @@ git commit -m "feat: resolve writable chat thread context"
 ## Task 5: Messages API, Thread-Scoped Ledger And Company Author Formatting
 
 **Files:**
+
 - Modify: `backend/src/modules/chat-messages/types.ts`
 - Modify: `backend/src/modules/chat-messages/repository.ts`
 - Modify: `backend/src/modules/chat-messages/repository.test.ts`
@@ -2325,6 +2373,7 @@ git commit -m "feat: send chat messages by portal thread"
 ## Task 6: Thread Realtime And Chatwoot Webhook Fanout
 
 **Files:**
+
 - Modify: `backend/src/modules/chat-realtime/hub.ts`
 - Modify: `backend/src/modules/chat-realtime/hub.test.ts`
 - Modify: `backend/src/modules/chat-realtime/routes.ts`
@@ -2360,7 +2409,11 @@ it('publishes a company thread event to every subscriber on that thread', async 
   await expect(
     hub.publishThreadMessages({
       createSnapshotForUser: vi.fn().mockResolvedValue({
-        activeThread: { id: 'company:154', title: 'ООО "Ромашка"', type: 'company' },
+        activeThread: {
+          id: 'company:154',
+          title: 'ООО "Ромашка"',
+          type: 'company',
+        },
         hasMoreOlder: false,
         messages: [],
         nextOlderCursor: null,
@@ -2592,6 +2645,7 @@ git commit -m "feat: publish realtime by chat thread"
 ## Task 7: Frontend Thread Switcher And Thread-Based Chat Runtime
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/types.ts`
 - Modify: `frontend/src/features/chat/api/chatClient.ts`
 - Modify: `frontend/src/features/chat/api/chatRealtimeClient.ts`
@@ -2673,10 +2727,7 @@ export type ChatThreadsResponse = {
   threads: ChatThreadSummary[]
 }
 
-export type ChatMessageAuthorRole =
-  | 'agent'
-  | 'company_member'
-  | 'current_user'
+export type ChatMessageAuthorRole = 'agent' | 'company_member' | 'current_user'
 ```
 
 Remove `ChatPrimaryConversation` from public snapshot types. Add `activeThread`.
@@ -2822,25 +2873,27 @@ type ChatHeaderProps = {
 Render left menu:
 
 ```tsx
-<div className="px-3 py-2 text-left font-medium text-brand-800">
-  Чаты
-</div>
-{threads.map((thread) => (
-  <button
-    aria-current={thread.id === selectedThreadId ? 'true' : undefined}
-    className="flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-700"
-    key={thread.id}
-    onClick={() => onSelectThread(thread.id)}
-    role="menuitem"
-    type="button"
-  >
-    <span className="w-4 text-brand-800">
-      {thread.id === selectedThreadId ? '✓' : ''}
-    </span>
-    <span className="min-w-0 truncate">{thread.title}</span>
-  </button>
-))}
-<button disabled role="menuitem">Центр поддержки <span>скоро</span></button>
+;<div className="px-3 py-2 text-left font-medium text-brand-800">Чаты</div>
+{
+  threads.map((thread) => (
+    <button
+      aria-current={thread.id === selectedThreadId ? 'true' : undefined}
+      className="flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-700"
+      key={thread.id}
+      onClick={() => onSelectThread(thread.id)}
+      role="menuitem"
+      type="button"
+    >
+      <span className="w-4 text-brand-800">
+        {thread.id === selectedThreadId ? '✓' : ''}
+      </span>
+      <span className="min-w-0 truncate">{thread.title}</span>
+    </button>
+  ))
+}
+;<button disabled role="menuitem">
+  Центр поддержки <span>скоро</span>
+</button>
 ```
 
 Header subtitle should use:
@@ -2887,6 +2940,7 @@ git commit -m "feat: switch portal chat threads in ui"
 ## Task 8: Full Verification, Docs Update And Cleanup
 
 **Files:**
+
 - Modify: `docs/ARCHITECTURE.md`
 - Modify: `docs/DECISIONS.md`
 - Modify: `docs/IMPLEMENTATION_PLAN.md`

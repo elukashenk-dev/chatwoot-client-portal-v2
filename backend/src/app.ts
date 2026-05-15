@@ -26,6 +26,8 @@ import {
 } from './modules/chat-messages/service.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
+import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
+import { createChatThreadsService } from './modules/chat-threads/service.js'
 import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/repository.js'
 import { registerChatwootWebhookRoutes } from './modules/chatwoot-webhooks/routes.js'
 import { createChatwootWebhookService } from './modules/chatwoot-webhooks/service.js'
@@ -122,6 +124,13 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       }),
       chatwootClient: createChatwootClientForRequest(request),
     })
+  const createChatThreadsServiceForRequest = (request: FastifyRequest) =>
+    createChatThreadsService({
+      chatContextRepository: createChatContextRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
+      chatwootClient: createChatwootClientForRequest(request),
+    })
   const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
     createChatMessagesService({
       chatContextService: createChatContextServiceForRequest(request),
@@ -176,6 +185,11 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,
+  })
+  registerChatThreadsRoutes(app, {
+    authService,
+    createChatThreadsService: createChatThreadsServiceForRequest,
+    env,
   })
   registerChatContextRoutes(app, {
     authService,

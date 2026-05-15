@@ -1,5 +1,6 @@
 import type { AppEnv } from '../../config/env.js'
 import { normalizeEmail } from '../../lib/email.js'
+import { findChatwootContactById } from './contactLookup.js'
 import {
   ChatwootClientConfigurationError,
   ChatwootClientRequestError,
@@ -24,7 +25,7 @@ export type {
   ChatwootMessageAttachment,
   ChatwootMessagesPage,
 } from './messagePayload.js'
-
+export type { ChatwootContact } from './contactLookup.js'
 const PORTAL_CONVERSATION_CHANNEL_TYPE = 'Channel::Api'
 const CONTACT_CONVERSATIONS_PAGE_LIMIT = 20
 const ACCOUNT_CONVERSATIONS_LOOKUP_MAX_PAGES = 5
@@ -72,12 +73,6 @@ type ChatwootAccountWebhookResponse = {
   payload: {
     webhook: unknown
   }
-}
-
-export type ChatwootContact = {
-  email: string | null
-  id: number
-  name: string | null
 }
 
 export type ChatwootConversation = {
@@ -512,7 +507,9 @@ export function createChatwootClient({
     config: initialConfig,
     env,
   })
-  const requestTimeoutMs = normalizeChatwootRequestTimeoutMs(inputRequestTimeoutMs)
+  const requestTimeoutMs = normalizeChatwootRequestTimeoutMs(
+    inputRequestTimeoutMs,
+  )
   const fetchChatwoot = createChatwootFetch({ fetchFn, requestTimeoutMs })
 
   function assertConfigured(): {
@@ -1178,7 +1175,7 @@ export function createChatwootClient({
       }
     },
 
-    async findContactByEmail(email: string): Promise<ChatwootContact | null> {
+    async findContactByEmail(email: string) {
       const resolvedConfig = assertConfigured()
 
       const normalizedEmail = normalizeEmail(email)
@@ -1219,6 +1216,14 @@ export function createChatwootClient({
         id: exactMatch.id,
         name: exactMatch.name ?? null,
       }
+    },
+
+    findContactById(contactId: number) {
+      return findChatwootContactById({
+        config: assertConfigured(),
+        contactId,
+        fetchChatwoot,
+      })
     },
 
     async listContactConversations(contactId: number) {
