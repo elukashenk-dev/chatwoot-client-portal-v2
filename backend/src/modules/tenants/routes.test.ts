@@ -22,6 +22,8 @@ const baseTestEnv: AppEnv = {
   DEFAULT_TENANT_SLUG: 'default',
   NODE_ENV: 'test',
   PORT: 3301,
+  AUTH_RATE_LIMIT_MAX: 5,
+  AUTH_RATE_LIMIT_WINDOW_MS: 60_000,
   PORTAL_TRUST_PROXY: false,
   PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',

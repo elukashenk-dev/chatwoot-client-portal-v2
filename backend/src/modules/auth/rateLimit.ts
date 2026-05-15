@@ -2,9 +2,12 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 import { ApiError } from '../../lib/errors.js'
 
-const AUTH_RATE_LIMIT_MAX = 5
-const AUTH_RATE_LIMIT_WINDOW_MS = 60_000
 const AUTH_RATE_LIMIT_CACHE_MAX = 10_000
+
+type AuthRateLimitOptions = {
+  maxRequests: number
+  windowMs: number
+}
 
 type AuthRateLimitBucket = {
   count: number
@@ -71,7 +74,10 @@ function trimOldestBuckets(buckets: Map<string, AuthRateLimitBucket>) {
   }
 }
 
-export function registerAuthRateLimit(app: FastifyInstance) {
+export function registerAuthRateLimit(
+  app: FastifyInstance,
+  { maxRequests, windowMs }: AuthRateLimitOptions,
+) {
   const buckets = new Map<string, AuthRateLimitBucket>()
 
   app.addHook('onRequest', async (request, reply) => {
@@ -89,7 +95,7 @@ export function registerAuthRateLimit(app: FastifyInstance) {
         ? currentBucket
         : {
             count: 0,
-            resetAt: now + AUTH_RATE_LIMIT_WINDOW_MS,
+            resetAt: now + windowMs,
           }
 
     bucket.count += 1
@@ -100,7 +106,7 @@ export function registerAuthRateLimit(app: FastifyInstance) {
       trimOldestBuckets(buckets)
     }
 
-    if (bucket.count <= AUTH_RATE_LIMIT_MAX) {
+    if (bucket.count <= maxRequests) {
       return
     }
 

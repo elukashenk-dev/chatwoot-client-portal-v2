@@ -18,6 +18,8 @@ export const testEnv: AppEnv = {
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
   NODE_ENV: 'test',
   PORT: 3301,
+  AUTH_RATE_LIMIT_MAX: 5,
+  AUTH_RATE_LIMIT_WINDOW_MS: 60_000,
   PORTAL_TRUST_PROXY: false,
   PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',

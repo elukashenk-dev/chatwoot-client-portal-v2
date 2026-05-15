@@ -31,7 +31,10 @@
 - `MT-0`-`MT-8` multi-tenant program;
 - post-MT runtime review fixes для tenant URL/domain, portal inbox routing и
   webhook payload validation;
-- `MT-8R Codebase Audit And Refactoring Readiness`.
+- `MT-8R Codebase Audit And Refactoring Readiness`;
+- `MT-8.5 Portal UI/UX Baseline Review`;
+- chat thread runtime follow-up: portal-owned `threadId`, личный чат и company
+  threads через Chatwoot contact attributes.
 
 Текущий baseline:
 
@@ -41,12 +44,15 @@
 - runtime Chatwoot config берется из tenant, а не из глобальных
   `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`;
 - customer auth, persistence, chat runtime, webhooks, frontend metadata и PWA
-  identity уже tenant-aware.
+  identity уже tenant-aware;
+- chat runtime больше не строится на browser-visible `primaryConversationId`;
+  browser работает с `threadId`, а backend мапит threads на Chatwoot
+  conversations через `portal_chat_threads`.
 
 Следующий активный scope:
 
 ```text
-MT-8.5. Portal UI/UX Baseline Review
+Production smoke deploy for chat-thread runtime, then MT-9 gate by F-MT-004
 ```
 
 ## Active Roadmap
@@ -138,6 +144,10 @@ Exit criteria:
 
 ### MT-8.5. Portal UI/UX Baseline Review
 
+Status:
+
+- completed on `2026-05-15`.
+
 Цель:
 
 Провести полный UI/UX-аудит и продуктовую переработку customer-facing PWA-чата
@@ -186,6 +196,38 @@ Exit criteria:
 - preview screens для `MT-9` определены и должны использовать реальные portal
   components, а не отдельную нарисованную копию;
 - blocker/finding список перед `MT-9` пуст или явно deferred отдельным решением.
+
+### Post-MT-8.5. Chat Thread Runtime
+
+Status:
+
+- completed on `2026-05-15`;
+- implemented from `docs/superpowers/plans/2026-05-14-chat-thread-model.md`.
+
+Цель:
+
+Перевести chat runtime с одного личного `primaryConversationId` на
+portal-owned `threadId`, чтобы один portal user мог иметь личный чат и общие
+company-чаты без выдачи Chatwoot authority в browser.
+
+Scope:
+
+- `GET /api/chat/threads` возвращает доступные threads;
+- messages, attachment sends и realtime принимают selected `threadId`;
+- `portal_chat_threads` хранит authoritative backend mapping на Chatwoot
+  conversation;
+- company thread access строится из Chatwoot contact attributes;
+- company send добавляет Chatwoot-visible Markdown author prefix;
+- webhook/realtime fanout работает через `tenant + threadId` и повторно
+  валидирует company access before delivery.
+
+Exit criteria:
+
+- browser sends `threadId`, not Chatwoot conversation id;
+- empty thread view does not create Chatwoot conversation;
+- first send lazily creates/reuses correct Chatwoot conversation under lock;
+- company history/send/realtime validates current Chatwoot attributes;
+- backend/frontend/e2e checks pass before checkpoint commit.
 
 ### MT-9. Tenant Admin And Branding Rebuild
 

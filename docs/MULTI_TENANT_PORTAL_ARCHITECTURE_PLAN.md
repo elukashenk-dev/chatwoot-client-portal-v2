@@ -336,15 +336,26 @@ iOS/iPadOS:
 
 ## 8. Chat Runtime Reference
 
-Portal chat remains one primary conversation per tenant user.
+Portal chat uses portal-owned threads. The browser sees `threadId`, not
+Chatwoot conversation authority.
+
+Thread IDs:
+
+- `private:me` - личный чат текущего portal user с tenant support team;
+- `company:<chatwoot_company_contact_id>` - общий чат компании, если linked
+  person contact пользователя содержит этот company contact id в разрешенном
+  portal attribute list.
 
 Rules:
 
 - contact links are tenant-scoped;
-- primary conversation mappings are tenant-scoped;
-- send ledger is tenant-scoped;
-- realtime fanout key includes tenant identity;
+- `portal_chat_threads` mappings are tenant-scoped;
+- Chatwoot conversation IDs stay backend-only thread mappings;
+- send ledger is tenant-scoped and thread-scoped;
+- realtime fanout key includes tenant identity and `threadId`;
 - webhook delivery dedupe includes tenant identity;
+- webhook routing maps Chatwoot conversation back to `portal_chat_threads`;
+- company realtime delivery revalidates current user access before fanout;
 - Chatwoot contact/conversation IDs are not globally unique without tenant
   scope.
 
@@ -354,8 +365,10 @@ Portal inbox requirements:
 - `Channel::Api`;
 - `lock_to_single_conversation = true`.
 
-If multiple portal conversations exist for one contact/inbox, treat that as
-data/config anomaly rather than target UX.
+If multiple Chatwoot conversations exist for one portal thread target inside
+the tenant portal inbox, treat that as data/config anomaly rather than target
+UX. First send may lazily create or replace a missing mapped conversation only
+under tenant-aware advisory lock with a fresh resolve inside the lock.
 
 ## 9. MT-8R Codebase Readiness, MT-8.5 UI/UX Baseline And MT-9 Admin/Branding Reference
 

@@ -132,6 +132,12 @@
 - Task 7 проверки: targeted chat tests `40/40`, frontend typecheck/build,
   root lint/code-health и `git diff --check` прошли; Playwright e2e не запускался,
   потому что local services для browser runtime validation запускает пользователь.
+- Task 8 verification/docs завершен: backend tests `220/220`, frontend tests
+  `93/93`, Playwright e2e `25/25`, backend build, frontend typecheck/build,
+  root lint/code-health и `git diff --check` прошли; stable docs обновлены под
+  portal-owned `threadId`, а local Chatwoot/API validation подтвердил company
+  thread listing, first-send bootstrap, Chatwoot-visible Markdown author prefix,
+  portal prefix stripping и controlled access removal.
 
 ## Current Baseline
 
@@ -149,6 +155,5 @@
 
 ## Recommended Next Step
 
-- Перейти к Task 8 основного thread plan: полная verification/docs update;
-  если local services уже подняты пользователем, сначала прогнать Playwright e2e
-  для browser runtime validation.
+- Провести production smoke deploy для chat-thread runtime и затем вернуться к
+  `MT-9` gate по `F-MT-004`.

@@ -92,6 +92,8 @@ const envSchema = z
       .string()
       .min(32, 'SESSION_SECRET must contain at least 32 characters'),
     SESSION_TTL_DAYS: z.coerce.number().int().positive().max(90).default(14),
+    AUTH_RATE_LIMIT_MAX: optionalPositiveInt.default(5),
+    AUTH_RATE_LIMIT_WINDOW_MS: optionalPositiveInt.default(60_000),
     CHATWOOT_BASE_URL: optionalUrlString,
     CHATWOOT_ACCOUNT_ID: optionalPositiveInt,
     CHATWOOT_API_ACCESS_TOKEN: optionalNonEmptyString,

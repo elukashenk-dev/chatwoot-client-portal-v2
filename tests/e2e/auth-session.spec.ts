@@ -4,7 +4,7 @@ import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 
 async function expectLoginScreen(page: Page) {
   await expect(
-    page.getByRole('heading', { name: 'Клиентский портал' }),
+    page.getByRole('heading', { name: 'Центр поддержки' }),
   ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Пароль' })).toBeVisible()
@@ -18,8 +18,15 @@ async function fillLoginForm(page: Page, password = E2E_PORTAL_USER.password) {
 
 async function expectProtectedChatShell(page: Page) {
   await expect(page).toHaveURL(/\/app\/chat/)
-  await expect(page.getByText('Чат не подключен')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Открыть меню чата' }),
+  ).toBeVisible()
+}
+
+async function logoutFromProtectedChat(page: Page) {
+  await page.getByRole('button', { name: 'Открыть меню чата' }).click()
+  await page.getByRole('menuitem', { name: 'Завершить диалог' }).click()
 }
 
 test('rejects invalid credentials without opening the protected shell', async ({
@@ -86,7 +93,7 @@ test('logs out and blocks the protected route again', async ({ page }) => {
   await page.getByRole('button', { name: 'Войти' }).click()
   await expectProtectedChatShell(page)
 
-  await page.getByRole('button', { name: 'Выйти' }).click()
+  await logoutFromProtectedChat(page)
 
   await expect(page).toHaveURL(/\/auth\/login$/)
   await expectLoginScreen(page)

@@ -127,7 +127,7 @@ test('shows a controlled password reset set-password guard without verified stat
   await page.goto('/auth/password-reset/set-password')
 
   await expect(
-    page.getByRole('heading', { name: 'Создание пароля' }),
+    page.getByRole('heading', { name: 'Новый пароль' }),
   ).toBeVisible()
   await expect(
     page.getByText(
@@ -207,7 +207,7 @@ test('keeps password reset on verify step when the code is invalid', async ({
   ).toBeVisible()
   await expect(page).toHaveURL(/\/auth\/password-reset\/verify$/)
   await expect(
-    page.getByRole('heading', { name: 'Создание пароля' }),
+    page.getByRole('heading', { name: 'Новый пароль' }),
   ).toHaveCount(0)
 })
 

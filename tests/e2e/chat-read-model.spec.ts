@@ -4,6 +4,20 @@ import { expect, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 
+const privateThread = {
+  id: 'private:me',
+  subtitle: 'Только вы и поддержка',
+  title: 'Личный чат',
+  type: 'private',
+} as const
+
+function createThreadsResponse() {
+  return {
+    activeThreadId: privateThread.id,
+    threads: [privateThread],
+  }
+}
+
 function createReadySnapshot({
   hasMoreOlder,
   messages,
@@ -14,19 +28,10 @@ function createReadySnapshot({
   nextOlderCursor: number | null
 }) {
   return {
+    activeThread: privateThread,
     hasMoreOlder,
-    linkedContact: {
-      id: 42,
-    },
     messages,
     nextOlderCursor,
-    primaryConversation: {
-      assigneeName: 'Ольга Support',
-      id: 77,
-      inboxId: 6,
-      lastActivityAt: 1_777_000_000,
-      status: 'open',
-    },
     reason: 'none',
     result: 'ready',
   }
@@ -37,6 +42,16 @@ async function fillLoginForm(page: Page) {
   await page
     .getByRole('textbox', { name: 'Пароль' })
     .fill(E2E_PORTAL_USER.password)
+}
+
+async function routePrivateThreads(page: Page) {
+  await page.route('**/api/chat/threads', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(createThreadsResponse()),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
 }
 
 async function routeStoppedRealtime(page: Page) {
@@ -52,6 +67,7 @@ test('renders the ready chat transcript and loads older history through the back
 }) => {
   const chatMessageRequests: string[] = []
 
+  await routePrivateThreads(page)
   await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
@@ -67,6 +83,7 @@ test('renders the ready chat transcript and loads older history through the back
               {
                 attachments: [],
                 authorName: 'Вы',
+                authorRole: 'current_user',
                 content: 'Ранее отправленное сообщение.',
                 contentType: 'text',
                 createdAt: '2026-04-20T08:00:00.000Z',
@@ -92,6 +109,7 @@ test('renders the ready chat transcript and loads older history through the back
             {
               attachments: [],
               authorName: 'Ольга Support',
+              authorRole: 'agent',
               content: 'Здравствуйте, вижу ваше обращение.',
               contentType: 'text',
               createdAt: '2026-04-21T09:12:00.000Z',
@@ -111,6 +129,7 @@ test('renders the ready chat transcript and loads older history through the back
                 },
               ],
               authorName: 'Вы',
+              authorRole: 'current_user',
               content: 'Последнее сообщение.',
               contentType: 'text',
               createdAt: '2026-04-21T10:00:00.000Z',
@@ -132,6 +151,7 @@ test('renders the ready chat transcript and loads older history through the back
   await page.getByRole('button', { name: 'Войти' }).click()
 
   await expect(page).toHaveURL(/\/app\/chat/)
+  await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
   await expect(page.getByText('Ольга Support', { exact: true })).toBeVisible()
   await expect(page.getByText('Онлайн')).toBeVisible()
   await expect(
@@ -146,8 +166,8 @@ test('renders the ready chat transcript and loads older history through the back
 
   await expect(page.getByText('Ранее отправленное сообщение.')).toBeVisible()
   expect(chatMessageRequests).toEqual([
-    '/api/chat/messages',
-    '/api/chat/messages?primaryConversationId=77&beforeMessageId=205',
+    '/api/chat/messages?threadId=private%3Ame',
+    '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
   ])
 })
 
@@ -160,6 +180,7 @@ test('sends text through the backend chat contract and renders the canonical res
     path: string
   }> = []
 
+  await routePrivateThreads(page)
   await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
@@ -175,21 +196,13 @@ test('sends text through the backend chat contract and renders the canonical res
     if (method === 'POST') {
       await route.fulfill({
         body: JSON.stringify({
-          linkedContact: {
-            id: 42,
-          },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 6,
-            lastActivityAt: 1_777_000_100,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Сообщение из портала',
             contentType: 'text',
             createdAt: '2026-04-21T10:10:00.000Z',
@@ -231,13 +244,13 @@ test('sends text through the backend chat contract and renders the canonical res
   expect(chatMessageRequests).toHaveLength(2)
   expect(chatMessageRequests[0]).toMatchObject({
     method: 'GET',
-    path: '/api/chat/messages',
+    path: '/api/chat/messages?threadId=private%3Ame',
   })
   expect(chatMessageRequests[1]).toMatchObject({
     body: {
       clientMessageKey: expect.stringMatching(/^portal-send:/),
       content: 'Сообщение из портала',
-      primaryConversationId: 77,
+      threadId: 'private:me',
     },
     method: 'POST',
     path: '/api/chat/messages',
@@ -253,6 +266,7 @@ test('selects a message as reply target and sends reply metadata through the bac
     path: string
   }> = []
 
+  await routePrivateThreads(page)
   await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
@@ -268,21 +282,13 @@ test('selects a message as reply target and sends reply metadata through the bac
     if (method === 'POST') {
       await route.fulfill({
         body: JSON.stringify({
-          linkedContact: {
-            id: 42,
-          },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 6,
-            lastActivityAt: 1_777_000_110,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
             attachments: [],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: 'Ответ из портала',
             contentType: 'text',
             createdAt: '2026-04-21T10:11:00.000Z',
@@ -312,6 +318,7 @@ test('selects a message as reply target and sends reply metadata through the bac
             {
               attachments: [],
               authorName: 'Ольга Support',
+              authorRole: 'agent',
               content: 'Вопрос от агента.',
               contentType: 'text',
               createdAt: '2026-04-21T09:12:00.000Z',
@@ -347,8 +354,8 @@ test('selects a message as reply target and sends reply metadata through the bac
     body: {
       clientMessageKey: expect.stringMatching(/^portal-send:/),
       content: 'Ответ из портала',
-      primaryConversationId: 77,
       replyToMessageId: 204,
+      threadId: 'private:me',
     },
     method: 'POST',
     path: '/api/chat/messages',
@@ -364,6 +371,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     path: string
   }> = []
 
+  await routePrivateThreads(page)
   await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
@@ -380,16 +388,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     if (method === 'POST' && requestUrl.pathname.endsWith('/attachment')) {
       await route.fulfill({
         body: JSON.stringify({
-          linkedContact: {
-            id: 42,
-          },
-          primaryConversation: {
-            assigneeName: 'Ольга Support',
-            id: 77,
-            inboxId: 6,
-            lastActivityAt: 1_777_000_200,
-            status: 'open',
-          },
+          activeThread: privateThread,
           reason: 'none',
           result: 'ready',
           sentMessage: {
@@ -404,6 +403,7 @@ test('sends an attachment through the backend chat contract and renders the cano
               },
             ],
             authorName: 'Вы',
+            authorRole: 'current_user',
             content: null,
             contentType: 'text',
             createdAt: '2026-04-21T10:12:00.000Z',
@@ -449,7 +449,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     {
       contentType: null,
       method: 'GET',
-      path: '/api/chat/messages',
+      path: '/api/chat/messages?threadId=private%3Ame',
     },
     {
       contentType: expect.stringContaining('multipart/form-data'),
@@ -468,6 +468,7 @@ test('renders new backend realtime messages without a manual transcript refresh'
       {
         attachments: [],
         authorName: 'Ольга Support',
+        authorRole: 'agent',
         content: 'Realtime ответ от агента.',
         contentType: 'text',
         createdAt: '2026-04-21T10:20:00.000Z',
@@ -479,6 +480,7 @@ test('renders new backend realtime messages without a manual transcript refresh'
     nextOlderCursor: null,
   })
 
+  await routePrivateThreads(page)
   await page.route('**/api/chat/realtime**', async (route) => {
     await route.fulfill({
       body: `event: messages\ndata: ${JSON.stringify(realtimeSnapshot)}\n\n`,
@@ -495,6 +497,7 @@ test('renders new backend realtime messages without a manual transcript refresh'
             {
               attachments: [],
               authorName: 'Вы',
+              authorRole: 'current_user',
               content: 'Текущее сообщение в истории.',
               contentType: 'text',
               createdAt: '2026-04-21T10:00:00.000Z',

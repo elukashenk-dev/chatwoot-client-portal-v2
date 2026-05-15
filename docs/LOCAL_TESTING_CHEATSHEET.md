@@ -284,6 +284,14 @@ pnpm --dir frontend build
 - frontend на нужном tenant host;
 - Chatwoot/Mailpit, если сценарий их требует.
 
+Для полного parallel-suite backend нужно поднять с увеличенным local/e2e auth
+rate limit, иначе несколько login-сценариев с одного `127.0.0.1` честно
+упрутся в production-default `5/min`:
+
+```bash
+AUTH_RATE_LIMIT_MAX=100 pnpm dev:backend
+```
+
 Для конкретного tenant host:
 
 ```bash

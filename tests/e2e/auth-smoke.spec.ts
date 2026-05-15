@@ -4,7 +4,7 @@ test('opens the public login screen', async ({ page }) => {
   await page.goto('/auth/login')
 
   await expect(
-    page.getByRole('heading', { name: 'Клиентский портал' }),
+    page.getByRole('heading', { name: 'Центр поддержки' }),
   ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Пароль' })).toBeVisible()
@@ -16,7 +16,7 @@ test('redirects unauthenticated app chat visits to login', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/auth\/login$/)
   await expect(
-    page.getByRole('heading', { name: 'Клиентский портал' }),
+    page.getByRole('heading', { name: 'Центр поддержки' }),
   ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Пароль' })).toBeVisible()

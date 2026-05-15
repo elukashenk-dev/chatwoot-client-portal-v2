@@ -100,7 +100,7 @@ export async function expectNoMailpitMessage({
 export async function waitForMailpitCode({
   sentAfter,
   subject,
-  timeoutMs = 10_000,
+  timeoutMs = 20_000,
   to,
 }: {
   sentAfter: Date

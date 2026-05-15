@@ -185,7 +185,10 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
 
   registerHealthRoutes(app, { env })
   registerTenantContext(app, { tenantsService })
-  registerAuthRateLimit(app)
+  registerAuthRateLimit(app, {
+    maxRequests: env.AUTH_RATE_LIMIT_MAX,
+    windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
+  })
   registerTenantRoutes(app, { tenantsService })
   registerAuthRoutes(app, {
     authService,

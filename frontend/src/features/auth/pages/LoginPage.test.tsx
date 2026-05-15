@@ -20,11 +20,27 @@ function createChatNotReadyResponse() {
     {
       hasMoreOlder: false,
       activeThread: null,
-      linkedContact: null,
       messages: [],
       nextOlderCursor: null,
       reason: 'contact_link_missing',
       result: 'not_ready',
+    },
+    200,
+  )
+}
+
+function createChatThreadsResponse() {
+  return createJsonResponse(
+    {
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          id: 'private:me',
+          subtitle: 'Только вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+        },
+      ],
     },
     200,
   )
@@ -121,6 +137,7 @@ describe('LoginPage', () => {
           200,
         ),
       )
+      .mockResolvedValueOnce(createChatThreadsResponse())
       .mockResolvedValueOnce(createChatNotReadyResponse())
 
     renderAuthRoutes(['/auth/login'])
@@ -194,6 +211,7 @@ describe('LoginPage', () => {
           200,
         ),
       )
+      .mockResolvedValueOnce(createChatThreadsResponse())
       .mockResolvedValueOnce(createChatNotReadyResponse())
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
 
@@ -209,7 +227,7 @@ describe('LoginPage', () => {
     )
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       '/api/auth/logout',
       expect.objectContaining({
         credentials: 'include',
@@ -269,7 +287,9 @@ describe('LoginPage', () => {
           200,
         ),
       )
-      fetchMock.mockResolvedValueOnce(createChatNotReadyResponse())
+      fetchMock
+        .mockResolvedValueOnce(createChatThreadsResponse())
+        .mockResolvedValueOnce(createChatNotReadyResponse())
 
       renderAuthRoutes([initialEntry])
 

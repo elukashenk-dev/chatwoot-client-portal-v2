@@ -3035,7 +3035,7 @@ git commit -m "feat: switch portal chat threads in ui"
 - Modify: `docs/WORK_LOG.md`
 - Optionally modify: `docs/Findings/*.md` if implementation opens or closes findings.
 
-- [ ] **Step 1: Run backend tests**
+- [x] **Step 1: Run backend tests**
 
 Run:
 
@@ -3045,7 +3045,9 @@ pnpm --dir backend test
 
 Expected: PASS.
 
-- [ ] **Step 2: Run frontend tests**
+Result on `2026-05-15`: PASS, `36` files / `220` tests.
+
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -3055,7 +3057,9 @@ pnpm --dir frontend test
 
 Expected: PASS.
 
-- [ ] **Step 3: Run typecheck/build/lint**
+Result on `2026-05-15`: PASS, `16` files / `93` tests.
+
+- [x] **Step 3: Run typecheck/build/lint**
 
 Run:
 
@@ -3069,7 +3073,10 @@ git diff --check
 
 Expected: all PASS and `git diff --check` empty.
 
-- [ ] **Step 4: Runtime validation with user-started services**
+Result on `2026-05-15`: PASS for backend build, frontend typecheck, frontend
+build, root lint/code-health and `git diff --check`.
+
+- [x] **Step 4: Runtime validation with user-started services**
 
 Do not start services from the agent. Ask the user to start the existing local portal/Chatwoot/Postgres stack. After the user confirms services are running, validate:
 
@@ -3079,7 +3086,9 @@ pnpm test:e2e
 
 Expected: PASS. If Playwright is blocked by environment, record the blocker and run targeted frontend runtime tests already listed above.
 
-- [ ] **Step 5: Manual Chatwoot admin validation**
+Result on `2026-05-15`: PASS, `pnpm test:e2e` reported `25 passed`.
+
+- [x] **Step 5: Manual Chatwoot admin validation**
 
 With test Chatwoot contacts configured:
 
@@ -3105,7 +3114,17 @@ Validate:
 - Another portal user with the same company ID receives company realtime events.
 - Removing company ID from a person contact blocks future history/send/realtime after reconnect.
 
-- [ ] **Step 6: Update stable docs**
+Result on `2026-05-15`: local Chatwoot/API validation created enabled person
+and company contacts, confirmed `Личный чат` plus company thread listing,
+confirmed first company send created Chatwoot conversation `88` under the
+company contact, confirmed raw Chatwoot message body included Markdown author
+prefix, confirmed portal history returned stripped content, and confirmed
+company membership removal hid the thread and returned controlled `not_ready`
+for future history/send/realtime access. Multi-subscriber realtime fanout is
+covered by backend/e2e automated tests; no separate manual agent UI click-through
+was recorded.
+
+- [x] **Step 6: Update stable docs**
 
 Update:
 
@@ -3131,7 +3150,9 @@ Recommended next step:
   `MT-9` gate по `F-MT-004`.
 ```
 
-- [ ] **Step 7: Final review**
+Result on `2026-05-15`: updated stable docs listed above and `WORK_LOG`.
+
+- [x] **Step 7: Final review**
 
 Review changed areas:
 
@@ -3152,7 +3173,12 @@ Look specifically for:
 - realtime fanout that publishes to a user without revalidating thread access;
 - stale `primaryConversationId` in frontend requests.
 
-- [ ] **Step 8: Commit Task 8**
+Result on `2026-05-15`: reviewed changed backend config/tests, frontend/e2e
+tests and stable docs. No blocking review findings. Remaining
+`primaryConversationId` references are internal DB/ledger compatibility fields
+or explicit legacy rejection tests, not frontend/browser authority.
+
+- [x] **Step 8: Commit Task 8**
 
 Run:
 
@@ -3160,6 +3186,9 @@ Run:
 git add docs/ARCHITECTURE.md docs/DECISIONS.md docs/IMPLEMENTATION_PLAN.md docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md docs/WORK_LOG.md
 git commit -m "docs: document chat thread runtime"
 ```
+
+Result on `2026-05-15`: committed as checkpoint
+`test: complete chat thread runtime verification`.
 
 ---
 
