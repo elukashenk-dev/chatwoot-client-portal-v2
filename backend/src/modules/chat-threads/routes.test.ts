@@ -165,4 +165,39 @@ describe('registerChatThreadsRoutes', () => {
       await app.close()
     }
   })
+
+  it('returns controlled person-contact authority errors from the thread service', async () => {
+    const { app } = await buildThreadsRoutesTestApp({
+      listCurrentUserThreads: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(
+            403,
+            'portal_contact_disabled',
+            'Доступ к порталу настроен некорректно. Обратитесь в поддержку.',
+          ),
+        ),
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads',
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({
+        error: {
+          code: 'portal_contact_disabled',
+          message:
+            'Доступ к порталу настроен некорректно. Обратитесь в поддержку.',
+        },
+      })
+    } finally {
+      await app.close()
+    }
+  })
 })

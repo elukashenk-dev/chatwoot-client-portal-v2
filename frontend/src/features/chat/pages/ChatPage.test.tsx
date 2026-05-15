@@ -257,6 +257,47 @@ describe('ChatPage', () => {
     )
   })
 
+  it('does not fallback to a company thread after backend rejects person contact authority', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: 'portal_contact_disabled',
+              message:
+                'Доступ к порталу настроен некорректно. Обратитесь в поддержку.',
+            },
+          },
+          403,
+        ),
+      )
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Мы не смогли получить состояние переписки из Chatwoot. Попробуйте обновить чат немного позже.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/chat/messages?threadId=private%3Ame',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).includes('company%3A')),
+    ).toBe(false)
+  })
+
   it('restores focus to the chat menu trigger when Escape closes the menu', async () => {
     const user = userEvent.setup()
 

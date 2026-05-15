@@ -90,6 +90,9 @@
   enabled company thread summaries из Chatwoot contact attributes, duplicate
   company IDs дают один lookup/thread entry, malformed/oversized lists fail
   closed controlled `403`.
+- `F-CHAT-THREAD-004` закрыт validation-only: текущий backend fail-closed
+  валидирует person contact до company lookup, а frontend не делает fallback на
+  company thread после backend configuration/access error.
 
 ## Current Baseline
 
@@ -107,7 +110,8 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-004`: зафиксировать fail-closed поведение выбора
-  active thread, чтобы person contact configuration errors не могли привести к
-  fallback на company thread. Company history/send/bootstrap/realtime не
+- Закрыть `F-CHAT-THREAD-001`: подготовить thread-scoped send ledger так, чтобы
+  будущие company sends сохраняли idempotency в scope
+  `tenant + portal_chat_thread + user + clientMessageKey` и не могли replay-ить
+  отправки другого пользователя. Company history/send/bootstrap/realtime не
   включать до закрытия оставшихся chat-thread findings.
