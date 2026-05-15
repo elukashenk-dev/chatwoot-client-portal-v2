@@ -17,6 +17,10 @@ import { createChatContextService } from './modules/chat-context/service.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import {
+  createChatSendRateLimiter,
+  createChatSendRateLimitRepository,
+} from './modules/chat-messages/rateLimit.js'
+import {
   CHAT_ATTACHMENT_MAX_BYTES,
   createChatMessagesService,
 } from './modules/chat-messages/service.js'
@@ -101,6 +105,9 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
     env,
   })
   const chatRealtimeHub = createChatRealtimeHub()
+  const chatSendRateLimiter = createChatSendRateLimiter({
+    repository: createChatSendRateLimitRepository(database.db),
+  })
   const tenantsService = createTenantsService({
     defaultTenantSlug: env.DEFAULT_TENANT_SLUG,
     tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
@@ -177,6 +184,7 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   })
   registerChatMessagesRoutes(app, {
     authService,
+    chatSendRateLimiter,
     createChatMessagesService: createChatMessagesServiceForRequest,
     env,
   })

@@ -33,11 +33,10 @@ export function assertPrivateChatThreadId(threadId: string) {
 export function mapPublicChatContextSnapshot(
   context: ChatContextSnapshot,
 ): PublicChatContextSnapshot {
-  const { primaryConversation: _primaryConversation, ...publicContext } =
-    context
-
   return {
-    ...publicContext,
+    linkedContact: context.linkedContact,
+    reason: context.reason,
+    result: context.result,
     activeThread: context.linkedContact ? { ...PRIVATE_CHAT_THREAD } : null,
   }
 }

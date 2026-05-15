@@ -80,6 +80,9 @@
   включены.
 - Header и левое меню показывают текущий выбранный thread как `Личный чат`;
   frontend больше не хранит Chatwoot conversation id как authority.
+- `F-CHAT-SEC-001` закрыт: authenticated chat send получил DB-backed fixed-window
+  limiter для text/attachment sends, scoped by tenant/user/thread, с отдельным
+  attachment budget и controlled `429` до Chatwoot outbound.
 
 ## Current Baseline
 
@@ -97,8 +100,8 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-SEC-001` authenticated chat send rate limit перед следующей
-  chat-thread feature фазой. Company behavior не включать до закрытия
-  `F-CHAT-THREAD-001`, `F-CHAT-THREAD-002`, `F-CHAT-THREAD-004`,
-  `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`, `F-CHAT-THREAD-007`,
-  `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
+- Закрыть `F-CHAT-THREAD-002`: ввести backend thread resolver authority boundary
+  для будущих private/company `threadId` и fail-closed membership checks. Company
+  behavior не включать до закрытия `F-CHAT-THREAD-001`,
+  `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`,
+  `F-CHAT-THREAD-007`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.

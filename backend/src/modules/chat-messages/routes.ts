@@ -8,6 +8,8 @@ import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
+import { requireTenantContext } from '../tenants/routes.js'
+import type { ChatSendRateLimiter } from './rateLimit.js'
 import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
@@ -52,8 +54,47 @@ type AttachmentMultipartFields = {
 
 type RegisterChatMessagesRoutesOptions = {
   authService: AuthService
+  chatSendRateLimiter: ChatSendRateLimiter
   createChatMessagesService: (request: FastifyRequest) => ChatMessagesService
   env: AppEnv
+}
+
+async function enforceChatSendRateLimit({
+  chatSendRateLimiter,
+  kind,
+  reply,
+  request,
+  threadId,
+  userId,
+}: {
+  chatSendRateLimiter: ChatSendRateLimiter
+  kind: 'attachment' | 'text'
+  reply: {
+    header: (name: string, value: string) => unknown
+  }
+  request: FastifyRequest
+  threadId: string
+  userId: number
+}) {
+  const tenant = requireTenantContext(request)
+  const rateLimit = await chatSendRateLimiter.consume({
+    kind,
+    tenantId: tenant.id,
+    threadId,
+    userId,
+  })
+
+  if (rateLimit.status === 'allowed') {
+    return
+  }
+
+  reply.header('Retry-After', String(rateLimit.retryAfterSeconds))
+
+  throw new ApiError(
+    429,
+    'CHAT_SEND_RATE_LIMITED',
+    'Слишком много сообщений. Попробуйте позже.',
+  )
 }
 
 function getMultipartFieldValue(part: MultipartValue) {
@@ -230,6 +271,7 @@ export function registerChatMessagesRoutes(
   app: FastifyInstance,
   {
     authService,
+    chatSendRateLimiter,
     createChatMessagesService,
     env,
   }: RegisterChatMessagesRoutesOptions,
@@ -261,6 +303,15 @@ export function registerChatMessagesRoutes(
     })
     const body = sendChatMessageBodySchema.parse(request.body)
 
+    await enforceChatSendRateLimit({
+      chatSendRateLimiter,
+      kind: 'text',
+      reply,
+      request,
+      threadId: body.threadId,
+      userId: user.id,
+    })
+
     return createChatMessagesService(request).sendCurrentUserTextMessage({
       clientMessageKey: body.clientMessageKey,
       content: body.content,
@@ -285,6 +336,15 @@ export function registerChatMessagesRoutes(
         request,
       })
       const upload = await parseAttachmentUpload(app, request)
+
+      await enforceChatSendRateLimit({
+        chatSendRateLimiter,
+        kind: 'attachment',
+        reply,
+        request,
+        threadId: upload.threadId,
+        userId: user.id,
+      })
 
       return createChatMessagesService(
         request,

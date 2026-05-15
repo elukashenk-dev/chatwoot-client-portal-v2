@@ -282,6 +282,45 @@ export const portalChatMessageSends = pgTable(
   ],
 )
 
+export const portalRateLimitBuckets = pgTable(
+  'portal_rate_limit_buckets',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'cascade',
+      }),
+    scope: text('scope').notNull(),
+    subjectKey: text('subject_key').notNull(),
+    count: integer('count').notNull(),
+    resetAt: timestamp('reset_at', {
+      mode: 'date',
+      withTimezone: true,
+    }).notNull(),
+    createdAt: timestamp('created_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', {
+      mode: 'date',
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_rate_limit_buckets_scope_unique').on(
+      table.tenantId,
+      table.scope,
+      table.subjectKey,
+    ),
+    index('portal_rate_limit_buckets_reset_at_idx').on(table.resetAt),
+  ],
+)
+
 export const chatwootWebhookDeliveries = pgTable(
   'chatwoot_webhook_deliveries',
   {

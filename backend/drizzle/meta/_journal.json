@@ -64,6 +64,13 @@
       "when": 1777991973574,
       "tag": "0008_bored_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778841436632,
+      "tag": "0009_unusual_wraith",
+      "breakpoints": true
     }
   ]
 }
