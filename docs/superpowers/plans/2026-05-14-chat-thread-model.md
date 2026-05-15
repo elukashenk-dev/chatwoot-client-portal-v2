@@ -43,6 +43,9 @@ Non-negotiables:
 - company thread listing must not be enabled while `F-CHAT-THREAD-007` is open;
 - no fallback may grant history/send/realtime access when Chatwoot contact
   attributes are missing, malformed, disabled or cross-tenant;
+- `portal_client_company_contact_ids` must be parsed by the shared
+  `contactAttributes` parser, capped at `20` IDs, deduplicated before Chatwoot
+  lookup/upsert work and rejected fail-closed on malformed or oversized values;
 - no Chatwoot secrets, conversation authority or membership authority may be
   stored in frontend state, local storage or public API responses;
 - known security findings on the runtime path must be closed before enabling
@@ -220,7 +223,7 @@ Fail-closed coverage required before runtime behavior is enabled:
 
 | Case | Required tests |
 | --- | --- |
-| Malformed `portal_client_company_contact_ids` | Task 1 parser tests reject non-integer values. |
+| Malformed `portal_client_company_contact_ids` | Task 1 parser tests reject non-integer values, empty tokens, unsafe integers and oversized lists. |
 | Referenced company contact is missing | Task 3 thread listing service test rejects with `portal_company_contact_missing`. |
 | Referenced company contact has wrong `portal_contact_type` | Task 3 thread listing service test rejects with `portal_company_contact_type_invalid`. |
 | Person contact is disabled or wrong type | Task 1 parser/assertion tests and Task 3 service tests reject before returning any thread list. |

@@ -12,7 +12,12 @@
   - Plan evidence: `docs/superpowers/plans/2026-05-14-chat-thread-model.md:1359` through `docs/superpowers/plans/2026-05-14-chat-thread-model.md:1402`.
   - A tenant Chatwoot misconfiguration, or compromised tenant Chatwoot admin account, could make one portal chat open trigger excessive backend and Chatwoot API work.
 - `fix_short`: Define a production maximum for company contact IDs per person contact, deduplicate IDs before lookup, and fail closed on oversized or malformed lists.
+- `progress`:
+  - Parser slice implemented in `backend/src/modules/chat-threads/contactAttributes.ts`.
+  - Maximum is `20` IDs per person contact.
+  - Parser deduplicates IDs before future lookup/upsert work and rejects malformed or oversized values fail-closed.
+  - Finding remains open until the parser is wired into `GET /api/chat/threads` service/route tests.
 - `acceptance`:
-  - Parser tests cover valid max-size lists, duplicate collapse, malformed values and oversized rejection.
+  - Parser tests cover valid max-size lists, duplicate collapse, malformed values and oversized rejection. `done`
   - Service tests prove duplicate company IDs trigger one Chatwoot lookup/upsert and one thread entry.
   - `GET /api/chat/threads` returns a fail-closed configuration error when the attribute exceeds the allowed limit.

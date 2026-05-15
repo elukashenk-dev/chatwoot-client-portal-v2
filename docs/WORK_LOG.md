@@ -86,6 +86,9 @@
 - `F-CHAT-THREAD-002` закрыт для текущего private-only runtime: добавлен общий
   public `threadId` parser/resolver boundary, `company:<id>` трактуется только
   как Chatwoot company contact id и fail-closed до Chatwoot lookup/send/realtime.
+- `F-CHAT-THREAD-007` parser slice выполнен: `portal_client_company_contact_ids`
+  получил max `20`, strict integer parsing, duplicate collapse и fail-closed
+  errors; finding остается open до service/route wiring.
 
 ## Current Baseline
 
@@ -103,8 +106,9 @@
 
 ## Recommended Next Step
 
-- Закрыть `F-CHAT-THREAD-007`: ввести строгий parser и cardinality bound для
-  `portal_client_company_contact_ids` перед любым `GET /api/chat/threads` с
-  company threads. Company behavior не включать до закрытия
+- Продолжить `F-CHAT-THREAD-007`: подключить `contactAttributes` parser к
+  будущему `GET /api/chat/threads` service/route так, чтобы duplicate IDs давали
+  один lookup/thread entry, а oversized list возвращал controlled fail-closed
+  configuration error. Company behavior не включать до закрытия
   `F-CHAT-THREAD-001`, `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`,
   `F-CHAT-THREAD-006`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
