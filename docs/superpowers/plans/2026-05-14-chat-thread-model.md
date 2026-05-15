@@ -216,6 +216,18 @@ resolves internal Chatwoot conversation ID -> Chatwoot API
 Never invert this flow. Browser input must never select a Chatwoot conversation
 directly.
 
+Fail-closed coverage required before runtime behavior is enabled:
+
+| Case | Required tests |
+| --- | --- |
+| Malformed `portal_client_company_contact_ids` | Task 1 parser tests reject non-integer values. |
+| Referenced company contact is missing | Task 3 thread listing service test rejects with `portal_company_contact_missing`. |
+| Referenced company contact has wrong `portal_contact_type` | Task 3 thread listing service test rejects with `portal_company_contact_type_invalid`. |
+| Person contact is disabled or wrong type | Task 1 parser/assertion tests and Task 3 service tests reject before returning any thread list. |
+| Company contact is disabled | Task 3 thread listing service test rejects with `portal_company_contact_disabled`. |
+| Forged `company:<id>` not listed on current person contact | Task 4 runtime resolver test rejects before Chatwoot conversation lookup/create; Task 5 history/send route tests verify no outbound send. |
+| Membership removed after subscribe/open | Task 5 history/send tests and Task 6 realtime/webhook tests revalidate current attributes and block future delivery. |
+
 ---
 
 ## Task 0: Private Chat Safety Gate
@@ -1173,50 +1185,67 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createChatThreadsService } from './service.js'
 
+type ContactTestDouble = {
+  customAttributes: Record<string, unknown>
+  email: string
+  id: number
+  name: string
+}
+
+function createThreadListService({
+  companyContact = {
+    customAttributes: {
+      portal_contact_type: 'company',
+      portal_enabled: true,
+    },
+    email: 'office@romashka.ru',
+    id: 154,
+    name: 'ООО "Ромашка"',
+  },
+  personContact = {
+    customAttributes: {
+      portal_client_company_contact_ids: '154',
+      portal_contact_type: 'person',
+      portal_enabled: true,
+    },
+    email: 'ivan@example.com',
+    id: 44,
+    name: 'Иван Петров',
+  },
+}: {
+  companyContact?: ContactTestDouble | null
+  personContact?: ContactTestDouble | null
+} = {}) {
+  return createChatThreadsService({
+    chatThreadsRepository: {
+      upsertCompanyThread: vi.fn().mockResolvedValue({
+        chatwootContactId: 154,
+        chatwootConversationId: null,
+        chatwootInboxId: 9,
+        id: 2,
+        portalUserId: null,
+        threadType: 'company',
+      }),
+      upsertPrivateThread: vi.fn().mockResolvedValue({
+        chatwootContactId: 44,
+        chatwootConversationId: null,
+        chatwootInboxId: 9,
+        id: 1,
+        portalUserId: 7,
+        threadType: 'private',
+      }),
+    },
+    chatwootClient: {
+      findContactById: vi.fn().mockResolvedValue(companyContact),
+    },
+    linkedContactResolver: vi.fn().mockResolvedValue(personContact),
+    portalInboxId: 9,
+  })
+}
+
 describe('createChatThreadsService', () => {
   it('returns private thread plus enabled company threads from person attributes', async () => {
-    const service = createChatThreadsService({
-      chatThreadsRepository: {
-        upsertCompanyThread: vi.fn().mockResolvedValue({
-          chatwootContactId: 154,
-          chatwootConversationId: null,
-          chatwootInboxId: 9,
-          id: 2,
-          portalUserId: null,
-          threadType: 'company',
-        }),
-        upsertPrivateThread: vi.fn().mockResolvedValue({
-          chatwootContactId: 44,
-          chatwootConversationId: null,
-          chatwootInboxId: 9,
-          id: 1,
-          portalUserId: 7,
-          threadType: 'private',
-        }),
-      },
-      chatwootClient: {
-        findContactById: vi.fn().mockResolvedValue({
-          customAttributes: {
-            portal_contact_type: 'company',
-            portal_enabled: true,
-          },
-          email: 'office@romashka.ru',
-          id: 154,
-          name: 'ООО "Ромашка"',
-        }),
-      },
-      linkedContactResolver: vi.fn().mockResolvedValue({
-        customAttributes: {
-          portal_client_company_contact_ids: '154',
-          portal_contact_type: 'person',
-          portal_enabled: true,
-        },
-        email: 'ivan@example.com',
-        id: 44,
-        name: 'Иван Петров',
-      }),
-      portalInboxId: 9,
-    })
+    const service = createThreadListService()
 
     await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual({
       activeThreadId: 'private:me',
@@ -1238,13 +1267,85 @@ describe('createChatThreadsService', () => {
   })
 
   it('fails closed when a referenced company contact is missing', async () => {
-    // linked person references 154, findContactById returns null.
-    // Expect ApiError code portal_company_contact_missing.
+    const service = createThreadListService({ companyContact: null })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+      code: 'portal_company_contact_missing',
+    })
+  })
+
+  it('fails closed when a referenced company contact has the wrong type', async () => {
+    const service = createThreadListService({
+      companyContact: {
+        customAttributes: {
+          portal_contact_type: 'person',
+          portal_enabled: true,
+        },
+        email: 'employee@romashka.ru',
+        id: 154,
+        name: 'Сотрудник Ромашки',
+      },
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+      code: 'portal_company_contact_type_invalid',
+    })
   })
 
   it('fails closed when a referenced company contact is not enabled', async () => {
-    // findContactById returns portal_contact_type='company', portal_enabled=false.
-    // Expect ApiError code portal_company_contact_disabled.
+    const service = createThreadListService({
+      companyContact: {
+        customAttributes: {
+          portal_contact_type: 'company',
+          portal_enabled: false,
+        },
+        email: 'office@romashka.ru',
+        id: 154,
+        name: 'ООО "Ромашка"',
+      },
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+      code: 'portal_company_contact_disabled',
+    })
+  })
+
+  it('fails closed when the current person contact is disabled', async () => {
+    const service = createThreadListService({
+      personContact: {
+        customAttributes: {
+          portal_client_company_contact_ids: '154',
+          portal_contact_type: 'person',
+          portal_enabled: false,
+        },
+        email: 'ivan@example.com',
+        id: 44,
+        name: 'Иван Петров',
+      },
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+      code: 'portal_contact_disabled',
+    })
+  })
+
+  it('fails closed when the current person contact has the wrong type', async () => {
+    const service = createThreadListService({
+      personContact: {
+        customAttributes: {
+          portal_client_company_contact_ids: '',
+          portal_contact_type: 'company',
+          portal_enabled: true,
+        },
+        email: 'office@romashka.ru',
+        id: 44,
+        name: 'ООО "Ромашка"',
+      },
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).rejects.toMatchObject({
+      code: 'portal_contact_type_invalid',
+    })
   })
 })
 ```
@@ -1474,7 +1575,21 @@ export function registerChatThreadsRoutes(
 }
 ```
 
-Create route tests mirroring `chat-realtime/routes.test.ts`: unauthenticated returns 401, authenticated returns thread list.
+Create route tests mirroring `chat-realtime/routes.test.ts`:
+
+- unauthenticated `GET /api/chat/threads` returns 401;
+- authenticated request returns the thread list from `ChatThreadsService`;
+- disabled current person contact returns 403 with `portal_contact_disabled`;
+- wrong-type current person contact returns 403 with
+  `portal_contact_type_invalid`;
+- malformed `portal_client_company_contact_ids` returns 403 with
+  `portal_client_company_contact_ids_invalid`;
+- missing referenced company contact returns 403 with
+  `portal_company_contact_missing`;
+- wrong-type referenced company contact returns 403 with
+  `portal_company_contact_type_invalid`;
+- disabled referenced company contact returns 403 with
+  `portal_company_contact_disabled`.
 
 - [ ] **Step 7: Wire route in app**
 
@@ -1526,9 +1641,11 @@ In `backend/src/modules/chat-threads/service.test.ts`, add:
 ```ts
 function createCompanyThreadRuntimeService({
   createConversation = vi.fn(),
+  personCompanyContactIds = '154',
   threadConversationId = null,
 }: {
   createConversation?: ReturnType<typeof vi.fn>
+  personCompanyContactIds?: string
   threadConversationId?: number | null
 } = {}) {
   const updateThreadConversation = vi.fn().mockResolvedValue({
@@ -1572,7 +1689,7 @@ function createCompanyThreadRuntimeService({
       }),
       linkedContactResolver: vi.fn().mockResolvedValue({
         customAttributes: {
-          portal_client_company_contact_ids: '154',
+          portal_client_company_contact_ids: personCompanyContactIds,
           portal_contact_type: 'person',
           portal_enabled: true,
         },
@@ -1647,6 +1764,49 @@ it('bootstraps a company conversation only for writable context', async () => {
     }),
   )
 })
+
+it('fails closed for a forged company thread not listed on the current person contact', async () => {
+  const createConversation = vi.fn()
+  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
+    createConversation,
+    personCompanyContactIds: '203',
+  })
+
+  await expect(
+    service.getCurrentUserThreadContext({
+      threadId: 'company:154',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    activeThread: null,
+    chatwootConversation: null,
+    reason: 'thread_access_denied',
+    result: 'not_ready',
+  })
+  expect(createConversation).not.toHaveBeenCalled()
+  expect(updateThreadConversation).not.toHaveBeenCalled()
+})
+
+it('fails closed for malformed public thread IDs', async () => {
+  const createConversation = vi.fn()
+  const { service, updateThreadConversation } = createCompanyThreadRuntimeService({
+    createConversation,
+  })
+
+  await expect(
+    service.getCurrentUserThreadContext({
+      threadId: 'company:not-a-number',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    activeThread: null,
+    chatwootConversation: null,
+    reason: 'thread_invalid',
+    result: 'not_ready',
+  })
+  expect(createConversation).not.toHaveBeenCalled()
+  expect(updateThreadConversation).not.toHaveBeenCalled()
+})
 ```
 
 - [ ] **Step 2: Run runtime context tests to verify they fail**
@@ -1711,6 +1871,8 @@ Rules:
 - Always validate person contact attributes first.
 - `private:me` targets the person contact.
 - `company:<id>` targets only a company contact listed in the current person contact's `portal_client_company_contact_ids`.
+- Forged or malformed public `threadId` values must fail closed before Chatwoot
+  conversation lookup/create.
 - `getCurrentUserThreadContext` never creates a Chatwoot conversation.
 - `ensureCurrentUserWritableThreadContext` creates/reuses contact inbox source ID and Chatwoot conversation when missing.
 - Persist conversation ID with `chatThreadsRepository.updateThreadConversation`.
@@ -1870,6 +2032,68 @@ it('strips company Markdown author prefix from portal history and exposes author
     ],
   })
 })
+
+it('does not read company history after membership is removed', async () => {
+  const listConversationMessages = vi.fn()
+  const service = createChatMessagesService({
+    chatThreadsService: createThreadServiceStub({
+      context: {
+        ...companyReadyContext,
+        activeThread: null,
+        chatwootConversation: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+      },
+    }),
+    chatwootClient: createChatwootClientStub({
+      listConversationMessages,
+    }),
+  })
+
+  await expect(
+    service.getCurrentUserChatMessages({
+      threadId: 'company:154',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    messages: [],
+    reason: 'thread_access_denied',
+    result: 'not_ready',
+  })
+  expect(listConversationMessages).not.toHaveBeenCalled()
+})
+
+it('does not send to Chatwoot after company membership is removed', async () => {
+  const createConversationIncomingMessage = vi.fn()
+  const service = createChatMessagesService({
+    chatThreadsService: createThreadServiceStub({
+      writableContext: {
+        ...companyReadyContext,
+        activeThread: null,
+        chatwootConversation: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+      },
+    }),
+    chatwootClient: createChatwootClientStub({
+      createConversationIncomingMessage,
+    }),
+  })
+
+  await expect(
+    service.sendCurrentUserTextMessage({
+      clientMessageKey: 'portal-send:key',
+      content: 'Добрый день',
+      threadId: 'company:154',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject({
+    reason: 'thread_access_denied',
+    result: 'not_ready',
+    sentMessage: null,
+  })
+  expect(createConversationIncomingMessage).not.toHaveBeenCalled()
+})
 ```
 
 - [ ] **Step 2: Run message tests to verify they fail**
@@ -1986,6 +2210,19 @@ const sendChatAttachmentFieldsSchema = z.object({
 
 Default `GET /api/chat/messages` without `threadId` to `private:me` during rollout. Require `threadId` for sends.
 
+Add route-level fail-closed tests:
+
+- `GET /api/chat/messages?threadId=company:999` where current person contact
+  does not list `999` returns a controlled not-ready/access-denied snapshot and
+  does not call Chatwoot message listing;
+- `POST /api/chat/messages` with forged `threadId=company:999` returns a
+  controlled not-ready/access-denied send result and does not call Chatwoot
+  outbound message create;
+- attachment send with forged `threadId=company:999` is rejected before Chatwoot
+  outbound attachment create;
+- all send routes require `threadId`; only read history may default missing
+  `threadId` to `private:me` during rollout.
+
 - [ ] **Step 6: Update service to use thread runtime**
 
 Change `createChatMessagesService` options:
@@ -2052,6 +2289,9 @@ function parseCompanyThreadContent(content: string | null) {
 
 Mapping rules:
 
+- If thread runtime returns anything except `result='ready'`, history/send must
+  return the controlled context result and must not call Chatwoot message list,
+  text send or attachment send APIs.
 - Agent messages: `authorRole='agent'`, `direction='incoming'`.
 - Private contact messages: `authorRole='current_user'`, `direction='outgoing'`.
 - Company contact messages with ledger `userId === current user`: `authorRole='current_user'`, `direction='outgoing'`.
@@ -2132,6 +2372,58 @@ it('publishes a company thread event to every subscriber on that thread', async 
   expect(firstSend).toHaveBeenCalledTimes(1)
   expect(secondSend).toHaveBeenCalledTimes(1)
 })
+
+it('skips a subscribed user after company thread access is revoked', async () => {
+  const hub = createChatRealtimeHub()
+  const firstSend = vi.fn()
+  const secondSend = vi.fn()
+
+  hub.subscribe({
+    send: firstSend,
+    tenantId: 1,
+    threadId: 'company:154',
+    userId: 7,
+  })
+  hub.subscribe({
+    send: secondSend,
+    tenantId: 1,
+    threadId: 'company:154',
+    userId: 8,
+  })
+
+  await expect(
+    hub.publishThreadMessages({
+      createSnapshotForUser: vi.fn(async (userId) =>
+        userId === 7
+          ? {
+              activeThread: null,
+              hasMoreOlder: false,
+              messages: [],
+              nextOlderCursor: null,
+              reason: 'thread_access_denied',
+              result: 'not_ready',
+            }
+          : {
+              activeThread: {
+                id: 'company:154',
+                title: 'ООО "Ромашка"',
+                type: 'company',
+              },
+              hasMoreOlder: false,
+              messages: [],
+              nextOlderCursor: null,
+              reason: 'none',
+              result: 'ready',
+            },
+      ),
+      tenantId: 1,
+      threadId: 'company:154',
+    }),
+  ).resolves.toBe(1)
+
+  expect(firstSend).not.toHaveBeenCalled()
+  expect(secondSend).toHaveBeenCalledTimes(1)
+})
 ```
 
 - [ ] **Step 2: Run realtime tests to verify they fail**
@@ -2209,6 +2501,16 @@ const chatRealtimeQuerySchema = z.object({
 
 Validate through `chatThreadsService.getCurrentUserThreadContext({ threadId, userId })`.
 
+Add route tests:
+
+- forged `threadId=company:999` where current person contact does not list
+  company `999` returns a controlled access-denied response and does not
+  subscribe;
+- malformed `threadId=company:not-a-number` returns a controlled invalid-thread
+  response and does not subscribe;
+- a user whose membership is removed before reconnect cannot establish a new SSE
+  subscription for that company thread.
+
 Subscribe with:
 
 ```ts
@@ -2253,6 +2555,15 @@ await realtimeHub.publishThreadMessages({
 ```
 
 For private mappings, this still works because only the private owner can subscribe.
+
+Add webhook service tests:
+
+- company webhook fanout calls `getCurrentUserChatMessages` once per active
+  subscriber and sends only snapshots that still return `result='ready'`;
+- a subscriber whose current person contact no longer lists the company contact
+  receives no webhook event without needing to reconnect;
+- an unmapped Chatwoot conversation remains `unroutable` and is not recovered
+  from contact validity alone.
 
 - [ ] **Step 7: Run realtime/webhook tests**
 

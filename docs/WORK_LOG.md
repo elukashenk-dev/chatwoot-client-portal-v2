@@ -71,8 +71,9 @@
 - Следующий implementation scope выбран как private-only safety gate:
   `threadId = private:me`, без включения company threads, company sends и
   company realtime.
-- Перед runtime-кодом нужно закрыть `F-CHAT-THREAD-003`: заменить общие
-  placeholder-тесты в плане на конкретные fail-closed cases.
+- `F-CHAT-THREAD-003` закрыт: plan теперь содержит конкретную fail-closed
+  coverage matrix и тесты для malformed attributes, missing/wrong/disabled
+  contacts, forged `threadId` и membership removal.
 
 ## Current Baseline
 
@@ -90,9 +91,8 @@
 
 ## Recommended Next Step
 
-- Закрыть pre-code gate `F-CHAT-THREAD-003`, затем начинать отдельную ветку
-  `feature/phase-chat-thread-private-safety-gate` для private-only перехода на
-  `threadId = private:me`. Company behavior не включать до закрытия
-  `F-CHAT-SEC-001`, `F-CHAT-THREAD-001`, `F-CHAT-THREAD-004`,
-  `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`, `F-CHAT-THREAD-007`,
-  `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
+- Создать отдельную ветку `feature/phase-chat-thread-private-safety-gate` и
+  начать private-only переход на `threadId = private:me`. Company behavior не
+  включать до закрытия `F-CHAT-SEC-001`, `F-CHAT-THREAD-001`,
+  `F-CHAT-THREAD-004`, `F-CHAT-THREAD-005`, `F-CHAT-THREAD-006`,
+  `F-CHAT-THREAD-007`, `F-CHAT-WEBHOOK-003` и `F-CHAT-RT-002`.
