@@ -1,7 +1,4 @@
-import type {
-  ChatwootClient,
-  ChatwootContact,
-} from '../../integrations/chatwoot/client.js'
+import type { ChatwootClient } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
 import type { ChatContextRepository } from '../chat-context/repository.js'
 import {
@@ -10,6 +7,13 @@ import {
 } from './contactAttributes.js'
 import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
+import { createChatThreadRuntimeResolver } from './runtime.js'
+import {
+  buildCompanyThread,
+  buildPrivateThread,
+  type CurrentUserChatThreads,
+  type PublicChatThreadSummary,
+} from './types.js'
 
 const CONFIGURATION_ERROR_MESSAGE =
   'Доступ к порталу настроен некорректно. Обратитесь в поддержку.'
@@ -21,32 +25,21 @@ type ChatThreadsContactRepository = Pick<
 
 type ChatThreadsPersistenceRepository = Pick<
   PortalChatThreadsRepository,
-  'upsertCompanyThread' | 'upsertPrivateThread'
+  | 'findThreadById'
+  | 'transactionWithThreadBootstrapLock'
+  | 'updateThreadConversation'
+  | 'upsertCompanyThread'
+  | 'upsertPrivateThread'
 >
 
 type ChatThreadsChatwootClient = Pick<
   ChatwootClient,
-  'findContactByEmail' | 'findContactById'
+  | 'createContactInbox'
+  | 'createConversation'
+  | 'findContactByEmail'
+  | 'findContactById'
+  | 'findContactPortalInboxSourceId'
 >
-
-export type PublicChatThreadSummary =
-  | {
-      id: typeof PRIVATE_CHAT_THREAD_ID
-      subtitle: string
-      title: string
-      type: 'private'
-    }
-  | {
-      id: `company:${number}`
-      subtitle: string
-      title: string
-      type: 'company'
-    }
-
-export type CurrentUserChatThreads = {
-  activeThreadId: typeof PRIVATE_CHAT_THREAD_ID
-  threads: PublicChatThreadSummary[]
-}
 
 type CreateChatThreadsServiceOptions = {
   chatContextRepository: ChatThreadsContactRepository
@@ -58,24 +51,6 @@ type CreateChatThreadsServiceOptions = {
 
 function createContactConfigurationError(code: string) {
   return new ApiError(403, code, CONFIGURATION_ERROR_MESSAGE)
-}
-
-function buildPrivateThread(): PublicChatThreadSummary {
-  return {
-    id: PRIVATE_CHAT_THREAD_ID,
-    subtitle: 'Только вы и поддержка',
-    title: 'Личный чат',
-    type: 'private',
-  }
-}
-
-function buildCompanyThread(contact: ChatwootContact): PublicChatThreadSummary {
-  return {
-    id: `company:${contact.id}`,
-    subtitle: 'Общий чат компании',
-    title: contact.name?.trim() || `Компания ${contact.id}`,
-    type: 'company',
-  }
 }
 
 export function createChatThreadsService({
@@ -130,8 +105,18 @@ export function createChatThreadsService({
 
     return refreshedContact
   }
+  const runtimeResolver = createChatThreadRuntimeResolver({
+    chatThreadsRepository,
+    chatwootClient,
+    findLinkedPersonContact,
+    now,
+    portalInboxId,
+    readPersonAttributes: assertPortalPersonContactEnabled,
+  })
 
   return {
+    ...runtimeResolver,
+
     async listCurrentUserThreads({
       userId,
     }: {

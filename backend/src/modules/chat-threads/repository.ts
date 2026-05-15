@@ -1,4 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+
+import { and, eq, inArray, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import { portalChatMessageSends, portalChatThreads } from '../../db/schema.js'
@@ -42,6 +44,19 @@ function mapThread(row: SelectedThread): PortalChatThreadRecord {
   }
 }
 
+function createThreadBootstrapLockKey(
+  tenantId: number,
+  chatwootContactId: number,
+) {
+  const digest = createHash('sha256')
+    .update(
+      `chat-threads:conversation-bootstrap:${tenantId}:${chatwootContactId}`,
+    )
+    .digest()
+
+  return [digest.readInt32BE(0), digest.readInt32BE(4)] as const
+}
+
 export function createChatThreadsRepository(
   db: AppDatabase,
   { tenantId }: TenantRepositoryScope,
@@ -62,6 +77,24 @@ export function createChatThreadsRepository(
   }
 
   return {
+    async transactionWithThreadBootstrapLock<T>(
+      chatwootContactId: number,
+      handler: () => Promise<T>,
+    ) {
+      const [lockKeyPartOne, lockKeyPartTwo] = createThreadBootstrapLockKey(
+        tenantId,
+        chatwootContactId,
+      )
+
+      return db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(${lockKeyPartOne}, ${lockKeyPartTwo})`,
+        )
+
+        return handler()
+      })
+    },
+
     async findSendLedgerAuthorsByMessageIds({
       messageIds,
       portalChatThreadId,

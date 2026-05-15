@@ -7,7 +7,9 @@ import type { ChatThreadsService } from './service.js'
 
 type RegisterChatThreadsRoutesOptions = {
   authService: AuthService
-  createChatThreadsService: (request: FastifyRequest) => ChatThreadsService
+  createChatThreadsService: (
+    request: FastifyRequest,
+  ) => Pick<ChatThreadsService, 'listCurrentUserThreads'>
   env: AppEnv
 }
 

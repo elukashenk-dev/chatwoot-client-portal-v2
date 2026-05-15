@@ -113,6 +113,10 @@
   upsert-ит validated private/company records в `portal_chat_threads` через
   tenant-scoped repository; company send/realtime/webhook routing пока не
   включены.
+- Task 4 thread runtime context завершен: добавлен внутренний resolver для
+  private/company thread context и lazy Chatwoot conversation bootstrap через
+  `portal_chat_threads` с tenant-scoped bootstrap lock; company send/realtime/webhook
+  routing пока не включены.
 
 ## Current Baseline
 
@@ -130,7 +134,6 @@
 
 ## Recommended Next Step
 
-- Реализовать Task 4 основного thread plan: thread runtime context и lazy
-  conversation bootstrap поверх `portal_chat_threads`, сохраняя browser contract
-  только через `threadId`; company send/formatting/realtime/webhook routing пока
-  не включать.
+- Реализовать Task 5 основного thread plan: подключить messages history/send к
+  thread runtime context и перевести send ledger на `portalChatThreadId`; перед
+  company send/author formatting закрыть `F-CHAT-THREAD-005`.

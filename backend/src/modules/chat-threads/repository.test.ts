@@ -46,6 +46,19 @@ describe('createChatThreadsRepository', () => {
     await database.close()
   })
 
+  it('runs thread conversation bootstrap work under a scoped database lock', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const repository = createChatThreadsRepository(database.db, {
+      tenantId: tenant.id,
+    })
+
+    await expect(
+      repository.transactionWithThreadBootstrapLock(154, async () => {
+        return 'locked'
+      }),
+    ).resolves.toBe('locked')
+  })
+
   it('upserts one private thread per tenant user', async () => {
     const tenant = await seedTestTenant(database.db)
     const user = await createUser({
