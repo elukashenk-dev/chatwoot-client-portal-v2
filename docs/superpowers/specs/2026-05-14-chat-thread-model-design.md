@@ -312,7 +312,12 @@ user. Новая модель не отменяет уже выбранные г
   допущенным users для company thread;
 - frontend state должен хранить список threads и активный thread.
 
-Миграционный путь:
+Implementation path:
+
+Проект еще не используется реальными клиентами. Production deploy сейчас служит
+для тестирования, поэтому этот путь не обязан сохранять live-customer
+compatibility со старым browser contract. Но каждый шаг все равно должен быть
+production-grade, проверяемым и закрытым тестами.
 
 1. Ввести чтение и строгую валидацию Chatwoot contact attributes.
 2. Добавить `portal_chat_threads` и создать private thread как совместимый

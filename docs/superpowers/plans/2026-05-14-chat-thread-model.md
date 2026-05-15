@@ -19,8 +19,15 @@
 ## Production Quality Bar
 
 This plan targets production-quality implementation from the first enabled
-slice. Incremental rollout is used to reduce blast radius and preserve rollback
-options, not to ship a weaker temporary architecture.
+slice. The portal is still in pre-customer development: production deploys are
+used for testing and there are no real customer conversations or customer users
+to preserve.
+
+That means this work does not need a cautious customer-data migration or legacy
+browser compatibility path. We can replace the old public chat contract directly
+once the replacement is tested. Controlled slices are still required, but their
+purpose is reviewability, security verification and fast rollback during testing,
+not long-term compatibility with live customers.
 
 Non-negotiables:
 
@@ -181,7 +188,9 @@ Company thread Chatwoot content format:
 
 ## Safety Strategy
 
-This feature must not be implemented as a big-bang rewrite. The safe sequence is:
+Because there are no real portal customers yet, this is not a live-customer
+migration. Still, it must not be implemented as an unreviewable big-bang rewrite:
+the safe sequence is:
 
 1. Protect the existing private-chat baseline with targeted tests.
 2. Introduce `threadId` as the browser-facing selector while mapping `private:me`
