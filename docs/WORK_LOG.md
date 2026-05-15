@@ -117,6 +117,11 @@
   private/company thread context и lazy Chatwoot conversation bootstrap через
   `portal_chat_threads` с tenant-scoped bootstrap lock; company send/realtime/webhook
   routing пока не включены.
+- Task 5 messages thread integration завершен: history/send/attachment перешли
+  на thread runtime context, send ledger scope переведен на
+  `portalChatThreadId + user + clientMessageKey`, company messages получают
+  безопасный Chatwoot-visible author prefix и portal `authorRole`;
+  `F-CHAT-THREAD-005` закрыт.
 
 ## Current Baseline
 
@@ -134,6 +139,6 @@
 
 ## Recommended Next Step
 
-- Реализовать Task 5 основного thread plan: подключить messages history/send к
-  thread runtime context и перевести send ledger на `portalChatThreadId`; перед
-  company send/author formatting закрыть `F-CHAT-THREAD-005`.
+- Реализовать Task 6 основного thread plan: thread realtime и Chatwoot webhook
+  fanout keyed by `threadId`; перед company realtime закрыть `F-CHAT-RT-002`,
+  перед webhook routing/recovery закрыть `F-CHAT-WEBHOOK-003`.

@@ -7,7 +7,7 @@ import { ApiError } from '../../lib/errors.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import type { AuthService } from '../auth/service.js'
 import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
-import { assertPublicChatThreadRuntimeAvailable } from '../chat-threads/threadResolver.js'
+import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatSendRateLimiter } from './rateLimit.js'
 import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
@@ -18,12 +18,12 @@ const CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES = 256 * 1024
 const CHAT_ATTACHMENT_REQUEST_MAX_BYTES =
   CHAT_ATTACHMENT_MAX_BYTES + CHAT_ATTACHMENT_REQUEST_OVERHEAD_BYTES
 
-const publicThreadIdSchema = z.string().min(1).max(64)
+const publicThreadIdSchema = z.string().trim().min(1).max(80)
 
 const chatMessagesQuerySchema = z
   .object({
     beforeMessageId: z.coerce.number().int().positive().optional(),
-    threadId: publicThreadIdSchema,
+    threadId: publicThreadIdSchema.optional(),
   })
   .strict()
 
@@ -284,11 +284,10 @@ export function registerChatMessagesRoutes(
       request,
     })
     const query = chatMessagesQuerySchema.parse(request.query)
-    assertPublicChatThreadRuntimeAvailable(query.threadId)
 
     return createChatMessagesService(request).getCurrentUserChatMessages({
       beforeMessageId: query.beforeMessageId ?? null,
-      threadId: query.threadId,
+      threadId: query.threadId ?? PRIVATE_CHAT_THREAD_ID,
       userId: user.id,
     })
   })
@@ -303,7 +302,6 @@ export function registerChatMessagesRoutes(
       request,
     })
     const body = sendChatMessageBodySchema.parse(request.body)
-    assertPublicChatThreadRuntimeAvailable(body.threadId)
 
     await enforceChatSendRateLimit({
       chatSendRateLimiter,
@@ -338,7 +336,6 @@ export function registerChatMessagesRoutes(
         request,
       })
       const upload = await parseAttachmentUpload(app, request)
-      assertPublicChatThreadRuntimeAvailable(upload.threadId)
 
       await enforceChatSendRateLimit({
         chatSendRateLimiter,

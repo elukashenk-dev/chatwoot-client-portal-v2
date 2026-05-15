@@ -14,9 +14,6 @@ const readySnapshot: ChatMessagesSnapshot = {
     title: 'Личный чат',
     type: 'private',
   },
-  linkedContact: {
-    id: 44,
-  },
   messages: [],
   nextOlderCursor: null,
   reason: 'none',

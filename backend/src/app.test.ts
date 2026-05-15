@@ -114,7 +114,6 @@ describe('buildApp', () => {
     expect(messagesResponse.json()).toEqual({
       hasMoreOlder: false,
       activeThread: null,
-      linkedContact: null,
       messages: [],
       nextOlderCursor: null,
       reason: 'chatwoot_unavailable',
@@ -164,7 +163,6 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
       activeThread: null,
-      linkedContact: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
       sentMessage: null,
@@ -218,7 +216,6 @@ describe('buildApp', () => {
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
       activeThread: null,
-      linkedContact: null,
       reason: 'chatwoot_unavailable',
       result: 'unavailable',
       sentMessage: null,

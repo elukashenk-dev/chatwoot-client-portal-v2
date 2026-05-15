@@ -7,6 +7,7 @@ export type ChatSendLedgerStatus = 'confirmed' | 'failed' | 'processing'
 
 export type ChatSendLedgerEntry = {
   attemptsCount: number
+  authorDisplayNameSnapshot: string | null
   chatwootMessageId: number | null
   clientMessageKey: string
   confirmedAt: Date | null
@@ -14,6 +15,7 @@ export type ChatSendLedgerEntry = {
   failedAt: Date | null
   messageKind: string
   payloadSha256: string
+  portalChatThreadId: number | null
   primaryConversationId: number
   processingToken: string | null
   status: string
@@ -23,14 +25,16 @@ export type ChatSendLedgerEntry = {
 
 type SendLedgerScope = {
   clientMessageKey: string
-  primaryConversationId: number
+  portalChatThreadId: number
   userId: number
 }
 
 type AcquireSendLedgerEntryInput = SendLedgerScope & {
+  authorDisplayNameSnapshot: string | null
   messageKind: string
   now: Date
   payloadSha256: string
+  primaryConversationId: number
   processingToken: string
   staleProcessingBefore: Date
 }
@@ -47,18 +51,19 @@ type TenantRepositoryScope = {
 
 function buildScopeWhere(
   tenantId: number,
-  { clientMessageKey, primaryConversationId, userId }: SendLedgerScope,
+  { clientMessageKey, portalChatThreadId, userId }: SendLedgerScope,
 ) {
   return and(
     eq(portalChatMessageSends.tenantId, tenantId),
     eq(portalChatMessageSends.userId, userId),
-    eq(portalChatMessageSends.primaryConversationId, primaryConversationId),
+    eq(portalChatMessageSends.portalChatThreadId, portalChatThreadId),
     eq(portalChatMessageSends.clientMessageKey, clientMessageKey),
   )
 }
 
 const ledgerSelection = {
   attemptsCount: portalChatMessageSends.attemptsCount,
+  authorDisplayNameSnapshot: portalChatMessageSends.authorDisplayNameSnapshot,
   chatwootMessageId: portalChatMessageSends.chatwootMessageId,
   clientMessageKey: portalChatMessageSends.clientMessageKey,
   confirmedAt: portalChatMessageSends.confirmedAt,
@@ -66,6 +71,7 @@ const ledgerSelection = {
   failedAt: portalChatMessageSends.failedAt,
   messageKind: portalChatMessageSends.messageKind,
   payloadSha256: portalChatMessageSends.payloadSha256,
+  portalChatThreadId: portalChatMessageSends.portalChatThreadId,
   primaryConversationId: portalChatMessageSends.primaryConversationId,
   processingToken: portalChatMessageSends.processingToken,
   status: portalChatMessageSends.status,
@@ -112,9 +118,11 @@ export function createChatMessagesRepository(
       const [createdEntry] = await db
         .insert(portalChatMessageSends)
         .values({
+          authorDisplayNameSnapshot: input.authorDisplayNameSnapshot,
           clientMessageKey: input.clientMessageKey,
           messageKind: input.messageKind,
           payloadSha256: input.payloadSha256,
+          portalChatThreadId: input.portalChatThreadId,
           primaryConversationId: input.primaryConversationId,
           processingToken: input.processingToken,
           status: 'processing',

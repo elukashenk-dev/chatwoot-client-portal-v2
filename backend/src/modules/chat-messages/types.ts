@@ -1,4 +1,7 @@
-import type { PublicChatContextSnapshot } from '../chat-threads/privateThread.js'
+import type {
+  ChatThreadRuntimeReason,
+  PublicChatThreadSummary,
+} from '../chat-threads/types.js'
 
 export type PortalChatAttachment = {
   fileSize: number | null
@@ -28,6 +31,7 @@ export type PortalChatMessage = {
   attachments: PortalChatAttachment[]
   authorAvatarUrl?: string | null
   authorName: string
+  authorRole: PortalChatMessageAuthorRole
   clientMessageKey?: string | null
   content: string | null
   contentType: string
@@ -38,12 +42,23 @@ export type PortalChatMessage = {
   status: string
 }
 
-export type ChatMessagesSnapshot = PublicChatContextSnapshot & {
+export type PortalChatMessageAuthorRole =
+  | 'agent'
+  | 'company_member'
+  | 'current_user'
+
+export type ChatMessagesSnapshot = {
+  activeThread: PublicChatThreadSummary | null
   hasMoreOlder: boolean
   messages: PortalChatMessage[]
   nextOlderCursor: number | null
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
 }
 
-export type ChatSendResult = PublicChatContextSnapshot & {
+export type ChatSendResult = {
+  activeThread: PublicChatThreadSummary | null
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
   sentMessage: PortalChatMessage | null
 }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DatabaseClient } from '../../db/client.js'
-import { portalUsers } from '../../db/schema.js'
+import { portalChatThreads, portalUsers } from '../../db/schema.js'
 import { hashPassword } from '../../lib/password.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
@@ -10,6 +10,7 @@ import { createChatMessagesRepository } from './repository.js'
 describe('createChatMessagesRepository', () => {
   let database: DatabaseClient
   let tenantId: number
+  let portalChatThreadId: number
   let userId: number
 
   beforeEach(async () => {
@@ -31,6 +32,26 @@ describe('createChatMessagesRepository', () => {
     }
 
     userId = user.id
+
+    const [thread] = await database.db
+      .insert(portalChatThreads)
+      .values({
+        chatwootContactId: 44,
+        chatwootConversationId: 101,
+        chatwootInboxId: 9,
+        portalUserId: user.id,
+        tenantId,
+        threadType: 'private',
+      })
+      .returning({
+        id: portalChatThreads.id,
+      })
+
+    if (!thread) {
+      throw new Error('Failed to create test portal chat thread.')
+    }
+
+    portalChatThreadId = thread.id
   })
 
   afterEach(async () => {
@@ -43,10 +64,12 @@ describe('createChatMessagesRepository', () => {
 
     await expect(
       repository.acquireSendLedgerEntry({
+        authorDisplayNameSnapshot: 'Portal User',
         clientMessageKey: 'portal-send:key-1',
         messageKind: 'text',
         now,
         payloadSha256: 'payload-hash',
+        portalChatThreadId,
         primaryConversationId: 101,
         processingToken: 'processing-token-1',
         staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
@@ -60,17 +83,19 @@ describe('createChatMessagesRepository', () => {
       chatwootMessageId: 501,
       clientMessageKey: 'portal-send:key-1',
       now,
-      primaryConversationId: 101,
+      portalChatThreadId,
       processingToken: 'processing-token-1',
       userId,
     })
 
     await expect(
       repository.acquireSendLedgerEntry({
+        authorDisplayNameSnapshot: 'Portal User',
         clientMessageKey: 'portal-send:key-1',
         messageKind: 'text',
         now,
         payloadSha256: 'payload-hash',
+        portalChatThreadId,
         primaryConversationId: 101,
         processingToken: 'processing-token-2',
         staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
@@ -78,7 +103,9 @@ describe('createChatMessagesRepository', () => {
       }),
     ).resolves.toMatchObject({
       entry: {
+        authorDisplayNameSnapshot: 'Portal User',
         chatwootMessageId: 501,
+        portalChatThreadId,
         status: 'confirmed',
       },
       outcome: 'confirmed',
@@ -90,10 +117,12 @@ describe('createChatMessagesRepository', () => {
     const now = new Date('2026-04-21T12:00:00.000Z')
 
     await repository.acquireSendLedgerEntry({
+      authorDisplayNameSnapshot: 'Portal User',
       clientMessageKey: 'portal-send:key-1',
       messageKind: 'text',
       now,
       payloadSha256: 'first-payload',
+      portalChatThreadId,
       primaryConversationId: 101,
       processingToken: 'processing-token-1',
       staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
@@ -102,10 +131,12 @@ describe('createChatMessagesRepository', () => {
 
     await expect(
       repository.acquireSendLedgerEntry({
+        authorDisplayNameSnapshot: 'Portal User',
         clientMessageKey: 'portal-send:key-1',
         messageKind: 'text',
         now,
         payloadSha256: 'second-payload',
+        portalChatThreadId,
         primaryConversationId: 101,
         processingToken: 'processing-token-2',
         staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
@@ -135,11 +166,13 @@ describe('createChatMessagesRepository', () => {
 
     const now = new Date('2026-04-21T12:00:00.000Z')
     const input = {
+      authorDisplayNameSnapshot: 'Portal User',
       clientMessageKey: 'portal-send:shared-key',
       messageKind: 'text',
       now,
       payloadSha256: 'payload-hash',
       primaryConversationId: 101,
+      portalChatThreadId,
       staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
     }
 
@@ -166,7 +199,7 @@ describe('createChatMessagesRepository', () => {
       chatwootMessageId: 501,
       clientMessageKey: input.clientMessageKey,
       now,
-      primaryConversationId: input.primaryConversationId,
+      portalChatThreadId: input.portalChatThreadId,
       processingToken: 'processing-token-1',
       userId,
     })
@@ -174,7 +207,7 @@ describe('createChatMessagesRepository', () => {
       chatwootMessageId: 502,
       clientMessageKey: input.clientMessageKey,
       now,
-      primaryConversationId: input.primaryConversationId,
+      portalChatThreadId: input.portalChatThreadId,
       processingToken: 'processing-token-2',
       userId: otherUser.id,
     })
@@ -182,7 +215,7 @@ describe('createChatMessagesRepository', () => {
     await expect(
       repository.findSendLedgerEntry({
         clientMessageKey: input.clientMessageKey,
-        primaryConversationId: input.primaryConversationId,
+        portalChatThreadId: input.portalChatThreadId,
         userId,
       }),
     ).resolves.toMatchObject({
@@ -192,7 +225,7 @@ describe('createChatMessagesRepository', () => {
     await expect(
       repository.findSendLedgerEntry({
         clientMessageKey: input.clientMessageKey,
-        primaryConversationId: input.primaryConversationId,
+        portalChatThreadId: input.portalChatThreadId,
         userId: otherUser.id,
       }),
     ).resolves.toMatchObject({
@@ -223,6 +256,24 @@ describe('createChatMessagesRepository', () => {
       throw new Error('Failed to create other tenant test portal user.')
     }
 
+    const [otherThread] = await database.db
+      .insert(portalChatThreads)
+      .values({
+        chatwootContactId: 44,
+        chatwootConversationId: 101,
+        chatwootInboxId: 9,
+        portalUserId: otherUser.id,
+        tenantId: otherTenantId,
+        threadType: 'private',
+      })
+      .returning({
+        id: portalChatThreads.id,
+      })
+
+    if (!otherThread) {
+      throw new Error('Failed to create other tenant test portal chat thread.')
+    }
+
     const tenantRepository = createChatMessagesRepository(database.db, {
       tenantId,
     })
@@ -231,11 +282,13 @@ describe('createChatMessagesRepository', () => {
     })
     const now = new Date('2026-04-21T12:00:00.000Z')
     const input = {
+      authorDisplayNameSnapshot: 'Portal User',
       clientMessageKey: 'portal-send:key-1',
       messageKind: 'text',
       now,
       payloadSha256: 'payload-hash',
       primaryConversationId: 101,
+      portalChatThreadId,
       staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
     }
 
@@ -251,6 +304,7 @@ describe('createChatMessagesRepository', () => {
     await expect(
       otherTenantRepository.acquireSendLedgerEntry({
         ...input,
+        portalChatThreadId: otherThread.id,
         processingToken: 'processing-token-2',
         userId: otherUser.id,
       }),

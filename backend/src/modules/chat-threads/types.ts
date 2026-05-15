@@ -24,6 +24,7 @@ export type ChatThreadRuntimeReason =
   | 'none'
   | 'chatwoot_not_configured'
   | 'chatwoot_unavailable'
+  | 'contact_link_missing'
   | 'conversation_mapping_unavailable'
   | 'conversation_missing'
   | 'thread_access_denied'
@@ -40,6 +41,8 @@ export type ChatThreadRuntimeConversation = {
 export type CurrentUserChatThreadContext = {
   activeThread: PublicChatThreadSummary | null
   chatwootConversation: ChatThreadRuntimeConversation | null
+  currentUserEmail: string | null
+  currentUserName: string | null
   linkedContactId: number | null
   portalChatThreadId: number | null
   reason: ChatThreadRuntimeReason

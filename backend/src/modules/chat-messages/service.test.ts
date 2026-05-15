@@ -1,23 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { ChatwootInvalidHistoryCursorError } from '../../integrations/chatwoot/client.js'
-import type { ChatContextSnapshot } from '../chat-context/service.js'
+import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import { createChatMessagesService } from './service.js'
 
 const readyContext = {
-  linkedContact: {
-    id: 44,
+  activeThread: {
+    id: 'private:me',
+    subtitle: 'Только вы и поддержка',
+    title: 'Личный чат',
+    type: 'private',
   },
-  primaryConversation: {
+  chatwootConversation: {
     assigneeName: 'Анна Смирнова',
     id: 101,
     inboxId: 9,
     lastActivityAt: 300,
     status: 'open',
   },
+  currentUserEmail: 'user@example.test',
+  currentUserName: 'Portal User',
+  linkedContactId: 44,
+  portalChatThreadId: 1,
   reason: 'none' as const,
   result: 'ready' as const,
-}
+  targetChatwootContactId: 44,
+  threadType: 'private' as const,
+} satisfies CurrentUserChatThreadContext
 
 const sentChatwootMessage = {
   attachments: [],
@@ -95,16 +104,18 @@ const sentAudioChatwootMessage = {
   status: 'sent',
 }
 
-function createChatContextServiceStub({
+function createChatThreadsServiceStub({
+  context = readyContext,
   writableContext = readyContext,
 }: {
-  writableContext?: ChatContextSnapshot
+  context?: CurrentUserChatThreadContext
+  writableContext?: CurrentUserChatThreadContext
 } = {}) {
   return {
-    ensureCurrentUserWritableChatContext: vi
+    ensureCurrentUserWritableThreadContext: vi
       .fn()
       .mockResolvedValue(writableContext),
-    getCurrentUserChatContext: vi.fn().mockResolvedValue(writableContext),
+    getCurrentUserThreadContext: vi.fn().mockResolvedValue(context),
   }
 }
 
@@ -140,6 +151,7 @@ function createChatMessagesRepositoryStub(
     acquireSendLedgerEntry: vi.fn().mockResolvedValue({
       entry: {
         attemptsCount: 1,
+        authorDisplayNameSnapshot: 'Portal User',
         chatwootMessageId: null,
         clientMessageKey: 'portal-send:test-key',
         confirmedAt: null,
@@ -147,6 +159,7 @@ function createChatMessagesRepositoryStub(
         failedAt: null,
         messageKind: 'text',
         payloadSha256: 'hash',
+        portalChatThreadId: 1,
         primaryConversationId: 101,
         processingToken: 'processing-token',
         status: 'processing',
@@ -162,19 +175,32 @@ function createChatMessagesRepositoryStub(
   }
 }
 
+function createChatThreadsRepositoryStub() {
+  return {
+    findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
+  }
+}
+
 describe('createChatMessagesService', () => {
   it('returns controlled context without reading messages when chat is not ready', async () => {
     const chatwootClient = createChatwootClientStub({
       listConversationMessages: vi.fn(),
     })
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub({
-        writableContext: {
-          linkedContact: null,
-          primaryConversation: null,
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub({
+        context: {
+          activeThread: null,
+          chatwootConversation: null,
+          currentUserEmail: null,
+          currentUserName: null,
+          linkedContactId: null,
+          portalChatThreadId: null,
           reason: 'contact_link_missing',
           result: 'not_ready',
-        },
+          targetChatwootContactId: null,
+          threadType: null,
+        } as CurrentUserChatThreadContext,
       }),
       chatwootClient,
     })
@@ -191,10 +217,24 @@ describe('createChatMessagesService', () => {
     expect(chatwootClient.listConversationMessages).not.toHaveBeenCalled()
   })
 
-  it('rejects unavailable company thread ids before resolving chat context', async () => {
-    const chatContextService = createChatContextServiceStub()
+  it('returns controlled context for unavailable company thread ids', async () => {
+    const chatThreadsService = createChatThreadsServiceStub({
+      context: {
+        activeThread: null,
+        chatwootConversation: null,
+        currentUserEmail: 'user@example.test',
+        currentUserName: 'Portal User',
+        linkedContactId: 44,
+        portalChatThreadId: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+        targetChatwootContactId: 154,
+        threadType: 'company',
+      },
+    })
     const service = createChatMessagesService({
-      chatContextService,
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService,
       chatwootClient: createChatwootClientStub(),
     })
 
@@ -203,16 +243,23 @@ describe('createChatMessagesService', () => {
         threadId: 'company:154',
         userId: 7,
       }),
-    ).rejects.toMatchObject({
-      code: 'chat_thread_unavailable',
-      statusCode: 403,
+    ).resolves.toMatchObject({
+      messages: [],
+      reason: 'thread_access_denied',
+      result: 'not_ready',
     })
-    expect(chatContextService.getCurrentUserChatContext).not.toHaveBeenCalled()
+    expect(chatThreadsService.getCurrentUserThreadContext).toHaveBeenCalledWith(
+      {
+        threadId: 'company:154',
+        userId: 7,
+      },
+    )
   })
 
   it('maps Chatwoot messages into the portal transcript contract', async () => {
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatwootClient: createChatwootClientStub({
         listConversationMessages: vi.fn().mockResolvedValue({
           hasMoreOlder: true,
@@ -332,7 +379,8 @@ describe('createChatMessagesService', () => {
       status: 'sent',
     })
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatwootClient: createChatwootClientStub({
         findConversationMessageById,
         listConversationMessages: vi.fn().mockResolvedValue({
@@ -386,7 +434,8 @@ describe('createChatMessagesService', () => {
 
   it('normalizes escaped Chatwoot line breaks before returning transcript content', async () => {
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatwootClient: createChatwootClientStub({
         listConversationMessages: vi.fn().mockResolvedValue({
           hasMoreOlder: false,
@@ -435,7 +484,8 @@ describe('createChatMessagesService', () => {
 
   it('returns the public invalid_history_cursor error for stale history anchors', async () => {
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatwootClient: createChatwootClientStub({
         listConversationMessages: vi
           .fn()
@@ -456,13 +506,14 @@ describe('createChatMessagesService', () => {
   })
 
   it('sends text through the writable backend-owned conversation and confirms the ledger', async () => {
-    const chatContextService = createChatContextServiceStub()
+    const chatThreadsService = createChatThreadsServiceStub()
     const chatMessagesRepository = createChatMessagesRepositoryStub()
     const createConversationIncomingMessage = vi
       .fn()
       .mockResolvedValue(sentChatwootMessage)
     const service = createChatMessagesService({
-      chatContextService,
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService,
       chatMessagesRepository,
       chatwootClient: createChatwootClientStub({
         createConversationIncomingMessage,
@@ -488,9 +539,9 @@ describe('createChatMessagesService', () => {
       },
     })
     expect(
-      chatContextService.ensureCurrentUserWritableChatContext,
+      chatThreadsService.ensureCurrentUserWritableThreadContext,
     ).toHaveBeenCalledWith({
-      selectedPrimaryConversationId: null,
+      threadId: 'private:me',
       userId: 7,
     })
     expect(createConversationIncomingMessage).toHaveBeenCalledWith({
@@ -505,7 +556,7 @@ describe('createChatMessagesService', () => {
       expect.objectContaining({
         chatwootMessageId: 501,
         clientMessageKey: 'portal-send:test-key',
-        primaryConversationId: 101,
+        portalChatThreadId: 1,
         userId: 7,
       }),
     )
@@ -542,7 +593,8 @@ describe('createChatMessagesService', () => {
       .fn()
       .mockResolvedValue(replyTargetChatwootMessage)
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub(),
       chatwootClient: createChatwootClientStub({
         createConversationIncomingMessage,
@@ -582,7 +634,8 @@ describe('createChatMessagesService', () => {
   it('rejects text replies when the target message is unavailable', async () => {
     const createConversationIncomingMessage = vi.fn()
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub(),
       chatwootClient: createChatwootClientStub({
         createConversationIncomingMessage,
@@ -608,11 +661,13 @@ describe('createChatMessagesService', () => {
   it('replays a confirmed ledger entry by exact Chatwoot message id without duplicate send', async () => {
     const createConversationIncomingMessage = vi.fn()
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub({
         acquireSendLedgerEntry: vi.fn().mockResolvedValue({
           entry: {
             attemptsCount: 1,
+            authorDisplayNameSnapshot: 'Portal User',
             chatwootMessageId: 501,
             clientMessageKey: 'portal-send:test-key',
             confirmedAt: new Date('2026-04-21T12:00:00.000Z'),
@@ -620,6 +675,7 @@ describe('createChatMessagesService', () => {
             failedAt: null,
             messageKind: 'text',
             payloadSha256: 'hash',
+            portalChatThreadId: 1,
             primaryConversationId: 101,
             processingToken: null,
             status: 'confirmed',
@@ -659,7 +715,8 @@ describe('createChatMessagesService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(sentChatwootMessage)
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository,
       chatwootClient: createChatwootClientStub({
         createConversationIncomingMessage: vi
@@ -696,14 +753,15 @@ describe('createChatMessagesService', () => {
 
   it('sends an attachment through the writable conversation and confirms the ledger', async () => {
     const chatMessagesRepository = createChatMessagesRepositoryStub()
-    const createConversationIncomingAttachmentMessage = vi.fn().mockResolvedValue(
-      {
+    const createConversationIncomingAttachmentMessage = vi
+      .fn()
+      .mockResolvedValue({
         ...sentAttachmentChatwootMessage,
         content: 'Подпись к файлу',
-      },
-    )
+      })
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository,
       chatwootClient: createChatwootClientStub({
         createConversationIncomingAttachmentMessage,
@@ -763,6 +821,7 @@ describe('createChatMessagesService', () => {
         clientMessageKey: 'portal-send:attachment-key',
         messageKind: 'attachment',
         payloadSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+        portalChatThreadId: 1,
         primaryConversationId: 101,
         userId: 7,
       }),
@@ -773,7 +832,7 @@ describe('createChatMessagesService', () => {
       expect.objectContaining({
         chatwootMessageId: 601,
         clientMessageKey: 'portal-send:attachment-key',
-        primaryConversationId: 101,
+        portalChatThreadId: 1,
         userId: 7,
       }),
     )
@@ -784,7 +843,8 @@ describe('createChatMessagesService', () => {
       .fn()
       .mockResolvedValue(sentAudioChatwootMessage)
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub(),
       chatwootClient: createChatwootClientStub({
         createConversationIncomingAttachmentMessage,
@@ -833,7 +893,8 @@ describe('createChatMessagesService', () => {
   it('rejects unsupported attachment types before calling Chatwoot', async () => {
     const createConversationIncomingAttachmentMessage = vi.fn()
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub(),
       chatwootClient: createChatwootClientStub({
         createConversationIncomingAttachmentMessage,
@@ -862,11 +923,13 @@ describe('createChatMessagesService', () => {
   it('replays a confirmed attachment ledger entry without duplicate upload', async () => {
     const createConversationIncomingAttachmentMessage = vi.fn()
     const service = createChatMessagesService({
-      chatContextService: createChatContextServiceStub(),
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
       chatMessagesRepository: createChatMessagesRepositoryStub({
         acquireSendLedgerEntry: vi.fn().mockResolvedValue({
           entry: {
             attemptsCount: 1,
+            authorDisplayNameSnapshot: 'Portal User',
             chatwootMessageId: 601,
             clientMessageKey: 'portal-send:attachment-key',
             confirmedAt: new Date('2026-04-21T12:00:00.000Z'),
@@ -874,6 +937,7 @@ describe('createChatMessagesService', () => {
             failedAt: null,
             messageKind: 'attachment',
             payloadSha256: 'hash',
+            portalChatThreadId: 1,
             primaryConversationId: 101,
             processingToken: null,
             status: 'confirmed',

@@ -28,13 +28,11 @@ const readySnapshot: ChatMessagesSnapshot = {
     title: 'Личный чат',
     type: 'private',
   },
-  linkedContact: {
-    id: 44,
-  },
   messages: [
     {
       attachments: [],
       authorName: 'Анна Смирнова',
+      authorRole: 'agent',
       content: 'Ответ агента',
       contentType: 'text',
       createdAt: '2026-04-21T12:00:00.000Z',

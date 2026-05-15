@@ -141,7 +141,10 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   }
   const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
     createChatMessagesService({
-      chatContextService: createChatContextServiceForRequest(request),
+      chatThreadsRepository: createChatThreadsRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
+      chatThreadsService: createChatThreadsServiceForRequest(request),
       chatMessagesRepository: createChatMessagesRepository(database.db, {
         tenantId: requireTenantContext(request).id,
       }),

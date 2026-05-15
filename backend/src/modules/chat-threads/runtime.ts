@@ -5,23 +5,22 @@ import type {
   ChatwootConversation,
   ChatwootContact,
 } from '../../integrations/chatwoot/client.js'
-import {
-  ChatwootClientConfigurationError,
-  ChatwootClientRequestError,
-} from '../../integrations/chatwoot/client.js'
+import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
 import { assertPortalCompanyContactEnabled } from './contactAttributes.js'
-import type {
-  ChatThreadsRepository,
-  PortalChatThreadRecord,
-} from './repository.js'
-import { parsePublicChatThreadId } from './threadResolver.js'
+import type { ChatThreadsRepository } from './repository.js'
+import {
+  buildContextFromThreadRecord,
+  buildThreadContext,
+  createUnavailableRuntimeContext,
+  mapChatwootConversation,
+  mapPersistedThreadConversation,
+  parseRuntimeThreadId,
+} from './runtimeContext.js'
 import {
   buildCompanyThread,
   buildPrivateThread,
-  type ChatThreadRuntimeConversation,
   type CurrentUserChatThreadContext,
-  type PublicChatThreadSummary,
 } from './types.js'
 
 type ChatThreadRuntimeRepository = Pick<
@@ -54,135 +53,6 @@ type CreateChatThreadRuntimeResolverOptions = {
   readPersonAttributes: (contact: ChatwootContact) => PersonAttributes
 }
 
-function buildThreadContext({
-  activeThread = null,
-  chatwootConversation = null,
-  linkedContactId = null,
-  portalChatThreadId = null,
-  reason,
-  result,
-  targetChatwootContactId = null,
-  threadType = null,
-}: CurrentUserChatThreadContext): CurrentUserChatThreadContext {
-  return {
-    activeThread,
-    chatwootConversation,
-    linkedContactId,
-    portalChatThreadId,
-    reason,
-    result,
-    targetChatwootContactId,
-    threadType,
-  }
-}
-
-function mapChatwootConversation(
-  conversation: ChatwootConversation,
-): ChatThreadRuntimeConversation {
-  return {
-    assigneeName: conversation.assigneeName,
-    id: conversation.id,
-    inboxId: conversation.inboxId,
-    lastActivityAt: conversation.lastActivityAt,
-    status: conversation.status,
-  }
-}
-
-function mapPersistedThreadConversation(
-  thread: PortalChatThreadRecord,
-): ChatThreadRuntimeConversation | null {
-  if (thread.chatwootConversationId === null) {
-    return null
-  }
-
-  return {
-    assigneeName: null,
-    id: thread.chatwootConversationId,
-    inboxId: thread.chatwootInboxId,
-    lastActivityAt: null,
-    status: 'open',
-  }
-}
-
-function parseRuntimeThreadId(threadId: string) {
-  try {
-    return parsePublicChatThreadId(threadId)
-  } catch (error) {
-    if (error instanceof ApiError && error.code === 'chat_thread_unsupported') {
-      return null
-    }
-
-    throw error
-  }
-}
-
-function createUnavailableRuntimeContext({
-  activeThread,
-  error,
-  linkedContactId,
-  portalChatThreadId,
-  targetChatwootContactId,
-  threadType,
-}: {
-  activeThread: PublicChatThreadSummary | null
-  error: unknown
-  linkedContactId: number | null
-  portalChatThreadId: number | null
-  targetChatwootContactId: number | null
-  threadType: 'company' | 'private' | null
-}) {
-  if (error instanceof ChatwootClientConfigurationError) {
-    return buildThreadContext({
-      activeThread,
-      chatwootConversation: null,
-      linkedContactId,
-      portalChatThreadId,
-      reason: 'chatwoot_not_configured',
-      result: 'unavailable',
-      targetChatwootContactId,
-      threadType,
-    })
-  }
-
-  if (error instanceof ChatwootClientRequestError) {
-    return buildThreadContext({
-      activeThread,
-      chatwootConversation: null,
-      linkedContactId,
-      portalChatThreadId,
-      reason: 'chatwoot_unavailable',
-      result: 'unavailable',
-      targetChatwootContactId,
-      threadType,
-    })
-  }
-
-  throw error
-}
-
-function buildContextFromThreadRecord({
-  activeThread,
-  linkedContactId,
-  threadRecord,
-}: {
-  activeThread: PublicChatThreadSummary
-  linkedContactId: number
-  threadRecord: PortalChatThreadRecord
-}) {
-  const chatwootConversation = mapPersistedThreadConversation(threadRecord)
-
-  return buildThreadContext({
-    activeThread,
-    chatwootConversation,
-    linkedContactId,
-    portalChatThreadId: threadRecord.id,
-    reason: chatwootConversation ? 'none' : 'conversation_missing',
-    result: chatwootConversation ? 'ready' : 'not_ready',
-    targetChatwootContactId: threadRecord.chatwootContactId,
-    threadType: threadRecord.threadType,
-  })
-}
-
 export function createChatThreadRuntimeResolver({
   chatThreadsRepository,
   chatwootClient,
@@ -204,6 +74,8 @@ export function createChatThreadRuntimeResolver({
       return buildThreadContext({
         activeThread: null,
         chatwootConversation: null,
+        currentUserEmail: null,
+        currentUserName: null,
         linkedContactId: null,
         portalChatThreadId: null,
         reason: 'thread_invalid',
@@ -213,7 +85,21 @@ export function createChatThreadRuntimeResolver({
       })
     }
 
-    const personContact = await findLinkedPersonContact(userId)
+    let personContact: ChatwootContact
+
+    try {
+      personContact = await findLinkedPersonContact(userId)
+    } catch (error) {
+      return createUnavailableRuntimeContext({
+        activeThread: null,
+        error,
+        linkedContactId: null,
+        portalChatThreadId: null,
+        targetChatwootContactId: null,
+        threadType: parsedThread.type,
+      })
+    }
+
     const personAttributes = readPersonAttributes(personContact)
     const refreshedAt = now()
 
@@ -229,6 +115,7 @@ export function createChatThreadRuntimeResolver({
         activeThread: buildPrivateThread(),
         linkedContactId: personContact.id,
         threadRecord,
+        userContact: personContact,
       })
     }
 
@@ -240,6 +127,8 @@ export function createChatThreadRuntimeResolver({
       return buildThreadContext({
         activeThread: null,
         chatwootConversation: null,
+        currentUserEmail: personContact.email,
+        currentUserName: personContact.name,
         linkedContactId: personContact.id,
         portalChatThreadId: null,
         reason: 'thread_access_denied',
@@ -257,6 +146,8 @@ export function createChatThreadRuntimeResolver({
       return buildThreadContext({
         activeThread: null,
         chatwootConversation: null,
+        currentUserEmail: personContact.email,
+        currentUserName: personContact.name,
         linkedContactId: personContact.id,
         portalChatThreadId: null,
         reason: 'thread_access_denied',
@@ -273,6 +164,8 @@ export function createChatThreadRuntimeResolver({
         return buildThreadContext({
           activeThread: null,
           chatwootConversation: null,
+          currentUserEmail: personContact.email,
+          currentUserName: personContact.name,
           linkedContactId: personContact.id,
           portalChatThreadId: null,
           reason: 'thread_access_denied',
@@ -295,6 +188,7 @@ export function createChatThreadRuntimeResolver({
       activeThread: buildCompanyThread(companyContact),
       linkedContactId: personContact.id,
       threadRecord,
+      userContact: personContact,
     })
   }
 
@@ -372,6 +266,8 @@ export function createChatThreadRuntimeResolver({
         } catch (error) {
           return createUnavailableRuntimeContext({
             activeThread,
+            currentUserEmail: context.currentUserEmail,
+            currentUserName: context.currentUserName,
             error,
             linkedContactId: context.linkedContactId,
             portalChatThreadId,
@@ -394,6 +290,8 @@ export function createChatThreadRuntimeResolver({
         } catch (error) {
           return createUnavailableRuntimeContext({
             activeThread,
+            currentUserEmail: context.currentUserEmail,
+            currentUserName: context.currentUserName,
             error,
             linkedContactId: context.linkedContactId,
             portalChatThreadId,

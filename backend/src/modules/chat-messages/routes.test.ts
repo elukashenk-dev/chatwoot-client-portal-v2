@@ -50,19 +50,24 @@ async function buildMessagesRoutesTestApp({
     consume: vi.fn().mockResolvedValue(rateLimitResult),
   }
   const chatMessagesService = {
-    getCurrentUserChatMessages: vi.fn(),
+    getCurrentUserChatMessages: vi.fn().mockResolvedValue({
+      activeThread: null,
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+      reason: 'thread_access_denied',
+      result: 'not_ready',
+    }),
     sendCurrentUserAttachmentMessage: vi.fn().mockResolvedValue({
       activeThread: null,
-      linkedContact: null,
-      reason: 'chatwoot_unavailable',
-      result: 'unavailable',
+      reason: 'thread_access_denied',
+      result: 'not_ready',
       sentMessage: null,
     }),
     sendCurrentUserTextMessage: vi.fn().mockResolvedValue({
       activeThread: null,
-      linkedContact: null,
-      reason: 'chatwoot_unavailable',
-      result: 'unavailable',
+      reason: 'thread_access_denied',
+      result: 'not_ready',
       sentMessage: null,
     }),
   }
@@ -100,7 +105,36 @@ async function buildMessagesRoutesTestApp({
 }
 
 describe('registerChatMessagesRoutes', () => {
-  it('fails closed for company history thread ids before calling the chat message service', async () => {
+  it('defaults message history to the private thread during rollout', async () => {
+    const { app, chatMessagesService } = await buildMessagesRoutesTestApp({
+      rateLimitResult: {
+        status: 'allowed',
+      },
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/messages',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(
+        chatMessagesService.getCurrentUserChatMessages,
+      ).toHaveBeenCalledWith({
+        beforeMessageId: null,
+        threadId: 'private:me',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('passes company history thread ids to the chat message service', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -117,23 +151,29 @@ describe('registerChatMessagesRoutes', () => {
         url: '/api/chat/messages?threadId=company%3A154',
       })
 
-      expect(response.statusCode).toBe(403)
+      expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual({
-        error: {
-          code: 'chat_thread_unavailable',
-          message: 'Этот чат недоступен.',
-        },
+        activeThread: null,
+        hasMoreOlder: false,
+        messages: [],
+        nextOlderCursor: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
       })
       expect(chatSendRateLimiter.consume).not.toHaveBeenCalled()
       expect(
         chatMessagesService.getCurrentUserChatMessages,
-      ).not.toHaveBeenCalled()
+      ).toHaveBeenCalledWith({
+        beforeMessageId: null,
+        threadId: 'company:154',
+        userId: 7,
+      })
     } finally {
       await app.close()
     }
   })
 
-  it('fails closed for company text sends before rate limit and service calls', async () => {
+  it('passes company text sends to the chat message service after rate limiting', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -156,13 +196,56 @@ describe('registerChatMessagesRoutes', () => {
         url: '/api/chat/messages',
       })
 
-      expect(response.statusCode).toBe(403)
+      expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual({
-        error: {
-          code: 'chat_thread_unavailable',
-          message: 'Этот чат недоступен.',
+        activeThread: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+        sentMessage: null,
+      })
+      expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
+        kind: 'text',
+        tenantId: tenant.id,
+        threadId: 'company:154',
+        userId: 7,
+      })
+      expect(
+        chatMessagesService.sendCurrentUserTextMessage,
+      ).toHaveBeenCalledWith({
+        clientMessageKey: 'portal-send:company-text',
+        content: 'Здравствуйте',
+        replyToMessageId: null,
+        threadId: 'company:154',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('requires threadId for text sends', async () => {
+    const { app, chatMessagesService, chatSendRateLimiter } =
+      await buildMessagesRoutesTestApp({
+        rateLimitResult: {
+          status: 'allowed',
         },
       })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          clientMessageKey: 'portal-send:missing-thread',
+          content: 'Здравствуйте',
+        },
+        url: '/api/chat/messages',
+      })
+
+      expect(response.statusCode).toBe(400)
       expect(chatSendRateLimiter.consume).not.toHaveBeenCalled()
       expect(
         chatMessagesService.sendCurrentUserTextMessage,
@@ -262,7 +345,44 @@ describe('registerChatMessagesRoutes', () => {
     }
   })
 
-  it('fails closed for company attachment sends before rate limit and service calls', async () => {
+  it('requires threadId for attachment sends', async () => {
+    const { app, chatMessagesService, chatSendRateLimiter } =
+      await buildMessagesRoutesTestApp({
+        rateLimitResult: {
+          status: 'allowed',
+        },
+      })
+    const multipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:missing-thread-attachment',
+      fileContent: Buffer.from('%PDF-1.7\n'),
+      fileName: 'invoice.pdf',
+      mimeType: 'application/pdf',
+      threadId: '',
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          'content-type': multipart.contentType,
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: multipart.payload,
+        url: '/api/chat/messages/attachment',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(chatSendRateLimiter.consume).not.toHaveBeenCalled()
+      expect(
+        chatMessagesService.sendCurrentUserAttachmentMessage,
+      ).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('passes company attachment sends to the chat message service after rate limiting', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -289,17 +409,30 @@ describe('registerChatMessagesRoutes', () => {
         url: '/api/chat/messages/attachment',
       })
 
-      expect(response.statusCode).toBe(403)
+      expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual({
-        error: {
-          code: 'chat_thread_unavailable',
-          message: 'Этот чат недоступен.',
-        },
+        activeThread: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+        sentMessage: null,
       })
-      expect(chatSendRateLimiter.consume).not.toHaveBeenCalled()
+      expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
+        kind: 'attachment',
+        tenantId: tenant.id,
+        threadId: 'company:154',
+        userId: 7,
+      })
       expect(
         chatMessagesService.sendCurrentUserAttachmentMessage,
-      ).not.toHaveBeenCalled()
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientMessageKey: 'portal-send:company-attachment',
+          content: null,
+          replyToMessageId: null,
+          threadId: 'company:154',
+          userId: 7,
+        }),
+      )
     } finally {
       await app.close()
     }
