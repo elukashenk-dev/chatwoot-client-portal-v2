@@ -60,6 +60,9 @@
   `cbr@provgroup.ru`; пользователь подтвердил successful registration code flow.
 - Production hardening review завершен без high/critical findings; активные
   follow-ups ведутся через `docs/Findings/`.
+- `F-PROD-002` закрыт: `main` fast-forward'нут до clean-schema branch,
+  `origin/main` синхронизирован, production `DEPLOY_SOURCE.txt` пишет clean
+  `main` commit.
 
 ## Chat Thread Planning
 
@@ -88,6 +91,14 @@
 - `scripts/` проверены на устаревшие portal runtime следы; удалена retired
   production installer option, code-health guard оставлен без старой
   формулировки.
+- Production portal clean reinstall выполнен на `lk.provgroup.ru`: portal app
+  dir, containers и Docker volumes удалены перед deploy; новая portal DB
+  создана с clean thread-only schema; Chatwoot core/DB/uploads/services и
+  `chat.provgroup.ru` не трогались.
+- Production verification после reinstall: `DEPLOY_SOURCE.txt`, `/api/health`,
+  `/api/tenant`, manifest, login HTML, Docker compose health и production DB
+  counts проверены; старая portal mapping table и старая send-ledger column
+  отсутствуют.
 
 ## Current Baseline
 
@@ -105,5 +116,5 @@
 
 ## Recommended Next Step
 
-- Fast-forward `main` from `refactor/thread-only-clean-schema`, push GitHub and
-  redeploy production with fresh provenance.
+- Create fresh production test portal user and validate private/company thread
+  flows on `lk.provgroup.ru` without modifying Chatwoot admin data.
