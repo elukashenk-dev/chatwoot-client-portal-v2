@@ -32,7 +32,6 @@ Options:
   --install             Run or resume the production installer.
   --reconfigure         Ask all env questions again and reset installer state.
   --sync-webhook-secret Configure the tenant API Channel webhook, store its secret in portal DB, and check health.
-  --paste-webhook-secret Unsupported legacy option. Use --sync-webhook-secret.
   --yes                 Use defaults for yes/no prompts when possible.
   --skip-public-health  Skip the public HTTPS health check step.
   --status              Show installer state and compose status.
@@ -52,9 +51,6 @@ for arg in "$@"; do
       ;;
     --sync-webhook-secret)
       ACTION="sync-webhook-secret"
-      ;;
-    --paste-webhook-secret)
-      ACTION="paste-webhook-secret"
       ;;
     --yes|-y)
       ASSUME_YES="true"
@@ -110,7 +106,7 @@ if [[ "$ACTION" == "reset-state" ]]; then
   exit 0
 fi
 
-if [[ "$ACTION" == "install" || "$ACTION" == "sync-webhook-secret" || "$ACTION" == "paste-webhook-secret" ]]; then
+if [[ "$ACTION" == "install" || "$ACTION" == "sync-webhook-secret" ]]; then
   LOG_FILE="$LOG_DIR/install-$(date +%Y%m%d-%H%M%S).log"
   ln -sfn "$(basename "$LOG_FILE")" "$LOG_DIR/install-latest.log"
   exec > >(tee -a "$LOG_FILE") 2>&1
@@ -128,9 +124,6 @@ on_error() {
 
   case "$ACTION" in
     sync-webhook-secret)
-      retry_command="scripts/install-production.sh --sync-webhook-secret"
-      ;;
-    paste-webhook-secret)
       retry_command="scripts/install-production.sh --sync-webhook-secret"
       ;;
   esac
@@ -841,12 +834,6 @@ sync_chatwoot_webhook_secret() {
   wait_for_public_tenant
 }
 
-paste_chatwoot_webhook_secret() {
-  echo "--paste-webhook-secret is no longer supported for the tenant-aware production flow." >&2
-  echo "Use scripts/install-production.sh --sync-webhook-secret so the installer stores the Chatwoot v4.13+ API Channel secret in the tenant record." >&2
-  exit 2
-}
-
 print_summary() {
   load_runtime_env
   echo
@@ -897,13 +884,6 @@ if [[ "$ACTION" == "sync-webhook-secret" ]]; then
   sync_chatwoot_webhook_secret
   mark_step_done chatwoot_webhook_secret_sync
   echo "[done] Sync Chatwoot webhook secret"
-  exit 0
-fi
-
-if [[ "$ACTION" == "paste-webhook-secret" ]]; then
-  print_header "Paste Chatwoot webhook secret"
-  paste_chatwoot_webhook_secret
-  echo "[done] Paste Chatwoot webhook secret"
   exit 0
 fi
 

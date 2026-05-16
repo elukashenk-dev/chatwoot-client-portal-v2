@@ -246,7 +246,7 @@ describe('buildApp', () => {
       },
       method: 'POST',
       payload: {
-        clientMessageKey: 'portal-send:legacy-key',
+        clientMessageKey: 'portal-send:test-key',
         content: 'Здравствуйте',
         chatwootConversationId: 101,
         threadId: 'private:me',

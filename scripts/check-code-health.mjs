@@ -116,7 +116,7 @@ async function checkProductionSecurityHeaders(failures) {
   }
 }
 
-async function checkRetiredLegacyWebhookScripts(failures) {
+async function checkRetiredWebhookScripts(failures) {
   const relativePaths = await listFiles('backend/src/scripts')
   const retiredFiles = relativePaths.filter((relativePath) =>
     relativePath.includes('configure-chatwoot-account-webhook'),
@@ -125,7 +125,7 @@ async function checkRetiredLegacyWebhookScripts(failures) {
   for (const relativePath of retiredFiles) {
     failures.push({
       relativePath,
-      message: 'retired legacy account webhook script must not be reintroduced',
+      message: 'retired account webhook script must not be reintroduced',
     })
   }
 }
@@ -160,7 +160,7 @@ async function main() {
   }
 
   await checkProductionSecurityHeaders(failures)
-  await checkRetiredLegacyWebhookScripts(failures)
+  await checkRetiredWebhookScripts(failures)
 
   if (failures.length > 0) {
     console.error('Code health check failed.\n')

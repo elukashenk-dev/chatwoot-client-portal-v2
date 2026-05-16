@@ -85,6 +85,9 @@
   `93/93`, Playwright e2e `25/25`, backend build, frontend typecheck/build,
   root lint/code-health, `git diff --check` и local company-thread send через
   реальный backend + локальный Chatwoot.
+- `scripts/` проверены на устаревшие portal runtime следы; удалена retired
+  production installer option, code-health guard оставлен без старой
+  формулировки.
 
 ## Current Baseline
 
@@ -102,6 +105,5 @@
 
 ## Recommended Next Step
 
-- Finish clean-schema checkpoint: review diff, commit
-  `refactor/thread-only-clean-schema`, then fast-forward `main`, push GitHub and
+- Fast-forward `main` from `refactor/thread-only-clean-schema`, push GitHub and
   redeploy production with fresh provenance.
