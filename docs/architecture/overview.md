@@ -13,10 +13,10 @@
 
 Подробности по решениям, очередности работ и истории изменений живут в отдельных документах:
 
-- `docs/DECISIONS.md` - принятые решения;
-- `docs/IMPLEMENTATION_PLAN.md` - roadmap и MT-фазы;
-- `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md` - подробный multi-tenant technical reference;
-- `docs/WORK_LOG.md` - короткий список реально завершенных шагов.
+- `docs/architecture/decisions.md` - принятые решения;
+- `docs/roadmap/implementation-plan.md` - roadmap и MT-фазы;
+- `docs/architecture/multi-tenant-reference.md` - подробный multi-tenant technical reference;
+- `docs/roadmap/work-log.md` - короткий список реально завершенных шагов.
 
 ## Что За Продукт
 
@@ -74,7 +74,7 @@ Portal backend отвечает за:
 - auth и sessions;
 - registration и password reset;
 - access control;
-- chat context resolution;
+- chat thread/access resolution;
 - send authority;
 - attachment upload validation;
 - realtime fanout;
@@ -300,7 +300,6 @@ Tenant-aware PWA endpoints:
 - `portal_users.email` не является глобально уникальным;
 - `verification_records` обслуживает registration и password reset;
 - continuation token fields остаются в `verification_records`;
-- transport table в `v2` не создается;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
 - env values single-tenant bootstrap вида допустимы только как bootstrap/dev
@@ -386,90 +385,49 @@ chatwoot-client-portal-v2/
 - `pwa` - service worker registration and PWA runtime support;
 - `shared` - reusable non-domain UI/lib helpers.
 
-## Deferred And Future Areas
-
-### MT-8R Codebase Audit And Refactoring Readiness
-
-Перед `MT-8.5` и `MT-9` нужно провести controlled codebase audit после
-`MT-1`-`MT-8`.
-
-Цель:
-
-- понять состояние backend/frontend/shared/tests areas;
-- найти technical debt и code smells без немедленного хаотичного refactoring;
-- классифицировать candidates как `must-fix-before-MT-9`,
-  `safe-pre-MT-9-cleanup`, `defer` или `do-not-touch`;
-- выполнять только bounded refactoring slices с targeted checks;
-- удалить dead code только при наличии evidence, что он не используется;
-- после refactoring повторно проверить tenant isolation, auth/session,
-  webhooks/realtime and PWA tenant identity boundaries.
-
-### MT-8.5 Portal UI/UX Baseline Review
-
-Перед `MT-9`, после `MT-8R`, нужно утвердить текущий customer-facing UI shell
-как branding baseline.
-
-Цель:
-
-- проверить реальные auth/forms/chat/PWA states на mobile и desktop;
-- решить, какие части портала являются fixed product shell;
-- решить, какие части станут tenant-brandable;
-- определить preview screens для branding admin: login, registration/forms,
-  chat и PWA/app identity;
-- зафиксировать, что preview в `MT-9` использует реальные portal components, а
-  не отдельную приблизительную копию интерфейса.
+## Next Architecture Work
 
 ### MT-9 Tenant Admin And Branding
 
-Branding/admin возвращается после tenant foundation и `MT-8.5` UI/UX baseline.
-
-Archived branch `feature/phase-10-portal-branding-admin` не мержится как есть.
+Следующая крупная зона - tenant-owned admin и branding поверх уже готового
+tenant-aware runtime.
 
 Зафиксированное направление:
 
-- branding tenant-owned;
+- branding settings tenant-scoped;
 - branding asset metadata хранится в portal DB, binary content - в
   S3-compatible object storage;
 - локальная разработка использует тот же object-storage подход через
-  MinIO/compatible service, без local-files storage внутри portal контейнера;
+  MinIO/compatible service;
 - tenant admin login отдельный от customer login;
-- для admin verification нужен отдельный encrypted per-tenant Chatwoot admin-verification token;
-- перед MT-9 выполняется Chatwoot permissions spike;
-- runtime Chatwoot token и admin-verification authority - разные security concerns.
+- для admin verification нужен отдельный encrypted per-tenant Chatwoot
+  admin-verification token;
+- перед реализацией нужен Chatwoot permissions spike по `F-MT-004`;
+- runtime Chatwoot token и admin-verification authority - разные security
+  boundaries.
 
-### Platform Admin
+### Future Product Areas
 
-Platform/operator admin - отдельная будущая зона.
-
-Она не должна смешиваться с:
-
-- customer auth;
-- tenant admin auth;
-- chat runtime;
-- tenant-owned branding runtime.
-
-### Product Growth
-
-Новые portal-owned domains добавляются отдельными slices:
+Новые portal-owned domains добавляются отдельными slices и не смешиваются с
+auth/chat runtime:
 
 - dashboard;
 - notifications;
-- tariff;
 - documents;
 - tasks;
 - service requests;
-- profile;
-- service/request workflows around chat.
+- profile.
 
-Chatwoot остается system of record только для chat-domain данных, пока не появится отдельная внешняя authoritative система.
+Chatwoot остается system of record только для chat-domain данных, пока не
+появится отдельная внешняя authoritative система.
 
 ### Не Является Текущей Целью
 
 - browser-direct Chatwoot runtime;
 - path-based production tenancy;
 - Chatwoot core customization;
-- multi-chat UX;
-- conversation switching;
+- private client-to-client chats inside portal;
+- platform/operator admin.
 
 ## Что Считать Успешным `v2`
 

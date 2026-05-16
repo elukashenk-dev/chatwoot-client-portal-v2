@@ -1,6 +1,7 @@
 # MT-10 Production Clean Reinstall Runbook
 
-Status: ready for review before executing on the production VM.
+Status: executed for the current clean production reinstall; keep as the
+operator checklist for future portal-only clean redeploys.
 
 Target VM: `ubuntu@93.77.166.238`
 
@@ -218,7 +219,7 @@ Expected: the dirty files are intentionally part of the current UI preview
 iteration. Use an explicit preview label in the archive command below.
 
 ```bash
-pnpm exec prettier --check .env.production.example infra/production/compose.yaml scripts/install-production.sh docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
+pnpm exec prettier --check .env.production.example infra/production/compose.yaml scripts/install-production.sh docs/operations/production-clean-reinstall.md
 git diff --check
 
 scripts/deploy-production-archive.sh \

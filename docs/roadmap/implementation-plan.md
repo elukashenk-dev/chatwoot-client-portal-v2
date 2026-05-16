@@ -5,12 +5,12 @@
 
 Что сюда не дублируем:
 
-- подробную архитектуру - см. `docs/ARCHITECTURE.md`;
-- устойчивые решения - см. `docs/DECISIONS.md`;
+- подробную архитектуру - см. `docs/architecture/overview.md`;
+- устойчивые решения - см. `docs/architecture/decisions.md`;
 - подробный multi-tenant design - см.
-  `docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md`;
-- историю всех выполненных фаз и проверок - см. `docs/WORK_LOG.md`;
-- временные review risks - см. `docs/Findings/`;
+  `docs/architecture/multi-tenant-reference.md`;
+- историю всех выполненных фаз и проверок - см. `docs/roadmap/work-log.md`;
+- временные review risks - см. `docs/findings/`;
 - правила closure flow, git и работы агента - см. `AGENTS.md`.
 
 ## Принцип
@@ -53,8 +53,11 @@
 Следующий активный scope:
 
 ```text
-Clean schema checkpoint, GitHub sync and production redeploy
+MT-9 Tenant Admin And Branding Rebuild
 ```
+
+Первый gate перед реализацией `MT-9`: закрыть `F-MT-004` через Chatwoot
+permissions spike и отдельную admin-verification token boundary.
 
 ## Active Roadmap
 
@@ -95,7 +98,7 @@ Non-goals:
    - не чинить найденное сразу, сначала классифицировать.
 3. Code smells review:
    - фиксировать только конкретные actionable issues;
-   - для реальных рисков создавать отдельные files в `docs/Findings/`;
+   - для реальных рисков создавать отдельные files в `docs/findings/`;
    - не превращать subjective style preferences в обязательный refactor.
 4. Refactoring assessment:
    - разложить candidates по категориям:
@@ -120,7 +123,7 @@ Deliverables:
 
 - audit summary, technical debt map, findings index, refactoring candidates and
   выбранный next slice plan в стабильных project docs;
-- finding files в `docs/Findings/` для actionable risks;
+- finding files в `docs/findings/` для actionable risks;
 - отдельные small commits для approved refactoring/dead-code slices, если они
   будут выполняться в рамках `MT-8R`.
 
@@ -245,10 +248,9 @@ Status:
 - no proven chat/runtime `must-fix-before-MT-9` blocker remains;
 - local Playwright e2e, backend/frontend tests/build/lint и local company-thread
   send validation прошли на чистой portal DB;
-- перед production release остаются GitHub source-of-truth sync и production
-  deploy provenance через `DEPLOY_SOURCE.txt` / `F-PROD-002`;
-- after those blockers are resolved or explicitly accepted, `F-MT-004` remains
-  the first `MT-9` implementation gate.
+- GitHub source-of-truth sync, production clean reinstall и production deploy
+  provenance через `DEPLOY_SOURCE.txt` закрыты;
+- `F-MT-004` remains the first `MT-9` implementation gate.
 
 Цель:
 
@@ -258,9 +260,9 @@ controlled refactoring assessment и dead-code removal plan до начала `M
 
 Scope:
 
-- проверить production preview или записать blocker;
+- проверить production smoke или записать blocker;
 - составить audit map backend/frontend/tests/docs после thread runtime rewrite;
-- зафиксировать реальные risks в `docs/Findings/`;
+- зафиксировать реальные risks в `docs/findings/`;
 - классифицировать candidates как `must-fix-before-MT-9`,
   `safe-pre-MT-9-cleanup`, `dead-code-candidate`, `defer` или
   `do-not-touch`;
@@ -430,5 +432,5 @@ Rule:
 - already-built single-tenant roadmap;
 - bootstrap/git/workflow decisions;
 - long checklists for completed auth/chat/PWA phases;
-- duplicated architecture rules now covered by `ARCHITECTURE.md` and
-  `DECISIONS.md`.
+- duplicated architecture rules now covered by `docs/architecture/overview.md`
+  and `docs/architecture/decisions.md`.

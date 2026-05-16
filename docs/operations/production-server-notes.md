@@ -6,7 +6,7 @@
 Актуальный executable runbook:
 
 ```text
-docs/MT_10_PRODUCTION_CLEAN_REINSTALL_RUNBOOK.md
+docs/operations/production-clean-reinstall.md
 ```
 
 ## Текущее Production Окружение

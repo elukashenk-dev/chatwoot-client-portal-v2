@@ -59,7 +59,7 @@
 - Production SMTP для portal `v2` переключен на Yandex 360
   `cbr@provgroup.ru`; пользователь подтвердил successful registration code flow.
 - Production hardening review завершен без high/critical findings; активные
-  follow-ups ведутся через `docs/Findings/`.
+  follow-ups ведутся через `docs/findings/`.
 - `F-PROD-002` закрыт: `main` fast-forward'нут до clean-schema branch,
   `origin/main` синхронизирован, production `DEPLOY_SOURCE.txt` пишет clean
   `main` commit.
@@ -106,11 +106,12 @@
   один tenant.
 - Локальная portal DB сейчас clean-reset baseline: default tenant и fresh test
   users созданы заново после destructive reset.
-- Production preview environment доступен на `lk.provgroup.ru` для проверки
-  текущего `MT-8.5` UI на реальных устройствах.
-- Основные source-of-truth документы: `ARCHITECTURE.md`, `DECISIONS.md`,
-  `IMPLEMENTATION_PLAN.md`, `MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md` и
-  `MT_8_5_PORTAL_UI_UX_BASELINE.md`.
+- Production portal доступен на `lk.provgroup.ru` для тестирования текущего
+  post-reinstall baseline.
+- Основные source-of-truth документы живут в `docs/architecture/`,
+  `docs/roadmap/` и `docs/design/`.
+- Stable docs cleanup выполнен: удален завершенный clean-schema execution plan,
+  stable docs приведены к текущему post-reinstall baseline.
 - Открытый архитектурный gate перед admin/branding: `F-MT-004` остается deferred
   до реализации `MT-9`, стратегия уже выбрана.
 

@@ -6,10 +6,9 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 режиме. Dedicated install остается той же архитектурой, только с одним tenant и
 своим Chatwoot.
 
-## Базовые правила
+## Базовые Правила
 
-- `v2` не наследует код из `v1`.
-- Старый проект нельзя читать, запускать или использовать как источник решений.
+- `v2` - самостоятельный portal project.
 - Browser не работает с Chatwoot напрямую.
 - Portal backend является authority-зоной для auth, session, access control,
   send и realtime fanout.
@@ -21,9 +20,9 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - Runtime Chatwoot config хранится у tenant, а не в глобальных
   `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`.
 
-## Текущий Статус
+## Текущий Baseline
 
-Завершены `MT-0`-`MT-8`:
+Завершены:
 
 - tenant schema foundation;
 - tenant resolution middleware;
@@ -32,36 +31,22 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - tenant-aware auth/session/registration/password reset;
 - tenant-aware chat runtime;
 - tenant-aware webhooks/provisioning;
-- tenant-aware frontend/PWA metadata, manifest and icons.
+- tenant-aware frontend/PWA metadata, manifest and icons;
+- `MT-8.5` customer-facing UI/UX baseline;
+- portal-owned `threadId` runtime для личного чата и company threads;
+- destructive clean-schema reset: old portal users и old chat mappings не
+  сохраняются;
+- production clean reinstall на `lk.provgroup.ru`.
 
 Следующий активный scope:
 
 ```text
-MT-8.5 Portal UI/UX Baseline Review
+MT-9 Tenant Admin And Branding Rebuild
 ```
 
 ## Карта документации
 
-- [docs/B2B_PRODUCT_GOAL.md](./docs/B2B_PRODUCT_GOAL.md)
-  Продуктовая рамка: что продается B2B-компании и зачем нужен портал.
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-  Текущий устойчивый архитектурный baseline.
-- [docs/DECISIONS.md](./docs/DECISIONS.md)
-  Журнал принятых архитектурных решений.
-- [docs/IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md)
-  Актуальный roadmap и следующие MT-фазы.
-- [docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md](./docs/MULTI_TENANT_PORTAL_ARCHITECTURE_PLAN.md)
-  Подробный multi-tenant technical reference.
-- [docs/LOCAL_TESTING_CHEATSHEET.md](./docs/LOCAL_TESTING_CHEATSHEET.md)
-  Актуальная локальная шпаргалка по запуску окружения.
-- [docs/PRODUCTION_DEPLOYMENT.md](./docs/PRODUCTION_DEPLOYMENT.md)
-  Временный production stop-sign: deployment заблокирован до `MT-10`.
-- [docs/PRODUCTION_DEPLOYMENT_SESSION_LOG.md](./docs/PRODUCTION_DEPLOYMENT_SESSION_LOG.md)
-  Исходные данные production server и план будущего clean rollout.
-- [docs/WORK_LOG.md](./docs/WORK_LOG.md)
-  Короткий список реально завершенных шагов.
-- [docs/Findings/](./docs/Findings/)
-  Открытые review findings и deferred risks.
+См. [docs/README.md](./docs/README.md).
 
 ## Стек
 
@@ -77,7 +62,7 @@ MT-8.5 Portal UI/UX Baseline Review
 Основной источник команд для локального запуска:
 
 ```text
-docs/LOCAL_TESTING_CHEATSHEET.md
+docs/operations/local-testing.md
 ```
 
 Коротко:

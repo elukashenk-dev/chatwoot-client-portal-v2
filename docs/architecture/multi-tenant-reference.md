@@ -7,13 +7,13 @@
 Роль этого файла сейчас:
 
 - хранить детали multi-tenant модели, которые слишком подробны для
-  `ARCHITECTURE.md`;
+  `docs/architecture/overview.md`;
 - держать technical reference для `MT-9 Tenant Admin And Branding Rebuild`;
-- держать future notes для `MT-10` и отложенных multi-tenant расширений.
+- держать notes для отложенных multi-tenant расширений.
 
-Короткий текущий baseline см. в `docs/ARCHITECTURE.md`.
-Актуальный roadmap см. в `docs/IMPLEMENTATION_PLAN.md`.
-Устойчивые решения см. в `docs/DECISIONS.md`.
+Короткий текущий baseline см. в `docs/architecture/overview.md`.
+Актуальный roadmap см. в `docs/roadmap/implementation-plan.md`.
+Устойчивые решения см. в `docs/architecture/decisions.md`.
 
 ## 1. Current Model
 
@@ -401,7 +401,7 @@ Control rules:
 Exit:
 
 - audit summary and refactoring plan are documented;
-- actionable risks are in `docs/Findings/`;
+- actionable risks are in `docs/findings/`;
 - selected cleanup/refactoring slices are complete or explicitly deferred;
 - no open `must-fix-before-MT-9` finding remains.
 
