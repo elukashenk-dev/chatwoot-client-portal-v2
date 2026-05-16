@@ -228,7 +228,6 @@ describe('createChatThreadsRepository', () => {
       messageKind: 'text',
       payloadSha256: 'payload-hash',
       portalChatThreadId: thread.id,
-      primaryConversationId: 101,
       status: 'confirmed',
       tenantId: tenant.id,
       updatedAt: new Date('2026-05-14T12:01:00.000Z'),

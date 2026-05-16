@@ -97,7 +97,7 @@ export function MessageContextMenu({
   return (
     <div
       className="fixed z-50 w-[184px] rounded-[0.8rem] border border-slate-200 bg-white p-1.5 text-[14px] font-medium text-slate-700 shadow-xl shadow-slate-900/10"
-      data-chat-context-menu
+      data-message-context-menu
       onKeyDown={handleKeyDown}
       ref={menuRef}
       role="menu"

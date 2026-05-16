@@ -349,7 +349,7 @@ describe('tenant routes and request context', () => {
               host: primaryDomain,
             },
             method: 'GET',
-            url: '/api/chat/context',
+            url: '/api/chat/threads',
           }),
           app.inject({
             headers: {

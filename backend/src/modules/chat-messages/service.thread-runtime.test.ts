@@ -140,7 +140,6 @@ describe('createChatMessagesService thread runtime integration', () => {
     expect(createConversationIncomingMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         content: '**Иван Петров**\nДобрый день',
-        conversationId: 301,
       }),
     )
   })

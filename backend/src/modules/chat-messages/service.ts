@@ -301,14 +301,14 @@ function createAttachmentPayloadSha256(
 async function findCanonicalMessageByClientKey({
   chatwootClient,
   clientMessageKey,
-  primaryConversationId,
+  conversationId,
 }: {
   chatwootClient: Pick<ChatwootClient, 'findConversationMessageBySourceId'>
   clientMessageKey: string
-  primaryConversationId: number
+  conversationId: number
 }) {
   return chatwootClient.findConversationMessageBySourceId(
-    primaryConversationId,
+    conversationId,
     clientMessageKey,
   )
 }
@@ -371,7 +371,7 @@ async function resolveConfirmedLedgerMessage({
   ledgerEntry,
   now,
   portalChatThreadId,
-  primaryConversationId,
+  conversationId,
   userId,
 }: {
   chatMessagesRepository: ChatMessagesRepository
@@ -383,12 +383,12 @@ async function resolveConfirmedLedgerMessage({
   ledgerEntry: ChatSendLedgerEntry
   now: Date
   portalChatThreadId: number
-  primaryConversationId: number
+  conversationId: number
   userId: number
 }) {
   const exactMessage = ledgerEntry.chatwootMessageId
     ? await chatwootClient.findConversationMessageById(
-        primaryConversationId,
+        conversationId,
         ledgerEntry.chatwootMessageId,
       )
     : null
@@ -400,7 +400,7 @@ async function resolveConfirmedLedgerMessage({
   const recoveredMessage = await findCanonicalMessageByClientKey({
     chatwootClient,
     clientMessageKey,
-    primaryConversationId,
+    conversationId,
   })
 
   if (!recoveredMessage) {
@@ -427,17 +427,17 @@ async function createOrReplayCanonicalMessageViaChatwoot({
   chatwootClient,
   clientMessageKey,
   createChatwootMessage,
-  primaryConversationId,
+  conversationId,
 }: {
   chatwootClient: Pick<ChatwootClient, 'findConversationMessageBySourceId'>
   clientMessageKey: string
   createChatwootMessage: () => Promise<ChatwootMessage | null>
-  primaryConversationId: number
+  conversationId: number
 }) {
   const existingMessage = await findCanonicalMessageByClientKey({
     chatwootClient,
     clientMessageKey,
-    primaryConversationId,
+    conversationId,
   })
 
   if (existingMessage) {
@@ -450,7 +450,7 @@ async function createOrReplayCanonicalMessageViaChatwoot({
     const recoveredMessage = await findCanonicalMessageByClientKey({
       chatwootClient,
       clientMessageKey,
-      primaryConversationId,
+      conversationId,
     })
 
     if (recoveredMessage) {
@@ -472,7 +472,7 @@ async function createOrReplayCanonicalMessageViaLedger({
   payloadMismatchMessage,
   payloadSha256,
   portalChatThreadId,
-  primaryConversationId,
+  conversationId,
   userId,
 }: {
   authorDisplayNameSnapshot: string | null
@@ -488,7 +488,7 @@ async function createOrReplayCanonicalMessageViaLedger({
   payloadMismatchMessage: string
   payloadSha256: string
   portalChatThreadId: number
-  primaryConversationId: number
+  conversationId: number
   userId: number
 }) {
   const acquiredAt = now()
@@ -500,7 +500,6 @@ async function createOrReplayCanonicalMessageViaLedger({
     now: acquiredAt,
     payloadSha256,
     portalChatThreadId,
-    primaryConversationId,
     processingToken,
     staleProcessingBefore: new Date(
       acquiredAt.getTime() - SEND_LEDGER_STALE_PROCESSING_MS,
@@ -524,7 +523,7 @@ async function createOrReplayCanonicalMessageViaLedger({
       ledgerEntry: acquireResult.entry,
       now: now(),
       portalChatThreadId,
-      primaryConversationId,
+      conversationId,
       userId,
     })
   }
@@ -533,7 +532,7 @@ async function createOrReplayCanonicalMessageViaLedger({
     const existingMessage = await findCanonicalMessageByClientKey({
       chatwootClient,
       clientMessageKey,
-      primaryConversationId,
+      conversationId,
     })
 
     if (existingMessage) {
@@ -568,7 +567,7 @@ async function createOrReplayCanonicalMessageViaLedger({
     const existingMessage = await findCanonicalMessageByClientKey({
       chatwootClient,
       clientMessageKey,
-      primaryConversationId,
+      conversationId,
     })
 
     if (existingMessage) {
@@ -631,7 +630,7 @@ async function createOrReplayCanonicalMessageViaLedger({
       recoveredMessage = await findCanonicalMessageByClientKey({
         chatwootClient,
         clientMessageKey,
-        primaryConversationId,
+        conversationId,
       })
     } catch (lookupError) {
       await markSendLedgerEntryFailed({
@@ -684,7 +683,7 @@ async function createOrReplayCanonicalMessage({
   payloadMismatchMessage,
   payloadSha256,
   portalChatThreadId,
-  primaryConversationId,
+  conversationId,
   userId,
 }: {
   authorDisplayNameSnapshot: string | null
@@ -700,7 +699,7 @@ async function createOrReplayCanonicalMessage({
   payloadMismatchMessage: string
   payloadSha256: string
   portalChatThreadId: number | null
-  primaryConversationId: number
+  conversationId: number
   userId: number
 }) {
   if (!chatMessagesRepository) {
@@ -708,7 +707,7 @@ async function createOrReplayCanonicalMessage({
       chatwootClient,
       clientMessageKey,
       createChatwootMessage,
-      primaryConversationId,
+      conversationId,
     })
   }
 
@@ -731,7 +730,7 @@ async function createOrReplayCanonicalMessage({
     payloadMismatchMessage,
     payloadSha256,
     portalChatThreadId,
-    primaryConversationId,
+    conversationId,
     userId,
   })
 }
@@ -958,7 +957,7 @@ export function createChatMessagesService({
             normalizedReplyToMessageId,
           ),
           portalChatThreadId: context.portalChatThreadId,
-          primaryConversationId: conversationId,
+          conversationId,
           userId,
         })
 
@@ -1094,7 +1093,7 @@ export function createChatMessagesService({
             normalizedReplyToMessageId,
           ),
           portalChatThreadId: context.portalChatThreadId,
-          primaryConversationId: conversationId,
+          conversationId,
           userId,
         })
 

@@ -287,23 +287,24 @@ Tenant-aware PWA endpoints:
 - `portal_sessions`;
 - `verification_records`;
 - `portal_user_contact_links`;
-- `portal_user_chatwoot_conversations`;
 - `portal_chat_threads`;
 - `portal_chat_message_sends`;
+- `portal_rate_limit_buckets`;
 - `chatwoot_webhook_deliveries`.
 
 Принципиальные правила:
 
 - все customer-owned и chat-owned таблицы имеют `tenant_id`;
-- уникальность users, contact links, legacy conversation mappings, chat threads,
-  send ledger и webhook deliveries учитывает tenant scope;
+- уникальность users, contact links, chat threads, send ledger и webhook
+  deliveries учитывает tenant scope;
 - `portal_users.email` не является глобально уникальным;
 - `verification_records` обслуживает registration и password reset;
 - continuation token fields остаются в `verification_records`;
 - transport table в `v2` не создается;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
-- env values legacy single-tenant вида допустимы только как bootstrap/dev input, а не как runtime source of truth.
+- env values single-tenant bootstrap вида допустимы только как bootstrap/dev
+  input, а не как runtime source of truth.
 
 ## API Surface
 
@@ -330,7 +331,6 @@ API `v2` остается простым и явным:
 - `/api/auth/password-reset/request`;
 - `/api/auth/password-reset/verify`;
 - `/api/auth/password-reset/set-password`;
-- `/api/chat/context`;
 - `/api/chat/threads`;
 - `/api/chat/messages`;
 - `/api/chat/messages/attachment`;
@@ -371,7 +371,6 @@ chatwoot-client-portal-v2/
 - `registration` - eligibility, verification request/confirm and password setup completion;
 - `password-reset` - reset request, verification and password update;
 - `portal-users` - portal user persistence helpers;
-- `chat-context` - linked contact context and legacy private chat compatibility boundary;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send and send ledger;
 - `chat-realtime` - SSE admission, stream lifecycle and backend fanout;

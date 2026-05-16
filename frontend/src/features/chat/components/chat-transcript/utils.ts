@@ -101,7 +101,7 @@ export function isInteractiveEventTarget(target: EventTarget | null) {
     target instanceof Element &&
     Boolean(
       target.closest(
-        'a, button, input, textarea, select, [role="button"], [data-chat-context-menu]',
+        'a, button, input, textarea, select, [role="button"], [data-message-context-menu]',
       ),
     )
   )

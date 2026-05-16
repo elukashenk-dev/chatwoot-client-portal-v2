@@ -4,7 +4,6 @@ import type { DatabaseClient } from '../../db/client.js'
 import {
   chatwootWebhookDeliveries,
   portalChatThreads,
-  portalUserChatwootConversations,
   portalUsers,
 } from '../../db/schema.js'
 import { hashPassword } from '../../lib/password.js'
@@ -108,23 +107,6 @@ describe('createChatwootWebhookRepository', () => {
       threadType: 'company',
       userId: null,
     })
-  })
-
-  it('does not recover an unmapped webhook conversation from the legacy contact mapping alone', async () => {
-    await database.db.insert(portalUserChatwootConversations).values({
-      chatwootContactId: 44,
-      chatwootConversationId: 101,
-      chatwootInboxId: 9,
-      tenantId,
-      userId,
-    })
-    const repository = createChatwootWebhookRepository(database.db, {
-      tenantId,
-    })
-
-    await expect(
-      repository.findConversationMappingByChatwootConversationId(101),
-    ).resolves.toBeNull()
   })
 
   it('records each Chatwoot delivery key only once', async () => {

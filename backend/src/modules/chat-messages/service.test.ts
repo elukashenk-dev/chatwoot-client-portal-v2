@@ -160,7 +160,6 @@ function createChatMessagesRepositoryStub(
         messageKind: 'text',
         payloadSha256: 'hash',
         portalChatThreadId: 1,
-        primaryConversationId: 101,
         processingToken: 'processing-token',
         status: 'processing',
         updatedAt: new Date('2026-04-21T12:00:00.000Z'),
@@ -676,7 +675,6 @@ describe('createChatMessagesService', () => {
             messageKind: 'text',
             payloadSha256: 'hash',
             portalChatThreadId: 1,
-            primaryConversationId: 101,
             processingToken: null,
             status: 'confirmed',
             updatedAt: new Date('2026-04-21T12:00:00.000Z'),
@@ -810,7 +808,6 @@ describe('createChatMessagesService', () => {
         size: data.byteLength,
       },
       content: 'Подпись к файлу',
-      conversationId: 101,
       sourceId: 'portal-send:attachment-key',
     })
     expect(
@@ -822,7 +819,6 @@ describe('createChatMessagesService', () => {
         messageKind: 'attachment',
         payloadSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
         portalChatThreadId: 1,
-        primaryConversationId: 101,
         userId: 7,
       }),
     )
@@ -884,7 +880,6 @@ describe('createChatMessagesService', () => {
           mimeType: 'audio/webm;codecs=opus',
           size: data.byteLength,
         }),
-        conversationId: 101,
         sourceId: 'portal-send:voice-key',
       }),
     )
@@ -938,7 +933,6 @@ describe('createChatMessagesService', () => {
             messageKind: 'attachment',
             payloadSha256: 'hash',
             portalChatThreadId: 1,
-            primaryConversationId: 101,
             processingToken: null,
             status: 'confirmed',
             updatedAt: new Date('2026-04-21T12:00:00.000Z'),

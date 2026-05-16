@@ -45,14 +45,15 @@
   `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`;
 - customer auth, persistence, chat runtime, webhooks, frontend metadata и PWA
   identity уже tenant-aware;
-- chat runtime больше не строится на browser-visible `primaryConversationId`;
-  browser работает с `threadId`, а backend мапит threads на Chatwoot
-  conversations через `portal_chat_threads`.
+- browser работает с `threadId`, а backend мапит threads на Chatwoot
+  conversations через `portal_chat_threads`;
+- migration history сжата в clean baseline; старая portal chat mapping schema
+  и старые portal users не сохраняются.
 
 Следующий активный scope:
 
 ```text
-MT-8.6 evidence blockers before MT-9
+Clean schema checkpoint, GitHub sync and production redeploy
 ```
 
 ## Active Roadmap
@@ -117,8 +118,8 @@ Non-goals:
 
 Deliverables:
 
-- `docs/MT_8R_CODEBASE_AUDIT.md` с audit summary, technical debt map,
-  findings index, refactoring candidates and выбранным next slice plan;
+- audit summary, technical debt map, findings index, refactoring candidates and
+  выбранный next slice plan в стабильных project docs;
 - finding files в `docs/Findings/` для actionable risks;
 - отдельные small commits для approved refactoring/dead-code slices, если они
   будут выполняться в рамках `MT-8R`.
@@ -202,13 +203,12 @@ Exit criteria:
 Status:
 
 - completed on `2026-05-15`;
-- implemented from `docs/superpowers/plans/2026-05-14-chat-thread-model.md`.
+- implemented as the approved portal-owned chat thread runtime model.
 
 Цель:
 
-Перевести chat runtime с одного личного `primaryConversationId` на
-portal-owned `threadId`, чтобы один portal user мог иметь личный чат и общие
-company-чаты без выдачи Chatwoot authority в browser.
+Закрепить portal-owned `threadId`, чтобы один portal user мог иметь личный чат
+и общие company-чаты без выдачи Chatwoot authority в browser.
 
 Scope:
 
@@ -233,14 +233,20 @@ Exit criteria:
 
 Status:
 
-- completed on `2026-05-15` as a read-only audit/reporting gate;
-- report: `docs/MT_8_6_POST_THREAD_RUNTIME_AUDIT.md`;
-- no required cleanup/refactoring/dead-code slice was found before `MT-9`;
+- completed on `2026-05-16`;
+- audit findings were folded into the stable project docs and superseded by the
+  clean-schema decision;
+- первоначальный read-only audit был расширен решением владельца проекта до
+  destructive clean-schema cleanup;
+- migration history сжата в один clean baseline;
+- `portal_chat_threads` является единственной portal chat mapping schema;
+- удален старый context endpoint;
+- локальная portal DB destructive reset-нута и мигрирована заново;
 - no proven chat/runtime `must-fix-before-MT-9` blocker remains;
-- evidence blockers remain before starting `MT-9` or treating production smoke
-  as release-valid: production `DEPLOY_SOURCE.txt` / `F-PROD-002` provenance,
-  production authenticated smoke/test account, Chatwoot admin prefix/realtime
-  smoke, and local Playwright e2e unavailable on `127.0.0.1:5173`;
+- local Playwright e2e, backend/frontend tests/build/lint и local company-thread
+  send validation прошли на чистой portal DB;
+- перед production release остаются GitHub source-of-truth sync и production
+  deploy provenance через `DEPLOY_SOURCE.txt` / `F-PROD-002`;
 - after those blockers are resolved or explicitly accepted, `F-MT-004` remains
   the first `MT-9` implementation gate.
 

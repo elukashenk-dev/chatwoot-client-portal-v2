@@ -15,8 +15,7 @@ export type ChatSendLedgerEntry = {
   failedAt: Date | null
   messageKind: string
   payloadSha256: string
-  portalChatThreadId: number | null
-  primaryConversationId: number
+  portalChatThreadId: number
   processingToken: string | null
   status: string
   updatedAt: Date
@@ -34,7 +33,6 @@ type AcquireSendLedgerEntryInput = SendLedgerScope & {
   messageKind: string
   now: Date
   payloadSha256: string
-  primaryConversationId: number
   processingToken: string
   staleProcessingBefore: Date
 }
@@ -72,7 +70,6 @@ const ledgerSelection = {
   messageKind: portalChatMessageSends.messageKind,
   payloadSha256: portalChatMessageSends.payloadSha256,
   portalChatThreadId: portalChatMessageSends.portalChatThreadId,
-  primaryConversationId: portalChatMessageSends.primaryConversationId,
   processingToken: portalChatMessageSends.processingToken,
   status: portalChatMessageSends.status,
   updatedAt: portalChatMessageSends.updatedAt,
@@ -123,7 +120,6 @@ export function createChatMessagesRepository(
           messageKind: input.messageKind,
           payloadSha256: input.payloadSha256,
           portalChatThreadId: input.portalChatThreadId,
-          primaryConversationId: input.primaryConversationId,
           processingToken: input.processingToken,
           status: 'processing',
           tenantId,

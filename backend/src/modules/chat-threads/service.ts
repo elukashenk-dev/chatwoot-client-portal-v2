@@ -1,10 +1,10 @@
 import type { ChatwootClient } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
-import type { ChatContextRepository } from '../chat-context/repository.js'
 import {
   assertPortalCompanyContactEnabled,
   assertPortalPersonContactEnabled,
 } from './contactAttributes.js'
+import type { ChatThreadContactRepository } from './contactRepository.js'
 import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
 import { createChatThreadRuntimeResolver } from './runtime.js'
@@ -19,7 +19,7 @@ const CONFIGURATION_ERROR_MESSAGE =
   'Доступ к порталу настроен некорректно. Обратитесь в поддержку.'
 
 type ChatThreadsContactRepository = Pick<
-  ChatContextRepository,
+  ChatThreadContactRepository,
   'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
 >
 
@@ -42,7 +42,7 @@ type ChatThreadsChatwootClient = Pick<
 >
 
 type CreateChatThreadsServiceOptions = {
-  chatContextRepository: ChatThreadsContactRepository
+  contactRepository: ChatThreadsContactRepository
   chatThreadsRepository: ChatThreadsPersistenceRepository
   chatwootClient: ChatThreadsChatwootClient
   now?: () => Date
@@ -54,7 +54,7 @@ function createContactConfigurationError(code: string) {
 }
 
 export function createChatThreadsService({
-  chatContextRepository,
+  contactRepository,
   chatThreadsRepository,
   chatwootClient,
   now = () => new Date(),
@@ -62,7 +62,7 @@ export function createChatThreadsService({
 }: CreateChatThreadsServiceOptions) {
   async function findLinkedPersonContact(userId: number) {
     const contactLink =
-      await chatContextRepository.findContactLinkByUserId(userId)
+      await contactRepository.findContactLinkByUserId(userId)
 
     if (contactLink) {
       const contact = await chatwootClient.findContactById(
@@ -76,7 +76,7 @@ export function createChatThreadsService({
       return contact
     }
 
-    const portalUser = await chatContextRepository.findPortalUserById(userId)
+    const portalUser = await contactRepository.findPortalUserById(userId)
 
     if (!portalUser) {
       throw createContactConfigurationError('portal_contact_missing')
@@ -88,7 +88,7 @@ export function createChatThreadsService({
       throw createContactConfigurationError('portal_contact_missing')
     }
 
-    const persistedLink = await chatContextRepository.createContactLink({
+    const persistedLink = await contactRepository.createContactLink({
       chatwootContactId: contact.id,
       userId,
     })

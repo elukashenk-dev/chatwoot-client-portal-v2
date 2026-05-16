@@ -10,10 +10,6 @@ export const codeHealthConfig = {
       reason:
         'Chatwoot resource split is deferred to a dedicated backend slice.',
     },
-    'backend/src/modules/chat-context/service.ts': {
-      maxLines: 636,
-      reason: 'Chat context service split is deferred until the next touch.',
-    },
     'backend/src/modules/chat-messages/service.ts': {
       maxLines: 1164,
       reason:

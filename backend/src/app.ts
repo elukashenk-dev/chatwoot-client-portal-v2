@@ -11,9 +11,6 @@ import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
-import { createChatContextRepository } from './modules/chat-context/repository.js'
-import { registerChatContextRoutes } from './modules/chat-context/routes.js'
-import { createChatContextService } from './modules/chat-context/service.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import {
@@ -26,6 +23,7 @@ import {
 } from './modules/chat-messages/service.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
+import { createChatThreadContactRepository } from './modules/chat-threads/contactRepository.js'
 import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
 import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
 import { createChatThreadsService } from './modules/chat-threads/service.js'
@@ -118,18 +116,11 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   })
   const createChatwootClientForRequest = (request: FastifyRequest) =>
     chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
-  const createChatContextServiceForRequest = (request: FastifyRequest) =>
-    createChatContextService({
-      chatContextRepository: createChatContextRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
-      }),
-      chatwootClient: createChatwootClientForRequest(request),
-    })
   const createChatThreadsServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
     return createChatThreadsService({
-      chatContextRepository: createChatContextRepository(database.db, {
+      contactRepository: createChatThreadContactRepository(database.db, {
         tenantId: tenant.id,
       }),
       chatThreadsRepository: createChatThreadsRepository(database.db, {
@@ -203,11 +194,6 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   registerChatThreadsRoutes(app, {
     authService,
     createChatThreadsService: createChatThreadsServiceForRequest,
-    env,
-  })
-  registerChatContextRoutes(app, {
-    authService,
-    createChatContextService: createChatContextServiceForRequest,
     env,
   })
   registerChatMessagesRoutes(app, {

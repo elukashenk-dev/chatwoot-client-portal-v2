@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../lib/errors.js'
-import type { ChatContextRepository } from '../chat-context/repository.js'
+import type { ChatThreadContactRepository } from './contactRepository.js'
 import { createChatThreadsService } from './service.js'
 
 type ChatThreadsServiceOptions = Parameters<typeof createChatThreadsService>[0]
@@ -17,12 +17,12 @@ type ChatwootClientStub = ChatThreadsServiceOptions['chatwootClient'] & {
 function createRepositoryStub(
   overrides: Partial<
     Pick<
-      ChatContextRepository,
+      ChatThreadContactRepository,
       'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
     >
   > = {},
 ): Pick<
-  ChatContextRepository,
+  ChatThreadContactRepository,
   'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
 > {
   return {
@@ -165,7 +165,7 @@ function createService({
   repository?: ReturnType<typeof createRepositoryStub>
 } = {}) {
   return createChatThreadsService({
-    chatContextRepository: repository,
+    contactRepository: repository,
     chatThreadsRepository:
       chatThreadsRepository as ChatThreadsServiceOptions['chatThreadsRepository'],
     chatwootClient:

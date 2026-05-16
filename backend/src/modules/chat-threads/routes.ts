@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 import type { AppEnv } from '../../config/env.js'
+import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
-import { resolveAuthenticatedPortalUser } from '../chat-context/routes.js'
 import type { ChatThreadsService } from './service.js'
 
 type RegisterChatThreadsRoutesOptions = {

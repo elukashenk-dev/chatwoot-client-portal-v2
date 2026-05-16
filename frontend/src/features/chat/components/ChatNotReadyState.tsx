@@ -1,8 +1,8 @@
-import type { ChatContextReason } from '../types'
+import type { ChatThreadReason } from '../types'
 import { ClockIcon, RefreshIcon } from '../../../shared/ui/icons'
 
 const notReadyCopy: Record<
-  Exclude<ChatContextReason, 'none'>,
+  Exclude<ChatThreadReason, 'none'>,
   { description: string; title: string }
 > = {
   chatwoot_not_configured: {
@@ -45,7 +45,7 @@ const notReadyCopy: Record<
 type ChatNotReadyStateProps = {
   isUnavailable: boolean
   onRetry: () => void
-  reason: ChatContextReason
+  reason: ChatThreadReason
 }
 
 export function ChatNotReadyState({

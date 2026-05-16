@@ -99,7 +99,7 @@ Examples:
 ```ts
 portalUsersRepository.findByEmail({ tenantId, email })
 portalSessionsRepository.findByToken({ tenantId, tokenHash })
-chatContextRepository.findContactLink({ tenantId, userId })
+chatThreadContactRepository.findContactLink({ tenantId, userId })
 chatMessagesRepository.createSendLedgerEntry({ tenantId, ... })
 ```
 
@@ -165,8 +165,9 @@ portal_users
 portal_sessions
 verification_records
 portal_user_contact_links
-portal_user_chatwoot_conversations
+portal_chat_threads
 portal_chat_message_sends
+portal_rate_limit_buckets
 chatwoot_webhook_deliveries
 ```
 

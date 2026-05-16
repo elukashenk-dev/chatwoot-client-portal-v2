@@ -477,7 +477,7 @@ Brandable:
 
 Locked:
 
-- one primary conversation model;
+- thread switcher model: personal chat plus available company chats;
 - logout placement;
 - connection status semantics;
 - composer structure;

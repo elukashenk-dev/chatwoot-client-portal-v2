@@ -147,45 +147,6 @@ export const portalUserContactLinks = pgTable(
   ],
 )
 
-export const portalUserChatwootConversations = pgTable(
-  'portal_user_chatwoot_conversations',
-  {
-    id: serial('id').primaryKey(),
-    tenantId: integer('tenant_id')
-      .notNull()
-      .references(() => portalTenants.id, {
-        onDelete: 'restrict',
-      }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => portalUsers.id, {
-        onDelete: 'cascade',
-      }),
-    chatwootContactId: integer('chatwoot_contact_id').notNull(),
-    chatwootConversationId: integer('chatwoot_conversation_id').notNull(),
-    chatwootInboxId: integer('chatwoot_inbox_id').notNull(),
-    createdAt: timestamp('created_at', timestampWithTimezone)
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', timestampWithTimezone)
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    uniqueIndex('portal_user_chatwoot_conversations_tenant_user_unique').on(
-      table.tenantId,
-      table.userId,
-    ),
-    uniqueIndex(
-      'portal_user_chatwoot_conversations_tenant_conversation_unique',
-    ).on(table.tenantId, table.chatwootConversationId),
-    index('portal_user_chatwoot_conversations_tenant_contact_id_idx').on(
-      table.tenantId,
-      table.chatwootContactId,
-    ),
-  ],
-)
-
 export const portalChatThreads = pgTable(
   'portal_chat_threads',
   {
@@ -253,8 +214,7 @@ export const portalChatMessageSends = pgTable(
       {
         onDelete: 'restrict',
       },
-    ),
-    primaryConversationId: integer('primary_conversation_id').notNull(),
+    ).notNull(),
     clientMessageKey: text('client_message_key').notNull(),
     messageKind: text('message_kind').notNull(),
     payloadSha256: text('payload_sha256').notNull(),
@@ -273,27 +233,15 @@ export const portalChatMessageSends = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex('portal_chat_message_sends_scope_unique').on(
+    uniqueIndex('portal_chat_message_sends_thread_scope_unique').on(
       table.tenantId,
+      table.portalChatThreadId,
       table.userId,
-      table.primaryConversationId,
       table.clientMessageKey,
     ),
-    uniqueIndex('portal_chat_message_sends_thread_scope_unique')
-      .on(
-        table.tenantId,
-        table.portalChatThreadId,
-        table.userId,
-        table.clientMessageKey,
-      )
-      .where(sql`${table.portalChatThreadId} is not null`),
     index('portal_chat_message_sends_tenant_user_id_idx').on(
       table.tenantId,
       table.userId,
-    ),
-    index('portal_chat_message_sends_tenant_conversation_id_idx').on(
-      table.tenantId,
-      table.primaryConversationId,
     ),
     index('portal_chat_message_sends_tenant_thread_message_idx').on(
       table.tenantId,

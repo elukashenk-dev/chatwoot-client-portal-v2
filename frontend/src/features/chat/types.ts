@@ -1,4 +1,4 @@
-export type ChatContextReason =
+export type ChatThreadReason =
   | 'none'
   | 'chatwoot_not_configured'
   | 'chatwoot_unavailable'
@@ -8,7 +8,7 @@ export type ChatContextReason =
   | 'thread_access_denied'
   | 'thread_invalid'
 
-export type ChatContextResult = 'not_ready' | 'ready' | 'unavailable'
+export type ChatThreadResult = 'not_ready' | 'ready' | 'unavailable'
 
 export const PRIVATE_CHAT_THREAD_ID = 'private:me'
 
@@ -73,13 +73,13 @@ export type ChatMessagesSnapshot = {
   hasMoreOlder: boolean
   messages: ChatMessage[]
   nextOlderCursor: number | null
-  reason: ChatContextReason
-  result: ChatContextResult
+  reason: ChatThreadReason
+  result: ChatThreadResult
 }
 
 export type ChatSendResult = {
   activeThread: ChatThreadSummary | null
-  reason: ChatContextReason
-  result: ChatContextResult
+  reason: ChatThreadReason
+  result: ChatThreadResult
   sentMessage: ChatMessage | null
 }
