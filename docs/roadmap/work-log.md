@@ -119,6 +119,9 @@
   поддерживает legacy `company`, публичный `threadId` использует `group:<id>`,
   Chatwoot attribute list переименован в `portal_client_group_contact_ids`, а
   `portal_contact_type` принимает только `person` и `group`.
+- Production portal clean reinstall выполнен после strict group rename:
+  `lk.provgroup.ru` поднят из clean `main` source, portal DB пересоздана,
+  Chatwoot API Channel/webhook verification пройдены, Chatwoot core не трогался.
 
 ## Current Baseline
 
@@ -137,6 +140,6 @@
 
 ## Recommended Next Step
 
-- Обновить Chatwoot custom attributes у тестовых контактов под новый strict
-  contract: `portal_contact_type=group` для групп и
-  `portal_client_group_contact_ids` у person contacts.
+- Провести ручной production smoke на реальном устройстве: registration/login,
+  личный чат, групповой чат `group:<id>` и recovery после удаления диалога
+  агентом.
