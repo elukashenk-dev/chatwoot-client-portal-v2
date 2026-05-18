@@ -174,9 +174,9 @@ export const portalChatThreads = pgTable(
     uniqueIndex('portal_chat_threads_tenant_private_user_unique')
       .on(table.tenantId, table.portalUserId)
       .where(sql`${table.threadType} = 'private'`),
-    uniqueIndex('portal_chat_threads_tenant_company_contact_unique')
+    uniqueIndex('portal_chat_threads_tenant_group_contact_unique')
       .on(table.tenantId, table.chatwootContactId)
-      .where(sql`${table.threadType} = 'company'`),
+      .where(sql`${table.threadType} = 'group'`),
     uniqueIndex('portal_chat_threads_tenant_conversation_unique')
       .on(table.tenantId, table.chatwootConversationId)
       .where(sql`${table.chatwootConversationId} is not null`),
@@ -186,11 +186,11 @@ export const portalChatThreads = pgTable(
     ),
     check(
       'portal_chat_threads_type_check',
-      sql`${table.threadType} in ('private', 'company')`,
+      sql`${table.threadType} in ('private', 'group')`,
     ),
     check(
       'portal_chat_threads_private_user_check',
-      sql`(${table.threadType} = 'private' and ${table.portalUserId} is not null) or (${table.threadType} = 'company' and ${table.portalUserId} is null)`,
+      sql`(${table.threadType} = 'private' and ${table.portalUserId} is not null) or (${table.threadType} = 'group' and ${table.portalUserId} is null)`,
     ),
   ],
 )

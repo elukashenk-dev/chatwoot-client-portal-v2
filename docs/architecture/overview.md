@@ -45,7 +45,7 @@ Tenant владеет:
 - пользователь подтверждает email, задает пароль и входит в портал;
 - password reset работает через email-code flow;
 - пользователь открывает защищенную клиентскую зону;
-- пользователь видит личный чат и, при наличии доступа, общие company-чаты;
+- пользователь видит личный чат и, при наличии доступа, групповые чаты;
 - backend загружает историю сообщений, отправляет текст, отправляет один файл и доставляет realtime-обновления;
 - PWA manifest, icons и iOS Home Screen metadata резолвятся tenant-aware.
 
@@ -199,7 +199,7 @@ Tenant со статусом не `active` не допускается до publ
 - публичная модель чата строится вокруг portal-owned `threadId`, а не вокруг
   Chatwoot conversation id;
 - browser может запрашивать только `threadId`: `private:me` или
-  `company:<chatwoot_company_contact_id>`;
+  `group:<chatwoot_group_contact_id>`;
 - backend валидирует каждый `threadId` через tenant, session, linked person
   contact и текущие Chatwoot contact attributes;
 - backend хранит authoritative thread mapping в `portal_chat_threads`;
@@ -209,9 +209,9 @@ Tenant со статусом не `active` не допускается до publ
 - portal inbox tenant должен быть `Channel::Api`;
 - portal inbox tenant должен иметь `lock_to_single_conversation = true`;
 - `private:me` привязан к linked person contact;
-- `company:<id>` доступен только если linked person contact содержит этот
-  company contact id в разрешенном portal attribute list, а company contact
-  включен для portal;
+- `group:<id>` доступен только если linked person contact содержит этот ID
+  группового Chatwoot contact в разрешенном portal attribute list, а сам
+  group contact включен для portal;
 - если thread существует в portal DB, но Chatwoot conversation еще нет, первый
   send может bootstrap-нуть conversation только под tenant-aware advisory lock,
   scoped by target Chatwoot contact/thread;
@@ -220,7 +220,7 @@ Tenant со статусом не `active` не допускается до publ
   может bootstrap-нуть replacement conversation под тем же lock;
 - несколько portal conversations для одного portal thread target внутри tenant
   portal inbox считаются anomaly, а не целевой UX;
-- company thread messages, отправленные из portal в Chatwoot, получают
+- group thread messages, отправленные из portal в Chatwoot, получают
   Chatwoot-visible Markdown author prefix; portal transcript показывает автора
   по structured metadata и не заставляет клиента видеть technical prefix.
 
@@ -245,7 +245,7 @@ Chatwoot signed webhook -> portal backend -> tenant-scoped SSE fanout -> browser
 - webhook routing резолвит Chatwoot conversation id обратно в
   `portal_chat_threads`;
 - realtime fanout key включает tenant и `threadId`;
-- перед доставкой company-thread event конкретному subscriber backend повторно
+- перед доставкой group-thread event конкретному subscriber backend повторно
   валидирует актуальный доступ пользователя к thread;
 - browser не подписывается напрямую на Chatwoot events.
 

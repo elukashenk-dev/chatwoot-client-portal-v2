@@ -19,7 +19,7 @@ describe('createChatMessagesRepository', () => {
     const [user] = await database.db
       .insert(portalUsers)
       .values({
-        email: 'name@company.ru',
+        email: 'name@group.ru',
         passwordHash: await hashPassword('Secret123'),
         tenantId,
       })
@@ -196,7 +196,7 @@ describe('createChatMessagesRepository', () => {
     const [otherUser] = await database.db
       .insert(portalUsers)
       .values({
-        email: 'partner@company.ru',
+        email: 'partner@group.ru',
         passwordHash: await hashPassword('Secret123'),
         tenantId,
       })
@@ -287,7 +287,7 @@ describe('createChatMessagesRepository', () => {
     const [otherUser] = await database.db
       .insert(portalUsers)
       .values({
-        email: 'name@other-company.ru',
+        email: 'name@other-group.ru',
         passwordHash: await hashPassword('Secret123'),
         tenantId: otherTenantId,
       })

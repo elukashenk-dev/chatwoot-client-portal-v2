@@ -1,7 +1,7 @@
 import { ApiError } from '../../lib/errors.js'
 import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 
-const COMPANY_THREAD_ID_PATTERN = /^company:([1-9]\d*)$/
+const GROUP_THREAD_ID_PATTERN = /^group:([1-9]\d*)$/
 const CHAT_THREAD_ID_MAX_LENGTH = 64
 
 export type ParsedPublicChatThread =
@@ -10,9 +10,9 @@ export type ParsedPublicChatThread =
       type: 'private'
     }
   | {
-      chatwootCompanyContactId: number
-      id: `company:${number}`
-      type: 'company'
+      chatwootGroupContactId: number
+      id: `group:${number}`
+      type: 'group'
     }
 
 function createUnsupportedThreadError() {
@@ -33,21 +33,21 @@ export function parsePublicChatThreadId(
     }
   }
 
-  const companyMatch = COMPANY_THREAD_ID_PATTERN.exec(threadId)
+  const groupMatch = GROUP_THREAD_ID_PATTERN.exec(threadId)
 
-  if (!companyMatch?.[1]) {
+  if (!groupMatch?.[1]) {
     throw createUnsupportedThreadError()
   }
 
-  const chatwootCompanyContactId = Number(companyMatch[1])
+  const chatwootGroupContactId = Number(groupMatch[1])
 
-  if (!Number.isSafeInteger(chatwootCompanyContactId)) {
+  if (!Number.isSafeInteger(chatwootGroupContactId)) {
     throw createUnsupportedThreadError()
   }
 
   return {
-    chatwootCompanyContactId,
-    id: `company:${chatwootCompanyContactId}`,
-    type: 'company',
+    chatwootGroupContactId,
+    id: `group:${chatwootGroupContactId}`,
+    type: 'group',
   }
 }

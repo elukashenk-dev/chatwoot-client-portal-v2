@@ -49,7 +49,7 @@ function createDeferredResponse() {
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
     user: {
-      email: 'name@company.ru',
+      email: 'name@group.ru',
       fullName: 'Portal User',
       id: 7,
     },

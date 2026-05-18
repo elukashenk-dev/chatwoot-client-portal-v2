@@ -9,7 +9,7 @@ type TenantRepositoryScope = {
   tenantId: number
 }
 
-type PortalChatThreadType = 'company' | 'private'
+type PortalChatThreadType = 'group' | 'private'
 
 export type PortalChatThreadRecord = {
   chatwootContactId: number
@@ -34,7 +34,7 @@ const threadSelection = {
 }
 
 function mapThread(row: SelectedThread): PortalChatThreadRecord {
-  if (row.threadType !== 'private' && row.threadType !== 'company') {
+  if (row.threadType !== 'private' && row.threadType !== 'group') {
     throw new Error('Unexpected portal chat thread type.')
   }
 
@@ -186,7 +186,7 @@ export function createChatThreadsRepository(
       return thread ? mapThread(thread) : null
     },
 
-    async upsertCompanyThread({
+    async upsertGroupThread({
       chatwootContactId,
       chatwootInboxId,
       now,
@@ -202,7 +202,7 @@ export function createChatThreadsRepository(
           chatwootInboxId,
           portalUserId: null,
           tenantId,
-          threadType: 'company',
+          threadType: 'group',
           updatedAt: now,
         })
         .onConflictDoNothing()
@@ -221,14 +221,14 @@ export function createChatThreadsRepository(
         .where(
           and(
             eq(portalChatThreads.tenantId, tenantId),
-            eq(portalChatThreads.threadType, 'company'),
+            eq(portalChatThreads.threadType, 'group'),
             eq(portalChatThreads.chatwootContactId, chatwootContactId),
           ),
         )
         .returning(threadSelection)
 
       if (!updatedThread) {
-        throw new Error('Failed to upsert company chat thread.')
+        throw new Error('Failed to upsert group chat thread.')
       }
 
       return mapThread(updatedThread)

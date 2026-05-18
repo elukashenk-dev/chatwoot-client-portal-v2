@@ -21,7 +21,7 @@ const readySnapshot: ChatMessagesSnapshot = {
 }
 
 describe('createChatRealtimeHub', () => {
-  it('publishes a company thread event to every subscriber on that thread', async () => {
+  it('publishes a group thread event to every subscriber on that thread', async () => {
     const hub = createChatRealtimeHub()
     const firstSend = vi.fn()
     const secondSend = vi.fn()
@@ -29,22 +29,22 @@ describe('createChatRealtimeHub', () => {
     hub.subscribe({
       send: firstSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
     hub.subscribe({
       send: secondSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 8,
     })
 
-    const companyReadySnapshot: ChatMessagesSnapshot = {
+    const groupReadySnapshot: ChatMessagesSnapshot = {
       activeThread: {
-        id: 'company:154',
-        subtitle: 'Общий чат компании',
+        id: 'group:154',
+        subtitle: 'Групповой чат',
         title: 'ООО "Ромашка"',
-        type: 'company',
+        type: 'group',
       },
       hasMoreOlder: false,
       messages: [],
@@ -55,23 +55,23 @@ describe('createChatRealtimeHub', () => {
 
     await expect(
       hub.publishThreadMessages({
-        createSnapshotForUser: vi.fn().mockResolvedValue(companyReadySnapshot),
+        createSnapshotForUser: vi.fn().mockResolvedValue(groupReadySnapshot),
         tenantId: 1,
-        threadId: 'company:154',
+        threadId: 'group:154',
       }),
     ).resolves.toBe(2)
 
     expect(firstSend).toHaveBeenCalledWith({
-      data: companyReadySnapshot,
+      data: groupReadySnapshot,
       type: 'messages',
     })
     expect(secondSend).toHaveBeenCalledWith({
-      data: companyReadySnapshot,
+      data: groupReadySnapshot,
       type: 'messages',
     })
   })
 
-  it('skips a subscribed user after company thread access is revoked', async () => {
+  it('skips a subscribed user after group thread access is revoked', async () => {
     const hub = createChatRealtimeHub()
     const firstSend = vi.fn()
     const secondSend = vi.fn()
@@ -79,22 +79,22 @@ describe('createChatRealtimeHub', () => {
     hub.subscribe({
       send: firstSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
     hub.subscribe({
       send: secondSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 8,
     })
 
-    const readyCompanySnapshot: ChatMessagesSnapshot = {
+    const readyGroupSnapshot: ChatMessagesSnapshot = {
       activeThread: {
-        id: 'company:154',
-        subtitle: 'Общий чат компании',
+        id: 'group:154',
+        subtitle: 'Групповой чат',
         title: 'ООО "Ромашка"',
-        type: 'company',
+        type: 'group',
       },
       hasMoreOlder: false,
       messages: [],
@@ -102,7 +102,7 @@ describe('createChatRealtimeHub', () => {
       reason: 'none',
       result: 'ready',
     }
-    const revokedCompanySnapshot: ChatMessagesSnapshot = {
+    const revokedGroupSnapshot: ChatMessagesSnapshot = {
       activeThread: null,
       hasMoreOlder: false,
       messages: [],
@@ -114,16 +114,16 @@ describe('createChatRealtimeHub', () => {
     await expect(
       hub.publishThreadMessages({
         createSnapshotForUser: vi.fn(async (userId) =>
-          userId === 7 ? revokedCompanySnapshot : readyCompanySnapshot,
+          userId === 7 ? revokedGroupSnapshot : readyGroupSnapshot,
         ),
         tenantId: 1,
-        threadId: 'company:154',
+        threadId: 'group:154',
       }),
     ).resolves.toBe(1)
 
     expect(firstSend).not.toHaveBeenCalled()
     expect(secondSend).toHaveBeenCalledWith({
-      data: readyCompanySnapshot,
+      data: readyGroupSnapshot,
       type: 'messages',
     })
   })

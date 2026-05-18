@@ -477,7 +477,7 @@ Brandable:
 
 Locked:
 
-- thread switcher model: personal chat plus available company chats;
+- thread switcher model: personal chat plus available group chats;
 - logout placement;
 - connection status semantics;
 - composer structure;

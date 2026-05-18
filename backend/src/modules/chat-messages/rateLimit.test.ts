@@ -75,7 +75,7 @@ describe('createChatSendRateLimiter', () => {
       limiter.consume({
         kind: 'text',
         tenantId,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toEqual({

@@ -134,7 +134,7 @@ describe('registerChatMessagesRoutes', () => {
     }
   })
 
-  it('passes company history thread ids to the chat message service', async () => {
+  it('passes group history thread ids to the chat message service', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -148,7 +148,7 @@ describe('registerChatMessagesRoutes', () => {
           cookie: createAuthorizedCookie(app),
         },
         method: 'GET',
-        url: '/api/chat/messages?threadId=company%3A154',
+        url: '/api/chat/messages?threadId=group%3A154',
       })
 
       expect(response.statusCode).toBe(200)
@@ -165,7 +165,7 @@ describe('registerChatMessagesRoutes', () => {
         chatMessagesService.getCurrentUserChatMessages,
       ).toHaveBeenCalledWith({
         beforeMessageId: null,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       })
     } finally {
@@ -173,7 +173,7 @@ describe('registerChatMessagesRoutes', () => {
     }
   })
 
-  it('passes company text sends to the chat message service after rate limiting', async () => {
+  it('passes group text sends to the chat message service after rate limiting', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -189,9 +189,9 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: {
-          clientMessageKey: 'portal-send:company-text',
+          clientMessageKey: 'portal-send:group-text',
           content: 'Здравствуйте',
-          threadId: 'company:154',
+          threadId: 'group:154',
         },
         url: '/api/chat/messages',
       })
@@ -206,16 +206,16 @@ describe('registerChatMessagesRoutes', () => {
       expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
         kind: 'text',
         tenantId: tenant.id,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       })
       expect(
         chatMessagesService.sendCurrentUserTextMessage,
       ).toHaveBeenCalledWith({
-        clientMessageKey: 'portal-send:company-text',
+        clientMessageKey: 'portal-send:group-text',
         content: 'Здравствуйте',
         replyToMessageId: null,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       })
     } finally {
@@ -382,7 +382,7 @@ describe('registerChatMessagesRoutes', () => {
     }
   })
 
-  it('passes company attachment sends to the chat message service after rate limiting', async () => {
+  it('passes group attachment sends to the chat message service after rate limiting', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
         rateLimitResult: {
@@ -390,11 +390,11 @@ describe('registerChatMessagesRoutes', () => {
         },
       })
     const multipart = createMultipartAttachmentPayload({
-      clientMessageKey: 'portal-send:company-attachment',
+      clientMessageKey: 'portal-send:group-attachment',
       fileContent: Buffer.from('%PDF-1.7\n'),
       fileName: 'invoice.pdf',
       mimeType: 'application/pdf',
-      threadId: 'company:154',
+      threadId: 'group:154',
     })
 
     try {
@@ -419,17 +419,17 @@ describe('registerChatMessagesRoutes', () => {
       expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
         kind: 'attachment',
         tenantId: tenant.id,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       })
       expect(
         chatMessagesService.sendCurrentUserAttachmentMessage,
       ).toHaveBeenCalledWith(
         expect.objectContaining({
-          clientMessageKey: 'portal-send:company-attachment',
+          clientMessageKey: 'portal-send:group-attachment',
           content: null,
           replyToMessageId: null,
-          threadId: 'company:154',
+          threadId: 'group:154',
           userId: 7,
         }),
       )

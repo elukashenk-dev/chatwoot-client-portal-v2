@@ -11,10 +11,24 @@ const privateThread = {
   type: 'private',
 } as const
 
+const groupThread = {
+  id: 'group:154',
+  subtitle: 'Групповой чат',
+  title: 'ООО "Ромашка"',
+  type: 'group',
+} as const
+
 function createThreadsResponse() {
   return {
     activeThreadId: privateThread.id,
     threads: [privateThread],
+  }
+}
+
+function createThreadsWithGroupResponse() {
+  return {
+    activeThreadId: privateThread.id,
+    threads: [privateThread, groupThread],
   }
 }
 
@@ -54,6 +68,16 @@ async function routePrivateThreads(page: Page) {
   })
 }
 
+async function routeThreadsWithGroup(page: Page) {
+  await page.route('**/api/chat/threads', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(createThreadsWithGroupResponse()),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+}
+
 async function routeStoppedRealtime(page: Page) {
   await page.route('**/api/chat/realtime**', async (route) => {
     await route.fulfill({
@@ -67,12 +91,41 @@ test('renders the ready chat transcript and loads older history through the back
 }) => {
   const chatMessageRequests: string[] = []
 
-  await routePrivateThreads(page)
+  await routeThreadsWithGroup(page)
   await routeStoppedRealtime(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
+    const threadId = requestUrl.searchParams.get('threadId')
 
     chatMessageRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
+
+    if (threadId === 'group:154') {
+      await route.fulfill({
+        body: JSON.stringify({
+          activeThread: groupThread,
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Иван Петров',
+              authorRole: 'group_member',
+              content: 'Сообщение из группового чата.',
+              contentType: 'text',
+              createdAt: '2026-05-19T09:00:00.000Z',
+              direction: 'incoming',
+              id: 804,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+          reason: 'none',
+          result: 'ready',
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
 
     if (requestUrl.searchParams.get('beforeMessageId') === '205') {
       await route.fulfill({
@@ -165,9 +218,17 @@ test('renders the ready chat transcript and loads older history through the back
     .click()
 
   await expect(page.getByText('Ранее отправленное сообщение.')).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByRole('menuitem', { name: /ООО "Ромашка"/ }).click()
+
+  await expect(
+    page.getByRole('heading', { name: 'ООО "Ромашка"' }),
+  ).toBeVisible()
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
   expect(chatMessageRequests).toEqual([
     '/api/chat/messages?threadId=private%3Ame',
     '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
+    '/api/chat/messages?threadId=group%3A154',
   ])
 })
 

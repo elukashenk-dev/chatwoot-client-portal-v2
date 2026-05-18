@@ -233,11 +233,11 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 2)).not.toHaveClass('rounded-tl-[0.3rem]')
   })
 
-  it('renders a company member header without an agent avatar', () => {
+  it('renders a group member header without an agent avatar', () => {
     const { container } = renderTranscript([
       createMessage({
         authorName: 'Иван Петров',
-        authorRole: 'company_member',
+        authorRole: 'group_member',
         content: 'Сообщение из общего чата',
         direction: 'incoming',
         id: 1,

@@ -1,41 +1,41 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  assertPortalCompanyContactEnabled,
+  assertPortalGroupContactEnabled,
   assertPortalPersonContactEnabled,
-  parsePortalCompanyContactIdsAttribute,
+  parsePortalGroupContactIdsAttribute,
   parsePortalContactAttributes,
-  PORTAL_COMPANY_CONTACT_IDS_MAX,
+  PORTAL_GROUP_CONTACT_IDS_MAX,
 } from './contactAttributes.js'
 
-function buildCompanyIds(count: number) {
+function buildGroupIds(count: number) {
   return Array.from({ length: count }, (_, index) => String(index + 1)).join(',')
 }
 
 describe('portal contact attributes', () => {
-  it('parses enabled person contacts with deduplicated company contact IDs', () => {
+  it('parses enabled person contacts with deduplicated group contact IDs', () => {
     expect(
       parsePortalContactAttributes({
-        portal_client_company_contact_ids: '154, 203,154, 203',
+        portal_client_group_contact_ids: '154, 203,154, 203',
         portal_contact_type: 'person',
         portal_enabled: true,
       }),
     ).toEqual({
-      companyContactIds: [154, 203],
+      groupContactIds: [154, 203],
       enabled: true,
       type: 'person',
     })
   })
 
-  it('accepts the maximum company contact ID count', () => {
+  it('accepts the maximum group contact ID count', () => {
     expect(
-      parsePortalCompanyContactIdsAttribute(
-        buildCompanyIds(PORTAL_COMPANY_CONTACT_IDS_MAX),
+      parsePortalGroupContactIdsAttribute(
+        buildGroupIds(PORTAL_GROUP_CONTACT_IDS_MAX),
       ),
-    ).toHaveLength(PORTAL_COMPANY_CONTACT_IDS_MAX)
+    ).toHaveLength(PORTAL_GROUP_CONTACT_IDS_MAX)
   })
 
-  it('rejects malformed company contact IDs', () => {
+  it('rejects malformed group contact IDs', () => {
     for (const value of [
       '154, bad',
       '154,,203',
@@ -45,47 +45,62 @@ describe('portal contact attributes', () => {
       '154,9007199254740992',
       ['154', '203'],
     ]) {
-      expect(() => parsePortalCompanyContactIdsAttribute(value)).toThrowError(
+      expect(() => parsePortalGroupContactIdsAttribute(value)).toThrowError(
         expect.objectContaining({
-          code: 'portal_client_company_contact_ids_invalid',
+          code: 'portal_client_group_contact_ids_invalid',
           statusCode: 403,
         }),
       )
     }
   })
 
-  it('rejects oversized company contact ID lists before Chatwoot lookups', () => {
+  it('rejects oversized group contact ID lists before Chatwoot lookups', () => {
     expect(() =>
-      parsePortalCompanyContactIdsAttribute(
-        buildCompanyIds(PORTAL_COMPANY_CONTACT_IDS_MAX + 1),
+      parsePortalGroupContactIdsAttribute(
+        buildGroupIds(PORTAL_GROUP_CONTACT_IDS_MAX + 1),
       ),
     ).toThrowError(
       expect.objectContaining({
-        code: 'portal_client_company_contact_ids_invalid',
+        code: 'portal_client_group_contact_ids_invalid',
         statusCode: 403,
       }),
     )
   })
 
-  it('parses enabled company contacts without memberships', () => {
+  it('parses enabled group contacts without memberships', () => {
     expect(
       parsePortalContactAttributes({
-        portal_client_company_contact_ids: '',
-        portal_contact_type: 'company',
+        portal_client_group_contact_ids: '',
+        portal_contact_type: 'group',
         portal_enabled: true,
       }),
     ).toEqual({
-      companyContactIds: [],
+      groupContactIds: [],
       enabled: true,
-      type: 'company',
+      type: 'group',
     })
+  })
+
+  it('rejects retired company contact type values', () => {
+    expect(() =>
+      parsePortalContactAttributes({
+        portal_client_group_contact_ids: '',
+        portal_contact_type: 'company',
+        portal_enabled: true,
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'portal_contact_type_invalid',
+        statusCode: 403,
+      }),
+    )
   })
 
   it('requires person contacts to be portal enabled', () => {
     expect(() =>
       assertPortalPersonContactEnabled({
         customAttributes: {
-          portal_contact_type: 'company',
+          portal_contact_type: 'group',
           portal_enabled: true,
         },
         id: 154,
@@ -113,9 +128,9 @@ describe('portal contact attributes', () => {
     )
   })
 
-  it('requires company contacts to be portal enabled companies', () => {
+  it('requires group contacts to be portal enabled groups', () => {
     expect(() =>
-      assertPortalCompanyContactEnabled({
+      assertPortalGroupContactEnabled({
         customAttributes: {
           portal_contact_type: 'person',
           portal_enabled: true,
@@ -124,22 +139,22 @@ describe('portal contact attributes', () => {
       }),
     ).toThrowError(
       expect.objectContaining({
-        code: 'portal_company_contact_type_invalid',
+        code: 'portal_group_contact_type_invalid',
         statusCode: 403,
       }),
     )
 
     expect(() =>
-      assertPortalCompanyContactEnabled({
+      assertPortalGroupContactEnabled({
         customAttributes: {
-          portal_contact_type: 'company',
+          portal_contact_type: 'group',
           portal_enabled: false,
         },
         id: 154,
       }),
     ).toThrowError(
       expect.objectContaining({
-        code: 'portal_company_contact_disabled',
+        code: 'portal_group_contact_disabled',
         statusCode: 403,
       }),
     )

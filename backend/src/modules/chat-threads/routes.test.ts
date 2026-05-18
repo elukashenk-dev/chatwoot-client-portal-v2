@@ -87,10 +87,10 @@ describe('registerChatThreadsRoutes', () => {
             type: 'private',
           },
           {
-            id: 'company:154',
-            subtitle: 'Общий чат компании',
+            id: 'group:154',
+            subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',
-            type: 'company',
+            type: 'group',
           },
         ],
       }),
@@ -116,10 +116,10 @@ describe('registerChatThreadsRoutes', () => {
             type: 'private',
           },
           {
-            id: 'company:154',
-            subtitle: 'Общий чат компании',
+            id: 'group:154',
+            subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',
-            type: 'company',
+            type: 'group',
           },
         ],
       })
@@ -138,7 +138,7 @@ describe('registerChatThreadsRoutes', () => {
         .mockRejectedValue(
           new ApiError(
             403,
-            'portal_client_company_contact_ids_invalid',
+            'portal_client_group_contact_ids_invalid',
             'Доступ к порталу настроен некорректно. Обратитесь в поддержку.',
           ),
         ),
@@ -156,7 +156,7 @@ describe('registerChatThreadsRoutes', () => {
       expect(response.statusCode).toBe(403)
       expect(response.json()).toEqual({
         error: {
-          code: 'portal_client_company_contact_ids_invalid',
+          code: 'portal_client_group_contact_ids_invalid',
           message:
             'Доступ к порталу настроен некорректно. Обратитесь в поддержку.',
         },

@@ -219,7 +219,7 @@ describe('createChatMessagesService', () => {
     expect(chatwootClient.listConversationMessages).not.toHaveBeenCalled()
   })
 
-  it('returns controlled context for unavailable company thread ids', async () => {
+  it('returns controlled context for unavailable group thread ids', async () => {
     const chatThreadsService = createChatThreadsServiceStub({
       context: {
         activeThread: null,
@@ -231,7 +231,7 @@ describe('createChatMessagesService', () => {
         reason: 'thread_access_denied',
         result: 'not_ready',
         targetChatwootContactId: 154,
-        threadType: 'company',
+        threadType: 'group',
       },
     })
     const service = createChatMessagesService({
@@ -242,7 +242,7 @@ describe('createChatMessagesService', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -252,7 +252,7 @@ describe('createChatMessagesService', () => {
     })
     expect(chatThreadsService.getCurrentUserThreadContext).toHaveBeenCalledWith(
       {
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       },
     )

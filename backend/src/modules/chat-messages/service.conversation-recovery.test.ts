@@ -36,13 +36,13 @@ const recoveredContext = {
   },
 } satisfies CurrentUserChatThreadContext
 
-const companyReadyContext = {
+const groupReadyContext = {
   ...readyContext,
   activeThread: {
-    id: 'company:154',
-    subtitle: 'Общий чат компании',
+    id: 'group:154',
+    subtitle: 'Групповой чат',
     title: 'ООО "Ромашка"',
-    type: 'company',
+    type: 'group',
   },
   chatwootConversation: {
     ...readyContext.chatwootConversation,
@@ -52,13 +52,13 @@ const companyReadyContext = {
   linkedContactId: 33,
   portalChatThreadId: 5,
   targetChatwootContactId: 154,
-  threadType: 'company',
+  threadType: 'group',
 } satisfies CurrentUserChatThreadContext
 
-const recoveredCompanyContext = {
-  ...companyReadyContext,
+const recoveredGroupContext = {
+  ...groupReadyContext,
   chatwootConversation: {
-    ...companyReadyContext.chatwootConversation,
+    ...groupReadyContext.chatwootConversation,
     id: 302,
     lastActivityAt: 500,
   },
@@ -220,15 +220,15 @@ describe('createChatMessagesService deleted conversation recovery', () => {
     )
   })
 
-  it('recovers a deleted company conversation and retries attachment send in the replacement conversation', async () => {
+  it('recovers a deleted group conversation and retries attachment send in the replacement conversation', async () => {
     const chatThreadsService = {
       ensureCurrentUserWritableThreadContext: vi
         .fn()
-        .mockResolvedValue(companyReadyContext),
-      getCurrentUserThreadContext: vi.fn().mockResolvedValue(companyReadyContext),
+        .mockResolvedValue(groupReadyContext),
+      getCurrentUserThreadContext: vi.fn().mockResolvedValue(groupReadyContext),
       recoverCurrentUserWritableThreadContext: vi
         .fn()
-        .mockResolvedValue(recoveredCompanyContext),
+        .mockResolvedValue(recoveredGroupContext),
     }
     const chatMessagesRepository = createChatMessagesRepositoryStub()
     const createConversationIncomingAttachmentMessage = vi
@@ -261,12 +261,12 @@ describe('createChatMessagesService deleted conversation recovery', () => {
           size: data.byteLength,
         },
         clientMessageKey: 'portal-send:attachment-recovery-key',
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
       activeThread: {
-        id: 'company:154',
+        id: 'group:154',
       },
       reason: 'none',
       result: 'ready',
@@ -284,7 +284,7 @@ describe('createChatMessagesService deleted conversation recovery', () => {
       chatThreadsService.recoverCurrentUserWritableThreadContext,
     ).toHaveBeenCalledWith({
       staleConversationId: 301,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
     expect(createConversationIncomingAttachmentMessage).toHaveBeenNthCalledWith(

@@ -29,7 +29,7 @@ function createThreadListingChatwootFetch(): typeof fetch {
       return createJsonResponse({
         payload: {
           custom_attributes: {
-            portal_client_company_contact_ids: '154',
+            portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
             portal_enabled: true,
           },
@@ -44,7 +44,7 @@ function createThreadListingChatwootFetch(): typeof fetch {
       return createJsonResponse({
         payload: {
           custom_attributes: {
-            portal_contact_type: 'company',
+            portal_contact_type: 'group',
             portal_enabled: true,
           },
           email: 'office@romashka.ru',
@@ -143,10 +143,10 @@ describe('chat threads app wiring', () => {
               type: 'private',
             },
             {
-              id: 'company:154',
-              subtitle: 'Общий чат компании',
+              id: 'group:154',
+              subtitle: 'Групповой чат',
               title: 'ООО "Ромашка"',
-              type: 'company',
+              type: 'group',
             },
           ],
         })
@@ -165,7 +165,7 @@ describe('chat threads app wiring', () => {
             chatwootInboxId: 1,
             portalUserId: null,
             tenantId,
-            threadType: 'company',
+            threadType: 'group',
           },
         ])
       } finally {

@@ -98,7 +98,7 @@ export function createUnavailableRuntimeContext({
   linkedContactId: number | null
   portalChatThreadId: number | null
   targetChatwootContactId: number | null
-  threadType: 'company' | 'private' | null
+  threadType: 'group' | 'private' | null
 }) {
   if (error instanceof ChatwootClientConfigurationError) {
     return buildThreadContext({

@@ -9,10 +9,10 @@ export type PublicChatThreadSummary =
       type: 'private'
     }
   | {
-      id: `company:${number}`
+      id: `group:${number}`
       subtitle: string
       title: string
-      type: 'company'
+      type: 'group'
     }
 
 export type CurrentUserChatThreads = {
@@ -48,7 +48,7 @@ export type CurrentUserChatThreadContext = {
   reason: ChatThreadRuntimeReason
   result: 'not_ready' | 'ready' | 'unavailable'
   targetChatwootContactId: number | null
-  threadType: 'company' | 'private' | null
+  threadType: 'group' | 'private' | null
 }
 
 export function buildPrivateThread(): PublicChatThreadSummary {
@@ -60,13 +60,13 @@ export function buildPrivateThread(): PublicChatThreadSummary {
   }
 }
 
-export function buildCompanyThread(
+export function buildGroupThread(
   contact: ChatwootContact,
 ): PublicChatThreadSummary {
   return {
-    id: `company:${contact.id}`,
-    subtitle: 'Общий чат компании',
-    title: contact.name?.trim() || `Компания ${contact.id}`,
-    type: 'company',
+    id: `group:${contact.id}`,
+    subtitle: 'Групповой чат',
+    title: contact.name?.trim() || `Группа ${contact.id}`,
+    type: 'group',
   }
 }

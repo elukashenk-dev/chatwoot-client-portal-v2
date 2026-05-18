@@ -2,7 +2,7 @@ import type {
   ChatwootClient,
   ChatwootMessage,
 } from '../../integrations/chatwoot/client.js'
-import { parseCompanyThreadContent } from './authorFormatting.js'
+import { parseGroupThreadContent } from './authorFormatting.js'
 import type {
   PortalChatMessage,
   PortalChatMessageAuthorRole,
@@ -18,7 +18,7 @@ type MessageThreadContext = {
   currentUserId: number
   ledgerAuthorsByMessageId?: Map<number, SendLedgerAuthor> | undefined
   replyTargetsById?: Map<number, ChatwootMessage> | undefined
-  threadType: 'company' | 'private' | null
+  threadType: 'group' | 'private' | null
 }
 
 function toIsoTimestamp(seconds: number) {
@@ -71,7 +71,7 @@ function mapMessagePresentation(
     }
   }
 
-  if (threadType !== 'company') {
+  if (threadType !== 'group') {
     return {
       authorAvatarUrl: null,
       authorName: 'Вы',
@@ -81,7 +81,7 @@ function mapMessagePresentation(
     }
   }
 
-  const parsedCompanyContent = parseCompanyThreadContent(normalizedContent)
+  const parsedGroupContent = parseGroupThreadContent(normalizedContent)
   const ledgerAuthor = ledgerAuthorsByMessageId?.get(message.id)
 
   if (ledgerAuthor?.userId === currentUserId) {
@@ -89,7 +89,7 @@ function mapMessagePresentation(
       authorAvatarUrl: null,
       authorName: 'Вы',
       authorRole: 'current_user',
-      content: parsedCompanyContent.content,
+      content: parsedGroupContent.content,
       direction: 'outgoing',
     }
   }
@@ -98,10 +98,10 @@ function mapMessagePresentation(
     authorAvatarUrl: null,
     authorName:
       ledgerAuthor?.authorDisplayName?.trim() ||
-      parsedCompanyContent.authorName ||
+      parsedGroupContent.authorName ||
       getContactFallbackName(message),
-    authorRole: 'company_member',
-    content: parsedCompanyContent.content,
+    authorRole: 'group_member',
+    content: parsedGroupContent.content,
     direction: 'incoming',
   }
 }

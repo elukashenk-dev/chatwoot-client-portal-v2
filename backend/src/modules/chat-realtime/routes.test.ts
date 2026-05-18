@@ -55,12 +55,12 @@ const readyContext: CurrentUserChatThreadContext = {
   threadType: 'private',
 }
 
-const companyReadyContext: CurrentUserChatThreadContext = {
+const groupReadyContext: CurrentUserChatThreadContext = {
   activeThread: {
-    id: 'company:154',
-    subtitle: 'Общий чат компании',
+    id: 'group:154',
+    subtitle: 'Групповой чат',
     title: 'ООО "Ромашка"',
-    type: 'company',
+    type: 'group',
   },
   chatwootConversation: {
     assigneeName: null,
@@ -76,12 +76,12 @@ const companyReadyContext: CurrentUserChatThreadContext = {
   reason: 'none',
   result: 'ready',
   targetChatwootContactId: 154,
-  threadType: 'company',
+  threadType: 'group',
 }
 
 function createNotReadyContext(
   reason: CurrentUserChatThreadContext['reason'],
-  threadType: CurrentUserChatThreadContext['threadType'] = 'company',
+  threadType: CurrentUserChatThreadContext['threadType'] = 'group',
 ): CurrentUserChatThreadContext {
   return {
     activeThread: null,
@@ -92,7 +92,7 @@ function createNotReadyContext(
     portalChatThreadId: null,
     reason,
     result: 'not_ready',
-    targetChatwootContactId: threadType === 'company' ? 999 : null,
+    targetChatwootContactId: threadType === 'group' ? 999 : null,
     threadType,
   }
 }
@@ -144,7 +144,7 @@ function createAuthorizedCookie(app: ReturnType<typeof Fastify>) {
 }
 
 describe('registerChatRealtimeRoutes', () => {
-  it('rejects forged company thread ids through thread access validation before subscribing', async () => {
+  it('rejects forged group thread ids through thread access validation before subscribing', async () => {
     const { app, chatThreadsService, realtimeHub } =
       await buildRealtimeRoutesTestApp({
         context: createNotReadyContext('thread_access_denied'),
@@ -157,7 +157,7 @@ describe('registerChatRealtimeRoutes', () => {
           cookie: createAuthorizedCookie(app),
         },
         method: 'GET',
-        url: '/api/chat/realtime?threadId=company%3A999',
+        url: '/api/chat/realtime?threadId=group%3A999',
       })
 
       expect(response.statusCode).toBe(409)
@@ -173,7 +173,7 @@ describe('registerChatRealtimeRoutes', () => {
       expect(
         chatThreadsService.getCurrentUserThreadContext,
       ).toHaveBeenCalledWith({
-        threadId: 'company:999',
+        threadId: 'group:999',
         userId: 7,
       })
       expect(subscribeSpy).not.toHaveBeenCalled()
@@ -182,7 +182,7 @@ describe('registerChatRealtimeRoutes', () => {
     }
   })
 
-  it('rejects malformed company thread ids through thread validation before subscribing', async () => {
+  it('rejects malformed group thread ids through thread validation before subscribing', async () => {
     const { app, chatThreadsService, realtimeHub } =
       await buildRealtimeRoutesTestApp({
         context: createNotReadyContext('thread_invalid', null),
@@ -195,7 +195,7 @@ describe('registerChatRealtimeRoutes', () => {
           cookie: createAuthorizedCookie(app),
         },
         method: 'GET',
-        url: '/api/chat/realtime?threadId=company%3Anot-a-number',
+        url: '/api/chat/realtime?threadId=group%3Anot-a-number',
       })
 
       expect(response.statusCode).toBe(409)
@@ -211,7 +211,7 @@ describe('registerChatRealtimeRoutes', () => {
       expect(
         chatThreadsService.getCurrentUserThreadContext,
       ).toHaveBeenCalledWith({
-        threadId: 'company:not-a-number',
+        threadId: 'group:not-a-number',
         userId: 7,
       })
       expect(subscribeSpy).not.toHaveBeenCalled()
@@ -220,7 +220,7 @@ describe('registerChatRealtimeRoutes', () => {
     }
   })
 
-  it('rejects a new company SSE subscription after membership is removed', async () => {
+  it('rejects a new group SSE subscription after membership is removed', async () => {
     const { app, chatThreadsService, realtimeHub } =
       await buildRealtimeRoutesTestApp({
         context: createNotReadyContext('thread_access_denied'),
@@ -233,14 +233,14 @@ describe('registerChatRealtimeRoutes', () => {
           cookie: createAuthorizedCookie(app),
         },
         method: 'GET',
-        url: '/api/chat/realtime?threadId=company%3A154',
+        url: '/api/chat/realtime?threadId=group%3A154',
       })
 
       expect(response.statusCode).toBe(409)
       expect(
         chatThreadsService.getCurrentUserThreadContext,
       ).toHaveBeenCalledWith({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       })
       expect(subscribeSpy).not.toHaveBeenCalled()
@@ -251,7 +251,7 @@ describe('registerChatRealtimeRoutes', () => {
 
   it('returns 429 before opening an SSE stream when the per chat subscription cap is reached', async () => {
     const { app, realtimeHub } = await buildRealtimeRoutesTestApp({
-      context: companyReadyContext,
+      context: groupReadyContext,
     })
 
     for (
@@ -263,7 +263,7 @@ describe('registerChatRealtimeRoutes', () => {
         realtimeHub.subscribe({
           send: vi.fn(),
           tenantId: tenant.id,
-          threadId: 'company:154',
+          threadId: 'group:154',
           userId: 7,
         }).status,
       ).toBe('subscribed')
@@ -275,7 +275,7 @@ describe('registerChatRealtimeRoutes', () => {
           cookie: createAuthorizedCookie(app),
         },
         method: 'GET',
-        url: '/api/chat/realtime?threadId=company%3A154',
+        url: '/api/chat/realtime?threadId=group%3A154',
       })
 
       expect(response.statusCode).toBe(429)

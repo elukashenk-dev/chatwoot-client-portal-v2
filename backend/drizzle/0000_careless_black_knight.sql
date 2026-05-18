@@ -40,8 +40,8 @@ CREATE TABLE "portal_chat_threads" (
 	"chatwoot_conversation_id" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "portal_chat_threads_type_check" CHECK ("portal_chat_threads"."thread_type" in ('private', 'company')),
-	CONSTRAINT "portal_chat_threads_private_user_check" CHECK (("portal_chat_threads"."thread_type" = 'private' and "portal_chat_threads"."portal_user_id" is not null) or ("portal_chat_threads"."thread_type" = 'company' and "portal_chat_threads"."portal_user_id" is null))
+	CONSTRAINT "portal_chat_threads_type_check" CHECK ("portal_chat_threads"."thread_type" in ('private', 'group')),
+	CONSTRAINT "portal_chat_threads_private_user_check" CHECK (("portal_chat_threads"."thread_type" = 'private' and "portal_chat_threads"."portal_user_id" is not null) or ("portal_chat_threads"."thread_type" = 'group' and "portal_chat_threads"."portal_user_id" is null))
 );
 --> statement-breakpoint
 CREATE TABLE "portal_rate_limit_buckets" (
@@ -148,7 +148,7 @@ CREATE INDEX "portal_chat_message_sends_tenant_user_id_idx" ON "portal_chat_mess
 CREATE INDEX "portal_chat_message_sends_tenant_thread_message_idx" ON "portal_chat_message_sends" USING btree ("tenant_id","portal_chat_thread_id","chatwoot_message_id");--> statement-breakpoint
 CREATE INDEX "portal_chat_message_sends_status_updated_at_idx" ON "portal_chat_message_sends" USING btree ("status","updated_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "portal_chat_threads_tenant_private_user_unique" ON "portal_chat_threads" USING btree ("tenant_id","portal_user_id") WHERE "portal_chat_threads"."thread_type" = 'private';--> statement-breakpoint
-CREATE UNIQUE INDEX "portal_chat_threads_tenant_company_contact_unique" ON "portal_chat_threads" USING btree ("tenant_id","chatwoot_contact_id") WHERE "portal_chat_threads"."thread_type" = 'company';--> statement-breakpoint
+CREATE UNIQUE INDEX "portal_chat_threads_tenant_group_contact_unique" ON "portal_chat_threads" USING btree ("tenant_id","chatwoot_contact_id") WHERE "portal_chat_threads"."thread_type" = 'group';--> statement-breakpoint
 CREATE UNIQUE INDEX "portal_chat_threads_tenant_conversation_unique" ON "portal_chat_threads" USING btree ("tenant_id","chatwoot_conversation_id") WHERE "portal_chat_threads"."chatwoot_conversation_id" is not null;--> statement-breakpoint
 CREATE INDEX "portal_chat_threads_tenant_contact_idx" ON "portal_chat_threads" USING btree ("tenant_id","chatwoot_contact_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "portal_rate_limit_buckets_scope_unique" ON "portal_rate_limit_buckets" USING btree ("tenant_id","scope","subject_key");--> statement-breakpoint

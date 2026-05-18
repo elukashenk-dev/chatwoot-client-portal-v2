@@ -364,29 +364,29 @@ describe('createChatwootWebhookService', () => {
     })
   })
 
-  it('fans out a company webhook only to active subscribers whose thread access is still ready', async () => {
+  it('fans out a group webhook only to active subscribers whose thread access is still ready', async () => {
     const realtimeHub = createChatRealtimeHub()
     const firstSend = vi.fn()
     const secondSend = vi.fn()
     realtimeHub.subscribe({
       send: firstSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
     realtimeHub.subscribe({
       send: secondSend,
       tenantId: 1,
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 8,
     })
-    const readyCompanySnapshot: ChatMessagesSnapshot = {
+    const readyGroupSnapshot: ChatMessagesSnapshot = {
       ...readySnapshot,
       activeThread: {
-        id: 'company:154',
-        subtitle: 'Общий чат компании',
+        id: 'group:154',
+        subtitle: 'Групповой чат',
         title: 'ООО "Ромашка"',
-        type: 'company',
+        type: 'group',
       },
     }
     const revokedSnapshot: ChatMessagesSnapshot = {
@@ -399,7 +399,7 @@ describe('createChatwootWebhookService', () => {
     }
     const getCurrentUserChatMessages = vi.fn<GetCurrentUserChatMessages>(
       async ({ userId }) =>
-        userId === 7 ? revokedSnapshot : readyCompanySnapshot,
+        userId === 7 ? revokedSnapshot : readyGroupSnapshot,
     )
     const { service } = createService({
       findConversationMappingByChatwootConversationId: vi
@@ -407,8 +407,8 @@ describe('createChatwootWebhookService', () => {
         .mockResolvedValue({
           chatwootConversationId: 301,
           portalChatThreadId: 2,
-          threadId: 'company:154',
-          threadType: 'company',
+          threadId: 'group:154',
+          threadType: 'group',
           userId: null,
         }),
       getCurrentUserChatMessages,
@@ -437,16 +437,16 @@ describe('createChatwootWebhookService', () => {
     })
     expect(getCurrentUserChatMessages).toHaveBeenCalledTimes(2)
     expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
     expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 8,
     })
     expect(firstSend).not.toHaveBeenCalled()
     expect(secondSend).toHaveBeenCalledWith({
-      data: readyCompanySnapshot,
+      data: readyGroupSnapshot,
       type: 'messages',
     })
   })

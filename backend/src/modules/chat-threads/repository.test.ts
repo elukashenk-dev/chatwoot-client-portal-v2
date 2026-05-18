@@ -93,18 +93,18 @@ describe('createChatThreadsRepository', () => {
     })
   })
 
-  it('upserts one company thread per tenant company contact', async () => {
+  it('upserts one group thread per tenant group contact', async () => {
     const tenant = await seedTestTenant(database.db)
     const repository = createChatThreadsRepository(database.db, {
       tenantId: tenant.id,
     })
 
-    const first = await repository.upsertCompanyThread({
+    const first = await repository.upsertGroupThread({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now: new Date('2026-05-14T12:00:00.000Z'),
     })
-    const second = await repository.upsertCompanyThread({
+    const second = await repository.upsertGroupThread({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now: new Date('2026-05-14T12:01:00.000Z'),
@@ -116,7 +116,7 @@ describe('createChatThreadsRepository', () => {
       chatwootConversationId: null,
       chatwootInboxId: 9,
       portalUserId: null,
-      threadType: 'company',
+      threadType: 'group',
     })
   })
 
@@ -155,19 +155,19 @@ describe('createChatThreadsRepository', () => {
       now: new Date('2026-05-14T12:00:00.000Z'),
       userId: userB.id,
     })
-    const companyA = await repositoryA.upsertCompanyThread({
+    const groupA = await repositoryA.upsertGroupThread({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now: new Date('2026-05-14T12:00:00.000Z'),
     })
-    const companyB = await repositoryB.upsertCompanyThread({
+    const groupB = await repositoryB.upsertGroupThread({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now: new Date('2026-05-14T12:00:00.000Z'),
     })
 
     expect(privateA.id).not.toBe(privateB.id)
-    expect(companyA.id).not.toBe(companyB.id)
+    expect(groupA.id).not.toBe(groupB.id)
   })
 
   it('updates and finds a thread conversation mapping after lazy bootstrap', async () => {
@@ -215,7 +215,7 @@ describe('createChatThreadsRepository', () => {
     const repository = createChatThreadsRepository(database.db, {
       tenantId: tenant.id,
     })
-    const thread = await repository.upsertCompanyThread({
+    const thread = await repository.upsertGroupThread({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now: new Date('2026-05-14T12:00:00.000Z'),

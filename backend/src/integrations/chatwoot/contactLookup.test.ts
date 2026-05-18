@@ -36,7 +36,7 @@ describe('findChatwootContactById', () => {
       createJsonResponse({
         payload: {
           custom_attributes: {
-            portal_client_company_contact_ids: '154',
+            portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
             portal_enabled: true,
           },
@@ -49,7 +49,7 @@ describe('findChatwootContactById', () => {
 
     await expect(createLookup(fetchFn)(44)).resolves.toEqual({
       customAttributes: {
-        portal_client_company_contact_ids: '154',
+        portal_client_group_contact_ids: '154',
         portal_contact_type: 'person',
         portal_enabled: true,
       },

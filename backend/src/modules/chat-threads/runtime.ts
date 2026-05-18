@@ -7,7 +7,7 @@ import type {
 } from '../../integrations/chatwoot/client.js'
 import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
-import { assertPortalCompanyContactEnabled } from './contactAttributes.js'
+import { assertPortalGroupContactEnabled } from './contactAttributes.js'
 import type { ChatThreadsRepository } from './repository.js'
 import {
   buildContextFromThreadRecord,
@@ -18,7 +18,7 @@ import {
   parseRuntimeThreadId,
 } from './runtimeContext.js'
 import {
-  buildCompanyThread,
+  buildGroupThread,
   buildPrivateThread,
   type CurrentUserChatThreadContext,
 } from './types.js'
@@ -28,7 +28,7 @@ type ChatThreadRuntimeRepository = Pick<
   | 'findThreadById'
   | 'transactionWithThreadBootstrapLock'
   | 'updateThreadConversation'
-  | 'upsertCompanyThread'
+  | 'upsertGroupThread'
   | 'upsertPrivateThread'
 >
 
@@ -41,7 +41,7 @@ type ChatThreadRuntimeChatwootClient = Pick<
 >
 
 type PersonAttributes = {
-  companyContactIds: number[]
+  groupContactIds: number[]
 }
 
 type CreateChatThreadRuntimeResolverOptions = {
@@ -120,8 +120,8 @@ export function createChatThreadRuntimeResolver({
     }
 
     if (
-      !personAttributes.companyContactIds.includes(
-        parsedThread.chatwootCompanyContactId,
+      !personAttributes.groupContactIds.includes(
+        parsedThread.chatwootGroupContactId,
       )
     ) {
       return buildThreadContext({
@@ -133,16 +133,16 @@ export function createChatThreadRuntimeResolver({
         portalChatThreadId: null,
         reason: 'thread_access_denied',
         result: 'not_ready',
-        targetChatwootContactId: parsedThread.chatwootCompanyContactId,
-        threadType: 'company',
+        targetChatwootContactId: parsedThread.chatwootGroupContactId,
+        threadType: 'group',
       })
     }
 
-    const companyContact = await chatwootClient.findContactById(
-      parsedThread.chatwootCompanyContactId,
+    const groupContact = await chatwootClient.findContactById(
+      parsedThread.chatwootGroupContactId,
     )
 
-    if (!companyContact) {
+    if (!groupContact) {
       return buildThreadContext({
         activeThread: null,
         chatwootConversation: null,
@@ -152,13 +152,13 @@ export function createChatThreadRuntimeResolver({
         portalChatThreadId: null,
         reason: 'thread_access_denied',
         result: 'not_ready',
-        targetChatwootContactId: parsedThread.chatwootCompanyContactId,
-        threadType: 'company',
+        targetChatwootContactId: parsedThread.chatwootGroupContactId,
+        threadType: 'group',
       })
     }
 
     try {
-      assertPortalCompanyContactEnabled(companyContact)
+      assertPortalGroupContactEnabled(groupContact)
     } catch (error) {
       if (error instanceof ApiError) {
         return buildThreadContext({
@@ -170,22 +170,22 @@ export function createChatThreadRuntimeResolver({
           portalChatThreadId: null,
           reason: 'thread_access_denied',
           result: 'not_ready',
-          targetChatwootContactId: companyContact.id,
-          threadType: 'company',
+          targetChatwootContactId: groupContact.id,
+          threadType: 'group',
         })
       }
 
       throw error
     }
 
-    const threadRecord = await chatThreadsRepository.upsertCompanyThread({
-      chatwootContactId: companyContact.id,
+    const threadRecord = await chatThreadsRepository.upsertGroupThread({
+      chatwootContactId: groupContact.id,
       chatwootInboxId: portalInboxId,
       now: refreshedAt,
     })
 
     return buildContextFromThreadRecord({
-      activeThread: buildCompanyThread(companyContact),
+      activeThread: buildGroupThread(groupContact),
       linkedContactId: personContact.id,
       threadRecord,
       userContact: personContact,

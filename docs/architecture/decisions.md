@@ -243,26 +243,27 @@
 - решение:
   публичный chat contract строится вокруг backend-controlled `threadId`.
   Browser отправляет и подписывается на `private:me` или
-  `company:<chatwoot_company_contact_id>`, но не получает Chatwoot conversation
+  `group:<chatwoot_group_contact_id>`, но не получает Chatwoot conversation
   id как authority. Backend валидирует thread access через tenant/session,
   linked person contact и текущие Chatwoot contact attributes, затем мапит
   thread на внутренний Chatwoot conversation через `portal_chat_threads`.
   Chatwoot conversation создается лениво только при первом send под
   tenant-aware advisory lock и повторным resolve внутри lock.
-- company-правило:
-  company thread доступен только если person contact пользователя содержит
-  company contact id в разрешенном portal attribute list, а company contact
-  включен для portal. Company send в Chatwoot получает Markdown author prefix,
-  чтобы агент видел, какой участник компании написал сообщение. Portal transcript
-  показывает автора через structured metadata и скрывает technical prefix.
+- group-правило:
+  group thread доступен только если person contact пользователя содержит ID
+  группового Chatwoot contact в разрешенном portal attribute list, а сам
+  group contact включен для portal. Group send в Chatwoot получает Markdown
+  author prefix, чтобы агент видел, какой участник группы написал сообщение.
+  Portal transcript показывает автора через structured metadata и скрывает
+  technical prefix.
 - realtime/webhook-правило:
   SSE subscriptions и fanout ключуются по `tenant + threadId`. Webhook routing
   резолвит Chatwoot conversation id только через `portal_chat_threads`, а
-  company-thread fanout перед доставкой конкретному subscriber повторно
+  group-thread fanout перед доставкой конкретному subscriber повторно
   проверяет текущий доступ пользователя к thread.
 - причина:
   portal-owned `threadId` сохраняет backend authority, не раскрывает Chatwoot
-  IDs браузеру как право доступа и позволяет добавлять личный и company-чаты без
+  IDs браузеру как право доступа и позволяет добавлять личный и групповые чаты без
   отдельной portal admin panel.
 
 ## D-020. Portal schema очищается под thread-only baseline

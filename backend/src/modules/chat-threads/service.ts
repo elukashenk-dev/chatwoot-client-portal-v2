@@ -1,7 +1,7 @@
 import type { ChatwootClient } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
 import {
-  assertPortalCompanyContactEnabled,
+  assertPortalGroupContactEnabled,
   assertPortalPersonContactEnabled,
 } from './contactAttributes.js'
 import type { ChatThreadContactRepository } from './contactRepository.js'
@@ -9,7 +9,7 @@ import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
 import { createChatThreadRuntimeResolver } from './runtime.js'
 import {
-  buildCompanyThread,
+  buildGroupThread,
   buildPrivateThread,
   type CurrentUserChatThreads,
   type PublicChatThreadSummary,
@@ -28,7 +28,7 @@ type ChatThreadsPersistenceRepository = Pick<
   | 'findThreadById'
   | 'transactionWithThreadBootstrapLock'
   | 'updateThreadConversation'
-  | 'upsertCompanyThread'
+  | 'upsertGroupThread'
   | 'upsertPrivateThread'
 >
 
@@ -134,25 +134,25 @@ export function createChatThreadsService({
         userId,
       })
 
-      for (const companyContactId of personAttributes.companyContactIds) {
-        const companyContact =
-          await chatwootClient.findContactById(companyContactId)
+      for (const groupContactId of personAttributes.groupContactIds) {
+        const groupContact =
+          await chatwootClient.findContactById(groupContactId)
 
-        if (!companyContact) {
+        if (!groupContact) {
           throw createContactConfigurationError(
-            'portal_company_contact_missing',
+            'portal_group_contact_missing',
           )
         }
 
-        assertPortalCompanyContactEnabled(companyContact)
+        assertPortalGroupContactEnabled(groupContact)
 
-        await chatThreadsRepository.upsertCompanyThread({
-          chatwootContactId: companyContact.id,
+        await chatThreadsRepository.upsertGroupThread({
+          chatwootContactId: groupContact.id,
           chatwootInboxId: portalInboxId,
           now: refreshedAt,
         })
 
-        threads.push(buildCompanyThread(companyContact))
+        threads.push(buildGroupThread(groupContact))
       }
 
       return {

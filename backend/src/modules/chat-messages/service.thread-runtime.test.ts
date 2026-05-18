@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import { createChatMessagesService } from './service.js'
 
-const companyReadyContext = {
+const groupReadyContext = {
   activeThread: {
-    id: 'company:154',
-    subtitle: 'Общий чат компании',
+    id: 'group:154',
+    subtitle: 'Групповой чат',
     title: 'ООО "Ромашка"',
-    type: 'company',
+    type: 'group',
   },
   chatwootConversation: {
     assigneeName: null,
@@ -24,11 +24,11 @@ const companyReadyContext = {
   reason: 'none',
   result: 'ready',
   targetChatwootContactId: 154,
-  threadType: 'company',
+  threadType: 'group',
 } as unknown as CurrentUserChatThreadContext
 
-const companyAccessDeniedContext = {
-  ...companyReadyContext,
+const groupAccessDeniedContext = {
+  ...groupReadyContext,
   activeThread: null,
   chatwootConversation: null,
   reason: 'thread_access_denied',
@@ -54,7 +54,7 @@ const sentChatwootMessage = {
 }
 
 function createThreadServiceStub({
-  context = companyReadyContext,
+  context = groupReadyContext,
   writableContext = context,
 }: {
   context?: CurrentUserChatThreadContext
@@ -123,7 +123,7 @@ function createThreadBackedMessageService({
 }
 
 describe('createChatMessagesService thread runtime integration', () => {
-  it('formats company thread text messages for Chatwoot with a Markdown author prefix', async () => {
+  it('formats group thread text messages for Chatwoot with a Markdown author prefix', async () => {
     const createConversationIncomingMessage = vi
       .fn()
       .mockResolvedValue(sentChatwootMessage)
@@ -136,7 +136,7 @@ describe('createChatMessagesService thread runtime integration', () => {
     await service.sendCurrentUserTextMessage({
       clientMessageKey: 'portal-send:key',
       content: 'Добрый день',
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
 
@@ -147,14 +147,14 @@ describe('createChatMessagesService thread runtime integration', () => {
     )
   })
 
-  it('normalizes and escapes company author names before Chatwoot formatting', async () => {
+  it('normalizes and escapes group author names before Chatwoot formatting', async () => {
     const createConversationIncomingMessage = vi
       .fn()
       .mockResolvedValue(sentChatwootMessage)
     const service = createThreadBackedMessageService({
       chatThreadsService: createThreadServiceStub({
         writableContext: {
-          ...companyReadyContext,
+          ...groupReadyContext,
           currentUserEmail: 'fallback@example.com',
           currentUserName: '  Иван\n\tПетров  *CEO* [docs] `quoted`  '.padEnd(
             140,
@@ -170,7 +170,7 @@ describe('createChatMessagesService thread runtime integration', () => {
     await service.sendCurrentUserTextMessage({
       clientMessageKey: 'portal-send:key',
       content: 'Добрый день',
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
 
@@ -183,14 +183,14 @@ describe('createChatMessagesService thread runtime integration', () => {
     )
   })
 
-  it('falls back to email when the company author display name is empty', async () => {
+  it('falls back to email when the group author display name is empty', async () => {
     const createConversationIncomingMessage = vi
       .fn()
       .mockResolvedValue(sentChatwootMessage)
     const service = createThreadBackedMessageService({
       chatThreadsService: createThreadServiceStub({
         writableContext: {
-          ...companyReadyContext,
+          ...groupReadyContext,
           currentUserEmail: 'ivan@example.com',
           currentUserName: '\n\t ',
         } as unknown as CurrentUserChatThreadContext,
@@ -203,7 +203,7 @@ describe('createChatMessagesService thread runtime integration', () => {
     await service.sendCurrentUserTextMessage({
       clientMessageKey: 'portal-send:key',
       content: 'Добрый день',
-      threadId: 'company:154',
+      threadId: 'group:154',
       userId: 7,
     })
 
@@ -214,7 +214,7 @@ describe('createChatMessagesService thread runtime integration', () => {
     )
   })
 
-  it('strips company Markdown author prefix from portal history and exposes author role', async () => {
+  it('strips group Markdown author prefix from portal history and exposes author role', async () => {
     const service = createThreadBackedMessageService({
       authors: new Map([
         [
@@ -236,14 +236,14 @@ describe('createChatMessagesService thread runtime integration', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 8,
       }),
     ).resolves.toMatchObject({
       messages: [
         {
           authorName: 'Иван Петров',
-          authorRole: 'company_member',
+          authorRole: 'group_member',
           content: 'Добрый день',
           direction: 'incoming',
         },
@@ -251,11 +251,11 @@ describe('createChatMessagesService thread runtime integration', () => {
     })
   })
 
-  it('does not read company history after membership is removed', async () => {
+  it('does not read group history after membership is removed', async () => {
     const listConversationMessages = vi.fn()
     const service = createThreadBackedMessageService({
       chatThreadsService: createThreadServiceStub({
-        context: companyAccessDeniedContext,
+        context: groupAccessDeniedContext,
       }),
       chatwootClient: createChatwootClientStub({
         listConversationMessages,
@@ -264,7 +264,7 @@ describe('createChatMessagesService thread runtime integration', () => {
 
     await expect(
       service.getCurrentUserChatMessages({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -275,11 +275,11 @@ describe('createChatMessagesService thread runtime integration', () => {
     expect(listConversationMessages).not.toHaveBeenCalled()
   })
 
-  it('does not send to Chatwoot after company membership is removed', async () => {
+  it('does not send to Chatwoot after group membership is removed', async () => {
     const createConversationIncomingMessage = vi.fn()
     const service = createThreadBackedMessageService({
       chatThreadsService: createThreadServiceStub({
-        writableContext: companyAccessDeniedContext,
+        writableContext: groupAccessDeniedContext,
       }),
       chatwootClient: createChatwootClientStub({
         createConversationIncomingMessage,
@@ -290,7 +290,7 @@ describe('createChatMessagesService thread runtime integration', () => {
       service.sendCurrentUserTextMessage({
         clientMessageKey: 'portal-send:key',
         content: 'Добрый день',
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({

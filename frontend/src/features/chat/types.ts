@@ -20,10 +20,10 @@ export type ChatThreadSummary =
       type: 'private'
     }
   | {
-      id: `company:${number}`
+      id: `group:${number}`
       subtitle: string
       title: string
-      type: 'company'
+      type: 'group'
     }
 
 export type ChatThreadsResponse = {
@@ -33,7 +33,7 @@ export type ChatThreadsResponse = {
 
 export type ChatMessageAuthorRole =
   | 'agent'
-  | 'company_member'
+  | 'group_member'
   | 'current_user'
 
 export type ChatAttachment = {

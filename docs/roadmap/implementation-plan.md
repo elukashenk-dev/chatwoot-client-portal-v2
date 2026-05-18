@@ -33,8 +33,8 @@
   webhook payload validation;
 - `MT-8R Codebase Audit And Refactoring Readiness`;
 - `MT-8.5 Portal UI/UX Baseline Review`;
-- chat thread runtime follow-up: portal-owned `threadId`, личный чат и company
-  threads через Chatwoot contact attributes.
+- chat thread runtime follow-up: portal-owned `threadId`, личный чат и
+  групповые чаты через Chatwoot contact attributes.
 
 Текущий baseline:
 
@@ -211,7 +211,7 @@ Status:
 Цель:
 
 Закрепить portal-owned `threadId`, чтобы один portal user мог иметь личный чат
-и общие company-чаты без выдачи Chatwoot authority в browser.
+и групповые чаты без выдачи Chatwoot authority в browser.
 
 Scope:
 
@@ -219,17 +219,17 @@ Scope:
 - messages, attachment sends и realtime принимают selected `threadId`;
 - `portal_chat_threads` хранит authoritative backend mapping на Chatwoot
   conversation;
-- company thread access строится из Chatwoot contact attributes;
-- company send добавляет Chatwoot-visible Markdown author prefix;
+- group thread access строится из Chatwoot contact attributes;
+- group send добавляет Chatwoot-visible Markdown author prefix;
 - webhook/realtime fanout работает через `tenant + threadId` и повторно
-  валидирует company access before delivery.
+  валидирует group access before delivery.
 
 Exit criteria:
 
 - browser sends `threadId`, not Chatwoot conversation id;
 - empty thread view does not create Chatwoot conversation;
 - first send lazily creates/reuses correct Chatwoot conversation under lock;
-- company history/send/realtime validates current Chatwoot attributes;
+- group history/send/realtime validates current Chatwoot attributes;
 - backend/frontend/e2e checks pass before checkpoint commit.
 
 ### MT-8.6. Post-Thread Runtime Audit And Cleanup
@@ -246,7 +246,7 @@ Status:
 - удален старый context endpoint;
 - локальная portal DB destructive reset-нута и мигрирована заново;
 - no proven chat/runtime `must-fix-before-MT-9` blocker remains;
-- local Playwright e2e, backend/frontend tests/build/lint и local company-thread
+- local Playwright e2e, backend/frontend tests/build/lint и local group-thread
   send validation прошли на чистой portal DB;
 - GitHub source-of-truth sync, production clean reinstall и production deploy
   provenance через `DEPLOY_SOURCE.txt` закрыты;

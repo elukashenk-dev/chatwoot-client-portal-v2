@@ -343,9 +343,9 @@ Chatwoot conversation authority.
 Thread IDs:
 
 - `private:me` - личный чат текущего portal user с tenant support team;
-- `company:<chatwoot_company_contact_id>` - общий чат компании, если linked
-  person contact пользователя содержит этот company contact id в разрешенном
-  portal attribute list.
+- `group:<chatwoot_group_contact_id>` - групповой чат, если linked person
+  contact пользователя содержит этот ID группового Chatwoot contact в
+  разрешенном portal attribute list.
 
 Rules:
 
@@ -356,7 +356,7 @@ Rules:
 - realtime fanout key includes tenant identity and `threadId`;
 - webhook delivery dedupe includes tenant identity;
 - webhook routing maps Chatwoot conversation back to `portal_chat_threads`;
-- company realtime delivery revalidates current user access before fanout;
+- group realtime delivery revalidates current user access before fanout;
 - Chatwoot contact/conversation IDs are not globally unique without tenant
   scope.
 

@@ -44,12 +44,12 @@ function createRepositoryStub(
 }
 
 function createChatwootClientStub({
-  companyContactIds = '154',
-  companyContactOverrides = {},
+  groupContactIds = '154',
+  groupContactOverrides = {},
   overrides = {},
 }: {
-  companyContactIds?: string
-  companyContactOverrides?: Record<string, unknown>
+  groupContactIds?: string
+  groupContactOverrides?: Record<string, unknown>
   overrides?: Partial<ChatwootClientStub>
 } = {}): ChatwootClientStub {
   return {
@@ -62,7 +62,7 @@ function createChatwootClientStub({
       if (contactId === 44) {
         return {
           customAttributes: {
-            portal_client_company_contact_ids: companyContactIds,
+            portal_client_group_contact_ids: groupContactIds,
             portal_contact_type: 'person',
             portal_enabled: true,
           },
@@ -75,13 +75,13 @@ function createChatwootClientStub({
       if (contactId === 154) {
         return {
           customAttributes: {
-            portal_contact_type: 'company',
+            portal_contact_type: 'group',
             portal_enabled: true,
           },
           email: 'office@romashka.ru',
           id: 154,
           name: 'ООО "Ромашка"',
-          ...companyContactOverrides,
+          ...groupContactOverrides,
         }
       }
 
@@ -92,19 +92,19 @@ function createChatwootClientStub({
 }
 
 function createChatThreadsPersistenceRepositoryStub({
-  initialCompanyConversationId = null,
+  initialGroupConversationId = null,
   initialPrivateConversationId = null,
 }: {
-  initialCompanyConversationId?: number | null
+  initialGroupConversationId?: number | null
   initialPrivateConversationId?: number | null
 } = {}) {
-  let companyThread = {
+  let groupThread = {
     chatwootContactId: 154,
-    chatwootConversationId: initialCompanyConversationId,
+    chatwootConversationId: initialGroupConversationId,
     chatwootInboxId: 9,
     id: 2,
     portalUserId: null,
-    threadType: 'company' as const,
+    threadType: 'group' as const,
   }
   let privateThread = {
     chatwootContactId: 44,
@@ -121,8 +121,8 @@ function createChatThreadsPersistenceRepositoryStub({
         return privateThread
       }
 
-      if (id === companyThread.id) {
-        return companyThread
+      if (id === groupThread.id) {
+        return groupThread
       }
 
       return null
@@ -142,19 +142,19 @@ function createChatThreadsPersistenceRepositoryStub({
         return privateThread
       }
 
-      if (input.id === companyThread.id) {
-        companyThread = {
-          ...companyThread,
+      if (input.id === groupThread.id) {
+        groupThread = {
+          ...groupThread,
           chatwootConversationId: input.chatwootConversationId,
           chatwootInboxId: input.chatwootInboxId,
         }
 
-        return companyThread
+        return groupThread
       }
 
       return null
     }),
-    upsertCompanyThread: vi.fn(async () => companyThread),
+    upsertGroupThread: vi.fn(async () => groupThread),
     upsertPrivateThread: vi.fn(async () => privateThread),
   }
 }
@@ -184,7 +184,7 @@ function createService({
 }
 
 describe('createChatThreadsService', () => {
-  it('returns a company thread context without creating a Chatwoot conversation for read-only empty state', async () => {
+  it('returns a group thread context without creating a Chatwoot conversation for read-only empty state', async () => {
     const createConversation = vi.fn()
     const service = createService({
       chatwootClient: createChatwootClientStub({
@@ -196,25 +196,25 @@ describe('createChatThreadsService', () => {
 
     await expect(
       service.getCurrentUserThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
       activeThread: {
-        id: 'company:154',
+        id: 'group:154',
         title: 'ООО "Ромашка"',
-        type: 'company',
+        type: 'group',
       },
       chatwootConversation: null,
       reason: 'conversation_missing',
       result: 'not_ready',
       targetChatwootContactId: 154,
-      threadType: 'company',
+      threadType: 'group',
     })
     expect(createConversation).not.toHaveBeenCalled()
   })
 
-  it('bootstraps a company conversation only for writable context', async () => {
+  it('bootstraps a group conversation only for writable context', async () => {
     const now = new Date('2026-05-15T10:00:00.000Z')
     const createConversation = vi.fn().mockResolvedValue({
       assigneeName: null,
@@ -243,7 +243,7 @@ describe('createChatThreadsService', () => {
 
     await expect(
       service.ensureCurrentUserWritableThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -306,7 +306,7 @@ describe('createChatThreadsService', () => {
 
     await expect(
       service.ensureCurrentUserWritableThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -408,7 +408,7 @@ describe('createChatThreadsService', () => {
       },
     ])
     const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub({
-      initialCompanyConversationId: 101,
+      initialGroupConversationId: 101,
     })
     const service = createService({
       chatThreadsRepository,
@@ -427,7 +427,7 @@ describe('createChatThreadsService', () => {
     await expect(
       service.recoverCurrentUserWritableThreadContext({
         staleConversationId: 101,
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -452,14 +452,14 @@ describe('createChatThreadsService', () => {
     )
   })
 
-  it('serializes parallel company conversation bootstrap attempts for one thread', async () => {
-    let persistedCompanyConversationId: number | null = null
+  it('serializes parallel group conversation bootstrap attempts for one thread', async () => {
+    let persistedGroupConversationId: number | null = null
     let lockQueue = Promise.resolve()
     const createConversation = vi.fn(async () => {
       await new Promise<void>((resolve) => {
         setImmediate(resolve)
       })
-      persistedCompanyConversationId = 301
+      persistedGroupConversationId = 301
 
       return {
         assigneeName: null,
@@ -475,11 +475,11 @@ describe('createChatThreadsService', () => {
       ...createChatThreadsPersistenceRepositoryStub(),
       findThreadById: vi.fn(async () => ({
         chatwootContactId: 154,
-        chatwootConversationId: persistedCompanyConversationId,
+        chatwootConversationId: persistedGroupConversationId,
         chatwootInboxId: 9,
         id: 2,
         portalUserId: null,
-        threadType: 'company' as const,
+        threadType: 'group' as const,
       })),
       transactionWithThreadBootstrapLock: vi.fn(
         async <T>(_chatwootContactId: number, handler: () => Promise<T>) => {
@@ -499,7 +499,7 @@ describe('createChatThreadsService', () => {
         },
       ),
       updateThreadConversation: vi.fn(async () => {
-        persistedCompanyConversationId = 301
+        persistedGroupConversationId = 301
 
         return {
           chatwootContactId: 154,
@@ -507,16 +507,16 @@ describe('createChatThreadsService', () => {
           chatwootInboxId: 9,
           id: 2,
           portalUserId: null,
-          threadType: 'company' as const,
+          threadType: 'group' as const,
         }
       }),
-      upsertCompanyThread: vi.fn(async () => ({
+      upsertGroupThread: vi.fn(async () => ({
         chatwootContactId: 154,
-        chatwootConversationId: persistedCompanyConversationId,
+        chatwootConversationId: persistedGroupConversationId,
         chatwootInboxId: 9,
         id: 2,
         portalUserId: null,
-        threadType: 'company' as const,
+        threadType: 'group' as const,
       })),
     }
     const service = createService({
@@ -535,11 +535,11 @@ describe('createChatThreadsService', () => {
 
     await Promise.all([
       service.ensureCurrentUserWritableThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
       service.ensureCurrentUserWritableThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 8,
       }),
     ])
@@ -553,13 +553,13 @@ describe('createChatThreadsService', () => {
     ).toHaveBeenCalledTimes(1)
   })
 
-  it('fails closed for a forged company thread not listed on the current person contact', async () => {
+  it('fails closed for a forged group thread not listed on the current person contact', async () => {
     const createConversation = vi.fn()
     const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
     const service = createService({
       chatThreadsRepository,
       chatwootClient: createChatwootClientStub({
-        companyContactIds: '203',
+        groupContactIds: '203',
         overrides: {
           createConversation,
         },
@@ -568,7 +568,7 @@ describe('createChatThreadsService', () => {
 
     await expect(
       service.getCurrentUserThreadContext({
-        threadId: 'company:154',
+        threadId: 'group:154',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -578,7 +578,7 @@ describe('createChatThreadsService', () => {
       result: 'not_ready',
     })
     expect(createConversation).not.toHaveBeenCalled()
-    expect(chatThreadsRepository.upsertCompanyThread).not.toHaveBeenCalled()
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
   it('fails closed for malformed public thread IDs', async () => {
@@ -595,7 +595,7 @@ describe('createChatThreadsService', () => {
 
     await expect(
       service.getCurrentUserThreadContext({
-        threadId: 'company:not-a-number',
+        threadId: 'group:not-a-number',
         userId: 7,
       }),
     ).resolves.toMatchObject({
@@ -605,10 +605,10 @@ describe('createChatThreadsService', () => {
       result: 'not_ready',
     })
     expect(createConversation).not.toHaveBeenCalled()
-    expect(chatThreadsRepository.upsertCompanyThread).not.toHaveBeenCalled()
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
-  it('persists private and company thread records while listing available threads', async () => {
+  it('persists private and group thread records while listing available threads', async () => {
     const now = new Date('2026-05-15T10:00:00.000Z')
     const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
     const service = createService({
@@ -624,14 +624,14 @@ describe('createChatThreadsService', () => {
       now,
       userId: 7,
     })
-    expect(chatThreadsRepository.upsertCompanyThread).toHaveBeenCalledWith({
+    expect(chatThreadsRepository.upsertGroupThread).toHaveBeenCalledWith({
       chatwootContactId: 154,
       chatwootInboxId: 9,
       now,
     })
   })
 
-  it('returns private thread plus enabled company threads from person attributes', async () => {
+  it('returns private thread plus enabled group threads from person attributes', async () => {
     const service = createService()
 
     await expect(
@@ -646,18 +646,18 @@ describe('createChatThreadsService', () => {
           type: 'private',
         },
         {
-          id: 'company:154',
-          subtitle: 'Общий чат компании',
+          id: 'group:154',
+          subtitle: 'Групповой чат',
           title: 'ООО "Ромашка"',
-          type: 'company',
+          type: 'group',
         },
       ],
     })
   })
 
-  it('deduplicates company IDs before looking up company contacts', async () => {
+  it('deduplicates group IDs before looking up group contacts', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactIds: '154, 154,154',
+      groupContactIds: '154, 154,154',
     })
     const service = createService({ chatwootClient })
 
@@ -670,7 +670,7 @@ describe('createChatThreadsService', () => {
           id: 'private:me',
         }),
         expect.objectContaining({
-          id: 'company:154',
+          id: 'group:154',
         }),
       ],
     })
@@ -679,9 +679,9 @@ describe('createChatThreadsService', () => {
     expect(chatwootClient.findContactById).toHaveBeenNthCalledWith(2, 154)
   })
 
-  it('fails closed before company lookups when the membership list is oversized', async () => {
+  it('fails closed before group lookups when the membership list is oversized', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactIds: Array.from({ length: 21 }, (_, index) =>
+      groupContactIds: Array.from({ length: 21 }, (_, index) =>
         String(index + 1),
       ).join(','),
     })
@@ -690,30 +690,30 @@ describe('createChatThreadsService', () => {
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
     ).rejects.toMatchObject({
-      code: 'portal_client_company_contact_ids_invalid',
+      code: 'portal_client_group_contact_ids_invalid',
       statusCode: 403,
     })
     expect(chatwootClient.findContactById).toHaveBeenCalledTimes(1)
     expect(chatwootClient.findContactById).toHaveBeenCalledWith(44)
   })
 
-  it('fails closed when a referenced company contact is missing', async () => {
+  it('fails closed when a referenced group contact is missing', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactIds: '999',
+      groupContactIds: '999',
     })
     const service = createService({ chatwootClient })
 
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
     ).rejects.toMatchObject({
-      code: 'portal_company_contact_missing',
+      code: 'portal_group_contact_missing',
       statusCode: 403,
     })
   })
 
-  it('fails closed when a referenced company contact has the wrong type', async () => {
+  it('fails closed when a referenced group contact has the wrong type', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactOverrides: {
+      groupContactOverrides: {
         customAttributes: {
           portal_contact_type: 'person',
           portal_enabled: true,
@@ -725,16 +725,16 @@ describe('createChatThreadsService', () => {
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
     ).rejects.toMatchObject({
-      code: 'portal_company_contact_type_invalid',
+      code: 'portal_group_contact_type_invalid',
       statusCode: 403,
     })
   })
 
-  it('fails closed when a referenced company contact is disabled', async () => {
+  it('fails closed when a referenced group contact is disabled', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactOverrides: {
+      groupContactOverrides: {
         customAttributes: {
-          portal_contact_type: 'company',
+          portal_contact_type: 'group',
           portal_enabled: false,
         },
       },
@@ -744,21 +744,21 @@ describe('createChatThreadsService', () => {
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
     ).rejects.toMatchObject({
-      code: 'portal_company_contact_disabled',
+      code: 'portal_group_contact_disabled',
       statusCode: 403,
     })
   })
 
-  it('fails closed before company lookups when the current person contact is disabled', async () => {
+  it('fails closed before group lookups when the current person contact is disabled', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactIds: '154',
+      groupContactIds: '154',
     })
 
     chatwootClient.findContactById.mockImplementation(async (contactId) => {
       if (contactId === 44) {
         return {
           customAttributes: {
-            portal_client_company_contact_ids: '154',
+            portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
             portal_enabled: false,
           },
@@ -782,17 +782,17 @@ describe('createChatThreadsService', () => {
     expect(chatwootClient.findContactById).toHaveBeenCalledWith(44)
   })
 
-  it('fails closed before company lookups when the current contact is not a person', async () => {
+  it('fails closed before group lookups when the current contact is not a person', async () => {
     const chatwootClient = createChatwootClientStub({
-      companyContactIds: '154',
+      groupContactIds: '154',
     })
 
     chatwootClient.findContactById.mockImplementation(async (contactId) => {
       if (contactId === 44) {
         return {
           customAttributes: {
-            portal_client_company_contact_ids: '154',
-            portal_contact_type: 'company',
+            portal_client_group_contact_ids: '154',
+            portal_contact_type: 'group',
             portal_enabled: true,
           },
           email: 'office@romashka.ru',
@@ -815,10 +815,10 @@ describe('createChatThreadsService', () => {
     expect(chatwootClient.findContactById).toHaveBeenCalledWith(44)
   })
 
-  it('keeps the private thread available even when no company memberships are configured', async () => {
+  it('keeps the private thread available even when no group memberships are configured', async () => {
     const service = createService({
       chatwootClient: createChatwootClientStub({
-        companyContactIds: '',
+        groupContactIds: '',
       }),
     })
 
@@ -885,7 +885,7 @@ describe('createChatThreadsService', () => {
   it('surfaces configuration ApiErrors without wrapping them', async () => {
     const service = createService({
       chatwootClient: createChatwootClientStub({
-        companyContactIds: 'bad',
+        groupContactIds: 'bad',
       }),
     })
 

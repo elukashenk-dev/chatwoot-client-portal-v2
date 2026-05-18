@@ -44,7 +44,7 @@ export type PortalChatMessage = {
 
 export type PortalChatMessageAuthorRole =
   | 'agent'
-  | 'company_member'
+  | 'group_member'
   | 'current_user'
 
 export type ChatMessagesSnapshot = {

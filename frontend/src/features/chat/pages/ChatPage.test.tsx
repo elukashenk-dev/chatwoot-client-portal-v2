@@ -110,7 +110,7 @@ function createJsonResponse(body: unknown, status = 200) {
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
     user: {
-      email: 'name@company.ru',
+      email: 'name@group.ru',
       fullName: 'Portal User',
       id: 7,
     },
@@ -265,7 +265,7 @@ describe('ChatPage', () => {
     )
   })
 
-  it('does not fallback to a company thread after backend rejects person contact authority', async () => {
+  it('does not fallback to a group thread after backend rejects person contact authority', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(
@@ -305,7 +305,7 @@ describe('ChatPage', () => {
       fetchMock.mock.calls.some(([url]) => String(url).includes('/chat/messages')),
     ).toBe(false)
     expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes('company%3A')),
+      fetchMock.mock.calls.some(([url]) => String(url).includes('group%3A')),
     ).toBe(false)
   })
 

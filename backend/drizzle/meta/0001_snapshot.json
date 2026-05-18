@@ -517,8 +517,8 @@
           "method": "btree",
           "with": {}
         },
-        "portal_chat_threads_tenant_company_contact_unique": {
-          "name": "portal_chat_threads_tenant_company_contact_unique",
+        "portal_chat_threads_tenant_group_contact_unique": {
+          "name": "portal_chat_threads_tenant_group_contact_unique",
           "columns": [
             {
               "expression": "tenant_id",
@@ -534,7 +534,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"portal_chat_threads\".\"thread_type\" = 'company'",
+          "where": "\"portal_chat_threads\".\"thread_type\" = 'group'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -617,11 +617,11 @@
       "checkConstraints": {
         "portal_chat_threads_type_check": {
           "name": "portal_chat_threads_type_check",
-          "value": "\"portal_chat_threads\".\"thread_type\" in ('private', 'company')"
+          "value": "\"portal_chat_threads\".\"thread_type\" in ('private', 'group')"
         },
         "portal_chat_threads_private_user_check": {
           "name": "portal_chat_threads_private_user_check",
-          "value": "(\"portal_chat_threads\".\"thread_type\" = 'private' and \"portal_chat_threads\".\"portal_user_id\" is not null) or (\"portal_chat_threads\".\"thread_type\" = 'company' and \"portal_chat_threads\".\"portal_user_id\" is null)"
+          "value": "(\"portal_chat_threads\".\"thread_type\" = 'private' and \"portal_chat_threads\".\"portal_user_id\" is not null) or (\"portal_chat_threads\".\"thread_type\" = 'group' and \"portal_chat_threads\".\"portal_user_id\" is null)"
         }
       },
       "isRLSEnabled": false

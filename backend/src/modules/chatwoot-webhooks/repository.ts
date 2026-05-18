@@ -30,13 +30,13 @@ type TenantRepositoryScope = {
 export type ChatwootConversationThreadMapping = {
   chatwootConversationId: number
   portalChatThreadId: number
-  threadId: typeof PRIVATE_CHAT_THREAD_ID | `company:${number}`
-  threadType: 'company' | 'private'
+  threadId: typeof PRIVATE_CHAT_THREAD_ID | `group:${number}`
+  threadType: 'group' | 'private'
   userId: number | null
 }
 
 function mapThreadType(threadType: string) {
-  if (threadType !== 'private' && threadType !== 'company') {
+  if (threadType !== 'private' && threadType !== 'group') {
     throw new Error('Unexpected portal chat thread type.')
   }
 
@@ -83,7 +83,7 @@ export function createChatwootWebhookRepository(
         threadId:
           threadType === 'private'
             ? PRIVATE_CHAT_THREAD_ID
-            : `company:${mapping.chatwootContactId}`,
+            : `group:${mapping.chatwootContactId}`,
         threadType,
         userId: mapping.userId,
       } satisfies ChatwootConversationThreadMapping

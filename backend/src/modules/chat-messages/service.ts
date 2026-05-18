@@ -15,8 +15,8 @@ import type { ChatThreadsRepository } from '../chat-threads/repository.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import {
-  formatCompanyThreadContent,
-  normalizeCompanyAuthorDisplayName,
+  formatGroupThreadContent,
+  normalizeGroupAuthorDisplayName,
 } from './authorFormatting.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
 import {
@@ -315,7 +315,7 @@ export function createChatMessagesService({
     messageIds: number[]
   }) {
     if (
-      context.threadType !== 'company' ||
+      context.threadType !== 'group' ||
       context.portalChatThreadId === null
     ) {
       return new Map()
@@ -355,12 +355,12 @@ export function createChatMessagesService({
     content: string | null
     context: CurrentUserChatThreadContext
   }) {
-    if (context.threadType !== 'company') {
+    if (context.threadType !== 'group') {
       return content
     }
 
-    return formatCompanyThreadContent({
-      authorName: normalizeCompanyAuthorDisplayName({
+    return formatGroupThreadContent({
+      authorName: normalizeGroupAuthorDisplayName({
         email: context.currentUserEmail,
         name: context.currentUserName,
       }),
@@ -484,7 +484,7 @@ export function createChatMessagesService({
           content: normalizedContent,
           context,
         }) ?? normalizedContent
-      const authorDisplayName = normalizeCompanyAuthorDisplayName({
+      const authorDisplayName = normalizeGroupAuthorDisplayName({
         email: context.currentUserEmail,
         name: context.currentUserName,
       })
@@ -499,7 +499,7 @@ export function createChatMessagesService({
       ) =>
         createOrReplayCanonicalMessage({
           authorDisplayNameSnapshot:
-            sendContext.threadType === 'company' ? authorDisplayName : null,
+            sendContext.threadType === 'group' ? authorDisplayName : null,
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
@@ -627,7 +627,7 @@ export function createChatMessagesService({
         content: normalizedContent,
         context,
       })
-      const authorDisplayName = normalizeCompanyAuthorDisplayName({
+      const authorDisplayName = normalizeGroupAuthorDisplayName({
         email: context.currentUserEmail,
         name: context.currentUserName,
       })
@@ -642,7 +642,7 @@ export function createChatMessagesService({
       ) =>
         createOrReplayCanonicalMessage({
           authorDisplayNameSnapshot:
-            sendContext.threadType === 'company' ? authorDisplayName : null,
+            sendContext.threadType === 'group' ? authorDisplayName : null,
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,

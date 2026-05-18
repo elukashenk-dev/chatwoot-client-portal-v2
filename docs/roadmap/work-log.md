@@ -67,14 +67,14 @@
 ## Chat Thread Planning
 
 - Принят и реализован production-grade portal-owned `threadId` runtime: личный
-  чат `private:me` и company threads через Chatwoot contact attributes, без
+  чат `private:me` и групповые чаты через Chatwoot contact attributes, без
   выдачи Chatwoot authority в browser.
 - `GET /api/chat/threads`, messages, attachment send, realtime и webhook fanout
-  работают через `tenant + threadId`; company send добавляет безопасный
+  работают через `tenant + threadId`; group send добавляет безопасный
   Chatwoot-visible Markdown author prefix, а portal transcript показывает автора
   через structured metadata.
 - Все chat thread security gates закрыты: malformed/forged thread ids,
-  person/company contact validation, company membership removal, author
+  person/group contact validation, group membership removal, author
   formatting, realtime fanout и webhook routing проверяются fail-closed.
 - `MT-8.6` расширен до destructive clean-schema cleanup по решению владельца
   проекта: старые portal users не сохраняются, migration history сжата в один
@@ -86,7 +86,7 @@
   chat threads созданы заново.
 - Проверки на чистой схеме прошли: backend tests `202/202`, frontend tests
   `93/93`, Playwright e2e `25/25`, backend build, frontend typecheck/build,
-  root lint/code-health, `git diff --check` и local company-thread send через
+  root lint/code-health, `git diff --check` и local group-thread send через
   реальный backend + локальный Chatwoot.
 - `scripts/` проверены на устаревшие portal runtime следы; удалена retired
   production installer option, code-health guard оставлен без старой
@@ -112,9 +112,13 @@
   systemd timer, перед включением выполняет dry-run, timer persistent и
   запускает cleanup внутри `portal-backend` container.
 - Deleted-conversation recovery review закрыт: `F-CHAT-005` и `F-CHAT-006`
-  удалены после regression coverage для ledger failed re-acquire и company
-  attachment recovery; Playwright MCP проверил private/company recovery без
+  удалены после regression coverage для ledger failed re-acquire и group
+  attachment recovery; Playwright MCP проверил private/group recovery без
   portal retry/error.
+- Strict group contact rename выполнен: portal chat thread model больше не
+  поддерживает legacy `company`, публичный `threadId` использует `group:<id>`,
+  Chatwoot attribute list переименован в `portal_client_group_contact_ids`, а
+  `portal_contact_type` принимает только `person` и `group`.
 
 ## Current Baseline
 
@@ -133,5 +137,6 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit для ветки `fix/chat-deleted-conversation-recovery`,
-  затем определить merge/push/deploy шаг.
+- Обновить Chatwoot custom attributes у тестовых контактов под новый strict
+  contract: `portal_contact_type=group` для групп и
+  `portal_client_group_contact_ids` у person contacts.

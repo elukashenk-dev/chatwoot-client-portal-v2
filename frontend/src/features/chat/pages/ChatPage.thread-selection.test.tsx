@@ -18,11 +18,11 @@ const privateThread = {
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
 
-const companyThread = {
-  id: 'company:154',
-  subtitle: 'Общий чат компании',
+const groupThread = {
+  id: 'group:154',
+  subtitle: 'Групповой чат',
   title: 'ООО "Ромашка"',
-  type: 'company',
+  type: 'group',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
 
 function createJsonResponse(body: unknown, status = 200) {
@@ -49,7 +49,7 @@ function createDeferredResponse() {
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
     user: {
-      email: 'name@company.ru',
+      email: 'name@group.ru',
       fullName: 'Portal User',
       id: 7,
     },
@@ -59,7 +59,7 @@ function createAuthenticatedUserResponse() {
 function createThreadsResponse() {
   return {
     activeThreadId: privateThread.id,
-    threads: [privateThread, companyThread],
+    threads: [privateThread, groupThread],
   }
 }
 
@@ -149,14 +149,14 @@ describe('ChatPage thread selection', () => {
     )
   })
 
-  it('switches from the private chat to a company chat from the header menu', async () => {
-    const companySnapshot = createReadySnapshot({
-      activeThread: companyThread,
+  it('switches from the private chat to a group chat from the header menu', async () => {
+    const groupSnapshot = createReadySnapshot({
+      activeThread: groupThread,
       messages: [
         {
           attachments: [],
           authorName: 'Иван Петров',
-          authorRole: 'company_member',
+          authorRole: 'group_member',
           content: 'Сообщение из общего чата',
           contentType: 'text',
           createdAt: '2026-05-13T08:00:00.000Z',
@@ -182,8 +182,8 @@ describe('ChatPage thread selection', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
-      if (url === '/api/chat/messages?threadId=company%3A154') {
-        return createJsonResponse(companySnapshot)
+      if (url === '/api/chat/messages?threadId=group%3A154') {
+        return createJsonResponse(groupSnapshot)
       }
 
       throw new Error(`Unexpected request: ${url}`)
@@ -213,7 +213,7 @@ describe('ChatPage thread selection', () => {
     ).toBeInTheDocument()
     expect(await screen.findByText('Сообщение из общего чата')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat/messages?threadId=company%3A154',
+      '/api/chat/messages?threadId=group%3A154',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
@@ -221,7 +221,7 @@ describe('ChatPage thread selection', () => {
     )
   })
 
-  it('does not merge stale private history after switching to a company chat', async () => {
+  it('does not merge stale private history after switching to a group chat', async () => {
     const olderPrivateHistory = createDeferredResponse()
     const privateSnapshot = createReadySnapshot({
       hasMoreOlder: true,
@@ -240,13 +240,13 @@ describe('ChatPage thread selection', () => {
       ],
       nextOlderCursor: 205,
     })
-    const companySnapshot = createReadySnapshot({
-      activeThread: companyThread,
+    const groupSnapshot = createReadySnapshot({
+      activeThread: groupThread,
       messages: [
         {
           attachments: [],
           authorName: 'Иван Петров',
-          authorRole: 'company_member',
+          authorRole: 'group_member',
           content: 'Актуальный общий чат.',
           contentType: 'text',
           createdAt: '2026-05-13T08:05:00.000Z',
@@ -278,8 +278,8 @@ describe('ChatPage thread selection', () => {
         return olderPrivateHistory.promise
       }
 
-      if (url === '/api/chat/messages?threadId=company%3A154') {
-        return createJsonResponse(companySnapshot)
+      if (url === '/api/chat/messages?threadId=group%3A154') {
+        return createJsonResponse(groupSnapshot)
       }
 
       throw new Error(`Unexpected request: ${url}`)

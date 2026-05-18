@@ -1,4 +1,4 @@
-const COMPANY_AUTHOR_DISPLAY_NAME_MAX_LENGTH = 80
+const GROUP_AUTHOR_DISPLAY_NAME_MAX_LENGTH = 80
 
 function replaceControlCharacters(value: string) {
   return Array.from(value, (char) => {
@@ -21,10 +21,10 @@ function normalizeDisplayNameCandidate(value: string | null | undefined) {
     return null
   }
 
-  return normalized.slice(0, COMPANY_AUTHOR_DISPLAY_NAME_MAX_LENGTH).trimEnd()
+  return normalized.slice(0, GROUP_AUTHOR_DISPLAY_NAME_MAX_LENGTH).trimEnd()
 }
 
-export function normalizeCompanyAuthorDisplayName({
+export function normalizeGroupAuthorDisplayName({
   email,
   name,
 }: {
@@ -42,7 +42,7 @@ export function escapeMarkdownStrongText(value: string) {
   return value.replace(/[\\*_`[\]]/g, '\\$&').trim()
 }
 
-export function formatCompanyThreadContent({
+export function formatGroupThreadContent({
   authorName,
   content,
 }: {
@@ -55,7 +55,7 @@ export function formatCompanyThreadContent({
   return normalizedContent ? `${prefix}\n${normalizedContent}` : prefix
 }
 
-export function parseCompanyThreadContent(content: string | null) {
+export function parseGroupThreadContent(content: string | null) {
   if (!content) {
     return {
       authorName: null,

@@ -22,7 +22,7 @@ describe('createChatwootWebhookRepository', () => {
     const [user] = await database.db
       .insert(portalUsers)
       .values({
-        email: 'name@company.ru',
+        email: 'name@group.ru',
         passwordHash: await hashPassword('Secret123'),
         tenantId,
       })
@@ -75,7 +75,7 @@ describe('createChatwootWebhookRepository', () => {
     })
   })
 
-  it('resolves a company portal chat thread mapping by Chatwoot conversation id', async () => {
+  it('resolves a group portal chat thread mapping by Chatwoot conversation id', async () => {
     const [thread] = await database.db
       .insert(portalChatThreads)
       .values({
@@ -84,14 +84,14 @@ describe('createChatwootWebhookRepository', () => {
         chatwootInboxId: 9,
         portalUserId: null,
         tenantId,
-        threadType: 'company',
+        threadType: 'group',
       })
       .returning({
         id: portalChatThreads.id,
       })
 
     if (!thread) {
-      throw new Error('Failed to create test company portal chat thread.')
+      throw new Error('Failed to create test group portal chat thread.')
     }
 
     const repository = createChatwootWebhookRepository(database.db, {
@@ -103,8 +103,8 @@ describe('createChatwootWebhookRepository', () => {
     ).resolves.toEqual({
       chatwootConversationId: 301,
       portalChatThreadId: thread.id,
-      threadId: 'company:154',
-      threadType: 'company',
+      threadId: 'group:154',
+      threadType: 'group',
       userId: null,
     })
   })

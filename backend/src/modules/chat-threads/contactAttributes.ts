@@ -1,11 +1,11 @@
 import { ApiError } from '../../lib/errors.js'
 
-export const PORTAL_COMPANY_CONTACT_IDS_MAX = 20
+export const PORTAL_GROUP_CONTACT_IDS_MAX = 20
 
-type PortalContactType = 'company' | 'person'
+type PortalContactType = 'group' | 'person'
 
 type PortalContactAttributes = {
-  companyContactIds: number[]
+  groupContactIds: number[]
   enabled: boolean
   type: PortalContactType
 }
@@ -23,7 +23,7 @@ function createContactConfigurationError(code: string) {
 }
 
 function readPortalContactType(value: unknown): PortalContactType {
-  if (value === 'person' || value === 'company') {
+  if (value === 'person' || value === 'group') {
     return value
   }
 
@@ -41,7 +41,7 @@ function readPortalEnabled(value: unknown) {
 function assertPositiveSafeIntegerToken(value: string) {
   if (!/^[1-9]\d*$/.test(value)) {
     throw createContactConfigurationError(
-      'portal_client_company_contact_ids_invalid',
+      'portal_client_group_contact_ids_invalid',
     )
   }
 
@@ -49,21 +49,21 @@ function assertPositiveSafeIntegerToken(value: string) {
 
   if (!Number.isSafeInteger(parsedValue)) {
     throw createContactConfigurationError(
-      'portal_client_company_contact_ids_invalid',
+      'portal_client_group_contact_ids_invalid',
     )
   }
 
   return parsedValue
 }
 
-export function parsePortalCompanyContactIdsAttribute(value: unknown) {
+export function parsePortalGroupContactIdsAttribute(value: unknown) {
   if (value === undefined || value === null || value === '') {
     return []
   }
 
   if (typeof value !== 'string') {
     throw createContactConfigurationError(
-      'portal_client_company_contact_ids_invalid',
+      'portal_client_group_contact_ids_invalid',
     )
   }
 
@@ -74,29 +74,29 @@ export function parsePortalCompanyContactIdsAttribute(value: unknown) {
   const tokens = value.split(',').map((token) => token.trim())
 
   if (
-    tokens.length > PORTAL_COMPANY_CONTACT_IDS_MAX ||
+    tokens.length > PORTAL_GROUP_CONTACT_IDS_MAX ||
     tokens.some((token) => !token)
   ) {
     throw createContactConfigurationError(
-      'portal_client_company_contact_ids_invalid',
+      'portal_client_group_contact_ids_invalid',
     )
   }
 
-  const companyContactIds: number[] = []
+  const groupContactIds: number[] = []
   const seenContactIds = new Set<number>()
 
   for (const token of tokens) {
-    const companyContactId = assertPositiveSafeIntegerToken(token)
+    const groupContactId = assertPositiveSafeIntegerToken(token)
 
-    if (seenContactIds.has(companyContactId)) {
+    if (seenContactIds.has(groupContactId)) {
       continue
     }
 
-    seenContactIds.add(companyContactId)
-    companyContactIds.push(companyContactId)
+    seenContactIds.add(groupContactId)
+    groupContactIds.push(groupContactId)
   }
 
-  return companyContactIds
+  return groupContactIds
 }
 
 export function parsePortalContactAttributes(
@@ -105,8 +105,8 @@ export function parsePortalContactAttributes(
   const attributes = customAttributes ?? {}
 
   return {
-    companyContactIds: parsePortalCompanyContactIdsAttribute(
-      attributes.portal_client_company_contact_ids,
+    groupContactIds: parsePortalGroupContactIdsAttribute(
+      attributes.portal_client_group_contact_ids,
     ),
     enabled: readPortalEnabled(attributes.portal_enabled),
     type: readPortalContactType(attributes.portal_contact_type),
@@ -129,17 +129,17 @@ export function assertPortalPersonContactEnabled(
   return attributes
 }
 
-export function assertPortalCompanyContactEnabled(
+export function assertPortalGroupContactEnabled(
   contact: PortalContactWithAttributes,
 ) {
   const attributes = parsePortalContactAttributes(contact.customAttributes)
 
-  if (attributes.type !== 'company') {
-    throw createContactConfigurationError('portal_company_contact_type_invalid')
+  if (attributes.type !== 'group') {
+    throw createContactConfigurationError('portal_group_contact_type_invalid')
   }
 
   if (!attributes.enabled) {
-    throw createContactConfigurationError('portal_company_contact_disabled')
+    throw createContactConfigurationError('portal_group_contact_disabled')
   }
 
   return attributes
