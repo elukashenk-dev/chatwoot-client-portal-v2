@@ -99,6 +99,22 @@
   `/api/tenant`, manifest, login HTML, Docker compose health и production DB
   counts проверены; старая portal mapping table и старая send-ledger column
   отсутствуют.
+- Chat thread deleted-conversation recovery добавлен: если Chatwoot conversation
+  удален после mapping в portal DB, следующий send восстанавливает thread под
+  lock, создает replacement conversation через contact inbox source, повторяет отправку
+  и нормализует confirmed portal-send messages в `sent`, даже если Chatwoot
+  помечает API-channel delivery status как `failed`.
+- Portal maintenance retention добавлен: cleanup module/script с dry-run,
+  tenant scope, default TTL для send ledger, webhook deliveries, expired
+  rate-limit buckets, sessions и verification records; `portal_chat_threads` и
+  Chatwoot-owned data не удаляются.
+- Production maintenance cleanup автоматизирован: installer ставит daily
+  systemd timer, перед включением выполняет dry-run, timer persistent и
+  запускает cleanup внутри `portal-backend` container.
+- Deleted-conversation recovery review закрыт: `F-CHAT-005` и `F-CHAT-006`
+  удалены после regression coverage для ledger failed re-acquire и company
+  attachment recovery; Playwright MCP проверил private/company recovery без
+  portal retry/error.
 
 ## Current Baseline
 
@@ -117,5 +133,5 @@
 
 ## Recommended Next Step
 
-- Create fresh production test portal user and validate private/company thread
-  flows on `lk.provgroup.ru` without modifying Chatwoot admin data.
+- Сделать checkpoint commit для ветки `fix/chat-deleted-conversation-recovery`,
+  затем определить merge/push/deploy шаг.

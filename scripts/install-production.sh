@@ -24,6 +24,9 @@ Usage:
   scripts/install-production.sh --install
   scripts/install-production.sh --install --reconfigure
   scripts/install-production.sh --sync-webhook-secret
+  scripts/install-production.sh --install-maintenance-cleanup
+  scripts/install-production.sh --maintenance-cleanup-dry-run
+  scripts/install-production.sh --maintenance-cleanup-status
   scripts/install-production.sh --status
   scripts/install-production.sh --logs
   scripts/install-production.sh --reset-state
@@ -32,6 +35,12 @@ Options:
   --install             Run or resume the production installer.
   --reconfigure         Ask all env questions again and reset installer state.
   --sync-webhook-secret Configure the tenant API Channel webhook, store its secret in portal DB, and check health.
+  --install-maintenance-cleanup
+                        Install and enable the daily portal maintenance cleanup timer.
+  --maintenance-cleanup-dry-run
+                        Run portal maintenance cleanup in dry-run mode.
+  --maintenance-cleanup-status
+                        Show portal maintenance cleanup timer status.
   --yes                 Use defaults for yes/no prompts when possible.
   --skip-public-health  Skip the public HTTPS health check step.
   --status              Show installer state and compose status.
@@ -51,6 +60,15 @@ for arg in "$@"; do
       ;;
     --sync-webhook-secret)
       ACTION="sync-webhook-secret"
+      ;;
+    --install-maintenance-cleanup)
+      ACTION="install-maintenance-cleanup"
+      ;;
+    --maintenance-cleanup-dry-run)
+      ACTION="maintenance-cleanup-dry-run"
+      ;;
+    --maintenance-cleanup-status)
+      ACTION="maintenance-cleanup-status"
       ;;
     --yes|-y)
       ASSUME_YES="true"
@@ -106,7 +124,10 @@ if [[ "$ACTION" == "reset-state" ]]; then
   exit 0
 fi
 
-if [[ "$ACTION" == "install" || "$ACTION" == "sync-webhook-secret" ]]; then
+if [[ "$ACTION" == "install" ||
+  "$ACTION" == "sync-webhook-secret" ||
+  "$ACTION" == "install-maintenance-cleanup" ||
+  "$ACTION" == "maintenance-cleanup-dry-run" ]]; then
   LOG_FILE="$LOG_DIR/install-$(date +%Y%m%d-%H%M%S).log"
   ln -sfn "$(basename "$LOG_FILE")" "$LOG_DIR/install-latest.log"
   exec > >(tee -a "$LOG_FILE") 2>&1
@@ -125,6 +146,12 @@ on_error() {
   case "$ACTION" in
     sync-webhook-secret)
       retry_command="scripts/install-production.sh --sync-webhook-secret"
+      ;;
+    install-maintenance-cleanup)
+      retry_command="scripts/install-production.sh --install-maintenance-cleanup"
+      ;;
+    maintenance-cleanup-dry-run)
+      retry_command="scripts/install-production.sh --maintenance-cleanup-dry-run"
       ;;
   esac
 
@@ -834,6 +861,33 @@ sync_chatwoot_webhook_secret() {
   wait_for_public_tenant
 }
 
+run_maintenance_cleanup_helper() {
+  local helper="$SCRIPT_DIR/install-maintenance-cleanup-timer.sh"
+
+  if [[ ! -x "$helper" ]]; then
+    echo "Maintenance cleanup helper is missing or is not executable: $helper" >&2
+    exit 1
+  fi
+
+  "$helper" \
+    "--app-path=$REPO_ROOT" \
+    "--env-file=$ENV_FILE" \
+    "--compose-file=$COMPOSE_FILE" \
+    "$@"
+}
+
+install_maintenance_cleanup_timer() {
+  run_maintenance_cleanup_helper --install
+}
+
+maintenance_cleanup_dry_run() {
+  run_maintenance_cleanup_helper --dry-run
+}
+
+maintenance_cleanup_status() {
+  run_maintenance_cleanup_helper --status
+}
+
 print_summary() {
   load_runtime_env
   echo
@@ -849,6 +903,8 @@ print_summary() {
   echo "  scripts/install-production.sh --status"
   echo "  scripts/install-production.sh --logs"
   echo "  scripts/install-production.sh --sync-webhook-secret"
+  echo "  scripts/install-production.sh --install-maintenance-cleanup"
+  echo "  scripts/install-production.sh --maintenance-cleanup-dry-run"
   echo "  docker compose --env-file .env.production -f infra/production/compose.yaml ps"
   echo "  docker compose --env-file .env.production -f infra/production/compose.yaml logs -f portal-backend portal-web"
 }
@@ -887,6 +943,26 @@ if [[ "$ACTION" == "sync-webhook-secret" ]]; then
   exit 0
 fi
 
+if [[ "$ACTION" == "install-maintenance-cleanup" ]]; then
+  print_header "Install maintenance cleanup timer"
+  install_maintenance_cleanup_timer
+  mark_step_done maintenance_cleanup_timer
+  echo "[done] Install maintenance cleanup timer"
+  exit 0
+fi
+
+if [[ "$ACTION" == "maintenance-cleanup-dry-run" ]]; then
+  print_header "Maintenance cleanup dry-run"
+  maintenance_cleanup_dry_run
+  exit 0
+fi
+
+if [[ "$ACTION" == "maintenance-cleanup-status" ]]; then
+  print_header "Maintenance cleanup status"
+  maintenance_cleanup_status
+  exit 0
+fi
+
 run_step preflight "Preflight checks" preflight
 run_step docker "Install or verify Docker Engine and Compose plugin" install_docker
 run_step env "Collect production configuration" collect_env
@@ -901,5 +977,6 @@ run_step public_tenant "Verify public tenant endpoint" wait_for_public_tenant
 run_step chatwoot_api_channel_approval "Approve tenant Chatwoot API Channel configuration changes" approve_chatwoot_api_channel_changes
 run_step chatwoot_routing "Verify or enable tenant Chatwoot API Channel single-conversation routing" configure_chatwoot_routing
 run_step chatwoot_webhook_secret_sync "Configure tenant API Channel webhook URL and store secret" sync_chatwoot_webhook_secret
+run_step maintenance_cleanup_timer "Install daily portal maintenance cleanup timer" install_maintenance_cleanup_timer
 
 print_summary

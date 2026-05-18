@@ -275,7 +275,19 @@ pnpm --dir frontend typecheck
 pnpm --dir frontend build
 ```
 
-## 13. Playwright E2E
+## 13. Maintenance Cleanup Dry-Run
+
+Проверить, сколько устаревших служебных записей portal DB можно удалить:
+
+```bash
+set -a && source .env && set +a
+pnpm --dir backend maintenance:cleanup -- --dry-run
+```
+
+Команда чистит только portal-owned service traces. Chatwoot DB и история чатов
+не затрагиваются.
+
+## 14. Playwright E2E
 
 Перед запуском должны быть подняты:
 
@@ -322,7 +334,7 @@ pnpm test:e2e:report
 pnpm exec playwright install chromium
 ```
 
-## 14. Остановить
+## 15. Остановить
 
 Backend/frontend остановить через `Ctrl+C`.
 

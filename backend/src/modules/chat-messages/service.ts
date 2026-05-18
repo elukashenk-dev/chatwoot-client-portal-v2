@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 
 import type {
   ChatwootClient,
@@ -26,8 +26,9 @@ import {
 } from './messageMapping.js'
 import type {
   ChatMessagesRepository,
-  ChatSendLedgerEntry,
 } from './repository.js'
+import { createOrReplayCanonicalMessage } from './sendLedger.js'
+import { sendWithDeletedConversationRecovery } from './sendRecovery.js'
 import type {
   ChatMessagesSnapshot,
   ChatSendResult,
@@ -46,7 +47,6 @@ export type {
 
 const SEND_LEDGER_MESSAGE_KIND_TEXT = 'text'
 const SEND_LEDGER_MESSAGE_KIND_ATTACHMENT = 'attachment'
-const SEND_LEDGER_STALE_PROCESSING_MS = 2 * 60 * 1000
 const CLIENT_MESSAGE_KEY_MAX_LENGTH = 200
 export const CHAT_ATTACHMENT_MAX_BYTES = 40 * 1024 * 1024
 const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
@@ -76,7 +76,9 @@ type CreateChatMessagesServiceOptions = {
   >
   chatThreadsService: Pick<
     ChatThreadsService,
-    'ensureCurrentUserWritableThreadContext' | 'getCurrentUserThreadContext'
+    | 'ensureCurrentUserWritableThreadContext'
+    | 'getCurrentUserThreadContext'
+    | 'recoverCurrentUserWritableThreadContext'
   >
   chatMessagesRepository?: ChatMessagesRepository | null
   chatwootClient: Pick<
@@ -298,443 +300,6 @@ function createAttachmentPayloadSha256(
     .digest('hex')
 }
 
-async function findCanonicalMessageByClientKey({
-  chatwootClient,
-  clientMessageKey,
-  conversationId,
-}: {
-  chatwootClient: Pick<ChatwootClient, 'findConversationMessageBySourceId'>
-  clientMessageKey: string
-  conversationId: number
-}) {
-  return chatwootClient.findConversationMessageBySourceId(
-    conversationId,
-    clientMessageKey,
-  )
-}
-
-async function markSendLedgerEntryConfirmed({
-  chatMessagesRepository,
-  chatwootMessageId,
-  clientMessageKey,
-  now,
-  portalChatThreadId,
-  processingToken,
-  userId,
-}: {
-  chatMessagesRepository: ChatMessagesRepository
-  chatwootMessageId: number
-  clientMessageKey: string
-  now: Date
-  portalChatThreadId: number
-  processingToken?: string
-  userId: number
-}) {
-  return chatMessagesRepository.markSendLedgerEntryConfirmed({
-    chatwootMessageId,
-    clientMessageKey,
-    now,
-    portalChatThreadId,
-    ...(processingToken === undefined ? {} : { processingToken }),
-    userId,
-  })
-}
-
-async function markSendLedgerEntryFailed({
-  chatMessagesRepository,
-  clientMessageKey,
-  now,
-  portalChatThreadId,
-  processingToken,
-  userId,
-}: {
-  chatMessagesRepository: ChatMessagesRepository
-  clientMessageKey: string
-  now: Date
-  portalChatThreadId: number
-  processingToken?: string
-  userId: number
-}) {
-  return chatMessagesRepository.markSendLedgerEntryFailed({
-    clientMessageKey,
-    now,
-    portalChatThreadId,
-    ...(processingToken === undefined ? {} : { processingToken }),
-    userId,
-  })
-}
-
-async function resolveConfirmedLedgerMessage({
-  chatMessagesRepository,
-  chatwootClient,
-  clientMessageKey,
-  ledgerEntry,
-  now,
-  portalChatThreadId,
-  conversationId,
-  userId,
-}: {
-  chatMessagesRepository: ChatMessagesRepository
-  chatwootClient: Pick<
-    ChatwootClient,
-    'findConversationMessageById' | 'findConversationMessageBySourceId'
-  >
-  clientMessageKey: string
-  ledgerEntry: ChatSendLedgerEntry
-  now: Date
-  portalChatThreadId: number
-  conversationId: number
-  userId: number
-}) {
-  const exactMessage = ledgerEntry.chatwootMessageId
-    ? await chatwootClient.findConversationMessageById(
-        conversationId,
-        ledgerEntry.chatwootMessageId,
-      )
-    : null
-
-  if (exactMessage) {
-    return exactMessage
-  }
-
-  const recoveredMessage = await findCanonicalMessageByClientKey({
-    chatwootClient,
-    clientMessageKey,
-    conversationId,
-  })
-
-  if (!recoveredMessage) {
-    throw new ChatwootClientRequestError(
-      'Previously confirmed Chatwoot message could not be replayed.',
-    )
-  }
-
-  if (recoveredMessage.id !== ledgerEntry.chatwootMessageId) {
-    await markSendLedgerEntryConfirmed({
-      chatMessagesRepository,
-      chatwootMessageId: recoveredMessage.id,
-      clientMessageKey,
-      now,
-      portalChatThreadId,
-      userId,
-    })
-  }
-
-  return recoveredMessage
-}
-
-async function createOrReplayCanonicalMessageViaChatwoot({
-  chatwootClient,
-  clientMessageKey,
-  createChatwootMessage,
-  conversationId,
-}: {
-  chatwootClient: Pick<ChatwootClient, 'findConversationMessageBySourceId'>
-  clientMessageKey: string
-  createChatwootMessage: () => Promise<ChatwootMessage | null>
-  conversationId: number
-}) {
-  const existingMessage = await findCanonicalMessageByClientKey({
-    chatwootClient,
-    clientMessageKey,
-    conversationId,
-  })
-
-  if (existingMessage) {
-    return existingMessage
-  }
-
-  try {
-    return await createChatwootMessage()
-  } catch (error) {
-    const recoveredMessage = await findCanonicalMessageByClientKey({
-      chatwootClient,
-      clientMessageKey,
-      conversationId,
-    })
-
-    if (recoveredMessage) {
-      return recoveredMessage
-    }
-
-    throw error
-  }
-}
-
-async function createOrReplayCanonicalMessageViaLedger({
-  authorDisplayNameSnapshot,
-  chatMessagesRepository,
-  chatwootClient,
-  clientMessageKey,
-  createChatwootMessage,
-  messageKind,
-  now,
-  payloadMismatchMessage,
-  payloadSha256,
-  portalChatThreadId,
-  conversationId,
-  userId,
-}: {
-  authorDisplayNameSnapshot: string | null
-  chatMessagesRepository: ChatMessagesRepository
-  chatwootClient: Pick<
-    ChatwootClient,
-    'findConversationMessageById' | 'findConversationMessageBySourceId'
-  >
-  clientMessageKey: string
-  createChatwootMessage: () => Promise<ChatwootMessage | null>
-  messageKind: string
-  now: () => Date
-  payloadMismatchMessage: string
-  payloadSha256: string
-  portalChatThreadId: number
-  conversationId: number
-  userId: number
-}) {
-  const acquiredAt = now()
-  const processingToken = randomUUID()
-  const acquireResult = await chatMessagesRepository.acquireSendLedgerEntry({
-    authorDisplayNameSnapshot,
-    clientMessageKey,
-    messageKind,
-    now: acquiredAt,
-    payloadSha256,
-    portalChatThreadId,
-    processingToken,
-    staleProcessingBefore: new Date(
-      acquiredAt.getTime() - SEND_LEDGER_STALE_PROCESSING_MS,
-    ),
-    userId,
-  })
-
-  if (acquireResult.outcome === 'payload_mismatch') {
-    throw new ApiError(
-      409,
-      'client_message_key_conflict',
-      payloadMismatchMessage,
-    )
-  }
-
-  if (acquireResult.outcome === 'confirmed') {
-    return resolveConfirmedLedgerMessage({
-      chatMessagesRepository,
-      chatwootClient,
-      clientMessageKey,
-      ledgerEntry: acquireResult.entry,
-      now: now(),
-      portalChatThreadId,
-      conversationId,
-      userId,
-    })
-  }
-
-  if (acquireResult.outcome === 'in_progress') {
-    const existingMessage = await findCanonicalMessageByClientKey({
-      chatwootClient,
-      clientMessageKey,
-      conversationId,
-    })
-
-    if (existingMessage) {
-      await markSendLedgerEntryConfirmed({
-        chatMessagesRepository,
-        chatwootMessageId: existingMessage.id,
-        clientMessageKey,
-        now: now(),
-        portalChatThreadId,
-        userId,
-      })
-
-      return existingMessage
-    }
-
-    throw new ApiError(
-      409,
-      'chat_send_in_progress',
-      'Это сообщение уже отправляется. Повторите через несколько секунд.',
-    )
-  }
-
-  if (acquireResult.outcome !== 'acquired') {
-    throw new ApiError(
-      503,
-      'chat_send_ledger_unavailable',
-      'Не удалось подготовить безопасную отправку сообщения.',
-    )
-  }
-
-  try {
-    const existingMessage = await findCanonicalMessageByClientKey({
-      chatwootClient,
-      clientMessageKey,
-      conversationId,
-    })
-
-    if (existingMessage) {
-      await markSendLedgerEntryConfirmed({
-        chatMessagesRepository,
-        chatwootMessageId: existingMessage.id,
-        clientMessageKey,
-        now: now(),
-        portalChatThreadId,
-        processingToken,
-        userId,
-      })
-
-      return existingMessage
-    }
-  } catch (error) {
-    await markSendLedgerEntryFailed({
-      chatMessagesRepository,
-      clientMessageKey,
-      now: now(),
-      portalChatThreadId,
-      processingToken,
-      userId,
-    })
-
-    throw error
-  }
-
-  try {
-    const createdMessage = await createChatwootMessage()
-
-    if (createdMessage === null) {
-      await markSendLedgerEntryFailed({
-        chatMessagesRepository,
-        clientMessageKey,
-        now: now(),
-        portalChatThreadId,
-        processingToken,
-        userId,
-      })
-
-      return null
-    }
-
-    await markSendLedgerEntryConfirmed({
-      chatMessagesRepository,
-      chatwootMessageId: createdMessage.id,
-      clientMessageKey,
-      now: now(),
-      portalChatThreadId,
-      processingToken,
-      userId,
-    })
-
-    return createdMessage
-  } catch (error) {
-    let recoveredMessage: ChatwootMessage | null
-
-    try {
-      recoveredMessage = await findCanonicalMessageByClientKey({
-        chatwootClient,
-        clientMessageKey,
-        conversationId,
-      })
-    } catch (lookupError) {
-      await markSendLedgerEntryFailed({
-        chatMessagesRepository,
-        clientMessageKey,
-        now: now(),
-        portalChatThreadId,
-        processingToken,
-        userId,
-      })
-
-      throw lookupError
-    }
-
-    if (recoveredMessage) {
-      await markSendLedgerEntryConfirmed({
-        chatMessagesRepository,
-        chatwootMessageId: recoveredMessage.id,
-        clientMessageKey,
-        now: now(),
-        portalChatThreadId,
-        processingToken,
-        userId,
-      })
-
-      return recoveredMessage
-    }
-
-    await markSendLedgerEntryFailed({
-      chatMessagesRepository,
-      clientMessageKey,
-      now: now(),
-      portalChatThreadId,
-      processingToken,
-      userId,
-    })
-
-    throw error
-  }
-}
-
-async function createOrReplayCanonicalMessage({
-  authorDisplayNameSnapshot,
-  chatMessagesRepository,
-  chatwootClient,
-  clientMessageKey,
-  createChatwootMessage,
-  messageKind,
-  now,
-  payloadMismatchMessage,
-  payloadSha256,
-  portalChatThreadId,
-  conversationId,
-  userId,
-}: {
-  authorDisplayNameSnapshot: string | null
-  chatMessagesRepository?: ChatMessagesRepository | null
-  chatwootClient: Pick<
-    ChatwootClient,
-    'findConversationMessageById' | 'findConversationMessageBySourceId'
-  >
-  clientMessageKey: string
-  createChatwootMessage: () => Promise<ChatwootMessage | null>
-  messageKind: string
-  now: () => Date
-  payloadMismatchMessage: string
-  payloadSha256: string
-  portalChatThreadId: number | null
-  conversationId: number
-  userId: number
-}) {
-  if (!chatMessagesRepository) {
-    return createOrReplayCanonicalMessageViaChatwoot({
-      chatwootClient,
-      clientMessageKey,
-      createChatwootMessage,
-      conversationId,
-    })
-  }
-
-  if (portalChatThreadId === null) {
-    throw new ApiError(
-      503,
-      'chat_send_ledger_unavailable',
-      'Не удалось подготовить безопасную отправку сообщения.',
-    )
-  }
-
-  return createOrReplayCanonicalMessageViaLedger({
-    authorDisplayNameSnapshot,
-    chatMessagesRepository,
-    chatwootClient,
-    clientMessageKey,
-    createChatwootMessage,
-    messageKind,
-    now,
-    payloadMismatchMessage,
-    payloadSha256,
-    portalChatThreadId,
-    conversationId,
-    userId,
-  })
-}
-
 export function createChatMessagesService({
   chatThreadsRepository,
   chatThreadsService,
@@ -928,23 +493,20 @@ export function createChatMessagesService({
       const normalizedReplyToMessageId =
         normalizeReplyToMessageId(replyToMessageId)
       const conversationId = context.chatwootConversation.id
-
-      try {
-        const replyTargetMessage = await resolveReplyTargetMessage({
-          chatwootClient,
-          conversationId,
-          replyToMessageId: normalizedReplyToMessageId,
-        })
-        const sentMessage = await createOrReplayCanonicalMessage({
+      const sendTextViaContext = (
+        sendContext: CurrentUserChatThreadContext,
+        sendConversationId: number,
+      ) =>
+        createOrReplayCanonicalMessage({
           authorDisplayNameSnapshot:
-            context.threadType === 'company' ? authorDisplayName : null,
+            sendContext.threadType === 'company' ? authorDisplayName : null,
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
           createChatwootMessage: () =>
             chatwootClient.createConversationIncomingMessage({
               content: outboundContent,
-              conversationId,
+              conversationId: sendConversationId,
               replyToMessageId: normalizedReplyToMessageId,
               sourceId: normalizedClientMessageKey,
             }),
@@ -956,27 +518,39 @@ export function createChatMessagesService({
             outboundContent,
             normalizedReplyToMessageId,
           ),
-          portalChatThreadId: context.portalChatThreadId,
-          conversationId,
+          portalChatThreadId: sendContext.portalChatThreadId,
+          conversationId: sendConversationId,
           userId,
         })
 
-        if (sentMessage === null) {
-          return buildSendResult({
-            ...context,
-            chatwootConversation: null,
-            reason: 'conversation_missing',
-            result: 'not_ready',
-          })
+      try {
+        const replyTargetMessage = await resolveReplyTargetMessage({
+          chatwootClient,
+          conversationId,
+          replyToMessageId: normalizedReplyToMessageId,
+        })
+        const sendResult = await sendWithDeletedConversationRecovery({
+          chatThreadsService,
+          context,
+          replyToMessageId: normalizedReplyToMessageId,
+          send: sendTextViaContext,
+          threadId,
+          userId,
+        })
+
+        if (sendResult.message === null) {
+          return buildSendResult(sendResult.context)
         }
 
+        const sendContext = sendResult.context
+        const sentMessage = sendResult.message
         const replyTargetsById = new Map(
           replyTargetMessage
             ? [[replyTargetMessage.id, replyTargetMessage]]
             : [],
         )
         const ledgerAuthorsByMessageId =
-          context.portalChatThreadId === null
+          sendContext.portalChatThreadId === null
             ? new Map()
             : new Map([
                 [
@@ -990,7 +564,7 @@ export function createChatMessagesService({
         const portalMessage = mapPortalMessage(
           sentMessage,
           createMessageMapperContext({
-            context,
+            context: sendContext,
             ledgerAuthorsByMessageId,
             replyTargetsById,
             userId,
@@ -1005,7 +579,7 @@ export function createChatMessagesService({
           )
         }
 
-        return buildSendResult(context, portalMessage)
+        return buildSendResult(sendContext, portalMessage)
       } catch (error) {
         if (error instanceof ApiError) {
           throw error
@@ -1062,16 +636,13 @@ export function createChatMessagesService({
       const normalizedReplyToMessageId =
         normalizeReplyToMessageId(replyToMessageId)
       const conversationId = context.chatwootConversation.id
-
-      try {
-        const replyTargetMessage = await resolveReplyTargetMessage({
-          chatwootClient,
-          conversationId,
-          replyToMessageId: normalizedReplyToMessageId,
-        })
-        const sentMessage = await createOrReplayCanonicalMessage({
+      const sendAttachmentViaContext = (
+        sendContext: CurrentUserChatThreadContext,
+        sendConversationId: number,
+      ) =>
+        createOrReplayCanonicalMessage({
           authorDisplayNameSnapshot:
-            context.threadType === 'company' ? authorDisplayName : null,
+            sendContext.threadType === 'company' ? authorDisplayName : null,
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
@@ -1079,7 +650,7 @@ export function createChatMessagesService({
             chatwootClient.createConversationIncomingAttachmentMessage({
               attachment: normalizedAttachment,
               content: outboundContent,
-              conversationId,
+              conversationId: sendConversationId,
               replyToMessageId: normalizedReplyToMessageId,
               sourceId: normalizedClientMessageKey,
             }),
@@ -1092,27 +663,39 @@ export function createChatMessagesService({
             outboundContent,
             normalizedReplyToMessageId,
           ),
-          portalChatThreadId: context.portalChatThreadId,
-          conversationId,
+          portalChatThreadId: sendContext.portalChatThreadId,
+          conversationId: sendConversationId,
           userId,
         })
 
-        if (sentMessage === null) {
-          return buildSendResult({
-            ...context,
-            chatwootConversation: null,
-            reason: 'conversation_missing',
-            result: 'not_ready',
-          })
+      try {
+        const replyTargetMessage = await resolveReplyTargetMessage({
+          chatwootClient,
+          conversationId,
+          replyToMessageId: normalizedReplyToMessageId,
+        })
+        const sendResult = await sendWithDeletedConversationRecovery({
+          chatThreadsService,
+          context,
+          replyToMessageId: normalizedReplyToMessageId,
+          send: sendAttachmentViaContext,
+          threadId,
+          userId,
+        })
+
+        if (sendResult.message === null) {
+          return buildSendResult(sendResult.context)
         }
 
+        const sendContext = sendResult.context
+        const sentMessage = sendResult.message
         const replyTargetsById = new Map(
           replyTargetMessage
             ? [[replyTargetMessage.id, replyTargetMessage]]
             : [],
         )
         const ledgerAuthorsByMessageId =
-          context.portalChatThreadId === null
+          sendContext.portalChatThreadId === null
             ? new Map()
             : new Map([
                 [
@@ -1126,7 +709,7 @@ export function createChatMessagesService({
         const portalMessage = mapPortalMessage(
           sentMessage,
           createMessageMapperContext({
-            context,
+            context: sendContext,
             ledgerAuthorsByMessageId,
             replyTargetsById,
             userId,
@@ -1141,7 +724,7 @@ export function createChatMessagesService({
           )
         }
 
-        return buildSendResult(context, portalMessage)
+        return buildSendResult(sendContext, portalMessage)
       } catch (error) {
         if (error instanceof ApiError) {
           throw error

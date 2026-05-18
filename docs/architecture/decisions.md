@@ -280,3 +280,26 @@
   production baseline проще: browser работает только с `threadId`, backend
   хранит только thread-owned mappings, а старые portal данные не считаются
   обязательством совместимости.
+
+## D-021. Служебные portal traces имеют retention policy
+
+- дата: `2026-05-18`
+- решение:
+  portal database не должна бесконечно копить служебные следы, которые не
+  являются пользовательской историей переписки. Maintenance cleanup удаляет
+  только portal-owned service rows по tenant-safe условиям:
+  confirmed/failed send ledger старше `90` дней, зависшие processing sends
+  старше `24` часов, webhook delivery bookkeeping старше `30` дней,
+  истекшие rate-limit buckets старше `24` часов, истекшие sessions старше
+  `7` дней и истекшие verification records старше `30` дней.
+- граница:
+  cleanup не удаляет `portal_chat_threads`, tenants, users, Chatwoot contacts,
+  Chatwoot conversations, Chatwoot messages или Chatwoot uploads. Если агент
+  удалил conversation в Chatwoot, portal thread может быть восстановлен через
+  replacement conversation, но old Chatwoot conversation остаётся внешним
+  удаленным объектом, а не portal-owned историей.
+- причина:
+  Chatwoot остается system of record для истории чата. Portal DB хранит
+  authority mappings и короткоживущие runtime/service traces; без retention они
+  постепенно превращаются в мусор, но удалять пользовательские thread mappings
+  автоматически нельзя.

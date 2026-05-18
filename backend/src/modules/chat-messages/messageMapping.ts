@@ -153,6 +153,24 @@ function buildReplyPreview(
   }
 }
 
+function isPortalSendSourceId(sourceId: string | null) {
+  return sourceId?.startsWith('portal-send:') ?? false
+}
+
+function normalizePortalMessageStatus(
+  message: ChatwootMessage,
+  presentation: Pick<ReturnType<typeof mapMessagePresentation>, 'direction'>,
+) {
+  if (
+    presentation.direction === 'outgoing' &&
+    isPortalSendSourceId(message.sourceId)
+  ) {
+    return 'sent'
+  }
+
+  return message.status
+}
+
 export function mapPortalMessage(
   message: ChatwootMessage,
   context: MessageThreadContext,
@@ -180,7 +198,7 @@ export function mapPortalMessage(
     authorAvatarUrl: presentation.authorAvatarUrl,
     authorName: presentation.authorName,
     authorRole: presentation.authorRole,
-    clientMessageKey: message.sourceId?.startsWith('portal-send:')
+    clientMessageKey: isPortalSendSourceId(message.sourceId)
       ? message.sourceId
       : null,
     content: presentation.content,
@@ -189,7 +207,7 @@ export function mapPortalMessage(
     direction: presentation.direction,
     id: message.id,
     replyTo: buildReplyPreview(replyToMessageId, replyToMessage, context),
-    status: message.status,
+    status: normalizePortalMessageStatus(message, presentation),
   }
 }
 

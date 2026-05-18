@@ -44,6 +44,41 @@ For the current production rollout, the supported business mode is dedicated
 one-tenant install. Shared SaaS rollout can reuse the same runtime model, but
 needs a separate multi-tenant provisioning runbook.
 
+## Maintenance Cleanup
+
+Portal maintenance cleanup is intentionally portal-only. It removes expired
+service traces from the isolated portal Postgres and never touches Chatwoot
+core, Chatwoot DB, uploads, contacts, conversations or messages.
+
+Production installs should use a host systemd timer. It runs once per day by
+default, waits through missed boots (`Persistent=true`) and adds a randomized
+delay so cleanup does not fight deploy/startup work.
+
+```bash
+scripts/install-production.sh --install-maintenance-cleanup
+```
+
+Check the timer:
+
+```bash
+scripts/install-production.sh --maintenance-cleanup-status
+```
+
+Run a safe dry-run manually:
+
+```bash
+scripts/install-production.sh --maintenance-cleanup-dry-run
+```
+
+Default retention:
+
+- send ledger `confirmed`/`failed`: `90` days;
+- send ledger stuck in `processing`: `24` hours;
+- Chatwoot webhook delivery bookkeeping: `30` days;
+- expired rate-limit buckets: `24` hours after reset;
+- expired sessions: `7` days after expiry;
+- expired verification records: `30` days after expiry.
+
 ## Real Server Notes
 
 Known production server facts are kept in:

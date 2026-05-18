@@ -218,6 +218,11 @@ export function createChatThreadRuntimeResolver({
 
   async function bootstrapThreadConversation(
     context: CurrentUserChatThreadContext,
+    {
+      staleConversationId = null,
+    }: {
+      staleConversationId?: number | null
+    } = {},
   ): Promise<CurrentUserChatThreadContext> {
     const activeThread = context.activeThread
     const portalChatThreadId = context.portalChatThreadId
@@ -245,10 +250,27 @@ export function createChatThreadRuntimeResolver({
             result: 'unavailable',
           })
         }
-
         const lockedConversation = mapPersistedThreadConversation(lockedThread)
 
-        if (lockedConversation) {
+        if (
+          staleConversationId !== null &&
+          lockedThread.chatwootConversationId !== staleConversationId
+        ) {
+          const recoveredConversation =
+            mapPersistedThreadConversation(lockedThread)
+
+          if (recoveredConversation) {
+            return buildThreadContext({
+              ...context,
+              chatwootConversation: recoveredConversation,
+              portalChatThreadId: lockedThread.id,
+              reason: 'none',
+              result: 'ready',
+            })
+          }
+        }
+
+        if (lockedConversation && staleConversationId === null) {
           return buildThreadContext({
             ...context,
             chatwootConversation: lockedConversation,
@@ -343,6 +365,39 @@ export function createChatThreadRuntimeResolver({
 
       if (context.result === 'ready') {
         return context
+      }
+
+      if (
+        context.result === 'not_ready' &&
+        context.reason === 'conversation_missing'
+      ) {
+        return bootstrapThreadConversation(context)
+      }
+
+      return context
+    },
+
+    async recoverCurrentUserWritableThreadContext({
+      staleConversationId,
+      threadId,
+      userId,
+    }: {
+      staleConversationId: number
+      threadId: string
+      userId: number
+    }): Promise<CurrentUserChatThreadContext> {
+      const context = await resolveCurrentUserThread({
+        threadId,
+        userId,
+      })
+
+      if (
+        context.result === 'ready' &&
+        context.chatwootConversation?.id === staleConversationId
+      ) {
+        return bootstrapThreadConversation(context, {
+          staleConversationId,
+        })
       }
 
       if (

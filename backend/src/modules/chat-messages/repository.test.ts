@@ -143,6 +143,54 @@ describe('createChatMessagesRepository', () => {
     })
   })
 
+  it('re-acquires a failed send ledger entry for a retry', async () => {
+    const repository = createChatMessagesRepository(database.db, { tenantId })
+    const firstAttemptAt = new Date('2026-04-21T12:00:00.000Z')
+    const retryAt = new Date('2026-04-21T12:00:05.000Z')
+    const input = {
+      authorDisplayNameSnapshot: 'Portal User',
+      clientMessageKey: 'portal-send:retry-key',
+      messageKind: 'text',
+      payloadSha256: 'payload-hash',
+      portalChatThreadId,
+      staleProcessingBefore: new Date('2026-04-21T11:58:00.000Z'),
+      userId,
+    }
+
+    await expect(
+      repository.acquireSendLedgerEntry({
+        ...input,
+        now: firstAttemptAt,
+        processingToken: 'processing-token-1',
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'acquired',
+    })
+    await repository.markSendLedgerEntryFailed({
+      clientMessageKey: input.clientMessageKey,
+      now: firstAttemptAt,
+      portalChatThreadId: input.portalChatThreadId,
+      processingToken: 'processing-token-1',
+      userId,
+    })
+
+    await expect(
+      repository.acquireSendLedgerEntry({
+        ...input,
+        now: retryAt,
+        processingToken: 'processing-token-2',
+      }),
+    ).resolves.toMatchObject({
+      entry: {
+        attemptsCount: 2,
+        failedAt: null,
+        processingToken: 'processing-token-2',
+        status: 'processing',
+      },
+      outcome: 'acquired',
+    })
+  })
+
   it('keeps send key scope separate for different users in the same conversation', async () => {
     const repository = createChatMessagesRepository(database.db, { tenantId })
     const [otherUser] = await database.db

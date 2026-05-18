@@ -12,6 +12,7 @@ type ChatwootClientStub = ChatThreadsServiceOptions['chatwootClient'] & {
   findContactByEmail: ReturnType<typeof vi.fn>
   findContactById: ReturnType<typeof vi.fn>
   findContactPortalInboxSourceId: ReturnType<typeof vi.fn>
+  listContactConversations: ReturnType<typeof vi.fn>
 }
 
 function createRepositoryStub(
@@ -49,13 +50,14 @@ function createChatwootClientStub({
 }: {
   companyContactIds?: string
   companyContactOverrides?: Record<string, unknown>
-  overrides?: Partial<ChatThreadsServiceOptions['chatwootClient']>
+  overrides?: Partial<ChatwootClientStub>
 } = {}): ChatwootClientStub {
   return {
     createContactInbox: vi.fn(),
     createConversation: vi.fn(),
     findContactByEmail: vi.fn(),
     findContactPortalInboxSourceId: vi.fn(),
+    listContactConversations: vi.fn().mockResolvedValue([]),
     findContactById: vi.fn(async (contactId: number) => {
       if (contactId === 44) {
         return {
@@ -89,10 +91,16 @@ function createChatwootClientStub({
   } as ChatwootClientStub
 }
 
-function createChatThreadsPersistenceRepositoryStub() {
+function createChatThreadsPersistenceRepositoryStub({
+  initialCompanyConversationId = null,
+  initialPrivateConversationId = null,
+}: {
+  initialCompanyConversationId?: number | null
+  initialPrivateConversationId?: number | null
+} = {}) {
   let companyThread = {
     chatwootContactId: 154,
-    chatwootConversationId: null as number | null,
+    chatwootConversationId: initialCompanyConversationId,
     chatwootInboxId: 9,
     id: 2,
     portalUserId: null,
@@ -100,7 +108,7 @@ function createChatThreadsPersistenceRepositoryStub() {
   }
   let privateThread = {
     chatwootContactId: 44,
-    chatwootConversationId: null as number | null,
+    chatwootConversationId: initialPrivateConversationId,
     chatwootInboxId: 9,
     id: 1,
     portalUserId: 7,
@@ -252,6 +260,191 @@ describe('createChatThreadsService', () => {
     expect(chatThreadsRepository.updateThreadConversation).toHaveBeenCalledWith(
       {
         chatwootConversationId: 301,
+        chatwootInboxId: 9,
+        id: 2,
+        now,
+      },
+    )
+  })
+
+  it('does not reuse previous Chatwoot conversations during normal writable bootstrap', async () => {
+    const now = new Date('2026-05-15T10:00:00.000Z')
+    const createConversation = vi.fn().mockResolvedValue({
+      assigneeName: null,
+      channelType: 'Channel::Api',
+      createdAt: 1_776_000_000,
+      id: 304,
+      inboxId: 9,
+      lastActivityAt: 1_776_000_000,
+      status: 'open',
+    })
+    const listContactConversations = vi.fn().mockResolvedValue([
+      {
+        assigneeName: 'Анна Смирнова',
+        channelType: 'Channel::Api',
+        createdAt: 1_775_000_000,
+        id: 303,
+        inboxId: 9,
+        lastActivityAt: 1_775_000_100,
+        status: 'open',
+      },
+    ])
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({
+      chatThreadsRepository,
+      chatwootClient: createChatwootClientStub({
+        overrides: {
+          createConversation,
+          findContactPortalInboxSourceId: vi
+            .fn()
+            .mockResolvedValue('portal-contact:existing'),
+          listContactConversations,
+        },
+      }),
+      now: () => now,
+    })
+
+    await expect(
+      service.ensureCurrentUserWritableThreadContext({
+        threadId: 'company:154',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      chatwootConversation: {
+        id: 304,
+      },
+      reason: 'none',
+      result: 'ready',
+    })
+    expect(listContactConversations).not.toHaveBeenCalled()
+    expect(createConversation).toHaveBeenCalledWith({
+      contactId: 154,
+      sourceId: 'portal-contact:existing',
+    })
+    expect(chatThreadsRepository.updateThreadConversation).toHaveBeenCalledWith(
+      {
+        chatwootConversationId: 304,
+        chatwootInboxId: 9,
+        id: 2,
+        now,
+      },
+    )
+  })
+
+  it('bootstraps a replacement private conversation when the mapped Chatwoot conversation was deleted', async () => {
+    const now = new Date('2026-05-15T10:00:00.000Z')
+    const createConversation = vi.fn().mockResolvedValue({
+      assigneeName: null,
+      channelType: 'Channel::Api',
+      createdAt: 1_776_000_000,
+      id: 302,
+      inboxId: 9,
+      lastActivityAt: 1_776_000_000,
+      status: 'open',
+    })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub({
+      initialPrivateConversationId: 101,
+    })
+    const service = createService({
+      chatThreadsRepository,
+      chatwootClient: createChatwootClientStub({
+        overrides: {
+          createConversation,
+          findContactPortalInboxSourceId: vi
+            .fn()
+            .mockResolvedValue('portal-contact:existing'),
+        },
+      }),
+      now: () => now,
+    })
+
+    await expect(
+      service.recoverCurrentUserWritableThreadContext({
+        staleConversationId: 101,
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      chatwootConversation: {
+        id: 302,
+      },
+      reason: 'none',
+      result: 'ready',
+    })
+    expect(createConversation).toHaveBeenCalledWith({
+      contactId: 44,
+      sourceId: 'portal-contact:existing',
+    })
+    expect(chatThreadsRepository.updateThreadConversation).toHaveBeenCalledWith(
+      {
+        chatwootConversationId: 302,
+        chatwootInboxId: 9,
+        id: 1,
+        now,
+      },
+    )
+  })
+
+  it('does not reuse previous Chatwoot conversations while recovering a stale mapping', async () => {
+    const now = new Date('2026-05-15T10:00:00.000Z')
+    const createConversation = vi.fn().mockResolvedValue({
+      assigneeName: null,
+      channelType: 'Channel::Api',
+      createdAt: 1_776_000_000,
+      id: 304,
+      inboxId: 9,
+      lastActivityAt: 1_776_000_000,
+      status: 'open',
+    })
+    const listContactConversations = vi.fn().mockResolvedValue([
+      {
+        assigneeName: 'Анна Смирнова',
+        channelType: 'Channel::Api',
+        createdAt: 1_776_000_000,
+        id: 303,
+        inboxId: 9,
+        lastActivityAt: 1_776_000_100,
+        status: 'open',
+      },
+    ])
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub({
+      initialCompanyConversationId: 101,
+    })
+    const service = createService({
+      chatThreadsRepository,
+      chatwootClient: createChatwootClientStub({
+        overrides: {
+          createConversation,
+          findContactPortalInboxSourceId: vi
+            .fn()
+            .mockResolvedValue('portal-contact:existing'),
+          listContactConversations,
+        },
+      }),
+      now: () => now,
+    })
+
+    await expect(
+      service.recoverCurrentUserWritableThreadContext({
+        staleConversationId: 101,
+        threadId: 'company:154',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      chatwootConversation: {
+        id: 304,
+      },
+      reason: 'none',
+      result: 'ready',
+    })
+    expect(listContactConversations).not.toHaveBeenCalled()
+    expect(createConversation).toHaveBeenCalledWith({
+      contactId: 154,
+      sourceId: 'portal-contact:existing',
+    })
+    expect(chatThreadsRepository.updateThreadConversation).toHaveBeenCalledWith(
+      {
+        chatwootConversationId: 304,
         chatwootInboxId: 9,
         id: 2,
         now,

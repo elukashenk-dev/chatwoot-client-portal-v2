@@ -116,6 +116,9 @@ function createChatThreadsServiceStub({
       .fn()
       .mockResolvedValue(writableContext),
     getCurrentUserThreadContext: vi.fn().mockResolvedValue(context),
+    recoverCurrentUserWritableThreadContext: vi
+      .fn()
+      .mockResolvedValue(writableContext),
   }
 }
 

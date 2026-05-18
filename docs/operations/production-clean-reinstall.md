@@ -219,7 +219,8 @@ Expected: the dirty files are intentionally part of the current UI preview
 iteration. Use an explicit preview label in the archive command below.
 
 ```bash
-pnpm exec prettier --check .env.production.example infra/production/compose.yaml scripts/install-production.sh docs/operations/production-clean-reinstall.md
+pnpm exec prettier --check infra/production/compose.yaml docs/operations/production-clean-reinstall.md
+bash -n scripts/install-production.sh scripts/install-maintenance-cleanup-timer.sh
 git diff --check
 
 scripts/deploy-production-archive.sh \
@@ -290,7 +291,8 @@ The installer now performs the tenant-aware flow:
 9. verifies and, if needed, enables single-conversation routing on the tenant
    Chatwoot API Channel;
 10. configures the tenant API Channel webhook URL;
-11. stores Chatwoot's actual `Channel::Api.secret` in the tenant record.
+11. stores Chatwoot's actual `Channel::Api.secret` in the tenant record;
+12. installs the daily systemd timer for portal maintenance cleanup.
 
 ## Step 6. Expected Env Shape
 

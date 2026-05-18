@@ -319,6 +319,7 @@ export const chatwootWebhookDeliveries = pgTable(
       table.eventName,
       table.status,
     ),
+    index('chatwoot_webhook_deliveries_received_at_idx').on(table.receivedAt),
   ],
 )
 

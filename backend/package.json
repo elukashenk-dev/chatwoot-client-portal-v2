@@ -11,11 +11,12 @@
     "tenant:chatwoot:ensure-portal-inbox": "tsx src/scripts/verify-tenant-chatwoot-connection.ts",
     "tenant:chatwoot:webhook:configure": "tsx src/scripts/configure-tenant-chatwoot-webhook.ts",
     "tenant:chatwoot:verify": "tsx src/scripts/verify-tenant-chatwoot-connection.ts",
+    "maintenance:cleanup": "tsx src/scripts/cleanup-maintenance-data.ts",
     "user:create": "tsx src/scripts/create-user.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/runMigrations.ts",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run --no-file-parallelism"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
