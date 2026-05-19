@@ -265,6 +265,76 @@ describe('ChatPage', () => {
     )
   })
 
+  it('opens chat info from the chat menu and returns to the transcript', async () => {
+    const user = userEvent.setup()
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/info') {
+        return createJsonResponse({
+          accessLabel: 'Только вы и поддержка',
+          activeThread: privateThread,
+          curatorName: 'Анна Маттина',
+          lastActivityAt: '2026-05-19T10:20:00.000Z',
+          participants: [],
+          reason: 'none',
+          result: 'ready',
+          startedAt: '2026-05-18T09:00:00.000Z',
+          supportLabel: 'Команда ProvGroup',
+          threadTypeLabel: 'Личный',
+        })
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Здравствуйте, вижу ваше обращение.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Информация о чате' }),
+    )
+
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Информация о чате' },
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Анна Маттина')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Вернуться к чату' }))
+
+    expect(
+      screen.getByText('Здравствуйте, вижу ваше обращение.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Информация о чате' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('does not fallback to a group thread after backend rejects person contact authority', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
@@ -302,7 +372,9 @@ describe('ChatPage', () => {
       }),
     )
     expect(
-      fetchMock.mock.calls.some(([url]) => String(url).includes('/chat/messages')),
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).includes('/chat/messages'),
+      ),
     ).toBe(false)
     expect(
       fetchMock.mock.calls.some(([url]) => String(url).includes('group%3A')),

@@ -19,12 +19,18 @@ function createRepositoryStub(
   overrides: Partial<
     Pick<
       ChatThreadContactRepository,
-      'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
+      | 'createContactLink'
+      | 'findContactLinkByUserId'
+      | 'findPortalUserById'
+      | 'listActivePortalUserContactLinks'
     >
   > = {},
 ): Pick<
   ChatThreadContactRepository,
-  'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
+  | 'createContactLink'
+  | 'findContactLinkByUserId'
+  | 'findPortalUserById'
+  | 'listActivePortalUserContactLinks'
 > {
   return {
     createContactLink: vi.fn().mockResolvedValue({
@@ -39,6 +45,7 @@ function createRepositoryStub(
       email: 'ivan@example.com',
       id: 7,
     }),
+    listActivePortalUserContactLinks: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

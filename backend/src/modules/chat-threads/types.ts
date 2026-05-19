@@ -51,6 +51,25 @@ export type CurrentUserChatThreadContext = {
   threadType: 'group' | 'private' | null
 }
 
+export type PublicChatThreadInfoParticipant = {
+  displayName: string
+  id: `portal-user:${number}`
+  isCurrentUser: boolean
+}
+
+export type PublicChatThreadInfo = {
+  accessLabel: string
+  activeThread: PublicChatThreadSummary | null
+  curatorName: string | null
+  lastActivityAt: string | null
+  participants: PublicChatThreadInfoParticipant[]
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
+  startedAt: string | null
+  supportLabel: string
+  threadTypeLabel: 'Групповой' | 'Личный' | null
+}
+
 export function buildPrivateThread(): PublicChatThreadSummary {
   return {
     id: PRIVATE_CHAT_THREAD_ID,

@@ -31,10 +31,26 @@ export type ChatThreadsResponse = {
   threads: ChatThreadSummary[]
 }
 
-export type ChatMessageAuthorRole =
-  | 'agent'
-  | 'group_member'
-  | 'current_user'
+export type ChatThreadInfoParticipant = {
+  displayName: string
+  id: `portal-user:${number}`
+  isCurrentUser: boolean
+}
+
+export type ChatThreadInfoResponse = {
+  accessLabel: string
+  activeThread: ChatThreadSummary | null
+  curatorName: string | null
+  lastActivityAt: string | null
+  participants: ChatThreadInfoParticipant[]
+  reason: ChatThreadReason
+  result: ChatThreadResult
+  startedAt: string | null
+  supportLabel: string
+  threadTypeLabel: 'Групповой' | 'Личный' | null
+}
+
+export type ChatMessageAuthorRole = 'agent' | 'group_member' | 'current_user'
 
 export type ChatAttachment = {
   fileSize: number | null

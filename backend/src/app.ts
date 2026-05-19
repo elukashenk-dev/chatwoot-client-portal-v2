@@ -128,6 +128,7 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       }),
       chatwootClient: createChatwootClientForRequest(request),
       portalInboxId: tenant.chatwoot.portalInboxId,
+      supportLabel: `Команда ${tenant.displayName}`,
     })
   }
   const createChatMessagesServiceForRequest = (request: FastifyRequest) =>

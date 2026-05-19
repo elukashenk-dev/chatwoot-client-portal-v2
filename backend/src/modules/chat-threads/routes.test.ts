@@ -32,13 +32,29 @@ function createAuthorizedCookie(app: ReturnType<typeof Fastify>) {
 }
 
 type ListCurrentUserThreads = ChatThreadsService['listCurrentUserThreads']
+type GetCurrentUserThreadInfo = ChatThreadsService['getCurrentUserThreadInfo']
 
 async function buildThreadsRoutesTestApp({
+  getCurrentUserThreadInfo = vi
+    .fn<GetCurrentUserThreadInfo>()
+    .mockResolvedValue({
+      accessLabel: '',
+      activeThread: null,
+      curatorName: null,
+      lastActivityAt: null,
+      participants: [],
+      reason: 'thread_invalid',
+      result: 'not_ready',
+      startedAt: null,
+      supportLabel: 'Команда Local Test Tenant',
+      threadTypeLabel: null,
+    }),
   listCurrentUserThreads = vi.fn<ListCurrentUserThreads>().mockResolvedValue({
     activeThreadId: 'private:me',
     threads: [],
   }),
 }: {
+  getCurrentUserThreadInfo?: MockedFunction<GetCurrentUserThreadInfo>
   listCurrentUserThreads?: MockedFunction<ListCurrentUserThreads>
 } = {}) {
   const app = Fastify({ logger: false })
@@ -62,6 +78,7 @@ async function buildThreadsRoutesTestApp({
   registerChatThreadsRoutes(app, {
     authService,
     createChatThreadsService: () => ({
+      getCurrentUserThreadInfo,
       listCurrentUserThreads,
     }),
     env: testEnv,
@@ -70,11 +87,57 @@ async function buildThreadsRoutesTestApp({
 
   return {
     app,
+    getCurrentUserThreadInfo,
     listCurrentUserThreads,
   }
 }
 
 describe('registerChatThreadsRoutes', () => {
+  it('returns current user chat thread info', async () => {
+    const getCurrentUserThreadInfo = vi.fn().mockResolvedValue({
+      accessLabel: 'Только вы и поддержка',
+      activeThread: {
+        id: 'private:me',
+        subtitle: 'Только вы и поддержка',
+        title: 'Личный чат',
+        type: 'private',
+      },
+      curatorName: 'Анна Маттина',
+      lastActivityAt: '2026-05-19T00:00:00.000Z',
+      participants: [],
+      reason: 'none',
+      result: 'ready',
+      startedAt: '2026-05-18T00:00:00.000Z',
+      supportLabel: 'Команда Local Test Tenant',
+      threadTypeLabel: 'Личный',
+    })
+    const { app } = await buildThreadsRoutesTestApp({
+      getCurrentUserThreadInfo,
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/private%3Ame/info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toMatchObject({
+        curatorName: 'Анна Маттина',
+        threadTypeLabel: 'Личный',
+      })
+      expect(getCurrentUserThreadInfo).toHaveBeenCalledWith({
+        threadId: 'private:me',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
   it('returns current user chat threads', async () => {
     const { app, listCurrentUserThreads } = await buildThreadsRoutesTestApp({
       listCurrentUserThreads: vi.fn().mockResolvedValue({

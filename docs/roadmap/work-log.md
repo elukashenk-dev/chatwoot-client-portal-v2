@@ -122,6 +122,20 @@
 - Production portal clean reinstall выполнен после strict group rename:
   `lk.provgroup.ru` поднят из clean `main` source, portal DB пересоздана,
   Chatwoot API Channel/webhook verification пройдены, Chatwoot core не трогался.
+- Страница `Информация о чате` реализована как full-screen chat-adjacent page:
+  backend endpoint отдает tenant/session/thread-scoped details без browser
+  Chatwoot authority, frontend открывает страницу из chat menu через reusable
+  `ChatFullScreenPanel`.
+- Chat info details покрывают тип чата, support label, доступ, `curator_name`,
+  дату начала/последней активности и безопасный список участников группового
+  чата через active portal users + Chatwoot contact attribute membership.
+- Проверки chat info slice пройдены: backend targeted tests `51/51`,
+  frontend targeted tests `23/23`, `pnpm build`, `pnpm lint`, Prettier targeted
+  check, `git diff --check`, Playwright MCP browser validation на
+  `http://127.0.0.1:5173` с mock API.
+- Repo Playwright e2e не запускался для этого slice: backend runtime на
+  `127.0.0.1:3301` не отвечает, а запуск/перезапуск локальных сервисов по
+  project rule выполняет пользователь.
 
 ## Current Baseline
 
@@ -140,6 +154,6 @@
 
 ## Recommended Next Step
 
-- Провести ручной production smoke на реальном устройстве: registration/login,
-  личный чат, групповой чат `group:<id>` и recovery после удаления диалога
-  агентом.
+- После пользовательского запуска backend runtime на `127.0.0.1:3301` прогнать
+  repo Playwright e2e для chat info browser flow; затем переходить к следующему
+  menu slice.

@@ -12,7 +12,6 @@
 
 ## File Structure
 
-- Modify `backend/src/integrations/chatwoot/client.ts`: add `findConversationByIdForContact` using the existing `listContactConversations` data path.
 - Modify `backend/src/modules/chat-threads/types.ts`: add public chat info response and participant types.
 - Modify `backend/src/modules/chat-threads/contactRepository.ts`: add tenant-scoped active portal-user contact-link listing for safe group participants.
 - Add `backend/src/modules/chat-threads/contactRepository.test.ts`: verify the participant source is tenant-scoped and active-user-only.
@@ -22,11 +21,12 @@
 - Add tests in `backend/src/modules/chat-threads/info.test.ts`, `service.test.ts`, and `routes.test.ts`.
 - Modify `frontend/src/features/chat/types.ts`: add chat info response types.
 - Modify `frontend/src/features/chat/api/chatClient.ts`: add `getChatThreadInfo`.
-- Create `frontend/src/features/chat/components/ChatInfoPage.tsx`: full-screen page UI.
+- Create `frontend/src/features/chat/components/ChatFullScreenPanel.tsx`: reusable full-screen chat-adjacent page shell for info, media/files, support center, profile, and future similar pages.
+- Create `frontend/src/features/chat/components/ChatInfoPage.tsx`: chat-info-specific content rendered inside the reusable full-screen shell.
 - Modify `frontend/src/features/chat/components/ChatHeader.tsx`: enable `Информация о чате` menu item.
 - Create `frontend/src/features/chat/pages/useChatInfoPanel.ts`: own info-page loading, retry, and close state outside `ChatPage.tsx`.
 - Modify `frontend/src/features/chat/pages/ChatPage.tsx`: call the info hook and render the full-screen page.
-- Add frontend tests in `frontend/src/features/chat/components/ChatInfoPage.test.tsx` and `frontend/src/features/chat/pages/ChatPage.test.tsx`.
+- Add frontend tests in `frontend/src/features/chat/components/ChatFullScreenPanel.test.tsx`, `frontend/src/features/chat/components/ChatInfoPage.test.tsx`, and `frontend/src/features/chat/pages/ChatPage.test.tsx`.
 - Add Playwright coverage in the existing e2e suite for private/group info opening when local runtime fixtures support it; otherwise record the runtime blocker in `docs/roadmap/work-log.md`.
 - Modify `docs/roadmap/work-log.md` only after implementation, review, fixes, and checks are complete.
 
@@ -40,7 +40,7 @@
 - Create: `backend/src/modules/chat-threads/info.ts`
 - Test: `backend/src/modules/chat-threads/info.test.ts`
 
-- [ ] **Step 1: Add failing pure helper tests**
+- [x] **Step 1: Add failing pure helper tests**
 
 Create `backend/src/modules/chat-threads/info.test.ts`:
 
@@ -117,7 +117,7 @@ describe('chat thread info helpers', () => {
 })
 ```
 
-- [ ] **Step 2: Run helper tests and verify they fail**
+- [x] **Step 2: Run helper tests and verify they fail**
 
 Run:
 
@@ -127,7 +127,7 @@ pnpm --dir backend test -- src/modules/chat-threads/info.test.ts
 
 Expected: fail because `info.ts` does not exist.
 
-- [ ] **Step 3: Add chat info public types**
+- [x] **Step 3: Add chat info public types**
 
 Append to `backend/src/modules/chat-threads/types.ts`:
 
@@ -152,7 +152,7 @@ export type PublicChatThreadInfo = {
 }
 ```
 
-- [ ] **Step 4: Implement pure helpers**
+- [x] **Step 4: Implement pure helpers**
 
 Create `backend/src/modules/chat-threads/info.ts`:
 
@@ -230,7 +230,7 @@ export function normalizeChatInfoParticipantRows(
 }
 ```
 
-- [ ] **Step 5: Run helper tests and verify they pass**
+- [x] **Step 5: Run helper tests and verify they pass**
 
 Run:
 
@@ -240,7 +240,7 @@ pnpm --dir backend test -- src/modules/chat-threads/info.test.ts
 
 Expected: pass.
 
-- [ ] **Step 6: Check backend helper foundation**
+- [x] **Step 6: Check backend helper foundation**
 
 Run:
 
@@ -258,12 +258,11 @@ work-log update.
 
 **Files:**
 
-- Modify: `backend/src/integrations/chatwoot/client.ts`
 - Modify: `backend/src/modules/chat-threads/contactRepository.ts`
 - Test: `backend/src/modules/chat-threads/contactRepository.test.ts`
-- Test: `backend/src/modules/chat-threads/service.test.ts`
+- Test: `backend/src/modules/chat-threads/service.info.test.ts`
 
-- [ ] **Step 1: Add failing contact repository test**
+- [x] **Step 1: Add failing contact repository test**
 
 Create `backend/src/modules/chat-threads/contactRepository.test.ts`:
 
@@ -382,7 +381,7 @@ describe('createChatThreadContactRepository', () => {
 })
 ```
 
-- [ ] **Step 2: Run contact repository test and verify it fails**
+- [x] **Step 2: Run contact repository test and verify it fails**
 
 Run:
 
@@ -392,7 +391,7 @@ pnpm --dir backend test -- src/modules/chat-threads/contactRepository.test.ts
 
 Expected: fail because `listActivePortalUserContactLinks` is missing.
 
-- [ ] **Step 3: Add tenant-scoped active contact-link listing**
+- [x] **Step 3: Add tenant-scoped active contact-link listing**
 
 Modify `backend/src/modules/chat-threads/contactRepository.ts` imports:
 
@@ -423,92 +422,15 @@ async listActivePortalUserContactLinks() {
 }
 ```
 
-- [ ] **Step 4: Add Chatwoot conversation lookup by contact and id**
+- [x] **Step 4: Keep Chatwoot client surface unchanged**
 
-In `backend/src/integrations/chatwoot/client.ts`, move the existing returned-object
-`async listContactConversations(contactId: number) { ... }` method body into a
-local function declared before the returned object:
+Use the existing `chatwootClient.listContactConversations(contactId)` method
+from the chat-info service and select the persisted conversation id in the
+service layer. Do not add a new method to
+`backend/src/integrations/chatwoot/client.ts`; that file is at its code-health
+baseline and this feature does not need a broader Chatwoot client API.
 
-```ts
-async function listContactConversations(contactId: number) {
-  const resolvedConfig = assertConfigured()
-
-  if (!Number.isInteger(contactId) || contactId <= 0) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot contact conversations lookup requires a valid contact id.',
-    )
-  }
-
-  const requestUrl = new URL(
-    `/api/v1/accounts/${resolvedConfig.accountId}/contacts/${contactId}/conversations`,
-    resolvedConfig.baseUrl,
-  )
-  const payload = await requestJson(
-    requestUrl,
-    'Chatwoot contact conversations lookup is unavailable.',
-  )
-
-  const contactConversations =
-    parseContactConversationsResponse(payload).payload.map(mapConversation)
-  const conversationsById = new Map(
-    contactConversations.map((conversation) => [conversation.id, conversation]),
-  )
-
-  if (contactConversations.length >= CONTACT_CONVERSATIONS_PAGE_LIMIT) {
-    const contact = await fetchContactDetails(contactId)
-    const sourceIds = collectPortalContactSourceIds(
-      contact,
-      resolvedConfig.portalInboxId,
-    )
-
-    for (const sourceId of sourceIds) {
-      const sourceConversations =
-        await fetchAllAccountConversationsBySourceId(sourceId)
-
-      for (const conversation of sourceConversations) {
-        conversationsById.set(conversation.id, conversation)
-      }
-    }
-  }
-
-  return [...conversationsById.values()].filter((conversation) =>
-    isPortalConversation(conversation, resolvedConfig.portalInboxId),
-  )
-}
-```
-
-Then expose it in the returned object:
-
-```ts
-listContactConversations,
-```
-
-Add the new method next to it:
-
-```ts
-async findConversationByIdForContact({
-  contactId,
-  conversationId,
-}: {
-  contactId: number
-  conversationId: number
-}) {
-  if (!Number.isInteger(conversationId) || conversationId <= 0) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot conversation lookup requires a valid conversation id.',
-    )
-  }
-
-  const conversations = await listContactConversations(contactId)
-
-  return (
-    conversations.find((conversation) => conversation.id === conversationId) ??
-    null
-  )
-}
-```
-
-- [ ] **Step 5: Run affected backend tests**
+- [x] **Step 5: Run affected backend tests**
 
 Run:
 
@@ -518,7 +440,7 @@ pnpm --dir backend test -- src/modules/chat-threads/contactRepository.test.ts
 
 Expected: pass.
 
-- [ ] **Step 6: Check metadata and repository support**
+- [x] **Step 6: Check metadata and repository support**
 
 Run:
 
@@ -538,10 +460,10 @@ yet.
 - Modify: `backend/src/modules/chat-threads/service.ts`
 - Modify: `backend/src/modules/chat-threads/routes.ts`
 - Modify: `backend/src/app.ts`
-- Test: `backend/src/modules/chat-threads/service.test.ts`
+- Test: `backend/src/modules/chat-threads/service.info.test.ts`
 - Test: `backend/src/modules/chat-threads/routes.test.ts`
 
-- [ ] **Step 1: Add failing service tests**
+- [x] **Step 1: Add failing service tests**
 
 In `backend/src/modules/chat-threads/service.test.ts`, first extend the local
 stubs:
@@ -553,7 +475,6 @@ type ChatwootClientStub = ChatThreadsServiceOptions['chatwootClient'] & {
   findContactByEmail: ReturnType<typeof vi.fn>
   findContactById: ReturnType<typeof vi.fn>
   findContactPortalInboxSourceId: ReturnType<typeof vi.fn>
-  findConversationByIdForContact: ReturnType<typeof vi.fn>
   listContactConversations: ReturnType<typeof vi.fn>
 }
 ```
@@ -568,7 +489,7 @@ listActivePortalUserContactLinks: vi.fn().mockResolvedValue([]),
 Update `createChatwootClientStub` default object:
 
 ```ts
-findConversationByIdForContact: vi.fn().mockResolvedValue(null),
+listContactConversations: vi.fn().mockResolvedValue([]),
 ```
 
 Then add these tests inside `describe('createChatThreadsService', () => { ... })`:
@@ -592,15 +513,17 @@ it('returns private chat info with person curator and no participants', async ()
             }
           : null,
       ),
-      findConversationByIdForContact: vi.fn().mockResolvedValue({
-        assigneeName: null,
-        channelType: 'Channel::Api',
-        createdAt: 1_779_182_400,
-        id: 101,
-        inboxId: 9,
-        lastActivityAt: 1_779_186_000,
-        status: 'open',
-      }),
+      listContactConversations: vi.fn().mockResolvedValue([
+        {
+          assigneeName: null,
+          channelType: 'Channel::Api',
+          createdAt: 1_779_182_400,
+          id: 101,
+          inboxId: 9,
+          lastActivityAt: 1_779_186_000,
+          status: 'open',
+        },
+      ]),
     },
   })
   const service = createService({
@@ -623,10 +546,7 @@ it('returns private chat info with person curator and no participants', async ()
     startedAt: '2026-05-19T09:20:00.000Z',
     threadTypeLabel: 'Личный',
   })
-  expect(chatwootClient.findConversationByIdForContact).toHaveBeenCalledWith({
-    contactId: 44,
-    conversationId: 101,
-  })
+  expect(chatwootClient.listContactConversations).toHaveBeenCalledWith(44)
   expect(chatwootClient.createConversation).not.toHaveBeenCalled()
 })
 
@@ -743,7 +663,7 @@ it('returns group participants only for active portal users with current group a
 })
 ```
 
-- [ ] **Step 2: Run service tests and verify they fail**
+- [x] **Step 2: Run service tests and verify they fail**
 
 Run:
 
@@ -753,7 +673,7 @@ pnpm --dir backend test -- src/modules/chat-threads/service.test.ts
 
 Expected: fail because `getCurrentUserThreadInfo` is missing.
 
-- [ ] **Step 3: Extend service dependencies**
+- [x] **Step 3: Extend service dependencies**
 
 Modify `backend/src/modules/chat-threads/service.ts` repository picks:
 
@@ -777,11 +697,11 @@ type ChatThreadsChatwootClient = Pick<
   | 'findContactByEmail'
   | 'findContactById'
   | 'findContactPortalInboxSourceId'
-  | 'findConversationByIdForContact'
+  | 'listContactConversations'
 >
 ```
 
-- [ ] **Step 4: Implement safe participant resolver**
+- [x] **Step 4: Implement safe participant resolver**
 
 In `backend/src/modules/chat-threads/service.ts`, import:
 
@@ -840,7 +760,7 @@ async function listSafeGroupParticipants({
 }
 ```
 
-- [ ] **Step 5: Implement `getCurrentUserThreadInfo`**
+- [x] **Step 5: Implement `getCurrentUserThreadInfo`**
 
 Add to the returned service object:
 
@@ -876,13 +796,18 @@ async getCurrentUserThreadInfo({
     context.targetChatwootContactId === null
       ? null
       : await chatwootClient.findContactById(context.targetChatwootContactId)
-  const conversation =
+  const conversations =
     context.chatwootConversation && context.targetChatwootContactId !== null
-      ? await chatwootClient.findConversationByIdForContact({
-          contactId: context.targetChatwootContactId,
-          conversationId: context.chatwootConversation.id,
-        })
-      : null
+      ? await chatwootClient.listContactConversations(
+          context.targetChatwootContactId,
+        )
+      : []
+  const conversation =
+    context.chatwootConversation === null
+      ? null
+      : (conversations.find(
+          (candidate) => candidate.id === context.chatwootConversation?.id,
+        ) ?? null)
   const participants =
     context.threadType === 'group' && context.targetChatwootContactId !== null
       ? await listSafeGroupParticipants({
@@ -917,7 +842,7 @@ In `buildApp`, after implementation, replace `supportLabel` with tenant display 
 supportLabel: `Команда ${tenant.displayName}`,
 ```
 
-- [ ] **Step 6: Add route test**
+- [x] **Step 6: Add route test**
 
 In `backend/src/modules/chat-threads/routes.test.ts`, extend the mock service pick and add:
 
@@ -968,7 +893,7 @@ it('returns current user chat thread info', async () => {
 })
 ```
 
-- [ ] **Step 7: Implement route**
+- [x] **Step 7: Implement route**
 
 Modify `backend/src/modules/chat-threads/routes.ts`:
 
@@ -1017,7 +942,7 @@ app.get('/api/chat/threads/:threadId/info', async (request, reply) => {
 })
 ```
 
-- [ ] **Step 8: Wire support label through app factory**
+- [x] **Step 8: Wire support label through app factory**
 
 Extend `CreateChatThreadsServiceOptions` with:
 
@@ -1037,7 +962,7 @@ Use the option in `getCurrentUserThreadInfo`. In `backend/src/app.ts`, pass:
 supportLabel: `Команда ${tenant.displayName}`,
 ```
 
-- [ ] **Step 9: Run backend chat-thread tests**
+- [x] **Step 9: Run backend chat-thread tests**
 
 Run:
 
@@ -1047,7 +972,7 @@ pnpm --dir backend test -- src/modules/chat-threads/info.test.ts src/modules/cha
 
 Expected: pass.
 
-- [ ] **Step 10: Check backend endpoint changes**
+- [x] **Step 10: Check backend endpoint changes**
 
 Run:
 
@@ -1066,10 +991,96 @@ yet.
 
 - Modify: `frontend/src/features/chat/types.ts`
 - Modify: `frontend/src/features/chat/api/chatClient.ts`
+- Create: `frontend/src/features/chat/components/ChatFullScreenPanel.tsx`
 - Create: `frontend/src/features/chat/components/ChatInfoPage.tsx`
+- Test: `frontend/src/features/chat/components/ChatFullScreenPanel.test.tsx`
 - Test: `frontend/src/features/chat/components/ChatInfoPage.test.tsx`
 
-- [ ] **Step 1: Add failing component tests**
+- [x] **Step 1: Add failing reusable shell tests**
+
+Create `frontend/src/features/chat/components/ChatFullScreenPanel.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+
+import { ChatFullScreenPanel } from './ChatFullScreenPanel'
+
+describe('ChatFullScreenPanel', () => {
+  it('renders title, back button, and children', async () => {
+    const user = userEvent.setup()
+    const onBack = vi.fn()
+
+    render(
+      <ChatFullScreenPanel
+        isLoading={false}
+        onBack={onBack}
+        onRetry={vi.fn()}
+        title="Информация о чате"
+      >
+        <p>Содержимое страницы</p>
+      </ChatFullScreenPanel>,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Информация о чате' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Содержимое страницы')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Вернуться к чату' }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders loading and unavailable states', async () => {
+    const user = userEvent.setup()
+    const onRetry = vi.fn()
+
+    const { rerender } = render(
+      <ChatFullScreenPanel
+        isLoading
+        onBack={vi.fn()}
+        onRetry={onRetry}
+        title="Медиа и файлы"
+      >
+        <p>Не видно при загрузке</p>
+      </ChatFullScreenPanel>,
+    )
+
+    expect(screen.getByText('Загружаем данные.')).toBeInTheDocument()
+    expect(screen.queryByText('Не видно при загрузке')).not.toBeInTheDocument()
+
+    rerender(
+      <ChatFullScreenPanel
+        isLoading={false}
+        isUnavailable
+        onBack={vi.fn()}
+        onRetry={onRetry}
+        title="Медиа и файлы"
+        unavailableMessage="Не удалось загрузить медиа."
+      >
+        <p>Не видно при ошибке</p>
+      </ChatFullScreenPanel>,
+    )
+
+    expect(screen.getByText('Не удалось загрузить медиа.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Повторить' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+- [x] **Step 2: Run shell tests and verify they fail**
+
+Run:
+
+```bash
+pnpm --dir frontend test -- src/features/chat/components/ChatFullScreenPanel.test.tsx
+```
+
+Expected: fail because `ChatFullScreenPanel` is missing.
+
+- [x] **Step 3: Add failing chat-info component tests**
 
 Create `frontend/src/features/chat/components/ChatInfoPage.test.tsx`:
 
@@ -1202,7 +1213,7 @@ describe('ChatInfoPage', () => {
 })
 ```
 
-- [ ] **Step 2: Run component tests and verify they fail**
+- [x] **Step 4: Run chat-info component tests and verify they fail**
 
 Run:
 
@@ -1212,7 +1223,7 @@ pnpm --dir frontend test -- src/features/chat/components/ChatInfoPage.test.tsx
 
 Expected: fail because `ChatInfoPage` and types are missing.
 
-- [ ] **Step 3: Add frontend types**
+- [x] **Step 5: Add frontend types**
 
 Append to `frontend/src/features/chat/types.ts`:
 
@@ -1237,7 +1248,7 @@ export type ChatThreadInfoResponse = {
 }
 ```
 
-- [ ] **Step 4: Add API client method**
+- [x] **Step 6: Add API client method**
 
 Modify `frontend/src/features/chat/api/chatClient.ts` imports and add:
 
@@ -1260,7 +1271,93 @@ export async function getChatThreadInfo(threadId: string) {
 }
 ```
 
-- [ ] **Step 5: Implement `ChatInfoPage`**
+- [x] **Step 7: Implement `ChatFullScreenPanel`**
+
+Create `frontend/src/features/chat/components/ChatFullScreenPanel.tsx`:
+
+```tsx
+import type { ReactNode } from 'react'
+
+import { ChevronLeftIcon, RefreshIcon } from '../../../shared/ui/icons'
+
+type ChatFullScreenPanelProps = {
+  children: ReactNode
+  isLoading: boolean
+  isUnavailable?: boolean
+  loadingMessage?: string
+  onBack: () => void
+  onRetry: () => void
+  title: string
+  unavailableMessage?: string
+}
+
+export function ChatFullScreenPanel({
+  children,
+  isLoading,
+  isUnavailable = false,
+  loadingMessage = 'Загружаем данные.',
+  onBack,
+  onRetry,
+  title,
+  unavailableMessage = 'Не удалось загрузить данные.',
+}: ChatFullScreenPanelProps) {
+  return (
+    <section className="fixed inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
+      <header className="app-safe-top chat-header-background border-b border-slate-200/90 px-4 pb-2.5 shadow-sm sm:px-6 sm:pb-3">
+        <div className="flex min-h-10 items-center gap-3">
+          <button
+            aria-label="Вернуться к чату"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            onClick={onBack}
+            type="button"
+          >
+            <ChevronLeftIcon className="h-5 w-5" />
+          </button>
+          <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight">
+            {title}
+          </h1>
+        </div>
+      </header>
+
+      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        {isLoading ? (
+          <div className="mx-auto mt-16 max-w-xs text-center text-sm text-slate-500">
+            {loadingMessage}
+          </div>
+        ) : null}
+
+        {!isLoading && isUnavailable ? (
+          <div className="mx-auto mt-16 max-w-xs text-center">
+            <p className="text-sm text-slate-600">{unavailableMessage}</p>
+            <button
+              className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+              onClick={onRetry}
+              type="button"
+            >
+              <RefreshIcon className="h-4 w-4" />
+              Повторить
+            </button>
+          </div>
+        ) : null}
+
+        {!isLoading && !isUnavailable ? children : null}
+      </div>
+    </section>
+  )
+}
+```
+
+- [x] **Step 8: Run shell tests**
+
+Run:
+
+```bash
+pnpm --dir frontend test -- src/features/chat/components/ChatFullScreenPanel.test.tsx
+```
+
+Expected: pass.
+
+- [x] **Step 9: Implement `ChatInfoPage`**
 
 Create `frontend/src/features/chat/components/ChatInfoPage.tsx`:
 
@@ -1430,7 +1527,7 @@ export function ChatInfoPage({
 }
 ```
 
-- [ ] **Step 6: Run component tests**
+- [x] **Step 6: Run component tests**
 
 Run:
 
@@ -1440,7 +1537,7 @@ pnpm --dir frontend test -- src/features/chat/components/ChatInfoPage.test.tsx
 
 Expected: pass.
 
-- [ ] **Step 7: Check frontend info component changes**
+- [x] **Step 7: Check frontend info component changes**
 
 Run:
 
@@ -1463,7 +1560,7 @@ yet.
 - Test: `frontend/src/features/chat/pages/ChatPage.test.tsx`
 - Test: `frontend/src/features/chat/pages/ChatPage.thread-selection.test.tsx`
 
-- [ ] **Step 1: Add failing page integration test**
+- [x] **Step 1: Add failing page integration test**
 
 In `frontend/src/features/chat/pages/ChatPage.test.tsx`, add:
 
@@ -1529,7 +1626,7 @@ it('opens chat info from the chat menu and returns to the transcript', async () 
 })
 ```
 
-- [ ] **Step 2: Run page test and verify it fails**
+- [x] **Step 2: Run page test and verify it fails**
 
 Run:
 
@@ -1539,7 +1636,7 @@ pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx
 
 Expected: fail because the menu item is disabled and panel state is missing.
 
-- [ ] **Step 3: Enable ChatHeader menu item callback**
+- [x] **Step 3: Enable ChatHeader menu item callback**
 
 Modify `ChatHeaderProps` in `frontend/src/features/chat/components/ChatHeader.tsx`:
 
@@ -1560,7 +1657,7 @@ Accept the prop and update the `Информация о чате` item:
 />
 ```
 
-- [ ] **Step 4: Add chat info panel hook**
+- [x] **Step 4: Add chat info panel hook**
 
 Create `frontend/src/features/chat/pages/useChatInfoPanel.ts`:
 
@@ -1682,7 +1779,7 @@ export function useChatInfoPanel({
 }
 ```
 
-- [ ] **Step 5: Wire ChatPage with minimal line growth**
+- [x] **Step 5: Wire ChatPage with minimal line growth**
 
 Modify imports in `frontend/src/features/chat/pages/ChatPage.tsx`:
 
@@ -1739,7 +1836,7 @@ wc -l frontend/src/features/chat/pages/ChatPage.tsx
 
 Expected: `ChatPage.tsx` remains at or below 500 lines.
 
-- [ ] **Step 6: Run frontend chat page tests**
+- [x] **Step 6: Run frontend chat page tests**
 
 Run:
 
@@ -1749,7 +1846,7 @@ pnpm --dir frontend test -- src/features/chat/pages/ChatPage.test.tsx src/featur
 
 Expected: pass.
 
-- [ ] **Step 7: Check menu integration changes**
+- [x] **Step 7: Check menu integration changes**
 
 Run:
 
@@ -1769,7 +1866,7 @@ yet.
 - Modify: `docs/roadmap/work-log.md`
 - Optional test file: existing Playwright e2e spec under `tests/` if local fixtures already cover private/group thread chat.
 
-- [ ] **Step 1: Run targeted backend checks**
+- [x] **Step 1: Run targeted backend checks**
 
 Run:
 
@@ -1779,7 +1876,7 @@ pnpm --dir backend test -- src/modules/chat-threads/info.test.ts src/modules/cha
 
 Expected: pass.
 
-- [ ] **Step 2: Run targeted frontend checks**
+- [x] **Step 2: Run targeted frontend checks**
 
 Run:
 
@@ -1790,7 +1887,7 @@ pnpm --dir frontend typecheck
 
 Expected: pass.
 
-- [ ] **Step 3: Run build and lint checks**
+- [x] **Step 3: Run build and lint checks**
 
 Run:
 
@@ -1803,7 +1900,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 4: Browser/runtime validation**
+- [x] **Step 4: Browser/runtime validation**
 
 Run Playwright when local services are already running and test fixtures support chat:
 
@@ -1818,7 +1915,7 @@ requests.
 If services are not running because the project rule reserves service start/stop
 for the user, record the blocker in the final answer and in the work log entry.
 
-- [ ] **Step 5: Code review the touched areas**
+- [x] **Step 5: Code review the touched areas**
 
 Review these files manually:
 
@@ -1835,7 +1932,7 @@ Check:
 - `ChatPage.tsx` remains at or below 500 lines;
 - no generated artifacts are tracked.
 
-- [ ] **Step 6: Update work log after checks**
+- [x] **Step 6: Update work log after checks**
 
 Edit `docs/roadmap/work-log.md`:
 
@@ -1845,7 +1942,7 @@ Edit `docs/roadmap/work-log.md`:
 
 Use only completed facts and checks. Keep one `Recommended Next Step` block.
 
-- [ ] **Step 7: Run docs formatting and diff check**
+- [x] **Step 7: Run docs formatting and diff check**
 
 Run:
 
@@ -1856,7 +1953,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 8: Commit completed feature slice**
+- [x] **Step 8: Commit completed feature slice**
 
 Run:
 

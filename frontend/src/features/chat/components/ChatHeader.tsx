@@ -24,6 +24,7 @@ import {
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
   isReady: boolean
+  onOpenThreadInfo: () => void
   onSelectThread: (threadId: string) => void
   selectedThreadId: string | null
   threads: ChatThreadSummary[]
@@ -38,6 +39,7 @@ function focusElement(element: HTMLElement | null) {
 export function ChatHeader({
   activeThread,
   isReady,
+  onOpenThreadInfo,
   onSelectThread,
   selectedThreadId,
   threads,
@@ -329,8 +331,13 @@ export function ChatHeader({
                 label="Отключить уведомления"
               />
               <ChatMenuItem
+                disabled={!selectedThreadId}
                 icon={<InfoIcon className="h-5 w-5" />}
                 label="Информация о чате"
+                onSelect={() => {
+                  closeMenus()
+                  onOpenThreadInfo()
+                }}
               />
               <ChatMenuItem
                 destructive

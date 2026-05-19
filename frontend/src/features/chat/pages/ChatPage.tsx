@@ -7,6 +7,7 @@ import {
 } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
+import { ChatInfoPage } from '../components/ChatInfoPage'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
@@ -28,6 +29,7 @@ import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPageState } from './chatPageState'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
+import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -95,6 +97,13 @@ export function ChatPage() {
     setPageState,
     setReplyTarget,
     setSendErrorMessage,
+  })
+  const chatInfoPanel = useChatInfoPanel({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
   })
 
   async function handleLoadOlderMessages() {
@@ -343,8 +352,9 @@ export function ChatPage() {
 
   const snapshot = pageState.snapshot
   const selectedThread =
-    pageState.threads.find((thread) => thread.id === pageState.selectedThreadId) ??
-    null
+    pageState.threads.find(
+      (thread) => thread.id === pageState.selectedThreadId,
+    ) ?? null
   const headerThread = snapshot?.activeThread ?? selectedThread
   const realtimeThreadId =
     pageState.status === 'ready' &&
@@ -399,6 +409,9 @@ export function ChatPage() {
       <ChatHeader
         activeThread={headerThread}
         isReady={isReady}
+        onOpenThreadInfo={() => {
+          void chatInfoPanel.loadChatInfo()
+        }}
         onSelectThread={(threadId) => {
           void handleSelectThread(threadId)
         }}
@@ -468,6 +481,16 @@ export function ChatPage() {
           replyTarget={replyTarget}
         />
       </div>
+      {chatInfoPanel.state.isOpen ? (
+        <ChatInfoPage
+          info={chatInfoPanel.state.info}
+          isLoading={chatInfoPanel.state.isLoading}
+          onBack={chatInfoPanel.closeChatInfo}
+          onRetry={() => {
+            void chatInfoPanel.retryChatInfo()
+          }}
+        />
+      ) : null}
     </>
   )
 }

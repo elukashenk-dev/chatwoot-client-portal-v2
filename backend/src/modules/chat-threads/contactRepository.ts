@@ -54,6 +54,28 @@ export function createChatThreadContactRepository(
 
     findContactLinkByUserId,
 
+    async listActivePortalUserContactLinks() {
+      return db
+        .select({
+          chatwootContactId: portalUserContactLinks.chatwootContactId,
+          email: portalUsers.email,
+          fullName: portalUsers.fullName,
+          userId: portalUsers.id,
+        })
+        .from(portalUserContactLinks)
+        .innerJoin(
+          portalUsers,
+          eq(portalUserContactLinks.userId, portalUsers.id),
+        )
+        .where(
+          and(
+            eq(portalUserContactLinks.tenantId, tenantId),
+            eq(portalUsers.tenantId, tenantId),
+            eq(portalUsers.isActive, true),
+          ),
+        )
+    },
+
     async findPortalUserById(userId: number) {
       const [user] = await db
         .select({

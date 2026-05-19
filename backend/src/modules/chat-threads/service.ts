@@ -5,6 +5,14 @@ import {
   assertPortalPersonContactEnabled,
 } from './contactAttributes.js'
 import type { ChatThreadContactRepository } from './contactRepository.js'
+import {
+  buildChatThreadAccessLabel,
+  buildChatThreadTypeLabel,
+  normalizeChatInfoParticipantRows,
+  readCuratorName,
+  toIsoDateTime,
+  type SafeChatInfoParticipantRow,
+} from './info.js'
 import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
 import { createChatThreadRuntimeResolver } from './runtime.js'
@@ -20,7 +28,10 @@ const CONFIGURATION_ERROR_MESSAGE =
 
 type ChatThreadsContactRepository = Pick<
   ChatThreadContactRepository,
-  'createContactLink' | 'findContactLinkByUserId' | 'findPortalUserById'
+  | 'createContactLink'
+  | 'findContactLinkByUserId'
+  | 'findPortalUserById'
+  | 'listActivePortalUserContactLinks'
 >
 
 type ChatThreadsPersistenceRepository = Pick<
@@ -39,6 +50,7 @@ type ChatThreadsChatwootClient = Pick<
   | 'findContactByEmail'
   | 'findContactById'
   | 'findContactPortalInboxSourceId'
+  | 'listContactConversations'
 >
 
 type CreateChatThreadsServiceOptions = {
@@ -47,6 +59,7 @@ type CreateChatThreadsServiceOptions = {
   chatwootClient: ChatThreadsChatwootClient
   now?: () => Date
   portalInboxId: number
+  supportLabel?: string
 }
 
 function createContactConfigurationError(code: string) {
@@ -59,10 +72,10 @@ export function createChatThreadsService({
   chatwootClient,
   now = () => new Date(),
   portalInboxId,
+  supportLabel = 'Команда поддержки',
 }: CreateChatThreadsServiceOptions) {
   async function findLinkedPersonContact(userId: number) {
-    const contactLink =
-      await contactRepository.findContactLinkByUserId(userId)
+    const contactLink = await contactRepository.findContactLinkByUserId(userId)
 
     if (contactLink) {
       const contact = await chatwootClient.findContactById(
@@ -114,8 +127,123 @@ export function createChatThreadsService({
     readPersonAttributes: assertPortalPersonContactEnabled,
   })
 
+  async function listSafeGroupParticipants({
+    currentUserId,
+    groupContactId,
+  }: {
+    currentUserId: number
+    groupContactId: number
+  }) {
+    const rows = await contactRepository.listActivePortalUserContactLinks()
+    const participantRows: SafeChatInfoParticipantRow[] = []
+
+    for (const row of rows) {
+      const contact = await chatwootClient.findContactById(
+        row.chatwootContactId,
+      )
+
+      if (!contact) {
+        continue
+      }
+
+      let attributes: ReturnType<typeof assertPortalPersonContactEnabled>
+
+      try {
+        attributes = assertPortalPersonContactEnabled(contact)
+      } catch {
+        continue
+      }
+
+      if (!attributes.groupContactIds.includes(groupContactId)) {
+        continue
+      }
+
+      participantRows.push({
+        displayName: row.fullName,
+        email: row.email,
+        isCurrentUser: row.userId === currentUserId,
+        userId: row.userId,
+      })
+    }
+
+    return normalizeChatInfoParticipantRows(participantRows)
+  }
+
   return {
     ...runtimeResolver,
+
+    async getCurrentUserThreadInfo({
+      threadId,
+      userId,
+    }: {
+      threadId: string
+      userId: number
+    }) {
+      const context = await runtimeResolver.getCurrentUserThreadContext({
+        threadId,
+        userId,
+      })
+
+      if (!context.activeThread || !context.threadType) {
+        return {
+          accessLabel: '',
+          activeThread: null,
+          curatorName: null,
+          lastActivityAt: null,
+          participants: [],
+          reason: context.reason,
+          result: context.result,
+          startedAt: null,
+          supportLabel,
+          threadTypeLabel: null,
+        }
+      }
+
+      const targetContact =
+        context.targetChatwootContactId === null
+          ? null
+          : await chatwootClient.findContactById(
+              context.targetChatwootContactId,
+            )
+      const conversations =
+        context.chatwootConversation && context.targetChatwootContactId !== null
+          ? await chatwootClient.listContactConversations(
+              context.targetChatwootContactId,
+            )
+          : []
+      const conversation =
+        context.chatwootConversation === null
+          ? null
+          : (conversations.find(
+              (candidate) => candidate.id === context.chatwootConversation?.id,
+            ) ?? null)
+      const participants =
+        context.threadType === 'group' &&
+        context.targetChatwootContactId !== null
+          ? await listSafeGroupParticipants({
+              currentUserId: userId,
+              groupContactId: context.targetChatwootContactId,
+            })
+          : []
+
+      return {
+        accessLabel: buildChatThreadAccessLabel(context.threadType),
+        activeThread: context.activeThread,
+        curatorName: readCuratorName(targetContact?.customAttributes),
+        lastActivityAt: toIsoDateTime(conversation?.lastActivityAt ?? null),
+        participants,
+        reason: context.reason,
+        result:
+          context.result === 'unavailable'
+            ? 'unavailable'
+            : context.activeThread
+              ? 'ready'
+              : context.result,
+        startedAt: toIsoDateTime(conversation?.createdAt ?? null),
+        supportLabel,
+        threadTypeLabel: buildChatThreadTypeLabel(context.threadType),
+      }
+    },
 
     async listCurrentUserThreads({
       userId,
@@ -139,9 +267,7 @@ export function createChatThreadsService({
           await chatwootClient.findContactById(groupContactId)
 
         if (!groupContact) {
-          throw createContactConfigurationError(
-            'portal_group_contact_missing',
-          )
+          throw createContactConfigurationError('portal_group_contact_missing')
         }
 
         assertPortalGroupContactEnabled(groupContact)

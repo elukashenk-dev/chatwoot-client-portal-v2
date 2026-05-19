@@ -1,6 +1,7 @@
 import type {
   ChatMessagesSnapshot,
   ChatSendResult,
+  ChatThreadInfoResponse,
   ChatThreadsResponse,
 } from '../types'
 
@@ -128,6 +129,12 @@ export async function getChatMessages({
 
 export async function getChatThreads() {
   return request<ChatThreadsResponse>('/chat/threads')
+}
+
+export async function getChatThreadInfo(threadId: string) {
+  return request<ChatThreadInfoResponse>(
+    `/chat/threads/${encodeURIComponent(threadId)}/info`,
+  )
 }
 
 export async function sendChatMessage({
