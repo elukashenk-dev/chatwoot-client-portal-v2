@@ -232,6 +232,140 @@ test('renders the ready chat transcript and loads older history through the back
   ])
 })
 
+test('opens group chat info from the chat menu and returns to the transcript', async ({
+  page,
+}) => {
+  const chatInfoRequests: string[] = []
+
+  await routeThreadsWithGroup(page)
+  await routeStoppedRealtime(page)
+  await page.route('**/api/chat/messages**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+    const threadId = requestUrl.searchParams.get('threadId')
+
+    if (threadId === 'group:154') {
+      await route.fulfill({
+        body: JSON.stringify({
+          activeThread: groupThread,
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Иван Петров',
+              authorRole: 'group_member',
+              content: 'Сообщение из группового чата.',
+              contentType: 'text',
+              createdAt: '2026-05-19T09:00:00.000Z',
+              direction: 'incoming',
+              id: 804,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+          reason: 'none',
+          result: 'ready',
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              authorRole: 'agent',
+              content: 'Здравствуйте, вижу ваше обращение.',
+              contentType: 'text',
+              createdAt: '2026-04-21T09:12:00.000Z',
+              direction: 'incoming',
+              id: 204,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/threads/*/info', async (route) => {
+    const requestUrl = new URL(route.request().url())
+
+    chatInfoRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
+    await route.fulfill({
+      body: JSON.stringify({
+        accessLabel: 'Участники группы и поддержка',
+        activeThread: groupThread,
+        curatorName: 'Анна Маттина',
+        lastActivityAt: '2026-05-19T10:20:00.000Z',
+        participants: [
+          {
+            displayName: 'Иван Петров',
+            id: 'portal-user:7',
+            isCurrentUser: true,
+          },
+          {
+            displayName: 'Мария Соколова',
+            id: 'portal-user:8',
+            isCurrentUser: false,
+          },
+        ],
+        reason: 'none',
+        result: 'ready',
+        startedAt: '2026-05-18T09:00:00.000Z',
+        supportLabel: 'Команда Local Test Tenant',
+        threadTypeLabel: 'Групповой',
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByRole('menuitem', { name: /ООО "Ромашка"/ }).click()
+
+  await expect(
+    page.getByRole('heading', { name: 'ООО "Ромашка"' }),
+  ).toBeVisible()
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Открыть меню чата' }).click()
+  await page.getByRole('menuitem', { name: 'Информация о чате' }).click()
+
+  const infoPage = page.locator('section').filter({
+    has: page.getByRole('heading', { name: 'Информация о чате' }),
+  })
+
+  await expect(
+    infoPage.getByRole('heading', { name: 'Информация о чате' }),
+  ).toBeVisible()
+  await expect(infoPage.getByText('Групповой', { exact: true })).toBeVisible()
+  await expect(infoPage.getByText('Анна Маттина')).toBeVisible()
+  await expect(infoPage.getByText('Участники портала')).toBeVisible()
+  await expect(infoPage.getByText('Иван Петров')).toBeVisible()
+  await expect(infoPage.getByText('Вы')).toBeVisible()
+  await expect(infoPage.getByText('Мария Соколова')).toBeVisible()
+
+  await infoPage.getByRole('button', { name: 'Вернуться к чату' }).click()
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Информация о чате' }),
+  ).toBeHidden()
+  expect(chatInfoRequests).toEqual(['/api/chat/threads/group%3A154/info'])
+})
+
 test('sends text through the backend chat contract and renders the canonical response', async ({
   page,
 }) => {

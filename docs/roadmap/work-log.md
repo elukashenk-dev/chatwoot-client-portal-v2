@@ -129,13 +129,16 @@
 - Chat info details покрывают тип чата, support label, доступ, `curator_name`,
   дату начала/последней активности и безопасный список участников группового
   чата через active portal users + Chatwoot contact attribute membership.
+- Local service governance обновлен: агент может запускать/перезапускать
+  локальные portal-сервисы для разработки и проверок; Chatwoot остается внешним
+  сервисом и без отдельной необходимости не трогается.
+- Chat info Playwright e2e добавлен в `chat-read-model`: group chat info
+  открывается из меню, показывает детали/куратора/участников и возвращается в
+  transcript.
 - Проверки chat info slice пройдены: backend targeted tests `51/51`,
   frontend targeted tests `23/23`, `pnpm build`, `pnpm lint`, Prettier targeted
   check, `git diff --check`, Playwright MCP browser validation на
-  `http://127.0.0.1:5173` с mock API.
-- Repo Playwright e2e не запускался для этого slice: backend runtime на
-  `127.0.0.1:3301` не отвечает, а запуск/перезапуск локальных сервисов по
-  project rule выполняет пользователь.
+  `http://127.0.0.1:5173` с mock API, repo Playwright e2e `26/26`.
 
 ## Current Baseline
 
@@ -154,6 +157,5 @@
 
 ## Recommended Next Step
 
-- После пользовательского запуска backend runtime на `127.0.0.1:3301` прогнать
-  repo Playwright e2e для chat info browser flow; затем переходить к следующему
-  menu slice.
+- Принять integration decision по ветке `feature/phase-chat-info-page`; после
+  этого переходить к следующему menu slice.
