@@ -165,6 +165,8 @@
   read-only full-screen `Медиа и файлы` page поверх текущего thread authority,
   с portal attachment proxy для медиа-страницы и существующего transcript, без
   browser Chatwoot authority и без upload/delete/search scope.
+- Для `Медиа и файлы` зафиксирован выбранный UI вариант `C. Mixed View`:
+  фото/видео в visual section, аудио/документы/прочие файлы в compact list.
 
 ## Current Baseline
 
@@ -183,6 +185,6 @@
 
 ## Recommended Next Step
 
-- Review и утвердить `docs/superpowers/specs/2026-05-19-chat-media-files-page-design.md`
-  и `docs/superpowers/plans/2026-05-19-chat-media-files-page.md`; затем
-  выбрать execution mode для реализации `Медиа и файлы`.
+- Реализовать `Медиа и файлы` task-by-task по
+  `docs/superpowers/plans/2026-05-19-chat-media-files-page.md`, начиная с
+  portal attachment proxy foundation.

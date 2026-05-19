@@ -4,6 +4,10 @@
 
 **Goal:** Build a read-only full-screen `Медиа и файлы` page for the selected portal chat thread.
 
+**Chosen UI:** `C. Mixed View` — render images/videos as a compact visual
+section and audio/documents/other files as a dense file list, preserving the
+same filter set across both sections.
+
 **Architecture:** Keep browser authority thread-id based. Backend first adds a portal attachment proxy and changes existing transcript attachment URLs to portal-authorized URLs, then adds a read-only media endpoint in the chat messages boundary. Frontend reuses `ChatFullScreenPanel`, adds a media page hook and component, and opens it from the existing chat menu without ever receiving direct Chatwoot attachment URLs.
 
 **Tech Stack:** Fastify, Zod, Chatwoot Application API wrapper, React 19, React Router, Tailwind CSS 4, Vitest, Testing Library, Playwright.
@@ -954,6 +958,8 @@ Create `frontend/src/features/chat/components/ChatMediaPage.tsx`:
 - derive loaded items from `media?.items ?? []`;
 - keep filter state local with labels `Все`, `Фото`, `Видео`, `Аудио`,
   `Файлы`;
+- implement `C. Mixed View`: image/video items in a compact visual grid and
+  audio/document/other items in a dense list;
 - use `formatAttachmentSize` from chat transcript utils;
 - use icon components from `frontend/src/shared/ui/icons`;
 - avoid `<audio>` native controls in this page for MVP so

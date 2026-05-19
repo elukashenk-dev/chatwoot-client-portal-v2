@@ -176,6 +176,8 @@ message cursor if older messages remain.
 
 Use the existing `ChatFullScreenPanel` inside the protected chat shell.
 
+Chosen presentation model: `C. Mixed View`.
+
 Layout:
 
 - safe-area aware top bar;
@@ -183,16 +185,21 @@ Layout:
 - title `Медиа и файлы`;
 - compact thread identity row;
 - segmented filter: `Все`, `Фото`, `Видео`, `Аудио`, `Файлы`;
-- scrollable item list;
+- visual media section for images and videos;
+- compact file list for audio, documents, and other files;
 - `Показать ещё` button when `hasMoreOlder` is true;
 - quiet empty state when no media is found.
 
 Item presentation:
 
-- images: square thumbnail when possible, filename and metadata next to it;
-- videos: video/file icon, filename, type, size, sender/date;
+- images: square thumbnail card when possible, filename and metadata below it;
+- videos: square card with video/file icon, filename and metadata below it;
 - audio: audio/voice icon, filename, type, size, sender/date;
 - documents/files: file icon, filename, type, size, sender/date.
+
+Filtering keeps the mixed layout: media filters show the visual section when it
+contains image/video items, and the compact list when it contains audio/file
+items.
 
 All items with a non-empty URL open in a new tab with `rel="noreferrer"`.
 Items without a URL stay visible but disabled with a controlled label
