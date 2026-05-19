@@ -189,6 +189,15 @@
   `git diff --check`, buhfirma Playwright e2e `27/27`, live Playwright flow
   registration -> private PNG send -> media page -> open image через portal
   proxy.
+- Production deploy `fac3412` выполнен на `lk.provgroup.ru` из clean
+  `feature/phase-media-files-page`; portal backend/web containers rebuilt и
+  healthy, `/api/health`, `/api/tenant` и manifest отвечают.
+- Production public smoke после deploy пройден в clean Playwright context:
+  login, registration и password reset routes рендерятся; unauthenticated
+  media endpoint возвращает ожидаемый `401`.
+- Authenticated production media smoke пока требует реального prod portal
+  пользователя, который уже добавлен агентом в Chatwoot как contact и может
+  войти или пройти registration.
 
 ## Current Baseline
 
@@ -207,6 +216,6 @@
 
 ## Recommended Next Step
 
-- Выбрать следующий menu slice: `Поиск по чату`, `Отключить уведомления`,
-  `Центр поддержки` или расширение `Медиа и файлы`, и перед стартом
-  зафиксировать точный scope.
+- Подготовить валидного prod portal пользователя для `lk.provgroup.ru`,
+  отправить файл в личный чат и проверить, что `Медиа и файлы` открывает его
+  через portal attachment proxy.
