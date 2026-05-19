@@ -1,5 +1,8 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { Readable } from 'node:stream'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
+
 import type { MultipartFile, MultipartValue } from '@fastify/multipart'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
@@ -10,7 +13,11 @@ import type { AuthService } from '../auth/service.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { ChatSendRateLimiter } from './rateLimit.js'
-import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
+import type {
+  ChatAttachmentProxyVariant,
+  ChatMessagesService,
+  PortalAttachmentUpload,
+} from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
 const CHAT_ATTACHMENT_FIELD_MAX_BYTES = 16 * 1024
@@ -24,6 +31,26 @@ const chatMessagesQuerySchema = z
   .object({
     beforeMessageId: z.coerce.number().int().positive().optional(),
     threadId: publicThreadIdSchema.optional(),
+  })
+  .strict()
+
+const attachmentProxyParamsSchema = z
+  .object({
+    attachmentId: z.coerce.number().int().positive(),
+    messageId: z.coerce.number().int().positive(),
+    threadId: publicThreadIdSchema,
+  })
+  .strict()
+
+const chatMediaParamsSchema = z
+  .object({
+    threadId: publicThreadIdSchema,
+  })
+  .strict()
+
+const chatMediaQuerySchema = z
+  .object({
+    beforeMessageId: z.coerce.number().int().positive().optional(),
   })
   .strict()
 
@@ -58,6 +85,17 @@ type RegisterChatMessagesRoutesOptions = {
   createChatMessagesService: (request: FastifyRequest) => ChatMessagesService
   env: AppEnv
 }
+
+const ATTACHMENT_PROXY_RESPONSE_HEADERS = [
+  'accept-ranges',
+  'cache-control',
+  'content-disposition',
+  'content-length',
+  'content-range',
+  'content-type',
+  'etag',
+  'last-modified',
+] as const
 
 async function enforceChatSendRateLimit({
   chatSendRateLimiter,
@@ -194,6 +232,28 @@ function toMultipartApiError(app: FastifyInstance, error: unknown) {
   return null
 }
 
+function copyAttachmentProxyHeaders({
+  headers,
+  reply,
+}: {
+  headers: Headers
+  reply: FastifyReply
+}) {
+  for (const headerName of ATTACHMENT_PROXY_RESPONSE_HEADERS) {
+    const headerValue = headers.get(headerName)
+
+    if (headerValue !== null) {
+      reply.header(headerName, headerValue)
+    }
+  }
+}
+
+function getRangeHeader(request: FastifyRequest) {
+  const rangeHeader = request.headers.range
+
+  return typeof rangeHeader === 'string' ? rangeHeader : null
+}
+
 async function parseAttachmentUpload(
   app: FastifyInstance,
   request: FastifyRequest,
@@ -276,6 +336,83 @@ export function registerChatMessagesRoutes(
     env,
   }: RegisterChatMessagesRoutesOptions,
 ) {
+  async function sendAttachmentProxy({
+    reply,
+    request,
+    variant,
+  }: {
+    reply: FastifyReply
+    request: FastifyRequest
+    variant: ChatAttachmentProxyVariant
+  }) {
+    const user = await resolveAuthenticatedPortalUser({
+      authService,
+      env,
+      reply,
+      request,
+    })
+    const params = attachmentProxyParamsSchema.parse(request.params)
+    const attachment = await createChatMessagesService(
+      request,
+    ).getCurrentUserChatAttachment({
+      attachmentId: params.attachmentId,
+      messageId: params.messageId,
+      rangeHeader: getRangeHeader(request),
+      threadId: params.threadId,
+      userId: user.id,
+      variant,
+    })
+
+    copyAttachmentProxyHeaders({
+      headers: attachment.headers,
+      reply,
+    })
+    reply.code(attachment.status)
+
+    if (!attachment.body) {
+      return reply.send()
+    }
+
+    return reply.send(Readable.fromWeb(attachment.body as NodeReadableStream))
+  }
+
+  app.get(
+    '/api/chat/threads/:threadId/attachments/:messageId/:attachmentId',
+    async (request, reply) =>
+      sendAttachmentProxy({
+        reply,
+        request,
+        variant: 'original',
+      }),
+  )
+
+  app.get(
+    '/api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb',
+    async (request, reply) =>
+      sendAttachmentProxy({
+        reply,
+        request,
+        variant: 'thumb',
+      }),
+  )
+
+  app.get('/api/chat/threads/:threadId/media', async (request, reply) => {
+    const user = await resolveAuthenticatedPortalUser({
+      authService,
+      env,
+      reply,
+      request,
+    })
+    const params = chatMediaParamsSchema.parse(request.params)
+    const query = chatMediaQuerySchema.parse(request.query)
+
+    return createChatMessagesService(request).getCurrentUserChatMedia({
+      beforeMessageId: query.beforeMessageId ?? null,
+      threadId: params.threadId,
+      userId: user.id,
+    })
+  })
+
   app.get('/api/chat/messages', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({
       authService,

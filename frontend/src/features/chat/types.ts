@@ -52,6 +52,8 @@ export type ChatThreadInfoResponse = {
 
 export type ChatMessageAuthorRole = 'agent' | 'group_member' | 'current_user'
 
+export type ChatMediaCategory = 'audio' | 'file' | 'image' | 'video'
+
 export type ChatAttachment = {
   fileSize: number | null
   fileType: string
@@ -88,6 +90,31 @@ export type ChatMessagesSnapshot = {
   activeThread: ChatThreadSummary | null
   hasMoreOlder: boolean
   messages: ChatMessage[]
+  nextOlderCursor: number | null
+  reason: ChatThreadReason
+  result: ChatThreadResult
+}
+
+export type ChatMediaItem = {
+  attachmentId: number
+  authorName: string
+  authorRole: ChatMessageAuthorRole
+  category: ChatMediaCategory
+  createdAt: string
+  direction: 'incoming' | 'outgoing'
+  fileSize: number | null
+  fileType: string
+  id: `attachment:${number}:${number}`
+  messageId: number
+  name: string
+  thumbUrl: string
+  url: string
+}
+
+export type ChatThreadMediaResponse = {
+  activeThread: ChatThreadSummary | null
+  hasMoreOlder: boolean
+  items: ChatMediaItem[]
   nextOlderCursor: number | null
   reason: ChatThreadReason
   result: ChatThreadResult

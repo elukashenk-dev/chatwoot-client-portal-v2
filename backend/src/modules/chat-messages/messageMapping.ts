@@ -18,6 +18,7 @@ type MessageThreadContext = {
   currentUserId: number
   ledgerAuthorsByMessageId?: Map<number, SendLedgerAuthor> | undefined
   replyTargetsById?: Map<number, ChatwootMessage> | undefined
+  threadId: string
   threadType: 'group' | 'private' | null
 }
 
@@ -171,6 +172,24 @@ function normalizePortalMessageStatus(
   return message.status
 }
 
+function buildPortalAttachmentUrl({
+  attachmentId,
+  messageId,
+  threadId,
+  variant = 'original',
+}: {
+  attachmentId: number
+  messageId: number
+  threadId: string
+  variant?: 'original' | 'thumb'
+}) {
+  const basePath = `/api/chat/threads/${encodeURIComponent(
+    threadId,
+  )}/attachments/${messageId}/${attachmentId}`
+
+  return variant === 'thumb' ? `${basePath}/thumb` : basePath
+}
+
 export function mapPortalMessage(
   message: ChatwootMessage,
   context: MessageThreadContext,
@@ -192,8 +211,19 @@ export function mapPortalMessage(
       fileType: attachment.fileType,
       id: attachment.id,
       name: attachment.name,
-      thumbUrl: attachment.thumbUrl,
-      url: attachment.url,
+      thumbUrl: attachment.thumbUrl
+        ? buildPortalAttachmentUrl({
+            attachmentId: attachment.id,
+            messageId: message.id,
+            threadId: context.threadId,
+            variant: 'thumb',
+          })
+        : '',
+      url: buildPortalAttachmentUrl({
+        attachmentId: attachment.id,
+        messageId: message.id,
+        threadId: context.threadId,
+      }),
     })),
     authorAvatarUrl: presentation.authorAvatarUrl,
     authorName: presentation.authorName,

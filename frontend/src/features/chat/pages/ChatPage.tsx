@@ -9,6 +9,7 @@ import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatInfoPage } from '../components/ChatInfoPage'
 import { ChatLoadingState } from '../components/ChatLoadingState'
+import { ChatMediaPage } from '../components/ChatMediaPage'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
@@ -30,6 +31,7 @@ import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type { ChatPageState } from './chatPageState'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
+import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -99,6 +101,13 @@ export function ChatPage() {
     setSendErrorMessage,
   })
   const chatInfoPanel = useChatInfoPanel({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
+  })
+  const chatMediaPanel = useChatMediaPanel({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
@@ -409,6 +418,9 @@ export function ChatPage() {
       <ChatHeader
         activeThread={headerThread}
         isReady={isReady}
+        onOpenThreadMedia={() => {
+          void chatMediaPanel.loadChatMedia()
+        }}
         onOpenThreadInfo={() => {
           void chatInfoPanel.loadChatInfo()
         }}
@@ -488,6 +500,20 @@ export function ChatPage() {
           onBack={chatInfoPanel.closeChatInfo}
           onRetry={() => {
             void chatInfoPanel.retryChatInfo()
+          }}
+        />
+      ) : null}
+      {chatMediaPanel.state.isOpen ? (
+        <ChatMediaPage
+          isLoading={chatMediaPanel.state.isLoading}
+          isLoadingOlder={chatMediaPanel.state.isLoadingOlder}
+          media={chatMediaPanel.state.media}
+          onBack={chatMediaPanel.closeChatMedia}
+          onLoadOlder={() => {
+            void chatMediaPanel.loadOlderChatMedia()
+          }}
+          onRetry={() => {
+            void chatMediaPanel.retryChatMedia()
           }}
         />
       ) : null}

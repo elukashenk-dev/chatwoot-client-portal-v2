@@ -178,7 +178,7 @@ test('renders the ready chat transcript and loads older history through the back
                   id: 9,
                   name: 'invoice.pdf',
                   thumbUrl: '',
-                  url: 'https://example.test/invoice.pdf',
+                  url: '/api/chat/threads/private%3Ame/attachments/205/9',
                 },
               ],
               authorName: 'Вы',
@@ -376,6 +376,182 @@ test('opens group chat info from the chat menu and returns to the transcript', a
     page.getByRole('heading', { name: 'Информация о чате' }),
   ).toBeHidden()
   expect(chatInfoRequests).toEqual(['/api/chat/threads/group%3A154/info'])
+})
+
+test('opens group chat media and files through portal-authorized attachment URLs', async ({
+  page,
+}) => {
+  const mediaRequests: string[] = []
+  const attachmentRequests: string[] = []
+
+  await routeThreadsWithGroup(page)
+  await routeStoppedRealtime(page)
+  await page.route('**/api/chat/messages**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+    const threadId = requestUrl.searchParams.get('threadId')
+
+    if (threadId === 'group:154') {
+      await route.fulfill({
+        body: JSON.stringify({
+          activeThread: groupThread,
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Иван Петров',
+              authorRole: 'group_member',
+              content: 'Сообщение из группового чата.',
+              contentType: 'text',
+              createdAt: '2026-05-19T09:00:00.000Z',
+              direction: 'incoming',
+              id: 804,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+          reason: 'none',
+          result: 'ready',
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              authorRole: 'agent',
+              content: 'Здравствуйте, вижу ваше обращение.',
+              contentType: 'text',
+              createdAt: '2026-04-21T09:12:00.000Z',
+              direction: 'incoming',
+              id: 204,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      ),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/threads/*/media**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+
+    mediaRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
+    await route.fulfill({
+      body: JSON.stringify({
+        activeThread: groupThread,
+        hasMoreOlder: false,
+        items: [
+          {
+            attachmentId: 71,
+            authorName: 'Ольга Support',
+            authorRole: 'agent',
+            category: 'image',
+            createdAt: '2026-05-19T10:20:00.000Z',
+            direction: 'incoming',
+            fileSize: 4096,
+            fileType: 'image',
+            id: 'attachment:804:71',
+            messageId: 804,
+            name: 'receipt.png',
+            thumbUrl: '/api/chat/threads/group%3A154/attachments/804/71/thumb',
+            url: '/api/chat/threads/group%3A154/attachments/804/71',
+          },
+          {
+            attachmentId: 72,
+            authorName: 'Иван Петров',
+            authorRole: 'group_member',
+            category: 'file',
+            createdAt: '2026-05-19T10:30:00.000Z',
+            direction: 'incoming',
+            fileSize: 12_288,
+            fileType: 'application/pdf',
+            id: 'attachment:805:72',
+            messageId: 805,
+            name: 'contract.pdf',
+            thumbUrl: '',
+            url: '/api/chat/threads/group%3A154/attachments/805/72',
+          },
+        ],
+        nextOlderCursor: null,
+        reason: 'none',
+        result: 'ready',
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/threads/*/attachments/**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+
+    attachmentRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
+    await route.fulfill({
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+        'base64',
+      ),
+      contentType: 'image/png',
+      status: 200,
+    })
+  })
+
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByRole('menuitem', { name: /ООО "Ромашка"/ }).click()
+
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть меню чата' }).click()
+  await page.getByRole('menuitem', { name: 'Медиа и файлы' }).click()
+
+  const mediaPage = page.locator('section').filter({
+    has: page.getByRole('heading', { name: 'Медиа и файлы' }),
+  })
+
+  await expect(
+    mediaPage.getByRole('heading', { name: 'Медиа и файлы' }),
+  ).toBeVisible()
+  await expect(mediaPage.getByText('Фото и видео')).toBeVisible()
+  await expect(mediaPage.getByText('receipt.png')).toBeVisible()
+  await expect(mediaPage.getByText('Аудио и файлы')).toBeVisible()
+  await expect(mediaPage.getByText('contract.pdf')).toBeVisible()
+
+  const receiptLink = mediaPage.getByRole('link', { name: /receipt\.png/ })
+  await expect(receiptLink).toHaveAttribute(
+    'href',
+    /\/api\/chat\/threads\/group%3A154\/attachments\/804\/71$/,
+  )
+
+  const viewportSize = page.viewportSize()
+  const mediaPageBox = await mediaPage.boundingBox()
+
+  expect(viewportSize).not.toBeNull()
+  expect(mediaPageBox).not.toBeNull()
+  expect(Math.round(mediaPageBox?.width ?? 0)).toBe(
+    Math.min(viewportSize?.width ?? 0, 500),
+  )
+
+  await mediaPage.getByRole('button', { name: 'Вернуться к чату' }).click()
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Медиа и файлы' }),
+  ).toBeHidden()
+  expect(mediaRequests).toEqual(['/api/chat/threads/group%3A154/media'])
+  expect(attachmentRequests).toContain(
+    '/api/chat/threads/group%3A154/attachments/804/71/thumb',
+  )
 })
 
 test('sends text through the backend chat contract and renders the canonical response', async ({
@@ -606,7 +782,7 @@ test('sends an attachment through the backend chat contract and renders the cano
                 id: 77,
                 name: 'signed-act.pdf',
                 thumbUrl: '',
-                url: 'https://files.example.test/signed-act.pdf',
+                url: '/api/chat/threads/private%3Ame/attachments/601/77',
               },
             ],
             authorName: 'Вы',

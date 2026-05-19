@@ -340,7 +340,7 @@ describe('createChatMessagesService', () => {
           attachments: [
             {
               name: 'invoice.pdf',
-              url: 'https://files.example.test/invoice.pdf',
+              url: '/api/chat/threads/private%3Ame/attachments/22/8',
             },
           ],
           authorName: 'Вы',
@@ -791,7 +791,7 @@ describe('createChatMessagesService', () => {
         attachments: [
           {
             name: 'invoice.pdf',
-            url: 'https://files.example.test/invoice.pdf',
+            url: '/api/chat/threads/private%3Ame/attachments/601/77',
           },
         ],
         authorName: 'Вы',

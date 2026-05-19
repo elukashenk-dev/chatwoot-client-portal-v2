@@ -2,6 +2,7 @@ import type {
   ChatMessagesSnapshot,
   ChatSendResult,
   ChatThreadInfoResponse,
+  ChatThreadMediaResponse,
   ChatThreadsResponse,
 } from '../types'
 
@@ -134,6 +135,28 @@ export async function getChatThreads() {
 export async function getChatThreadInfo(threadId: string) {
   return request<ChatThreadInfoResponse>(
     `/chat/threads/${encodeURIComponent(threadId)}/info`,
+  )
+}
+
+export async function getChatThreadMedia({
+  beforeMessageId,
+  threadId,
+}: {
+  beforeMessageId?: number | null
+  threadId: string
+}) {
+  const searchParams = new URLSearchParams()
+
+  if (beforeMessageId) {
+    searchParams.set('beforeMessageId', String(beforeMessageId))
+  }
+
+  const query = searchParams.toString()
+
+  return request<ChatThreadMediaResponse>(
+    `/chat/threads/${encodeURIComponent(threadId)}/media${
+      query ? `?${query}` : ''
+    }`,
   )
 }
 

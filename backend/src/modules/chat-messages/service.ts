@@ -19,28 +19,31 @@ import {
   normalizeGroupAuthorDisplayName,
 } from './authorFormatting.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
+import { buildPortalChatMediaItems } from './media.js'
 import {
   buildReplyTargetsById,
   isClientVisibleMessage,
   mapPortalMessage,
 } from './messageMapping.js'
-import type {
-  ChatMessagesRepository,
-} from './repository.js'
+import type { ChatMessagesRepository } from './repository.js'
 import { createOrReplayCanonicalMessage } from './sendLedger.js'
 import { sendWithDeletedConversationRecovery } from './sendRecovery.js'
 import type {
   ChatMessagesSnapshot,
+  ChatThreadMediaResponse,
   ChatSendResult,
   PortalAttachmentUpload,
+  PortalChatMediaItem,
   PortalChatMessage,
 } from './types.js'
 
 export type {
   ChatMessagesSnapshot,
+  ChatThreadMediaResponse,
   ChatSendResult,
   PortalAttachmentUpload,
   PortalChatAttachment,
+  PortalChatMediaItem,
   PortalChatMessage,
   PortalChatReplyPreview,
 } from './types.js'
@@ -70,6 +73,7 @@ const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
 ])
 
 type CreateChatMessagesServiceOptions = {
+  attachmentFetchFn?: typeof fetch
   chatThreadsRepository: Pick<
     ChatThreadsRepository,
     'findSendLedgerAuthorsByMessageIds'
@@ -92,6 +96,14 @@ type CreateChatMessagesServiceOptions = {
   now?: () => Date
 }
 
+export type ChatAttachmentProxyVariant = 'original' | 'thumb'
+
+export type ChatAttachmentProxyResponse = {
+  body: ReadableStream<Uint8Array> | null
+  headers: Headers
+  status: number
+}
+
 function buildMessagesSnapshot(
   context: CurrentUserChatThreadContext,
   {
@@ -111,6 +123,32 @@ function buildMessagesSnapshot(
     nextOlderCursor,
     reason: context.reason,
     result: context.result,
+  }
+}
+
+function buildMediaResponse(
+  context: CurrentUserChatThreadContext,
+  {
+    hasMoreOlder = false,
+    items = [],
+    nextOlderCursor = null,
+    reason = context.reason,
+    result = context.result,
+  }: {
+    hasMoreOlder?: boolean
+    items?: PortalChatMediaItem[]
+    nextOlderCursor?: number | null
+    reason?: ChatThreadMediaResponse['reason']
+    result?: ChatThreadMediaResponse['result']
+  } = {},
+): ChatThreadMediaResponse {
+  return {
+    activeThread: context.activeThread,
+    hasMoreOlder,
+    items,
+    nextOlderCursor,
+    reason,
+    result,
   }
 }
 
@@ -146,6 +184,20 @@ function createChatSendUnavailableResult(
     reason: 'chatwoot_unavailable',
     result: 'unavailable',
   })
+}
+
+function createAttachmentUnavailableError(statusCode = 404) {
+  return new ApiError(statusCode, 'attachment_unavailable', 'Файл недоступен.')
+}
+
+function createAttachmentThreadContextError(
+  context: CurrentUserChatThreadContext,
+) {
+  if (context.reason === 'thread_access_denied') {
+    return new ApiError(403, 'thread_access_denied', 'Доступ к чату запрещен.')
+  }
+
+  return createAttachmentUnavailableError()
 }
 
 function normalizeClientMessageKey(clientMessageKey: string) {
@@ -301,6 +353,7 @@ function createAttachmentPayloadSha256(
 }
 
 export function createChatMessagesService({
+  attachmentFetchFn = fetch,
   chatThreadsRepository,
   chatThreadsService,
   chatMessagesRepository = null,
@@ -314,10 +367,7 @@ export function createChatMessagesService({
     context: CurrentUserChatThreadContext
     messageIds: number[]
   }) {
-    if (
-      context.threadType !== 'group' ||
-      context.portalChatThreadId === null
-    ) {
+    if (context.threadType !== 'group' || context.portalChatThreadId === null) {
       return new Map()
     }
 
@@ -344,6 +394,7 @@ export function createChatMessagesService({
       currentUserId: userId,
       ledgerAuthorsByMessageId,
       replyTargetsById,
+      threadId: context.activeThread?.id ?? PRIVATE_CHAT_THREAD_ID,
       threadType: context.threadType,
     }
   }
@@ -369,6 +420,223 @@ export function createChatMessagesService({
   }
 
   return {
+    async getCurrentUserChatAttachment({
+      attachmentId,
+      messageId,
+      rangeHeader = null,
+      threadId,
+      userId,
+      variant,
+    }: {
+      attachmentId: number
+      messageId: number
+      rangeHeader?: string | null
+      threadId: string
+      userId: number
+      variant: ChatAttachmentProxyVariant
+    }): Promise<ChatAttachmentProxyResponse> {
+      const context = await chatThreadsService.getCurrentUserThreadContext({
+        threadId,
+        userId,
+      })
+
+      if (context.result !== 'ready') {
+        throw createAttachmentThreadContextError(context)
+      }
+
+      if (!context.chatwootConversation) {
+        throw createAttachmentUnavailableError()
+      }
+
+      try {
+        const message = await chatwootClient.findConversationMessageById(
+          context.chatwootConversation.id,
+          messageId,
+        )
+
+        if (!message || !isClientVisibleMessage(message)) {
+          throw createAttachmentUnavailableError()
+        }
+
+        const attachment = message.attachments.find(
+          (candidate) =>
+            candidate.id === attachmentId && candidate.messageId === messageId,
+        )
+
+        if (!attachment) {
+          throw createAttachmentUnavailableError()
+        }
+
+        const attachmentUrl =
+          variant === 'thumb' ? attachment.thumbUrl : attachment.url
+
+        if (!attachmentUrl.trim()) {
+          throw createAttachmentUnavailableError()
+        }
+
+        const headers = new Headers()
+        const normalizedRangeHeader = rangeHeader?.trim()
+
+        if (normalizedRangeHeader) {
+          headers.set('range', normalizedRangeHeader)
+        }
+
+        let upstreamResponse: Response
+
+        try {
+          upstreamResponse = await attachmentFetchFn(attachmentUrl, {
+            headers,
+          })
+        } catch {
+          throw createAttachmentUnavailableError(502)
+        }
+
+        if (!upstreamResponse.ok) {
+          throw createAttachmentUnavailableError(502)
+        }
+
+        return {
+          body: upstreamResponse.body,
+          headers: upstreamResponse.headers,
+          status: upstreamResponse.status,
+        }
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw error
+        }
+
+        if (
+          error instanceof ChatwootClientConfigurationError ||
+          error instanceof ChatwootClientRequestError
+        ) {
+          throw createAttachmentUnavailableError(503)
+        }
+
+        throw error
+      }
+    },
+
+    async getCurrentUserChatMedia({
+      beforeMessageId = null,
+      threadId = PRIVATE_CHAT_THREAD_ID,
+      userId,
+    }: {
+      beforeMessageId?: number | null
+      threadId?: string
+      userId: number
+    }): Promise<ChatThreadMediaResponse> {
+      const context = await chatThreadsService.getCurrentUserThreadContext({
+        threadId,
+        userId,
+      })
+
+      if (!context.chatwootConversation) {
+        if (
+          context.reason === 'conversation_missing' &&
+          context.activeThread !== null
+        ) {
+          return buildMediaResponse(context, {
+            reason: 'none',
+            result: 'ready',
+          })
+        }
+
+        return buildMediaResponse(context)
+      }
+
+      if (context.result !== 'ready') {
+        return buildMediaResponse(context)
+      }
+
+      try {
+        const conversationId = context.chatwootConversation.id
+        let cursor = beforeMessageId
+        let hasMoreOlder = false
+        let nextOlderCursor: number | null = null
+        const mediaItems: PortalChatMediaItem[] = []
+
+        for (let scannedPages = 0; scannedPages < 4; scannedPages += 1) {
+          const page = await chatwootClient.listConversationMessages(
+            conversationId,
+            {
+              beforeMessageId: cursor,
+            },
+          )
+
+          if (page === null) {
+            return buildMediaResponse(context, {
+              reason: 'conversation_missing',
+              result: 'not_ready',
+            })
+          }
+
+          const replyTargetsById = await buildReplyTargetsById({
+            chatwootClient,
+            conversationId,
+            messages: page.messages,
+          })
+          const ledgerAuthorsByMessageId = await findLedgerAuthorsForMessages({
+            context,
+            messageIds: [
+              ...new Set([
+                ...page.messages.map((message) => message.id),
+                ...replyTargetsById.keys(),
+              ]),
+            ],
+          })
+          const messageMapperContext = createMessageMapperContext({
+            context,
+            ledgerAuthorsByMessageId,
+            replyTargetsById,
+            userId,
+          })
+          const visibleMessages = page.messages
+            .map((message) => mapPortalMessage(message, messageMapperContext))
+            .filter((message): message is PortalChatMessage => message !== null)
+
+          mediaItems.push(...buildPortalChatMediaItems(visibleMessages))
+          hasMoreOlder = page.hasMoreOlder
+          nextOlderCursor = page.nextOlderCursor
+
+          if (
+            mediaItems.length > 0 ||
+            !page.hasMoreOlder ||
+            !page.nextOlderCursor
+          ) {
+            break
+          }
+
+          cursor = page.nextOlderCursor
+        }
+
+        return buildMediaResponse(context, {
+          hasMoreOlder,
+          items: mediaItems,
+          nextOlderCursor,
+        })
+      } catch (error) {
+        if (error instanceof ChatwootInvalidHistoryCursorError) {
+          throw new ApiError(
+            400,
+            'invalid_history_cursor',
+            'History cursor is invalid for the current conversation.',
+          )
+        }
+
+        if (
+          error instanceof ChatwootClientConfigurationError ||
+          error instanceof ChatwootClientRequestError
+        ) {
+          return buildMediaResponse(context, {
+            reason: 'chatwoot_unavailable',
+            result: 'unavailable',
+          })
+        }
+
+        throw error
+      }
+    },
+
     async getCurrentUserChatMessages({
       beforeMessageId = null,
       threadId = PRIVATE_CHAT_THREAD_ID,

@@ -47,10 +47,37 @@ export type PortalChatMessageAuthorRole =
   | 'group_member'
   | 'current_user'
 
+export type ChatMediaCategory = 'audio' | 'file' | 'image' | 'video'
+
+export type PortalChatMediaItem = {
+  attachmentId: number
+  authorName: string
+  authorRole: PortalChatMessageAuthorRole
+  category: ChatMediaCategory
+  createdAt: string
+  direction: 'incoming' | 'outgoing'
+  fileSize: number | null
+  fileType: string
+  id: `attachment:${number}:${number}`
+  messageId: number
+  name: string
+  thumbUrl: string
+  url: string
+}
+
 export type ChatMessagesSnapshot = {
   activeThread: PublicChatThreadSummary | null
   hasMoreOlder: boolean
   messages: PortalChatMessage[]
+  nextOlderCursor: number | null
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
+}
+
+export type ChatThreadMediaResponse = {
+  activeThread: PublicChatThreadSummary | null
+  hasMoreOlder: boolean
+  items: PortalChatMediaItem[]
   nextOlderCursor: number | null
   reason: ChatThreadRuntimeReason
   result: 'not_ready' | 'ready' | 'unavailable'

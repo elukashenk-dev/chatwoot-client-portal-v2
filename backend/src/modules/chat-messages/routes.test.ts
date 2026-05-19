@@ -50,6 +50,15 @@ async function buildMessagesRoutesTestApp({
     consume: vi.fn().mockResolvedValue(rateLimitResult),
   }
   const chatMessagesService = {
+    getCurrentUserChatAttachment: vi.fn(),
+    getCurrentUserChatMedia: vi.fn().mockResolvedValue({
+      activeThread: null,
+      hasMoreOlder: false,
+      items: [],
+      nextOlderCursor: null,
+      reason: 'thread_access_denied',
+      result: 'not_ready',
+    }),
     getCurrentUserChatMessages: vi.fn().mockResolvedValue({
       activeThread: null,
       hasMoreOlder: false,

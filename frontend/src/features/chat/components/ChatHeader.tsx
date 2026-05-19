@@ -24,6 +24,7 @@ import {
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
   isReady: boolean
+  onOpenThreadMedia: () => void
   onOpenThreadInfo: () => void
   onSelectThread: (threadId: string) => void
   selectedThreadId: string | null
@@ -39,6 +40,7 @@ function focusElement(element: HTMLElement | null) {
 export function ChatHeader({
   activeThread,
   isReady,
+  onOpenThreadMedia,
   onOpenThreadInfo,
   onSelectThread,
   selectedThreadId,
@@ -323,8 +325,13 @@ export function ChatHeader({
                 label="Поиск по чату"
               />
               <ChatMenuItem
+                disabled={!selectedThreadId}
                 icon={<ImageIcon className="h-5 w-5" />}
                 label="Медиа и файлы"
+                onSelect={() => {
+                  closeMenus()
+                  onOpenThreadMedia()
+                }}
               />
               <ChatMenuItem
                 icon={<BellOffIcon className="h-5 w-5" />}

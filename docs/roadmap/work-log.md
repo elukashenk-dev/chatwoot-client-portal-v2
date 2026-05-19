@@ -167,6 +167,13 @@
   browser Chatwoot authority и без upload/delete/search scope.
 - Для `Медиа и файлы` зафиксирован выбранный UI вариант `C. Mixed View`:
   фото/видео в visual section, аудио/документы/прочие файлы в compact list.
+- Реализован read-only full-screen slice `Медиа и файлы`: backend media
+  endpoint, portal attachment proxy для transcript/media URLs, frontend
+  `C. Mixed View` page, chat menu wiring и stale-response handling.
+- Проверки `Медиа и файлы` slice пройдены: backend targeted tests, frontend
+  targeted tests, full backend/frontend suites, `pnpm lint`, `pnpm build`,
+  Prettier targeted check, `git diff --check` и Playwright
+  `chat-read-model`.
 
 ## Current Baseline
 
@@ -185,6 +192,6 @@
 
 ## Recommended Next Step
 
-- Реализовать `Медиа и файлы` task-by-task по
-  `docs/superpowers/plans/2026-05-19-chat-media-files-page.md`, начиная с
-  portal attachment proxy foundation.
+- Выбрать следующий menu slice: `Поиск по чату`, `Отключить уведомления`,
+  `Центр поддержки` или расширение `Медиа и файлы`, и перед стартом
+  зафиксировать точный scope.
