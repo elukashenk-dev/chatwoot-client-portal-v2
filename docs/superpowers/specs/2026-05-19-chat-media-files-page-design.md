@@ -44,10 +44,9 @@ Each media item includes:
 - created date/time from the parent message;
 - sender display name and direction, using the same author rules as the
   transcript;
-- thumbnail when Chatwoot provides `thumb_url`, or a safe image preview when
-  the item is an image and has a direct URL;
-- direct open/download link using the same URL already used by transcript
-  attachment cards.
+- portal-authorized thumbnail URL when Chatwoot provides `thumb_url`, or a
+  portal-authorized image preview URL when the item is an image;
+- portal-authorized open/download URL.
 
 Private Chatwoot messages and empty non-visible messages must stay hidden by
 reusing the existing client-visible message rules.
@@ -103,9 +102,49 @@ type ChatThreadMediaItem = {
 `id` is a portal presentation ID built from the parent message ID and attachment
 ID. It is not authority for backend mutations.
 
+`url` and `thumbUrl` must be portal URLs, not Chatwoot `data_url` or
+`thumb_url`. The browser must not receive direct Chatwoot attachment URLs from
+the media endpoint or from the existing chat transcript endpoint after this
+slice.
+
 `beforeMessageId` follows the existing chat history cursor semantics. Backend
 must reject invalid cursors with the same controlled `invalid_history_cursor`
 error used by chat history.
+
+## Attachment Proxy Contract
+
+Add portal-owned attachment proxy endpoints and update existing chat message
+attachment mapping to use them:
+
+```text
+GET /api/chat/threads/:threadId/attachments/:messageId/:attachmentId
+GET /api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb
+```
+
+The proxy endpoints must:
+
+1. Resolve tenant from host.
+2. Resolve the authenticated portal user from session.
+3. Validate `threadId` through `chatThreadsService.getCurrentUserThreadContext`.
+4. Fetch the parent message from Chatwoot through the backend Chatwoot client.
+5. Verify the parent message is client-visible.
+6. Verify the requested attachment belongs to that message.
+7. For group chats, re-check current group access through the existing thread
+   authority model before every file response.
+8. Fetch and stream the selected Chatwoot attachment URL server-side.
+9. Preserve useful response headers such as `Content-Type`, `Content-Length`,
+   `Content-Disposition`, and `Accept-Ranges` when available.
+10. Forward browser `Range` requests for original attachment content so audio
+    and video playback remain usable.
+
+The proxy must not redirect the browser to the Chatwoot `data_url`, because a
+redirect still gives the browser a reusable direct URL. If the proxy cannot
+stream a file because Chatwoot/storage is unavailable, it must return a
+controlled portal error.
+
+Transcript attachment cards and the media page must both use the same portal
+proxy URLs. This closes the direct-link gap for existing chat attachments and
+prevents the new media page from introducing a second, weaker file access path.
 
 ## Backend Rules
 
@@ -196,6 +235,14 @@ Backend:
 - group media rejects revoked group access;
 - Chatwoot unavailable returns controlled `unavailable`;
 - invalid cursor returns controlled `invalid_history_cursor`.
+- attachment proxy rejects malformed IDs;
+- attachment proxy rejects inaccessible or revoked group threads;
+- attachment proxy rejects attachments that do not belong to the requested
+  message;
+- attachment proxy streams original files through the portal without exposing
+  Chatwoot `data_url`;
+- transcript message attachments return portal proxy URLs, not direct Chatwoot
+  URLs.
 
 Frontend:
 
@@ -206,6 +253,7 @@ Frontend:
 - filters classify photo/video/audio/file items;
 - stale media responses after back do not reopen the page;
 - panel remains constrained to the `portal-shell` width.
+- existing transcript attachment cards use portal proxy URLs.
 
 Browser/runtime:
 
@@ -214,6 +262,8 @@ Browser/runtime:
 - e2e verifies rendered media items and the width constraint;
 - browser network must only call portal `/api/...` endpoints, never Chatwoot
   directly.
+- opening an attachment from the transcript or media page goes through the
+  portal proxy endpoint.
 
 Required checks:
 

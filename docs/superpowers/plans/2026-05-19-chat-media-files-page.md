@@ -4,7 +4,7 @@
 
 **Goal:** Build a read-only full-screen `Медиа и файлы` page for the selected portal chat thread.
 
-**Architecture:** Keep browser authority thread-id based. Backend adds a read-only media endpoint in the chat messages boundary that validates tenant/session/thread access, reads Chatwoot messages through the portal backend, maps only client-visible message attachments, and never creates conversations. Frontend reuses `ChatFullScreenPanel`, adds a media page hook and component, and opens it from the existing chat menu.
+**Architecture:** Keep browser authority thread-id based. Backend first adds a portal attachment proxy and changes existing transcript attachment URLs to portal-authorized URLs, then adds a read-only media endpoint in the chat messages boundary. Frontend reuses `ChatFullScreenPanel`, adds a media page hook and component, and opens it from the existing chat menu without ever receiving direct Chatwoot attachment URLs.
 
 **Tech Stack:** Fastify, Zod, Chatwoot Application API wrapper, React 19, React Router, Tailwind CSS 4, Vitest, Testing Library, Playwright.
 
@@ -13,11 +13,15 @@
 ## File Structure
 
 - Modify `backend/src/modules/chat-messages/types.ts`: add `PortalChatMediaItem` and `ChatThreadMediaResponse`.
+- Modify `backend/src/modules/chat-messages/messageMapping.ts`: build portal proxy URLs for transcript attachments instead of returning Chatwoot `data_url` / `thumb_url`.
+- Modify `backend/src/modules/chat-messages/messageMapping.test.ts`: cover portal proxy URL mapping.
+- Modify `backend/src/modules/chat-messages/service.ts`: add attachment proxy resolution/streaming support and `getCurrentUserChatMedia`.
+- Create `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`: focused proxy authority and streaming tests.
+- Modify `backend/src/modules/chat-messages/routes.ts`: add attachment proxy routes and `GET /api/chat/threads/:threadId/media`.
+- Create `backend/src/modules/chat-messages/routes.attachment-proxy.test.ts`: focused proxy route coverage.
 - Create `backend/src/modules/chat-messages/media.ts`: flatten mapped portal messages into stable media items and classify file categories.
 - Create `backend/src/modules/chat-messages/media.test.ts`: pure helper coverage.
-- Modify `backend/src/modules/chat-messages/service.ts`: add `getCurrentUserChatMedia` without writable context or conversation creation.
 - Create `backend/src/modules/chat-messages/service.media.test.ts`: focused service coverage for media loading.
-- Modify `backend/src/modules/chat-messages/routes.ts`: add `GET /api/chat/threads/:threadId/media`.
 - Create `backend/src/modules/chat-messages/routes.media.test.ts`: focused route coverage.
 - Modify `frontend/src/features/chat/types.ts`: add media response/item types.
 - Modify `frontend/src/features/chat/api/chatClient.ts`: add `getChatThreadMedia`.
@@ -35,7 +39,154 @@ Repo rule for implementation: do not commit after individual tasks unless the us
 
 ---
 
-### Task 1: Backend Media Types And Pure Mapping
+### Task 1: Portal Attachment Proxy Foundation
+
+**Files:**
+
+- Modify: `backend/src/modules/chat-messages/messageMapping.ts`
+- Test: `backend/src/modules/chat-messages/messageMapping.test.ts`
+- Modify: `backend/src/modules/chat-messages/service.ts`
+- Test: `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`
+- Modify: `backend/src/modules/chat-messages/routes.ts`
+- Test: `backend/src/modules/chat-messages/routes.attachment-proxy.test.ts`
+
+- [ ] **Step 1: Add failing message mapping test for portal URLs**
+
+Add a test to `backend/src/modules/chat-messages/messageMapping.test.ts` that
+maps a visible message with one attachment and asserts:
+
+```ts
+expect(mappedMessage?.attachments[0]).toMatchObject({
+  id: 91,
+  thumbUrl: '/api/chat/threads/group%3A154/attachments/501/91/thumb',
+  url: '/api/chat/threads/group%3A154/attachments/501/91',
+})
+```
+
+The mapper context in this test must include `threadId: 'group:154'`. Expected:
+fail because the mapper currently returns Chatwoot direct URLs.
+
+- [ ] **Step 2: Add portal attachment URL helper**
+
+In `backend/src/modules/chat-messages/messageMapping.ts`, add:
+
+```ts
+function buildPortalAttachmentUrl({
+  attachmentId,
+  messageId,
+  threadId,
+  variant = 'original',
+}: {
+  attachmentId: number
+  messageId: number
+  threadId: string
+  variant?: 'original' | 'thumb'
+}) {
+  const basePath = `/api/chat/threads/${encodeURIComponent(threadId)}/attachments/${messageId}/${attachmentId}`
+
+  return variant === 'thumb' ? `${basePath}/thumb` : basePath
+}
+```
+
+Extend `MessageThreadContext` with `threadId: string`, pass it from
+`createMessageMapperContext`, and map attachments like this:
+
+```ts
+attachments: message.attachments.map((attachment) => ({
+  fileSize: attachment.fileSize,
+  fileType: attachment.fileType,
+  id: attachment.id,
+  name: attachment.name,
+  thumbUrl: attachment.thumbUrl
+    ? buildPortalAttachmentUrl({
+        attachmentId: attachment.id,
+        messageId: message.id,
+        threadId: context.threadId,
+        variant: 'thumb',
+      })
+    : '',
+  url: buildPortalAttachmentUrl({
+    attachmentId: attachment.id,
+    messageId: message.id,
+    threadId: context.threadId,
+  }),
+})),
+```
+
+- [ ] **Step 3: Run mapping tests**
+
+Run:
+
+```bash
+pnpm --dir backend exec vitest run src/modules/chat-messages/messageMapping.test.ts
+```
+
+Expected: pass.
+
+- [ ] **Step 4: Add failing proxy service tests**
+
+Create `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`.
+Cover:
+
+- valid user/thread/message/attachment resolves a stream response source;
+- revoked/inaccessible thread returns the existing not-ready/denied behavior;
+- missing conversation returns 404-style `attachment_unavailable`;
+- missing attachment returns 404-style `attachment_unavailable`;
+- private Chatwoot message is rejected;
+- `Range` header is forwarded to the server-side attachment fetch.
+
+Use a fake `attachmentFetchFn` dependency that records URL and headers and
+returns a `Response` with `body`, `Content-Type`, and `Content-Length`.
+
+- [ ] **Step 5: Implement proxy service method**
+
+In `createChatMessagesService`, accept an optional dependency:
+
+```ts
+attachmentFetchFn?: typeof fetch
+```
+
+Default it to `fetch`. Add `getCurrentUserChatAttachment` that:
+
+1. Calls `chatThreadsService.getCurrentUserThreadContext({ threadId, userId })`.
+2. Requires `context.result === 'ready'` and `context.chatwootConversation`.
+3. Calls `chatwootClient.findConversationMessageById(conversationId, messageId)`.
+4. Rejects missing/private/non-visible messages.
+5. Finds the requested attachment by `attachmentId`.
+6. Chooses `attachment.thumbUrl` for `variant: 'thumb'`, otherwise
+   `attachment.url`.
+7. Server-side fetches that URL and forwards the browser `Range` header when
+   provided.
+8. Returns a controlled object with upstream status, headers, and body for the
+   route to stream.
+
+Do not return the Chatwoot URL to the browser and do not redirect.
+
+- [ ] **Step 6: Add proxy routes**
+
+In `backend/src/modules/chat-messages/routes.ts`, add:
+
+```text
+GET /api/chat/threads/:threadId/attachments/:messageId/:attachmentId
+GET /api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb
+```
+
+Both routes must enforce tenant origin, session auth, thread ID validation,
+positive integer `messageId` and `attachmentId`, and call
+`getCurrentUserChatAttachment`. The handler must copy safe upstream headers and
+stream the body through Fastify without exposing the upstream URL.
+
+- [ ] **Step 7: Run proxy tests**
+
+Run:
+
+```bash
+pnpm --dir backend exec vitest run src/modules/chat-messages/messageMapping.test.ts src/modules/chat-messages/service.attachment-proxy.test.ts src/modules/chat-messages/routes.attachment-proxy.test.ts
+```
+
+Expected: pass.
+
+### Task 2: Backend Media Types And Pure Mapping
 
 **Files:**
 
@@ -82,8 +233,9 @@ describe('chat media mapping', () => {
               fileType: 'image',
               id: 91,
               name: 'receipt.png',
-              thumbUrl: 'https://chatwoot.test/thumb.png',
-              url: 'https://chatwoot.test/receipt.png',
+              thumbUrl:
+                '/api/chat/threads/private%3Ame/attachments/501/91/thumb',
+              url: '/api/chat/threads/private%3Ame/attachments/501/91',
             },
             {
               fileSize: null,
@@ -91,7 +243,7 @@ describe('chat media mapping', () => {
               id: 92,
               name: 'contract.pdf',
               thumbUrl: '',
-              url: 'https://chatwoot.test/contract.pdf',
+              url: '/api/chat/threads/private%3Ame/attachments/501/92',
             },
           ],
         }),
@@ -109,8 +261,8 @@ describe('chat media mapping', () => {
         id: 'attachment:501:91',
         messageId: 501,
         name: 'receipt.png',
-        thumbUrl: 'https://chatwoot.test/thumb.png',
-        url: 'https://chatwoot.test/receipt.png',
+        thumbUrl: '/api/chat/threads/private%3Ame/attachments/501/91/thumb',
+        url: '/api/chat/threads/private%3Ame/attachments/501/91',
       },
       {
         attachmentId: 92,
@@ -125,7 +277,7 @@ describe('chat media mapping', () => {
         messageId: 501,
         name: 'contract.pdf',
         thumbUrl: '',
-        url: 'https://chatwoot.test/contract.pdf',
+        url: '/api/chat/threads/private%3Ame/attachments/501/92',
       },
     ])
   })
@@ -264,7 +416,7 @@ Expected: pass.
 
 ---
 
-### Task 2: Backend Media Service
+### Task 3: Backend Media Service
 
 **Files:**
 
@@ -607,7 +759,7 @@ Expected: pass.
 
 ---
 
-### Task 3: Backend Media Route
+### Task 4: Backend Media Route
 
 **Files:**
 
@@ -688,7 +840,7 @@ Expected: pass.
 
 ---
 
-### Task 4: Frontend Types, API, And Media Page Component
+### Task 5: Frontend Types, API, And Media Page Component
 
 **Files:**
 
@@ -832,7 +984,7 @@ Expected: pass.
 
 ---
 
-### Task 5: Frontend Media Hook And Chat Menu Wiring
+### Task 6: Frontend Media Hook And Chat Menu Wiring
 
 **Files:**
 
@@ -949,7 +1101,7 @@ Expected: pass and code-health line limits remain acceptable.
 
 ---
 
-### Task 6: Playwright E2E And Runtime Validation
+### Task 7: Playwright E2E And Runtime Validation
 
 **Files:**
 
@@ -964,8 +1116,13 @@ Add a Playwright test that:
 - opens `Медиа и файлы` from the chat menu;
 - verifies the file name, sender, and page title;
 - checks the full-screen panel width is `Math.min(viewport.width, 500)`;
+- verifies media item links use `/api/chat/threads/.../attachments/...`
+  portal proxy URLs, not Chatwoot URLs;
 - clicks back and verifies the group transcript is visible again;
 - asserts the browser requested only portal `/api/chat/threads/.../media`.
+
+Also extend the existing attachment-send/transcript e2e coverage to assert that
+rendered transcript attachment links use portal proxy URLs.
 
 Use the same `infoPage.boundingBox()` pattern already present in the chat info
 e2e test.
@@ -997,7 +1154,7 @@ closure note and `docs/roadmap/work-log.md`.
 
 ---
 
-### Task 7: Closure Checks, Review, Work Log, And Commit
+### Task 8: Closure Checks, Review, Work Log, And Commit
 
 **Files:**
 
@@ -1008,7 +1165,7 @@ closure note and `docs/roadmap/work-log.md`.
 Run:
 
 ```bash
-pnpm --dir backend exec vitest run src/modules/chat-messages/media.test.ts src/modules/chat-messages/service.media.test.ts src/modules/chat-messages/routes.media.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-messages/messageMapping.test.ts src/modules/chat-messages/service.attachment-proxy.test.ts src/modules/chat-messages/routes.attachment-proxy.test.ts src/modules/chat-messages/media.test.ts src/modules/chat-messages/service.media.test.ts src/modules/chat-messages/routes.media.test.ts
 ```
 
 Expected: pass.
@@ -1052,7 +1209,13 @@ Review:
 
 - `backend/src/modules/chat-messages/service.ts`: no writable context call in
   media endpoint, no conversation creation, controlled errors preserved;
-- `backend/src/modules/chat-messages/routes.ts`: tenant origin/auth enforced;
+- `backend/src/modules/chat-messages/service.ts`: attachment proxy validates
+  thread/message/attachment access on every request and never returns upstream
+  Chatwoot URLs to the browser;
+- `backend/src/modules/chat-messages/routes.ts`: tenant origin/auth enforced on
+  media and proxy routes;
+- `backend/src/modules/chat-messages/messageMapping.ts`: transcript
+  attachments use portal proxy URLs;
 - `frontend/src/features/chat/pages/useChatMediaPanel.ts`: stale responses
   ignored after close;
 - `frontend/src/features/chat/components/ChatMediaPage.tsx`: no horizontal
@@ -1072,6 +1235,10 @@ After the user approves commit timing or requests commit, run:
 ```bash
 git status --short
 git add backend/src/modules/chat-messages/types.ts \
+  backend/src/modules/chat-messages/messageMapping.ts \
+  backend/src/modules/chat-messages/messageMapping.test.ts \
+  backend/src/modules/chat-messages/service.attachment-proxy.test.ts \
+  backend/src/modules/chat-messages/routes.attachment-proxy.test.ts \
   backend/src/modules/chat-messages/media.ts \
   backend/src/modules/chat-messages/media.test.ts \
   backend/src/modules/chat-messages/service.ts \

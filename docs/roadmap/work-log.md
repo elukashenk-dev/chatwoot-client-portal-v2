@@ -163,7 +163,8 @@
   centered desktop для private и group chat info.
 - Для следующего menu slice подготовлены spec и implementation plan:
   read-only full-screen `Медиа и файлы` page поверх текущего thread authority,
-  без browser Chatwoot authority и без upload/delete/search scope.
+  с portal attachment proxy для медиа-страницы и существующего transcript, без
+  browser Chatwoot authority и без upload/delete/search scope.
 
 ## Current Baseline
 
