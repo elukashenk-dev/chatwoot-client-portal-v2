@@ -12,6 +12,11 @@ import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
+import {
+  ATTACHMENT_PROXY_CACHE_CONTROL,
+  copyAttachmentProxyHeaders,
+  getRangeHeader,
+} from './attachmentProxyHeaders.js'
 import type { ChatSendRateLimiter } from './rateLimit.js'
 import type {
   ChatAttachmentProxyVariant,
@@ -85,17 +90,6 @@ type RegisterChatMessagesRoutesOptions = {
   createChatMessagesService: (request: FastifyRequest) => ChatMessagesService
   env: AppEnv
 }
-
-const ATTACHMENT_PROXY_RESPONSE_HEADERS = [
-  'accept-ranges',
-  'cache-control',
-  'content-disposition',
-  'content-length',
-  'content-range',
-  'content-type',
-  'etag',
-  'last-modified',
-] as const
 
 async function enforceChatSendRateLimit({
   chatSendRateLimiter,
@@ -232,28 +226,6 @@ function toMultipartApiError(app: FastifyInstance, error: unknown) {
   return null
 }
 
-function copyAttachmentProxyHeaders({
-  headers,
-  reply,
-}: {
-  headers: Headers
-  reply: FastifyReply
-}) {
-  for (const headerName of ATTACHMENT_PROXY_RESPONSE_HEADERS) {
-    const headerValue = headers.get(headerName)
-
-    if (headerValue !== null) {
-      reply.header(headerName, headerValue)
-    }
-  }
-}
-
-function getRangeHeader(request: FastifyRequest) {
-  const rangeHeader = request.headers.range
-
-  return typeof rangeHeader === 'string' ? rangeHeader : null
-}
-
 async function parseAttachmentUpload(
   app: FastifyInstance,
   request: FastifyRequest,
@@ -367,6 +339,7 @@ export function registerChatMessagesRoutes(
       headers: attachment.headers,
       reply,
     })
+    reply.header('cache-control', ATTACHMENT_PROXY_CACHE_CONTROL)
     reply.code(attachment.status)
 
     if (!attachment.body) {

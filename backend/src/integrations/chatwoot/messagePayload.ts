@@ -106,7 +106,14 @@ function buildAttachmentName(payload: Record<string, unknown>) {
     : 'attached-file'
 }
 
-function mapAttachment(payload: unknown): ChatwootMessageAttachment {
+function mapAttachment(
+  payload: unknown,
+  {
+    baseUrl = null,
+  }: {
+    baseUrl?: string | null
+  } = {},
+): ChatwootMessageAttachment {
   if (!isPlainObject(payload)) {
     throw new ChatwootClientRequestError(
       'Chatwoot messages lookup returned an invalid attachment payload.',
@@ -130,8 +137,9 @@ function mapAttachment(payload: unknown): ChatwootMessageAttachment {
     id,
     messageId,
     name: buildAttachmentName(payload),
-    thumbUrl: readString(payload.thumb_url) ?? '',
-    url: readString(payload.data_url) ?? '',
+    thumbUrl:
+      resolveChatwootAssetUrl(readString(payload.thumb_url), baseUrl) ?? '',
+    url: resolveChatwootAssetUrl(readString(payload.data_url), baseUrl) ?? '',
   }
 }
 
@@ -207,7 +215,11 @@ export function mapMessage(
 
   return {
     attachments: Array.isArray(payload.attachments)
-      ? payload.attachments.map(mapAttachment)
+      ? payload.attachments.map((attachment) =>
+          mapAttachment(attachment, {
+            baseUrl,
+          }),
+        )
       : [],
     content: readString(payload.content),
     contentAttributes: readObject(payload.content_attributes) ?? {},

@@ -14,6 +14,7 @@ const testEnv: AppEnv = {
   CHATWOOT_API_ACCESS_TOKEN: undefined,
   CHATWOOT_BASE_URL: undefined,
   CHATWOOT_PORTAL_INBOX_ID: undefined,
+  CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS: [],
   DATABASE_URL:
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
   NODE_ENV: 'test',

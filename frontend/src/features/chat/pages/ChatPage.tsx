@@ -108,6 +108,7 @@ export function ChatPage() {
     selectedThreadId: pageState.selectedThreadId,
   })
   const chatMediaPanel = useChatMediaPanel({
+    currentSnapshot: pageState.status === 'ready' ? pageState.snapshot : null,
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,

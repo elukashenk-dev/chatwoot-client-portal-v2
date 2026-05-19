@@ -57,6 +57,16 @@ type RuntimeChatwootClientFactoryOptions = {
   env: Pick<AppEnv, 'CHATWOOT_REQUEST_TIMEOUT_MS'>
 }
 
+function getAttachmentProxyAllowedOrigins({
+  env,
+  tenantChatwootBaseUrl,
+}: {
+  env: Pick<AppEnv, 'CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS'>
+  tenantChatwootBaseUrl: string
+}) {
+  return [tenantChatwootBaseUrl, ...env.CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS]
+}
+
 export function createRuntimeChatwootClientFactory({
   chatwootFetchFn,
   env,
@@ -131,17 +141,26 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       supportLabel: `Команда ${tenant.displayName}`,
     })
   }
-  const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
-    createChatMessagesService({
+  const createChatMessagesServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatMessagesService({
+      attachmentAllowedOrigins: getAttachmentProxyAllowedOrigins({
+        env,
+        tenantChatwootBaseUrl: tenant.chatwoot.baseUrl,
+      }),
+      attachmentAllowPrivateNetwork: env.NODE_ENV !== 'production',
+      attachmentRequestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
       chatThreadsRepository: createChatThreadsRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
+        tenantId: tenant.id,
       }),
       chatThreadsService: createChatThreadsServiceForRequest(request),
       chatMessagesRepository: createChatMessagesRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
+        tenantId: tenant.id,
       }),
       chatwootClient: createChatwootClientForRequest(request),
     })
+  }
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
       chatwootClient: createChatwootClientForRequest(request),

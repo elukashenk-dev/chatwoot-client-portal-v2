@@ -46,6 +46,21 @@ const optionalUrlString = z.preprocess((value) => {
   return trimmedValue === '' ? undefined : trimmedValue
 }, z.string().url().optional())
 
+const optionalUrlList = z.preprocess((value) => {
+  if (value === undefined || value === null) {
+    return []
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+  }
+
+  return value
+}, z.array(z.string().url()).default([]))
+
 const optionalPositiveInt = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') {
     return undefined
@@ -99,6 +114,7 @@ const envSchema = z
     CHATWOOT_API_ACCESS_TOKEN: optionalNonEmptyString,
     CHATWOOT_PORTAL_INBOX_ID: optionalPositiveInt,
     CHATWOOT_REQUEST_TIMEOUT_MS: optionalPositiveInt,
+    CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS: optionalUrlList,
     CHATWOOT_WEBHOOK_CALLBACK_URL: optionalUrlString,
     CHATWOOT_WEBHOOK_SECRET: optionalNonEmptyString,
     PORTAL_TENANT_SECRET_KEY: optionalNonEmptyString,

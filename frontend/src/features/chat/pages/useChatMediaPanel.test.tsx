@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getChatThreadMedia } from '../api/chatClient'
-import type { ChatThreadMediaResponse } from '../types'
+import type { ChatMessagesSnapshot, ChatThreadMediaResponse } from '../types'
 import { useChatMediaPanel } from './useChatMediaPanel'
 
 vi.mock('../api/chatClient', async () => {
@@ -66,6 +66,43 @@ function createMediaResponse(
   }
 }
 
+function createCurrentSnapshotWithAttachment(): ChatMessagesSnapshot {
+  return {
+    activeThread: {
+      id: 'private:me',
+      subtitle: 'Только вы и поддержка',
+      title: 'Личный чат',
+      type: 'private',
+    },
+    hasMoreOlder: false,
+    messages: [
+      {
+        attachments: [
+          {
+            fileSize: 68,
+            fileType: 'image',
+            id: 77,
+            name: 'fresh-photo.png',
+            thumbUrl: '/api/chat/threads/private%3Ame/attachments/601/77/thumb',
+            url: '/api/chat/threads/private%3Ame/attachments/601/77',
+          },
+        ],
+        authorName: 'Вы',
+        authorRole: 'current_user',
+        content: null,
+        contentType: 'text',
+        createdAt: '2026-05-19T12:00:00.000Z',
+        direction: 'outgoing',
+        id: 601,
+        status: 'sent',
+      },
+    ],
+    nextOlderCursor: null,
+    reason: 'none',
+    result: 'ready',
+  }
+}
+
 describe('useChatMediaPanel', () => {
   afterEach(() => {
     vi.clearAllMocks()
@@ -79,6 +116,7 @@ describe('useChatMediaPanel', () => {
 
     const { result } = renderHook(() =>
       useChatMediaPanel({
+        currentSnapshot: null,
         handleConnectionUnavailableError: vi.fn(() => false),
         handleUnauthorizedChatError: vi.fn(async () => false),
         isMountedRef: { current: true },
@@ -136,6 +174,7 @@ describe('useChatMediaPanel', () => {
 
     const { result } = renderHook(() =>
       useChatMediaPanel({
+        currentSnapshot: null,
         handleConnectionUnavailableError: vi.fn(() => false),
         handleUnauthorizedChatError: vi.fn(async () => false),
         isMountedRef: { current: true },
@@ -160,5 +199,39 @@ describe('useChatMediaPanel', () => {
       'contract.pdf',
     ])
     expect(result.current.state.media?.hasMoreOlder).toBe(false)
+  })
+
+  it('keeps freshly sent transcript attachments visible while Chatwoot media history catches up', async () => {
+    getChatThreadMediaMock.mockResolvedValueOnce(
+      createMediaResponse({
+        hasMoreOlder: false,
+        items: [],
+        nextOlderCursor: null,
+      }),
+    )
+
+    const { result } = renderHook(() =>
+      useChatMediaPanel({
+        currentSnapshot: createCurrentSnapshotWithAttachment(),
+        handleConnectionUnavailableError: vi.fn(() => false),
+        handleUnauthorizedChatError: vi.fn(async () => false),
+        isMountedRef: { current: true },
+        markBrowserOnline: vi.fn(),
+        selectedThreadId: 'private:me',
+      }),
+    )
+
+    await act(async () => {
+      await result.current.loadChatMedia()
+    })
+
+    expect(result.current.state.media?.items).toEqual([
+      expect.objectContaining({
+        category: 'image',
+        id: 'attachment:601:77',
+        name: 'fresh-photo.png',
+        url: '/api/chat/threads/private%3Ame/attachments/601/77',
+      }),
+    ])
   })
 })

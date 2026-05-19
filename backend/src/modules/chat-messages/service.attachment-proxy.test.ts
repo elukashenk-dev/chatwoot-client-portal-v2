@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatwootMessage } from '../../integrations/chatwoot/client.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
@@ -79,6 +79,7 @@ function createChatwootMessage(
 }
 
 function createService({
+  attachmentAllowedOrigins = ['https://chatwoot.test'],
   attachmentFetchFn = vi.fn().mockResolvedValue(
     new Response('proxy-body', {
       headers: {
@@ -88,10 +89,13 @@ function createService({
       status: 206,
     }),
   ),
+  attachmentRequestTimeoutMs = undefined,
   context = readyContext,
   message = createChatwootMessage(),
 }: {
+  attachmentAllowedOrigins?: string[]
   attachmentFetchFn?: typeof fetch
+  attachmentRequestTimeoutMs?: number
   context?: CurrentUserChatThreadContext
   message?: ChatwootMessage | null
 } = {}) {
@@ -107,7 +111,9 @@ function createService({
     chatThreadsService,
     findConversationMessageById,
     service: createChatMessagesService({
+      attachmentAllowedOrigins,
       attachmentFetchFn,
+      attachmentRequestTimeoutMs,
       chatMessagesRepository: null,
       chatThreadsRepository: {
         findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
@@ -125,6 +131,10 @@ function createService({
 }
 
 describe('chat attachment proxy service', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('streams a visible attachment through a backend-owned fetch', async () => {
     const { attachmentFetchFn, findConversationMessageById, service } =
       createService()
@@ -148,6 +158,11 @@ describe('chat attachment proxy service', () => {
         'range',
       ),
     ).toBe('bytes=0-99')
+    expect(
+      new Headers(vi.mocked(attachmentFetchFn).mock.calls[0]?.[1]?.headers).get(
+        'accept-encoding',
+      ),
+    ).toBe('identity')
     expect(result.status).toBe(206)
     expect(result.headers.get('content-type')).toBe('image/png')
     await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
@@ -274,5 +289,312 @@ describe('chat attachment proxy service', () => {
       code: 'attachment_unavailable',
       statusCode: 502,
     })
+  })
+
+  it('aborts slow upstream attachment fetches with a controlled portal error', async () => {
+    vi.useFakeTimers()
+    const attachmentFetchFn = vi.fn<typeof fetch>((_url, options) => {
+      const signal = options?.signal
+
+      return new Promise<Response>((_resolve, reject) => {
+        if (!(signal instanceof AbortSignal)) {
+          reject(new Error('Missing abort signal.'))
+          return
+        }
+
+        signal.addEventListener(
+          'abort',
+          () => reject(signal.reason ?? new Error('Request aborted.')),
+          { once: true },
+        )
+      })
+    })
+    const { service } = createService({
+      attachmentFetchFn,
+      attachmentRequestTimeoutMs: 5,
+    })
+
+    const attachment = service.getCurrentUserChatAttachment({
+      attachmentId: 91,
+      messageId: 501,
+      threadId: 'group:154',
+      userId: 7,
+      variant: 'original',
+    })
+    const attachmentExpectation = expect(attachment).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+
+    await vi.advanceTimersByTimeAsync(5)
+    await attachmentExpectation
+
+    expect(attachmentFetchFn.mock.calls[0]?.[1]?.signal).toMatchObject({
+      aborted: true,
+    })
+  })
+
+  it('aborts stalled upstream attachment bodies', async () => {
+    vi.useFakeTimers()
+    const attachmentFetchFn = vi.fn<typeof fetch>((_url, options) => {
+      const signal = options?.signal
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          if (!(signal instanceof AbortSignal)) {
+            controller.error(new Error('Missing abort signal.'))
+            return
+          }
+
+          signal.addEventListener(
+            'abort',
+            () => controller.error(signal.reason ?? new Error('Aborted.')),
+            { once: true },
+          )
+        },
+      })
+
+      return Promise.resolve(
+        new Response(body, {
+          headers: {
+            'content-type': 'image/png',
+          },
+          status: 200,
+        }),
+      )
+    })
+    const { service } = createService({
+      attachmentFetchFn,
+      attachmentRequestTimeoutMs: 5,
+    })
+
+    const result = await service.getCurrentUserChatAttachment({
+      attachmentId: 91,
+      messageId: 501,
+      threadId: 'group:154',
+      userId: 7,
+      variant: 'original',
+    })
+    const stalledBody = expect(
+      new Response(result.body).arrayBuffer(),
+    ).rejects.toThrow(/Chatwoot attachment fetch timed out/)
+
+    await vi.advanceTimersByTimeAsync(5)
+    await stalledBody
+    expect(attachmentFetchFn.mock.calls[0]?.[1]?.signal).toMatchObject({
+      aborted: true,
+    })
+  })
+
+  it('rejects attachment URLs outside the configured Chatwoot origin', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>()
+    const { service } = createService({
+      attachmentFetchFn,
+      message: createChatwootMessage({
+        attachments: [
+          {
+            extension: 'png',
+            fileSize: 2048,
+            fileType: 'image',
+            id: 91,
+            messageId: 501,
+            name: 'receipt.png',
+            thumbUrl: '',
+            url: 'https://files.example.test/receipt.png',
+          },
+        ],
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatAttachment({
+        attachmentId: 91,
+        messageId: 501,
+        threadId: 'group:154',
+        userId: 7,
+        variant: 'original',
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+    expect(attachmentFetchFn).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-http attachment URLs before upstream fetch', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>()
+    const { service } = createService({
+      attachmentFetchFn,
+      message: createChatwootMessage({
+        attachments: [
+          {
+            extension: 'png',
+            fileSize: 2048,
+            fileType: 'image',
+            id: 91,
+            messageId: 501,
+            name: 'receipt.png',
+            thumbUrl: '',
+            url: 'file:///etc/passwd',
+          },
+        ],
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatAttachment({
+        attachmentId: 91,
+        messageId: 501,
+        threadId: 'group:154',
+        userId: 7,
+        variant: 'original',
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+    expect(attachmentFetchFn).not.toHaveBeenCalled()
+  })
+
+  it('follows upstream redirects to configured storage origins', async () => {
+    const attachmentFetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          headers: {
+            location: 'https://storage.example.test/files/receipt.png',
+          },
+          status: 302,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('storage-body', {
+          headers: {
+            'content-type': 'image/png',
+          },
+          status: 200,
+        }),
+      )
+    const { service } = createService({
+      attachmentAllowedOrigins: [
+        'https://chatwoot.test',
+        'https://storage.example.test',
+      ],
+      attachmentFetchFn,
+    })
+
+    const result = await service.getCurrentUserChatAttachment({
+      attachmentId: 91,
+      messageId: 501,
+      threadId: 'group:154',
+      userId: 7,
+      variant: 'original',
+    })
+
+    expect(attachmentFetchFn).toHaveBeenCalledTimes(2)
+    expect(attachmentFetchFn.mock.calls[1]?.[0]).toBe(
+      'https://storage.example.test/files/receipt.png',
+    )
+    expect(result.status).toBe(200)
+    await expect(new Response(result.body).text()).resolves.toBe('storage-body')
+  })
+
+  it('rejects private-network attachment URLs before upstream fetch', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>()
+    const { service } = createService({
+      attachmentAllowedOrigins: ['http://127.0.0.1:3000'],
+      attachmentFetchFn,
+      message: createChatwootMessage({
+        attachments: [
+          {
+            extension: 'png',
+            fileSize: 2048,
+            fileType: 'image',
+            id: 91,
+            messageId: 501,
+            name: 'receipt.png',
+            thumbUrl: '',
+            url: 'http://127.0.0.1:3000/rails/active_storage/file',
+          },
+        ],
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatAttachment({
+        attachmentId: 91,
+        messageId: 501,
+        threadId: 'group:154',
+        userId: 7,
+        variant: 'original',
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+    expect(attachmentFetchFn).not.toHaveBeenCalled()
+  })
+
+  it('rejects IPv4-mapped private-network attachment URLs before upstream fetch', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>()
+    const { service } = createService({
+      attachmentAllowedOrigins: ['http://[::ffff:7f00:1]:3000'],
+      attachmentFetchFn,
+      message: createChatwootMessage({
+        attachments: [
+          {
+            extension: 'png',
+            fileSize: 2048,
+            fileType: 'image',
+            id: 91,
+            messageId: 501,
+            name: 'receipt.png',
+            thumbUrl: '',
+            url: 'http://[::ffff:127.0.0.1]:3000/rails/active_storage/file',
+          },
+        ],
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatAttachment({
+        attachmentId: 91,
+        messageId: 501,
+        threadId: 'group:154',
+        userId: 7,
+        variant: 'original',
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+    expect(attachmentFetchFn).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsafe upstream redirects before following them', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(null, {
+        headers: {
+          location: 'http://127.0.0.1:3000/private-file',
+        },
+        status: 302,
+      }),
+    )
+    const { service } = createService({
+      attachmentFetchFn,
+    })
+
+    await expect(
+      service.getCurrentUserChatAttachment({
+        attachmentId: 91,
+        messageId: 501,
+        threadId: 'group:154',
+        userId: 7,
+        variant: 'original',
+      }),
+    ).rejects.toMatchObject({
+      code: 'attachment_unavailable',
+      statusCode: 502,
+    })
+    expect(attachmentFetchFn).toHaveBeenCalledTimes(1)
   })
 })

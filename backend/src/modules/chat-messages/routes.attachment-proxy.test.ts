@@ -102,6 +102,7 @@ describe('chat attachment proxy routes', () => {
       expect(response.headers['content-disposition']).toBe(
         'inline; filename="receipt.png"',
       )
+      expect(response.headers['cache-control']).toBe('private, no-store')
       expect(response.headers['set-cookie']).toBeUndefined()
       expect(getCurrentUserChatAttachment).toHaveBeenCalledWith({
         attachmentId: 91,
@@ -111,6 +112,64 @@ describe('chat attachment proxy routes', () => {
         userId: 7,
         variant: 'original',
       })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('does not forward public upstream cache headers for protected attachments', async () => {
+    const { app } = await buildAttachmentProxyRoutesTestApp({
+      getCurrentUserChatAttachment: vi.fn().mockResolvedValue({
+        body: new Response('file-bytes').body,
+        headers: new Headers({
+          'cache-control': 'public, max-age=31536000',
+          'content-type': 'image/png',
+        }),
+        status: 200,
+      }),
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/group%3A154/attachments/501/91',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['cache-control']).toBe('private, no-store')
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('does not forward compressed upstream content length metadata', async () => {
+    const { app } = await buildAttachmentProxyRoutesTestApp({
+      getCurrentUserChatAttachment: vi.fn().mockResolvedValue({
+        body: new Response('decompressed-file-bytes').body,
+        headers: new Headers({
+          'content-encoding': 'gzip',
+          'content-length': '53',
+          'content-type': 'text/plain',
+        }),
+        status: 200,
+      }),
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/group%3A154/attachments/501/91',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.payload).toBe('decompressed-file-bytes')
+      expect(response.headers['content-length']).toBeUndefined()
     } finally {
       await app.close()
     }

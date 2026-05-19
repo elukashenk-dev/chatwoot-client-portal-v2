@@ -15,6 +15,10 @@ import type { ChatThreadsRepository } from '../chat-threads/repository.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import {
+  createAttachmentProxyFetcher,
+  createAttachmentProxyUnavailableError,
+} from './attachmentProxy.js'
+import {
   formatGroupThreadContent,
   normalizeGroupAuthorDisplayName,
 } from './authorFormatting.js'
@@ -73,7 +77,10 @@ const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
 ])
 
 type CreateChatMessagesServiceOptions = {
+  attachmentAllowedOrigins?: readonly string[]
+  attachmentAllowPrivateNetwork?: boolean
   attachmentFetchFn?: typeof fetch
+  attachmentRequestTimeoutMs?: number | undefined
   chatThreadsRepository: Pick<
     ChatThreadsRepository,
     'findSendLedgerAuthorsByMessageIds'
@@ -353,13 +360,23 @@ function createAttachmentPayloadSha256(
 }
 
 export function createChatMessagesService({
+  attachmentAllowedOrigins = [],
+  attachmentAllowPrivateNetwork = false,
   attachmentFetchFn = fetch,
+  attachmentRequestTimeoutMs: inputAttachmentRequestTimeoutMs,
   chatThreadsRepository,
   chatThreadsService,
   chatMessagesRepository = null,
   chatwootClient,
   now = () => new Date(),
 }: CreateChatMessagesServiceOptions) {
+  const fetchAllowedAttachment = createAttachmentProxyFetcher({
+    allowedOrigins: attachmentAllowedOrigins,
+    allowPrivateNetwork: attachmentAllowPrivateNetwork,
+    fetchFn: attachmentFetchFn,
+    requestTimeoutMs: inputAttachmentRequestTimeoutMs,
+  })
+
   async function findLedgerAuthorsForMessages({
     context,
     messageIds,
@@ -480,19 +497,21 @@ export function createChatMessagesService({
         if (normalizedRangeHeader) {
           headers.set('range', normalizedRangeHeader)
         }
+        headers.set('accept-encoding', 'identity')
 
         let upstreamResponse: Response
 
         try {
-          upstreamResponse = await attachmentFetchFn(attachmentUrl, {
+          upstreamResponse = await fetchAllowedAttachment({
             headers,
+            initialUrl: attachmentUrl,
           })
         } catch {
-          throw createAttachmentUnavailableError(502)
+          throw createAttachmentProxyUnavailableError()
         }
 
         if (!upstreamResponse.ok) {
-          throw createAttachmentUnavailableError(502)
+          throw createAttachmentProxyUnavailableError()
         }
 
         return {

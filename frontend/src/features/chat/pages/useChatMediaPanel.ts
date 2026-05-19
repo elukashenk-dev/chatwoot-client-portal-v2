@@ -1,7 +1,13 @@
 import { useRef, useState, type RefObject } from 'react'
 
 import { ChatApiClientError, getChatThreadMedia } from '../api/chatClient'
-import type { ChatThreadMediaResponse, ChatThreadReason } from '../types'
+import type {
+  ChatMediaCategory,
+  ChatMediaItem,
+  ChatMessagesSnapshot,
+  ChatThreadMediaResponse,
+  ChatThreadReason,
+} from '../types'
 
 export type ChatMediaPanelState = {
   isLoading: boolean
@@ -39,6 +45,7 @@ function readUnavailableReason(error: unknown): ChatThreadReason {
 }
 
 type UseChatMediaPanelOptions = {
+  currentSnapshot: ChatMessagesSnapshot | null
   handleConnectionUnavailableError: (error: unknown) => boolean
   handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
   isMountedRef: RefObject<boolean>
@@ -46,7 +53,104 @@ type UseChatMediaPanelOptions = {
   selectedThreadId: string | null
 }
 
+function getMediaItemCategory(fileType: string): ChatMediaCategory {
+  const normalizedFileType = fileType.trim().toLowerCase()
+
+  if (
+    normalizedFileType === 'image' ||
+    normalizedFileType.startsWith('image/')
+  ) {
+    return 'image'
+  }
+
+  if (
+    normalizedFileType === 'video' ||
+    normalizedFileType.startsWith('video/')
+  ) {
+    return 'video'
+  }
+
+  if (
+    normalizedFileType === 'audio' ||
+    normalizedFileType.startsWith('audio/')
+  ) {
+    return 'audio'
+  }
+
+  return 'file'
+}
+
+function buildCurrentSnapshotMediaItems({
+  currentSnapshot,
+  selectedThreadId,
+}: {
+  currentSnapshot: ChatMessagesSnapshot | null
+  selectedThreadId: string
+}) {
+  if (
+    !currentSnapshot ||
+    currentSnapshot.result !== 'ready' ||
+    currentSnapshot.activeThread?.id !== selectedThreadId
+  ) {
+    return []
+  }
+
+  const items: ChatMediaItem[] = []
+
+  for (const message of currentSnapshot.messages) {
+    for (const attachment of message.attachments) {
+      items.push({
+        attachmentId: attachment.id,
+        authorName: message.authorName,
+        authorRole: message.authorRole,
+        category: getMediaItemCategory(attachment.fileType),
+        createdAt: message.createdAt,
+        direction: message.direction,
+        fileSize: attachment.fileSize,
+        fileType: attachment.fileType,
+        id: `attachment:${message.id}:${attachment.id}`,
+        messageId: message.id,
+        name: attachment.name,
+        thumbUrl: attachment.thumbUrl,
+        url: attachment.url,
+      })
+    }
+  }
+
+  return items
+}
+
+function mergeMediaWithCurrentSnapshot({
+  currentSnapshot,
+  media,
+  selectedThreadId,
+}: {
+  currentSnapshot: ChatMessagesSnapshot | null
+  media: ChatThreadMediaResponse
+  selectedThreadId: string
+}) {
+  if (media.result !== 'ready') {
+    return media
+  }
+
+  const existingItemIds = new Set(media.items.map((item) => item.id))
+  const currentSnapshotItems = buildCurrentSnapshotMediaItems({
+    currentSnapshot,
+    selectedThreadId,
+  }).filter((item) => !existingItemIds.has(item.id))
+
+  if (currentSnapshotItems.length === 0) {
+    return media
+  }
+
+  return {
+    ...media,
+    items: [...currentSnapshotItems, ...media.items],
+  }
+}
+
 export function useChatMediaPanel({
+  currentSnapshot,
   handleConnectionUnavailableError,
   handleUnauthorizedChatError,
   isMountedRef,
@@ -89,12 +193,18 @@ export function useChatMediaPanel({
         return
       }
 
+      const mergedMedia = mergeMediaWithCurrentSnapshot({
+        currentSnapshot,
+        media,
+        selectedThreadId,
+      })
+
       markBrowserOnline()
       setState({
         isLoading: false,
         isLoadingOlder: false,
         isOpen: true,
-        media,
+        media: mergedMedia,
       })
     } catch (error) {
       if (!isCurrentRequest(requestId)) {

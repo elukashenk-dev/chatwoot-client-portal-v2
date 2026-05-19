@@ -174,6 +174,21 @@
   targeted tests, full backend/frontend suites, `pnpm lint`, `pnpm build`,
   Prettier targeted check, `git diff --check` и Playwright
   `chat-read-model`.
+- Review findings `F-CHAT-007`..`F-CHAT-010` закрыты: attachment proxy получил
+  portal-owned cache policy, timeout на fetch/body stream, content-length guard,
+  allowlist для tenant Chatwoot/object-storage origins и SSRF checks для схем,
+  private hosts и redirects.
+- Проверки attachment proxy fixes пройдены: targeted backend tests `48/48`,
+  full backend suite `260/260`, `pnpm lint`, `pnpm build`, `git diff --check`.
+- Runtime media validation на `buhfirma.127.0.0.1.nip.io:5173` выявила и
+  закрыла consistency gap: сразу после отправки attachment страница
+  `Медиа и файлы` теперь merge-ит свежие вложения из текущего transcript
+  snapshot, пока Chatwoot media history догоняет.
+- Проверки media runtime fix пройдены: frontend targeted tests `8/8`,
+  `pnpm --dir frontend typecheck`, `pnpm lint`, `pnpm build`,
+  `git diff --check`, buhfirma Playwright e2e `27/27`, live Playwright flow
+  registration -> private PNG send -> media page -> open image через portal
+  proxy.
 
 ## Current Baseline
 

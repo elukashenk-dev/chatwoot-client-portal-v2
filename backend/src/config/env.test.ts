@@ -13,6 +13,32 @@ describe('loadEnv', () => {
     expect(loadEnv(baseRawEnv).CHATWOOT_REQUEST_TIMEOUT_MS).toBeUndefined()
   })
 
+  it('leaves attachment proxy extra origins empty by default', () => {
+    expect(loadEnv(baseRawEnv).CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS).toEqual(
+      [],
+    )
+  })
+
+  it('parses configured attachment proxy extra origins', () => {
+    expect(
+      loadEnv({
+        ...baseRawEnv,
+        CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS:
+          'https://storage.example.test, https://cdn.example.test/path',
+      }).CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS,
+    ).toEqual(['https://storage.example.test', 'https://cdn.example.test/path'])
+  })
+
+  it('rejects invalid attachment proxy extra origins', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS:
+          'https://storage.example.test,not-a-url',
+      }),
+    ).toThrow(/CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS/)
+  })
+
   it('keeps conservative auth rate limit defaults', () => {
     const env = loadEnv(baseRawEnv)
 
