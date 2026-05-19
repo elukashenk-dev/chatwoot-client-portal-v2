@@ -358,6 +358,18 @@ test('opens group chat info from the chat menu and returns to the transcript', a
   await expect(infoPage.getByText('Вы')).toBeVisible()
   await expect(infoPage.getByText('Мария Соколова')).toBeVisible()
 
+  const viewportSize = page.viewportSize()
+  const infoPageBox = await infoPage.boundingBox()
+
+  expect(viewportSize).not.toBeNull()
+  expect(infoPageBox).not.toBeNull()
+  expect(Math.round(infoPageBox?.width ?? 0)).toBe(
+    Math.min(viewportSize?.width ?? 0, 500),
+  )
+  expect(Math.round(infoPageBox?.x ?? 0)).toBe(
+    Math.round(((viewportSize?.width ?? 0) - (infoPageBox?.width ?? 0)) / 2),
+  )
+
   await infoPage.getByRole('button', { name: 'Вернуться к чату' }).click()
   await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
   await expect(

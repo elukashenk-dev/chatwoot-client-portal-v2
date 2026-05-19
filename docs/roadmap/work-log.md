@@ -151,6 +151,16 @@
 - Проверки после migration fix пройдены: full backend suite `226/226`,
   targeted chat-thread backend tests `7/7`, buhfirma Playwright e2e `26/26`,
   `git diff --check`.
+- `ChatFullScreenPanel` приведен к portal shell layout: chat-adjacent pages
+  больше не выходят за `max-w-[500px]` основного portal UI.
+- Chat info close flow усилен: поздний `/api/chat/threads/:id/info` response
+  после `Назад` не открывает страницу повторно.
+- Проверки после UI/layout fix пройдены: frontend targeted tests `21/21`,
+  `pnpm --dir frontend typecheck`, `pnpm lint`, targeted Prettier check,
+  targeted chat-info Playwright e2e, full buhfirma Playwright e2e `26/26`,
+  `git diff --check`; runtime measurement на
+  `buhfirma.127.0.0.1.nip.io:5173` подтвердил `390px` mobile и `500px`
+  centered desktop для private и group chat info.
 
 ## Current Baseline
 

@@ -24,7 +24,7 @@ export function ChatFullScreenPanel({
   unavailableMessage = 'Не удалось загрузить данные.',
 }: ChatFullScreenPanelProps) {
   return (
-    <section className="fixed inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
+    <section className="absolute inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
       <header className="app-safe-top chat-header-background border-b border-slate-200/90 px-4 pb-2.5 shadow-sm sm:px-6 sm:pb-3">
         <div className="flex min-h-10 items-center gap-3">
           <button

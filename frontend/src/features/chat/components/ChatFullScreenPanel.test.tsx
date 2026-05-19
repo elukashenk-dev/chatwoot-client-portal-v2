@@ -9,7 +9,7 @@ describe('ChatFullScreenPanel', () => {
     const user = userEvent.setup()
     const onBack = vi.fn()
 
-    render(
+    const { container } = render(
       <ChatFullScreenPanel
         isLoading={false}
         onBack={onBack}
@@ -27,6 +27,9 @@ describe('ChatFullScreenPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Вернуться к чату' }))
     expect(onBack).toHaveBeenCalledTimes(1)
+
+    expect(container.firstElementChild).toHaveClass('absolute')
+    expect(container.firstElementChild).not.toHaveClass('fixed')
   })
 
   it('renders loading and unavailable states', async () => {

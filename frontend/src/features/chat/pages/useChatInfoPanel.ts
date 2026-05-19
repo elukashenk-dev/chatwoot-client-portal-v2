@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 
 import { ChatApiClientError, getChatThreadInfo } from '../api/chatClient'
 import type { ChatThreadInfoResponse, ChatThreadReason } from '../types'
@@ -56,34 +56,45 @@ export function useChatInfoPanel({
   markBrowserOnline,
   selectedThreadId,
 }: UseChatInfoPanelOptions) {
+  const requestSequenceRef = useRef(0)
   const [state, setState] = useState<ChatInfoPanelState>({
     info: null,
     isLoading: false,
     isOpen: false,
   })
 
+  function isCurrentRequest(requestId: number) {
+    return isMountedRef.current && requestSequenceRef.current === requestId
+  }
+
   async function loadChatInfo() {
     if (!selectedThreadId) {
       return
     }
 
+    const requestId = requestSequenceRef.current + 1
+    requestSequenceRef.current = requestId
     setState({ info: null, isLoading: true, isOpen: true })
 
     try {
       const info = await getChatThreadInfo(selectedThreadId)
 
-      if (!isMountedRef.current) {
+      if (!isCurrentRequest(requestId)) {
         return
       }
 
       markBrowserOnline()
       setState({ info, isLoading: false, isOpen: true })
     } catch (error) {
-      if (!isMountedRef.current) {
+      if (!isCurrentRequest(requestId)) {
         return
       }
 
       if (await handleUnauthorizedChatError(error)) {
+        if (!isCurrentRequest(requestId)) {
+          return
+        }
+
         setState({
           info: unavailableInfo,
           isLoading: false,
@@ -93,6 +104,10 @@ export function useChatInfoPanel({
       }
 
       handleConnectionUnavailableError(error)
+      if (!isCurrentRequest(requestId)) {
+        return
+      }
+
       setState({
         info: { ...unavailableInfo, reason: readUnavailableReason(error) },
         isLoading: false,
@@ -103,6 +118,7 @@ export function useChatInfoPanel({
 
   return {
     closeChatInfo: () => {
+      requestSequenceRef.current += 1
       setState((currentState) => ({
         ...currentState,
         isOpen: false,
