@@ -161,6 +161,9 @@
   `git diff --check`; runtime measurement на
   `buhfirma.127.0.0.1.nip.io:5173` подтвердил `390px` mobile и `500px`
   centered desktop для private и group chat info.
+- Для следующего menu slice подготовлены spec и implementation plan:
+  read-only full-screen `Медиа и файлы` page поверх текущего thread authority,
+  без browser Chatwoot authority и без upload/delete/search scope.
 
 ## Current Baseline
 
@@ -179,5 +182,6 @@
 
 ## Recommended Next Step
 
-- Сделать checkpoint commit по ветке `feature/phase-chat-info-page`; после
-  этого принять integration decision и переходить к следующему menu slice.
+- Review и утвердить `docs/superpowers/specs/2026-05-19-chat-media-files-page-design.md`
+  и `docs/superpowers/plans/2026-05-19-chat-media-files-page.md`; затем
+  выбрать execution mode для реализации `Медиа и файлы`.
