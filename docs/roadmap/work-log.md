@@ -139,6 +139,18 @@
   frontend targeted tests `23/23`, `pnpm build`, `pnpm lint`, Prettier targeted
   check, `git diff --check`, Playwright MCP browser validation на
   `http://127.0.0.1:5173` с mock API, repo Playwright e2e `26/26`.
+- Local dev DB compatibility migration добавлена для старых
+  `portal_chat_threads` schemas: legacy `company` constraint/index переводятся
+  на strict `group`, чтобы group threads могли создаваться без `portal_user_id`.
+- Runtime send validation на `buhfirma.127.0.0.1.nip.io:5173` пройдена через
+  portal registration/login и реальные Chatwoot sends: `private:me` и
+  `group:<contactId>` отправлены и прочитаны обратно из Chatwoot snapshots.
+- Rendered UI validation на `buhfirma.127.0.0.1.nip.io:5173` пройдена в чистом
+  Playwright context: страница `Информация о чате` открывается из меню для
+  `private:me` и для `group:<contactId>`, back возвращает в transcript.
+- Проверки после migration fix пройдены: full backend suite `226/226`,
+  targeted chat-thread backend tests `7/7`, buhfirma Playwright e2e `26/26`,
+  `git diff --check`.
 
 ## Current Baseline
 
@@ -157,5 +169,5 @@
 
 ## Recommended Next Step
 
-- Принять integration decision по ветке `feature/phase-chat-info-page`; после
-  этого переходить к следующему menu slice.
+- Сделать checkpoint commit по ветке `feature/phase-chat-info-page`; после
+  этого принять integration decision и переходить к следующему menu slice.

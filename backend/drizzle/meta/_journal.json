@@ -15,6 +15,13 @@
       "when": 1779115050104,
       "tag": "0001_many_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779186865272,
+      "tag": "0002_portal-chat-thread-group-constraint",
+      "breakpoints": true
     }
   ]
 }
