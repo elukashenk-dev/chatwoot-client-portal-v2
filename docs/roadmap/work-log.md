@@ -195,9 +195,9 @@
 - Production public smoke после deploy пройден в clean Playwright context:
   login, registration и password reset routes рендерятся; unauthenticated
   media endpoint возвращает ожидаемый `401`.
-- Authenticated production media smoke пока требует реального prod portal
-  пользователя, который уже добавлен агентом в Chatwoot как contact и может
-  войти или пройти registration.
+- Authenticated production media smoke для `Медиа и файлы` закрыт
+  пользовательской проверкой на одном production tenant: файл в личном чате
+  отображается и открывается через portal attachment proxy.
 
 ## Current Baseline
 
@@ -216,6 +216,4 @@
 
 ## Recommended Next Step
 
-- Подготовить валидного prod portal пользователя для `lk.provgroup.ru`,
-  отправить файл в личный чат и проверить, что `Медиа и файлы` открывает его
-  через portal attachment proxy.
+- Начать следующий chat menu slice: `Поиск по чату`.
