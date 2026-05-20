@@ -60,9 +60,8 @@
   `cbr@provgroup.ru`; пользователь подтвердил successful registration code flow.
 - Production hardening review завершен без high/critical findings; активные
   follow-ups ведутся через `docs/findings/`.
-- `F-PROD-002` закрыт: `main` fast-forward'нут до clean-schema branch,
-  `origin/main` синхронизирован, production `DEPLOY_SOURCE.txt` пишет clean
-  `main` commit.
+- Production deploy source tracking синхронизирован: `origin/main` и
+  `DEPLOY_SOURCE.txt` отражают clean `main` baseline.
 
 ## Chat Thread Planning
 
@@ -81,24 +80,9 @@
   clean baseline, старый context endpoint удален, chat mapping живет только в
   `portal_chat_threads`, send ledger scope живет только через
   `portal_chat_thread_id`.
-- Локальная portal DB destructive reset-нута и мигрирована заново: после reset
-  нет старой chat mapping table, нет старой send-ledger колонки, portal users и
-  chat threads созданы заново.
-- Проверки на чистой схеме прошли: backend tests `202/202`, frontend tests
-  `93/93`, Playwright e2e `25/25`, backend build, frontend typecheck/build,
-  root lint/code-health, `git diff --check` и local group-thread send через
-  реальный backend + локальный Chatwoot.
-- `scripts/` проверены на устаревшие portal runtime следы; удалена retired
-  production installer option, code-health guard оставлен без старой
-  формулировки.
-- Production portal clean reinstall выполнен на `lk.provgroup.ru`: portal app
-  dir, containers и Docker volumes удалены перед deploy; новая portal DB
-  создана с clean thread-only schema; Chatwoot core/DB/uploads/services и
-  `chat.provgroup.ru` не трогались.
-- Production verification после reinstall: `DEPLOY_SOURCE.txt`, `/api/health`,
-  `/api/tenant`, manifest, login HTML, Docker compose health и production DB
-  counts проверены; старая portal mapping table и старая send-ledger column
-  отсутствуют.
+- Локальная portal DB destructive reset-нута и мигрирована заново под clean
+  thread-only schema; production portal clean reinstall выполнен на
+  `lk.provgroup.ru` без изменений Chatwoot core.
 - Chat thread deleted-conversation recovery добавлен: если Chatwoot conversation
   удален после mapping в portal DB, следующий send восстанавливает thread под
   lock, создает replacement conversation через contact inbox source, повторяет отправку
@@ -111,17 +95,13 @@
 - Production maintenance cleanup автоматизирован: installer ставит daily
   systemd timer, перед включением выполняет dry-run, timer persistent и
   запускает cleanup внутри `portal-backend` container.
-- Deleted-conversation recovery review закрыт: `F-CHAT-005` и `F-CHAT-006`
-  удалены после regression coverage для ledger failed re-acquire и group
-  attachment recovery; Playwright MCP проверил private/group recovery без
-  portal retry/error.
 - Strict group contact rename выполнен: portal chat thread model больше не
   поддерживает legacy `company`, публичный `threadId` использует `group:<id>`,
   Chatwoot attribute list переименован в `portal_client_group_contact_ids`, а
   `portal_contact_type` принимает только `person` и `group`.
 - Production portal clean reinstall выполнен после strict group rename:
   `lk.provgroup.ru` поднят из clean `main` source, portal DB пересоздана,
-  Chatwoot API Channel/webhook verification пройдены, Chatwoot core не трогался.
+  Chatwoot core не трогался.
 - Страница `Информация о чате` реализована как full-screen chat-adjacent page:
   backend endpoint отдает tenant/session/thread-scoped details без browser
   Chatwoot authority, frontend открывает страницу из chat menu через reusable
@@ -132,72 +112,25 @@
 - Local service governance обновлен: агент может запускать/перезапускать
   локальные portal-сервисы для разработки и проверок; Chatwoot остается внешним
   сервисом и без отдельной необходимости не трогается.
-- Chat info Playwright e2e добавлен в `chat-read-model`: group chat info
-  открывается из меню, показывает детали/куратора/участников и возвращается в
-  transcript.
-- Проверки chat info slice пройдены: backend targeted tests `51/51`,
-  frontend targeted tests `23/23`, `pnpm build`, `pnpm lint`, Prettier targeted
-  check, `git diff --check`, Playwright MCP browser validation на
-  `http://127.0.0.1:5173` с mock API, repo Playwright e2e `26/26`.
-- Local dev DB compatibility migration добавлена для старых
-  `portal_chat_threads` schemas: legacy `company` constraint/index переводятся
-  на strict `group`, чтобы group threads могли создаваться без `portal_user_id`.
-- Runtime send validation на `buhfirma.127.0.0.1.nip.io:5173` пройдена через
-  portal registration/login и реальные Chatwoot sends: `private:me` и
-  `group:<contactId>` отправлены и прочитаны обратно из Chatwoot snapshots.
-- Rendered UI validation на `buhfirma.127.0.0.1.nip.io:5173` пройдена в чистом
-  Playwright context: страница `Информация о чате` открывается из меню для
-  `private:me` и для `group:<contactId>`, back возвращает в transcript.
-- Проверки после migration fix пройдены: full backend suite `226/226`,
-  targeted chat-thread backend tests `7/7`, buhfirma Playwright e2e `26/26`,
-  `git diff --check`.
 - `ChatFullScreenPanel` приведен к portal shell layout: chat-adjacent pages
   больше не выходят за `max-w-[500px]` основного portal UI.
-- Chat info close flow усилен: поздний `/api/chat/threads/:id/info` response
-  после `Назад` не открывает страницу повторно.
-- Проверки после UI/layout fix пройдены: frontend targeted tests `21/21`,
-  `pnpm --dir frontend typecheck`, `pnpm lint`, targeted Prettier check,
-  targeted chat-info Playwright e2e, full buhfirma Playwright e2e `26/26`,
-  `git diff --check`; runtime measurement на
-  `buhfirma.127.0.0.1.nip.io:5173` подтвердил `390px` mobile и `500px`
-  centered desktop для private и group chat info.
-- Для следующего menu slice подготовлены spec и implementation plan:
-  read-only full-screen `Медиа и файлы` page поверх текущего thread authority,
-  с portal attachment proxy для медиа-страницы и существующего transcript, без
-  browser Chatwoot authority и без upload/delete/search scope.
-- Для `Медиа и файлы` зафиксирован выбранный UI вариант `C. Mixed View`:
-  фото/видео в visual section, аудио/документы/прочие файлы в compact list.
 - Реализован read-only full-screen slice `Медиа и файлы`: backend media
   endpoint, portal attachment proxy для transcript/media URLs, frontend
   `C. Mixed View` page, chat menu wiring и stale-response handling.
-- Проверки `Медиа и файлы` slice пройдены: backend targeted tests, frontend
-  targeted tests, full backend/frontend suites, `pnpm lint`, `pnpm build`,
-  Prettier targeted check, `git diff --check` и Playwright
-  `chat-read-model`.
-- Review findings `F-CHAT-007`..`F-CHAT-010` закрыты: attachment proxy получил
-  portal-owned cache policy, timeout на fetch/body stream, content-length guard,
-  allowlist для tenant Chatwoot/object-storage origins и SSRF checks для схем,
-  private hosts и redirects.
-- Проверки attachment proxy fixes пройдены: targeted backend tests `48/48`,
-  full backend suite `260/260`, `pnpm lint`, `pnpm build`, `git diff --check`.
-- Runtime media validation на `buhfirma.127.0.0.1.nip.io:5173` выявила и
-  закрыла consistency gap: сразу после отправки attachment страница
-  `Медиа и файлы` теперь merge-ит свежие вложения из текущего transcript
+- Attachment proxy для чата и медиа работает через portal authority: allowlist
+  tenant Chatwoot/object-storage origins, SSRF guards, timeout/body timeout,
+  content-length guard, portal-owned cache policy и local dev loopback handling.
+- Страница `Медиа и файлы` merge-ит свежие вложения из текущего transcript
   snapshot, пока Chatwoot media history догоняет.
-- Проверки media runtime fix пройдены: frontend targeted tests `8/8`,
-  `pnpm --dir frontend typecheck`, `pnpm lint`, `pnpm build`,
-  `git diff --check`, buhfirma Playwright e2e `27/27`, live Playwright flow
-  registration -> private PNG send -> media page -> open image через portal
-  proxy.
-- Production deploy `fac3412` выполнен на `lk.provgroup.ru` из clean
-  `feature/phase-media-files-page`; portal backend/web containers rebuilt и
-  healthy, `/api/health`, `/api/tenant` и manifest отвечают.
-- Production public smoke после deploy пройден в clean Playwright context:
-  login, registration и password reset routes рендерятся; unauthenticated
-  media endpoint возвращает ожидаемый `401`.
-- Authenticated production media smoke для `Медиа и файлы` закрыт
-  пользовательской проверкой на одном production tenant: файл в личном чате
-  отображается и открывается через portal attachment proxy.
+- Production deploy media slice выполнен на `lk.provgroup.ru`; пользователь
+  подтвердил работу `Медиа и файлы` на production tenant.
+- Реализован read-only full-screen slice `Поиск по чату`: backend endpoint
+  ищет только client-visible text messages в текущем `threadId`, frontend
+  показывает вариант `C. Search page + context preview` с author filters,
+  context snippets, fresh transcript snapshot merge, pagination по истории и
+  jump-back highlight для уже загруженных сообщений.
+- Search UX поддерживает устойчивый input focus, стабильный thread header,
+  trailing spaces в поле ввода и punctuation-insensitive phrase matching.
 
 ## Current Baseline
 
@@ -216,4 +149,4 @@
 
 ## Recommended Next Step
 
-- Начать следующий chat menu slice: `Поиск по чату`.
+- Начать следующий chat menu slice: `Отключить уведомления`.

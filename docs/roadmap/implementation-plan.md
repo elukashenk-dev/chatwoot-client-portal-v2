@@ -9,7 +9,7 @@
 - устойчивые решения - см. `docs/architecture/decisions.md`;
 - подробный multi-tenant design - см.
   `docs/architecture/multi-tenant-reference.md`;
-- историю всех выполненных фаз и проверок - см. `docs/roadmap/work-log.md`;
+- короткую карту крупных завершенных этапов - см. `docs/roadmap/work-log.md`;
 - временные review risks - см. `docs/findings/`;
 - правила closure flow, git и работы агента - см. `AGENTS.md`.
 

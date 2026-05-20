@@ -40,7 +40,8 @@
   - найденные findings в рамках scope исправлены или явно deferred пользователем;
   - targeted checks пройдены;
   - обязательные auto-tests пройдены или blocker записан;
-  - `docs/roadmap/work-log.md` обновлен, если шаг действительно завершен.
+  - `docs/roadmap/work-log.md` обновлен, если шаг действительно меняет
+    устойчивый product/architecture/runtime baseline.
 - Лучший момент для docs-only commit:
   - изменены только docs/rules;
   - форматирование проверено;
@@ -69,7 +70,9 @@
   - что именно покрываем;
   - зачем это нужно перед следующей phase;
   - какие проверки будут считаться достаточными.
-- Phase checkpoint закрывается тем же closure flow: implementation, review, fixes, targeted checks, required auto-tests, `docs/roadmap/work-log.md` update.
+- Phase checkpoint закрывается тем же closure flow: implementation, review,
+  fixes, targeted checks, required auto-tests и, если checkpoint меняет
+  устойчивый baseline, `docs/roadmap/work-log.md` update.
 - После зеленого phase checkpoint агент должен предложить обычный checkpoint commit и только затем переходить к следующей feature phase.
 - Если дополнительная regression coverage объективно не нужна, агент должен явно сказать почему и предложить переход к следующей phase без тестового pre-step.
 
@@ -129,10 +132,20 @@
   пользователь явно не отложил их отдельным решением.
 - Для browser/runtime flows предпочитать Playwright e2e; для backend-инвариантов — backend unit/integration tests; для frontend state/validation — frontend unit tests.
 - Если обязательный auto-test пока невозможно добавить из-за readiness/blocker, зафиксировать blocker и точный следующий шаг вместо молчаливого пропуска.
-- После каждого завершенного шага обязательно обновлять `docs/roadmap/work-log.md`.
-- `docs/roadmap/work-log.md` вести коротким списком, без длинных объяснений.
-- В лог писать только реально выполненное, а не планы.
-- Обновлять `docs/roadmap/work-log.md` только после того, как по завершенному шагу закончены реализация, тесты, проверки и review.
+- `docs/roadmap/work-log.md` обновлять только для крупных завершенных
+  feature/phase/runtime/docs-governance шагов, которые меняют устойчивый
+  product/architecture/runtime baseline.
+- `docs/roadmap/work-log.md` вести короткой картой baseline, без длинных
+  объяснений.
+- В лог писать только реально выполненные крупные изменения, а не планы.
+- Не добавлять в `docs/roadmap/work-log.md` отдельные пункты про мелкие fixes,
+  transient regressions, временные findings, refactoring slices, test runs,
+  команды, счетчики тестов, списки проверок, smoke details и review minutiae.
+  Эти детали остаются в финальном ответе, commit/PR description или finding
+  файлах, пока finding открыт.
+- Обновлять `docs/roadmap/work-log.md` только после того, как по завершенному
+  крупному шагу закончены реализация, тесты, проверки и review; сами проверки
+  в work-log не перечислять.
 - В конце `docs/roadmap/work-log.md` всегда держать один актуальный блок `Recommended Next Step`.
 - Перед записью нового рекомендуемого следующего шага удалять предыдущий, чтобы в конце файла всегда оставался только один актуальный следующий шаг.
 
@@ -151,7 +164,9 @@
   - frontend route/state boundary;
   - persistence/migration impact;
   - required tests and runtime validation.
-- Не начинать следующий feature-slice, пока текущий slice не прошел implementation, review, fixes, targeted checks, required tests и `docs/roadmap/work-log.md` update.
+- Не начинать следующий feature-slice, пока текущий slice не прошел
+  implementation, review, fixes, targeted checks, required tests и, если slice
+  меняет устойчивый baseline, `docs/roadmap/work-log.md` update.
 - Если во время feature work найден adjacent риск, который не входит в текущий scope, оформить его в `docs/findings/` и предложить следующим шагом. Не чинить скрыто, если пользователь явно не расширил scope.
 - Browser/runtime feature считается готовой только если есть либо Playwright e2e, либо documented readiness/blocker, почему e2e сейчас невозможно.
 - Backend invariant считается готовым только если покрыт backend unit/integration test или зафиксирован blocker.
@@ -163,7 +178,9 @@
 - Один файл = один finding.
 - Перед работой над feature/module читать open findings из `docs/findings/`, которые относятся к этой области.
 - После фикса и проверки finding файл с ним нужно удалить из `docs/findings/`.
-- Факт закрытия finding фиксировать в `docs/roadmap/work-log.md` вместе с выполненным шагом и проверками.
+- Факт закрытия finding фиксировать в `docs/roadmap/work-log.md` только если он
+  меняет устойчивый baseline; проверки и технические детали закрытия в
+  work-log не перечислять.
 - Формат и обязательные поля описаны в `docs/findings/README.md`.
 
 ## Source Of Truth Inside v2
