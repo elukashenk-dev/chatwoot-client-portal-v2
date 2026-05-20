@@ -36,6 +36,7 @@ type MessageBubbleProps = {
   hasDateDivider: boolean
   index: number
   isConnectionAvailable: boolean
+  isHighlighted?: boolean
   message: ChatMessage
   onOpenActionMenu: (message: ChatMessage, triggerElement: HTMLElement) => void
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
@@ -221,6 +222,7 @@ export function MessageBubble({
   hasDateDivider,
   index,
   isConnectionAvailable,
+  isHighlighted = false,
   message,
   onOpenActionMenu,
   onOpenContextMenu,
@@ -351,7 +353,8 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        'group flex',
+        'group flex scroll-mt-20 rounded-[0.9rem] transition-shadow',
+        isHighlighted ? 'shadow-[0_0_0_4px_rgb(250_204_21_/_0.28)]' : '',
         isOutgoing ? 'items-end' : 'items-start',
         isOutgoing ? 'justify-end' : 'justify-start',
         getMessageWrapperSpacingClass({
@@ -360,6 +363,7 @@ export function MessageBubble({
           index,
         }),
       )}
+      data-message-highlighted={isHighlighted ? 'true' : undefined}
       data-message-id={message.id}
     >
       {hasAgentAvatarSlot ? (

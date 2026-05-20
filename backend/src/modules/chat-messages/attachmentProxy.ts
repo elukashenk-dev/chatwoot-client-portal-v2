@@ -85,18 +85,66 @@ function isPrivateAttachmentHost(hostname: string) {
   return false
 }
 
-function normalizeAttachmentAllowedOrigins(origins: readonly string[]) {
-  return new Set(
-    origins.map((origin) => {
-      try {
-        return new URL(origin).origin
-      } catch {
-        throw new ChatwootClientConfigurationError(
-          'Attachment proxy allowed origins must be valid URLs.',
-        )
-      }
-    }),
+function isLoopbackAttachmentHost(hostname: string) {
+  const normalizedHostname = normalizeHostname(hostname)
+
+  return (
+    normalizedHostname === 'localhost' || normalizedHostname === '127.0.0.1'
   )
+}
+
+function buildOriginUrl({
+  baseUrl,
+  hostname,
+}: {
+  baseUrl: URL
+  hostname: string
+}) {
+  const originUrl = new URL(baseUrl.origin)
+  originUrl.hostname = hostname
+
+  return originUrl.origin
+}
+
+function normalizeAttachmentAllowedOrigins({
+  allowPrivateNetwork,
+  origins,
+}: {
+  allowPrivateNetwork: boolean
+  origins: readonly string[]
+}) {
+  const allowedOrigins = new Set<string>()
+
+  for (const origin of origins) {
+    let originUrl: URL
+
+    try {
+      originUrl = new URL(origin)
+    } catch {
+      throw new ChatwootClientConfigurationError(
+        'Attachment proxy allowed origins must be valid URLs.',
+      )
+    }
+
+    allowedOrigins.add(originUrl.origin)
+
+    if (allowPrivateNetwork && isLoopbackAttachmentHost(originUrl.hostname)) {
+      allowedOrigins.add(
+        buildOriginUrl({
+          baseUrl: originUrl,
+          hostname: 'localhost',
+        }),
+      )
+      allowedOrigins.add(
+        buildOriginUrl({
+          baseUrl: originUrl,
+          hostname: '127.0.0.1',
+        }),
+      )
+    }
+  }
+
+  return allowedOrigins
 }
 
 function assertAllowedAttachmentUrl({
@@ -187,8 +235,10 @@ export function createAttachmentProxyFetcher({
 }: CreateAttachmentProxyFetcherOptions) {
   const normalizedRequestTimeoutMs =
     normalizeChatwootRequestTimeoutMs(requestTimeoutMs)
-  const normalizedAllowedOrigins =
-    normalizeAttachmentAllowedOrigins(allowedOrigins)
+  const normalizedAllowedOrigins = normalizeAttachmentAllowedOrigins({
+    allowPrivateNetwork,
+    origins: allowedOrigins,
+  })
 
   async function fetchAttachmentWithTimeout({
     headers,

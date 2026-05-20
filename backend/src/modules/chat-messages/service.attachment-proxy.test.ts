@@ -80,6 +80,7 @@ function createChatwootMessage(
 
 function createService({
   attachmentAllowedOrigins = ['https://chatwoot.test'],
+  attachmentAllowPrivateNetwork = false,
   attachmentFetchFn = vi.fn().mockResolvedValue(
     new Response('proxy-body', {
       headers: {
@@ -94,6 +95,7 @@ function createService({
   message = createChatwootMessage(),
 }: {
   attachmentAllowedOrigins?: string[]
+  attachmentAllowPrivateNetwork?: boolean
   attachmentFetchFn?: typeof fetch
   attachmentRequestTimeoutMs?: number
   context?: CurrentUserChatThreadContext
@@ -112,6 +114,7 @@ function createService({
     findConversationMessageById,
     service: createChatMessagesService({
       attachmentAllowedOrigins,
+      attachmentAllowPrivateNetwork,
       attachmentFetchFn,
       attachmentRequestTimeoutMs,
       chatMessagesRepository: null,
@@ -166,6 +169,53 @@ describe('chat attachment proxy service', () => {
     expect(result.status).toBe(206)
     expect(result.headers.get('content-type')).toBe('image/png')
     await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
+  })
+
+  it('allows equivalent loopback attachment origins only when private-network proxying is enabled', async () => {
+    const attachmentFetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('loopback-body', {
+        headers: {
+          'content-type': 'image/png',
+        },
+        status: 200,
+      }),
+    )
+    const { service } = createService({
+      attachmentAllowedOrigins: ['http://127.0.0.1:3000'],
+      attachmentAllowPrivateNetwork: true,
+      attachmentFetchFn,
+      message: createChatwootMessage({
+        attachments: [
+          {
+            extension: 'png',
+            fileSize: 2048,
+            fileType: 'image',
+            id: 91,
+            messageId: 501,
+            name: 'receipt.png',
+            thumbUrl: '',
+            url: 'http://localhost:3000/rails/active_storage/file',
+          },
+        ],
+      }),
+    })
+
+    const result = await service.getCurrentUserChatAttachment({
+      attachmentId: 91,
+      messageId: 501,
+      threadId: 'group:154',
+      userId: 7,
+      variant: 'original',
+    })
+
+    expect(attachmentFetchFn).toHaveBeenCalledWith(
+      'http://localhost:3000/rails/active_storage/file',
+      expect.any(Object),
+    )
+    expect(result.status).toBe(200)
+    await expect(new Response(result.body).text()).resolves.toBe(
+      'loopback-body',
+    )
   })
 
   it('rejects inaccessible threads before looking up the Chatwoot message', async () => {
@@ -268,6 +318,51 @@ describe('chat attachment proxy service', () => {
       expect.any(Object),
     )
     expect(result.status).toBe(206)
+  })
+
+  it('falls back to the original attachment when Chatwoot thumbnail fetch fails', async () => {
+    const attachmentFetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response('missing-thumb', {
+          status: 502,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response('original-body', {
+          headers: {
+            'content-type': 'image/png',
+          },
+          status: 200,
+        }),
+      )
+    const { service } = createService({
+      attachmentFetchFn,
+    })
+
+    const result = await service.getCurrentUserChatAttachment({
+      attachmentId: 91,
+      messageId: 501,
+      threadId: 'group:154',
+      userId: 7,
+      variant: 'thumb',
+    })
+
+    expect(attachmentFetchFn).toHaveBeenNthCalledWith(
+      1,
+      'https://chatwoot.test/rails/active_storage/thumb',
+      expect.any(Object),
+    )
+    expect(attachmentFetchFn).toHaveBeenNthCalledWith(
+      2,
+      'https://chatwoot.test/rails/active_storage/file',
+      expect.any(Object),
+    )
+    expect(result.status).toBe(200)
+    expect(result.headers.get('content-type')).toBe('image/png')
+    await expect(new Response(result.body).text()).resolves.toBe(
+      'original-body',
+    )
   })
 
   it('maps upstream attachment fetch failures to a controlled portal error', async () => {

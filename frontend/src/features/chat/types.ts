@@ -120,6 +120,36 @@ export type ChatThreadMediaResponse = {
   result: ChatThreadResult
 }
 
+export type ChatSearchMatchRange = {
+  end: number
+  start: number
+}
+
+export type ChatSearchResult = {
+  afterSnippet: string | null
+  authorName: string
+  authorRole: ChatMessageAuthorRole
+  beforeSnippet: string | null
+  content: string
+  createdAt: string
+  direction: 'incoming' | 'outgoing'
+  id: `message:${number}`
+  matchRanges: ChatSearchMatchRange[]
+  messageId: number
+}
+
+export type ChatThreadSearchResponse = {
+  activeThread: ChatThreadSummary | null
+  hasMoreOlder: boolean
+  items: ChatSearchResult[]
+  nextOlderCursor: number | null
+  query: string
+  reason: ChatThreadReason
+  result: ChatThreadResult
+}
+
+export type ChatSearchAuthorFilter = 'all' | 'mine' | 'support'
+
 export type ChatSendResult = {
   activeThread: ChatThreadSummary | null
   reason: ChatThreadReason

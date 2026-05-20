@@ -65,6 +65,24 @@ export type PortalChatMediaItem = {
   url: string
 }
 
+export type ChatSearchMatchRange = {
+  end: number
+  start: number
+}
+
+export type PortalChatSearchResult = {
+  afterSnippet: string | null
+  authorName: string
+  authorRole: PortalChatMessageAuthorRole
+  beforeSnippet: string | null
+  content: string
+  createdAt: string
+  direction: 'incoming' | 'outgoing'
+  id: `message:${number}`
+  matchRanges: ChatSearchMatchRange[]
+  messageId: number
+}
+
 export type ChatMessagesSnapshot = {
   activeThread: PublicChatThreadSummary | null
   hasMoreOlder: boolean
@@ -79,6 +97,16 @@ export type ChatThreadMediaResponse = {
   hasMoreOlder: boolean
   items: PortalChatMediaItem[]
   nextOlderCursor: number | null
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
+}
+
+export type ChatThreadSearchResponse = {
+  activeThread: PublicChatThreadSummary | null
+  hasMoreOlder: boolean
+  items: PortalChatSearchResult[]
+  nextOlderCursor: number | null
+  query: string
   reason: ChatThreadRuntimeReason
   result: 'not_ready' | 'ready' | 'unavailable'
 }

@@ -32,9 +32,11 @@ import {
 import type { ChatMessagesRepository } from './repository.js'
 import { createOrReplayCanonicalMessage } from './sendLedger.js'
 import { sendWithDeletedConversationRecovery } from './sendRecovery.js'
+import { getCurrentUserChatSearch as getCurrentUserChatSearchFromService } from './searchService.js'
 import type {
   ChatMessagesSnapshot,
   ChatThreadMediaResponse,
+  ChatThreadSearchResponse,
   ChatSendResult,
   PortalAttachmentUpload,
   PortalChatMediaItem,
@@ -44,12 +46,14 @@ import type {
 export type {
   ChatMessagesSnapshot,
   ChatThreadMediaResponse,
+  ChatThreadSearchResponse,
   ChatSendResult,
   PortalAttachmentUpload,
   PortalChatAttachment,
   PortalChatMediaItem,
   PortalChatMessage,
   PortalChatReplyPreview,
+  PortalChatSearchResult,
 } from './types.js'
 
 const SEND_LEDGER_MESSAGE_KIND_TEXT = 'text'
@@ -359,6 +363,41 @@ function createAttachmentPayloadSha256(
     .digest('hex')
 }
 
+function buildAttachmentProxyUrlCandidates({
+  attachment,
+  variant,
+}: {
+  attachment: {
+    thumbUrl: string
+    url: string
+  }
+  variant: ChatAttachmentProxyVariant
+}) {
+  const rawUrls =
+    variant === 'thumb'
+      ? [attachment.thumbUrl, attachment.url]
+      : [attachment.url]
+  const urls: string[] = []
+
+  for (const rawUrl of rawUrls) {
+    const url = rawUrl.trim()
+
+    if (url && !urls.includes(url)) {
+      urls.push(url)
+    }
+  }
+
+  return urls
+}
+
+async function cancelAttachmentResponseBody(response: Response) {
+  try {
+    await response.body?.cancel()
+  } catch {
+    // Best-effort cleanup before trying the fallback attachment URL.
+  }
+}
+
 export function createChatMessagesService({
   attachmentAllowedOrigins = [],
   attachmentAllowPrivateNetwork = false,
@@ -484,10 +523,12 @@ export function createChatMessagesService({
           throw createAttachmentUnavailableError()
         }
 
-        const attachmentUrl =
-          variant === 'thumb' ? attachment.thumbUrl : attachment.url
+        const attachmentUrls = buildAttachmentProxyUrlCandidates({
+          attachment,
+          variant,
+        })
 
-        if (!attachmentUrl.trim()) {
+        if (attachmentUrls.length === 0) {
           throw createAttachmentUnavailableError()
         }
 
@@ -499,26 +540,31 @@ export function createChatMessagesService({
         }
         headers.set('accept-encoding', 'identity')
 
-        let upstreamResponse: Response
+        let lastAttachmentError: ApiError | null = null
 
-        try {
-          upstreamResponse = await fetchAllowedAttachment({
-            headers,
-            initialUrl: attachmentUrl,
-          })
-        } catch {
-          throw createAttachmentProxyUnavailableError()
+        for (const attachmentUrl of attachmentUrls) {
+          try {
+            const upstreamResponse = await fetchAllowedAttachment({
+              headers,
+              initialUrl: attachmentUrl,
+            })
+
+            if (upstreamResponse.ok) {
+              return {
+                body: upstreamResponse.body,
+                headers: upstreamResponse.headers,
+                status: upstreamResponse.status,
+              }
+            }
+
+            await cancelAttachmentResponseBody(upstreamResponse)
+            lastAttachmentError = createAttachmentProxyUnavailableError()
+          } catch {
+            lastAttachmentError = createAttachmentProxyUnavailableError()
+          }
         }
 
-        if (!upstreamResponse.ok) {
-          throw createAttachmentProxyUnavailableError()
-        }
-
-        return {
-          body: upstreamResponse.body,
-          headers: upstreamResponse.headers,
-          status: upstreamResponse.status,
-        }
+        throw lastAttachmentError ?? createAttachmentProxyUnavailableError()
       } catch (error) {
         if (error instanceof ApiError) {
           throw error
@@ -654,6 +700,28 @@ export function createChatMessagesService({
 
         throw error
       }
+    },
+
+    async getCurrentUserChatSearch({
+      beforeMessageId = null,
+      query,
+      threadId = PRIVATE_CHAT_THREAD_ID,
+      userId,
+    }: {
+      beforeMessageId?: number | null
+      query: string
+      threadId?: string
+      userId: number
+    }): Promise<ChatThreadSearchResponse> {
+      return getCurrentUserChatSearchFromService({
+        beforeMessageId,
+        chatThreadsRepository,
+        chatThreadsService,
+        chatwootClient,
+        query,
+        threadId,
+        userId,
+      })
     },
 
     async getCurrentUserChatMessages({

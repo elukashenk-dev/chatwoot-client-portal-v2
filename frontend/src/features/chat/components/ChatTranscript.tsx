@@ -35,6 +35,7 @@ import {
 
 type ChatTranscriptProps = {
   hasMoreOlder: boolean
+  highlightedMessageId?: number | null
   historyErrorMessage: string | null
   isConnectionAvailable: boolean
   isLoadingOlder: boolean
@@ -75,6 +76,7 @@ function restoreFocusToElement(element: HTMLElement | null | undefined) {
 
 export function ChatTranscript({
   hasMoreOlder,
+  highlightedMessageId = null,
   historyErrorMessage,
   isConnectionAvailable,
   isLoadingOlder,
@@ -362,6 +364,7 @@ export function ChatTranscript({
                   hasDateDivider={hasDateDivider}
                   index={index}
                   isConnectionAvailable={isConnectionAvailable}
+                  isHighlighted={highlightedMessageId === message.id}
                   message={message}
                   onOpenActionMenu={handleOpenActionMenu}
                   onOpenContextMenu={handleOpenContextMenu}

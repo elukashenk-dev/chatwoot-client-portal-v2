@@ -1,0 +1,229 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+
+import type { ChatThreadSearchResponse, ChatThreadSummary } from '../types'
+import { ChatSearchPage } from './ChatSearchPage'
+
+const groupThread = {
+  id: 'group:154',
+  subtitle: 'Групповой чат',
+  title: 'ИП Петров',
+  type: 'group',
+} satisfies ChatThreadSummary
+
+const readySearch: ChatThreadSearchResponse = {
+  activeThread: {
+    id: 'private:me',
+    subtitle: 'Только вы и поддержка',
+    title: 'Личный чат',
+    type: 'private',
+  },
+  hasMoreOlder: true,
+  items: [
+    {
+      afterSnippet: 'Спасибо, проверю сегодня.',
+      authorName: 'Ольга Support',
+      authorRole: 'agent',
+      beforeSnippet: 'Добрый день.',
+      content: 'Договор готов к подписанию.',
+      createdAt: '2026-05-20T08:20:00.000Z',
+      direction: 'incoming',
+      id: 'message:204',
+      matchRanges: [{ start: 0, end: 7 }],
+      messageId: 204,
+    },
+  ],
+  nextOlderCursor: 204,
+  query: 'договор',
+  reason: 'none',
+  result: 'ready',
+}
+
+describe('ChatSearchPage', () => {
+  it('keeps the thread title visible before results, while loading, and for empty results', () => {
+    const props = {
+      activeThread: groupThread,
+      isLoading: false,
+      isLoadingOlder: false,
+      onBack: vi.fn(),
+      onLoadOlder: vi.fn(),
+      onQueryChange: vi.fn(),
+      onRetry: vi.fn(),
+      onResultSelect: vi.fn(),
+      query: '',
+      search: null,
+    }
+
+    const { rerender } = render(<ChatSearchPage {...props} />)
+    expect(screen.getByText('ИП Петров')).toBeVisible()
+    expect(screen.getByText('Групповой чат')).toBeVisible()
+
+    rerender(<ChatSearchPage {...props} isLoading query="те" />)
+    expect(screen.getByText('ИП Петров')).toBeVisible()
+    expect(screen.getByText('Групповой чат')).toBeVisible()
+
+    rerender(
+      <ChatSearchPage
+        {...props}
+        query="нет"
+        search={{
+          ...readySearch,
+          activeThread: groupThread,
+          hasMoreOlder: false,
+          items: [],
+          query: 'нет',
+        }}
+      />,
+    )
+    expect(screen.getByText('ИП Петров')).toBeVisible()
+    expect(screen.getByText('Групповой чат')).toBeVisible()
+  })
+
+  it('renders search input, highlighted result, context, and load more', async () => {
+    const user = userEvent.setup()
+    const onLoadOlder = vi.fn()
+    const onQueryChange = vi.fn()
+    const onResultSelect = vi.fn()
+
+    render(
+      <ChatSearchPage
+        activeThread={readySearch.activeThread}
+        isLoading={false}
+        isLoadingOlder={false}
+        onBack={vi.fn()}
+        onLoadOlder={onLoadOlder}
+        onQueryChange={onQueryChange}
+        onRetry={vi.fn()}
+        onResultSelect={onResultSelect}
+        query="договор"
+        search={readySearch}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Поиск по чату' })).toBeVisible()
+    expect(screen.getByLabelText('Поиск по чату')).toHaveValue('договор')
+    expect(screen.getByText('Личный чат')).toBeVisible()
+    expect(screen.getByText('Добрый день.')).toBeVisible()
+    expect(screen.getByText('Спасибо, проверю сегодня.')).toBeVisible()
+    expect(screen.getByText('Договор')).toHaveAttribute('data-search-match')
+
+    await user.click(screen.getByRole('button', { name: 'Показать ещё' }))
+    expect(onLoadOlder).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: /Открыть место/ }))
+    expect(onResultSelect).toHaveBeenCalledWith(readySearch.items[0])
+  })
+
+  it('shows initial, short-query, and empty states', () => {
+    const props = {
+      activeThread: readySearch.activeThread,
+      isLoading: false,
+      isLoadingOlder: false,
+      onBack: vi.fn(),
+      onLoadOlder: vi.fn(),
+      onQueryChange: vi.fn(),
+      onRetry: vi.fn(),
+      onResultSelect: vi.fn(),
+      search: null,
+    }
+
+    const { rerender } = render(<ChatSearchPage {...props} query="" />)
+    expect(
+      screen.getByText('Введите запрос, чтобы найти сообщение'),
+    ).toBeVisible()
+
+    rerender(<ChatSearchPage {...props} query="д" />)
+    expect(screen.getByText('Введите минимум 2 символа')).toBeVisible()
+
+    rerender(
+      <ChatSearchPage
+        {...props}
+        query="нет"
+        search={{
+          ...readySearch,
+          hasMoreOlder: false,
+          items: [],
+          query: 'нет',
+        }}
+      />,
+    )
+    expect(screen.getByText('По этому запросу ничего не найдено')).toBeVisible()
+  })
+
+  it('filters by author group on the page only', async () => {
+    const user = userEvent.setup()
+    const findParagraphByText = (text: string) => {
+      return screen.queryByText((_, element) => {
+        return (
+          element?.tagName.toLowerCase() === 'p' && element.textContent === text
+        )
+      })
+    }
+
+    render(
+      <ChatSearchPage
+        activeThread={readySearch.activeThread}
+        isLoading={false}
+        isLoadingOlder={false}
+        onBack={vi.fn()}
+        onLoadOlder={vi.fn()}
+        onQueryChange={vi.fn()}
+        onRetry={vi.fn()}
+        onResultSelect={vi.fn()}
+        query="договор"
+        search={{
+          ...readySearch,
+          items: [
+            readySearch.items[0],
+            {
+              ...readySearch.items[0],
+              authorName: 'Вы',
+              authorRole: 'current_user',
+              content: 'Мой договор подписан.',
+              direction: 'outgoing',
+              id: 'message:205',
+              matchRanges: [{ start: 4, end: 11 }],
+              messageId: 205,
+            },
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Мои' }))
+    expect(findParagraphByText('Мой договор подписан.')).toBeVisible()
+    expect(findParagraphByText('Договор готов к подписанию.')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Поддержка' }))
+    expect(findParagraphByText('Договор готов к подписанию.')).toBeVisible()
+    expect(findParagraphByText('Мой договор подписан.')).toBeNull()
+  })
+
+  it('keeps the search input focused while a query is loading', () => {
+    const props = {
+      activeThread: readySearch.activeThread,
+      isLoadingOlder: false,
+      onBack: vi.fn(),
+      onLoadOlder: vi.fn(),
+      onQueryChange: vi.fn(),
+      onRetry: vi.fn(),
+      onResultSelect: vi.fn(),
+      search: null,
+    }
+
+    const { rerender } = render(
+      <ChatSearchPage {...props} isLoading={false} query="" />,
+    )
+    const input = screen.getByLabelText('Поиск по чату')
+
+    input.focus()
+    expect(input).toHaveFocus()
+
+    rerender(<ChatSearchPage {...props} isLoading query="до" />)
+
+    expect(screen.getByLabelText('Поиск по чату')).toHaveFocus()
+    expect(screen.getByLabelText('Поиск по чату')).toHaveValue('до')
+    expect(screen.getByText('Ищем сообщения.')).toBeVisible()
+  })
+})

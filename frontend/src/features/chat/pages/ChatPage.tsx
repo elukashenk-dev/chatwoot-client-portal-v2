@@ -7,9 +7,7 @@ import {
 } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
-import { ChatInfoPage } from '../components/ChatInfoPage'
 import { ChatLoadingState } from '../components/ChatLoadingState'
-import { ChatMediaPage } from '../components/ChatMediaPage'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
@@ -28,10 +26,13 @@ import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import type { ChatPageState } from './chatPageState'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
+import { useChatSearchNavigation } from './useChatSearchNavigation'
+import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -108,6 +109,14 @@ export function ChatPage() {
     selectedThreadId: pageState.selectedThreadId,
   })
   const chatMediaPanel = useChatMediaPanel({
+    currentSnapshot: pageState.status === 'ready' ? pageState.snapshot : null,
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
+  })
+  const chatSearchPanel = useChatSearchPanel({
     currentSnapshot: pageState.status === 'ready' ? pageState.snapshot : null,
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
@@ -413,12 +422,21 @@ export function ChatPage() {
           threadId: pageState.selectedThreadId,
         })
       : []
+  const {
+    clearHighlightedMessage,
+    handleOpenSearchResult,
+    highlightedMessageId,
+  } = useChatSearchNavigation({
+    closeChatSearch: chatSearchPanel.closeChatSearch,
+    visibleMessages,
+  })
 
   return (
     <>
       <ChatHeader
         activeThread={headerThread}
         isReady={isReady}
+        onOpenThreadSearch={chatSearchPanel.openChatSearch}
         onOpenThreadMedia={() => {
           void chatMediaPanel.loadChatMedia()
         }}
@@ -426,6 +444,7 @@ export function ChatPage() {
           void chatInfoPanel.loadChatInfo()
         }}
         onSelectThread={(threadId) => {
+          clearHighlightedMessage()
           void handleSelectThread(threadId)
         }}
         selectedThreadId={pageState.selectedThreadId}
@@ -467,6 +486,7 @@ export function ChatPage() {
         {shouldRenderTranscript ? (
           <ChatTranscript
             hasMoreOlder={pageState.snapshot.hasMoreOlder}
+            highlightedMessageId={highlightedMessageId}
             historyErrorMessage={historyErrorMessage}
             isConnectionAvailable={isBrowserOnline}
             isLoadingOlder={isLoadingOlder}
@@ -494,30 +514,13 @@ export function ChatPage() {
           replyTarget={replyTarget}
         />
       </div>
-      {chatInfoPanel.state.isOpen ? (
-        <ChatInfoPage
-          info={chatInfoPanel.state.info}
-          isLoading={chatInfoPanel.state.isLoading}
-          onBack={chatInfoPanel.closeChatInfo}
-          onRetry={() => {
-            void chatInfoPanel.retryChatInfo()
-          }}
-        />
-      ) : null}
-      {chatMediaPanel.state.isOpen ? (
-        <ChatMediaPage
-          isLoading={chatMediaPanel.state.isLoading}
-          isLoadingOlder={chatMediaPanel.state.isLoadingOlder}
-          media={chatMediaPanel.state.media}
-          onBack={chatMediaPanel.closeChatMedia}
-          onLoadOlder={() => {
-            void chatMediaPanel.loadOlderChatMedia()
-          }}
-          onRetry={() => {
-            void chatMediaPanel.retryChatMedia()
-          }}
-        />
-      ) : null}
+      <ChatAuxiliaryPages
+        activeThread={headerThread}
+        chatInfoPanel={chatInfoPanel}
+        chatMediaPanel={chatMediaPanel}
+        chatSearchPanel={chatSearchPanel}
+        onSearchResultSelect={handleOpenSearchResult}
+      />
     </>
   )
 }

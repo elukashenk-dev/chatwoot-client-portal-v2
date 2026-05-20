@@ -59,6 +59,17 @@ const chatMediaQuerySchema = z
   })
   .strict()
 
+const chatSearchParamsSchema = z
+  .object({ threadId: publicThreadIdSchema })
+  .strict()
+
+const chatSearchQuerySchema = z
+  .object({
+    beforeMessageId: z.coerce.number().int().positive().optional(),
+    q: z.string().trim().min(2).max(80),
+  })
+  .strict()
+
 const sendChatMessageBodySchema = z
   .object({
     clientMessageKey: z.string().trim().min(1).max(200),
@@ -381,6 +392,24 @@ export function registerChatMessagesRoutes(
 
     return createChatMessagesService(request).getCurrentUserChatMedia({
       beforeMessageId: query.beforeMessageId ?? null,
+      threadId: params.threadId,
+      userId: user.id,
+    })
+  })
+
+  app.get('/api/chat/threads/:threadId/search', async (request, reply) => {
+    const user = await resolveAuthenticatedPortalUser({
+      authService,
+      env,
+      reply,
+      request,
+    })
+    const params = chatSearchParamsSchema.parse(request.params)
+    const query = chatSearchQuerySchema.parse(request.query)
+
+    return createChatMessagesService(request).getCurrentUserChatSearch({
+      beforeMessageId: query.beforeMessageId ?? null,
+      query: query.q,
       threadId: params.threadId,
       userId: user.id,
     })
