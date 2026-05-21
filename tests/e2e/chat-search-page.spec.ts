@@ -71,6 +71,131 @@ function wait(ms: number) {
   })
 }
 
+async function routeSearchContext(page: Page, contextRequests: string[]) {
+  await page.route(
+    '**/api/chat/threads/*/messages/context**',
+    async (route) => {
+      const requestUrl = new URL(route.request().url())
+      const direction = requestUrl.searchParams.get('direction')
+      const cursor = requestUrl.searchParams.get('cursor')
+
+      contextRequests.push(`${requestUrl.pathname}${requestUrl.search}`)
+
+      if (direction === 'earlier' && cursor === '600') {
+        await route.fulfill({
+          body: JSON.stringify({
+            activeThread: groupThread,
+            earlierCursor: null,
+            hasMoreEarlier: false,
+            hasMoreLater: true,
+            laterCursor: null,
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                authorRole: 'agent',
+                content: 'Еще более ранний контекст.',
+                contentType: 'text',
+                createdAt: '2026-05-18T08:16:00.000Z',
+                direction: 'incoming',
+                id: 590,
+                status: 'sent',
+              },
+            ],
+            reason: 'none',
+            result: 'ready',
+            targetMessageId: 602,
+          }),
+          contentType: 'application/json',
+          status: 200,
+        })
+        return
+      }
+
+      if (direction === 'later' && cursor === '604') {
+        await route.fulfill({
+          body: JSON.stringify({
+            activeThread: groupThread,
+            earlierCursor: null,
+            hasMoreEarlier: true,
+            hasMoreLater: false,
+            laterCursor: null,
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Иван Петров',
+                authorRole: 'group_member',
+                content: 'Более поздний контекст.',
+                contentType: 'text',
+                createdAt: '2026-05-18T08:26:00.000Z',
+                direction: 'incoming',
+                id: 610,
+                status: 'sent',
+              },
+            ],
+            reason: 'none',
+            result: 'ready',
+            targetMessageId: 602,
+          }),
+          contentType: 'application/json',
+          status: 200,
+        })
+        return
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({
+          activeThread: groupThread,
+          earlierCursor: 600,
+          hasMoreEarlier: true,
+          hasMoreLater: true,
+          laterCursor: 604,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              authorRole: 'agent',
+              content: 'Перед старым договором обсудили оплату.',
+              contentType: 'text',
+              createdAt: '2026-05-18T08:18:00.000Z',
+              direction: 'incoming',
+              id: 600,
+              status: 'sent',
+            },
+            {
+              attachments: [],
+              authorName: 'Ольга Support',
+              authorRole: 'agent',
+              content: 'Старый договор найден.',
+              contentType: 'text',
+              createdAt: '2026-05-18T08:20:00.000Z',
+              direction: 'incoming',
+              id: 602,
+              status: 'sent',
+            },
+            {
+              attachments: [],
+              authorName: 'Иван Петров',
+              authorRole: 'group_member',
+              content: 'После старого договора согласовали сроки.',
+              contentType: 'text',
+              createdAt: '2026-05-18T08:22:00.000Z',
+              direction: 'incoming',
+              id: 604,
+              status: 'sent',
+            },
+          ],
+          reason: 'none',
+          result: 'ready',
+          targetMessageId: 602,
+        }),
+        contentType: 'application/json',
+        status: 200,
+      })
+    },
+  )
+}
+
 test('opens private chat search, finds a visible message, and returns to transcript', async ({
   page,
 }) => {
@@ -133,7 +258,6 @@ test('opens private chat search, finds a visible message, and returns to transcr
       status: 200,
     })
   })
-
   await page.goto('/auth/login')
   await fillLoginForm(page)
   await page.getByRole('button', { name: 'Войти' }).click()
@@ -180,10 +304,12 @@ test('opens private chat search, finds a visible message, and returns to transcr
 test('opens group chat search with context preview and loads older results', async ({
   page,
 }) => {
+  const contextRequests: string[] = []
   const searchRequests: string[] = []
 
   await routeThreads(page, [privateThread, groupThread])
   await routeStoppedRealtime(page)
+  await routeSearchContext(page, contextRequests)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
 
@@ -319,14 +445,38 @@ test('opens group chat search with context preview and loads older results', asy
 
   await searchPage.getByRole('button', { name: 'Показать ещё' }).click()
   await expect(searchPage.getByText('Старый договор найден.')).toBeVisible()
-  await searchPage.getByRole('button', { name: 'Вернуться к чату' }).click()
+  await searchPage
+    .getByRole('button', { name: /Открыть место/ })
+    .last()
+    .click()
 
-  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
   await expect(
     page.getByRole('heading', { name: 'Поиск по чату' }),
   ).toBeHidden()
+  await expect(page.getByText('Показан фрагмент истории')).toBeVisible()
+  await expect(
+    page.getByText('Перед старым договором обсудили оплату.'),
+  ).toBeVisible()
+  await expect(page.getByText('Старый договор найден.')).toBeVisible()
+  await expect(
+    page
+      .locator('[data-message-highlighted="true"]')
+      .getByText('Старый договор найден.'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Показать более ранние' }).click()
+  await expect(page.getByText('Еще более ранний контекст.')).toBeVisible()
+  await page.getByRole('button', { name: 'Показать более поздние' }).click()
+  await expect(page.getByText('Более поздний контекст.')).toBeVisible()
+  await page.getByRole('button', { name: 'К последним сообщениям' }).click()
+  await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
+  await expect(page.getByText('Показан фрагмент истории')).toBeHidden()
   expect(searchRequests).toEqual([
     '/api/chat/threads/group%3A154/search?q=%D0%B4%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80',
     '/api/chat/threads/group%3A154/search?q=%D0%B4%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80&beforeMessageId=804',
+  ])
+  expect(contextRequests).toEqual([
+    '/api/chat/threads/group%3A154/messages/context?messageId=602',
+    '/api/chat/threads/group%3A154/messages/context?messageId=602&direction=earlier&cursor=600',
+    '/api/chat/threads/group%3A154/messages/context?messageId=602&direction=later&cursor=604',
   ])
 })

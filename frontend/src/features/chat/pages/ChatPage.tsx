@@ -49,6 +49,7 @@ export function ChatPage() {
     null,
   )
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
+  const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
   const [replyTarget, setReplyTarget] =
     useState<MessageComposerReplyTarget | null>(null)
   const {
@@ -86,6 +87,22 @@ export function ChatPage() {
   )
 
   const {
+    clearHistoryFragment,
+    clearSearchResultOpenError,
+    historyFragment,
+    loadHistoryFragmentContext,
+    openSearchResultContext,
+    searchResultOpenErrorMessage,
+  } = useChatSearchResultContext({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
+    setHistoryErrorMessage,
+  })
+  const {
     clearSendError,
     handleSendAttachment,
     isSending,
@@ -97,6 +114,7 @@ export function ChatPage() {
     isBrowserOnline,
     isMountedRef,
     markBrowserOnline,
+    onAttachmentSendStarted: clearHistoryFragment,
     pageState,
     setPageState,
   })
@@ -134,21 +152,6 @@ export function ChatPage() {
     markBrowserOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
-  const {
-    clearHistoryFragment,
-    historyFragment,
-    loadHistoryFragmentContext,
-    openSearchResultContext,
-  } = useChatSearchResultContext({
-    handleConnectionUnavailableError,
-    handleUnauthorizedChatError,
-    isBrowserOnline,
-    isMountedRef,
-    markBrowserOnline,
-    selectedThreadId: pageState.selectedThreadId,
-    setHistoryErrorMessage,
-  })
-
   async function handleLoadOlderMessages() {
     if (
       !isBrowserOnline ||
@@ -355,14 +358,21 @@ export function ChatPage() {
   const transcriptMessages = historyFragment
     ? historyFragment.messages
     : visibleMessages
+  const handleCloseChatSearch = useCallback(() => {
+    clearSearchResultOpenError()
+    chatSearchPanel.closeChatSearch()
+  }, [chatSearchPanel, clearSearchResultOpenError])
   const {
     clearHighlightedMessage,
     handleOpenSearchResult,
     highlightedMessageId,
+    highlightedMessageScrollSignal,
   } = useChatSearchNavigation({
-    closeChatSearch: chatSearchPanel.closeChatSearch,
+    clearHistoryFragment,
+    closeChatSearch: handleCloseChatSearch,
+    displayedMessages: transcriptMessages,
+    latestMessages: visibleMessages,
     openSearchResultContext,
-    visibleMessages,
   })
   const transcriptHighlightedMessageId =
     historyFragment?.targetMessageId ?? highlightedMessageId
@@ -372,7 +382,10 @@ export function ChatPage() {
       <ChatHeader
         activeThread={headerThread}
         isReady={isReady}
-        onOpenThreadSearch={chatSearchPanel.openChatSearch}
+        onOpenThreadSearch={() => {
+          clearSearchResultOpenError()
+          chatSearchPanel.openChatSearch()
+        }}
         onOpenThreadMedia={() => {
           void chatMediaPanel.loadChatMedia()
         }}
@@ -422,6 +435,7 @@ export function ChatPage() {
 
         {shouldRenderTranscript ? (
           <ChatTranscript
+            forceScrollToBottomSignal={forceScrollToBottomSignal}
             hasMoreOlder={
               historyFragment ? false : pageState.snapshot.hasMoreOlder
             }
@@ -443,6 +457,7 @@ export function ChatPage() {
                     onReturnToLatest: () => {
                       clearHistoryFragment()
                       clearHighlightedMessage()
+                      setForceScrollToBottomSignal((signal) => signal + 1)
                     },
                   }
                 : null
@@ -458,6 +473,8 @@ export function ChatPage() {
               setReplyTarget(toComposerReplyTarget(message))
             }}
             onRetryTextMessage={handleRetryTextMessage}
+            scrollToMessageId={transcriptHighlightedMessageId}
+            scrollToMessageSignal={highlightedMessageScrollSignal}
           />
         ) : null}
 
@@ -479,7 +496,13 @@ export function ChatPage() {
         chatInfoPanel={chatInfoPanel}
         chatMediaPanel={chatMediaPanel}
         chatSearchPanel={chatSearchPanel}
+        onSearchBack={handleCloseChatSearch}
+        onSearchQueryChange={(query) => {
+          clearSearchResultOpenError()
+          void chatSearchPanel.updateChatSearchQuery(query)
+        }}
         onSearchResultSelect={handleOpenSearchResult}
+        searchResultOpenErrorMessage={searchResultOpenErrorMessage}
       />
     </>
   )

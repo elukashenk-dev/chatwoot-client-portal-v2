@@ -16,6 +16,7 @@ export type ChatSearchPanelState = {
   isLoading: boolean
   isLoadingOlder: boolean
   isOpen: boolean
+  olderSearchErrorMessage: string | null
   query: string
   search: ChatThreadSearchResponse | null
 }
@@ -31,6 +32,8 @@ const unavailableSearch: ChatThreadSearchResponse = {
 }
 
 const CHAT_SEARCH_DEBOUNCE_MS = 300
+const OLDER_SEARCH_ERROR_MESSAGE =
+  'Не удалось загрузить более ранние результаты. Попробуйте еще раз.'
 
 function normalizeChatSearchInput(query: string) {
   return query.slice(0, CHAT_SEARCH_QUERY_MAX_LENGTH)
@@ -81,6 +84,7 @@ export function useChatSearchPanel({
     isLoading: false,
     isLoadingOlder: false,
     isOpen: false,
+    olderSearchErrorMessage: null,
     query: '',
     search: null,
   })
@@ -125,6 +129,7 @@ export function useChatSearchPanel({
         isLoading: false,
         isLoadingOlder: false,
         isOpen: true,
+        olderSearchErrorMessage: null,
         query: displayQuery,
         search: mergeChatSearchWithCurrentSnapshot({
           currentSnapshot: currentSnapshotRef.current,
@@ -146,6 +151,7 @@ export function useChatSearchPanel({
           isLoading: false,
           isLoadingOlder: false,
           isOpen: true,
+          olderSearchErrorMessage: null,
           query: displayQuery,
           search: { ...unavailableSearch, query: searchQuery },
         })
@@ -161,6 +167,7 @@ export function useChatSearchPanel({
         isLoading: false,
         isLoadingOlder: false,
         isOpen: true,
+        olderSearchErrorMessage: null,
         query: displayQuery,
         search: {
           ...unavailableSearch,
@@ -188,6 +195,7 @@ export function useChatSearchPanel({
       ...currentState,
       isLoading: true,
       isLoadingOlder: false,
+      olderSearchErrorMessage: null,
       query: displayQuery,
       search: null,
     }))
@@ -229,6 +237,7 @@ export function useChatSearchPanel({
         ...currentState,
         isLoading: false,
         isLoadingOlder: false,
+        olderSearchErrorMessage: null,
         query: displayQuery,
         search: null,
       }))
@@ -264,6 +273,7 @@ export function useChatSearchPanel({
     setState((currentState) => ({
       ...currentState,
       isLoadingOlder: true,
+      olderSearchErrorMessage: null,
     }))
 
     try {
@@ -283,12 +293,14 @@ export function useChatSearchPanel({
           return {
             ...currentState,
             isLoadingOlder: false,
+            olderSearchErrorMessage: OLDER_SEARCH_ERROR_MESSAGE,
           }
         }
 
         return {
           ...currentState,
           isLoadingOlder: false,
+          olderSearchErrorMessage: null,
           search: {
             ...olderSearch,
             items: [...currentState.search.items, ...olderSearch.items],
@@ -315,6 +327,7 @@ export function useChatSearchPanel({
       setState((currentState) => ({
         ...currentState,
         isLoadingOlder: false,
+        olderSearchErrorMessage: OLDER_SEARCH_ERROR_MESSAGE,
       }))
     }
   }
@@ -343,6 +356,7 @@ export function useChatSearchPanel({
         isLoading: false,
         isLoadingOlder: false,
         isOpen: false,
+        olderSearchErrorMessage: null,
       }))
     },
     loadOlderChatSearch,
@@ -353,6 +367,7 @@ export function useChatSearchPanel({
         isLoading: false,
         isLoadingOlder: false,
         isOpen: true,
+        olderSearchErrorMessage: null,
         query: '',
         search: null,
       })

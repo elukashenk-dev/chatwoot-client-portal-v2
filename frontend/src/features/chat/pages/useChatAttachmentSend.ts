@@ -16,6 +16,7 @@ type UseChatAttachmentSendOptions = {
   isBrowserOnline: boolean
   isMountedRef: MutableRefObject<boolean>
   markBrowserOnline: () => void
+  onAttachmentSendStarted?: () => void
   pageState: ChatPageState
   setPageState: Dispatch<SetStateAction<ChatPageState>>
 }
@@ -33,6 +34,7 @@ export function useChatAttachmentSend({
   isBrowserOnline,
   isMountedRef,
   markBrowserOnline,
+  onAttachmentSendStarted,
   pageState,
   setPageState,
 }: UseChatAttachmentSendOptions) {
@@ -60,6 +62,7 @@ export function useChatAttachmentSend({
 
       const threadId = pageState.selectedThreadId
 
+      onAttachmentSendStarted?.()
       setIsSending(true)
       setSendErrorMessage(null)
 
@@ -138,6 +141,7 @@ export function useChatAttachmentSend({
       isBrowserOnline,
       isMountedRef,
       markBrowserOnline,
+      onAttachmentSendStarted,
       pageState.selectedThreadId,
       pageState.status,
       setPageState,

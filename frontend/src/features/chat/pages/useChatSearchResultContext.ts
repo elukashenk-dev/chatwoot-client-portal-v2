@@ -3,6 +3,8 @@ import {
   type MutableRefObject,
   type SetStateAction,
   useCallback,
+  useEffect,
+  useRef,
   useState,
 } from 'react'
 
@@ -103,11 +105,31 @@ export function useChatSearchResultContext({
   selectedThreadId,
   setHistoryErrorMessage,
 }: UseChatSearchResultContextOptions) {
+  const selectedThreadIdRef = useRef(selectedThreadId)
+  const contextRequestSequenceRef = useRef(0)
   const [historyFragment, setHistoryFragment] =
     useState<ChatHistoryFragmentState | null>(null)
+  const [searchResultOpenErrorMessage, setSearchResultOpenErrorMessage] =
+    useState<string | null>(null)
+
+  const isCurrentContextRequest = useCallback(
+    ({ requestId, threadId }: { requestId: number; threadId: string }) => {
+      return (
+        isMountedRef.current &&
+        contextRequestSequenceRef.current === requestId &&
+        selectedThreadIdRef.current === threadId
+      )
+    },
+    [isMountedRef],
+  )
 
   const clearHistoryFragment = useCallback(() => {
+    contextRequestSequenceRef.current += 1
     setHistoryFragment(null)
+  }, [])
+
+  const clearSearchResultOpenError = useCallback(() => {
+    setSearchResultOpenErrorMessage(null)
   }, [])
 
   const openSearchResultContext = useCallback(
@@ -116,32 +138,49 @@ export function useChatSearchResultContext({
         return false
       }
 
+      const requestId = contextRequestSequenceRef.current + 1
+      const requestThreadId = selectedThreadId
+
+      contextRequestSequenceRef.current = requestId
+      setSearchResultOpenErrorMessage(null)
+
       try {
         const context = await getChatThreadMessageContext({
           messageId: result.messageId,
-          threadId: selectedThreadId,
+          threadId: requestThreadId,
         })
 
-        if (!isMountedRef.current) {
+        if (
+          !isCurrentContextRequest({
+            requestId,
+            threadId: requestThreadId,
+          })
+        ) {
           return false
         }
 
         if (
           context.result !== 'ready' ||
-          context.activeThread?.id !== selectedThreadId
+          context.activeThread?.id !== requestThreadId
         ) {
           setHistoryFragment(null)
-          setHistoryErrorMessage(HISTORY_FRAGMENT_ERROR_MESSAGE)
+          setSearchResultOpenErrorMessage(HISTORY_FRAGMENT_ERROR_MESSAGE)
           return false
         }
 
         markBrowserOnline()
         setHistoryErrorMessage(null)
+        setSearchResultOpenErrorMessage(null)
         setHistoryFragment(createHistoryFragmentFromContext(context))
 
         return true
       } catch (error) {
-        if (!isMountedRef.current) {
+        if (
+          !isCurrentContextRequest({
+            requestId,
+            threadId: requestThreadId,
+          })
+        ) {
           return false
         }
 
@@ -150,7 +189,7 @@ export function useChatSearchResultContext({
         }
 
         handleConnectionUnavailableError(error)
-        setHistoryErrorMessage(HISTORY_FRAGMENT_ERROR_MESSAGE)
+        setSearchResultOpenErrorMessage(HISTORY_FRAGMENT_ERROR_MESSAGE)
 
         return false
       }
@@ -159,7 +198,7 @@ export function useChatSearchResultContext({
       handleConnectionUnavailableError,
       handleUnauthorizedChatError,
       isBrowserOnline,
-      isMountedRef,
+      isCurrentContextRequest,
       markBrowserOnline,
       selectedThreadId,
       setHistoryErrorMessage,
@@ -273,7 +312,7 @@ export function useChatSearchResultContext({
         }
 
         setHistoryFragment((currentFragment) =>
-          currentFragment
+          currentFragment?.targetMessageId === targetMessageId
             ? {
                 ...stopFragmentLoading(currentFragment),
                 errorMessage: wasUnauthorized
@@ -295,10 +334,17 @@ export function useChatSearchResultContext({
     ],
   )
 
+  useEffect(() => {
+    selectedThreadIdRef.current = selectedThreadId
+    contextRequestSequenceRef.current += 1
+  }, [selectedThreadId])
+
   return {
     clearHistoryFragment,
+    clearSearchResultOpenError,
     historyFragment,
     loadHistoryFragmentContext,
     openSearchResultContext,
+    searchResultOpenErrorMessage,
   }
 }

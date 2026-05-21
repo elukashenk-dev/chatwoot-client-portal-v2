@@ -17,6 +17,7 @@ import {
   isTranscriptNearBottom,
 } from './ChatTranscriptScroll'
 import { ChevronUpIcon } from '../../../shared/ui/icons'
+import { DayDivider } from './chat-transcript/DayDivider'
 import { MessageBubble } from './chat-transcript/MessageBubble'
 import { MessageContextMenu } from './chat-transcript/MessageContextMenu'
 import {
@@ -32,8 +33,10 @@ import {
   shouldUseDesktopMessageContextMenu,
   type MessageContextMenuState,
 } from './chat-transcript/utils'
+import { useTranscriptMessageScroll } from './useTranscriptMessageScroll'
 
 type ChatTranscriptProps = {
+  forceScrollToBottomSignal?: number
   historyFragmentControls?: {
     errorMessage: string | null
     hasMoreEarlier: boolean
@@ -53,29 +56,8 @@ type ChatTranscriptProps = {
   onLoadOlder: () => void
   onReplyToMessage: (message: ChatMessage) => void
   onRetryTextMessage: (clientMessageKey: string) => void
-}
-
-function DayDivider({
-  className,
-  label,
-}: {
-  className?: string
-  label: string
-}) {
-  return (
-    <div
-      className={cn(
-        'self-center flex w-full max-w-[500px] items-center gap-2.5 px-1',
-        className,
-      )}
-    >
-      <div className="h-px flex-1 bg-slate-100" />
-      <span className="rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-0.5 text-[11px] font-normal text-slate-500 shadow-sm shadow-slate-900/[0.03]">
-        {label}
-      </span>
-      <div className="h-px flex-1 bg-slate-100" />
-    </div>
-  )
+  scrollToMessageId?: number | null
+  scrollToMessageSignal?: number
 }
 
 function restoreFocusToElement(element: HTMLElement | null | undefined) {
@@ -85,6 +67,7 @@ function restoreFocusToElement(element: HTMLElement | null | undefined) {
 }
 
 export function ChatTranscript({
+  forceScrollToBottomSignal = 0,
   historyFragmentControls = null,
   hasMoreOlder,
   highlightedMessageId = null,
@@ -95,6 +78,8 @@ export function ChatTranscript({
   onLoadOlder,
   onReplyToMessage,
   onRetryTextMessage,
+  scrollToMessageId = null,
+  scrollToMessageSignal = 0,
 }: ChatTranscriptProps) {
   const [contextMenu, setContextMenu] = useState<MessageContextMenuState>(null)
   const [copyStatusText, setCopyStatusText] = useState('')
@@ -105,6 +90,8 @@ export function ChatTranscript({
     null,
   )
   const shouldAutoFollowNewMessagesRef = useRef(true)
+  const lastForceScrollToBottomSignalRef = useRef(forceScrollToBottomSignal)
+  const lastScrollToMessageSignalRef = useRef(scrollToMessageSignal)
 
   const closeContextMenu = useCallback(
     ({
@@ -198,6 +185,52 @@ export function ChatTranscript({
       cancelNextFrame(frameId)
     }
   }, [messages])
+
+  useLayoutEffect(() => {
+    if (
+      lastForceScrollToBottomSignalRef.current === forceScrollToBottomSignal
+    ) {
+      return
+    }
+
+    const scrollElement = scrollElementRef.current
+
+    if (!scrollElement) {
+      return
+    }
+
+    lastForceScrollToBottomSignalRef.current = forceScrollToBottomSignal
+
+    function scrollToBottomAndCapture() {
+      if (!scrollElement) {
+        return
+      }
+
+      scrollElement.scrollTop = scrollElement.scrollHeight
+      previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
+        scrollElement,
+        messages,
+      )
+      shouldAutoFollowNewMessagesRef.current = true
+    }
+
+    scrollToBottomAndCapture()
+    const frameId = requestNextFrame(scrollToBottomAndCapture)
+
+    return () => {
+      cancelNextFrame(frameId)
+    }
+  }, [forceScrollToBottomSignal, messages])
+
+  useTranscriptMessageScroll({
+    lastScrollToMessageSignalRef,
+    messages,
+    previousScrollSnapshotRef,
+    scrollElementRef,
+    scrollToMessageId,
+    scrollToMessageSignal,
+    shouldAutoFollowNewMessagesRef,
+  })
 
   useEffect(() => {
     const messageListElement = messageListRef.current

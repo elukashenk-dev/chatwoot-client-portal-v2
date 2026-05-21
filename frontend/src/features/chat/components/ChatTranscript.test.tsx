@@ -533,6 +533,167 @@ describe('ChatTranscript', () => {
     expect(onReplyToMessage).not.toHaveBeenCalled()
   })
 
+  it('scrolls to the bottom when the parent requests latest messages', async () => {
+    const messages = [
+      createMessage({
+        content: 'Старое сообщение',
+        id: 1,
+      }),
+      createMessage({
+        content: 'Последнее сообщение',
+        id: 2,
+      }),
+    ]
+    const { container, rerender } = render(
+      <ChatTranscript
+        forceScrollToBottomSignal={0}
+        hasMoreOlder={false}
+        historyErrorMessage={null}
+        isConnectionAvailable
+        isLoadingOlder={false}
+        messages={messages}
+        onLoadOlder={vi.fn()}
+        onReplyToMessage={vi.fn()}
+        onRetryTextMessage={vi.fn()}
+      />,
+    )
+    const scrollElement = container.querySelector<HTMLElement>(
+      'section.chat-scroll',
+    )
+
+    expect(scrollElement).not.toBeNull()
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 0)
+    })
+
+    let currentScrollTop = 240
+
+    Object.defineProperty(scrollElement, 'clientHeight', {
+      configurable: true,
+      get: () => 320,
+    })
+    Object.defineProperty(scrollElement, 'scrollHeight', {
+      configurable: true,
+      get: () => 1000,
+    })
+    Object.defineProperty(scrollElement, 'scrollTop', {
+      configurable: true,
+      get: () => currentScrollTop,
+      set: (value: number) => {
+        currentScrollTop = value
+      },
+    })
+
+    fireEvent.scroll(scrollElement!)
+    expect(currentScrollTop).toBe(240)
+
+    rerender(
+      <ChatTranscript
+        forceScrollToBottomSignal={1}
+        hasMoreOlder={false}
+        historyErrorMessage={null}
+        isConnectionAvailable
+        isLoadingOlder={false}
+        messages={messages}
+        onLoadOlder={vi.fn()}
+        onReplyToMessage={vi.fn()}
+        onRetryTextMessage={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(currentScrollTop).toBe(1000)
+    })
+  })
+
+  it('scrolls a requested message into view after a search result opens', async () => {
+    const messages = [
+      createMessage({
+        content: 'Старое сообщение',
+        id: 1,
+      }),
+      createMessage({
+        content: 'Найденное сообщение',
+        id: 2,
+      }),
+      createMessage({
+        content: 'Последнее сообщение',
+        id: 3,
+      }),
+    ]
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    const scrollIntoView = vi.fn(function (this: Element) {
+      if (this.getAttribute('data-message-id') === '2') {
+        currentScrollTop = 260
+      }
+    })
+    let currentScrollTop = 1000
+
+    try {
+      Element.prototype.scrollIntoView = scrollIntoView
+
+      const { container, rerender } = render(
+        <ChatTranscript
+          hasMoreOlder={false}
+          historyErrorMessage={null}
+          isConnectionAvailable
+          isLoadingOlder={false}
+          messages={messages}
+          onLoadOlder={vi.fn()}
+          onReplyToMessage={vi.fn()}
+          onRetryTextMessage={vi.fn()}
+          scrollToMessageId={null}
+          scrollToMessageSignal={0}
+        />,
+      )
+      const scrollElement = container.querySelector<HTMLElement>(
+        'section.chat-scroll',
+      )
+
+      expect(scrollElement).not.toBeNull()
+
+      Object.defineProperty(scrollElement, 'clientHeight', {
+        configurable: true,
+        get: () => 320,
+      })
+      Object.defineProperty(scrollElement, 'scrollHeight', {
+        configurable: true,
+        get: () => 1000,
+      })
+      Object.defineProperty(scrollElement, 'scrollTop', {
+        configurable: true,
+        get: () => currentScrollTop,
+        set: (value: number) => {
+          currentScrollTop = value
+        },
+      })
+
+      fireEvent.scroll(scrollElement!)
+
+      rerender(
+        <ChatTranscript
+          hasMoreOlder={false}
+          historyErrorMessage={null}
+          isConnectionAvailable
+          isLoadingOlder={false}
+          messages={messages}
+          onLoadOlder={vi.fn()}
+          onReplyToMessage={vi.fn()}
+          onRetryTextMessage={vi.fn()}
+          scrollToMessageId={2}
+          scrollToMessageSignal={1}
+        />,
+      )
+
+      await waitFor(() => {
+        expect(scrollIntoView).toHaveBeenCalled()
+        expect(currentScrollTop).toBe(260)
+      })
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+
   it('keeps the latest message visible when new messages arrive at the bottom edge', () => {
     expect(
       getTranscriptScrollAction({

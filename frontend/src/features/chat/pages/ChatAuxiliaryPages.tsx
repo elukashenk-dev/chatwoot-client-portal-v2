@@ -11,7 +11,10 @@ type ChatAuxiliaryPagesProps = {
   chatInfoPanel: ReturnType<typeof useChatInfoPanel>
   chatMediaPanel: ReturnType<typeof useChatMediaPanel>
   chatSearchPanel: ReturnType<typeof useChatSearchPanel>
+  onSearchBack: () => void
+  onSearchQueryChange: (query: string) => void
   onSearchResultSelect: (result: ChatSearchResult) => void
+  searchResultOpenErrorMessage: string | null
 }
 
 export function ChatAuxiliaryPages({
@@ -19,7 +22,10 @@ export function ChatAuxiliaryPages({
   chatInfoPanel,
   chatMediaPanel,
   chatSearchPanel,
+  onSearchBack,
+  onSearchQueryChange,
   onSearchResultSelect,
+  searchResultOpenErrorMessage,
 }: ChatAuxiliaryPagesProps) {
   return (
     <>
@@ -52,18 +58,20 @@ export function ChatAuxiliaryPages({
           activeThread={activeThread}
           isLoading={chatSearchPanel.state.isLoading}
           isLoadingOlder={chatSearchPanel.state.isLoadingOlder}
-          onBack={chatSearchPanel.closeChatSearch}
+          olderSearchErrorMessage={
+            chatSearchPanel.state.olderSearchErrorMessage
+          }
+          onBack={onSearchBack}
           onLoadOlder={() => {
             void chatSearchPanel.loadOlderChatSearch()
           }}
-          onQueryChange={(query) => {
-            void chatSearchPanel.updateChatSearchQuery(query)
-          }}
+          onQueryChange={onSearchQueryChange}
           onRetry={() => {
             void chatSearchPanel.retryChatSearch()
           }}
           onResultSelect={onSearchResultSelect}
           query={chatSearchPanel.state.query}
+          resultOpenErrorMessage={searchResultOpenErrorMessage}
           search={chatSearchPanel.state.search}
         />
       ) : null}

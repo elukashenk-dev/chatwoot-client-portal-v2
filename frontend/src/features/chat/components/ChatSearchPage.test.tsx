@@ -40,6 +40,14 @@ const readySearch: ChatThreadSearchResponse = {
   result: 'ready',
 }
 
+function findParagraphByText(text: string) {
+  return screen.queryByText((_, element) => {
+    return (
+      element?.tagName.toLowerCase() === 'p' && element.textContent === text
+    )
+  })
+}
+
 describe('ChatSearchPage', () => {
   it('keeps the thread title visible before results, while loading, and for empty results', () => {
     const props = {
@@ -151,15 +159,92 @@ describe('ChatSearchPage', () => {
     expect(screen.getByText('По этому запросу ничего не найдено')).toBeVisible()
   })
 
+  it('shows a partial empty state while older history can still be searched', async () => {
+    const user = userEvent.setup()
+
+    const { rerender } = render(
+      <ChatSearchPage
+        activeThread={readySearch.activeThread}
+        isLoading={false}
+        isLoadingOlder={false}
+        onBack={vi.fn()}
+        onLoadOlder={vi.fn()}
+        onQueryChange={vi.fn()}
+        onRetry={vi.fn()}
+        onResultSelect={vi.fn()}
+        query="договор"
+        search={{
+          ...readySearch,
+          hasMoreOlder: true,
+          items: [],
+          nextOlderCursor: 190,
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'В загруженной части совпадений нет. Можно продолжить поиск глубже.',
+      ),
+    ).toBeVisible()
+    expect(screen.queryByText('По этому запросу ничего не найдено')).toBeNull()
+
+    rerender(
+      <ChatSearchPage
+        activeThread={readySearch.activeThread}
+        isLoading={false}
+        isLoadingOlder={false}
+        onBack={vi.fn()}
+        onLoadOlder={vi.fn()}
+        onQueryChange={vi.fn()}
+        onRetry={vi.fn()}
+        onResultSelect={vi.fn()}
+        query="договор"
+        search={{
+          ...readySearch,
+          hasMoreOlder: true,
+          items: [readySearch.items[0]],
+          nextOlderCursor: 190,
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Мои' }))
+    expect(
+      screen.getByText(
+        'В загруженной части нет совпадений для выбранного фильтра. Можно продолжить поиск глубже.',
+      ),
+    ).toBeVisible()
+  })
+
+  it('shows an older search error without hiding current results', () => {
+    render(
+      <ChatSearchPage
+        activeThread={readySearch.activeThread}
+        isLoading={false}
+        isLoadingOlder={false}
+        olderSearchErrorMessage="Не удалось загрузить более ранние результаты. Попробуйте еще раз."
+        onBack={vi.fn()}
+        onLoadOlder={vi.fn()}
+        onQueryChange={vi.fn()}
+        onRetry={vi.fn()}
+        onResultSelect={vi.fn()}
+        query="договор"
+        search={readySearch}
+      />,
+    )
+
+    expect(findParagraphByText('Договор готов к подписанию.')).toBeVisible()
+    expect(
+      screen.getByText(
+        'Не удалось загрузить более ранние результаты. Попробуйте еще раз.',
+      ),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Показать ещё' })).toBeEnabled()
+  })
+
   it('filters by author group on the page only', async () => {
     const user = userEvent.setup()
-    const findParagraphByText = (text: string) => {
-      return screen.queryByText((_, element) => {
-        return (
-          element?.tagName.toLowerCase() === 'p' && element.textContent === text
-        )
-      })
-    }
 
     render(
       <ChatSearchPage

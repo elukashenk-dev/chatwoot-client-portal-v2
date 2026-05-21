@@ -15,12 +15,14 @@ type ChatSearchPageProps = {
   activeThread: ChatThreadSummary | null
   isLoading: boolean
   isLoadingOlder?: boolean
+  olderSearchErrorMessage?: string | null
   onBack: () => void
   onLoadOlder: () => void
   onQueryChange: (query: string) => void
   onRetry: () => void
   onResultSelect: (result: ChatSearchResult) => void
   query: string
+  resultOpenErrorMessage?: string | null
   search: ChatThreadSearchResponse | null
 }
 
@@ -160,17 +162,44 @@ function SearchInput({
   )
 }
 
-function SearchEmptyState({ query }: { query: string }) {
+function SearchEmptyState({
+  canLoadMore,
+  isFiltered,
+  query,
+}: {
+  canLoadMore: boolean
+  isFiltered: boolean
+  query: string
+}) {
   const normalizedQuery = query.trim()
   const message =
     normalizedQuery.length === 0
       ? 'Введите запрос, чтобы найти сообщение'
       : normalizedQuery.length < 2
         ? 'Введите минимум 2 символа'
-        : 'По этому запросу ничего не найдено'
+        : canLoadMore && isFiltered
+          ? 'В загруженной части нет совпадений для выбранного фильтра. Можно продолжить поиск глубже.'
+          : canLoadMore
+            ? 'В загруженной части совпадений нет. Можно продолжить поиск глубже.'
+            : 'По этому запросу ничего не найдено'
 
   return (
     <div className="mt-14 rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-[13px] leading-5 text-slate-500">
+      {message}
+    </div>
+  )
+}
+
+function SearchOlderError({ message }: { message: string | null }) {
+  if (!message) {
+    return null
+  }
+
+  return (
+    <div
+      className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800"
+      role="alert"
+    >
       {message}
     </div>
   )
@@ -254,17 +283,18 @@ function SearchResultCard({
     </article>
   )
 }
-
 export function ChatSearchPage({
   activeThread,
   isLoading,
   isLoadingOlder = false,
+  olderSearchErrorMessage = null,
   onBack,
   onLoadOlder,
   onQueryChange,
   onRetry,
   onResultSelect,
   query,
+  resultOpenErrorMessage = null,
   search,
 }: ChatSearchPageProps) {
   const [activeFilter, setActiveFilter] =
@@ -272,6 +302,7 @@ export function ChatSearchPage({
   const isUnavailable = Boolean(search && search.result !== 'ready')
   const items = filterChatSearchResults(search?.items ?? [], activeFilter)
   const displayedThread = search?.activeThread ?? activeThread
+  const canLoadMore = Boolean(search?.hasMoreOlder)
 
   return (
     <ChatFullScreenPanel
@@ -286,6 +317,15 @@ export function ChatSearchPage({
         <SearchInput onQueryChange={onQueryChange} query={query} />
 
         <ThreadIdentity activeThread={displayedThread} />
+
+        {resultOpenErrorMessage ? (
+          <div
+            className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-5 text-amber-800"
+            role="alert"
+          >
+            {resultOpenErrorMessage}
+          </div>
+        ) : null}
 
         <FilterTabs activeFilter={activeFilter} onChange={setActiveFilter} />
 
@@ -308,10 +348,16 @@ export function ChatSearchPage({
             ))}
           </div>
         ) : (
-          <SearchEmptyState query={query} />
+          <SearchEmptyState
+            canLoadMore={canLoadMore}
+            isFiltered={activeFilter !== 'all'}
+            query={query}
+          />
         )}
 
-        {search?.hasMoreOlder ? (
+        <SearchOlderError message={olderSearchErrorMessage} />
+
+        {canLoadMore ? (
           <button
             className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isLoadingOlder}
