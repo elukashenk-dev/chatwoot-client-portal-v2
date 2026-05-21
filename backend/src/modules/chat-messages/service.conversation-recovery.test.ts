@@ -168,6 +168,7 @@ describe('createChatMessagesService deleted conversation recovery', () => {
         findConversationMessageById: vi.fn().mockResolvedValue(null),
         findConversationMessageBySourceId: vi.fn().mockResolvedValue(null),
         listConversationMessages: vi.fn(),
+        listConversationMessagesAfter: vi.fn(),
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
     })
@@ -247,6 +248,7 @@ describe('createChatMessagesService deleted conversation recovery', () => {
         findConversationMessageById: vi.fn().mockResolvedValue(null),
         findConversationMessageBySourceId: vi.fn().mockResolvedValue(null),
         listConversationMessages: vi.fn(),
+        listConversationMessagesAfter: vi.fn(),
       },
       now: () => new Date('2026-04-21T12:00:00.000Z'),
     })

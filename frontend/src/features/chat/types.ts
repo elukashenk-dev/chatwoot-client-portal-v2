@@ -150,6 +150,20 @@ export type ChatThreadSearchResponse = {
 
 export type ChatSearchAuthorFilter = 'all' | 'mine' | 'support'
 
+export type ChatMessageContextDirection = 'earlier' | 'initial' | 'later'
+
+export type ChatMessageContextResponse = {
+  activeThread: ChatThreadSummary | null
+  earlierCursor: number | null
+  hasMoreEarlier: boolean
+  hasMoreLater: boolean
+  laterCursor: number | null
+  messages: ChatMessage[]
+  reason: ChatThreadReason
+  result: ChatThreadResult
+  targetMessageId: number
+}
+
 export type ChatSendResult = {
   activeThread: ChatThreadSummary | null
   reason: ChatThreadReason

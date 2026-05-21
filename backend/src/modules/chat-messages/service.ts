@@ -23,6 +23,7 @@ import {
   normalizeGroupAuthorDisplayName,
 } from './authorFormatting.js'
 import { normalizeContent, normalizeOptionalContent } from './content.js'
+import { getCurrentUserChatMessageContext as getCurrentUserChatMessageContextFromService } from './contextService.js'
 import { buildPortalChatMediaItems } from './media.js'
 import {
   buildReplyTargetsById,
@@ -34,6 +35,7 @@ import { createOrReplayCanonicalMessage } from './sendLedger.js'
 import { sendWithDeletedConversationRecovery } from './sendRecovery.js'
 import { getCurrentUserChatSearch as getCurrentUserChatSearchFromService } from './searchService.js'
 import type {
+  ChatMessageContextResponse,
   ChatMessagesSnapshot,
   ChatThreadMediaResponse,
   ChatThreadSearchResponse,
@@ -45,6 +47,7 @@ import type {
 
 export type {
   ChatMessagesSnapshot,
+  ChatMessageContextResponse,
   ChatThreadMediaResponse,
   ChatThreadSearchResponse,
   ChatSendResult,
@@ -103,6 +106,7 @@ type CreateChatMessagesServiceOptions = {
     | 'findConversationMessageById'
     | 'findConversationMessageBySourceId'
     | 'listConversationMessages'
+    | 'listConversationMessagesAfter'
   >
   now?: () => Date
 }
@@ -719,6 +723,31 @@ export function createChatMessagesService({
         chatThreadsService,
         chatwootClient,
         query,
+        threadId,
+        userId,
+      })
+    },
+
+    async getCurrentUserChatMessageContext({
+      cursorMessageId = null,
+      direction = 'initial',
+      messageId,
+      threadId = PRIVATE_CHAT_THREAD_ID,
+      userId,
+    }: {
+      cursorMessageId?: number | null
+      direction?: 'earlier' | 'initial' | 'later'
+      messageId: number
+      threadId?: string
+      userId: number
+    }): Promise<ChatMessageContextResponse> {
+      return getCurrentUserChatMessageContextFromService({
+        chatThreadsRepository,
+        chatThreadsService,
+        chatwootClient,
+        cursorMessageId,
+        direction,
+        messageId,
         threadId,
         userId,
       })

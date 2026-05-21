@@ -68,6 +68,17 @@ async function buildMessagesRoutesTestApp({
       reason: 'thread_access_denied',
       result: 'not_ready',
     }),
+    getCurrentUserChatMessageContext: vi.fn().mockResolvedValue({
+      activeThread: null,
+      earlierCursor: null,
+      hasMoreEarlier: false,
+      hasMoreLater: false,
+      laterCursor: null,
+      messages: [],
+      reason: 'thread_access_denied',
+      result: 'not_ready',
+      targetMessageId: 1,
+    }),
     getCurrentUserChatMessages: vi.fn().mockResolvedValue({
       activeThread: null,
       hasMoreOlder: false,

@@ -4,11 +4,13 @@ import type { ChatMessage, ChatSearchResult } from '../types'
 
 type UseChatSearchNavigationOptions = {
   closeChatSearch: () => void
+  openSearchResultContext: (result: ChatSearchResult) => Promise<boolean>
   visibleMessages: ChatMessage[]
 }
 
 export function useChatSearchNavigation({
   closeChatSearch,
+  openSearchResultContext,
   visibleMessages,
 }: UseChatSearchNavigationOptions) {
   const [highlightedMessageId, setHighlightedMessageId] = useState<
@@ -21,17 +23,26 @@ export function useChatSearchNavigation({
 
   const handleOpenSearchResult = useCallback(
     (result: ChatSearchResult) => {
-      closeChatSearch()
-
       const isLoadedInTranscript = visibleMessages.some(
         (message) => message.id === result.messageId,
       )
 
       if (isLoadedInTranscript) {
+        closeChatSearch()
         setHighlightedMessageId(result.messageId)
+        return
       }
+
+      void openSearchResultContext(result).then((didOpenContext) => {
+        if (!didOpenContext) {
+          return
+        }
+
+        closeChatSearch()
+        setHighlightedMessageId(result.messageId)
+      })
     },
-    [closeChatSearch, visibleMessages],
+    [closeChatSearch, openSearchResultContext, visibleMessages],
   )
 
   useEffect(() => {

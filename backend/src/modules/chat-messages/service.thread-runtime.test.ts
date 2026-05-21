@@ -88,6 +88,7 @@ function createChatwootClientStub(
       messages: [],
       nextOlderCursor: null,
     }),
+    listConversationMessagesAfter: vi.fn(),
     ...overrides,
   }
 }

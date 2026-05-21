@@ -17,6 +17,7 @@ import {
   copyAttachmentProxyHeaders,
   getRangeHeader,
 } from './attachmentProxyHeaders.js'
+import { registerChatMessageContextRoutes } from './contextRoutes.js'
 import type { ChatSendRateLimiter } from './rateLimit.js'
 import type {
   ChatAttachmentProxyVariant,
@@ -47,20 +48,12 @@ const attachmentProxyParamsSchema = z
   })
   .strict()
 
-const chatMediaParamsSchema = z
-  .object({
-    threadId: publicThreadIdSchema,
-  })
-  .strict()
+const threadParamsSchema = z.object({ threadId: publicThreadIdSchema }).strict()
 
 const chatMediaQuerySchema = z
   .object({
     beforeMessageId: z.coerce.number().int().positive().optional(),
   })
-  .strict()
-
-const chatSearchParamsSchema = z
-  .object({ threadId: publicThreadIdSchema })
   .strict()
 
 const chatSearchQuerySchema = z
@@ -387,7 +380,7 @@ export function registerChatMessagesRoutes(
       reply,
       request,
     })
-    const params = chatMediaParamsSchema.parse(request.params)
+    const params = threadParamsSchema.parse(request.params)
     const query = chatMediaQuerySchema.parse(request.query)
 
     return createChatMessagesService(request).getCurrentUserChatMedia({
@@ -404,7 +397,7 @@ export function registerChatMessagesRoutes(
       reply,
       request,
     })
-    const params = chatSearchParamsSchema.parse(request.params)
+    const params = threadParamsSchema.parse(request.params)
     const query = chatSearchQuerySchema.parse(request.query)
 
     return createChatMessagesService(request).getCurrentUserChatSearch({
@@ -413,6 +406,12 @@ export function registerChatMessagesRoutes(
       threadId: params.threadId,
       userId: user.id,
     })
+  })
+
+  registerChatMessageContextRoutes(app, {
+    authService,
+    createChatMessagesService,
+    env,
   })
 
   app.get('/api/chat/messages', async (request, reply) => {

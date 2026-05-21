@@ -128,6 +128,7 @@ function createService({
         findConversationMessageById,
         findConversationMessageBySourceId: vi.fn(),
         listConversationMessages: vi.fn(),
+        listConversationMessagesAfter: vi.fn(),
       },
     }),
   }

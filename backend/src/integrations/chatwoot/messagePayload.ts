@@ -36,6 +36,16 @@ export type ChatwootMessagesPage = {
   nextOlderCursor: number | null
 }
 
+export type ChatwootMessagesAfterPage = {
+  hasMoreNewer: boolean
+  messages: ChatwootMessage[]
+  nextNewerCursor: number | null
+}
+
+export type ChatwootMessagesResponse = {
+  payload: unknown[]
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -50,6 +60,20 @@ function readString(value: unknown) {
 
 function readObject(value: unknown) {
   return isPlainObject(value) ? value : null
+}
+
+export function parseMessagesResponse(
+  payload: unknown,
+): ChatwootMessagesResponse {
+  if (!isPlainObject(payload) || !Array.isArray(payload.payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot messages lookup returned an unexpected response shape.',
+    )
+  }
+
+  return {
+    payload: payload.payload,
+  }
 }
 
 function extractAttachmentNameFromUrl(url: string) {

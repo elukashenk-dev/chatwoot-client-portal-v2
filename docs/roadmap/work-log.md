@@ -131,6 +131,9 @@
   jump-back highlight для уже загруженных сообщений.
 - Search UX поддерживает устойчивый input focus, стабильный thread header,
   trailing spaces в поле ввода и punctuation-insensitive phrase matching.
+- Search jump для найденных сообщений вне текущей ленты открывает bounded
+  history fragment прямо в чате с ручным расширением контекста раньше/позже и
+  возвратом к последним сообщениям.
 
 ## Current Baseline
 

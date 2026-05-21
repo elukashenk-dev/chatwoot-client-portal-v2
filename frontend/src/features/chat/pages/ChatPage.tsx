@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  ChatApiClientError,
-  getChatMessages,
-  sendChatAttachment,
-} from '../api/chatClient'
+import { ChatApiClientError, getChatMessages } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
@@ -16,7 +12,6 @@ import {
   type MessageComposerReplyTarget,
 } from '../components/MessageComposer'
 import {
-  buildSnapshotFromSendResult,
   isFirstConversationBootstrapReady,
   mergeOlderMessages,
   mergeRealtimeSnapshot,
@@ -28,11 +23,13 @@ import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import type { ChatPageState } from './chatPageState'
+import { useChatAttachmentSend } from './useChatAttachmentSend'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
+import { useChatSearchResultContext } from './useChatSearchResultContext'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -52,10 +49,8 @@ export function ChatPage() {
     null,
   )
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
-  const [isSending, setIsSending] = useState(false)
   const [replyTarget, setReplyTarget] =
     useState<MessageComposerReplyTarget | null>(null)
-  const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
   const {
     isOnline: isBrowserOnline,
     markOffline: markBrowserOffline,
@@ -90,6 +85,21 @@ export function ChatPage() {
     [markBrowserOffline],
   )
 
+  const {
+    clearSendError,
+    handleSendAttachment,
+    isSending,
+    sendErrorMessage,
+    setSendErrorMessage,
+  } = useChatAttachmentSend({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline,
+    isMountedRef,
+    markBrowserOnline,
+    pageState,
+    setPageState,
+  })
   const { handleSelectThread, loadInitialChat } = useChatThreadSelection({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
@@ -123,6 +133,20 @@ export function ChatPage() {
     isMountedRef,
     markBrowserOnline,
     selectedThreadId: pageState.selectedThreadId,
+  })
+  const {
+    clearHistoryFragment,
+    historyFragment,
+    loadHistoryFragmentContext,
+    openSearchResultContext,
+  } = useChatSearchResultContext({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
+    setHistoryErrorMessage,
   })
 
   async function handleLoadOlderMessages() {
@@ -192,101 +216,6 @@ export function ChatPage() {
     } finally {
       if (isMountedRef.current) {
         setIsLoadingOlder(false)
-      }
-    }
-  }
-
-  async function handleSendAttachment({
-    clientMessageKey,
-    content,
-    file,
-    replyToMessageId,
-  }: {
-    clientMessageKey: string
-    content?: string | null
-    file: File
-    replyToMessageId?: number | null
-  }) {
-    if (
-      !isBrowserOnline ||
-      pageState.status !== 'ready' ||
-      !pageState.selectedThreadId
-    ) {
-      return false
-    }
-
-    const threadId = pageState.selectedThreadId
-
-    setIsSending(true)
-    setSendErrorMessage(null)
-
-    try {
-      const sendResult = await sendChatAttachment({
-        clientMessageKey,
-        content,
-        file,
-        replyToMessageId,
-        threadId,
-      })
-
-      if (!isMountedRef.current) {
-        return false
-      }
-
-      if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
-        setSendErrorMessage('Не удалось отправить файл. Попробуйте еще раз.')
-        return false
-      }
-
-      if (sendResult.activeThread?.id !== threadId) {
-        setSendErrorMessage('Не удалось отправить файл. Попробуйте еще раз.')
-        return false
-      }
-
-      markBrowserOnline()
-      setPageState((currentState) => {
-        if (currentState.selectedThreadId !== threadId) {
-          return currentState
-        }
-
-        const currentSnapshot =
-          currentState.status === 'ready' ? currentState.snapshot : null
-
-        return {
-          snapshot: buildSnapshotFromSendResult({
-            currentSnapshot,
-            sendResult,
-          }),
-          selectedThreadId: currentState.selectedThreadId,
-          status: 'ready',
-          threads: currentState.threads,
-        }
-      })
-
-      return true
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return false
-      }
-
-      if (await handleUnauthorizedChatError(error)) {
-        return false
-      }
-
-      if (handleConnectionUnavailableError(error)) {
-        return false
-      }
-
-      setSendErrorMessage(
-        error instanceof Error
-          ? error.message
-          : 'Не удалось отправить файл. Попробуйте еще раз.',
-      )
-
-      return false
-    } finally {
-      if (isMountedRef.current) {
-        setIsSending(false)
       }
     }
   }
@@ -407,7 +336,8 @@ export function ChatPage() {
       isMountedRef,
       markBrowserOnline,
       onTextSendStarted: () => {
-        setSendErrorMessage(null)
+        clearHistoryFragment()
+        clearSendError()
       },
       pageState,
       replyTarget,
@@ -422,14 +352,20 @@ export function ChatPage() {
           threadId: pageState.selectedThreadId,
         })
       : []
+  const transcriptMessages = historyFragment
+    ? historyFragment.messages
+    : visibleMessages
   const {
     clearHighlightedMessage,
     handleOpenSearchResult,
     highlightedMessageId,
   } = useChatSearchNavigation({
     closeChatSearch: chatSearchPanel.closeChatSearch,
+    openSearchResultContext,
     visibleMessages,
   })
+  const transcriptHighlightedMessageId =
+    historyFragment?.targetMessageId ?? highlightedMessageId
 
   return (
     <>
@@ -445,6 +381,7 @@ export function ChatPage() {
         }}
         onSelectThread={(threadId) => {
           clearHighlightedMessage()
+          clearHistoryFragment()
           void handleSelectThread(threadId)
         }}
         selectedThreadId={pageState.selectedThreadId}
@@ -485,12 +422,35 @@ export function ChatPage() {
 
         {shouldRenderTranscript ? (
           <ChatTranscript
-            hasMoreOlder={pageState.snapshot.hasMoreOlder}
-            highlightedMessageId={highlightedMessageId}
+            hasMoreOlder={
+              historyFragment ? false : pageState.snapshot.hasMoreOlder
+            }
+            highlightedMessageId={transcriptHighlightedMessageId}
+            historyFragmentControls={
+              historyFragment
+                ? {
+                    errorMessage: historyFragment.errorMessage,
+                    hasMoreEarlier: historyFragment.hasMoreEarlier,
+                    hasMoreLater: historyFragment.hasMoreLater,
+                    isLoadingEarlier: historyFragment.isLoadingEarlier,
+                    isLoadingLater: historyFragment.isLoadingLater,
+                    onLoadEarlier: () => {
+                      void loadHistoryFragmentContext('earlier')
+                    },
+                    onLoadLater: () => {
+                      void loadHistoryFragmentContext('later')
+                    },
+                    onReturnToLatest: () => {
+                      clearHistoryFragment()
+                      clearHighlightedMessage()
+                    },
+                  }
+                : null
+            }
             historyErrorMessage={historyErrorMessage}
             isConnectionAvailable={isBrowserOnline}
             isLoadingOlder={isLoadingOlder}
-            messages={visibleMessages}
+            messages={transcriptMessages}
             onLoadOlder={() => {
               void handleLoadOlderMessages()
             }}

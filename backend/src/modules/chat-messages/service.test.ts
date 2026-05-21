@@ -137,6 +137,7 @@ function createChatwootClientStub(
     findConversationMessageById: vi.fn().mockResolvedValue(null),
     findConversationMessageBySourceId: vi.fn().mockResolvedValue(null),
     listConversationMessages: vi.fn(),
+    listConversationMessagesAfter: vi.fn(),
     ...overrides,
   }
 }

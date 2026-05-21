@@ -1,5 +1,7 @@
 import type {
   ChatMessagesSnapshot,
+  ChatMessageContextDirection,
+  ChatMessageContextResponse,
   ChatSendResult,
   ChatThreadInfoResponse,
   ChatThreadMediaResponse,
@@ -183,6 +185,38 @@ export async function getChatThreadSearch({
   return request<ChatThreadSearchResponse>(
     `/chat/threads/${encodeURIComponent(threadId)}/search${
       queryString ? `?${queryString}` : ''
+    }`,
+  )
+}
+
+export async function getChatThreadMessageContext({
+  cursorMessageId,
+  direction = 'initial',
+  messageId,
+  threadId,
+}: {
+  cursorMessageId?: number | null
+  direction?: ChatMessageContextDirection
+  messageId: number
+  threadId: string
+}) {
+  const searchParams = new URLSearchParams()
+
+  searchParams.set('messageId', String(messageId))
+
+  if (direction !== 'initial') {
+    searchParams.set('direction', direction)
+  }
+
+  if (cursorMessageId) {
+    searchParams.set('cursor', String(cursorMessageId))
+  }
+
+  const query = searchParams.toString()
+
+  return request<ChatMessageContextResponse>(
+    `/chat/threads/${encodeURIComponent(threadId)}/messages/context${
+      query ? `?${query}` : ''
     }`,
   )
 }

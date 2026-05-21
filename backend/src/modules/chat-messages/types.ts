@@ -111,6 +111,18 @@ export type ChatThreadSearchResponse = {
   result: 'not_ready' | 'ready' | 'unavailable'
 }
 
+export type ChatMessageContextResponse = {
+  activeThread: PublicChatThreadSummary | null
+  earlierCursor: number | null
+  hasMoreEarlier: boolean
+  hasMoreLater: boolean
+  laterCursor: number | null
+  messages: PortalChatMessage[]
+  reason: ChatThreadRuntimeReason
+  result: 'not_ready' | 'ready' | 'unavailable'
+  targetMessageId: number
+}
+
 export type ChatSendResult = {
   activeThread: PublicChatThreadSummary | null
   reason: ChatThreadRuntimeReason

@@ -146,6 +146,7 @@ function createService({
       findConversationMessageById: vi.fn().mockResolvedValue(null),
       findConversationMessageBySourceId: vi.fn().mockResolvedValue(null),
       listConversationMessages,
+      listConversationMessagesAfter: vi.fn(),
     },
   })
 

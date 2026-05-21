@@ -4,10 +4,9 @@ import { findChatwootContactById } from './contactLookup.js'
 import {
   ChatwootClientConfigurationError,
   ChatwootClientRequestError,
-  ChatwootInvalidHistoryCursorError,
 } from './errors.js'
+import { createChatwootMessageClient } from './messageClient.js'
 import { mapMessage } from './messagePayload.js'
-import type { ChatwootMessage, ChatwootMessagesPage } from './messagePayload.js'
 import {
   createChatwootFetch,
   normalizeChatwootRequestTimeoutMs,
@@ -23,13 +22,13 @@ export {
 export type {
   ChatwootMessage,
   ChatwootMessageAttachment,
+  ChatwootMessagesAfterPage,
   ChatwootMessagesPage,
 } from './messagePayload.js'
 export type { ChatwootContact } from './contactLookup.js'
 const PORTAL_CONVERSATION_CHANNEL_TYPE = 'Channel::Api'
 const CONTACT_CONVERSATIONS_PAGE_LIMIT = 20
 const ACCOUNT_CONVERSATIONS_LOOKUP_MAX_PAGES = 5
-const MESSAGE_PAGE_SIZE = 20
 
 type ChatwootContactSearchPayload = {
   email?: string | null
@@ -51,10 +50,6 @@ type ChatwootContactDetailsResponse = {
 
 type ChatwootAccountConversationsResponse = {
   allCount: number
-  payload: unknown[]
-}
-
-type ChatwootMessagesResponse = {
   payload: unknown[]
 }
 
@@ -333,18 +328,6 @@ function mapConversation(payload: unknown): ChatwootConversation {
   }
 }
 
-function parseMessagesResponse(payload: unknown): ChatwootMessagesResponse {
-  if (!isPlainObject(payload) || !Array.isArray(payload.payload)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot messages lookup returned an unexpected response shape.',
-    )
-  }
-
-  return {
-    payload: payload.payload,
-  }
-}
-
 function mapContactInbox(payload: unknown): ChatwootContactInboxResponse {
   if (!isPlainObject(payload)) {
     throw new ChatwootClientRequestError(
@@ -435,20 +418,6 @@ function mapAccountWebhook(payload: unknown): ChatwootAccountWebhook {
       : [],
     url,
   }
-}
-
-function sortMessages(messages: ChatwootMessage[]) {
-  return [...messages].sort((left, right) => {
-    if (left.createdAt !== right.createdAt) {
-      return left.createdAt - right.createdAt
-    }
-
-    return left.id - right.id
-  })
-}
-
-function buildMessagesPage(messages: ChatwootMessage[]) {
-  return sortMessages(messages).slice(-MESSAGE_PAGE_SIZE)
 }
 
 function isPortalConversation(
@@ -730,67 +699,6 @@ export function createChatwootClient({
     )
   }
 
-  async function fetchConversationMessages({
-    beforeMessageId,
-    conversationId,
-  }: {
-    beforeMessageId?: number | null
-    conversationId: number
-  }) {
-    const resolvedConfig = assertConfigured()
-    const requestUrl = new URL(
-      `/api/v1/accounts/${resolvedConfig.accountId}/conversations/${conversationId}/messages`,
-      resolvedConfig.baseUrl,
-    )
-
-    requestUrl.searchParams.set('filter_internal_messages', 'true')
-
-    if (beforeMessageId !== undefined && beforeMessageId !== null) {
-      requestUrl.searchParams.set('before', String(beforeMessageId))
-    }
-
-    const request = await fetchChatwoot(
-      requestUrl,
-      'Chatwoot messages lookup is unavailable.',
-      {
-        headers: {
-          Accept: 'application/json',
-          api_access_token: resolvedConfig.apiAccessToken,
-        },
-        method: 'GET',
-      },
-    )
-    const { response } = request
-
-    try {
-      if (response.status === 404) {
-        return null
-      }
-
-      if (!response.ok) {
-        throw new ChatwootClientRequestError(
-          `Chatwoot messages lookup failed with status ${response.status}.`,
-        )
-      }
-
-      const payload = await readChatwootJson({
-        invalidJsonMessage: 'Chatwoot messages lookup returned invalid JSON.',
-        request,
-        unavailableMessage: 'Chatwoot messages lookup is unavailable.',
-      })
-
-      return sortMessages(
-        parseMessagesResponse(payload).payload.map((message) =>
-          mapMessage(message, {
-            baseUrl: resolvedConfig.baseUrl,
-          }),
-        ),
-      )
-    } finally {
-      request.clearTimeout()
-    }
-  }
-
   function createAttachmentBlob(attachment: ChatwootAttachmentUpload) {
     const data = attachment.data.slice()
 
@@ -963,37 +871,10 @@ export function createChatwootClient({
     }
   }
 
-  async function isConversationMessageAnchorValid(
-    conversationId: number,
-    beforeMessageId: number,
-  ) {
-    const probeMessages = await fetchConversationMessages({
-      beforeMessageId: beforeMessageId + 1,
-      conversationId,
-    })
-
-    if (probeMessages === null) {
-      return null
-    }
-
-    return probeMessages.some((message) => message.id === beforeMessageId)
-  }
-
-  async function hasConversationMessagesBefore(
-    conversationId: number,
-    beforeMessageId: number,
-  ) {
-    const olderMessages = await fetchConversationMessages({
-      beforeMessageId,
-      conversationId,
-    })
-
-    if (olderMessages === null) {
-      return null
-    }
-
-    return olderMessages.length > 0
-  }
+  const messageClient = createChatwootMessageClient({
+    assertConfigured,
+    fetchChatwoot,
+  })
 
   return {
     async listAccountWebhooks() {
@@ -1503,132 +1384,7 @@ export function createChatwootClient({
       })
     },
 
-    async findConversationMessageById(
-      conversationId: number,
-      messageId: number,
-    ) {
-      assertConfigured()
-
-      if (!Number.isInteger(messageId) || messageId <= 0) {
-        throw new ChatwootClientRequestError(
-          'Chatwoot message lookup requires a valid message id.',
-        )
-      }
-
-      const messages = await fetchConversationMessages({
-        beforeMessageId: messageId + 1,
-        conversationId,
-      })
-
-      return messages?.find((message) => message.id === messageId) ?? null
-    },
-
-    async findConversationMessageBySourceId(
-      conversationId: number,
-      sourceId: string,
-    ) {
-      assertConfigured()
-
-      if (!sourceId.trim()) {
-        return null
-      }
-
-      const messages = await fetchConversationMessages({
-        conversationId,
-      })
-
-      return (
-        messages?.find((message) => message.sourceId === sourceId.trim()) ??
-        null
-      )
-    },
-
-    async listConversationMessages(
-      conversationId: number,
-      { beforeMessageId = null }: { beforeMessageId?: number | null } = {},
-    ): Promise<ChatwootMessagesPage | null> {
-      assertConfigured()
-
-      if (!Number.isInteger(conversationId) || conversationId <= 0) {
-        throw new ChatwootClientRequestError(
-          'Chatwoot messages lookup requires a valid conversation id.',
-        )
-      }
-
-      if (
-        beforeMessageId !== null &&
-        (!Number.isInteger(beforeMessageId) || beforeMessageId <= 0)
-      ) {
-        throw new ChatwootInvalidHistoryCursorError()
-      }
-
-      if (beforeMessageId !== null) {
-        const isAnchorValid = await isConversationMessageAnchorValid(
-          conversationId,
-          beforeMessageId,
-        )
-
-        if (isAnchorValid === null) {
-          return null
-        }
-
-        if (!isAnchorValid) {
-          throw new ChatwootInvalidHistoryCursorError()
-        }
-      }
-
-      const messages = await fetchConversationMessages({
-        beforeMessageId,
-        conversationId,
-      })
-
-      if (messages === null) {
-        return null
-      }
-
-      const page = buildMessagesPage(messages)
-
-      if (page.length === 0) {
-        return {
-          hasMoreOlder: false,
-          messages: [],
-          nextOlderCursor: null,
-        }
-      }
-
-      const oldestMessage = page[0]
-
-      if (!oldestMessage) {
-        return {
-          hasMoreOlder: false,
-          messages: page,
-          nextOlderCursor: null,
-        }
-      }
-
-      if (page.length < MESSAGE_PAGE_SIZE) {
-        return {
-          hasMoreOlder: false,
-          messages: page,
-          nextOlderCursor: null,
-        }
-      }
-
-      const hasMoreOlder = await hasConversationMessagesBefore(
-        conversationId,
-        oldestMessage.id,
-      )
-
-      if (hasMoreOlder === null) {
-        return null
-      }
-
-      return {
-        hasMoreOlder,
-        messages: page,
-        nextOlderCursor: hasMoreOlder ? oldestMessage.id : null,
-      }
-    },
+    ...messageClient,
   }
 }
 

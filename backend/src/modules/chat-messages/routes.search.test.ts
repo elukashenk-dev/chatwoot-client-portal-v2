@@ -38,6 +38,17 @@ function createAuthorizedCookie(app: ReturnType<typeof Fastify>) {
 }
 
 async function buildSearchRoutesTestApp({
+  getCurrentUserChatMessageContext = vi.fn().mockResolvedValue({
+    activeThread: privateThread,
+    earlierCursor: 188,
+    hasMoreEarlier: true,
+    hasMoreLater: true,
+    laterCursor: 192,
+    messages: [],
+    reason: 'none',
+    result: 'ready',
+    targetMessageId: 190,
+  }),
   getCurrentUserChatSearch = vi.fn().mockResolvedValue({
     activeThread: privateThread,
     hasMoreOlder: false,
@@ -61,6 +72,9 @@ async function buildSearchRoutesTestApp({
     result: 'ready',
   }),
 }: {
+  getCurrentUserChatMessageContext?: (
+    input: unknown,
+  ) => Promise<unknown> | unknown
   getCurrentUserChatSearch?: ChatMessagesService['getCurrentUserChatSearch']
 } = {}) {
   const app = Fastify({ logger: false })
@@ -88,6 +102,7 @@ async function buildSearchRoutesTestApp({
     },
     createChatMessagesService: () =>
       ({
+        getCurrentUserChatMessageContext,
         getCurrentUserChatSearch,
       }) as unknown as ChatMessagesService,
     env: testEnv,
@@ -96,6 +111,7 @@ async function buildSearchRoutesTestApp({
 
   return {
     app,
+    getCurrentUserChatMessageContext,
     getCurrentUserChatSearch,
   }
 }
@@ -185,6 +201,81 @@ describe('chat search routes', () => {
 
       expect(response.statusCode).toBe(400)
       expect(getCurrentUserChatSearch).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('requires authentication for search result context', async () => {
+    const { app, getCurrentUserChatMessageContext } =
+      await buildSearchRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/chat/threads/private%3Ame/messages/context?messageId=190',
+      })
+
+      expect(response.statusCode).toBe(401)
+      expect(getCurrentUserChatMessageContext).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('passes message context params to the service', async () => {
+    const getCurrentUserChatMessageContext = vi.fn().mockResolvedValue({
+      activeThread: privateThread,
+      earlierCursor: 188,
+      hasMoreEarlier: true,
+      hasMoreLater: false,
+      laterCursor: null,
+      messages: [],
+      reason: 'none',
+      result: 'ready',
+      targetMessageId: 190,
+    })
+    const { app } = await buildSearchRoutesTestApp({
+      getCurrentUserChatMessageContext,
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/group%3A154/messages/context?messageId=190&direction=earlier&cursor=188',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(getCurrentUserChatMessageContext).toHaveBeenCalledWith({
+        cursorMessageId: 188,
+        direction: 'earlier',
+        messageId: 190,
+        threadId: 'group:154',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects invalid message context params before calling the service', async () => {
+    const { app, getCurrentUserChatMessageContext } =
+      await buildSearchRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/private%3Ame/messages/context?messageId=190&direction=sideways',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(getCurrentUserChatMessageContext).not.toHaveBeenCalled()
     } finally {
       await app.close()
     }

@@ -34,6 +34,16 @@ import {
 } from './chat-transcript/utils'
 
 type ChatTranscriptProps = {
+  historyFragmentControls?: {
+    errorMessage: string | null
+    hasMoreEarlier: boolean
+    hasMoreLater: boolean
+    isLoadingEarlier: boolean
+    isLoadingLater: boolean
+    onLoadEarlier: () => void
+    onLoadLater: () => void
+    onReturnToLatest: () => void
+  } | null
   hasMoreOlder: boolean
   highlightedMessageId?: number | null
   historyErrorMessage: string | null
@@ -75,6 +85,7 @@ function restoreFocusToElement(element: HTMLElement | null | undefined) {
 }
 
 export function ChatTranscript({
+  historyFragmentControls = null,
   hasMoreOlder,
   highlightedMessageId = null,
   historyErrorMessage,
@@ -314,7 +325,33 @@ export function ChatTranscript({
           className="mx-auto flex w-full max-w-[620px] flex-col"
           ref={messageListRef}
         >
-          {hasMoreOlder ? (
+          {historyFragmentControls ? (
+            <div className="mb-3 grid gap-2 self-stretch">
+              <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[12px] leading-5 text-brand-900">
+                <strong className="block text-[13px]">
+                  Показан фрагмент истории
+                </strong>
+                Найденное сообщение открыто в контексте переписки.
+              </div>
+              {historyFragmentControls.hasMoreEarlier ? (
+                <button
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
+                  disabled={historyFragmentControls.isLoadingEarlier}
+                  onClick={historyFragmentControls.onLoadEarlier}
+                  type="button"
+                >
+                  {historyFragmentControls.isLoadingEarlier
+                    ? 'Загружаем...'
+                    : 'Показать более ранние'}
+                </button>
+              ) : null}
+              {historyFragmentControls.errorMessage ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800">
+                  {historyFragmentControls.errorMessage}
+                </div>
+              ) : null}
+            </div>
+          ) : hasMoreOlder ? (
             <div className="flex flex-col items-center gap-2 self-center">
               <button
                 className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
@@ -374,6 +411,30 @@ export function ChatTranscript({
               </div>
             )
           })}
+
+          {historyFragmentControls ? (
+            <div className="mt-4 grid gap-2 self-stretch">
+              {historyFragmentControls.hasMoreLater ? (
+                <button
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
+                  disabled={historyFragmentControls.isLoadingLater}
+                  onClick={historyFragmentControls.onLoadLater}
+                  type="button"
+                >
+                  {historyFragmentControls.isLoadingLater
+                    ? 'Загружаем...'
+                    : 'Показать более поздние'}
+                </button>
+              ) : null}
+              <button
+                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-900 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+                onClick={historyFragmentControls.onReturnToLatest}
+                type="button"
+              >
+                К последним сообщениям
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
 
