@@ -44,6 +44,36 @@ export type ChatSupportAvailabilityResponse = {
   workingHours: ChatWorkingHoursInfo
 }
 
+export type UserNotificationSettings = {
+  newMessagesEnabled: boolean
+  pushEnabled: boolean
+  soundEnabled: boolean
+}
+
+export type ChatNotificationOverrides = {
+  newMessagesEnabled: boolean | null
+  pushEnabled: boolean | null
+  soundEnabled: boolean | null
+}
+
+export type ChatNotificationSettings = {
+  effective: UserNotificationSettings
+  global: UserNotificationSettings
+  overrides: ChatNotificationOverrides
+  threadId: string
+}
+
+export type PushPublicKeyResponse =
+  | {
+      available: true
+      publicKey: string
+      publicKeyFingerprint: string
+      vapidKeyId: string
+    }
+  | {
+      available: false
+    }
+
 export const PRIVATE_CHAT_THREAD_ID = 'private:me'
 
 export type ChatThreadSummary =

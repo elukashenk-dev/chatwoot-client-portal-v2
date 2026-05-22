@@ -3,6 +3,8 @@ export const routePaths = {
   app: {
     chat: '/app/chat',
     root: '/app',
+    settings: '/app/settings',
+    settingsNotifications: '/app/settings/notifications',
   },
   auth: {
     login: '/auth/login',

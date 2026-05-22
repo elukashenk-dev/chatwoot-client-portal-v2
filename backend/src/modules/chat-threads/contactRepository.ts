@@ -84,7 +84,11 @@ export function createChatThreadContactRepository(
         })
         .from(portalUsers)
         .where(
-          and(eq(portalUsers.id, userId), eq(portalUsers.tenantId, tenantId)),
+          and(
+            eq(portalUsers.id, userId),
+            eq(portalUsers.tenantId, tenantId),
+            eq(portalUsers.isActive, true),
+          ),
         )
         .limit(1)
 

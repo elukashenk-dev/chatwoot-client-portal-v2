@@ -9,12 +9,15 @@ import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import type {
+  ChatNotificationSettings,
   ChatSupportAvailabilityResponse,
   ChatThreadSummary,
 } from '../types'
 import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
+import { getChatNotificationsStatus } from './NotificationSettingsControls'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
+  BellIcon,
   BellOffIcon,
   CheckIcon,
   ImageIcon,
@@ -23,16 +26,19 @@ import {
   MenuIcon,
   MoreHorizontalIcon,
   SearchIcon,
+  SettingsIcon,
 } from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
-  onOpenThreadSearch: () => void
-  onOpenThreadMedia: () => void
   onOpenThreadInfo: () => void
+  onOpenThreadMedia: () => void
+  onOpenThreadNotifications: () => void
+  onOpenThreadSearch: () => void
   onSelectThread: (threadId: string) => void
   selectedThreadId: string | null
   supportAvailability: ChatSupportAvailabilityResponse | null
+  threadNotificationSettings: ChatNotificationSettings | null
   threads: ChatThreadSummary[]
 }
 
@@ -44,12 +50,14 @@ function focusElement(element: HTMLElement | null) {
 
 export function ChatHeader({
   activeThread,
-  onOpenThreadSearch,
-  onOpenThreadMedia,
   onOpenThreadInfo,
+  onOpenThreadMedia,
+  onOpenThreadNotifications,
+  onOpenThreadSearch,
   onSelectThread,
   selectedThreadId,
   supportAvailability,
+  threadNotificationSettings,
   threads,
 }: ChatHeaderProps) {
   const navigate = useNavigate()
@@ -197,6 +205,9 @@ export function ChatHeader({
   const tenantMonogram = tenant
     ? createTenantMonogram(tenant.displayName)
     : 'ЛК'
+  const notificationsStatus = getChatNotificationsStatus(
+    threadNotificationSettings,
+  )
 
   return (
     <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
@@ -262,14 +273,16 @@ export function ChatHeader({
                 )
               })}
               <button
-                aria-disabled="true"
-                className="mt-1 flex w-full items-center justify-between rounded-[0.6rem] px-3 py-2 text-left text-slate-500"
-                disabled
+                className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+                onClick={() => {
+                  setIsNavMenuOpen(false)
+                  navigate(routePaths.app.settings)
+                }}
                 role="menuitem"
                 type="button"
               >
-                <span>Центр поддержки</span>
-                <span className="text-xs text-slate-400">скоро</span>
+                <SettingsIcon className="h-4 w-4 shrink-0" />
+                <span>Настройки</span>
               </button>
             </div>
           ) : null}
@@ -360,8 +373,21 @@ export function ChatHeader({
                 }}
               />
               <ChatMenuItem
-                icon={<BellOffIcon className="h-5 w-5" />}
-                label="Отключить уведомления"
+                disabled={!selectedThreadId}
+                icon={
+                  threadNotificationSettings?.effective.newMessagesEnabled ===
+                  false ? (
+                    <BellOffIcon className="h-5 w-5" />
+                  ) : (
+                    <BellIcon className="h-5 w-5" />
+                  )
+                }
+                label="Уведомления"
+                onSelect={() => {
+                  closeMenus()
+                  onOpenThreadNotifications()
+                }}
+                secondaryLabel={notificationsStatus}
               />
               <ChatMenuItem
                 disabled={!selectedThreadId}
@@ -407,12 +433,14 @@ function ChatMenuItem({
   icon,
   label,
   onSelect,
+  secondaryLabel,
 }: {
   destructive?: boolean
   disabled?: boolean
   icon: ReactNode
   label: string
   onSelect?: () => void
+  secondaryLabel?: string
 }) {
   const isDisabled = disabled || !onSelect
 
@@ -433,7 +461,14 @@ function ChatMenuItem({
       <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center">
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="min-w-0">
+        <span className="block">{label}</span>
+        {secondaryLabel ? (
+          <span className="mt-0.5 block truncate text-[11px] leading-4 text-slate-400">
+            {secondaryLabel}
+          </span>
+        ) : null}
+      </span>
     </button>
   )
 }

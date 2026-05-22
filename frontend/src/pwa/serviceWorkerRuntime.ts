@@ -9,6 +9,27 @@ export type ServiceWorkerUpdateSnapshot = {
   status: ServiceWorkerUpdateStatus
 }
 
+export type BrowserPushSupportState =
+  | {
+      reason: 'supported'
+      supported: true
+    }
+  | {
+      reason:
+        | 'insecure_context'
+        | 'notifications_unavailable'
+        | 'push_unavailable'
+        | 'service_worker_unavailable'
+      supported: false
+    }
+
+export type PortalPushMessagePayload = {
+  tenantSlug: string | null
+  type: 'chat_message'
+  url: string
+}
+
+type PortalPushMessageHandler = (payload: PortalPushMessagePayload) => void
 type UpdateListener = (snapshot: ServiceWorkerUpdateSnapshot) => void
 
 const updateListeners = new Set<UpdateListener>()
@@ -88,6 +109,154 @@ function monitorRegistration(registration: ServiceWorkerRegistration) {
   registration.addEventListener('updatefound', () => {
     trackInstallingWorker(registration.installing)
   })
+}
+
+export function getBrowserPushSupportState(): BrowserPushSupportState {
+  if (typeof window === 'undefined' || !window.isSecureContext) {
+    return {
+      reason: 'insecure_context',
+      supported: false,
+    }
+  }
+
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return {
+      reason: 'service_worker_unavailable',
+      supported: false,
+    }
+  }
+
+  if (!('PushManager' in window)) {
+    return {
+      reason: 'push_unavailable',
+      supported: false,
+    }
+  }
+
+  if (!('Notification' in window)) {
+    return {
+      reason: 'notifications_unavailable',
+      supported: false,
+    }
+  }
+
+  return {
+    reason: 'supported',
+    supported: true,
+  }
+}
+
+function assertBrowserPushSupported() {
+  const support = getBrowserPushSupportState()
+
+  if (!support.supported) {
+    throw new Error(`Browser push is not supported: ${support.reason}`)
+  }
+}
+
+function base64UrlToUint8Array(value: string) {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4)
+  const base64 = `${value}${padding}`.replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index)
+  }
+
+  return outputArray
+}
+
+async function getReadyServiceWorkerRegistration() {
+  assertBrowserPushSupported()
+  await startServiceWorkerRuntime()
+
+  const registration = await navigator.serviceWorker.ready
+
+  if (!registration.pushManager) {
+    throw new Error('Browser push manager is unavailable.')
+  }
+
+  return registration
+}
+
+export async function getExistingBrowserPushSubscription() {
+  const support = getBrowserPushSupportState()
+
+  if (!support.supported || !navigator.serviceWorker.controller) {
+    return null
+  }
+
+  const registration = await navigator.serviceWorker.ready
+
+  return registration.pushManager.getSubscription()
+}
+
+export async function subscribeBrowserPush(publicKey: string) {
+  const registration = await getReadyServiceWorkerRegistration()
+  const existingSubscription = await registration.pushManager.getSubscription()
+
+  if (existingSubscription) {
+    return existingSubscription.toJSON()
+  }
+
+  const subscription = await registration.pushManager.subscribe({
+    applicationServerKey: base64UrlToUint8Array(publicKey),
+    userVisibleOnly: true,
+  })
+
+  return subscription.toJSON()
+}
+
+export async function unsubscribeBrowserPush() {
+  const existingSubscription = await getExistingBrowserPushSubscription()
+
+  if (!existingSubscription) {
+    return null
+  }
+
+  const endpoint = existingSubscription.endpoint
+  const didUnsubscribe = await existingSubscription.unsubscribe()
+
+  return didUnsubscribe ? endpoint : null
+}
+
+export function registerPortalPushMessageListener(
+  handler: PortalPushMessageHandler,
+) {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return () => {}
+  }
+
+  function handleMessage(event: MessageEvent) {
+    if (event.data?.type !== 'PORTAL_PUSH_MESSAGE') {
+      return
+    }
+
+    handler({
+      tenantSlug:
+        typeof event.data.payload?.tenantSlug === 'string'
+          ? event.data.payload.tenantSlug
+          : null,
+      type: 'chat_message',
+      url:
+        typeof event.data.payload?.url === 'string'
+          ? event.data.payload.url
+          : '/',
+    })
+  }
+
+  navigator.serviceWorker.addEventListener('message', handleMessage)
+  navigator.serviceWorker.controller?.postMessage({
+    type: 'PORTAL_PUSH_CLIENT_READY',
+  })
+
+  return () => {
+    navigator.serviceWorker.removeEventListener('message', handleMessage)
+    navigator.serviceWorker.controller?.postMessage({
+      type: 'PORTAL_PUSH_CLIENT_NOT_READY',
+    })
+  }
 }
 
 export async function startServiceWorkerRuntime() {
@@ -173,4 +342,8 @@ export function resetServiceWorkerRuntimeForTests() {
   serviceWorkerUpdateSnapshot = defaultSnapshot
   waitingWorker = null
   updateListeners.clear()
+}
+
+export const serviceWorkerRuntimeInternalsForTests = {
+  base64UrlToUint8Array,
 }

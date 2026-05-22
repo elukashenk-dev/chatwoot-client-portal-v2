@@ -209,12 +209,11 @@ export const portalChatMessageSends = pgTable(
       .references(() => portalUsers.id, {
         onDelete: 'cascade',
       }),
-    portalChatThreadId: integer('portal_chat_thread_id').references(
-      () => portalChatThreads.id,
-      {
+    portalChatThreadId: integer('portal_chat_thread_id')
+      .references(() => portalChatThreads.id, {
         onDelete: 'restrict',
-      },
-    ).notNull(),
+      })
+      .notNull(),
     clientMessageKey: text('client_message_key').notNull(),
     messageKind: text('message_kind').notNull(),
     payloadSha256: text('payload_sha256').notNull(),
@@ -254,6 +253,8 @@ export const portalChatMessageSends = pgTable(
     ),
   ],
 )
+
+export * from './notificationSchema.js'
 
 export const portalRateLimitBuckets = pgTable(
   'portal_rate_limit_buckets',

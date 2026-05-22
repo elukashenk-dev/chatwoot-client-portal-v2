@@ -2,12 +2,16 @@ import type {
   ChatMessagesSnapshot,
   ChatMessageContextDirection,
   ChatMessageContextResponse,
+  ChatNotificationOverrides,
+  ChatNotificationSettings,
   ChatSendResult,
   ChatSupportAvailabilityResponse,
   ChatThreadInfoResponse,
   ChatThreadMediaResponse,
   ChatThreadSearchResponse,
   ChatThreadsResponse,
+  PushPublicKeyResponse,
+  UserNotificationSettings,
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -66,7 +70,7 @@ async function request<TResponse>(
   }: {
     body?: unknown
     formData?: FormData
-    method?: 'GET' | 'POST'
+    method?: 'DELETE' | 'GET' | 'PATCH' | 'POST'
     networkErrorMessage?: string
   } = {},
 ): Promise<TResponse> {
@@ -140,10 +144,68 @@ export async function getChatSupportAvailability() {
   return request<ChatSupportAvailabilityResponse>('/chat/support-availability')
 }
 
+export async function getUserNotificationSettings() {
+  return request<UserNotificationSettings>('/notifications/settings')
+}
+
+export async function updateUserNotificationSettings(
+  patch: Partial<UserNotificationSettings>,
+) {
+  return request<UserNotificationSettings>('/notifications/settings', {
+    body: patch,
+    method: 'PATCH',
+    networkErrorMessage:
+      'Не удалось обновить настройки уведомлений. Попробуйте еще раз.',
+  })
+}
+
 export async function getChatThreadInfo(threadId: string) {
   return request<ChatThreadInfoResponse>(
     `/chat/threads/${encodeURIComponent(threadId)}/info`,
   )
+}
+
+export async function getChatNotificationSettings(threadId: string) {
+  return request<ChatNotificationSettings>(
+    `/chat/threads/${encodeURIComponent(threadId)}/notification-settings`,
+  )
+}
+
+export async function updateChatNotificationSettings(
+  threadId: string,
+  patch: Partial<ChatNotificationOverrides>,
+) {
+  return request<ChatNotificationSettings>(
+    `/chat/threads/${encodeURIComponent(threadId)}/notification-settings`,
+    {
+      body: patch,
+      method: 'PATCH',
+      networkErrorMessage:
+        'Не удалось обновить настройки уведомлений. Попробуйте еще раз.',
+    },
+  )
+}
+
+export async function getPushPublicKey() {
+  return request<PushPublicKeyResponse>('/notifications/push/public-key')
+}
+
+export async function savePushSubscription(subscription: PushSubscriptionJSON) {
+  await request<void>('/notifications/push/subscriptions', {
+    body: subscription,
+    method: 'POST',
+    networkErrorMessage:
+      'Не удалось включить push-уведомления. Попробуйте еще раз.',
+  })
+}
+
+export async function deletePushSubscription(endpoint: string) {
+  await request<void>('/notifications/push/subscriptions', {
+    body: { endpoint },
+    method: 'DELETE',
+    networkErrorMessage:
+      'Не удалось отключить push на этом устройстве. Попробуйте еще раз.',
+  })
 }
 
 export async function getChatThreadMedia({

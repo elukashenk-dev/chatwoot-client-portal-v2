@@ -153,6 +153,24 @@ export function InfoIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function BellIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.45"
+      viewBox="0 0 24 24"
+    >
+      <path d="M6 10.55A6 6 0 0 1 18 10.55V13l2 3H4l2-3v-2.45Z" />
+      <path d="M9.75 19a2.5 2.5 0 0 0 4.5 0" />
+    </svg>
+  )
+}
+
 export function BellOffIcon({ className = iconClassName }: IconProps) {
   return (
     <svg
@@ -169,6 +187,24 @@ export function BellOffIcon({ className = iconClassName }: IconProps) {
       <path d="M10.25 5.1A5.8 5.8 0 0 1 18 10.55V13l2 3H9.6" />
       <path d="M6 10.55V13l-2 3h8" />
       <path d="M9.75 19a2.5 2.5 0 0 0 4.5 0" />
+    </svg>
+  )
+}
+
+export function SettingsIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.45"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.37a1.7 1.7 0 0 0-1 .58 1.7 1.7 0 0 0-.4 1.05V21a2 2 0 0 1-4 0v-.08a1.7 1.7 0 0 0-.4-1.05 1.7 1.7 0 0 0-1-.58 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-.58-1 1.7 1.7 0 0 0-1.05-.4H3a2 2 0 0 1 0-4h.08a1.7 1.7 0 0 0 1.05-.4 1.7 1.7 0 0 0 .58-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1-.58A1.7 1.7 0 0 0 10.4 3V3a2 2 0 0 1 4 0v.08a1.7 1.7 0 0 0 .4 1.05 1.7 1.7 0 0 0 1 .58 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.37 9c.1.36.3.7.58 1 .28.28.65.4 1.05.4H21a2 2 0 0 1 0 4h-.08a1.7 1.7 0 0 0-1.05.4 1.7 1.7 0 0 0-.47.2Z" />
     </svg>
   )
 }

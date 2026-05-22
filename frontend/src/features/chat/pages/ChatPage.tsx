@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ChatApiClientError, getChatMessages } from '../api/chatClient'
-import { PRIVATE_CHAT_THREAD_ID, type ChatMessagesSnapshot } from '../types'
+import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
@@ -14,7 +14,6 @@ import {
 import {
   isFirstConversationBootstrapReady,
   mergeOlderMessages,
-  mergeRealtimeSnapshot,
   toComposerReplyTarget,
 } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
@@ -27,9 +26,12 @@ import { useChatAttachmentSend } from './useChatAttachmentSend'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
+import { useChatPageNotifications } from './useChatPageNotifications'
+import { useChatNotificationsPanel } from './useChatNotificationsPanel'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatSearchResultContext } from './useChatSearchResultContext'
+import { useChatSnapshotRefresh } from './useChatSnapshotRefresh'
 import { useChatSupportAvailability } from './useChatSupportAvailability'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
@@ -146,6 +148,13 @@ export function ChatPage() {
     markBrowserOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
+  const chatNotificationsPanel = useChatNotificationsPanel({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isMountedRef,
+    markBrowserOnline,
+    selectedThreadId: pageState.selectedThreadId,
+  })
   const chatSearchPanel = useChatSearchPanel({
     currentSnapshot: pageState.status === 'ready' ? pageState.snapshot : null,
     handleConnectionUnavailableError,
@@ -244,65 +253,14 @@ export function ChatPage() {
     }
   }, [loadInitialChat])
 
-  const refreshChatSnapshot = useCallback(async () => {
-    let latestSnapshot: ChatMessagesSnapshot
-    const threadId = pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID
-
-    try {
-      latestSnapshot = await getChatMessages({
-        threadId,
-      })
-    } catch (error) {
-      if (await handleUnauthorizedChatError(error)) {
-        return
-      }
-
-      if (handleConnectionUnavailableError(error)) {
-        return
-      }
-
-      throw error
-    }
-
-    if (!isMountedRef.current) {
-      return
-    }
-
-    markBrowserOnline()
-    setPageState((currentState) => {
-      if (currentState.selectedThreadId !== threadId) {
-        return currentState
-      }
-
-      if (
-        currentState.status === 'ready' &&
-        currentState.snapshot.result === 'ready' &&
-        latestSnapshot.result === 'ready'
-      ) {
-        return {
-          snapshot: mergeRealtimeSnapshot({
-            currentSnapshot: currentState.snapshot,
-            realtimeSnapshot: latestSnapshot,
-          }),
-          selectedThreadId: currentState.selectedThreadId,
-          status: 'ready',
-          threads: currentState.threads,
-        }
-      }
-
-      return {
-        snapshot: latestSnapshot,
-        selectedThreadId: currentState.selectedThreadId,
-        status: 'ready',
-        threads: currentState.threads,
-      }
-    })
-  }, [
+  const refreshChatSnapshot = useChatSnapshotRefresh({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
+    isMountedRef,
     markBrowserOnline,
-    pageState.selectedThreadId,
-  ])
+    selectedThreadId: pageState.selectedThreadId,
+    setPageState,
+  })
   const resyncStatus = useChatResumeResync({
     canAttemptResync: isBrowserOnline || navigatorHintIsOnline,
     loadInitialChat,
@@ -364,6 +322,12 @@ export function ChatPage() {
           threadId: pageState.selectedThreadId,
         })
       : []
+  const selectedThreadNotificationSettings = useChatPageNotifications({
+    chatNotificationsPanel,
+    messages: visibleMessages,
+    refreshChatSnapshot,
+    selectedThreadId: pageState.selectedThreadId,
+  })
   const transcriptMessages = historyFragment
     ? historyFragment.messages
     : visibleMessages
@@ -401,6 +365,9 @@ export function ChatPage() {
         onOpenThreadInfo={() => {
           void chatInfoPanel.loadChatInfo()
         }}
+        onOpenThreadNotifications={() => {
+          void chatNotificationsPanel.loadChatNotifications()
+        }}
         onSelectThread={(threadId) => {
           clearHighlightedMessage()
           clearHistoryFragment()
@@ -408,6 +375,7 @@ export function ChatPage() {
         }}
         selectedThreadId={pageState.selectedThreadId}
         supportAvailability={supportAvailability.state.availability}
+        threadNotificationSettings={selectedThreadNotificationSettings}
         threads={pageState.threads}
       />
       <ChatRuntimeAlerts
@@ -505,6 +473,7 @@ export function ChatPage() {
         activeThread={headerThread}
         chatInfoPanel={chatInfoPanel}
         chatMediaPanel={chatMediaPanel}
+        chatNotificationsPanel={chatNotificationsPanel}
         chatSearchPanel={chatSearchPanel}
         onSearchBack={handleCloseChatSearch}
         onSearchQueryChange={(query) => {

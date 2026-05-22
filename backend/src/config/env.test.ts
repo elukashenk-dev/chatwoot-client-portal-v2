@@ -83,4 +83,69 @@ describe('loadEnv', () => {
       }),
     ).toThrow(/CHATWOOT_REQUEST_TIMEOUT_MS/)
   })
+
+  it('leaves Web Push VAPID configuration unset by default', () => {
+    const env = loadEnv(baseRawEnv)
+
+    expect(env.PUSH_VAPID_PUBLIC_KEY).toBeUndefined()
+    expect(env.PUSH_VAPID_PRIVATE_KEY).toBeUndefined()
+    expect(env.PUSH_VAPID_SUBJECT).toBeUndefined()
+    expect(env.PUSH_VAPID_KEY_ID).toBeUndefined()
+  })
+
+  it('accepts a complete Web Push VAPID configuration', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      PUSH_VAPID_PUBLIC_KEY: 'public-key',
+      PUSH_VAPID_PRIVATE_KEY: 'private-key',
+      PUSH_VAPID_SUBJECT: 'mailto:support@example.test',
+      PUSH_VAPID_KEY_ID: 'vapid-key-2026-05',
+    })
+
+    expect(env.PUSH_VAPID_PUBLIC_KEY).toBe('public-key')
+    expect(env.PUSH_VAPID_PRIVATE_KEY).toBe('private-key')
+    expect(env.PUSH_VAPID_SUBJECT).toBe('mailto:support@example.test')
+    expect(env.PUSH_VAPID_KEY_ID).toBe('vapid-key-2026-05')
+  })
+
+  it('allows a Web Push subject without keys and keeps push unavailable', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      PUSH_VAPID_SUBJECT: 'mailto:support@example.test',
+    })
+
+    expect(env.PUSH_VAPID_PUBLIC_KEY).toBeUndefined()
+    expect(env.PUSH_VAPID_PRIVATE_KEY).toBeUndefined()
+    expect(env.PUSH_VAPID_SUBJECT).toBe('mailto:support@example.test')
+  })
+
+  it('rejects a Web Push public key without a private key', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        PUSH_VAPID_PUBLIC_KEY: 'public-key',
+        PUSH_VAPID_SUBJECT: 'mailto:support@example.test',
+      }),
+    ).toThrow(/PUSH_VAPID_PUBLIC_KEY/)
+  })
+
+  it('rejects a Web Push private key without a public key', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        PUSH_VAPID_PRIVATE_KEY: 'private-key',
+        PUSH_VAPID_SUBJECT: 'mailto:support@example.test',
+      }),
+    ).toThrow(/PUSH_VAPID_PUBLIC_KEY/)
+  })
+
+  it('rejects Web Push VAPID keys without a subject', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        PUSH_VAPID_PUBLIC_KEY: 'public-key',
+        PUSH_VAPID_PRIVATE_KEY: 'private-key',
+      }),
+    ).toThrow(/PUSH_VAPID_SUBJECT/)
+  })
 })

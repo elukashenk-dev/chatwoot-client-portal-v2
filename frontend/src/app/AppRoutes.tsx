@@ -51,6 +51,16 @@ const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
 const ChatPage = lazyRouteComponent(() =>
   import('../features/chat/pages/ChatPage').then((module) => module.ChatPage),
 )
+const SettingsPage = lazyRouteComponent(() =>
+  import('../features/settings/pages/SettingsPage').then(
+    (module) => module.SettingsPage,
+  ),
+)
+const UserNotificationsPage = lazyRouteComponent(() =>
+  import('../features/settings/pages/UserNotificationsPage').then(
+    (module) => module.UserNotificationsPage,
+  ),
+)
 
 function LazyRoute({ children }: { children: ReactNode }) {
   return (
@@ -146,6 +156,22 @@ export function AppRoutes() {
             element={
               <LazyRoute>
                 <ChatPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <LazyRoute>
+                <SettingsPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="settings/notifications"
+            element={
+              <LazyRoute>
+                <UserNotificationsPage />
               </LazyRoute>
             }
           />

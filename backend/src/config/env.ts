@@ -133,6 +133,10 @@ const envSchema = z
     SMTP_USER: optionalNonEmptyString,
     SMTP_PASS: optionalNonEmptyString,
     SMTP_FROM: optionalNonEmptyString,
+    PUSH_VAPID_PUBLIC_KEY: optionalNonEmptyString,
+    PUSH_VAPID_PRIVATE_KEY: optionalNonEmptyString,
+    PUSH_VAPID_SUBJECT: optionalNonEmptyString,
+    PUSH_VAPID_KEY_ID: optionalNonEmptyString,
   })
   .superRefine((env, context) => {
     const hasChatwootConfig = Boolean(
@@ -209,6 +213,30 @@ const envSchema = z
           code: 'custom',
           message: 'SMTP_USER and SMTP_PASS must be provided together',
           path: ['SMTP_USER'],
+        })
+      }
+    }
+
+    const hasPushVapidKey = Boolean(
+      env.PUSH_VAPID_PUBLIC_KEY || env.PUSH_VAPID_PRIVATE_KEY,
+    )
+
+    if (hasPushVapidKey) {
+      if (!env.PUSH_VAPID_PUBLIC_KEY || !env.PUSH_VAPID_PRIVATE_KEY) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'PUSH_VAPID_PUBLIC_KEY and PUSH_VAPID_PRIVATE_KEY must be provided together',
+          path: ['PUSH_VAPID_PUBLIC_KEY'],
+        })
+      }
+
+      if (!env.PUSH_VAPID_SUBJECT) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'PUSH_VAPID_SUBJECT is required when Web Push VAPID keys are configured',
+          path: ['PUSH_VAPID_SUBJECT'],
         })
       }
     }

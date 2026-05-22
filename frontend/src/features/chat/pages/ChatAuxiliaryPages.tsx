@@ -1,5 +1,6 @@
 import { ChatInfoPage } from '../components/ChatInfoPage'
 import { ChatMediaPage } from '../components/ChatMediaPage'
+import { ChatNotificationsPage } from '../components/ChatNotificationsPage'
 import { ChatSearchPage } from '../components/ChatSearchPage'
 import type {
   ChatSearchResult,
@@ -8,12 +9,14 @@ import type {
 } from '../types'
 import type { useChatInfoPanel } from './useChatInfoPanel'
 import type { useChatMediaPanel } from './useChatMediaPanel'
+import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 import type { useChatSearchPanel } from './useChatSearchPanel'
 
 type ChatAuxiliaryPagesProps = {
   activeThread: ChatThreadSummary | null
   chatInfoPanel: ReturnType<typeof useChatInfoPanel>
   chatMediaPanel: ReturnType<typeof useChatMediaPanel>
+  chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   chatSearchPanel: ReturnType<typeof useChatSearchPanel>
   onSearchBack: () => void
   onSearchQueryChange: (query: string) => void
@@ -27,6 +30,7 @@ export function ChatAuxiliaryPages({
   activeThread,
   chatInfoPanel,
   chatMediaPanel,
+  chatNotificationsPanel,
   chatSearchPanel,
   onSearchBack,
   onSearchQueryChange,
@@ -47,6 +51,28 @@ export function ChatAuxiliaryPages({
             void chatInfoPanel.retryChatInfo()
           }}
           supportAvailability={supportAvailability}
+        />
+      ) : null}
+      {chatNotificationsPanel.state.isOpen ? (
+        <ChatNotificationsPage
+          activeThread={activeThread}
+          onBack={chatNotificationsPanel.closeChatNotifications}
+          onDisableDevicePush={() => {
+            void chatNotificationsPanel.disableDevicePush()
+          }}
+          onEnablePushForThread={() => {
+            void chatNotificationsPanel.enablePushForThread()
+          }}
+          onResetThreadOverrides={() => {
+            void chatNotificationsPanel.resetThreadOverrides()
+          }}
+          onRetry={() => {
+            void chatNotificationsPanel.retryChatNotifications()
+          }}
+          onUpdateSetting={(patch) => {
+            void chatNotificationsPanel.updateSettings(patch)
+          }}
+          state={chatNotificationsPanel.state}
         />
       ) : null}
       {chatMediaPanel.state.isOpen ? (

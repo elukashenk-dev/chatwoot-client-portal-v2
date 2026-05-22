@@ -7,6 +7,7 @@ const APP_SHELL_URLS = [
   '/pwa-icons/icon-512.png',
   '/pwa-icons/icon-maskable-512.png',
 ]
+const PUSH_READY_CLIENT_IDS = new Set()
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -32,7 +33,32 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting()
+    return
   }
+
+  const sourceClientId = event.source?.id
+
+  if (!sourceClientId) {
+    return
+  }
+
+  if (event.data?.type === 'PORTAL_PUSH_CLIENT_READY') {
+    PUSH_READY_CLIENT_IDS.add(sourceClientId)
+    return
+  }
+
+  if (event.data?.type === 'PORTAL_PUSH_CLIENT_NOT_READY') {
+    PUSH_READY_CLIENT_IDS.delete(sourceClientId)
+  }
+})
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(handlePushEvent(event))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil(handleNotificationClick(event.notification.data))
 })
 
 self.addEventListener('fetch', (event) => {
@@ -144,4 +170,108 @@ function shouldCacheResponse(response) {
     response.headers.get('cache-control')?.toLowerCase() ?? ''
 
   return !cacheControl.includes('no-store')
+}
+
+async function handlePushEvent(event) {
+  const payload = readPushPayload(event.data)
+  const clientsList = await clients.matchAll({
+    includeUncontrolled: false,
+    type: 'window',
+  })
+  const focusedClient = clientsList.find(
+    (client) =>
+      client.focused &&
+      isSameOriginUrl(client.url) &&
+      PUSH_READY_CLIENT_IDS.has(client.id),
+  )
+
+  if (focusedClient) {
+    focusedClient.postMessage({
+      payload,
+      type: 'PORTAL_PUSH_MESSAGE',
+    })
+    return
+  }
+
+  await self.registration.showNotification('Новое сообщение', {
+    body: 'Откройте портал, чтобы посмотреть чат.',
+    data: {
+      url: normalizeNotificationUrl(payload.url),
+    },
+    icon: '/pwa-icons/icon-192.png',
+    tag: 'portal-chat-message',
+  })
+}
+
+function readPushPayload(data) {
+  if (!data) {
+    return {
+      tenantSlug: null,
+      type: 'chat_message',
+      url: '/',
+    }
+  }
+
+  try {
+    const payload = data.json()
+
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid push payload.')
+    }
+
+    return {
+      tenantSlug:
+        typeof payload.tenantSlug === 'string' ? payload.tenantSlug : null,
+      type: payload.type === 'chat_message' ? 'chat_message' : 'chat_message',
+      url: normalizeNotificationUrl(
+        typeof payload.url === 'string' ? payload.url : '/',
+      ),
+    }
+  } catch {
+    return {
+      tenantSlug: null,
+      type: 'chat_message',
+      url: '/',
+    }
+  }
+}
+
+async function handleNotificationClick(data) {
+  const url = normalizeNotificationUrl(data?.url)
+  const clientsList = await clients.matchAll({
+    includeUncontrolled: true,
+    type: 'window',
+  })
+  const existingClient = clientsList.find((client) =>
+    isSameOriginUrl(client.url),
+  )
+
+  if (existingClient) {
+    await existingClient.focus()
+    return
+  }
+
+  await clients.openWindow(url)
+}
+
+function normalizeNotificationUrl(value) {
+  try {
+    const url = new URL(value || '/', self.location.origin)
+
+    if (url.origin !== self.location.origin) {
+      return '/'
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return '/'
+  }
+}
+
+function isSameOriginUrl(value) {
+  try {
+    return new URL(value).origin === self.location.origin
+  } catch {
+    return false
+  }
 }

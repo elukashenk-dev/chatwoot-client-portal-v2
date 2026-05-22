@@ -32,6 +32,10 @@ export const testEnv: AppEnv = {
   SMTP_PORT: 1025,
   SMTP_SECURE: false,
   SMTP_USER: undefined,
+  PUSH_VAPID_KEY_ID: undefined,
+  PUSH_VAPID_PRIVATE_KEY: undefined,
+  PUSH_VAPID_PUBLIC_KEY: undefined,
+  PUSH_VAPID_SUBJECT: undefined,
 }
 
 export async function seedDefaultTenant(database: DatabaseClient) {

@@ -138,6 +138,10 @@
   portal backend отдает tenant-scoped Chatwoot agent availability и working
   hours, frontend показывает `На связи` / `Ответим позже` / `Вне графика`, а
   страница `Информация о чате` содержит read-only блок `Часы работы`.
+- Реализован slice `Уведомления`: глобальная страница настроек, chat-level
+  overrides, in-portal sound, Web Push/VAPID subscription lifecycle,
+  tenant-scoped push delivery из Chatwoot `message_created` webhooks и generic
+  PWA push payload без текста сообщения.
 
 ## Current Baseline
 
@@ -156,4 +160,5 @@
 
 ## Recommended Next Step
 
-- Начать следующий chat menu slice: `Отключить уведомления`.
+- Задеплоить notifications slice на production и выполнить smoke-test на
+  реальном tenant.

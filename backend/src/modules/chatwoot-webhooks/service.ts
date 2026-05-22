@@ -8,6 +8,7 @@ import type { IncomingHttpHeaders } from 'node:http'
 
 import { ApiError } from '../../lib/errors.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
+import type { ChatNotificationPushDeliveryService } from '../chat-notifications/pushDeliveryService.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
 import type {
   ChatwootWebhookDeliveryStatus,
@@ -39,8 +40,13 @@ type CreateChatwootWebhookServiceOptions = {
   chatwootAccountId: number
   chatwootPortalInboxId: number
   now?: () => Date
+  pushDeliveryService?: Pick<
+    ChatNotificationPushDeliveryService,
+    'deliverMessageCreated'
+  >
   realtimeHub: ChatRealtimeHub
   tenantId: number
+  tenantSlug: string
   webhookSecret: string
   webhookRepository: ChatwootWebhookRepository
 }
@@ -283,8 +289,10 @@ export function createChatwootWebhookService({
   chatwootAccountId,
   chatwootPortalInboxId,
   now = () => new Date(),
+  pushDeliveryService,
   realtimeHub,
   tenantId,
+  tenantSlug,
   webhookSecret,
   webhookRepository,
 }: CreateChatwootWebhookServiceOptions) {
@@ -447,6 +455,18 @@ export function createChatwootWebhookService({
         realtimeHub,
         tenantId,
       })
+
+      if (eventName === 'message_created' && pushDeliveryService) {
+        try {
+          await pushDeliveryService.deliverMessageCreated({
+            chatwootMessageId,
+            tenantSlug,
+            threadMapping: mapping,
+          })
+        } catch {
+          // Push is best-effort and must not break Chatwoot webhook realtime delivery.
+        }
+      }
 
       return {
         deliveredClients,

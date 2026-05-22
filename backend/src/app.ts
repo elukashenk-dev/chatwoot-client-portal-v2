@@ -21,6 +21,14 @@ import {
   CHAT_ATTACHMENT_MAX_BYTES,
   createChatMessagesService,
 } from './modules/chat-messages/service.js'
+import { registerChatNotificationRoutes } from './modules/chat-notifications/routes.js'
+import { createChatNotificationsRepository } from './modules/chat-notifications/repository.js'
+import { createChatNotificationRecipientResolver } from './modules/chat-notifications/recipientResolver.js'
+import { createChatNotificationPushDeliveryService } from './modules/chat-notifications/pushDeliveryService.js'
+import { createPushSubscriptionService } from './modules/chat-notifications/pushSubscriptionService.js'
+import { createChatNotificationsService } from './modules/chat-notifications/service.js'
+import { createWebPushTransport } from './modules/chat-notifications/pushTransport.js'
+import { createVapidConfig } from './modules/chat-notifications/vapid.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
 import { registerChatSupportRoutes } from './modules/chat-support/routes.js'
@@ -118,6 +126,8 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
     env,
   })
   const chatRealtimeHub = createChatRealtimeHub()
+  const vapidConfig = createVapidConfig(env)
+  const pushTransport = vapidConfig ? createWebPushTransport(vapidConfig) : null
   const chatSendRateLimiter = createChatSendRateLimiter({
     repository: createChatSendRateLimitRepository(database.db),
   })
@@ -169,6 +179,39 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
     createChatSupportAvailabilityService({
       chatwootClient: createChatwootClientForRequest(request),
     })
+  const createChatNotificationsServiceForRequest = (request: FastifyRequest) =>
+    createChatNotificationsService({
+      chatThreadsService: createChatThreadsServiceForRequest(request),
+      repository: createChatNotificationsRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
+    })
+  const createPushSubscriptionServiceForRequest = (request: FastifyRequest) =>
+    createPushSubscriptionService({
+      repository: createChatNotificationsRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
+      }),
+      vapidConfig,
+    })
+  const createPushDeliveryServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatNotificationPushDeliveryService({
+      recipientResolver: createChatNotificationRecipientResolver({
+        chatThreadsRepository: createChatThreadsRepository(database.db, {
+          tenantId: tenant.id,
+        }),
+        chatwootClient: createChatwootClientForRequest(request),
+        contactRepository: createChatThreadContactRepository(database.db, {
+          tenantId: tenant.id,
+        }),
+      }),
+      repository: createChatNotificationsRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      transport: pushTransport,
+    })
+  }
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
       chatwootClient: createChatwootClientForRequest(request),
@@ -193,8 +236,10 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       chatMessagesService: createChatMessagesServiceForRequest(request),
       chatwootAccountId: tenant.chatwoot.accountId,
       chatwootPortalInboxId: tenant.chatwoot.portalInboxId,
+      pushDeliveryService: createPushDeliveryServiceForRequest(request),
       realtimeHub: chatRealtimeHub,
       tenantId: tenant.id,
+      tenantSlug: tenant.slug,
       webhookRepository: createChatwootWebhookRepository(database.db, {
         tenantId: tenant.id,
       }),
@@ -228,6 +273,12 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
     authService,
     createChatSupportAvailabilityService:
       createChatSupportAvailabilityServiceForRequest,
+    env,
+  })
+  registerChatNotificationRoutes(app, {
+    authService,
+    createChatNotificationsService: createChatNotificationsServiceForRequest,
+    createPushSubscriptionService: createPushSubscriptionServiceForRequest,
     env,
   })
   registerChatMessagesRoutes(app, {
