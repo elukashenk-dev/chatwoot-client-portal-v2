@@ -21,7 +21,7 @@ describe('chat thread info helpers', () => {
   it('maps thread labels without exposing implementation details', () => {
     expect(buildChatThreadTypeLabel('private')).toBe('Личный')
     expect(buildChatThreadTypeLabel('group')).toBe('Групповой')
-    expect(buildChatThreadAccessLabel('private')).toBe('Только вы и поддержка')
+    expect(buildChatThreadAccessLabel('private')).toBe('Вы и поддержка')
     expect(buildChatThreadAccessLabel('group')).toBe(
       'Участники группы и поддержка',
     )

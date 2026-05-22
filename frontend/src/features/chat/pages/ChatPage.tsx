@@ -30,6 +30,7 @@ import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatSearchResultContext } from './useChatSearchResultContext'
+import { useChatSupportAvailability } from './useChatSupportAvailability'
 import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -152,6 +153,13 @@ export function ChatPage() {
     isMountedRef,
     markBrowserOnline,
     selectedThreadId: pageState.selectedThreadId,
+  })
+  const supportAvailability = useChatSupportAvailability({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline: isBrowserOnline && pageState.status === 'ready',
+    isMountedRef,
+    markBrowserOnline,
   })
   async function handleLoadOlderMessages() {
     if (
@@ -383,7 +391,6 @@ export function ChatPage() {
     <>
       <ChatHeader
         activeThread={headerThread}
-        isReady={isReady}
         onOpenThreadSearch={() => {
           clearSearchResultOpenError()
           chatSearchPanel.openChatSearch()
@@ -400,6 +407,7 @@ export function ChatPage() {
           void handleSelectThread(threadId)
         }}
         selectedThreadId={pageState.selectedThreadId}
+        supportAvailability={supportAvailability.state.availability}
         threads={pageState.threads}
       />
       <ChatRuntimeAlerts
@@ -505,6 +513,8 @@ export function ChatPage() {
         }}
         onSearchResultSelect={handleOpenSearchResult}
         searchResultOpenErrorMessage={searchResultOpenErrorMessage}
+        supportAvailability={supportAvailability.state.availability}
+        supportAvailabilityIsLoading={supportAvailability.state.isLoading}
       />
     </>
   )

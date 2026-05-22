@@ -33,10 +33,10 @@ function createDeferred<T>() {
 
 function createChatInfoResponse(): ChatThreadInfoResponse {
   return {
-    accessLabel: 'Только вы и поддержка',
+    accessLabel: 'Вы и поддержка',
     activeThread: {
       id: 'private:me',
-      subtitle: 'Только вы и поддержка',
+      subtitle: 'Вы и поддержка',
       title: 'Личный чат',
       type: 'private',
     },

@@ -37,7 +37,7 @@ function createMediaResponse(
   return {
     activeThread: {
       id: 'private:me',
-      subtitle: 'Только вы и поддержка',
+      subtitle: 'Вы и поддержка',
       title: 'Личный чат',
       type: 'private',
     },
@@ -70,7 +70,7 @@ function createCurrentSnapshotWithAttachment(): ChatMessagesSnapshot {
   return {
     activeThread: {
       id: 'private:me',
-      subtitle: 'Только вы и поддержка',
+      subtitle: 'Вы и поддержка',
       title: 'Личный чат',
       type: 'private',
     },

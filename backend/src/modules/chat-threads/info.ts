@@ -31,7 +31,7 @@ export function buildChatThreadTypeLabel(threadType: ChatInfoThreadType) {
 export function buildChatThreadAccessLabel(threadType: ChatInfoThreadType) {
   return threadType === 'group'
     ? 'Участники группы и поддержка'
-    : 'Только вы и поддержка'
+    : 'Вы и поддержка'
 }
 
 export function toIsoDateTime(timestampSeconds: number | null | undefined) {

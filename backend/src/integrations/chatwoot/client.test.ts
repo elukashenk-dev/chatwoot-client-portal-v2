@@ -236,6 +236,113 @@ describe('createChatwootClient', () => {
     )
   })
 
+  it('reads portal inbox details with working hours metadata', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        channel_type: 'Channel::Api',
+        id: 9,
+        lock_to_single_conversation: true,
+        out_of_office_message: 'Ответим в рабочее время.',
+        timezone: 'Europe/Samara',
+        webhook_url: 'https://portal.example.test/webhook',
+        working_hours: [
+          {
+            close_hour: 17,
+            close_minutes: 0,
+            closed_all_day: false,
+            day_of_week: 1,
+            open_all_day: false,
+            open_hour: 9,
+            open_minutes: 0,
+          },
+          {
+            closed_all_day: true,
+            day_of_week: 0,
+            open_all_day: false,
+          },
+        ],
+        working_hours_enabled: true,
+      }),
+    )
+    const client = createChatwootClient({
+      env: testChatwootEnv,
+      fetchFn,
+    })
+
+    await expect(client.getPortalInboxDetails()).resolves.toEqual({
+      channelType: 'Channel::Api',
+      id: 9,
+      lockToSingleConversation: true,
+      outOfOfficeMessage: 'Ответим в рабочее время.',
+      timezone: 'Europe/Samara',
+      webhookSecret: null,
+      webhookUrl: 'https://portal.example.test/webhook',
+      workingHours: [
+        {
+          closeHour: 17,
+          closeMinutes: 0,
+          closedAllDay: false,
+          dayOfWeek: 1,
+          openAllDay: false,
+          openHour: 9,
+          openMinutes: 0,
+        },
+        {
+          closeHour: null,
+          closeMinutes: null,
+          closedAllDay: true,
+          dayOfWeek: 0,
+          openAllDay: false,
+          openHour: null,
+          openMinutes: null,
+        },
+      ],
+      workingHoursEnabled: true,
+    })
+    expect(String(fetchFn.mock.calls[0]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/inboxes/9',
+    )
+  })
+
+  it('lists portal inbox members with availability statuses', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        payload: [
+          {
+            availability_status: 'online',
+            id: 11,
+            name: 'Анна Маттина',
+          },
+          {
+            availability_status: 'busy',
+            id: 12,
+            name: 'Ольга Support',
+          },
+        ],
+      }),
+    )
+    const client = createChatwootClient({
+      env: testChatwootEnv,
+      fetchFn,
+    })
+
+    await expect(client.listPortalInboxMembers()).resolves.toEqual([
+      {
+        availabilityStatus: 'online',
+        id: 11,
+        name: 'Анна Маттина',
+      },
+      {
+        availabilityStatus: 'busy',
+        id: 12,
+        name: 'Ольга Support',
+      },
+    ])
+    expect(String(fetchFn.mock.calls[0]?.[0])).toBe(
+      'http://127.0.0.1:3000/api/v1/accounts/3/inbox_members/9',
+    )
+  })
+
   it('returns an exact email match from Chatwoot search results', async () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       createJsonResponse({

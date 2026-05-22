@@ -11,7 +11,7 @@ import type { ChatMessagesService } from './service.js'
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } as const

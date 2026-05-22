@@ -23,7 +23,7 @@ function createReadyContext(
   return {
     activeThread: {
       id: PRIVATE_CHAT_THREAD_ID,
-      subtitle: 'Только вы и поддержка',
+      subtitle: 'Вы и поддержка',
       title: 'Личный чат',
       type: 'private',
     },

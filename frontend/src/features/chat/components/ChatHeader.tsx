@@ -8,7 +8,11 @@ import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
-import type { ChatThreadSummary } from '../types'
+import type {
+  ChatSupportAvailabilityResponse,
+  ChatThreadSummary,
+} from '../types'
+import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellOffIcon,
@@ -23,12 +27,12 @@ import {
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
-  isReady: boolean
   onOpenThreadSearch: () => void
   onOpenThreadMedia: () => void
   onOpenThreadInfo: () => void
   onSelectThread: (threadId: string) => void
   selectedThreadId: string | null
+  supportAvailability: ChatSupportAvailabilityResponse | null
   threads: ChatThreadSummary[]
 }
 
@@ -40,12 +44,12 @@ function focusElement(element: HTMLElement | null) {
 
 export function ChatHeader({
   activeThread,
-  isReady,
   onOpenThreadSearch,
   onOpenThreadMedia,
   onOpenThreadInfo,
   onSelectThread,
   selectedThreadId,
+  supportAvailability,
   threads,
 }: ChatHeaderProps) {
   const navigate = useNavigate()
@@ -181,7 +185,8 @@ export function ChatHeader({
     }
   }
 
-  const presenceLabel = isReady ? 'Онлайн' : 'Подключение'
+  const supportPresence =
+    getSupportAvailabilityPresentation(supportAvailability)
   const supportTeamName = tenant
     ? `Команда ${tenant.displayName}`
     : 'Команда поддержки'
@@ -282,15 +287,29 @@ export function ChatHeader({
             <span className="min-w-0 truncate">{threadSubtitle}</span>
             <span
               aria-hidden="true"
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#76a878] shadow-[0_0_0_2px_rgb(118_168_120_/_0.14)]"
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                supportPresence.tone === 'online'
+                  ? 'bg-[#46a266] shadow-[0_0_0_2px_rgb(70_162_102_/_0.14)]'
+                  : supportPresence.tone === 'later'
+                    ? 'bg-[#d6932c] shadow-[0_0_0_2px_rgb(214_147_44_/_0.14)]'
+                    : 'bg-slate-400 shadow-[0_0_0_2px_rgb(148_163_184_/_0.16)]',
+              )}
             />
             <span
-              aria-label={presenceLabel}
-              className="shrink-0 font-normal text-[#5f8b62]"
+              aria-label={supportPresence.label}
+              className={cn(
+                'shrink-0 font-normal',
+                supportPresence.tone === 'online'
+                  ? 'text-[#3f8a57]'
+                  : supportPresence.tone === 'later'
+                    ? 'text-[#a76712]'
+                    : 'text-slate-500',
+              )}
               role="status"
-              title={presenceLabel}
+              title={supportPresence.label}
             >
-              {presenceLabel}
+              {supportPresence.label}
             </span>
           </div>
         </div>

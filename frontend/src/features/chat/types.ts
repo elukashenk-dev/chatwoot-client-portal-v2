@@ -10,6 +10,40 @@ export type ChatThreadReason =
 
 export type ChatThreadResult = 'not_ready' | 'ready' | 'unavailable'
 
+export type ChatSupportAvailabilityStatus =
+  | 'offline'
+  | 'online'
+  | 'outside_hours'
+  | 'unknown'
+
+export type ChatSupportAvailabilityReason =
+  | 'none'
+  | 'chatwoot_not_configured'
+  | 'chatwoot_unavailable'
+
+export type ChatWorkingHoursRow = {
+  closeTime: string | null
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6
+  isClosedAllDay: boolean
+  isOpenAllDay: boolean
+  openTime: string | null
+}
+
+export type ChatWorkingHoursInfo = {
+  enabled: boolean
+  isWithinWorkingHours: boolean | null
+  rows: ChatWorkingHoursRow[]
+  timezone: string
+}
+
+export type ChatSupportAvailabilityResponse = {
+  currentStatus: ChatSupportAvailabilityStatus
+  outOfOfficeMessage: string | null
+  reason: ChatSupportAvailabilityReason
+  result: ChatThreadResult
+  workingHours: ChatWorkingHoursInfo
+}
+
 export const PRIVATE_CHAT_THREAD_ID = 'private:me'
 
 export type ChatThreadSummary =

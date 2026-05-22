@@ -95,10 +95,10 @@ async function buildThreadsRoutesTestApp({
 describe('registerChatThreadsRoutes', () => {
   it('returns current user chat thread info', async () => {
     const getCurrentUserThreadInfo = vi.fn().mockResolvedValue({
-      accessLabel: 'Только вы и поддержка',
+      accessLabel: 'Вы и поддержка',
       activeThread: {
         id: 'private:me',
-        subtitle: 'Только вы и поддержка',
+        subtitle: 'Вы и поддержка',
         title: 'Личный чат',
         type: 'private',
       },
@@ -145,7 +145,7 @@ describe('registerChatThreadsRoutes', () => {
         threads: [
           {
             id: 'private:me',
-            subtitle: 'Только вы и поддержка',
+            subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
           },
@@ -174,7 +174,7 @@ describe('registerChatThreadsRoutes', () => {
         threads: [
           {
             id: 'private:me',
-            subtitle: 'Только вы и поддержка',
+            subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
           },

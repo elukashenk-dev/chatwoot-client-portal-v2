@@ -13,7 +13,7 @@ const CHAT_PAGE_LOAD_TIMEOUT = {
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
@@ -65,6 +65,21 @@ function createReadySnapshot(): ChatMessagesSnapshot {
     reason: 'none',
     result: 'ready',
   }
+}
+
+function createSupportAvailabilityResponse() {
+  return createJsonResponse({
+    currentStatus: 'online',
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
 }
 
 function createSearchResponse(): ChatThreadSearchResponse {
@@ -266,6 +281,10 @@ describe('ChatPage search panel', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
         return createJsonResponse(createSearchResponse())
       }
@@ -354,6 +373,10 @@ describe('ChatPage search panel', () => {
 
       if (url === '/api/chat/messages?threadId=private%3Ame') {
         return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
       }
 
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
@@ -543,6 +566,10 @@ describe('ChatPage search panel', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (
         url ===
         '/api/chat/threads/private%3Ame/search?q=%D0%B4%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80'
@@ -630,6 +657,10 @@ describe('ChatPage search panel', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (
         url ===
         '/api/chat/threads/private%3Ame/search?q=%D0%B4%D0%BE%D0%B3%D0%BE%D0%B2%D0%BE%D1%80'
@@ -714,6 +745,10 @@ describe('ChatPage search panel', () => {
 
       if (url === '/api/chat/messages?threadId=private%3Ame') {
         return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
       }
 
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
