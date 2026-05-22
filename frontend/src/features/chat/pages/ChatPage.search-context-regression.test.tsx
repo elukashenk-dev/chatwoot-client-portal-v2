@@ -451,6 +451,152 @@ describe('ChatPage search context regressions', () => {
     ).toBeInTheDocument()
   })
 
+  it('retargets an open history fragment when another search result is already loaded there', async () => {
+    const user = userEvent.setup()
+    let searchCount = 0
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
+        searchCount += 1
+
+        return createJsonResponse({
+          ...createOldSearchResponse(),
+          items:
+            searchCount === 1
+              ? [
+                  {
+                    ...createOldSearchResponse().items[0],
+                    content: 'Первая задача во фрагменте.',
+                    id: 'message:190',
+                    messageId: 190,
+                  },
+                ]
+              : [
+                  {
+                    ...createOldSearchResponse().items[0],
+                    content: 'Вторая задача во фрагменте.',
+                    id: 'message:195',
+                    messageId: 195,
+                  },
+                ],
+        })
+      }
+
+      if (
+        url === '/api/chat/threads/private%3Ame/messages/context?messageId=190'
+      ) {
+        return createJsonResponse(
+          createContextResponse({
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                authorRole: 'agent',
+                content: 'Первая задача во фрагменте.',
+                contentType: 'text',
+                createdAt: '2026-02-12T06:14:00.000Z',
+                direction: 'incoming',
+                id: 190,
+                status: 'sent',
+              },
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                authorRole: 'agent',
+                content: 'Вторая задача во фрагменте.',
+                contentType: 'text',
+                createdAt: '2026-02-12T06:20:00.000Z',
+                direction: 'incoming',
+                id: 195,
+                status: 'sent',
+              },
+            ],
+            targetMessageId: 190,
+          }),
+        )
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Договор готов к подписанию.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Поиск по чату' }))
+    fireEvent.change(
+      await screen.findByLabelText('Поиск по чату', {}, CHAT_PAGE_LOAD_TIMEOUT),
+      {
+        target: { value: 'задача 22' },
+      },
+    )
+    const firstResultOpenButtons = await screen.findAllByRole('button', {
+      name: 'Открыть место в чате',
+    })
+
+    await user.click(firstResultOpenButtons[firstResultOpenButtons.length - 1]!)
+
+    expect(
+      await screen.findByText('Показан фрагмент истории'),
+    ).toBeInTheDocument()
+    expect(
+      document.querySelector(
+        '[data-message-id="190"][data-message-highlighted="true"]',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Поиск по чату' }))
+    fireEvent.change(
+      await screen.findByLabelText('Поиск по чату', {}, CHAT_PAGE_LOAD_TIMEOUT),
+      {
+        target: { value: 'задача 32' },
+      },
+    )
+    const secondResultOpenButtons = await screen.findAllByRole('button', {
+      name: 'Открыть место в чате',
+    })
+
+    await user.click(
+      secondResultOpenButtons[secondResultOpenButtons.length - 1]!,
+    )
+
+    expect(
+      document.querySelector(
+        '[data-message-id="195"][data-message-highlighted="true"]',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      document.querySelector(
+        '[data-message-id="190"][data-message-highlighted="true"]',
+      ),
+    ).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      '/api/chat/threads/private%3Ame/messages/context?messageId=195',
+    )
+  })
+
   it('returns from a history fragment when an attachment send starts', async () => {
     const user = userEvent.setup()
     const attachmentResponse = createDeferredResponse()

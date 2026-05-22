@@ -92,6 +92,7 @@ export function ChatPage() {
     historyFragment,
     loadHistoryFragmentContext,
     openSearchResultContext,
+    retargetHistoryFragment,
     searchResultOpenErrorMessage,
   } = useChatSearchResultContext({
     handleConnectionUnavailableError,
@@ -373,6 +374,7 @@ export function ChatPage() {
     displayedMessages: transcriptMessages,
     latestMessages: visibleMessages,
     openSearchResultContext,
+    retargetHistoryFragment,
   })
   const transcriptHighlightedMessageId =
     historyFragment?.targetMessageId ?? highlightedMessageId

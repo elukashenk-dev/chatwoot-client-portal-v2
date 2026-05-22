@@ -8,6 +8,7 @@ type UseChatSearchNavigationOptions = {
   displayedMessages: ChatMessage[]
   latestMessages: ChatMessage[]
   openSearchResultContext: (result: ChatSearchResult) => Promise<boolean>
+  retargetHistoryFragment: (messageId: number) => void
 }
 
 export function useChatSearchNavigation({
@@ -16,6 +17,7 @@ export function useChatSearchNavigation({
   displayedMessages,
   latestMessages,
   openSearchResultContext,
+  retargetHistoryFragment,
 }: UseChatSearchNavigationOptions) {
   const [highlightedMessageId, setHighlightedMessageId] = useState<
     number | null
@@ -38,6 +40,7 @@ export function useChatSearchNavigation({
       )
 
       if (isLoadedInDisplayedTranscript) {
+        retargetHistoryFragment(result.messageId)
         closeChatSearch()
         highlightSearchResult(result.messageId)
         return
@@ -70,6 +73,7 @@ export function useChatSearchNavigation({
       highlightSearchResult,
       latestMessages,
       openSearchResultContext,
+      retargetHistoryFragment,
     ],
   )
 

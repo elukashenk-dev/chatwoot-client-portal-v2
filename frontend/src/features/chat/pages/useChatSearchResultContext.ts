@@ -128,6 +128,25 @@ export function useChatSearchResultContext({
     setHistoryFragment(null)
   }, [])
 
+  const retargetHistoryFragment = useCallback((messageId: number) => {
+    setHistoryFragment((currentFragment) => {
+      if (
+        !currentFragment ||
+        !currentFragment.messages.some((message) => message.id === messageId)
+      ) {
+        return currentFragment
+      }
+
+      return {
+        ...currentFragment,
+        errorMessage: null,
+        isLoadingEarlier: false,
+        isLoadingLater: false,
+        targetMessageId: messageId,
+      }
+    })
+  }, [])
+
   const clearSearchResultOpenError = useCallback(() => {
     setSearchResultOpenErrorMessage(null)
   }, [])
@@ -345,6 +364,7 @@ export function useChatSearchResultContext({
     historyFragment,
     loadHistoryFragmentContext,
     openSearchResultContext,
+    retargetHistoryFragment,
     searchResultOpenErrorMessage,
   }
 }
