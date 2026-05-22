@@ -3,6 +3,7 @@ import type {
   ChatMessageContextDirection,
   ChatMessageContextResponse,
   ChatSendResult,
+  ChatSupportAvailabilityResponse,
   ChatThreadInfoResponse,
   ChatThreadMediaResponse,
   ChatThreadSearchResponse,
@@ -133,6 +134,10 @@ export async function getChatMessages({
 
 export async function getChatThreads() {
   return request<ChatThreadsResponse>('/chat/threads')
+}
+
+export async function getChatSupportAvailability() {
+  return request<ChatSupportAvailabilityResponse>('/chat/support-availability')
 }
 
 export async function getChatThreadInfo(threadId: string) {

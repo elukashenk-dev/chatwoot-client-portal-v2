@@ -2,14 +2,17 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ChatThreadInfoResponse } from '../types'
+import type {
+  ChatSupportAvailabilityResponse,
+  ChatThreadInfoResponse,
+} from '../types'
 import { ChatInfoPage } from './ChatInfoPage'
 
 const privateInfo = {
-  accessLabel: 'Только вы и поддержка',
+  accessLabel: 'Вы и поддержка',
   activeThread: {
     id: 'private:me',
-    subtitle: 'Только вы и поддержка',
+    subtitle: 'Вы и поддержка',
     title: 'Личный чат',
     type: 'private',
   },
@@ -23,14 +26,51 @@ const privateInfo = {
   threadTypeLabel: 'Личный',
 } satisfies ChatThreadInfoResponse
 
+const supportAvailability = {
+  currentStatus: 'outside_hours',
+  outOfOfficeMessage: 'Ответим в рабочее время.',
+  reason: 'none',
+  result: 'ready',
+  workingHours: {
+    enabled: true,
+    isWithinWorkingHours: false,
+    rows: [
+      {
+        closeTime: '18:00',
+        dayOfWeek: 1,
+        isClosedAllDay: false,
+        isOpenAllDay: false,
+        openTime: '09:00',
+      },
+      {
+        closeTime: '18:00',
+        dayOfWeek: 2,
+        isClosedAllDay: false,
+        isOpenAllDay: false,
+        openTime: '09:00',
+      },
+      {
+        closeTime: null,
+        dayOfWeek: 6,
+        isClosedAllDay: true,
+        isOpenAllDay: false,
+        openTime: null,
+      },
+    ],
+    timezone: 'Europe/Samara',
+  },
+} satisfies ChatSupportAvailabilityResponse
+
 describe('ChatInfoPage', () => {
   it('renders private chat details without participants', () => {
     render(
       <ChatInfoPage
         info={privateInfo}
         isLoading={false}
+        isSupportAvailabilityLoading={false}
         onBack={vi.fn()}
         onRetry={vi.fn()}
+        supportAvailability={null}
       />,
     )
 
@@ -55,8 +95,10 @@ describe('ChatInfoPage', () => {
           startedAt: null,
         }}
         isLoading={false}
+        isSupportAvailabilityLoading={false}
         onBack={vi.fn()}
         onRetry={vi.fn()}
+        supportAvailability={null}
       />,
     )
 
@@ -92,8 +134,10 @@ describe('ChatInfoPage', () => {
           threadTypeLabel: 'Групповой',
         }}
         isLoading={false}
+        isSupportAvailabilityLoading={false}
         onBack={vi.fn()}
         onRetry={vi.fn()}
+        supportAvailability={null}
       />,
     )
 
@@ -115,13 +159,85 @@ describe('ChatInfoPage', () => {
           result: 'unavailable',
         }}
         isLoading={false}
+        isSupportAvailabilityLoading={false}
         onBack={vi.fn()}
         onRetry={onRetry}
+        supportAvailability={null}
       />,
     )
 
     await user.click(screen.getByRole('button', { name: 'Повторить' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders working hours and out-of-office state', () => {
+    render(
+      <ChatInfoPage
+        info={privateInfo}
+        isLoading={false}
+        isSupportAvailabilityLoading={false}
+        onBack={vi.fn()}
+        onRetry={vi.fn()}
+        supportAvailability={supportAvailability}
+      />,
+    )
+
+    expect(screen.getByText('Часы работы')).toBeInTheDocument()
+    expect(screen.getByText('Вне графика')).toBeInTheDocument()
+    expect(screen.getByText('Пн - Вт')).toBeInTheDocument()
+    expect(screen.getByText('09:00 - 18:00')).toBeInTheDocument()
+    expect(screen.getByText('Сб')).toBeInTheDocument()
+    expect(screen.getByText('Выходной')).toBeInTheDocument()
+    expect(screen.getByText('Часовой пояс: Europe/Samara')).toBeInTheDocument()
+    expect(screen.getByText('Ответим в рабочее время.')).toBeInTheDocument()
+  })
+
+  it('renders working-hours loading state without a failure message', () => {
+    render(
+      <ChatInfoPage
+        info={privateInfo}
+        isLoading={false}
+        isSupportAvailabilityLoading
+        onBack={vi.fn()}
+        onRetry={vi.fn()}
+        supportAvailability={null}
+      />,
+    )
+
+    expect(
+      screen.getByText('Проверяем расписание поддержки.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Не удалось загрузить расписание поддержки.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders disabled working-hours state', () => {
+    render(
+      <ChatInfoPage
+        info={privateInfo}
+        isLoading={false}
+        isSupportAvailabilityLoading={false}
+        onBack={vi.fn()}
+        onRetry={vi.fn()}
+        supportAvailability={{
+          ...supportAvailability,
+          currentStatus: 'offline',
+          outOfOfficeMessage: null,
+          workingHours: {
+            enabled: false,
+            isWithinWorkingHours: null,
+            rows: [],
+            timezone: 'UTC',
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Без расписания')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Ответим в рабочее время.'),
+    ).not.toBeInTheDocument()
   })
 
   it('does not render empty details for a not-ready response', () => {
@@ -140,8 +256,10 @@ describe('ChatInfoPage', () => {
           threadTypeLabel: null,
         }}
         isLoading={false}
+        isSupportAvailabilityLoading={false}
         onBack={vi.fn()}
         onRetry={vi.fn()}
+        supportAvailability={null}
       />,
     )
 

@@ -13,7 +13,7 @@ const CHAT_PAGE_LOAD_TIMEOUT = {
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
@@ -211,7 +211,9 @@ describe('ChatPage thread selection', () => {
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
     ).toBeInTheDocument()
-    expect(await screen.findByText('Сообщение из общего чата')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Сообщение из общего чата'),
+    ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/chat/messages?threadId=group%3A154',
       expect.objectContaining({
@@ -323,7 +325,9 @@ describe('ChatPage thread selection', () => {
     )
 
     await waitFor(() => {
-      expect(screen.queryByText('Устаревшая личная история.')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('Устаревшая личная история.'),
+      ).not.toBeInTheDocument()
     })
     expect(screen.getByText('Актуальный общий чат.')).toBeInTheDocument()
   })

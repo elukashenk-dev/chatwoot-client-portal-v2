@@ -6,7 +6,7 @@ import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } as const
@@ -86,6 +86,57 @@ async function routeStoppedRealtime(page: Page) {
   })
 }
 
+async function routeSupportAvailability(
+  page: Page,
+  {
+    currentStatus = 'online',
+  }: {
+    currentStatus?: 'offline' | 'online' | 'outside_hours' | 'unknown'
+  } = {},
+) {
+  await page.route('**/api/chat/support-availability', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        currentStatus,
+        outOfOfficeMessage:
+          currentStatus === 'outside_hours' ? 'Ответим в рабочее время.' : null,
+        reason: 'none',
+        result: 'ready',
+        workingHours: {
+          enabled: true,
+          isWithinWorkingHours: currentStatus !== 'outside_hours',
+          rows: [
+            {
+              closeTime: '18:00',
+              dayOfWeek: 1,
+              isClosedAllDay: false,
+              isOpenAllDay: false,
+              openTime: '09:00',
+            },
+            {
+              closeTime: '18:00',
+              dayOfWeek: 2,
+              isClosedAllDay: false,
+              isOpenAllDay: false,
+              openTime: '09:00',
+            },
+            {
+              closeTime: null,
+              dayOfWeek: 6,
+              isClosedAllDay: true,
+              isOpenAllDay: false,
+              openTime: null,
+            },
+          ],
+          timezone: 'Europe/Samara',
+        },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+}
+
 test('renders the ready chat transcript and loads older history through the backend contract', async ({
   page,
 }) => {
@@ -93,6 +144,7 @@ test('renders the ready chat transcript and loads older history through the back
 
   await routeThreadsWithGroup(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
     const threadId = requestUrl.searchParams.get('threadId')
@@ -206,7 +258,7 @@ test('renders the ready chat transcript and loads older history through the back
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
   await expect(page.getByText('Ольга Support', { exact: true })).toBeVisible()
-  await expect(page.getByText('Онлайн')).toBeVisible()
+  await expect(page.getByRole('status', { name: 'На связи' })).toBeVisible()
   await expect(
     page.getByText('Здравствуйте, вижу ваше обращение.'),
   ).toBeVisible()
@@ -239,6 +291,7 @@ test('opens group chat info from the chat menu and returns to the transcript', a
 
   await routeThreadsWithGroup(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page, { currentStatus: 'outside_hours' })
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
     const threadId = requestUrl.searchParams.get('threadId')
@@ -339,6 +392,7 @@ test('opens group chat info from the chat menu and returns to the transcript', a
   await expect(
     page.getByRole('heading', { name: 'ООО "Ромашка"' }),
   ).toBeVisible()
+  await expect(page.getByRole('status', { name: 'Вне графика' })).toBeVisible()
   await expect(page.getByText('Сообщение из группового чата.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
@@ -353,9 +407,14 @@ test('opens group chat info from the chat menu and returns to the transcript', a
   ).toBeVisible()
   await expect(infoPage.getByText('Групповой', { exact: true })).toBeVisible()
   await expect(infoPage.getByText('Анна Маттина')).toBeVisible()
+  await expect(infoPage.getByText('Часы работы')).toBeVisible()
+  await expect(infoPage.getByText('Пн - Вт')).toBeVisible()
+  await expect(infoPage.getByText('09:00 - 18:00')).toBeVisible()
+  await expect(infoPage.getByText('Часовой пояс: Europe/Samara')).toBeVisible()
+  await expect(infoPage.getByText('Ответим в рабочее время.')).toBeVisible()
   await expect(infoPage.getByText('Участники портала')).toBeVisible()
   await expect(infoPage.getByText('Иван Петров')).toBeVisible()
-  await expect(infoPage.getByText('Вы')).toBeVisible()
+  await expect(infoPage.getByText('Вы', { exact: true })).toBeVisible()
   await expect(infoPage.getByText('Мария Соколова')).toBeVisible()
 
   const viewportSize = page.viewportSize()
@@ -386,6 +445,7 @@ test('opens group chat media and files through portal-authorized attachment URLs
 
   await routeThreadsWithGroup(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
     const threadId = requestUrl.searchParams.get('threadId')
@@ -565,6 +625,7 @@ test('sends text through the backend chat contract and renders the canonical res
 
   await routePrivateThreads(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
@@ -651,6 +712,7 @@ test('selects a message as reply target and sends reply metadata through the bac
 
   await routePrivateThreads(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
@@ -756,6 +818,7 @@ test('sends an attachment through the backend chat contract and renders the cano
 
   await routePrivateThreads(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     const request = route.request()
     const requestUrl = new URL(request.url())
@@ -864,6 +927,7 @@ test('renders new backend realtime messages without a manual transcript refresh'
   })
 
   await routePrivateThreads(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/realtime**', async (route) => {
     await route.fulfill({
       body: `event: messages\ndata: ${JSON.stringify(realtimeSnapshot)}\n\n`,

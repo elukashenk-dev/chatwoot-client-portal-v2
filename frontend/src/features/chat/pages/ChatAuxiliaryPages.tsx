@@ -1,7 +1,11 @@
 import { ChatInfoPage } from '../components/ChatInfoPage'
 import { ChatMediaPage } from '../components/ChatMediaPage'
 import { ChatSearchPage } from '../components/ChatSearchPage'
-import type { ChatSearchResult, ChatThreadSummary } from '../types'
+import type {
+  ChatSearchResult,
+  ChatSupportAvailabilityResponse,
+  ChatThreadSummary,
+} from '../types'
 import type { useChatInfoPanel } from './useChatInfoPanel'
 import type { useChatMediaPanel } from './useChatMediaPanel'
 import type { useChatSearchPanel } from './useChatSearchPanel'
@@ -15,6 +19,8 @@ type ChatAuxiliaryPagesProps = {
   onSearchQueryChange: (query: string) => void
   onSearchResultSelect: (result: ChatSearchResult) => void
   searchResultOpenErrorMessage: string | null
+  supportAvailability: ChatSupportAvailabilityResponse | null
+  supportAvailabilityIsLoading: boolean
 }
 
 export function ChatAuxiliaryPages({
@@ -26,6 +32,8 @@ export function ChatAuxiliaryPages({
   onSearchQueryChange,
   onSearchResultSelect,
   searchResultOpenErrorMessage,
+  supportAvailability,
+  supportAvailabilityIsLoading,
 }: ChatAuxiliaryPagesProps) {
   return (
     <>
@@ -33,10 +41,12 @@ export function ChatAuxiliaryPages({
         <ChatInfoPage
           info={chatInfoPanel.state.info}
           isLoading={chatInfoPanel.state.isLoading}
+          isSupportAvailabilityLoading={supportAvailabilityIsLoading}
           onBack={chatInfoPanel.closeChatInfo}
           onRetry={() => {
             void chatInfoPanel.retryChatInfo()
           }}
+          supportAvailability={supportAvailability}
         />
       ) : null}
       {chatMediaPanel.state.isOpen ? (

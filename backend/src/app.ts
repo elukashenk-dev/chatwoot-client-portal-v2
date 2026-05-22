@@ -23,6 +23,8 @@ import {
 } from './modules/chat-messages/service.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
+import { registerChatSupportRoutes } from './modules/chat-support/routes.js'
+import { createChatSupportAvailabilityService } from './modules/chat-support/service.js'
 import { createChatThreadContactRepository } from './modules/chat-threads/contactRepository.js'
 import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
 import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
@@ -161,6 +163,12 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
       chatwootClient: createChatwootClientForRequest(request),
     })
   }
+  const createChatSupportAvailabilityServiceForRequest = (
+    request: FastifyRequest,
+  ) =>
+    createChatSupportAvailabilityService({
+      chatwootClient: createChatwootClientForRequest(request),
+    })
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
       chatwootClient: createChatwootClientForRequest(request),
@@ -214,6 +222,12 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   registerChatThreadsRoutes(app, {
     authService,
     createChatThreadsService: createChatThreadsServiceForRequest,
+    env,
+  })
+  registerChatSupportRoutes(app, {
+    authService,
+    createChatSupportAvailabilityService:
+      createChatSupportAvailabilityServiceForRequest,
     env,
   })
   registerChatMessagesRoutes(app, {

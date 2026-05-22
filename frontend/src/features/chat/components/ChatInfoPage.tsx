@@ -1,13 +1,22 @@
 import { ChatFullScreenPanel } from './ChatFullScreenPanel'
 import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
-import type { ChatThreadInfoResponse } from '../types'
+import {
+  getSupportAvailabilityPresentation,
+  groupWorkingHoursRows,
+} from '../lib/chatSupportAvailability'
+import type {
+  ChatSupportAvailabilityResponse,
+  ChatThreadInfoResponse,
+} from '../types'
 
 type ChatInfoPageProps = {
   info: ChatThreadInfoResponse | null
   isLoading: boolean
+  isSupportAvailabilityLoading: boolean
   onBack: () => void
   onRetry: () => void
+  supportAvailability: ChatSupportAvailabilityResponse | null
 }
 
 function formatDateTime(value: string | null) {
@@ -43,11 +52,99 @@ function ParticipantAvatar({ name }: { name: string }) {
   )
 }
 
+function WorkingHoursSection({
+  isLoading,
+  supportAvailability,
+}: {
+  isLoading: boolean
+  supportAvailability: ChatSupportAvailabilityResponse | null
+}) {
+  const presentation = getSupportAvailabilityPresentation(supportAvailability)
+  const isUnavailable =
+    !supportAvailability || supportAvailability.result !== 'ready'
+
+  if (isLoading || isUnavailable) {
+    return (
+      <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
+          <h2 className="text-[13px] font-semibold text-slate-900">
+            Часы работы
+          </h2>
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
+            Проверяем
+          </span>
+        </div>
+        <p className="px-4 py-3 text-[13px] leading-5 text-slate-500">
+          {isLoading
+            ? 'Проверяем расписание поддержки.'
+            : 'Не удалось загрузить расписание поддержки.'}
+        </p>
+      </section>
+    )
+  }
+
+  const groupedRows = groupWorkingHoursRows(
+    supportAvailability.workingHours.rows,
+  )
+  const showOutOfOfficeMessage =
+    supportAvailability.currentStatus === 'outside_hours' &&
+    supportAvailability.outOfOfficeMessage
+
+  return (
+    <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
+        <h2 className="text-[13px] font-semibold text-slate-900">
+          Часы работы
+        </h2>
+        <span
+          className={[
+            'rounded-full px-2 py-1 text-[11px] font-semibold',
+            presentation.tone === 'online'
+              ? 'bg-green-50 text-green-700'
+              : presentation.tone === 'later'
+                ? 'bg-amber-50 text-amber-700'
+                : 'bg-slate-100 text-slate-500',
+          ].join(' ')}
+        >
+          {presentation.label}
+        </span>
+      </div>
+      <div className="px-4 py-3">
+        {supportAvailability.workingHours.enabled && groupedRows.length > 0 ? (
+          <dl className="space-y-2">
+            {groupedRows.map((row) => (
+              <div
+                className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 text-[13px] leading-5"
+                key={`${row.daysLabel}-${row.timeLabel}`}
+              >
+                <dt className="text-slate-500">{row.daysLabel}</dt>
+                <dd className="font-medium text-slate-900">{row.timeLabel}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-[13px] leading-5 text-slate-500">Без расписания</p>
+        )}
+        <p className="mt-3 text-[12px] leading-4 text-slate-500">
+          Часовой пояс: {supportAvailability.workingHours.timezone}
+        </p>
+        {showOutOfOfficeMessage ? (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[13px] leading-5 text-amber-800">
+            {supportAvailability.outOfOfficeMessage}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 export function ChatInfoPage({
   info,
   isLoading,
+  isSupportAvailabilityLoading,
   onBack,
   onRetry,
+  supportAvailability,
 }: ChatInfoPageProps) {
   const { tenant } = useTenantIdentity()
   const monogram = tenant ? createTenantMonogram(tenant.displayName) : 'ЛК'
@@ -93,6 +190,11 @@ export function ChatInfoPage({
             ) : null}
             <DetailRow label="Доступ" value={info.accessLabel} />
           </dl>
+
+          <WorkingHoursSection
+            isLoading={isSupportAvailabilityLoading}
+            supportAvailability={supportAvailability}
+          />
 
           {info.participants.length > 0 ? (
             <section className="mt-5">

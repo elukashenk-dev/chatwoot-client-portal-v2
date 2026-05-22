@@ -13,7 +13,7 @@ const CHAT_PAGE_LOAD_TIMEOUT = {
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
@@ -163,6 +163,23 @@ function createReadySnapshot(
   }
 }
 
+function createSupportAvailabilityResponse(
+  currentStatus: 'offline' | 'online' | 'outside_hours' | 'unknown' = 'online',
+) {
+  return createJsonResponse({
+    currentStatus,
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -223,6 +240,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
     renderChatRoute()
 
@@ -239,7 +257,6 @@ describe('ChatPage', () => {
     expect(screen.getByRole('banner')).toHaveClass('chat-header-background')
     expect(screen.getAllByText('Ольга Support').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Агент:/)).not.toBeInTheDocument()
-    expect(screen.getByRole('status', { name: 'Онлайн' })).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Открыть навигацию' }),
     ).toBeInTheDocument()
@@ -265,6 +282,52 @@ describe('ChatPage', () => {
     )
   })
 
+  it('renders real support availability instead of connection readiness', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse('outside_hours')
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Здравствуйте, вижу ваше обращение.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+
+    expect(screen.getByText('Вы и поддержка')).toBeInTheDocument()
+    expect(
+      await screen.findByRole(
+        'status',
+        { name: 'Вне графика' },
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: 'Онлайн' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('opens chat info from the chat menu and returns to the transcript', async () => {
     const user = userEvent.setup()
 
@@ -283,9 +346,13 @@ describe('ChatPage', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (url === '/api/chat/threads/private%3Ame/info') {
         return createJsonResponse({
-          accessLabel: 'Только вы и поддержка',
+          accessLabel: 'Вы и поддержка',
           activeThread: privateThread,
           curatorName: 'Анна Маттина',
           lastActivityAt: '2026-05-19T10:20:00.000Z',
@@ -388,6 +455,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
     renderChatRoute()
 
@@ -443,6 +511,7 @@ describe('ChatPage', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -482,7 +551,7 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Последнее сообщение.')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
       expect.objectContaining({
         credentials: 'include',
@@ -518,6 +587,7 @@ describe('ChatPage', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           {
@@ -579,6 +649,7 @@ describe('ChatPage', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -621,6 +692,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse({
           activeThread: privateThread,
@@ -684,7 +756,7 @@ describe('ChatPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       replyToMessageId: number
     }
@@ -705,6 +777,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse({
           activeThread: privateThread,
@@ -757,12 +830,12 @@ describe('ChatPage', () => {
       expect(textarea).toHaveFocus()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -787,6 +860,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse({
           activeThread: privateThread,
@@ -837,12 +911,12 @@ describe('ChatPage', () => {
     expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
     expect(stopTrack).toHaveBeenCalledTimes(1)
 
-    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -864,6 +938,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           {
@@ -905,7 +980,7 @@ describe('ChatPage', () => {
     expect(
       screen.queryByText('Голосовая запись недоступна в этом браузере.'),
     ).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
   })
 
   it('allows the first text send to bootstrap a conversation without a selected conversation id', async () => {
@@ -924,6 +999,7 @@ describe('ChatPage', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse({
           activeThread: privateThread,
@@ -959,7 +1035,7 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
 
     const requestBody = JSON.parse(
-      String(fetchMock.mock.calls[3]?.[1]?.body),
+      String(fetchMock.mock.calls[4]?.[1]?.body),
     ) as {
       threadId?: string
     }
@@ -994,6 +1070,7 @@ describe('ChatPage', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
     renderChatRoute()
 

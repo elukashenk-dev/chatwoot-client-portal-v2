@@ -71,7 +71,7 @@ function createAuthenticatedUserResponse() {
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
@@ -121,6 +121,21 @@ function createReadySnapshot(
   }
 }
 
+function createSupportAvailabilityResponse() {
+  return createJsonResponse({
+    currentStatus: 'online',
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -158,6 +173,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
     renderChatRoute()
 
@@ -211,6 +227,7 @@ describe('ChatPage runtime hardening', () => {
           }),
         ),
       )
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           createReadySnapshot({
@@ -264,7 +281,7 @@ describe('ChatPage runtime hardening', () => {
       await screen.findByText('Новый ответ после восстановления соединения.'),
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
@@ -280,6 +297,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
     renderChatRoute()
@@ -319,6 +337,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(
         createJsonResponse(
@@ -394,6 +413,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
     renderChatRoute()
@@ -449,12 +469,38 @@ describe('ChatPage runtime hardening', () => {
   })
 
   it('returns to login when resume resync hits an expired backend session', async () => {
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createUnauthorizedSessionResponse())
-      .mockResolvedValueOnce(createUnauthorizedSessionResponse())
+    let authRequestCount = 0
+    let messageRequestCount = 0
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        authRequestCount += 1
+
+        return authRequestCount === 1
+          ? createAuthenticatedUserResponse()
+          : createUnauthorizedSessionResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        messageRequestCount += 1
+
+        return messageRequestCount === 1
+          ? createJsonResponse(createReadySnapshot())
+          : createUnauthorizedSessionResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
 
     renderChatRoute()
 
@@ -483,13 +529,13 @@ describe('ChatPage runtime hardening', () => {
         'Не удалось обновить чат после восстановления соединения. Попробуйте еще раз.',
       ),
     ).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/me',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
       }),
     )
+    expect(authRequestCount).toBeGreaterThan(1)
   })
 })

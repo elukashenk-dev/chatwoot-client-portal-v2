@@ -88,6 +88,29 @@ export type ChatwootPortalInboxRouting = {
   webhookUrl: string | null
 }
 
+export type ChatwootPortalInboxWorkingHour = {
+  closeHour: number | null
+  closeMinutes: number | null
+  closedAllDay: boolean
+  dayOfWeek: number
+  openAllDay: boolean
+  openHour: number | null
+  openMinutes: number | null
+}
+
+export type ChatwootPortalInboxDetails = ChatwootPortalInboxRouting & {
+  outOfOfficeMessage: string | null
+  timezone: string | null
+  workingHours: ChatwootPortalInboxWorkingHour[]
+  workingHoursEnabled: boolean
+}
+
+export type ChatwootPortalInboxMember = {
+  availabilityStatus: string | null
+  id: number
+  name: string | null
+}
+
 export type ChatwootPortalInboxWebhook = {
   id: number
   secret: string | null
@@ -206,6 +229,10 @@ function readObject(value: unknown) {
   return isPlainObject(value) ? value : null
 }
 
+function readBoolean(value: unknown) {
+  return typeof value === 'boolean' ? value : null
+}
+
 function readAssigneeName(conversation: Record<string, unknown>) {
   const meta = readObject(conversation.meta)
   const metaAssignee = readObject(meta?.assignee)
@@ -296,6 +323,88 @@ function mapPortalInboxRouting(payload: unknown): ChatwootPortalInboxRouting {
     webhookSecret: readTrimmedString(payload.secret),
     webhookUrl: readTrimmedString(payload.webhook_url),
   }
+}
+
+function mapPortalInboxWorkingHour(
+  payload: unknown,
+): ChatwootPortalInboxWorkingHour | null {
+  if (!isPlainObject(payload)) {
+    return null
+  }
+
+  const dayOfWeek = readInteger(payload.day_of_week)
+  const closedAllDay = readBoolean(payload.closed_all_day)
+  const openAllDay = readBoolean(payload.open_all_day)
+
+  if (dayOfWeek === null || closedAllDay === null || openAllDay === null) {
+    return null
+  }
+
+  return {
+    closeHour: readInteger(payload.close_hour),
+    closeMinutes: readInteger(payload.close_minutes),
+    closedAllDay,
+    dayOfWeek,
+    openAllDay,
+    openHour: readInteger(payload.open_hour),
+    openMinutes: readInteger(payload.open_minutes),
+  }
+}
+
+function mapPortalInboxDetails(payload: unknown): ChatwootPortalInboxDetails {
+  const routing = mapPortalInboxRouting(payload)
+
+  if (!isPlainObject(payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot inbox lookup returned an unexpected response shape.',
+    )
+  }
+
+  const workingHoursEnabled =
+    typeof payload.working_hours_enabled === 'boolean'
+      ? payload.working_hours_enabled
+      : false
+  const workingHours = Array.isArray(payload.working_hours)
+    ? payload.working_hours
+        .map(mapPortalInboxWorkingHour)
+        .filter((row): row is ChatwootPortalInboxWorkingHour => row !== null)
+    : []
+
+  return {
+    ...routing,
+    outOfOfficeMessage: readTrimmedString(payload.out_of_office_message),
+    timezone: readTrimmedString(payload.timezone),
+    workingHours,
+    workingHoursEnabled,
+  }
+}
+
+function parseInboxMembersResponse(payload: unknown) {
+  const parsedPayload = readObject(payload)
+  const rawMembers = parsedPayload?.payload
+
+  if (!Array.isArray(rawMembers)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot inbox members lookup returned an unexpected response shape.',
+    )
+  }
+
+  return rawMembers
+    .map((rawMember): ChatwootPortalInboxMember | null => {
+      const member = readObject(rawMember)
+      const id = readInteger(member?.id)
+
+      if (id === null) {
+        return null
+      }
+
+      return {
+        availabilityStatus: readTrimmedString(member?.availability_status),
+        id,
+        name: readTrimmedString(member?.name),
+      }
+    })
+    .filter((member): member is ChatwootPortalInboxMember => member !== null)
 }
 
 function mapConversation(payload: unknown): ChatwootConversation {
@@ -612,18 +721,21 @@ export function createChatwootClient({
     return conversations
   }
 
-  async function getPortalInboxRouting() {
+  async function getPortalInboxRoutingPayload() {
     const resolvedConfig = assertConfigured()
     const requestUrl = new URL(
       `/api/v1/accounts/${resolvedConfig.accountId}/inboxes/${resolvedConfig.portalInboxId}`,
       resolvedConfig.baseUrl,
     )
-    const payload = await requestJson(
+
+    return requestJson(
       requestUrl,
       'Chatwoot portal inbox lookup is unavailable.',
     )
+  }
 
-    return mapPortalInboxRouting(payload)
+  async function getPortalInboxRouting() {
+    return mapPortalInboxRouting(await getPortalInboxRoutingPayload())
   }
 
   function normalizeWebhookUrl(value: string) {
@@ -1006,6 +1118,24 @@ export function createChatwootClient({
       }
 
       return currentRouting
+    },
+
+    async getPortalInboxDetails() {
+      return mapPortalInboxDetails(await getPortalInboxRoutingPayload())
+    },
+
+    async listPortalInboxMembers() {
+      const resolvedConfig = assertConfigured()
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/inbox_members/${resolvedConfig.portalInboxId}`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot inbox members lookup is unavailable.',
+      )
+
+      return parseInboxMembersResponse(payload)
     },
 
     async ensurePortalInboxSingleConversationRouting() {

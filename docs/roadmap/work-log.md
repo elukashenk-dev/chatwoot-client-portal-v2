@@ -134,6 +134,10 @@
 - Search jump для найденных сообщений вне текущей ленты открывает bounded
   history fragment прямо в чате с ручным расширением контекста раньше/позже и
   возвратом к последним сообщениям.
+- Chat header больше не трактует connection readiness как статус поддержки:
+  portal backend отдает tenant-scoped Chatwoot agent availability и working
+  hours, frontend показывает `На связи` / `Ответим позже` / `Вне графика`, а
+  страница `Информация о чате` содержит read-only блок `Часы работы`.
 
 ## Current Baseline
 

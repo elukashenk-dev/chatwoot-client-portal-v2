@@ -4,7 +4,7 @@ import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 
 const privateThread = {
   id: 'private:me',
-  subtitle: 'Только вы и поддержка',
+  subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
 } as const
@@ -61,6 +61,27 @@ async function routeStoppedRealtime(page: Page) {
   await page.route('**/api/chat/realtime**', async (route) => {
     await route.fulfill({
       status: 204,
+    })
+  })
+}
+
+async function routeSupportAvailability(page: Page) {
+  await page.route('**/api/chat/support-availability', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        currentStatus: 'online',
+        outOfOfficeMessage: null,
+        reason: 'none',
+        result: 'ready',
+        workingHours: {
+          enabled: false,
+          isWithinWorkingHours: null,
+          rows: [],
+          timezone: 'UTC',
+        },
+      }),
+      contentType: 'application/json',
+      status: 200,
     })
   })
 }
@@ -203,6 +224,7 @@ test('opens private chat search, finds a visible message, and returns to transcr
 
   await routeThreads(page)
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await page.route('**/api/chat/messages**', async (route) => {
     await route.fulfill({
       body: JSON.stringify(
@@ -275,7 +297,7 @@ test('opens private chat search, finds a visible message, and returns to transcr
     searchPage.getByRole('heading', { name: 'Поиск по чату' }),
   ).toBeVisible()
   await expect(searchPage.getByText('Личный чат')).toBeVisible()
-  await expect(searchPage.getByText('Только вы и поддержка')).toBeVisible()
+  await expect(searchPage.getByText('Вы и поддержка')).toBeVisible()
   const searchInput = searchPage.getByLabel('Поиск по чату')
 
   await searchInput.fill('до')
@@ -309,6 +331,7 @@ test('opens group chat search with context preview and loads older results', asy
 
   await routeThreads(page, [privateThread, groupThread])
   await routeStoppedRealtime(page)
+  await routeSupportAvailability(page)
   await routeSearchContext(page, contextRequests)
   await page.route('**/api/chat/messages**', async (route) => {
     const requestUrl = new URL(route.request().url())
