@@ -1,109 +1,206 @@
-# Chat Notifications
+# Уведомления В Чате
 
-## Decision
+## Решение
 
-Implement `Уведомления` as a chat-adjacent full-screen page using the approved
-visual option `C. Menu + Page`.
+Реализуем `Уведомления` как chat-adjacent full-screen страницу по выбранному
+визуальному варианту `C. Menu + Page`.
 
-The chat action menu opens a dedicated `Уведомления` page and shows a compact
-status line under the menu item, for example:
+В меню чата остается один понятный вход:
 
 ```text
 Уведомления
 Push включены · звук включен
 ```
 
-The first user-facing page includes three controls for the selected chat:
+На странице выбранного чата показываем три настройки:
 
 - `Новые сообщения`;
 - `Звук`;
 - `Push-уведомления`.
 
-Email notifications, digests, campaigns and other mailings are explicitly out
-of scope.
+Email-уведомления, рассылки, digest-письма, marketing/CRM notifications и
+offline email delivery не входят в текущий scope.
+
+## Почему Так
+
+Для messenger-like интерфейса уведомления должны быть полезными, управляемыми и
+не навязчивыми:
+
+- пользователь должен понимать, для какого чата он меняет настройки;
+- browser permission для push нельзя запрашивать при открытии страницы;
+- push должен включаться только после явного действия пользователя;
+- у пользователя всегда должен быть понятный способ отключить уведомления;
+- настройки должны быть thread-scoped, потому что личка и группы могут иметь
+  разную важность;
+- системные push payloads в первом slice не должны раскрывать текст сообщения,
+  автора, имя файла, Chatwoot IDs или текущий `threadId`.
+
+Этот slice осознанно открывает ранее deferred блок Push Notifications по
+продуктовому решению от `2026-05-23`, но делает это в минимальной безопасной
+модели: generic push payload, tenant/user/thread-scoped preferences, browser
+feature detection и без email-канала.
 
 ## Scope
 
-This slice covers notification preferences for the currently selected chat
-thread:
+Настройки относятся к текущему chat thread:
 
 - `private:me`;
-- `group:<contactId>` when the current portal user still has access to that
-  group thread.
+- `group:<contactId>`, если текущий portal user все еще имеет доступ к группе.
 
-Preferences are scoped by:
+Persistence scope:
 
 ```text
 tenant + portal user + threadId
 ```
 
-The same portal user may have different settings for the private chat and each
-group chat. The same email in another tenant must have independent preferences.
+Один portal user может иметь разные настройки для личного чата и каждой группы.
+Одинаковый email в другом tenant получает отдельные независимые настройки.
 
-This spec intentionally reopens the previously deferred minimum Push
-Notifications scope by explicit product decision on `2026-05-23`. The first push
-implementation stays intentionally conservative: safe generic payload,
-tenant/user/thread-scoped preferences, and no email/offline notification
-delivery.
+## Пользовательская Модель
 
-## User Model
+`Новые сообщения` - master switch для interruptive notifications в этом чате.
 
-`Новые сообщения` is the master switch for this chat.
+Если включено:
 
-- When enabled, the portal may show in-app notification state for this chat and
-  may use enabled delivery channels such as sound and push.
-- When disabled, sound and push are effectively muted for this chat. The
-  transcript still updates normally and the user can still send messages.
+- портал может использовать разрешенные каналы для этого чата;
+- `Звук` и `Push-уведомления` работают согласно своим переключателям.
 
-`Звук` controls a short in-portal sound when a new client-visible message arrives
-and the portal is open in the browser. Sound is not played for messages sent by
-the current user. If browser autoplay rules block playback, the portal fails
-quietly and keeps the preference unchanged.
+Если выключено:
 
-`Push-уведомления` controls system notifications through browser/PWA Web Push.
-Push must use a safe payload in the first slice: no message text, no author name,
-no file name and no Chatwoot IDs in the push payload.
+- звук и push для этого чата фактически muted;
+- значения `soundEnabled` и `pushEnabled` сохраняются, чтобы при повторном
+  включении `Новые сообщения` вернуть прежние поднастройки;
+- transcript, realtime updates и future in-app unread state продолжают
+  работать.
+
+Важно: `Новые сообщения` не означает "не загружать новые сообщения" и не должен
+ломать unread/badge foundation. Это только управление interruptive channels.
+
+`Звук` - короткий in-portal звук, когда портал открыт в браузере и приходит
+новое client-visible сообщение.
+
+Звук не проигрывается:
+
+- для сообщений текущего пользователя;
+- если выключены `Новые сообщения`;
+- если выключен `Звук`;
+- если сообщение не относится к текущему tenant/user/thread authority;
+- если браузер заблокировал playback autoplay policy.
+
+Если браузер заблокировал звук, портал не меняет настройку и не показывает
+ошибку как failure сохранения. Это runtime limitation, а не ошибка preference.
+
+`Push-уведомления` - системные уведомления браузера/PWA через Web Push.
+
+Push не заменяет realtime transcript. Это дополнительный канал для случаев,
+когда портал свернут, открыт в другой вкладке или пользователь не смотрит на
+чат.
 
 ## UI
 
-The menu item label is `Уведомления`.
+### Меню Чата
 
-The menu item status line is derived from the current settings and browser push
-state:
+Пункт меню:
+
+```text
+Уведомления
+<status line>
+```
+
+Status line:
 
 - `Push включены · звук включен`;
 - `Push выключены · звук включен`;
 - `Без звука`;
 - `Уведомления отключены`;
-- `Проверяем настройки` while loading;
-- `Недоступно` when settings cannot be loaded.
+- `Проверяем настройки`;
+- `Недоступно`.
 
-The full-screen page uses the existing `ChatFullScreenPanel` portal layout and
-the same width constraints as `Информация о чате`, `Медиа и файлы` and
-`Поиск по чату`.
+Меню не показывает отдельные переключатели. Оно дает контекст и открывает
+страницу настроек.
 
-Page layout:
+### Страница `Уведомления`
 
-- top bar with back button and title `Уведомления`;
-- current thread header: title and `Личный чат` / `Групповой чат`;
-- settings card with three switches;
+Используем существующий `ChatFullScreenPanel` и те же width/layout boundaries,
+что у `Информация о чате`, `Медиа и файлы` и `Поиск по чату`.
+
+Структура:
+
+- top bar: back button + title `Уведомления`;
+- thread header: название чата и `Личный чат` / `Групповой чат`;
+- settings card:
+  - `Новые сообщения`;
+  - `Звук`;
+  - `Push-уведомления`;
 - browser permission block for push;
-- compact unavailable/retry state when backend settings cannot be loaded.
+- compact unavailable/retry state, если настройки не загрузились.
 
-Push permission states:
+### Push Permission States
 
-- `unsupported`: show that this browser does not support push notifications;
-- `default`: enabling push starts the browser permission request;
-- `granted`: enabling push creates or refreshes the subscription;
-- `denied`: show a short instruction to allow notifications in browser settings.
+Страница не вызывает browser permission prompt при открытии.
 
-The page must not ask for push permission on page load. Permission request is
-triggered only by the user enabling `Push-уведомления`.
+Состояния:
+
+- `unsupported`: browser/PWA runtime не поддерживает нужные API;
+- `default`: пользователь еще не давал разрешение, включение push показывает
+  наш pre-prompt/объяснение и затем системный prompt;
+- `granted`: можно создать или обновить push subscription;
+- `denied`: системный prompt больше не показываем, даем краткую инструкцию
+  открыть настройки браузера/устройства.
+
+Permission request запускается только после явного действия пользователя на
+нашей странице, например включения `Push-уведомления`.
+
+## Browser/PWA Best Practices
+
+Реализация должна следовать текущим browser/PWA ограничениям:
+
+1. Не спрашивать разрешение на push при page load.
+2. Использовать settings panel/pre-prompt: сначала объяснить пользу, потом
+   запускать browser prompt.
+3. Делать feature detection, а не browser detection:
+   - `window.isSecureContext`;
+   - `navigator.serviceWorker`;
+   - `window.PushManager`;
+   - `window.Notification`;
+   - `ServiceWorkerRegistration.pushManager`.
+4. Подписывать push только после `navigator.serviceWorker.ready`.
+5. Вызывать `pushManager.subscribe()` только в ответ на user gesture.
+6. Всегда использовать `userVisibleOnly: true`.
+7. Передавать VAPID public key в `applicationServerKey`; VAPID private key
+   остается только на backend.
+8. Каждый real push должен давать user-visible effect: если portal window уже
+   открыт и focused, service worker может передать событие в страницу через
+   `postMessage`; если focused окна нет - показать system notification.
+   Полностью silent push в этом slice не используем.
+9. На `notificationclick` закрывать notification, фокусировать уже открытую
+   вкладку portal origin, а если такой вкладки нет - открывать safe same-origin
+   URL.
+10. Не полагаться только на `pushsubscriptionchange`: событие полезно, но не
+    одинаково надежно во всех браузерах. Дополнительно обновлять subscription
+    при открытии страницы уведомлений и при старте PWA runtime.
+11. При `410 Gone`, `404 Not Found` или аналогичных push-service ответах
+    выключать/удалять устаревшую subscription.
+12. Не использовать notification `sound` option как нашу настройку звука:
+    системный звук push контролируется OS/browser. Наш `Звук` - только
+    in-portal audio для открытого портала.
+
+### iOS/iPadOS
+
+Для iOS/iPadOS Web Push поддерживается только для web apps, добавленных на Home
+Screen, начиная с iOS/iPadOS 16.4. Поэтому:
+
+- UI должен уметь показывать `unsupported` в обычном Safari/browser context;
+- нельзя обещать push на iPhone, если портал не установлен как Home Screen app;
+- используем feature detection, а не проверку `iOS`;
+- permission request все равно должен быть результатом прямого действия
+  пользователя;
+- системные Focus/notification settings остаются под контролем iOS.
 
 ## Backend Contract
 
-Add portal-owned notification preference endpoints. All endpoints are
-same-origin `/api`, authenticated and tenant-scoped by request host/session.
+Все endpoints same-origin `/api`, authenticated и tenant-scoped по
+request host/session.
 
 ```text
 GET /api/chat/threads/:threadId/notification-settings
@@ -113,7 +210,7 @@ POST /api/notifications/push/subscriptions
 DELETE /api/notifications/push/subscriptions
 ```
 
-The thread settings response:
+Thread settings response:
 
 ```ts
 type ChatNotificationSettingsResponse = {
@@ -134,29 +231,35 @@ type ChatNotificationSettings = {
 }
 ```
 
-`PATCH` accepts a partial settings object and returns the full normalized
-settings. If `newMessagesEnabled` is set to `false`, the backend must preserve
-the stored `soundEnabled` and `pushEnabled` values but delivery logic treats
-both as muted while the master switch is off. This lets the user restore the
-previous sub-settings by re-enabling `Новые сообщения`.
+`PATCH` принимает partial settings и возвращает полное нормализованное состояние.
 
-The push public key endpoint returns the tenant-safe public VAPID key when Web
-Push is configured. Private VAPID key never leaves the backend.
+Если `newMessagesEnabled` становится `false`, backend сохраняет текущие
+`soundEnabled` и `pushEnabled`, но delivery logic считает оба канала muted.
 
-The push subscription endpoint stores or refreshes the current browser
-subscription. The delete endpoint removes the subscription by endpoint for the
-current tenant and portal user.
+`GET /api/notifications/push/public-key` возвращает public VAPID key, если Web
+Push настроен. Если push не настроен, endpoint возвращает controlled
+`not_ready`/`unavailable` state без раскрытия backend configuration details.
+
+`POST /api/notifications/push/subscriptions` создает или обновляет subscription
+для текущего tenant/user/browser endpoint.
+
+`DELETE /api/notifications/push/subscriptions` удаляет subscription текущего
+tenant/user по endpoint. Пользователь должен иметь понятный способ отключить
+push из UI.
 
 ## Persistence
 
-Add portal-owned tables:
+Добавляем portal-owned таблицы:
 
 ```text
 portal_chat_notification_preferences
 portal_push_subscriptions
+portal_push_deliveries
 ```
 
-`portal_chat_notification_preferences`:
+### `portal_chat_notification_preferences`
+
+Поля:
 
 - `tenant_id`;
 - `portal_user_id`;
@@ -172,7 +275,9 @@ Unique key:
 tenant_id + portal_user_id + thread_id
 ```
 
-`portal_push_subscriptions`:
+### `portal_push_subscriptions`
+
+Поля:
 
 - `tenant_id`;
 - `portal_user_id`;
@@ -181,38 +286,68 @@ tenant_id + portal_user_id + thread_id
 - `auth`;
 - `user_agent`;
 - `status`;
-- timestamps and optional last error metadata.
+- `last_error`;
+- `last_error_at`;
+- timestamps.
 
-The endpoint must be unique enough to prevent duplicate sends for one browser
-subscription. Expired or rejected subscriptions are disabled or removed during
-send attempts.
+Endpoint уникален в рамках tenant/user enough, чтобы не отправлять один push
+несколько раз в один browser subscription.
+
+Expired/rejected subscriptions выключаются или удаляются при send attempts.
+
+### `portal_push_deliveries`
+
+Минимальная таблица для duplicate suppression:
+
+- `tenant_id`;
+- `portal_user_id`;
+- `thread_id`;
+- `chatwoot_message_id`;
+- `status`;
+- timestamps.
+
+Unique key:
+
+```text
+tenant_id + portal_user_id + thread_id + chatwoot_message_id
+```
+
+Эта таблица не дает повторно отправить push при повторной webhook delivery.
 
 ## Delivery Rules
 
-In-app transcript updates are not blocked by notification settings.
+### In-App Sound
 
-Sound delivery happens in the frontend when a new message enters the active
-runtime stream and all of these are true:
+Frontend проигрывает звук, когда в active runtime stream появляется новое
+сообщение и все условия выполняются:
 
-1. the message is client-visible;
-2. the message belongs to the selected thread;
-3. the message was not sent by the current portal user;
-4. `newMessagesEnabled` is true;
-5. `soundEnabled` is true.
+1. сообщение client-visible;
+2. сообщение принадлежит выбранному thread;
+3. сообщение не отправлено текущим portal user;
+4. `newMessagesEnabled === true`;
+5. `soundEnabled === true`;
+6. портал уже получил user interaction, достаточный для audio playback.
 
-Push delivery happens from the backend after Chatwoot webhook processing, using
-only portal authority:
+Sound asset должен быть коротким, локальным, без внешних requests и без
+зависимости от Chatwoot URLs.
 
-1. resolve tenant from webhook host/signature;
-2. validate Chatwoot account/inbox invariants;
-3. map the message through the same client-visible message rules as transcript;
-4. resolve the portal thread;
-5. find portal users in the current tenant who still have access to the thread;
-6. skip the portal user who authored the message when that can be determined;
-7. send push only to users with `newMessagesEnabled` and `pushEnabled`;
-8. send only to active push subscriptions for that tenant/user.
+### Push
 
-The first push payload is intentionally minimal:
+Backend отправляет push после Chatwoot webhook processing, только через portal
+authority:
+
+1. resolve tenant из webhook host/signature;
+2. проверить Chatwoot account/inbox invariants;
+3. смэппить message через те же client-visible rules, что transcript;
+4. resolve portal thread;
+5. найти portal users текущего tenant, которые все еще имеют доступ к thread;
+6. пропустить автора сообщения, если он определяется как текущий portal user;
+7. проверить `newMessagesEnabled` и `pushEnabled`;
+8. проверить active push subscriptions для tenant/user;
+9. применить duplicate suppression по `portal_push_deliveries`;
+10. отправить generic push payload.
+
+Первый push payload:
 
 ```json
 {
@@ -222,89 +357,164 @@ The first push payload is intentionally minimal:
 }
 ```
 
-The service worker displays generic copy such as:
+Service worker показывает generic notification:
 
 ```text
 Новое сообщение
 Откройте портал, чтобы посмотреть чат
 ```
 
-No message text, author name, file name, Chatwoot conversation ID or Chatwoot
-message ID is included in the push payload. The first slice also avoids putting
-`threadId` into the push payload because group thread ids currently include a
-Chatwoot group contact id.
+Payload не содержит:
+
+- текст сообщения;
+- имя автора;
+- имя файла;
+- Chatwoot conversation/message/contact IDs;
+- `threadId`.
+
+`threadId` тоже исключен из первого slice, потому что публичный group thread id
+сейчас содержит Chatwoot group contact id.
+
+Если позже потребуется открывать точный чат из push, делать это нужно через
+portal-owned opaque open token с коротким TTL, а не через raw `threadId`.
 
 ## Service Worker
 
-The existing service worker remains the PWA runtime entry point. Extend it with:
+Существующий `frontend/public/sw.js` остается PWA runtime entrypoint.
 
-- `push` event handler;
+Добавляем:
+
+- `push` handler;
 - `notificationclick` handler;
-- safe navigation back to the portal origin.
+- optional `notificationclose` handler только для diagnostics/analytics, если
+  это понадобится;
+- safe same-origin navigation.
 
-The service worker must not cache tenant dynamic metadata or API responses for
-notifications. Existing `no-store` and tenant metadata cache rules remain.
+`push` handler:
 
-If the app is open and focused, the backend may still send push in the first
-slice; duplicate suppression between foreground sound and system push can be a
-follow-up if it becomes noisy. Backend duplicate suppression by tenant/message
-scope should still prevent repeated pushes from repeated webhook delivery.
+- парсит payload defensively;
+- для неизвестного payload показывает generic fallback;
+- проверяет открытые focused окна текущего origin;
+- если focused окно есть - отправляет `postMessage` в страницу и не показывает
+  system notification;
+- если focused окна нет - вызывает `registration.showNotification()`;
+- использует generic `tag`, чтобы не заспамить notification tray повторными
+  webhook deliveries;
+- не делает browser-direct Chatwoot requests.
+
+`notificationclick` handler:
+
+- закрывает notification;
+- ищет открытую вкладку текущего origin через `clients.matchAll`;
+- если вкладка есть - фокусирует ее;
+- если вкладки нет - открывает `/`;
+- не открывает внешние URLs из payload.
+
+Service worker не должен cache-ить API responses, push payloads или tenant
+dynamic metadata. Существующие `no-store` и tenant metadata cache rules остаются.
 
 ## Multi-Tenant And Security Requirements
 
-- Browser never receives Chatwoot tokens.
-- Browser never calls Chatwoot for notification settings or push.
-- Preferences and subscriptions are tenant-scoped.
-- Push sends are tenant-scoped and user-scoped.
-- Group thread access is rechecked before sending push.
-- Unknown or deleted thread mappings fail closed.
-- Push payload contains no sensitive content in the first slice.
-- VAPID private key stays backend-only.
-- A subscription registered on tenant A cannot receive tenant B notifications.
+- Browser не получает Chatwoot tokens.
+- Browser не вызывает Chatwoot для notifications или push.
+- Preferences tenant-scoped и user-scoped.
+- Push subscriptions tenant-scoped и user-scoped.
+- Push delivery tenant-scoped, user-scoped и thread-access-scoped.
+- Group access rechecked before push delivery.
+- Unknown/deleted thread mappings fail closed.
+- Push payload не содержит sensitive content.
+- VAPID private key backend-only.
+- Subscription tenant A не может получить notifications tenant B.
+- Logs не должны печатать `p256dh`, `auth`, VAPID private key или full push
+  endpoint в plaintext.
+
+## Deployment And Runtime Notes
+
+- Production должен иметь VAPID public/private key configuration до включения
+  push UI как `available`.
+- Если outbound firewall ограничен, нужно разрешить push-service endpoints,
+  включая browser-specific endpoints. Для Apple Web Push может понадобиться
+  доступ к `*.push.apple.com`.
+- Если VAPID не настроен, страница показывает `Push недоступны`, но `Новые
+сообщения` и `Звук` продолжают работать.
+- Local/dev HTTPS может быть нужен для полного push smoke; обычный Playwright
+  flow может покрыть UI/settings без реального system push prompt.
 
 ## Non-Goals
 
-- no email notifications;
-- no mailing lists, campaigns, digests or scheduled summaries;
-- no tenant-admin notification policy screen;
-- no global user notification center across all chats;
-- no message text or author name in push payload;
-- no browser-direct Chatwoot integration;
-- no Chatwoot core changes;
-- no marketing or CRM notifications.
+- email notifications;
+- mailing lists, campaigns, digests или scheduled summaries;
+- tenant-admin notification policy screen;
+- global user notification center across all chats;
+- rich push payload с текстом/автором/файлами;
+- browser-direct Chatwoot integration;
+- Chatwoot core changes;
+- marketing или CRM notifications.
 
 ## Testing
 
 Backend:
 
-- preference repository/service tests for tenant/user/thread uniqueness;
-- route tests for auth, tenant scope, thread access and partial updates;
-- push subscription route tests;
-- push delivery service tests for safe payload, access filtering, duplicate
-  suppression and expired subscription cleanup;
-- webhook integration tests around push delivery trigger without weakening
-  existing webhook tenant checks.
+- repository/service tests для tenant/user/thread uniqueness;
+- route tests для auth, tenant scope, thread access и partial updates;
+- push public-key/subscription route tests;
+- push delivery service tests:
+  - safe payload;
+  - access filtering;
+  - skip current user's own message;
+  - duplicate suppression;
+  - expired subscription cleanup;
+  - push not configured;
+- webhook integration tests, которые подтверждают push trigger без ослабления
+  существующих tenant checks.
 
 Frontend:
 
 - notification settings API client tests;
-- page tests for loading, unavailable state, switches and push permission
-  states;
-- sound runtime tests for "not current user's message" and muted state;
-- service worker unit-style tests where practical, or isolated browser tests if
-  unit harness cannot execute service worker push events.
+- page tests для loading, unavailable, switches и permission states;
+- push runtime tests для feature detection и denied/default/granted states;
+- sound runtime tests:
+  - не играть для текущего пользователя;
+  - не играть при muted;
+  - не считать autoplay block ошибкой сохранения настройки;
+- service worker tests там, где practical:
+  - generic notification on push;
+  - same-origin focus/open on notification click.
 
 E2E/runtime:
 
-- Playwright coverage for opening `Уведомления` from the chat menu and toggling
-  settings;
-- documented browser limitation for real system push prompt if the local runner
-  cannot reliably automate it.
+- Playwright: открыть `Уведомления` из chat menu;
+- Playwright: переключить `Новые сообщения` и `Звук`;
+- Playwright: проверить UI states для unsupported/default/denied push через
+  mocks;
+- documented blocker или manual smoke для настоящего system push prompt, если
+  local runner не может надежно автоматизировать browser/OS permission UI.
 
 ## Follow-Ups
 
-- richer push payload after explicit privacy decision;
-- foreground/background duplicate suppression;
+- portal-owned opaque open token для открытия конкретного чата из push;
+- foreground/background duplicate suppression между in-app sound и system push;
+- app badge/unread count для PWA, когда появится unread foundation;
 - global notification center;
 - per-tenant admin defaults;
-- email/offline notifications, if explicitly reopened later.
+- rich push payload после отдельного privacy decision;
+- email/offline notifications, если этот канал явно откроем позже.
+
+## Сверка С Источниками
+
+- MDN Web Push best practices:
+  https://developer.mozilla.org/en-US/docs/Web/API/Push_API/Best_Practices
+- MDN Notifications API:
+  https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API/Using_the_Notifications_API
+- MDN PushManager.subscribe:
+  https://developer.mozilla.org/en-US/docs/Web/API/PushManager/subscribe
+- MDN ServiceWorker push event:
+  https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope/push_event
+- web.dev Permission UX:
+  https://web.dev/articles/push-notifications-permissions-ux
+- web.dev Notification behavior:
+  https://web.dev/articles/push-notifications-notification-behaviour
+- web.dev Common notification patterns:
+  https://web.dev/articles/push-notifications-common-notification-patterns
+- WebKit Web Push for iOS/iPadOS:
+  https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/
