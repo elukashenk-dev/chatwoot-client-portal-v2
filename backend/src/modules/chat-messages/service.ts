@@ -64,6 +64,8 @@ const SEND_LEDGER_MESSAGE_KIND_ATTACHMENT = 'attachment'
 const CLIENT_MESSAGE_KEY_MAX_LENGTH = 200
 export const CHAT_ATTACHMENT_MAX_BYTES = 40 * 1024 * 1024
 const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
+const CHAT_MEDIA_MAX_SCANNED_PAGES = 8
+const CHAT_MEDIA_TARGET_ITEMS = 20
 const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
   'application/json',
   'application/msword',
@@ -624,7 +626,11 @@ export function createChatMessagesService({
         let nextOlderCursor: number | null = null
         const mediaItems: PortalChatMediaItem[] = []
 
-        for (let scannedPages = 0; scannedPages < 4; scannedPages += 1) {
+        for (
+          let scannedPages = 0;
+          scannedPages < CHAT_MEDIA_MAX_SCANNED_PAGES;
+          scannedPages += 1
+        ) {
           const page = await chatwootClient.listConversationMessages(
             conversationId,
             {
@@ -668,7 +674,7 @@ export function createChatMessagesService({
           nextOlderCursor = page.nextOlderCursor
 
           if (
-            mediaItems.length > 0 ||
+            mediaItems.length >= CHAT_MEDIA_TARGET_ITEMS ||
             !page.hasMoreOlder ||
             !page.nextOlderCursor
           ) {

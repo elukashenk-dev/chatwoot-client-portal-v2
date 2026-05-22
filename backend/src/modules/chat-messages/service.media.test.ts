@@ -231,6 +231,94 @@ describe('chat media service', () => {
     })
   })
 
+  it('continues scanning older pages after the first media item to build a fuller media page', async () => {
+    const listConversationMessages = vi
+      .fn<ListConversationMessages>()
+      .mockResolvedValueOnce({
+        hasMoreOlder: true,
+        messages: [
+          createChatwootMessage({
+            attachments: [
+              {
+                fileSize: 4096,
+                fileType: 'image',
+                id: 72,
+                name: 'latest.png',
+                thumbUrl: 'https://chatwoot.test/latest-thumb.png',
+                url: 'https://chatwoot.test/latest.png',
+              },
+            ],
+            id: 502,
+          }),
+        ],
+        nextOlderCursor: 401,
+      })
+      .mockResolvedValueOnce({
+        hasMoreOlder: true,
+        messages: [
+          createChatwootMessage({
+            attachments: [],
+            content: 'Обычное сообщение без файлов',
+            id: 401,
+          }),
+        ],
+        nextOlderCursor: 301,
+      })
+      .mockResolvedValueOnce({
+        hasMoreOlder: false,
+        messages: [
+          createChatwootMessage({
+            attachments: [
+              {
+                fileSize: null,
+                fileType: 'application/pdf',
+                id: 73,
+                name: 'older-contract.pdf',
+                thumbUrl: '',
+                url: 'https://chatwoot.test/older-contract.pdf',
+              },
+            ],
+            id: 301,
+          }),
+        ],
+        nextOlderCursor: null,
+      })
+    const { service } = createService({
+      listConversationMessages,
+    })
+
+    await expect(
+      service.getCurrentUserChatMedia({
+        threadId: PRIVATE_CHAT_THREAD_ID,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      hasMoreOlder: false,
+      items: [
+        {
+          id: 'attachment:502:72',
+          name: 'latest.png',
+        },
+        {
+          id: 'attachment:301:73',
+          name: 'older-contract.pdf',
+        },
+      ],
+      nextOlderCursor: null,
+      result: 'ready',
+    })
+    expect(listConversationMessages).toHaveBeenCalledTimes(3)
+    expect(listConversationMessages).toHaveBeenNthCalledWith(1, 1001, {
+      beforeMessageId: null,
+    })
+    expect(listConversationMessages).toHaveBeenNthCalledWith(2, 1001, {
+      beforeMessageId: 401,
+    })
+    expect(listConversationMessages).toHaveBeenNthCalledWith(3, 1001, {
+      beforeMessageId: 301,
+    })
+  })
+
   it('returns a ready empty page when the thread has no conversation yet', async () => {
     const listConversationMessages = vi.fn<ListConversationMessages>()
     const { service } = createService({
