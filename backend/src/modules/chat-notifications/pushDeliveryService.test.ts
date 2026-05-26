@@ -122,6 +122,7 @@ describe('chat notification push delivery service', () => {
         },
       },
       JSON.stringify({
+        notificationTag: 'portal-chat-message-default-9001',
         tenantSlug: 'default',
         type: 'chat_message',
         url: '/',

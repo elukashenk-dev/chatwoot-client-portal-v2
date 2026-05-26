@@ -193,19 +193,28 @@ async function handlePushEvent(event) {
     return
   }
 
-  await self.registration.showNotification('Новое сообщение', {
+  const notificationOptions = {
     body: 'Откройте портал, чтобы посмотреть чат.',
     data: {
       url: normalizeNotificationUrl(payload.url),
     },
     icon: '/pwa-icons/icon-192.png',
-    tag: 'portal-chat-message',
-  })
+  }
+
+  if (payload.notificationTag) {
+    notificationOptions.tag = payload.notificationTag
+  }
+
+  await self.registration.showNotification(
+    'Новое сообщение',
+    notificationOptions,
+  )
 }
 
 function readPushPayload(data) {
   if (!data) {
     return {
+      notificationTag: null,
       tenantSlug: null,
       type: 'chat_message',
       url: '/',
@@ -220,6 +229,11 @@ function readPushPayload(data) {
     }
 
     return {
+      notificationTag:
+        typeof payload.notificationTag === 'string' &&
+        payload.notificationTag.length > 0
+          ? payload.notificationTag
+          : null,
       tenantSlug:
         typeof payload.tenantSlug === 'string' ? payload.tenantSlug : null,
       type: payload.type === 'chat_message' ? 'chat_message' : 'chat_message',
@@ -229,6 +243,7 @@ function readPushPayload(data) {
     }
   } catch {
     return {
+      notificationTag: null,
       tenantSlug: null,
       type: 'chat_message',
       url: '/',
