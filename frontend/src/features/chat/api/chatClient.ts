@@ -192,7 +192,13 @@ export async function getPushPublicKey() {
 
 export async function savePushSubscription(subscription: PushSubscriptionJSON) {
   await request<void>('/notifications/push/subscriptions', {
-    body: subscription,
+    body: {
+      endpoint: subscription.endpoint,
+      keys: {
+        auth: subscription.keys?.auth,
+        p256dh: subscription.keys?.p256dh,
+      },
+    },
     method: 'POST',
     networkErrorMessage:
       'Не удалось включить push-уведомления. Попробуйте еще раз.',

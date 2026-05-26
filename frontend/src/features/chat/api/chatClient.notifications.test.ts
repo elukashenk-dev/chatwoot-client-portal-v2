@@ -143,6 +143,7 @@ describe('chat notification API client', () => {
 
     await savePushSubscription({
       endpoint: 'https://push.example.test/subscription',
+      expirationTime: null,
       keys: {
         auth: 'auth-secret',
         p256dh: 'p256dh-key',
