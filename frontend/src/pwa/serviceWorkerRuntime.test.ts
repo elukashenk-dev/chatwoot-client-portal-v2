@@ -249,34 +249,52 @@ describe('serviceWorkerRuntime', () => {
       registration: registration as unknown as ServiceWorkerRegistration,
     })
     setServiceWorkerContainer(container)
-    const handler = vi.fn()
+    const handler = vi.fn(() => true)
 
     const runtime = await import('./serviceWorkerRuntime')
-    const unregister = runtime.registerPortalPushMessageListener(handler)
+    const unregister = runtime.registerPortalPushMessageListener(handler, {
+      activeThreadId: 'group:155',
+    })
 
     expect(controller.postMessage).toHaveBeenCalledWith({
+      activeThreadId: 'group:155',
       type: 'PORTAL_PUSH_CLIENT_READY',
     })
+
+    const channel = new MessageChannel()
+    const replies: unknown[] = []
+    channel.port1.onmessage = (event) => {
+      replies.push(event.data)
+    }
 
     container.dispatchEvent(
       new MessageEvent('message', {
         data: {
           payload: {
+            chatwootMessageId: 9004,
             tenantSlug: 'buhfirma',
+            threadId: 'group:155',
             type: 'chat_message',
             url: '/',
           },
           type: 'PORTAL_PUSH_MESSAGE',
         },
+        ports: [channel.port2],
       }),
     )
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 0)
+    })
     unregister()
 
     expect(handler).toHaveBeenCalledWith({
+      chatwootMessageId: 9004,
       tenantSlug: 'buhfirma',
+      threadId: 'group:155',
       type: 'chat_message',
       url: '/',
     })
+    expect(replies).toEqual([{ handled: true }])
     expect(controller.postMessage).toHaveBeenCalledWith({
       type: 'PORTAL_PUSH_CLIENT_NOT_READY',
     })

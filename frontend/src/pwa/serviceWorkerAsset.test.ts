@@ -15,7 +15,7 @@ function loadServiceWorker({
   clientsList?: Array<{
     focused?: boolean
     id: string
-    postMessage?: (message: unknown) => void
+    postMessage?: (message: unknown, transfer?: Transferable[]) => void
     url: string
     visibilityState?: string
   }>
@@ -74,9 +74,14 @@ async function dispatchPush(
   await Promise.all(promises)
 }
 
-function markClientPushReady(listener: Listener, clientId: string) {
+function markClientPushReady(
+  listener: Listener,
+  clientId: string,
+  activeThreadId: string | null = null,
+) {
   listener({
     data: {
+      activeThreadId,
       type: 'PORTAL_PUSH_CLIENT_READY',
     },
     source: {
@@ -140,7 +145,7 @@ describe('service worker push notifications', () => {
     expect(messageListener).toBeDefined()
     expect(pushListener).toBeDefined()
 
-    markClientPushReady(messageListener!, 'client-1')
+    markClientPushReady(messageListener!, 'client-1', 'group:155')
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9003',
       tenantSlug: 'default',
@@ -157,12 +162,21 @@ describe('service worker push notifications', () => {
     )
   })
 
-  it('posts to the push-ready portal client instead of showing a system notification when the client is visible', async () => {
-    const postMessage = vi.fn()
+  it('lets a visible push-ready portal client suppress the system notification after it handles the push', async () => {
+    const postMessage = vi.fn(
+      (_message: unknown, transfer?: Transferable[]) => {
+        const [responsePort] = transfer ?? []
+        if (responsePort instanceof MessagePort) {
+          responsePort.postMessage({
+            handled: true,
+          })
+        }
+      },
+    )
     const { listeners, showNotification } = loadServiceWorker({
       clientsList: [
         {
-          focused: true,
+          focused: false,
           id: 'client-1',
           postMessage,
           url: 'https://lk.provgroup.ru/app',
@@ -176,23 +190,124 @@ describe('service worker push notifications', () => {
     expect(messageListener).toBeDefined()
     expect(pushListener).toBeDefined()
 
-    markClientPushReady(messageListener!, 'client-1')
+    markClientPushReady(messageListener!, 'client-1', 'group:155')
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9004',
+      chatwootMessageId: 9004,
       tenantSlug: 'default',
+      threadId: 'group:155',
       type: 'chat_message',
       url: '/',
     })
 
-    expect(postMessage).toHaveBeenCalledWith({
-      payload: {
-        notificationTag: 'portal-chat-message-default-9004',
-        tenantSlug: 'default',
-        type: 'chat_message',
-        url: '/',
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        payload: {
+          chatwootMessageId: 9004,
+          notificationTag: 'portal-chat-message-default-9004',
+          tenantSlug: 'default',
+          threadId: 'group:155',
+          type: 'chat_message',
+          url: '/',
+        },
+        type: 'PORTAL_PUSH_MESSAGE',
       },
-      type: 'PORTAL_PUSH_MESSAGE',
-    })
+      expect.arrayContaining([expect.any(MessagePort)]),
+    )
     expect(showNotification).not.toHaveBeenCalled()
+  })
+
+  it('shows a system notification when the visible portal client reports that another chat is active', async () => {
+    const postMessage = vi.fn(
+      (_message: unknown, transfer?: Transferable[]) => {
+        const [responsePort] = transfer ?? []
+        if (responsePort instanceof MessagePort) {
+          responsePort.postMessage({
+            handled: false,
+          })
+        }
+      },
+    )
+    const { listeners, showNotification } = loadServiceWorker({
+      clientsList: [
+        {
+          focused: false,
+          id: 'client-1',
+          postMessage,
+          url: 'https://lk.provgroup.ru/app',
+          visibilityState: 'visible',
+        },
+      ],
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(messageListener).toBeDefined()
+    expect(pushListener).toBeDefined()
+
+    markClientPushReady(messageListener!, 'client-1', 'private:me')
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9005,
+      notificationTag: 'portal-chat-message-default-9005',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(postMessage).not.toHaveBeenCalled()
+    expect(showNotification).toHaveBeenCalledWith(
+      'Новое сообщение',
+      expect.objectContaining({
+        tag: 'portal-chat-message-default-9005',
+      }),
+    )
+  })
+
+  it('does not let a visible portal client suppress a push for another active chat', async () => {
+    const postMessage = vi.fn(
+      (_message: unknown, transfer?: Transferable[]) => {
+        const [responsePort] = transfer ?? []
+        if (responsePort instanceof MessagePort) {
+          responsePort.postMessage({
+            handled: true,
+          })
+        }
+      },
+    )
+    const { listeners, showNotification } = loadServiceWorker({
+      clientsList: [
+        {
+          focused: false,
+          id: 'client-1',
+          postMessage,
+          url: 'https://lk.provgroup.ru/app',
+          visibilityState: 'visible',
+        },
+      ],
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(messageListener).toBeDefined()
+    expect(pushListener).toBeDefined()
+
+    markClientPushReady(messageListener!, 'client-1', 'private:me')
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9006,
+      notificationTag: 'portal-chat-message-default-9006',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(postMessage).not.toHaveBeenCalled()
+    expect(showNotification).toHaveBeenCalledWith(
+      'Новое сообщение',
+      expect.objectContaining({
+        tag: 'portal-chat-message-default-9006',
+      }),
+    )
   })
 })

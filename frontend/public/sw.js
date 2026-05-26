@@ -1,5 +1,6 @@
 const SERVICE_WORKER_REVISION = '__PORTAL_SERVICE_WORKER_REVISION__'
 const STATIC_CACHE = `provgroup-portal-static-${SERVICE_WORKER_REVISION}`
+const PUSH_CLIENT_RESPONSE_TIMEOUT_MS = 700
 const APP_SHELL_URLS = [
   '/',
   '/favicon.svg',
@@ -8,6 +9,7 @@ const APP_SHELL_URLS = [
   '/pwa-icons/icon-maskable-512.png',
 ]
 const PUSH_READY_CLIENT_IDS = new Set()
+const PUSH_READY_CLIENT_THREAD_IDS = new Map()
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -44,11 +46,19 @@ self.addEventListener('message', (event) => {
 
   if (event.data?.type === 'PORTAL_PUSH_CLIENT_READY') {
     PUSH_READY_CLIENT_IDS.add(sourceClientId)
+    PUSH_READY_CLIENT_THREAD_IDS.set(
+      sourceClientId,
+      typeof event.data.activeThreadId === 'string' &&
+        event.data.activeThreadId.length > 0
+        ? event.data.activeThreadId
+        : null,
+    )
     return
   }
 
   if (event.data?.type === 'PORTAL_PUSH_CLIENT_NOT_READY') {
     PUSH_READY_CLIENT_IDS.delete(sourceClientId)
+    PUSH_READY_CLIENT_THREAD_IDS.delete(sourceClientId)
   }
 })
 
@@ -172,25 +182,22 @@ function shouldCacheResponse(response) {
   return !cacheControl.includes('no-store')
 }
 
+function isPushReadyForThread(client, threadId) {
+  return (
+    threadId !== null &&
+    PUSH_READY_CLIENT_IDS.has(client.id) &&
+    PUSH_READY_CLIENT_THREAD_IDS.get(client.id) === threadId
+  )
+}
+
 async function handlePushEvent(event) {
   const payload = readPushPayload(event.data)
   const clientsList = await clients.matchAll({
     includeUncontrolled: false,
     type: 'window',
   })
-  const focusedClient = clientsList.find(
-    (client) =>
-      client.focused &&
-      client.visibilityState === 'visible' &&
-      isSameOriginUrl(client.url) &&
-      PUSH_READY_CLIENT_IDS.has(client.id),
-  )
 
-  if (focusedClient) {
-    focusedClient.postMessage({
-      payload,
-      type: 'PORTAL_PUSH_MESSAGE',
-    })
+  if (await notifyVisiblePortalClients({ clientsList, payload })) {
     return
   }
 
@@ -212,11 +219,78 @@ async function handlePushEvent(event) {
   )
 }
 
+async function notifyVisiblePortalClients({ clientsList, payload }) {
+  const visibleClients = clientsList.filter(
+    (client) =>
+      client.visibilityState === 'visible' &&
+      isSameOriginUrl(client.url) &&
+      isPushReadyForThread(client, payload.threadId),
+  )
+
+  if (visibleClients.length === 0) {
+    return false
+  }
+
+  const results = await Promise.all(
+    visibleClients.map((client) => postPushMessageToClient(client, payload)),
+  )
+
+  return results.some(Boolean)
+}
+
+function postPushMessageToClient(client, payload) {
+  if (typeof MessageChannel === 'undefined') {
+    client.postMessage({
+      payload,
+      type: 'PORTAL_PUSH_MESSAGE',
+    })
+
+    return Promise.resolve(false)
+  }
+
+  return new Promise((resolve) => {
+    let didResolve = false
+    const channel = new MessageChannel()
+    const timeoutId = setTimeout(() => {
+      resolveOnce(false)
+    }, PUSH_CLIENT_RESPONSE_TIMEOUT_MS)
+
+    function resolveOnce(value) {
+      if (didResolve) {
+        return
+      }
+
+      didResolve = true
+      clearTimeout(timeoutId)
+      channel.port1.close()
+      resolve(value)
+    }
+
+    channel.port1.onmessage = (event) => {
+      resolveOnce(event.data?.handled === true)
+    }
+
+    try {
+      client.postMessage(
+        {
+          payload,
+          type: 'PORTAL_PUSH_MESSAGE',
+        },
+        [channel.port2],
+      )
+    } catch {
+      resolveOnce(false)
+    }
+  })
+}
+
 function readPushPayload(data) {
   if (!data) {
     return {
+      chatwootMessageId: null,
       notificationTag: null,
       tenantSlug: null,
+      threadId: null,
       type: 'chat_message',
       url: '/',
     }
@@ -230,6 +304,9 @@ function readPushPayload(data) {
     }
 
     return {
+      chatwootMessageId: Number.isSafeInteger(payload.chatwootMessageId)
+        ? payload.chatwootMessageId
+        : null,
       notificationTag:
         typeof payload.notificationTag === 'string' &&
         payload.notificationTag.length > 0
@@ -237,6 +314,10 @@ function readPushPayload(data) {
           : null,
       tenantSlug:
         typeof payload.tenantSlug === 'string' ? payload.tenantSlug : null,
+      threadId:
+        typeof payload.threadId === 'string' && payload.threadId.length > 0
+          ? payload.threadId
+          : null,
       type: payload.type === 'chat_message' ? 'chat_message' : 'chat_message',
       url: normalizeNotificationUrl(
         typeof payload.url === 'string' ? payload.url : '/',
@@ -244,8 +325,10 @@ function readPushPayload(data) {
     }
   } catch {
     return {
+      chatwootMessageId: null,
       notificationTag: null,
       tenantSlug: null,
+      threadId: null,
       type: 'chat_message',
       url: '/',
     }

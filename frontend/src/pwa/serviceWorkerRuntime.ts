@@ -24,12 +24,19 @@ export type BrowserPushSupportState =
     }
 
 export type PortalPushMessagePayload = {
+  chatwootMessageId: number | null
   tenantSlug: string | null
+  threadId: string | null
   type: 'chat_message'
   url: string
 }
 
-type PortalPushMessageHandler = (payload: PortalPushMessagePayload) => void
+type PortalPushMessageHandler = (
+  payload: PortalPushMessagePayload,
+) => boolean | Promise<boolean>
+type RegisterPortalPushMessageListenerOptions = {
+  activeThreadId?: string | null
+}
 type UpdateListener = (snapshot: ServiceWorkerUpdateSnapshot) => void
 
 const updateListeners = new Set<UpdateListener>()
@@ -257,13 +264,17 @@ export async function unsubscribeBrowserPush() {
 
 export function registerPortalPushMessageListener(
   handler: PortalPushMessageHandler,
+  { activeThreadId = null }: RegisterPortalPushMessageListenerOptions = {},
 ) {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return () => {}
   }
 
   function postClientReadyState(type: string) {
-    navigator.serviceWorker.controller?.postMessage({ type })
+    navigator.serviceWorker.controller?.postMessage({
+      ...(type === 'PORTAL_PUSH_CLIENT_READY' ? { activeThreadId } : {}),
+      type,
+    })
   }
 
   function handleMessage(event: MessageEvent) {
@@ -271,17 +282,40 @@ export function registerPortalPushMessageListener(
       return
     }
 
-    handler({
+    const payload = {
+      chatwootMessageId: Number.isSafeInteger(
+        event.data.payload?.chatwootMessageId,
+      )
+        ? event.data.payload.chatwootMessageId
+        : null,
       tenantSlug:
         typeof event.data.payload?.tenantSlug === 'string'
           ? event.data.payload.tenantSlug
+          : null,
+      threadId:
+        typeof event.data.payload?.threadId === 'string' &&
+        event.data.payload.threadId.length > 0
+          ? event.data.payload.threadId
           : null,
       type: 'chat_message',
       url:
         typeof event.data.payload?.url === 'string'
           ? event.data.payload.url
           : '/',
-    })
+    } satisfies PortalPushMessagePayload
+    const responsePort = event.ports[0]
+
+    void Promise.resolve(handler(payload))
+      .then((handled) => {
+        responsePort?.postMessage({
+          handled: handled === true,
+        })
+      })
+      .catch(() => {
+        responsePort?.postMessage({
+          handled: false,
+        })
+      })
   }
 
   function handleControllerChange() {

@@ -26,10 +26,21 @@ export function useChatPageNotifications({
 
   useEffect(
     () =>
-      registerPortalPushMessageListener(() => {
-        void refreshChatSnapshot()
-      }),
-    [refreshChatSnapshot],
+      registerPortalPushMessageListener(
+        (payload) => {
+          if (!payload.threadId || payload.threadId !== selectedThreadId) {
+            return false
+          }
+
+          void refreshChatSnapshot()
+
+          return true
+        },
+        {
+          activeThreadId: selectedThreadId,
+        },
+      ),
+    [refreshChatSnapshot, selectedThreadId],
   )
 
   const selectedThreadNotificationSettings =

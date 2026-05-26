@@ -122,8 +122,10 @@ describe('chat notification push delivery service', () => {
         },
       },
       JSON.stringify({
+        chatwootMessageId: 9001,
         notificationTag: 'portal-chat-message-default-9001',
         tenantSlug: 'default',
+        threadId: 'private:me',
         type: 'chat_message',
         url: '/',
       }),

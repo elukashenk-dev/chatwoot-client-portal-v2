@@ -54,13 +54,17 @@ function emptySummary(): PushDeliverySummary {
 function buildPayload({
   chatwootMessageId,
   tenantSlug,
+  threadId,
 }: {
   chatwootMessageId: number
   tenantSlug: string
+  threadId: string
 }) {
   return JSON.stringify({
+    chatwootMessageId,
     notificationTag: `portal-chat-message-${tenantSlug}-${chatwootMessageId}`,
     tenantSlug,
+    threadId,
     type: 'chat_message',
     url: '/',
   })
@@ -89,6 +93,7 @@ export function createChatNotificationPushDeliveryService({
       const payload = buildPayload({
         chatwootMessageId: input.chatwootMessageId,
         tenantSlug: input.tenantSlug,
+        threadId: input.threadMapping.threadId,
       })
 
       for (const recipient of recipients) {
