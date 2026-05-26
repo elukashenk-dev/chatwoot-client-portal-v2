@@ -38,7 +38,7 @@ Backend:
 
 - `backend/src/modules/chat-notifications/recipientResolver.ts`
   - Extend push recipients with safe `threadTitle` and `threadType`.
-  - Derive group title from the same safe Chatwoot contact source used by chat thread list.
+  - Derive group title from the same safe Chatwoot contact source used by chat thread list, but do not use the `Группа <id>` fallback in push payload.
 - `backend/src/modules/chat-notifications/recipientResolver.test.ts`
   - Cover private/group thread metadata and fail-closed group metadata.
 - `backend/src/modules/chat-notifications/pushDeliveryService.ts`
@@ -120,7 +120,9 @@ await expect(
 Add a group contact helper:
 
 ```ts
-function groupContact(id: number, name = `Group ${id}`) {
+import type { ChatwootContact } from '../../integrations/chatwoot/client.js'
+
+function groupContact(id: number, name: string | null = `Group ${id}`) {
   return {
     customAttributes: {
       portal_contact_type: 'group',
@@ -129,8 +131,14 @@ function groupContact(id: number, name = `Group ${id}`) {
     email: null,
     id,
     name,
-  }
+  } satisfies ChatwootContact
 }
+```
+
+Update `createResolver` so `contacts` can hold either person or group contacts:
+
+```ts
+contacts = new Map<number, ChatwootContact | null>(),
 ```
 
 For group-recipient tests, include the target group contact in the `contacts`
@@ -156,6 +164,38 @@ Expected group recipient:
 }
 ```
 
+Add one more group test where the target group contact has `name: null`; the
+recipient should still be resolved, but `threadTitle` must be `null` so push UI
+falls back to generic copy instead of exposing `Группа 155`:
+
+```ts
+const contacts = new Map<number, ChatwootContact | null>([
+  [155, groupContact(155, null)],
+  [101, personContact(101, [155])],
+])
+
+await expect(
+  resolver.resolveRecipients({
+    chatwootMessageId: 9001,
+    threadMapping: {
+      chatwootConversationId: 11,
+      portalChatThreadId: 22,
+      threadId: 'group:155',
+      threadType: 'group',
+      userId: null,
+    },
+  }),
+).resolves.toEqual([
+  {
+    portalChatThreadId: 22,
+    portalUserId: 1,
+    threadId: 'group:155',
+    threadTitle: null,
+    threadType: 'group',
+  },
+])
+```
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run:
@@ -168,14 +208,28 @@ Expected: FAIL because `PushRecipient` does not include `threadTitle` and `threa
 
 - [ ] **Step 3: Implement recipient metadata**
 
-In `recipientResolver.ts`, import the same helpers used by public thread list:
+In `recipientResolver.ts`, import the same authority helpers used by public
+thread list:
 
 ```ts
 import {
   assertPortalGroupContactEnabled,
   assertPortalPersonContactEnabled,
 } from '../chat-threads/contactAttributes.js'
-import { buildGroupThread, buildPrivateThread } from '../chat-threads/types.js'
+import { buildPrivateThread } from '../chat-threads/types.js'
+```
+
+Add a push-specific safe title helper. This intentionally does not call
+`buildGroupThread(groupContact)`, because that helper falls back to
+`Группа ${contact.id}` and push notifications must not expose raw Chatwoot
+contact IDs:
+
+```ts
+function buildGroupPushThreadTitle(contact: ChatwootContact) {
+  const title = contact.name?.trim()
+
+  return title ? title.slice(0, 120) : null
+}
 ```
 
 Extend the public type:
@@ -221,7 +275,7 @@ try {
   return []
 }
 
-const groupThread = buildGroupThread(groupContact)
+const groupThreadTitle = buildGroupPushThreadTitle(groupContact)
 ```
 
 Each accepted group recipient includes:
@@ -231,8 +285,8 @@ return {
   portalChatThreadId: threadMapping.portalChatThreadId,
   portalUserId: link.userId,
   threadId: threadMapping.threadId,
-  threadTitle: groupThread.title,
-  threadType: groupThread.type,
+  threadTitle: groupThreadTitle,
+  threadType: 'group',
 }
 ```
 
@@ -262,6 +316,24 @@ threadTitle: 'Личный чат',
 threadType: 'private',
 ```
 
+Update `createRecipientResolver()` so it returns the new metadata:
+
+```ts
+function createRecipientResolver() {
+  return {
+    resolveRecipients: vi.fn(async () => [
+      {
+        portalChatThreadId: 22,
+        portalUserId: 7,
+        threadId: 'private:me',
+        threadTitle: 'Личный чат',
+        threadType: 'private' as const,
+      },
+    ]),
+  }
+}
+```
+
 Add a dedicated test that parses the payload and asserts unsafe fields are absent:
 
 ```ts
@@ -283,6 +355,24 @@ expect(parsedPayload).not.toHaveProperty('text')
 expect(parsedPayload).not.toHaveProperty('authorName')
 expect(parsedPayload).not.toHaveProperty('attachments')
 expect(parsedPayload).not.toHaveProperty('chatwootBaseUrl')
+```
+
+Add a fallback metadata test by returning a recipient with `threadTitle: null`
+and `threadType: null`; the payload should keep those safe nulls and must still
+avoid unsafe fields:
+
+```ts
+const recipientResolver = {
+  resolveRecipients: vi.fn(async () => [
+    {
+      portalChatThreadId: 22,
+      portalUserId: 7,
+      threadId: 'group:155',
+      threadTitle: null,
+      threadType: null,
+    },
+  ]),
+}
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -394,6 +484,34 @@ it('uses safe chat title and type in the system notification copy', async () => 
 })
 ```
 
+Add a generic fallback copy test for null/empty metadata:
+
+```ts
+it('falls back to generic copy when chat metadata is unavailable', async () => {
+  const { listeners, showNotification } = loadServiceWorker()
+  const pushListener = listeners.get('push')?.[0]
+
+  await dispatchPush(pushListener!, {
+    chatwootMessageId: 9008,
+    notificationTag: 'portal-chat-message-default-9008',
+    tenantSlug: 'default',
+    threadId: 'group:155',
+    threadTitle: null,
+    threadType: null,
+    type: 'chat_message',
+    url: '/',
+  })
+
+  expect(showNotification).toHaveBeenCalledWith(
+    'Новое сообщение',
+    expect.objectContaining({
+      body: 'Откройте портал, чтобы посмотреть чат.',
+      tag: 'portal-chat-message-default-9008',
+    }),
+  )
+})
+```
+
 Update the existing "another chat is active" tests:
 
 - `postMessage` must be called for the open ready client;
@@ -499,10 +617,7 @@ Replace the current visible same-thread-only filter with ready same-origin clien
 
 ```js
 function isReadyPortalClient(client) {
-  return (
-    PUSH_READY_CLIENT_IDS.has(client.id) &&
-    isSameOriginUrl(client.url)
-  )
+  return PUSH_READY_CLIENT_IDS.has(client.id) && isSameOriginUrl(client.url)
 }
 
 function canClientSuppressPush(client, threadId) {
@@ -770,7 +885,11 @@ Clear selected thread on open:
 useEffect(() => {
   const selectedThreadId = pageState.selectedThreadId
 
-  if (!selectedThreadId) {
+  if (
+    !selectedThreadId ||
+    pageState.status !== 'ready' ||
+    pageState.snapshot.activeThread?.id !== selectedThreadId
+  ) {
     return
   }
 
@@ -784,7 +903,7 @@ useEffect(() => {
 
     return nextValue
   })
-}, [pageState.selectedThreadId])
+}, [pageState])
 ```
 
 Pass callback into `useChatPageNotifications`:
@@ -868,6 +987,46 @@ vi.mock('../../../pwa/serviceWorkerRuntime', () => ({
 
 Use the same render/fetch helpers pattern as `ChatPage.thread-selection.test.tsx`.
 
+Add local helpers for endpoints that load after the chat becomes ready:
+
+```ts
+function createSupportAvailabilityResponse() {
+  return createJsonResponse({
+    currentStatus: 'online',
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
+}
+
+function createNotificationSettings(threadId: string) {
+  return {
+    effective: {
+      newMessagesEnabled: true,
+      pushEnabled: true,
+      soundEnabled: true,
+    },
+    global: {
+      newMessagesEnabled: true,
+      pushEnabled: true,
+      soundEnabled: true,
+    },
+    overrides: {
+      newMessagesEnabled: null,
+      pushEnabled: null,
+      soundEnabled: null,
+    },
+    threadId,
+  }
+}
+```
+
 Test flow:
 
 ```ts
@@ -883,7 +1042,8 @@ it('shows and clears a local unread dot for another chat push', async () => {
   )
 
   const handler =
-    serviceWorkerRuntimeMock.registerPortalPushMessageListener.mock.calls[0]?.[0]
+    serviceWorkerRuntimeMock.registerPortalPushMessageListener.mock
+      .calls[0]?.[0]
   expect(handler).toBeDefined()
 
   const otherThreadPush = {
@@ -918,17 +1078,114 @@ it('shows and clears a local unread dot for another chat push', async () => {
   ).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
-  expect(screen.queryByTestId('thread-unread-dot-group:154')).not.toBeInTheDocument()
+  expect(
+    screen.queryByTestId('thread-unread-dot-group:154'),
+  ).not.toBeInTheDocument()
 })
 ```
 
-Expected fetch routes:
+Expected fetch routes that should be handled in the test mock:
 
 - `/api/auth/me`
 - `/api/chat/threads`
 - `/api/chat/messages?threadId=private%3Ame`
 - `/api/chat/support-availability`
+- `/api/chat/threads/private%3Ame/notification-settings`
 - `/api/chat/messages?threadId=group%3A154`
+- `/api/chat/threads/group%3A154/notification-settings`
+
+Add a second test for the failure path:
+
+```ts
+it('keeps the unread dot when the marked chat fails to open', async () => {
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+
+    if (url === '/api/auth/me') {
+      return createAuthenticatedUserResponse()
+    }
+
+    if (url === '/api/chat/threads') {
+      return createJsonResponse(createThreadsResponse())
+    }
+
+    if (url === '/api/chat/messages?threadId=private%3Ame') {
+      return createJsonResponse(createReadySnapshot())
+    }
+
+    if (url === '/api/chat/support-availability') {
+      return createSupportAvailabilityResponse()
+    }
+
+    if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+      return createJsonResponse(createNotificationSettings('private:me'))
+    }
+
+    if (url === '/api/chat/messages?threadId=group%3A154') {
+      return createJsonResponse(
+        {
+          error: {
+            code: 'chatwoot_unavailable',
+            message: 'Chatwoot unavailable.',
+          },
+        },
+        503,
+      )
+    }
+
+    if (url === '/api/chat/threads/group%3A154/notification-settings') {
+      return createJsonResponse(createNotificationSettings('group:154'))
+    }
+
+    throw new Error(`Unexpected request: ${url}`)
+  })
+
+  const user = userEvent.setup()
+
+  renderChatRoute()
+
+  await screen.findByText(
+    'Здравствуйте, вижу ваше обращение.',
+    {},
+    CHAT_PAGE_LOAD_TIMEOUT,
+  )
+
+  const handler =
+    serviceWorkerRuntimeMock.registerPortalPushMessageListener.mock
+      .calls[0]?.[0]
+
+  expect(
+    handler?.({
+      chatwootMessageId: 9001,
+      tenantSlug: 'buhfirma',
+      threadId: 'group:154',
+      threadTitle: 'ООО "Ромашка"',
+      threadType: 'group',
+      type: 'chat_message',
+      url: '/',
+    }),
+  ).toBe(false)
+
+  await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
+  expect(screen.getByTestId('thread-unread-dot-group:154')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('menuitem', { name: /ООО "Ромашка"/i }))
+
+  expect(
+    await screen.findByText(
+      'Чат временно недоступен',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    ),
+  ).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
+  expect(screen.getByTestId('thread-unread-dot-group:154')).toBeInTheDocument()
+})
+```
+
+This protects the intended clear-on-open behavior: the dot clears after the
+target transcript is actually ready, not merely after a click or loading state.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -984,9 +1241,7 @@ Replace title span:
       data-testid={`thread-unread-dot-${thread.id}`}
     />
   ) : null}
-  {hasUnread ? (
-    <span className="sr-only">, есть новое сообщение</span>
-  ) : null}
+  {hasUnread ? <span className="sr-only">, есть новое сообщение</span> : null}
 </span>
 ```
 

@@ -106,7 +106,10 @@ type PortalChatPushPayload = {
 `threadTitle` must be safe, short user-facing chat metadata:
 
 - private thread: `Личный чат`;
-- group thread: same title the portal already exposes in `GET /api/chat/threads`;
+- group thread: the safe Chatwoot contact display name used by
+  `GET /api/chat/threads`;
+- group thread with an empty/missing display name: `null`, not the
+  `Группа <contactId>` UI fallback;
 - unknown or unsafe value: `null`.
 
 `threadType` must be derived from the portal thread model:
