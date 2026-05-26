@@ -142,6 +142,9 @@
   overrides, in-portal sound, Web Push/VAPID subscription lifecycle,
   tenant-scoped push delivery из Chatwoot `message_created` webhooks и generic
   PWA push payload без текста сообщения.
+- Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
+  runtime env подключен, settings UI и push subscription lifecycle доступны на
+  реальном tenant.
 
 ## Current Baseline
 
@@ -160,5 +163,5 @@
 
 ## Recommended Next Step
 
-- Задеплоить notifications slice на production и выполнить smoke-test на
-  реальном tenant.
+- Выполнить real-device smoke для Web Push: установленная PWA, подписка
+  устройства и получение push после нового сообщения из Chatwoot.
