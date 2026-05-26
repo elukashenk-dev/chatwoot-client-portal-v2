@@ -1,4 +1,4 @@
-import * as webPush from 'web-push'
+import webPush from 'web-push'
 
 import type { PushTransportSubscription } from './types.js'
 import type { VapidConfig } from './vapid.js'
