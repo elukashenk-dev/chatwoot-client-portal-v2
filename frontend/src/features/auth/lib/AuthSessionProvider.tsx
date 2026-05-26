@@ -9,7 +9,6 @@ import {
   type AuthSessionContextValue,
   type AuthSessionStatus,
 } from './authSessionContext'
-import { disableCurrentBrowserPushBestEffort } from '../../chat/pages/notificationBrowserPush'
 
 type AuthSessionProviderProps = {
   children: ReactNode
@@ -73,7 +72,6 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     setErrorMessage(null)
 
     try {
-      await disableCurrentBrowserPushBestEffort()
       await logout()
 
       if (isMountedRef.current) {

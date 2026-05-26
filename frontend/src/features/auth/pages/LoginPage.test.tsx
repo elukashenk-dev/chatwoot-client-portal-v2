@@ -4,7 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
+import { disableCurrentBrowserPushBestEffort } from '../../chat/pages/notificationBrowserPush'
 import { AuthSessionProvider } from '../lib/AuthSessionProvider'
+
+vi.mock('../../chat/pages/notificationBrowserPush', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../chat/pages/notificationBrowserPush')
+  >('../../chat/pages/notificationBrowserPush')
+
+  return {
+    ...actual,
+    disableCurrentBrowserPushBestEffort: vi.fn(async () => undefined),
+  }
+})
+
+const disableCurrentBrowserPushBestEffortMock = vi.mocked(
+  disableCurrentBrowserPushBestEffort,
+)
 
 function createJsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -106,6 +122,7 @@ describe('LoginPage', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.clearAllMocks()
     fetchMock.mockReset()
   })
 
@@ -297,6 +314,7 @@ describe('LoginPage', () => {
         method: 'POST',
       }),
     )
+    expect(disableCurrentBrowserPushBestEffortMock).not.toHaveBeenCalled()
     expect(await screen.findByLabelText(/Email/)).toBeInTheDocument()
   })
 
