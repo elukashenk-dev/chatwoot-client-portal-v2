@@ -181,6 +181,7 @@ async function handlePushEvent(event) {
   const focusedClient = clientsList.find(
     (client) =>
       client.focused &&
+      client.visibilityState === 'visible' &&
       isSameOriginUrl(client.url) &&
       PUSH_READY_CLIENT_IDS.has(client.id),
   )
