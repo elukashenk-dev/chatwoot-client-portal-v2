@@ -42,6 +42,19 @@ describe('push transport', () => {
       'public-key',
       'private-key',
     )
-    expect(webPushMock.sendNotification).toHaveBeenCalled()
+    expect(webPushMock.sendNotification).toHaveBeenCalledWith(
+      {
+        endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
+        keys: {
+          auth: 'auth-secret',
+          p256dh: 'p256dh-key',
+        },
+      },
+      '{"type":"chat_message"}',
+      {
+        TTL: 86_400,
+        urgency: 'high',
+      },
+    )
   })
 })

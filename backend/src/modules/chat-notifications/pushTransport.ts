@@ -3,6 +3,8 @@ import webPush from 'web-push'
 import type { PushTransportSubscription } from './types.js'
 import type { VapidConfig } from './vapid.js'
 
+const CHAT_PUSH_TTL_SECONDS = 86_400
+
 export type PushTransportResult =
   | {
       status: 'sent'
@@ -58,7 +60,10 @@ export function createWebPushTransport(
   return {
     async sendNotification(subscription, payload) {
       try {
-        await webPush.sendNotification(subscription, payload)
+        await webPush.sendNotification(subscription, payload, {
+          TTL: CHAT_PUSH_TTL_SECONDS,
+          urgency: 'high',
+        })
 
         return {
           status: 'sent',
