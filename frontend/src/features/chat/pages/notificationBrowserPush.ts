@@ -7,6 +7,7 @@ import type { PushPublicKeyResponse } from '../types'
 import {
   getBrowserPushSupportState,
   getExistingBrowserPushSubscription,
+  isBrowserPushSubscriptionForPublicKey,
   subscribeBrowserPush,
   unsubscribeBrowserPush,
   type BrowserPushSupportState,
@@ -48,13 +49,22 @@ export async function loadBrowserPushSnapshot(): Promise<BrowserPushSnapshot> {
 
   const publicKey = await getPushPublicKey()
   const existingSubscription = await getExistingBrowserPushSubscription()
+  const isCurrentSubscription = existingSubscription
+    ? !publicKey.available ||
+      isBrowserPushSubscriptionForPublicKey(
+        existingSubscription,
+        publicKey.publicKey,
+      )
+    : false
 
   return {
     configured: publicKey.available,
     permission: readNotificationPermission(support),
     publicKey,
-    subscribed: Boolean(existingSubscription),
-    subscriptionEndpoint: existingSubscription?.endpoint ?? null,
+    subscribed: isCurrentSubscription,
+    subscriptionEndpoint: isCurrentSubscription
+      ? (existingSubscription?.endpoint ?? null)
+      : null,
     support,
   }
 }

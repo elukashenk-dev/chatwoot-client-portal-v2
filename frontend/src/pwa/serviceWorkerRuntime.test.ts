@@ -53,10 +53,21 @@ class MockServiceWorkerContainer extends EventTarget {
 
 class MockPushSubscription {
   endpoint: string
+  options: PushSubscriptionOptions
   readonly unsubscribe = vi.fn(async () => true)
 
-  constructor(endpoint = 'https://push.example.test/subscription') {
+  constructor({
+    applicationServerKey = null,
+    endpoint = 'https://push.example.test/subscription',
+  }: {
+    applicationServerKey?: ArrayBuffer | null
+    endpoint?: string
+  } = {}) {
     this.endpoint = endpoint
+    this.options = {
+      applicationServerKey,
+      userVisibleOnly: true,
+    }
   }
 
   toJSON(): PushSubscriptionJSON {
@@ -217,11 +228,79 @@ describe('serviceWorkerRuntime', () => {
     })
   })
 
+  it('reuses an existing push subscription when its VAPID public key matches', async () => {
+    setSecurePushBrowser()
+    const existingSubscription = new MockPushSubscription({
+      applicationServerKey: new Uint8Array([1, 2, 3]).buffer,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
+    })
+    const pushManager = createPushManager({ existingSubscription })
+    const registration = new MockServiceWorkerRegistration({
+      pushManager,
+    })
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.subscribeBrowserPush('AQID')).resolves.toEqual({
+      endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
+      keys: {
+        auth: 'auth-secret',
+        p256dh: 'p256dh-key',
+      },
+    })
+    expect(existingSubscription.unsubscribe).not.toHaveBeenCalled()
+    expect(pushManager.subscribe).not.toHaveBeenCalled()
+  })
+
+  it('replaces an existing push subscription when its VAPID public key is stale', async () => {
+    setSecurePushBrowser()
+    const existingSubscription = new MockPushSubscription({
+      applicationServerKey: new Uint8Array([9, 9, 9]).buffer,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/old-subscription',
+    })
+    const newSubscription = new MockPushSubscription({
+      applicationServerKey: new Uint8Array([1, 2, 3]).buffer,
+      endpoint: 'https://fcm.googleapis.com/fcm/send/new-subscription',
+    })
+    const pushManager = createPushManager({ existingSubscription })
+    vi.mocked(pushManager.subscribe).mockResolvedValueOnce(
+      newSubscription as unknown as PushSubscription,
+    )
+    const registration = new MockServiceWorkerRegistration({
+      pushManager,
+    })
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.subscribeBrowserPush('AQID')).resolves.toEqual({
+      endpoint: 'https://fcm.googleapis.com/fcm/send/new-subscription',
+      keys: {
+        auth: 'auth-secret',
+        p256dh: 'p256dh-key',
+      },
+    })
+    expect(existingSubscription.unsubscribe).toHaveBeenCalled()
+    expect(pushManager.subscribe).toHaveBeenCalledWith({
+      applicationServerKey: new Uint8Array([1, 2, 3]),
+      userVisibleOnly: true,
+    })
+  })
+
   it('reads an existing push subscription from a ready registration without a controller', async () => {
     setSecurePushBrowser()
-    const existingSubscription = new MockPushSubscription(
-      'https://fcm.googleapis.com/fcm/send/subscription-1',
-    )
+    const existingSubscription = new MockPushSubscription({
+      endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
+    })
     const pushManager = createPushManager({ existingSubscription })
     const registration = new MockServiceWorkerRegistration({
       pushManager,
@@ -262,10 +341,11 @@ describe('serviceWorkerRuntime', () => {
     })
 
     const channel = new MessageChannel()
-    const replies: unknown[] = []
-    channel.port1.onmessage = (event) => {
-      replies.push(event.data)
-    }
+    const reply = new Promise<unknown>((resolve) => {
+      channel.port1.onmessage = (event) => {
+        resolve(event.data)
+      }
+    })
 
     container.dispatchEvent(
       new MessageEvent('message', {
@@ -282,9 +362,7 @@ describe('serviceWorkerRuntime', () => {
         ports: [channel.port2],
       }),
     )
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 0)
-    })
+    await expect(reply).resolves.toEqual({ handled: true })
     unregister()
 
     expect(handler).toHaveBeenCalledWith({
@@ -294,7 +372,6 @@ describe('serviceWorkerRuntime', () => {
       type: 'chat_message',
       url: '/',
     })
-    expect(replies).toEqual([{ handled: true }])
     expect(controller.postMessage).toHaveBeenCalledWith({
       type: 'PORTAL_PUSH_CLIENT_NOT_READY',
     })

@@ -175,6 +175,36 @@ function base64UrlToUint8Array(value: string) {
   return outputArray
 }
 
+function areUint8ArraysEqual(left: Uint8Array, right: Uint8Array) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+
+  return true
+}
+
+export function isBrowserPushSubscriptionForPublicKey(
+  subscription: PushSubscription,
+  publicKey: string,
+) {
+  const applicationServerKey = subscription.options.applicationServerKey
+
+  if (!applicationServerKey) {
+    return true
+  }
+
+  return areUint8ArraysEqual(
+    new Uint8Array(applicationServerKey),
+    base64UrlToUint8Array(publicKey),
+  )
+}
+
 async function getReadyServiceWorkerRegistration() {
   assertBrowserPushSupported()
   await startServiceWorkerRuntime()
@@ -238,7 +268,13 @@ export async function subscribeBrowserPush(publicKey: string) {
   const existingSubscription = await registration.pushManager.getSubscription()
 
   if (existingSubscription) {
-    return existingSubscription.toJSON()
+    if (
+      isBrowserPushSubscriptionForPublicKey(existingSubscription, publicKey)
+    ) {
+      return existingSubscription.toJSON()
+    }
+
+    await existingSubscription.unsubscribe()
   }
 
   const subscription = await registration.pushManager.subscribe({
@@ -425,5 +461,6 @@ export function resetServiceWorkerRuntimeForTests() {
 }
 
 export const serviceWorkerRuntimeInternalsForTests = {
+  areUint8ArraysEqual,
   base64UrlToUint8Array,
 }

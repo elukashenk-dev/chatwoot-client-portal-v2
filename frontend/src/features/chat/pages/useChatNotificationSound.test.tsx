@@ -126,4 +126,45 @@ describe('useChatNotificationSound', () => {
 
     expect(playSound).toHaveBeenCalledTimes(1)
   })
+
+  it('does not play when older incoming history is prepended', () => {
+    const playSound = vi.fn()
+    const { rerender } = renderHook(
+      ({ messages }) =>
+        useChatNotificationSound({
+          activeThreadId: 'private:me',
+          enabled: true,
+          messages,
+          playSound,
+        }),
+      {
+        initialProps: {
+          messages: [
+            message(2, {
+              createdAt: '2026-05-23T00:02:00.000Z',
+            }),
+            message(3, {
+              createdAt: '2026-05-23T00:03:00.000Z',
+            }),
+          ],
+        },
+      },
+    )
+
+    rerender({
+      messages: [
+        message(1, {
+          createdAt: '2026-05-23T00:01:00.000Z',
+        }),
+        message(2, {
+          createdAt: '2026-05-23T00:02:00.000Z',
+        }),
+        message(3, {
+          createdAt: '2026-05-23T00:03:00.000Z',
+        }),
+      ],
+    })
+
+    expect(playSound).not.toHaveBeenCalled()
+  })
 })

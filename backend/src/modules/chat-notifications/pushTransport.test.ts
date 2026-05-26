@@ -53,6 +53,7 @@ describe('push transport', () => {
       '{"type":"chat_message"}',
       {
         TTL: 86_400,
+        timeout: 5_000,
         urgency: 'high',
       },
     )

@@ -449,23 +449,29 @@ export function createChatwootWebhookService({
         }
       }
 
-      const deliveredClients = await publishCurrentSnapshot({
-        chatMessagesService,
-        mapping,
-        realtimeHub,
-        tenantId,
-      })
+      let deliveredClients = 0
+
+      try {
+        deliveredClients = await publishCurrentSnapshot({
+          chatMessagesService,
+          mapping,
+          realtimeHub,
+          tenantId,
+        })
+      } catch {
+        // Realtime fanout is best-effort after the webhook is accepted; push delivery must still run.
+      }
 
       if (eventName === 'message_created' && pushDeliveryService) {
-        try {
-          await pushDeliveryService.deliverMessageCreated({
+        void pushDeliveryService
+          .deliverMessageCreated({
             chatwootMessageId,
             tenantSlug,
             threadMapping: mapping,
           })
-        } catch {
-          // Push is best-effort and must not break Chatwoot webhook realtime delivery.
-        }
+          .catch(() => {
+            // Push is best-effort and must not break Chatwoot webhook acceptance.
+          })
       }
 
       return {

@@ -4,6 +4,7 @@ import type { PushTransportSubscription } from './types.js'
 import type { VapidConfig } from './vapid.js'
 
 const CHAT_PUSH_TTL_SECONDS = 86_400
+const CHAT_PUSH_SOCKET_TIMEOUT_MS = 5_000
 
 export type PushTransportResult =
   | {
@@ -62,6 +63,7 @@ export function createWebPushTransport(
       try {
         await webPush.sendNotification(subscription, payload, {
           TTL: CHAT_PUSH_TTL_SECONDS,
+          timeout: CHAT_PUSH_SOCKET_TIMEOUT_MS,
           urgency: 'high',
         })
 

@@ -485,6 +485,99 @@ describe('createChatwootWebhookService', () => {
     })
   })
 
+  it('keeps webhook response independent from pending push delivery', async () => {
+    const deliverMessageCreated = vi
+      .fn<DeliverMessageCreated>()
+      .mockReturnValue(new Promise(() => {}))
+    const { service } = createService({
+      pushDeliveryService: {
+        deliverMessageCreated,
+      },
+    })
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    })
+
+    const result = await Promise.race([
+      service.handleWebhook(webhook),
+      new Promise((resolve) => {
+        setTimeout(() => resolve('waiting_for_push'), 20)
+      }),
+    ])
+
+    expect(result).toEqual({
+      deliveredClients: 2,
+      result: 'accepted',
+    })
+    expect(deliverMessageCreated).toHaveBeenCalled()
+  })
+
+  it('keeps webhook accepted and still triggers push delivery when realtime fanout fails', async () => {
+    const deliverMessageCreated = vi
+      .fn<DeliverMessageCreated>()
+      .mockResolvedValue({
+        expired: 0,
+        failed: 0,
+        recipients: 1,
+        sent: 1,
+        skipped: 0,
+        subscriptions: 1,
+      })
+    const { service } = createService({
+      publishThreadMessages: vi
+        .fn<PublishThreadMessages>()
+        .mockRejectedValue(new Error('Realtime snapshot failed.')),
+      pushDeliveryService: {
+        deliverMessageCreated,
+      },
+    })
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).resolves.toEqual({
+      deliveredClients: 0,
+      result: 'accepted',
+    })
+    expect(deliverMessageCreated).toHaveBeenCalledWith({
+      chatwootMessageId: 501,
+      tenantSlug: 'default',
+      threadMapping: {
+        chatwootConversationId: 101,
+        portalChatThreadId: 1,
+        threadId: 'private:me',
+        threadType: 'private',
+        userId: 7,
+      },
+    })
+  })
+
   it('fans out a group webhook only to active subscribers whose thread access is still ready', async () => {
     const realtimeHub = createChatRealtimeHub()
     const firstSend = vi.fn()
