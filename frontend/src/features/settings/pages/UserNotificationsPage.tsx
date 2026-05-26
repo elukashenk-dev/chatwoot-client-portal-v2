@@ -4,12 +4,14 @@ import { routePaths } from '../../../app/routePaths'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { ChatFullScreenPanel } from '../../chat/components/ChatFullScreenPanel'
 import {
-  canEnableBrowserPush,
-  getBrowserPushStatusLabel,
-  getGlobalEffectiveSettings,
   NotificationCard,
   NotificationSwitch,
 } from '../../chat/components/NotificationSettingsControls'
+import {
+  canEnableBrowserPush,
+  getBrowserPushStatusLabel,
+  getGlobalEffectiveSettings,
+} from '../../chat/lib/notificationSettingsPresentation'
 import { useUserNotificationsSettings } from './useUserNotificationsSettings'
 
 export function UserNotificationsPage() {
@@ -28,6 +30,11 @@ export function UserNotificationsPage() {
   const pushStatus = getBrowserPushStatusLabel(state.browserPush)
   const canTogglePush =
     Boolean(effectiveSettings?.newMessagesEnabled) &&
+    canEnableBrowserPush(state.browserPush)
+  const shouldShowDeviceConnect =
+    Boolean(effectiveSettings?.pushEnabled) &&
+    Boolean(state.browserPush) &&
+    !state.browserPush?.subscribed &&
     canEnableBrowserPush(state.browserPush)
 
   return (
@@ -85,6 +92,19 @@ export function UserNotificationsPage() {
               }}
             />
           </NotificationCard>
+
+          {shouldShowDeviceConnect ? (
+            <button
+              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={state.isUpdating}
+              onClick={() => {
+                void enablePushDefault()
+              }}
+              type="button"
+            >
+              Подключить push на этом устройстве
+            </button>
+          ) : null}
 
           {state.browserPush?.subscribed ? (
             <button

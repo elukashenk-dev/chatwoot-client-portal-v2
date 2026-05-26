@@ -1,10 +1,12 @@
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
-import type { ChatThreadSummary } from '../types'
 import {
   canEnableBrowserPush,
   getBrowserPushStatusLabel,
   getInheritanceStatus,
   hasChatNotificationOverrides,
+} from '../lib/notificationSettingsPresentation'
+import type { ChatThreadSummary } from '../types'
+import {
   NotificationCard,
   NotificationSwitch,
 } from './NotificationSettingsControls'
@@ -41,6 +43,11 @@ export function ChatNotificationsPage({
   const pushStatus = getBrowserPushStatusLabel(state.browserPush)
   const canTogglePush =
     Boolean(settings?.effective.newMessagesEnabled) &&
+    canEnableBrowserPush(state.browserPush)
+  const shouldShowDeviceConnect =
+    Boolean(settings?.effective.pushEnabled) &&
+    Boolean(state.browserPush) &&
+    !state.browserPush?.subscribed &&
     canEnableBrowserPush(state.browserPush)
   const globalMessagesDisabled = Boolean(
     settings && !settings.global.newMessagesEnabled,
@@ -123,6 +130,17 @@ export function ChatNotificationsPage({
               type="button"
             >
               Сбросить к общим настройкам
+            </button>
+          ) : null}
+
+          {shouldShowDeviceConnect ? (
+            <button
+              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={state.isUpdating}
+              onClick={onEnablePushForThread}
+              type="button"
+            >
+              Подключить push на этом устройстве
             </button>
           ) : null}
 

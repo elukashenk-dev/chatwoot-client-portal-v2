@@ -177,4 +177,36 @@ describe('UserNotificationsPage', () => {
     })
     expect(updateUserNotificationSettingsMock).not.toHaveBeenCalled()
   })
+
+  it('connects this device when global push is already enabled elsewhere', async () => {
+    const user = userEvent.setup()
+
+    getUserNotificationSettingsMock.mockResolvedValueOnce({
+      newMessagesEnabled: true,
+      pushEnabled: true,
+      soundEnabled: true,
+    })
+    loadBrowserPushSnapshotMock.mockResolvedValueOnce(browserPushSnapshot)
+    ensureBrowserPushSubscriptionMock.mockResolvedValueOnce({
+      browserPush: {
+        ...browserPushSnapshot,
+        subscribed: true,
+        subscriptionEndpoint: 'https://push.example.test/subscription',
+      },
+      result: 'subscribed',
+    })
+
+    renderPage()
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Подключить push на этом устройстве',
+      }),
+    )
+
+    await waitFor(() => {
+      expect(ensureBrowserPushSubscriptionMock).toHaveBeenCalled()
+    })
+    expect(updateUserNotificationSettingsMock).not.toHaveBeenCalled()
+  })
 })

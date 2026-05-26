@@ -20,6 +20,8 @@ export function useChatPageNotifications({
 }: UseChatPageNotificationsOptions): ChatNotificationSettings | null {
   useEffect(() => {
     void chatNotificationsPanel.loadChatNotificationSettings()
+    // The panel object is intentionally not a dependency: this effect is keyed to the selected chat only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedThreadId])
 
   useEffect(
@@ -34,10 +36,10 @@ export function useChatPageNotifications({
     chatNotificationsPanel.state.settingsThreadId === selectedThreadId
       ? chatNotificationsPanel.state.settings
       : null
-  const notificationSoundEnabled =
-    selectedThreadNotificationSettings?.effective.newMessagesEnabled !==
-      false &&
-    selectedThreadNotificationSettings?.effective.soundEnabled !== false
+  const notificationSoundEnabled = Boolean(
+    selectedThreadNotificationSettings?.effective?.newMessagesEnabled &&
+    selectedThreadNotificationSettings.effective.soundEnabled,
+  )
 
   useChatNotificationSound({
     activeThreadId: selectedThreadId,

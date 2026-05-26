@@ -93,6 +93,27 @@ describe('loadEnv', () => {
     expect(env.PUSH_VAPID_KEY_ID).toBeUndefined()
   })
 
+  it('uses conservative default Web Push subscription origins', () => {
+    expect(loadEnv(baseRawEnv).PUSH_SUBSCRIPTION_ALLOWED_ORIGINS).toEqual([
+      'https://fcm.googleapis.com',
+      'https://updates.push.services.mozilla.com',
+      'https://web.push.apple.com',
+    ])
+  })
+
+  it('parses configured Web Push subscription origins', () => {
+    expect(
+      loadEnv({
+        ...baseRawEnv,
+        PUSH_SUBSCRIPTION_ALLOWED_ORIGINS:
+          'https://push.example.test, https://another-push.example.test',
+      }).PUSH_SUBSCRIPTION_ALLOWED_ORIGINS,
+    ).toEqual([
+      'https://push.example.test',
+      'https://another-push.example.test',
+    ])
+  })
+
   it('accepts a complete Web Push VAPID configuration', () => {
     const env = loadEnv({
       ...baseRawEnv,

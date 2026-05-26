@@ -37,12 +37,19 @@ export function useChatSupportAvailability({
     isLoading: true,
   })
 
-  latestOptionsRef.current = {
+  useEffect(() => {
+    latestOptionsRef.current = {
+      handleConnectionUnavailableError,
+      handleUnauthorizedChatError,
+      isMountedRef,
+      markBrowserOnline,
+    }
+  }, [
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
     markBrowserOnline,
-  }
+  ])
 
   const loadSupportAvailability = useCallback(async () => {
     const requestId = requestSequenceRef.current + 1
@@ -101,12 +108,15 @@ export function useChatSupportAvailability({
       return
     }
 
-    void loadSupportAvailability()
+    const initialLoadTimerId = window.setTimeout(() => {
+      void loadSupportAvailability()
+    }, 0)
     const intervalId = window.setInterval(() => {
       void loadSupportAvailability()
     }, SUPPORT_AVAILABILITY_POLL_MS)
 
     return () => {
+      window.clearTimeout(initialLoadTimerId)
       window.clearInterval(intervalId)
       requestSequenceRef.current += 1
     }

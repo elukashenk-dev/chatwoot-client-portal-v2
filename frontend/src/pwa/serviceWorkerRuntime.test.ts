@@ -217,6 +217,30 @@ describe('serviceWorkerRuntime', () => {
     })
   })
 
+  it('reads an existing push subscription from a ready registration without a controller', async () => {
+    setSecurePushBrowser()
+    const existingSubscription = new MockPushSubscription(
+      'https://fcm.googleapis.com/fcm/send/subscription-1',
+    )
+    const pushManager = createPushManager({ existingSubscription })
+    const registration = new MockServiceWorkerRegistration({
+      pushManager,
+    })
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: null,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.getExistingBrowserPushSubscription()).resolves.toBe(
+      existingSubscription,
+    )
+    expect(pushManager.getSubscription).toHaveBeenCalled()
+  })
+
   it('registers the page as push-ready while a message listener is active', async () => {
     const controller = new MockServiceWorker('activated')
     const registration = new MockServiceWorkerRegistration()

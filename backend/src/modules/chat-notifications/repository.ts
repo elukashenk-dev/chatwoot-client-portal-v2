@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -75,6 +75,31 @@ export function createChatNotificationsRepository(
   { tenantId }: TenantRepositoryScope,
 ) {
   return {
+    async disableOtherPushSubscriptionsForEndpoint({
+      endpoint,
+      now,
+      portalUserId,
+    }: {
+      endpoint: string
+      now: Date
+      portalUserId: number
+    }) {
+      await db
+        .update(portalPushSubscriptions)
+        .set({
+          status: 'disabled',
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(portalPushSubscriptions.tenantId, tenantId),
+            eq(portalPushSubscriptions.endpoint, endpoint),
+            eq(portalPushSubscriptions.status, 'active'),
+            ne(portalPushSubscriptions.portalUserId, portalUserId),
+          ),
+        )
+    },
+
     async disablePushSubscription({
       endpoint,
       now,

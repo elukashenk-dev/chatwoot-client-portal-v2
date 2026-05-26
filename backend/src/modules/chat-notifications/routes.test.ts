@@ -286,7 +286,7 @@ describe('registerChatNotificationRoutes', () => {
         },
         method: 'POST',
         payload: {
-          endpoint: 'https://push.example.test/subscription/1',
+          endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
           keys: {
             auth: 'auth-secret',
             p256dh: 'p256dh-key',
@@ -299,7 +299,7 @@ describe('registerChatNotificationRoutes', () => {
       expect(subscriptionService.saveSubscription).toHaveBeenCalledWith({
         portalUserId: 7,
         subscription: {
-          endpoint: 'https://push.example.test/subscription/1',
+          endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
           keys: {
             auth: 'auth-secret',
             p256dh: 'p256dh-key',
@@ -307,6 +307,33 @@ describe('registerChatNotificationRoutes', () => {
           userAgent: 'Test Browser',
         },
       })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects unlisted public browser push subscription origins', async () => {
+    const { app, subscriptionService } = await buildNotificationsRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          endpoint: 'https://attacker.example.test/subscription/1',
+          keys: {
+            auth: 'auth-secret',
+            p256dh: 'p256dh-key',
+          },
+        },
+        url: '/api/notifications/push/subscriptions',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(subscriptionService.saveSubscription).not.toHaveBeenCalled()
     } finally {
       await app.close()
     }
@@ -359,14 +386,14 @@ describe('registerChatNotificationRoutes', () => {
         },
         method: 'DELETE',
         payload: {
-          endpoint: 'https://push.example.test/subscription/1',
+          endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
         },
         url: '/api/notifications/push/subscriptions',
       })
 
       expect(response.statusCode).toBe(204)
       expect(subscriptionService.disableSubscription).toHaveBeenCalledWith({
-        endpoint: 'https://push.example.test/subscription/1',
+        endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
         portalUserId: 7,
       })
     } finally {

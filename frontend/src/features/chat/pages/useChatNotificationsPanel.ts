@@ -117,6 +117,32 @@ export function useChatNotificationsPanel({
       }
 
       if (await handleUnauthorizedChatError(error)) {
+        try {
+          const settings = await getChatNotificationSettings(threadId)
+
+          if (!isCurrentRequest(requestId, threadId)) {
+            return
+          }
+
+          markBrowserOnline()
+          setState((currentState) => ({
+            ...currentState,
+            settings,
+            settingsThreadId: threadId,
+          }))
+        } catch (retryError) {
+          if (!isCurrentRequest(requestId, threadId)) {
+            return
+          }
+
+          handleConnectionUnavailableError(retryError)
+          setState((currentState) => ({
+            ...currentState,
+            settings: null,
+            settingsThreadId: null,
+          }))
+        }
+
         return
       }
 
@@ -278,6 +304,19 @@ export function useChatNotificationsPanel({
         setState((currentState) => ({
           ...currentState,
           browserPush: subscriptionResult.browserPush,
+          isUpdating: false,
+        }))
+        return
+      }
+
+      if (
+        state.settingsThreadId === threadId &&
+        state.settings?.effective.pushEnabled
+      ) {
+        setState((currentState) => ({
+          ...currentState,
+          browserPush: subscriptionResult.browserPush,
+          errorMessage: null,
           isUpdating: false,
         }))
         return

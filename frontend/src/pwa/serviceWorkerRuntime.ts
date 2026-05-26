@@ -33,6 +33,7 @@ type PortalPushMessageHandler = (payload: PortalPushMessagePayload) => void
 type UpdateListener = (snapshot: ServiceWorkerUpdateSnapshot) => void
 
 const updateListeners = new Set<UpdateListener>()
+const SERVICE_WORKER_READY_TIMEOUT_MS = 2000
 const defaultSnapshot: ServiceWorkerUpdateSnapshot = {
   isSupported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
   status:
@@ -180,14 +181,47 @@ async function getReadyServiceWorkerRegistration() {
   return registration
 }
 
+async function waitForReadyServiceWorkerRegistration() {
+  let timeoutId: number | null = null
+
+  try {
+    return await Promise.race<ServiceWorkerRegistration | null>([
+      navigator.serviceWorker.ready,
+      new Promise<ServiceWorkerRegistration | null>((resolve) => {
+        timeoutId = window.setTimeout(() => {
+          resolve(null)
+        }, SERVICE_WORKER_READY_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId)
+    }
+  }
+}
+
 export async function getExistingBrowserPushSubscription() {
   const support = getBrowserPushSupportState()
 
-  if (!support.supported || !navigator.serviceWorker.controller) {
+  if (!support.supported) {
     return null
   }
 
-  const registration = await navigator.serviceWorker.ready
+  const didStart = await startServiceWorkerRuntime()
+
+  if (!didStart) {
+    return null
+  }
+
+  const registration = await waitForReadyServiceWorkerRegistration()
+
+  if (!registration) {
+    return null
+  }
+
+  if (!registration.pushManager) {
+    return null
+  }
 
   return registration.pushManager.getSubscription()
 }
@@ -228,6 +262,10 @@ export function registerPortalPushMessageListener(
     return () => {}
   }
 
+  function postClientReadyState(type: string) {
+    navigator.serviceWorker.controller?.postMessage({ type })
+  }
+
   function handleMessage(event: MessageEvent) {
     if (event.data?.type !== 'PORTAL_PUSH_MESSAGE') {
       return
@@ -246,16 +284,24 @@ export function registerPortalPushMessageListener(
     })
   }
 
+  function handleControllerChange() {
+    postClientReadyState('PORTAL_PUSH_CLIENT_READY')
+  }
+
   navigator.serviceWorker.addEventListener('message', handleMessage)
-  navigator.serviceWorker.controller?.postMessage({
-    type: 'PORTAL_PUSH_CLIENT_READY',
-  })
+  navigator.serviceWorker.addEventListener(
+    'controllerchange',
+    handleControllerChange,
+  )
+  postClientReadyState('PORTAL_PUSH_CLIENT_READY')
 
   return () => {
     navigator.serviceWorker.removeEventListener('message', handleMessage)
-    navigator.serviceWorker.controller?.postMessage({
-      type: 'PORTAL_PUSH_CLIENT_NOT_READY',
-    })
+    navigator.serviceWorker.removeEventListener(
+      'controllerchange',
+      handleControllerChange,
+    )
+    postClientReadyState('PORTAL_PUSH_CLIENT_NOT_READY')
   }
 }
 

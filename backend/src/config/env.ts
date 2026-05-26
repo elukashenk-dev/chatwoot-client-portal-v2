@@ -61,6 +61,32 @@ const optionalUrlList = z.preprocess((value) => {
   return value
 }, z.array(z.string().url()).default([]))
 
+const DEFAULT_PUSH_SUBSCRIPTION_ALLOWED_ORIGINS = [
+  'https://fcm.googleapis.com',
+  'https://updates.push.services.mozilla.com',
+  'https://web.push.apple.com',
+]
+
+const pushSubscriptionAllowedOrigins = z.preprocess(
+  (value) => {
+    if (value === undefined || value === null || value === '') {
+      return DEFAULT_PUSH_SUBSCRIPTION_ALLOWED_ORIGINS
+    }
+
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+    }
+
+    return value
+  },
+  z
+    .array(z.string().url())
+    .default([...DEFAULT_PUSH_SUBSCRIPTION_ALLOWED_ORIGINS]),
+)
+
 const optionalPositiveInt = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') {
     return undefined
@@ -137,6 +163,7 @@ const envSchema = z
     PUSH_VAPID_PRIVATE_KEY: optionalNonEmptyString,
     PUSH_VAPID_SUBJECT: optionalNonEmptyString,
     PUSH_VAPID_KEY_ID: optionalNonEmptyString,
+    PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: pushSubscriptionAllowedOrigins,
   })
   .superRefine((env, context) => {
     const hasChatwootConfig = Boolean(

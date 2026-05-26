@@ -117,7 +117,9 @@ describe('useChatSupportAvailability', () => {
 
   it('polls while browser is online', async () => {
     vi.useFakeTimers()
-    getChatSupportAvailabilityMock.mockResolvedValue(createAvailability('online'))
+    getChatSupportAvailabilityMock.mockResolvedValue(
+      createAvailability('online'),
+    )
 
     renderHook(() =>
       useChatSupportAvailability({
@@ -130,7 +132,7 @@ describe('useChatSupportAvailability', () => {
     )
 
     await act(async () => {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
     })
     expect(getChatSupportAvailabilityMock).toHaveBeenCalledTimes(1)
 

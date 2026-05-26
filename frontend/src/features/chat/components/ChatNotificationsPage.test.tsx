@@ -56,6 +56,7 @@ function renderPage(
   }> = {},
 ) {
   const onResetThreadOverrides = callbacks.onResetThreadOverrides ?? vi.fn()
+  const onEnablePushForThread = vi.fn()
   const onUpdateSetting = callbacks.onUpdateSetting ?? vi.fn()
 
   render(
@@ -68,7 +69,7 @@ function renderPage(
       }}
       onBack={vi.fn()}
       onDisableDevicePush={vi.fn()}
-      onEnablePushForThread={vi.fn()}
+      onEnablePushForThread={onEnablePushForThread}
       onResetThreadOverrides={onResetThreadOverrides}
       onRetry={vi.fn()}
       onUpdateSetting={onUpdateSetting}
@@ -80,6 +81,7 @@ function renderPage(
   )
 
   return {
+    onEnablePushForThread,
     onResetThreadOverrides,
     onUpdateSetting,
   }
@@ -135,5 +137,46 @@ describe('ChatNotificationsPage', () => {
     )
 
     expect(onResetThreadOverrides).toHaveBeenCalled()
+  })
+
+  it('offers to connect this device when chat push is enabled elsewhere', async () => {
+    const user = userEvent.setup()
+    const { onEnablePushForThread } = renderPage({
+      browserPush: {
+        configured: true,
+        permission: 'granted',
+        publicKey: {
+          available: true,
+          publicKey: 'public-key',
+          publicKeyFingerprint: 'sha256-public-key',
+          vapidKeyId: 'sha256-public',
+        },
+        subscribed: false,
+        subscriptionEndpoint: null,
+        support: {
+          reason: 'supported',
+          supported: true,
+        },
+      },
+      settings: {
+        ...readyState.settings,
+        effective: {
+          ...readyState.settings.effective,
+          pushEnabled: true,
+        },
+        global: {
+          ...readyState.settings.global,
+          pushEnabled: true,
+        },
+      },
+    })
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Подключить push на этом устройстве',
+      }),
+    )
+
+    expect(onEnablePushForThread).toHaveBeenCalled()
   })
 })

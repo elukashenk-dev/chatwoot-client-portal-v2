@@ -6,6 +6,8 @@ import {
   chatwootWebhookDeliveries,
   portalChatMessageSends,
   portalChatThreads,
+  portalPushDeliveries,
+  portalPushSubscriptions,
   portalRateLimitBuckets,
   portalSessions,
   portalUsers,
@@ -29,6 +31,8 @@ async function countRows(
   table:
     | typeof chatwootWebhookDeliveries
     | typeof portalChatMessageSends
+    | typeof portalPushDeliveries
+    | typeof portalPushSubscriptions
     | typeof portalRateLimitBuckets
     | typeof portalSessions
     | typeof verificationRecords,
@@ -212,6 +216,62 @@ describe('cleanupPortalMaintenanceData', () => {
         tenantId,
       },
     ])
+    const [oldPushSubscription] = await database.db
+      .insert(portalPushSubscriptions)
+      .values({
+        auth: 'old-auth',
+        endpoint: 'https://fcm.googleapis.com/fcm/send/old',
+        lastErrorAt: daysAgo(now, 45),
+        p256dh: 'old-p256dh',
+        portalUserId: userId,
+        status: 'expired',
+        tenantId,
+        updatedAt: daysAgo(now, 45),
+        vapidKeyId: 'test-key',
+        vapidPublicKeyFingerprint: 'sha256-test',
+      })
+      .returning({ id: portalPushSubscriptions.id })
+    const [recentPushSubscription] = await database.db
+      .insert(portalPushSubscriptions)
+      .values({
+        auth: 'recent-auth',
+        endpoint: 'https://fcm.googleapis.com/fcm/send/recent',
+        p256dh: 'recent-p256dh',
+        portalUserId: userId,
+        status: 'active',
+        tenantId,
+        updatedAt: daysAgo(now, 2),
+        vapidKeyId: 'test-key',
+        vapidPublicKeyFingerprint: 'sha256-test',
+      })
+      .returning({ id: portalPushSubscriptions.id })
+
+    if (!oldPushSubscription || !recentPushSubscription) {
+      throw new Error('Failed to create push subscription fixtures.')
+    }
+
+    await database.db.insert(portalPushDeliveries).values([
+      {
+        chatwootMessageId: 501,
+        createdAt: daysAgo(now, 31),
+        portalChatThreadId,
+        portalUserId: userId,
+        status: 'sent',
+        subscriptionId: oldPushSubscription.id,
+        tenantId,
+        threadId: 'private:me',
+      },
+      {
+        chatwootMessageId: 502,
+        createdAt: daysAgo(now, 2),
+        portalChatThreadId,
+        portalUserId: userId,
+        status: 'sent',
+        subscriptionId: recentPushSubscription.id,
+        tenantId,
+        threadId: 'private:me',
+      },
+    ])
 
     await expect(
       cleanupPortalMaintenanceData(database.db, {
@@ -220,15 +280,17 @@ describe('cleanupPortalMaintenanceData', () => {
     ).resolves.toEqual({
       chatMessageSendsDeleted: 2,
       dryRun: false,
+      pushDeliveriesDeleted: 1,
+      pushSubscriptionsDeleted: 1,
       rateLimitBucketsDeleted: 1,
       sessionsDeleted: 1,
       verificationRecordsDeleted: 1,
       webhookDeliveriesDeleted: 1,
     })
 
-    await expect(
-      countRows(database.db, portalChatMessageSends),
-    ).resolves.toBe(1)
+    await expect(countRows(database.db, portalChatMessageSends)).resolves.toBe(
+      1,
+    )
     await expect(
       countRows(database.db, chatwootWebhookDeliveries),
     ).resolves.toBe(1)
@@ -237,6 +299,10 @@ describe('cleanupPortalMaintenanceData', () => {
     )
     await expect(countRows(database.db, portalSessions)).resolves.toBe(1)
     await expect(countRows(database.db, verificationRecords)).resolves.toBe(1)
+    await expect(countRows(database.db, portalPushDeliveries)).resolves.toBe(1)
+    await expect(countRows(database.db, portalPushSubscriptions)).resolves.toBe(
+      1,
+    )
 
     const [threadCount] = await database.db
       .select({ value: count() })
@@ -273,6 +339,8 @@ describe('cleanupPortalMaintenanceData', () => {
       }),
     ).resolves.toMatchObject({
       dryRun: true,
+      pushDeliveriesDeleted: 0,
+      pushSubscriptionsDeleted: 0,
       webhookDeliveriesDeleted: 1,
     })
     await expect(

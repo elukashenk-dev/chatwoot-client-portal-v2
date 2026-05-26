@@ -10,7 +10,9 @@ type CreatePushSubscriptionServiceOptions = {
   now?: () => Date
   repository: Pick<
     ChatNotificationsRepository,
-    'disablePushSubscription' | 'upsertPushSubscription'
+    | 'disableOtherPushSubscriptionsForEndpoint'
+    | 'disablePushSubscription'
+    | 'upsertPushSubscription'
   >
   vapidConfig: VapidConfig | null
 }
@@ -50,16 +52,22 @@ export function createPushSubscriptionService({
           'Push-уведомления не настроены на сервере.',
         )
       }
+      const currentTime = now()
 
       await repository.upsertPushSubscription({
         auth: subscription.keys.auth,
         endpoint: subscription.endpoint,
-        now: now(),
+        now: currentTime,
         p256dh: subscription.keys.p256dh,
         portalUserId,
         userAgent: subscription.userAgent,
         vapidKeyId: vapidConfig.keyId,
         vapidPublicKeyFingerprint: vapidConfig.publicKeyFingerprint,
+      })
+      await repository.disableOtherPushSubscriptionsForEndpoint({
+        endpoint: subscription.endpoint,
+        now: currentTime,
+        portalUserId,
       })
     },
 

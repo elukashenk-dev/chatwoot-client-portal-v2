@@ -136,6 +136,16 @@ export function useUserNotificationsSettings() {
         return
       }
 
+      if (state.settings?.pushEnabled) {
+        setState((currentState) => ({
+          ...currentState,
+          browserPush: subscriptionResult.browserPush,
+          errorMessage: null,
+          isUpdating: false,
+        }))
+        return
+      }
+
       const settings = await updateUserNotificationSettings({
         pushEnabled: true,
       })

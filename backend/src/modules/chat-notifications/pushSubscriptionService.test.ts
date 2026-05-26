@@ -12,6 +12,7 @@ const vapidConfig = createVapidConfig({
 
 function createRepository() {
   return {
+    disableOtherPushSubscriptionsForEndpoint: vi.fn(async () => undefined),
     disablePushSubscription: vi.fn(async () => undefined),
     upsertPushSubscription: vi.fn(async () => undefined),
   }
@@ -98,6 +99,13 @@ describe('push subscription service', () => {
       vapidKeyId: 'sha256-43a46f1d081d2701',
       vapidPublicKeyFingerprint:
         'sha256-43a46f1d081d270130e2210a1de59f9715de033307d068edc65a335b27e95d3d',
+    })
+    expect(
+      repository.disableOtherPushSubscriptionsForEndpoint,
+    ).toHaveBeenCalledWith({
+      endpoint: 'https://push.example.test/subscription/1',
+      now: new Date('2026-05-23T00:00:00.000Z'),
+      portalUserId: 7,
     })
   })
 

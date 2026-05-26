@@ -8,13 +8,13 @@ import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { getChatNotificationsStatus } from '../lib/notificationSettingsPresentation'
+import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
 import type {
   ChatNotificationSettings,
   ChatSupportAvailabilityResponse,
   ChatThreadSummary,
 } from '../types'
-import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
-import { getChatNotificationsStatus } from './NotificationSettingsControls'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellIcon,

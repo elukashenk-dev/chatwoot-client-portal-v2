@@ -46,6 +46,48 @@ function createChatThreadsResponse() {
   )
 }
 
+function createNotificationSettingsResponse() {
+  return createJsonResponse(
+    {
+      effective: {
+        newMessagesEnabled: true,
+        pushEnabled: false,
+        soundEnabled: true,
+      },
+      global: {
+        newMessagesEnabled: true,
+        pushEnabled: false,
+        soundEnabled: true,
+      },
+      overrides: {
+        newMessagesEnabled: null,
+        pushEnabled: null,
+        soundEnabled: null,
+      },
+      threadId: 'private:me',
+    },
+    200,
+  )
+}
+
+function createSupportAvailabilityResponse() {
+  return createJsonResponse(
+    {
+      currentStatus: 'online',
+      outOfOfficeMessage: null,
+      reason: 'none',
+      result: 'ready',
+      workingHours: {
+        enabled: false,
+        isWithinWorkingHours: null,
+        rows: [],
+        timezone: 'UTC',
+      },
+    },
+    200,
+  )
+}
+
 function renderAuthRoutes(initialEntries: string[]) {
   renderWithRouter(
     <AuthSessionProvider>
@@ -198,9 +240,11 @@ describe('LoginPage', () => {
   it('loads existing session into the app shell and returns to login after logout', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(
-        createJsonResponse(
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createJsonResponse(
           {
             user: {
               email: 'name@company.ru',
@@ -209,11 +253,31 @@ describe('LoginPage', () => {
             },
           },
           200,
-        ),
-      )
-      .mockResolvedValueOnce(createChatThreadsResponse())
-      .mockResolvedValueOnce(createChatNotReadyResponse())
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+        )
+      }
+
+      if (url === '/api/chat/threads') {
+        return createChatThreadsResponse()
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createChatNotReadyResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/auth/logout') {
+        return new Response(null, { status: 204 })
+      }
+
+      return createJsonResponse({}, 404)
+    })
 
     renderAuthRoutes(['/auth/login'])
 
@@ -226,8 +290,7 @@ describe('LoginPage', () => {
       await screen.findByRole('menuitem', { name: 'Завершить диалог' }),
     )
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/logout',
       expect.objectContaining({
         credentials: 'include',

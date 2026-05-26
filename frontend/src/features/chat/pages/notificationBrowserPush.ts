@@ -33,10 +33,21 @@ export function readNotificationPermission(
 
 export async function loadBrowserPushSnapshot(): Promise<BrowserPushSnapshot> {
   const support = getBrowserPushSupportState()
+  if (!support.supported) {
+    return {
+      configured: false,
+      permission: 'unsupported',
+      publicKey: {
+        available: false,
+      },
+      subscribed: false,
+      subscriptionEndpoint: null,
+      support,
+    }
+  }
+
   const publicKey = await getPushPublicKey()
-  const existingSubscription = support.supported
-    ? await getExistingBrowserPushSubscription()
-    : null
+  const existingSubscription = await getExistingBrowserPushSubscription()
 
   return {
     configured: publicKey.available,
@@ -116,5 +127,19 @@ export async function disableBrowserPushOnDevice({
     ...browserPush,
     subscribed: false,
     subscriptionEndpoint: null,
+  }
+}
+
+export async function disableCurrentBrowserPushBestEffort() {
+  try {
+    const browserPush = await loadBrowserPushSnapshot()
+
+    if (!browserPush.subscribed) {
+      return
+    }
+
+    await disableBrowserPushOnDevice({ browserPush })
+  } catch {
+    // Logout must not be blocked by best-effort local push cleanup.
   }
 }

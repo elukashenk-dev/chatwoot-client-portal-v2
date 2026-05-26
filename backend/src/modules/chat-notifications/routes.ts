@@ -49,33 +49,6 @@ const chatNotificationSettingsPatchSchema = z
   })
   .strict()
 
-const pushEndpointSchema = z
-  .string()
-  .trim()
-  .url()
-  .max(4096)
-  .refine(isSafePushEndpoint, {
-    message: 'Некорректный endpoint push-уведомлений.',
-  })
-
-const pushSubscriptionBodySchema = z
-  .object({
-    endpoint: pushEndpointSchema,
-    keys: z
-      .object({
-        auth: z.string().trim().min(1).max(512),
-        p256dh: z.string().trim().min(1).max(2048),
-      })
-      .strict(),
-  })
-  .strict()
-
-const pushSubscriptionDeleteBodySchema = z
-  .object({
-    endpoint: pushEndpointSchema,
-  })
-  .strict()
-
 function isPrivateIpv4(hostname: string) {
   const octets = hostname.split('.').map((part) => Number(part))
 
@@ -114,7 +87,19 @@ function isPrivateIpv6(hostname: string) {
   )
 }
 
-function isSafePushEndpoint(value: string) {
+function normalizeAllowedOrigins(allowedOrigins: string[] | undefined) {
+  return new Set(
+    (allowedOrigins ?? []).map((origin) => {
+      try {
+        return new URL(origin).origin
+      } catch {
+        return origin
+      }
+    }),
+  )
+}
+
+function isSafePushEndpoint(value: string, allowedOrigins: Set<string>) {
   try {
     const url = new URL(value)
     const hostname = url.hostname.replace(/\.$/, '').toLowerCase()
@@ -130,17 +115,50 @@ function isSafePushEndpoint(value: string) {
     const ipVersion = isIP(hostname.replace(/^\[|\]$/g, ''))
 
     if (ipVersion === 4) {
-      return !isPrivateIpv4(hostname)
+      return !isPrivateIpv4(hostname) && allowedOrigins.has(url.origin)
     }
 
     if (ipVersion === 6) {
-      return !isPrivateIpv6(hostname)
+      return !isPrivateIpv6(hostname) && allowedOrigins.has(url.origin)
     }
 
-    return true
+    return allowedOrigins.has(url.origin)
   } catch {
     return false
   }
+}
+
+function createPushEndpointSchema(allowedOrigins: Set<string>) {
+  return z
+    .string()
+    .trim()
+    .url()
+    .max(4096)
+    .refine((value) => isSafePushEndpoint(value, allowedOrigins), {
+      message: 'Некорректный endpoint push-уведомлений.',
+    })
+}
+
+function createPushSubscriptionBodySchema(allowedOrigins: Set<string>) {
+  return z
+    .object({
+      endpoint: createPushEndpointSchema(allowedOrigins),
+      keys: z
+        .object({
+          auth: z.string().trim().min(1).max(512),
+          p256dh: z.string().trim().min(1).max(2048),
+        })
+        .strict(),
+    })
+    .strict()
+}
+
+function createPushSubscriptionDeleteBodySchema(allowedOrigins: Set<string>) {
+  return z
+    .object({
+      endpoint: createPushEndpointSchema(allowedOrigins),
+    })
+    .strict()
 }
 
 function toUserSettingsPatch(
@@ -192,6 +210,14 @@ export function registerChatNotificationRoutes(
     env,
   }: RegisterChatNotificationRoutesOptions,
 ) {
+  const allowedPushOrigins = normalizeAllowedOrigins(
+    env.PUSH_SUBSCRIPTION_ALLOWED_ORIGINS,
+  )
+  const pushSubscriptionBodySchema =
+    createPushSubscriptionBodySchema(allowedPushOrigins)
+  const pushSubscriptionDeleteBodySchema =
+    createPushSubscriptionDeleteBodySchema(allowedPushOrigins)
+
   app.get('/api/notifications/settings', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({
       authService,

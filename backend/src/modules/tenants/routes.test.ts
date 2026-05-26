@@ -36,6 +36,15 @@ const baseTestEnv: AppEnv = {
   SMTP_PORT: 1025,
   SMTP_SECURE: false,
   SMTP_USER: undefined,
+  PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: [
+    'https://fcm.googleapis.com',
+    'https://updates.push.services.mozilla.com',
+    'https://web.push.apple.com',
+  ],
+  PUSH_VAPID_KEY_ID: undefined,
+  PUSH_VAPID_PRIVATE_KEY: undefined,
+  PUSH_VAPID_PUBLIC_KEY: undefined,
+  PUSH_VAPID_SUBJECT: undefined,
 }
 
 async function seedTenant(

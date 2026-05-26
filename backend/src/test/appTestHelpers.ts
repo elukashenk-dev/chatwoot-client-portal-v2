@@ -36,6 +36,11 @@ export const testEnv: AppEnv = {
   PUSH_VAPID_PRIVATE_KEY: undefined,
   PUSH_VAPID_PUBLIC_KEY: undefined,
   PUSH_VAPID_SUBJECT: undefined,
+  PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: [
+    'https://fcm.googleapis.com',
+    'https://updates.push.services.mozilla.com',
+    'https://web.push.apple.com',
+  ],
 }
 
 export async function seedDefaultTenant(database: DatabaseClient) {
