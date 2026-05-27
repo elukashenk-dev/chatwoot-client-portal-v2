@@ -395,14 +395,53 @@ export async function clearAppIconBadge() {
     return false
   }
 
+  let didClearBrowserBadge = false
   const clearAppBadge = (navigator as AppBadgingNavigator).clearAppBadge
 
-  if (typeof clearAppBadge !== 'function') {
+  if (typeof clearAppBadge === 'function') {
+    try {
+      await clearAppBadge.call(navigator)
+      didClearBrowserBadge = true
+    } catch {
+      didClearBrowserBadge = false
+    }
+  }
+
+  const didRequestWorkerClear = await postClearAppBadgeMessage()
+
+  return didClearBrowserBadge || didRequestWorkerClear
+}
+
+async function postClearAppBadgeMessage() {
+  if (!('serviceWorker' in navigator)) {
     return false
   }
 
+  const clearMessage = {
+    type: 'PORTAL_APP_BADGE_CLEAR',
+  }
+
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage(clearMessage)
+
+    return true
+  }
+
   try {
-    await clearAppBadge.call(navigator)
+    const registration = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<null>((resolve) => {
+        window.setTimeout(() => {
+          resolve(null)
+        }, SERVICE_WORKER_READY_TIMEOUT_MS)
+      }),
+    ])
+
+    if (!registration?.active) {
+      return false
+    }
+
+    registration.active.postMessage(clearMessage)
 
     return true
   } catch {

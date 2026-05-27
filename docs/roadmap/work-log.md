@@ -143,8 +143,8 @@
   tenant-scoped push delivery из Chatwoot `message_created` webhooks, safe
   chat-title context в PWA push payload без текста сообщения и локальная
   красная точка для чатов с новыми сообщениями вне текущего активного чата,
-  плюс минимальный PWA app-icon badge signal без счетчика на поддерживаемых
-  платформах.
+  плюс минимальный локальный PWA app-icon badge count по показанным системным
+  push на поддерживаемых платформах.
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
@@ -167,5 +167,5 @@
 ## Recommended Next Step
 
 - Выполнить real-device/prod smoke обновленных push-уведомлений: safe chat
-  title, локальная красная точка в меню чатов и iOS PWA app-icon badge signal;
-  затем перейти к follow-up `backend unread-state`.
+  title, локальная красная точка в меню чатов и локальный iOS/macOS PWA
+  app-icon badge count; затем перейти к follow-up `backend unread-state`.

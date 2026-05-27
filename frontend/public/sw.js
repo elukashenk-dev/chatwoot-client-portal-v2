@@ -1,6 +1,10 @@
 const SERVICE_WORKER_REVISION = '__PORTAL_SERVICE_WORKER_REVISION__'
 const STATIC_CACHE = `provgroup-portal-static-${SERVICE_WORKER_REVISION}`
 const PUSH_CLIENT_RESPONSE_TIMEOUT_MS = 700
+const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
+const APP_BADGE_STORE_NAME = 'state'
+const APP_BADGE_COUNT_KEY = 'chat_push_count'
+const APP_BADGE_MAX_COUNT = 9999
 const APP_SHELL_URLS = [
   '/',
   '/favicon.svg',
@@ -10,6 +14,8 @@ const APP_SHELL_URLS = [
 ]
 const PUSH_READY_CLIENT_IDS = new Set()
 const PUSH_READY_CLIENT_THREAD_IDS = new Map()
+let fallbackAppBadgeCount = 0
+let appBadgeMutationQueue = Promise.resolve()
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -35,6 +41,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting()
+    return
+  }
+
+  if (event.data?.type === 'PORTAL_APP_BADGE_CLEAR') {
+    const resetPromise = resetAppIconBadge()
+    event.waitUntil?.(resetPromise)
     return
   }
 
@@ -230,10 +242,143 @@ async function setAppIconBadge() {
   }
 
   try {
-    await navigator.setAppBadge()
+    await runAppBadgeMutation(async () => {
+      const badgeCount = await incrementAppBadgeCount()
+
+      await navigator.setAppBadge(badgeCount)
+    })
   } catch {
     // App badge support and permission behavior differs by browser/platform.
   }
+}
+
+async function resetAppIconBadge() {
+  await runAppBadgeMutation(async () => {
+    fallbackAppBadgeCount = 0
+
+    try {
+      await writePersistedAppBadgeCount(0)
+    } catch {
+      // IndexedDB can be unavailable in some browser/service-worker states.
+    }
+
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.clearAppBadge !== 'function'
+    ) {
+      return
+    }
+
+    try {
+      await navigator.clearAppBadge()
+    } catch {
+      // App badge support and permission behavior differs by browser/platform.
+    }
+  })
+}
+
+function runAppBadgeMutation(operation) {
+  const queuedMutation = appBadgeMutationQueue.then(operation, operation)
+  appBadgeMutationQueue = queuedMutation.catch(() => {})
+
+  return queuedMutation
+}
+
+async function incrementAppBadgeCount() {
+  const currentCount = await readAppBadgeCount()
+  const nextCount = Math.min(currentCount + 1, APP_BADGE_MAX_COUNT)
+
+  fallbackAppBadgeCount = nextCount
+
+  try {
+    await writePersistedAppBadgeCount(nextCount)
+  } catch {
+    // Keep the in-memory count when persistent storage is unavailable.
+  }
+
+  return nextCount
+}
+
+async function readAppBadgeCount() {
+  try {
+    return await readPersistedAppBadgeCount()
+  } catch {
+    return fallbackAppBadgeCount
+  }
+}
+
+function openAppBadgeDatabase() {
+  if (typeof indexedDB === 'undefined') {
+    return Promise.reject(new Error('IndexedDB is unavailable.'))
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(APP_BADGE_DATABASE_NAME, 1)
+
+    request.onupgradeneeded = () => {
+      const database = request.result
+
+      if (!database.objectStoreNames.contains(APP_BADGE_STORE_NAME)) {
+        database.createObjectStore(APP_BADGE_STORE_NAME)
+      }
+    }
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to open app badge database.'))
+    }
+  })
+}
+
+async function readPersistedAppBadgeCount() {
+  const database = await openAppBadgeDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(APP_BADGE_STORE_NAME, 'readonly')
+    const request = transaction
+      .objectStore(APP_BADGE_STORE_NAME)
+      .get(APP_BADGE_COUNT_KEY)
+
+    request.onsuccess = () => {
+      const value = request.result
+
+      resolve(Number.isSafeInteger(value) && value > 0 ? value : 0)
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to read app badge count.'))
+    }
+    transaction.oncomplete = () => {
+      database.close()
+    }
+    transaction.onabort = () => {
+      database.close()
+    }
+  })
+}
+
+async function writePersistedAppBadgeCount(count) {
+  const database = await openAppBadgeDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(APP_BADGE_STORE_NAME, 'readwrite')
+    const request = transaction
+      .objectStore(APP_BADGE_STORE_NAME)
+      .put(count, APP_BADGE_COUNT_KEY)
+
+    request.onsuccess = () => {
+      resolve()
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to write app badge count.'))
+    }
+    transaction.oncomplete = () => {
+      database.close()
+    }
+    transaction.onabort = () => {
+      database.close()
+    }
+  })
 }
 
 function buildNotificationCopy(payload) {
