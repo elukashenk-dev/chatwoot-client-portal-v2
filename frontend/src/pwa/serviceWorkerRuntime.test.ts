@@ -382,6 +382,14 @@ describe('serviceWorkerRuntime', () => {
   })
 
   it('clears the app icon badge when the browser supports badging', async () => {
+    const controller = new MockServiceWorker('activated')
+    const registration = new MockServiceWorkerRegistration()
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: controller as unknown as ServiceWorker,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
     const clearAppBadge = vi.fn(async () => undefined)
     Object.defineProperty(globalThis.navigator, 'clearAppBadge', {
       configurable: true,
@@ -392,5 +400,30 @@ describe('serviceWorkerRuntime', () => {
 
     await expect(runtime.clearAppIconBadge()).resolves.toBe(true)
     expect(clearAppBadge).toHaveBeenCalledTimes(1)
+    expect(controller.postMessage).toHaveBeenCalledWith({
+      type: 'PORTAL_APP_BADGE_CLEAR',
+    })
+  })
+
+  it('resets the service worker badge count through the active worker when the page has no controller yet', async () => {
+    const activeWorker = new MockServiceWorker('activated')
+    const registration = new MockServiceWorkerRegistration()
+    Object.defineProperty(registration, 'active', {
+      configurable: true,
+      value: activeWorker,
+    })
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: null,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.clearAppIconBadge()).resolves.toBe(true)
+    expect(activeWorker.postMessage).toHaveBeenCalledWith({
+      type: 'PORTAL_APP_BADGE_CLEAR',
+    })
   })
 })

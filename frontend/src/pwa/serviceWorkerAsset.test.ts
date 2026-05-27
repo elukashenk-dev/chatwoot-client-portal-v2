@@ -160,7 +160,76 @@ describe('service worker push notifications', () => {
     })
 
     expect(showNotification).toHaveBeenCalled()
-    expect(setAppBadge).toHaveBeenCalledWith()
+    expect(setAppBadge).toHaveBeenCalledWith(1)
+  })
+
+  it('increments the local app icon badge count for each shown system notification', async () => {
+    const setAppBadge = vi.fn(async () => undefined)
+    const { listeners } = loadServiceWorker({
+      appBadge: {
+        setAppBadge,
+      },
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      notificationTag: 'portal-chat-message-default-9010',
+      tenantSlug: 'default',
+      type: 'chat_message',
+      url: '/',
+    })
+    await dispatchPush(pushListener!, {
+      notificationTag: 'portal-chat-message-default-9011',
+      tenantSlug: 'default',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
+  })
+
+  it('resets the local app icon badge count after a clear message', async () => {
+    const clearAppBadge = vi.fn(async () => undefined)
+    const setAppBadge = vi.fn(async () => undefined)
+    const { listeners } = loadServiceWorker({
+      appBadge: {
+        clearAppBadge,
+        setAppBadge,
+      },
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(messageListener).toBeDefined()
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      notificationTag: 'portal-chat-message-default-9012',
+      tenantSlug: 'default',
+      type: 'chat_message',
+      url: '/',
+    })
+    messageListener!({
+      data: {
+        type: 'PORTAL_APP_BADGE_CLEAR',
+      },
+      source: {
+        id: 'client-1',
+      },
+    })
+    await dispatchPush(pushListener!, {
+      notificationTag: 'portal-chat-message-default-9013',
+      tenantSlug: 'default',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(clearAppBadge).toHaveBeenCalledTimes(1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2, 1)
   })
 
   it('shows a system notification when the push-ready portal client is hidden', async () => {
