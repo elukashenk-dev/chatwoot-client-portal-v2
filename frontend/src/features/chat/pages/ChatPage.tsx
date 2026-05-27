@@ -48,6 +48,9 @@ export function ChatPage() {
     status: 'loading',
     threads: [],
   })
+  const [unreadThreadIds, setUnreadThreadIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
     null,
   )
@@ -322,12 +325,54 @@ export function ChatPage() {
           threadId: pageState.selectedThreadId,
         })
       : []
+  const markUnreadThread = useCallback(
+    (threadId: string) => {
+      setUnreadThreadIds((currentValue) => {
+        if (
+          threadId === pageState.selectedThreadId ||
+          !pageState.threads.some((thread) => thread.id === threadId) ||
+          currentValue.has(threadId)
+        ) {
+          return currentValue
+        }
+
+        const nextValue = new Set(currentValue)
+        nextValue.add(threadId)
+
+        return nextValue
+      })
+    },
+    [pageState.selectedThreadId, pageState.threads],
+  )
   const selectedThreadNotificationSettings = useChatPageNotifications({
     chatNotificationsPanel,
     messages: visibleMessages,
+    onOtherThreadPush: markUnreadThread,
     refreshChatSnapshot,
     selectedThreadId: pageState.selectedThreadId,
   })
+  useEffect(() => {
+    const selectedThreadId = pageState.selectedThreadId
+
+    if (
+      !selectedThreadId ||
+      pageState.status !== 'ready' ||
+      pageState.snapshot.activeThread?.id !== selectedThreadId
+    ) {
+      return
+    }
+
+    setUnreadThreadIds((currentValue) => {
+      if (!currentValue.has(selectedThreadId)) {
+        return currentValue
+      }
+
+      const nextValue = new Set(currentValue)
+      nextValue.delete(selectedThreadId)
+
+      return nextValue
+    })
+  }, [pageState])
   const transcriptMessages = historyFragment
     ? historyFragment.messages
     : visibleMessages
@@ -377,6 +422,7 @@ export function ChatPage() {
         supportAvailability={supportAvailability.state.availability}
         threadNotificationSettings={selectedThreadNotificationSettings}
         threads={pageState.threads}
+        unreadThreadIds={unreadThreadIds}
       />
       <ChatRuntimeAlerts
         isOnline={isBrowserOnline}

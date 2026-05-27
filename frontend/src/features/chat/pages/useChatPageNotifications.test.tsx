@@ -34,6 +34,7 @@ describe('useChatPageNotifications', () => {
   })
 
   it('acknowledges browser push messages only for the currently selected thread', async () => {
+    const onOtherThreadPush = vi.fn()
     const refreshChatSnapshot = vi.fn(async () => undefined)
     const chatNotificationsPanel = createChatNotificationsPanel()
 
@@ -41,6 +42,7 @@ describe('useChatPageNotifications', () => {
       useChatPageNotifications({
         chatNotificationsPanel,
         messages: [],
+        onOtherThreadPush,
         refreshChatSnapshot,
         selectedThreadId: 'group:155',
       }),
@@ -58,10 +60,13 @@ describe('useChatPageNotifications', () => {
         chatwootMessageId: 9001,
         tenantSlug: 'buhfirma',
         threadId: 'private:me',
+        threadTitle: 'Личный чат',
+        threadType: 'private',
         type: 'chat_message',
         url: '/',
       }),
     ).toBe(false)
+    expect(onOtherThreadPush).toHaveBeenCalledWith('private:me')
     expect(refreshChatSnapshot).not.toHaveBeenCalled()
 
     expect(
@@ -69,10 +74,13 @@ describe('useChatPageNotifications', () => {
         chatwootMessageId: 9002,
         tenantSlug: 'buhfirma',
         threadId: 'group:155',
+        threadTitle: 'ООО Уточки',
+        threadType: 'group',
         type: 'chat_message',
         url: '/',
       }),
     ).toBe(true)
+    expect(onOtherThreadPush).toHaveBeenCalledTimes(1)
     expect(refreshChatSnapshot).toHaveBeenCalledTimes(1)
   })
 })

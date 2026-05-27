@@ -354,6 +354,8 @@ describe('serviceWorkerRuntime', () => {
             chatwootMessageId: 9004,
             tenantSlug: 'buhfirma',
             threadId: 'group:155',
+            threadTitle: 'ООО Уточки',
+            threadType: 'group',
             type: 'chat_message',
             url: '/',
           },
@@ -369,6 +371,8 @@ describe('serviceWorkerRuntime', () => {
       chatwootMessageId: 9004,
       tenantSlug: 'buhfirma',
       threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
       type: 'chat_message',
       url: '/',
     })

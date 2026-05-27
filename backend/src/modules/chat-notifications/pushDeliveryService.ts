@@ -55,16 +55,22 @@ function buildPayload({
   chatwootMessageId,
   tenantSlug,
   threadId,
+  threadTitle,
+  threadType,
 }: {
   chatwootMessageId: number
   tenantSlug: string
   threadId: string
+  threadTitle: string | null
+  threadType: 'group' | 'private' | null
 }) {
   return JSON.stringify({
     chatwootMessageId,
     notificationTag: `portal-chat-message-${tenantSlug}-${chatwootMessageId}`,
     tenantSlug,
     threadId,
+    threadTitle,
+    threadType,
     type: 'chat_message',
     url: '/',
   })
@@ -90,11 +96,6 @@ export function createChatNotificationPushDeliveryService({
         threadMapping: input.threadMapping,
       })
       summary.recipients = recipients.length
-      const payload = buildPayload({
-        chatwootMessageId: input.chatwootMessageId,
-        tenantSlug: input.tenantSlug,
-        threadId: input.threadMapping.threadId,
-      })
 
       for (const recipient of recipients) {
         const global =
@@ -119,6 +120,13 @@ export function createChatNotificationPushDeliveryService({
           recipient.portalUserId,
         )
         summary.subscriptions += subscriptions.length
+        const payload = buildPayload({
+          chatwootMessageId: input.chatwootMessageId,
+          tenantSlug: input.tenantSlug,
+          threadId: recipient.threadId,
+          threadTitle: recipient.threadTitle,
+          threadType: recipient.threadType,
+        })
 
         for (const subscription of subscriptions) {
           const deliveryId = await repository.recordPushDeliveryAttempt({

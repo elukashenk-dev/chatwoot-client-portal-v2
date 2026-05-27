@@ -1220,14 +1220,18 @@ type ChatHeaderProps = {
 Default it:
 
 ```ts
-unreadThreadIds = new Set(),
+unreadThreadIds = EMPTY_UNREAD_THREAD_IDS,
 ```
 
 Inside `availableThreads.map`:
 
 ```ts
-const hasUnread = !isSelected && unreadThreadIds.has(thread.id)
+const hasUnread = unreadThreadIds.has(thread.id)
 ```
+
+The selected chat is cleared only after that chat loads successfully, so an
+errored selection can still show the local unread dot until the user opens the
+chat in a ready state.
 
 Replace title span:
 

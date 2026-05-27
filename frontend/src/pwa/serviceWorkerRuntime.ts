@@ -27,6 +27,8 @@ export type PortalPushMessagePayload = {
   chatwootMessageId: number | null
   tenantSlug: string | null
   threadId: string | null
+  threadTitle: string | null
+  threadType: 'group' | 'private' | null
   type: 'chat_message'
   url: string
 }
@@ -332,6 +334,16 @@ export function registerPortalPushMessageListener(
         typeof event.data.payload?.threadId === 'string' &&
         event.data.payload.threadId.length > 0
           ? event.data.payload.threadId
+          : null,
+      threadTitle:
+        typeof event.data.payload?.threadTitle === 'string' &&
+        event.data.payload.threadTitle.trim().length > 0
+          ? event.data.payload.threadTitle.trim()
+          : null,
+      threadType:
+        event.data.payload?.threadType === 'private' ||
+        event.data.payload?.threadType === 'group'
+          ? event.data.payload.threadType
           : null,
       type: 'chat_message',
       url:

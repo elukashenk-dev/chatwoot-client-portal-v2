@@ -197,12 +197,13 @@ async function handlePushEvent(event) {
     type: 'window',
   })
 
-  if (await notifyVisiblePortalClients({ clientsList, payload })) {
+  if (await notifyPortalClients({ clientsList, payload })) {
     return
   }
 
+  const notificationCopy = buildNotificationCopy(payload)
   const notificationOptions = {
-    body: 'Откройте портал, чтобы посмотреть чат.',
+    body: notificationCopy.body,
     data: {
       url: normalizeNotificationUrl(payload.url),
     },
@@ -214,28 +215,58 @@ async function handlePushEvent(event) {
   }
 
   await self.registration.showNotification(
-    'Новое сообщение',
+    notificationCopy.title,
     notificationOptions,
   )
 }
 
-async function notifyVisiblePortalClients({ clientsList, payload }) {
-  const visibleClients = clientsList.filter(
-    (client) =>
-      client.visibilityState === 'visible' &&
-      isSameOriginUrl(client.url) &&
-      isPushReadyForThread(client, payload.threadId),
-  )
+function buildNotificationCopy(payload) {
+  if (payload.threadTitle && payload.threadType === 'group') {
+    return {
+      body: 'Новое сообщение в групповом чате',
+      title: payload.threadTitle,
+    }
+  }
 
-  if (visibleClients.length === 0) {
+  if (payload.threadTitle && payload.threadType === 'private') {
+    return {
+      body: 'Новое сообщение в личном чате',
+      title: payload.threadTitle,
+    }
+  }
+
+  return {
+    body: 'Откройте портал, чтобы посмотреть чат.',
+    title: 'Новое сообщение',
+  }
+}
+
+function isReadyPortalClient(client) {
+  return PUSH_READY_CLIENT_IDS.has(client.id) && isSameOriginUrl(client.url)
+}
+
+function canClientSuppressPush(client, threadId) {
+  return (
+    client.visibilityState === 'visible' &&
+    isPushReadyForThread(client, threadId)
+  )
+}
+
+async function notifyPortalClients({ clientsList, payload }) {
+  const portalClients = clientsList.filter(isReadyPortalClient)
+
+  if (portalClients.length === 0) {
     return false
   }
 
   const results = await Promise.all(
-    visibleClients.map((client) => postPushMessageToClient(client, payload)),
+    portalClients.map(async (client) => ({
+      handled: await postPushMessageToClient(client, payload),
+      suppressible: canClientSuppressPush(client, payload.threadId),
+    })),
   )
 
-  return results.some(Boolean)
+  return results.some((result) => result.handled && result.suppressible)
 }
 
 function postPushMessageToClient(client, payload) {
@@ -291,6 +322,8 @@ function readPushPayload(data) {
       notificationTag: null,
       tenantSlug: null,
       threadId: null,
+      threadTitle: null,
+      threadType: null,
       type: 'chat_message',
       url: '/',
     }
@@ -318,6 +351,15 @@ function readPushPayload(data) {
         typeof payload.threadId === 'string' && payload.threadId.length > 0
           ? payload.threadId
           : null,
+      threadTitle:
+        typeof payload.threadTitle === 'string' &&
+        payload.threadTitle.trim().length > 0
+          ? payload.threadTitle.trim().slice(0, 120)
+          : null,
+      threadType:
+        payload.threadType === 'private' || payload.threadType === 'group'
+          ? payload.threadType
+          : null,
       type: payload.type === 'chat_message' ? 'chat_message' : 'chat_message',
       url: normalizeNotificationUrl(
         typeof payload.url === 'string' ? payload.url : '/',
@@ -329,6 +371,8 @@ function readPushPayload(data) {
       notificationTag: null,
       tenantSlug: null,
       threadId: null,
+      threadTitle: null,
+      threadType: null,
       type: 'chat_message',
       url: '/',
     }

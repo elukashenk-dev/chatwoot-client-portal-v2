@@ -8,6 +8,7 @@ import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 type UseChatPageNotificationsOptions = {
   chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   messages: ChatMessage[]
+  onOtherThreadPush: (threadId: string) => void
   refreshChatSnapshot: () => Promise<void>
   selectedThreadId: string | null
 }
@@ -15,6 +16,7 @@ type UseChatPageNotificationsOptions = {
 export function useChatPageNotifications({
   chatNotificationsPanel,
   messages,
+  onOtherThreadPush,
   refreshChatSnapshot,
   selectedThreadId,
 }: UseChatPageNotificationsOptions): ChatNotificationSettings | null {
@@ -28,7 +30,12 @@ export function useChatPageNotifications({
     () =>
       registerPortalPushMessageListener(
         (payload) => {
-          if (!payload.threadId || payload.threadId !== selectedThreadId) {
+          if (!payload.threadId) {
+            return false
+          }
+
+          if (payload.threadId !== selectedThreadId) {
+            onOtherThreadPush(payload.threadId)
             return false
           }
 
@@ -40,7 +47,7 @@ export function useChatPageNotifications({
           activeThreadId: selectedThreadId,
         },
       ),
-    [refreshChatSnapshot, selectedThreadId],
+    [onOtherThreadPush, refreshChatSnapshot, selectedThreadId],
   )
 
   const selectedThreadNotificationSettings =

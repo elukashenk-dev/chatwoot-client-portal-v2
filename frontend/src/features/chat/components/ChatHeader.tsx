@@ -40,7 +40,10 @@ type ChatHeaderProps = {
   supportAvailability: ChatSupportAvailabilityResponse | null
   threadNotificationSettings: ChatNotificationSettings | null
   threads: ChatThreadSummary[]
+  unreadThreadIds?: ReadonlySet<string>
 }
+
+const EMPTY_UNREAD_THREAD_IDS = new Set<string>()
 
 function focusElement(element: HTMLElement | null) {
   if (element && document.contains(element)) {
@@ -59,6 +62,7 @@ export function ChatHeader({
   supportAvailability,
   threadNotificationSettings,
   threads,
+  unreadThreadIds = EMPTY_UNREAD_THREAD_IDS,
 }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
@@ -244,6 +248,7 @@ export function ChatHeader({
               </div>
               {availableThreads.map((thread) => {
                 const isSelected = thread.id === selectedThreadId
+                const hasUnread = unreadThreadIds.has(thread.id)
 
                 return (
                   <button
@@ -268,7 +273,19 @@ export function ChatHeader({
                     ) : (
                       <span className="h-4 w-4 shrink-0" />
                     )}
-                    <span className="min-w-0 truncate">{thread.title}</span>
+                    <span className="flex min-w-0 flex-1 items-start gap-1.5">
+                      <span className="min-w-0 truncate">{thread.title}</span>
+                      {hasUnread ? (
+                        <span
+                          aria-hidden="true"
+                          className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_0_2px_rgb(239_68_68_/_0.14)]"
+                          data-testid={`thread-unread-dot-${thread.id}`}
+                        />
+                      ) : null}
+                      {hasUnread ? (
+                        <span className="sr-only">, есть новое сообщение</span>
+                      ) : null}
+                    </span>
                   </button>
                 )
               })}

@@ -127,7 +127,16 @@ describe('service worker push notifications', () => {
   })
 
   it('shows a system notification when the push-ready portal client is hidden', async () => {
-    const postMessage = vi.fn()
+    const postMessage = vi.fn(
+      (_message: unknown, transfer?: Transferable[]) => {
+        const [responsePort] = transfer ?? []
+        if (responsePort instanceof MessagePort) {
+          responsePort.postMessage({
+            handled: false,
+          })
+        }
+      },
+    )
     const { listeners, showNotification } = loadServiceWorker({
       clientsList: [
         {
@@ -149,14 +158,33 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9003',
       tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
       type: 'chat_message',
       url: '/',
     })
 
-    expect(postMessage).not.toHaveBeenCalled()
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        payload: {
+          chatwootMessageId: null,
+          notificationTag: 'portal-chat-message-default-9003',
+          tenantSlug: 'default',
+          threadId: 'group:155',
+          threadTitle: 'ООО Уточки',
+          threadType: 'group',
+          type: 'chat_message',
+          url: '/',
+        },
+        type: 'PORTAL_PUSH_MESSAGE',
+      },
+      expect.arrayContaining([expect.any(MessagePort)]),
+    )
     expect(showNotification).toHaveBeenCalledWith(
-      'Новое сообщение',
+      'ООО Уточки',
       expect.objectContaining({
+        body: 'Новое сообщение в групповом чате',
         tag: 'portal-chat-message-default-9003',
       }),
     )
@@ -196,6 +224,8 @@ describe('service worker push notifications', () => {
       chatwootMessageId: 9004,
       tenantSlug: 'default',
       threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
       type: 'chat_message',
       url: '/',
     })
@@ -207,6 +237,8 @@ describe('service worker push notifications', () => {
           notificationTag: 'portal-chat-message-default-9004',
           tenantSlug: 'default',
           threadId: 'group:155',
+          threadTitle: 'ООО Уточки',
+          threadType: 'group',
           type: 'chat_message',
           url: '/',
         },
@@ -251,14 +283,28 @@ describe('service worker push notifications', () => {
       notificationTag: 'portal-chat-message-default-9005',
       tenantSlug: 'default',
       threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
       type: 'chat_message',
       url: '/',
     })
 
-    expect(postMessage).not.toHaveBeenCalled()
-    expect(showNotification).toHaveBeenCalledWith(
-      'Новое сообщение',
+    expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        payload: expect.objectContaining({
+          chatwootMessageId: 9005,
+          threadId: 'group:155',
+          threadTitle: 'ООО Уточки',
+          threadType: 'group',
+        }),
+        type: 'PORTAL_PUSH_MESSAGE',
+      }),
+      expect.arrayContaining([expect.any(MessagePort)]),
+    )
+    expect(showNotification).toHaveBeenCalledWith(
+      'ООО Уточки',
+      expect.objectContaining({
+        body: 'Новое сообщение в групповом чате',
         tag: 'portal-chat-message-default-9005',
       }),
     )
@@ -298,15 +344,81 @@ describe('service worker push notifications', () => {
       notificationTag: 'portal-chat-message-default-9006',
       tenantSlug: 'default',
       threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
       type: 'chat_message',
       url: '/',
     })
 
-    expect(postMessage).not.toHaveBeenCalled()
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          chatwootMessageId: 9006,
+          threadId: 'group:155',
+          threadTitle: 'ООО Уточки',
+          threadType: 'group',
+        }),
+        type: 'PORTAL_PUSH_MESSAGE',
+      }),
+      expect.arrayContaining([expect.any(MessagePort)]),
+    )
+    expect(showNotification).toHaveBeenCalledWith(
+      'ООО Уточки',
+      expect.objectContaining({
+        body: 'Новое сообщение в групповом чате',
+        tag: 'portal-chat-message-default-9006',
+      }),
+    )
+  })
+
+  it('uses safe chat title and type in the system notification copy', async () => {
+    const { listeners, showNotification } = loadServiceWorker()
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9007,
+      notificationTag: 'portal-chat-message-default-9007',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(showNotification).toHaveBeenCalledWith(
+      'ООО Уточки',
+      expect.objectContaining({
+        body: 'Новое сообщение в групповом чате',
+        tag: 'portal-chat-message-default-9007',
+      }),
+    )
+  })
+
+  it('falls back to generic copy when chat metadata is unavailable', async () => {
+    const { listeners, showNotification } = loadServiceWorker()
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9008,
+      notificationTag: 'portal-chat-message-default-9008',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: null,
+      threadType: null,
+      type: 'chat_message',
+      url: '/',
+    })
+
     expect(showNotification).toHaveBeenCalledWith(
       'Новое сообщение',
       expect.objectContaining({
-        tag: 'portal-chat-message-default-9006',
+        body: 'Откройте портал, чтобы посмотреть чат.',
+        tag: 'portal-chat-message-default-9008',
       }),
     )
   })

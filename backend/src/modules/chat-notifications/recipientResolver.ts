@@ -2,9 +2,13 @@ import type {
   ChatwootClient,
   ChatwootContact,
 } from '../../integrations/chatwoot/client.js'
-import { assertPortalPersonContactEnabled } from '../chat-threads/contactAttributes.js'
+import {
+  assertPortalGroupContactEnabled,
+  assertPortalPersonContactEnabled,
+} from '../chat-threads/contactAttributes.js'
 import type { ChatThreadContactRepository } from '../chat-threads/contactRepository.js'
 import type { ChatThreadsRepository } from '../chat-threads/repository.js'
+import { buildPrivateThread } from '../chat-threads/types.js'
 import type { ChatwootConversationThreadMapping } from '../chatwoot-webhooks/repository.js'
 
 const GROUP_RECIPIENT_LOOKUP_BATCH_SIZE = 5
@@ -25,6 +29,8 @@ export type PushRecipient = {
   portalChatThreadId: number
   portalUserId: number
   threadId: string
+  threadTitle: string | null
+  threadType: 'group' | 'private' | null
 }
 
 type CreateChatNotificationRecipientResolverOptions = {
@@ -74,6 +80,12 @@ function canReceiveGroupPush({
   }
 }
 
+function buildGroupPushThreadTitle(contact: ChatwootContact) {
+  const title = contact.name?.trim()
+
+  return title ? title.slice(0, 120) : null
+}
+
 export function createChatNotificationRecipientResolver({
   chatThreadsRepository,
   chatwootClient,
@@ -107,11 +119,15 @@ export function createChatNotificationRecipientResolver({
           return []
         }
 
+        const privateThread = buildPrivateThread()
+
         return [
           {
             portalChatThreadId: threadMapping.portalChatThreadId,
             portalUserId: threadMapping.userId,
             threadId: threadMapping.threadId,
+            threadTitle: privateThread.title,
+            threadType: privateThread.type,
           },
         ]
       }
@@ -122,6 +138,19 @@ export function createChatNotificationRecipientResolver({
         return []
       }
 
+      const groupContact = await chatwootClient.findContactById(groupContactId)
+
+      if (!groupContact) {
+        return []
+      }
+
+      try {
+        assertPortalGroupContactEnabled(groupContact)
+      } catch {
+        return []
+      }
+
+      const groupThreadTitle = buildGroupPushThreadTitle(groupContact)
       const links = await contactRepository.listActivePortalUserContactLinks()
       const recipients = await mapWithConcurrencyLimit(
         links,
@@ -155,6 +184,8 @@ export function createChatNotificationRecipientResolver({
             portalChatThreadId: threadMapping.portalChatThreadId,
             portalUserId: link.userId,
             threadId: threadMapping.threadId,
+            threadTitle: groupThreadTitle,
+            threadType: 'group',
           }
         },
       )

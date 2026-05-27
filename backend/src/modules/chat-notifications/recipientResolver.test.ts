@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ChatwootContact } from '../../integrations/chatwoot/client.js'
 import { createChatNotificationRecipientResolver } from './recipientResolver.js'
 
 function personContact(id: number, groupContactIds: number[]) {
@@ -12,12 +13,24 @@ function personContact(id: number, groupContactIds: number[]) {
     email: `user-${id}@example.test`,
     id,
     name: `User ${id}`,
-  }
+  } satisfies ChatwootContact
+}
+
+function groupContact(id: number, name: string | null = `Group ${id}`) {
+  return {
+    customAttributes: {
+      portal_contact_type: 'group',
+      portal_enabled: true,
+    },
+    email: null,
+    id,
+    name,
+  } satisfies ChatwootContact
 }
 
 function createResolver({
   authorUserId = null,
-  contacts = new Map<number, ReturnType<typeof personContact> | null>(),
+  contacts = new Map<number, ChatwootContact | null>(),
   links = [
     {
       chatwootContactId: 101,
@@ -34,7 +47,7 @@ function createResolver({
   ],
 }: {
   authorUserId?: number | null
-  contacts?: Map<number, ReturnType<typeof personContact> | null>
+  contacts?: Map<number, ChatwootContact | null>
   links?: Array<{
     chatwootContactId: number
     email: string
@@ -95,6 +108,8 @@ describe('chat notification recipient resolver', () => {
         portalChatThreadId: 22,
         portalUserId: 7,
         threadId: 'private:me',
+        threadTitle: 'Личный чат',
+        threadType: 'private',
       },
     ])
   })
@@ -145,7 +160,8 @@ describe('chat notification recipient resolver', () => {
   })
 
   it('resolves only current verified group members', async () => {
-    const contacts = new Map([
+    const contacts = new Map<number, ChatwootContact | null>([
+      [155, groupContact(155, 'ООО Уточки')],
       [101, personContact(101, [155])],
       [102, personContact(102, [999])],
       [103, null],
@@ -190,6 +206,8 @@ describe('chat notification recipient resolver', () => {
         portalChatThreadId: 22,
         portalUserId: 1,
         threadId: 'group:155',
+        threadTitle: 'ООО Уточки',
+        threadType: 'group',
       },
     ])
   })
@@ -197,7 +215,8 @@ describe('chat notification recipient resolver', () => {
   it('skips group message author', async () => {
     const resolver = createResolver({
       authorUserId: 1,
-      contacts: new Map([
+      contacts: new Map<number, ChatwootContact | null>([
+        [155, groupContact(155, 'ООО Уточки')],
         [101, personContact(101, [155])],
         [102, personContact(102, [155])],
       ]),
@@ -219,13 +238,55 @@ describe('chat notification recipient resolver', () => {
         portalChatThreadId: 22,
         portalUserId: 2,
         threadId: 'group:155',
+        threadTitle: 'ООО Уточки',
+        threadType: 'group',
+      },
+    ])
+  })
+
+  it('keeps group push title generic when the group contact has no safe name', async () => {
+    const resolver = createResolver({
+      contacts: new Map<number, ChatwootContact | null>([
+        [155, groupContact(155, null)],
+        [101, personContact(101, [155])],
+      ]),
+      links: [
+        {
+          chatwootContactId: 101,
+          email: 'one@example.test',
+          fullName: 'One',
+          userId: 1,
+        },
+      ],
+    })
+
+    await expect(
+      resolver.resolveRecipients({
+        chatwootMessageId: 9001,
+        threadMapping: {
+          chatwootConversationId: 11,
+          portalChatThreadId: 22,
+          threadId: 'group:155',
+          threadType: 'group',
+          userId: null,
+        },
+      }),
+    ).resolves.toEqual([
+      {
+        portalChatThreadId: 22,
+        portalUserId: 1,
+        threadId: 'group:155',
+        threadTitle: null,
+        threadType: 'group',
       },
     ])
   })
 
   it('fails closed when group thread id cannot identify a group contact', async () => {
     const resolver = createResolver({
-      contacts: new Map([[101, personContact(101, [155])]]),
+      contacts: new Map<number, ChatwootContact | null>([
+        [101, personContact(101, [155])],
+      ]),
     })
 
     await expect(

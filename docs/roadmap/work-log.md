@@ -140,8 +140,9 @@
   страница `Информация о чате` содержит read-only блок `Часы работы`.
 - Реализован slice `Уведомления`: глобальная страница настроек, chat-level
   overrides, in-portal sound, Web Push/VAPID subscription lifecycle,
-  tenant-scoped push delivery из Chatwoot `message_created` webhooks и generic
-  PWA push payload без текста сообщения.
+  tenant-scoped push delivery из Chatwoot `message_created` webhooks, safe
+  chat-title context в PWA push payload без текста сообщения и локальная
+  красная точка для чатов с новыми сообщениями вне текущего активного чата.
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
@@ -163,5 +164,6 @@
 
 ## Recommended Next Step
 
-- Выполнить real-device smoke для Web Push: установленная PWA, подписка
-  устройства и получение push после нового сообщения из Chatwoot.
+- Выполнить real-device/prod smoke обновленных push-уведомлений: safe chat
+  title и локальная красная точка в меню чатов; затем перейти к follow-up
+  `backend unread-state`.

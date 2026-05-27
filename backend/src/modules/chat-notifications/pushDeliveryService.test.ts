@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createChatNotificationPushDeliveryService } from './pushDeliveryService.js'
+import type { PushTransport, PushTransportResult } from './pushTransport.js'
 
 const threadMapping = {
   chatwootConversationId: 11,
@@ -42,9 +43,29 @@ function createRecipientResolver() {
         portalChatThreadId: 22,
         portalUserId: 7,
         threadId: 'private:me',
+        threadTitle: 'Личный чат',
+        threadType: 'private' as const,
       },
     ]),
   }
+}
+
+function createTransport(result: PushTransportResult = { status: 'sent' }) {
+  return {
+    sendNotification: vi.fn<PushTransport['sendNotification']>(
+      async () => result,
+    ),
+  }
+}
+
+function parseFirstNotificationPayload(
+  transport: ReturnType<typeof createTransport>,
+) {
+  const payload = transport.sendNotification.mock.calls[0]?.[1]
+
+  expect(payload).toBeTypeOf('string')
+
+  return JSON.parse(String(payload))
 }
 
 describe('chat notification push delivery service', () => {
@@ -72,9 +93,7 @@ describe('chat notification push delivery service', () => {
   })
 
   it('skips delivery when message id is missing', async () => {
-    const transport = {
-      sendNotification: vi.fn(async () => ({ status: 'sent' as const })),
-    }
+    const transport = createTransport()
     const service = createChatNotificationPushDeliveryService({
       recipientResolver: createRecipientResolver(),
       repository: createRepository(),
@@ -92,9 +111,7 @@ describe('chat notification push delivery service', () => {
 
   it('sends a generic payload to active subscriptions', async () => {
     const repository = createRepository()
-    const transport = {
-      sendNotification: vi.fn(async () => ({ status: 'sent' as const })),
-    }
+    const transport = createTransport()
     const service = createChatNotificationPushDeliveryService({
       now: () => new Date('2026-05-23T00:00:00.000Z'),
       recipientResolver: createRecipientResolver(),
@@ -126,15 +143,73 @@ describe('chat notification push delivery service', () => {
         notificationTag: 'portal-chat-message-default-9001',
         tenantSlug: 'default',
         threadId: 'private:me',
+        threadTitle: 'Личный чат',
+        threadType: 'private',
         type: 'chat_message',
         url: '/',
       }),
     )
+    const parsedPayload = parseFirstNotificationPayload(transport)
+
+    expect(parsedPayload).not.toHaveProperty('content')
+    expect(parsedPayload).not.toHaveProperty('text')
+    expect(parsedPayload).not.toHaveProperty('authorName')
+    expect(parsedPayload).not.toHaveProperty('attachments')
+    expect(parsedPayload).not.toHaveProperty('chatwootBaseUrl')
     expect(repository.updatePushDeliveryStatus).toHaveBeenCalledWith({
       deliveryId: 500,
       errorCode: null,
       status: 'sent',
     })
+  })
+
+  it('keeps unresolved thread metadata as safe nulls', async () => {
+    const repository = createRepository()
+    const transport = createTransport()
+    const service = createChatNotificationPushDeliveryService({
+      recipientResolver: {
+        resolveRecipients: vi.fn(async () => [
+          {
+            portalChatThreadId: 22,
+            portalUserId: 7,
+            threadId: 'group:155',
+            threadTitle: null,
+            threadType: null,
+          },
+        ]),
+      },
+      repository,
+      transport,
+    })
+
+    await service.deliverMessageCreated({
+      chatwootMessageId: 9001,
+      tenantSlug: 'default',
+      threadMapping: {
+        ...threadMapping,
+        threadId: 'group:155',
+        threadType: 'group',
+        userId: null,
+      },
+    })
+
+    const parsedPayload = parseFirstNotificationPayload(transport)
+
+    expect(parsedPayload).toMatchObject({
+      chatwootMessageId: 9001,
+      notificationTag: 'portal-chat-message-default-9001',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: null,
+      threadType: null,
+      type: 'chat_message',
+      url: '/',
+    })
+    expect(parsedPayload).not.toHaveProperty('content')
+    expect(parsedPayload).not.toHaveProperty('text')
+    expect(parsedPayload).not.toHaveProperty('authorName')
+    expect(parsedPayload).not.toHaveProperty('attachments')
+    expect(parsedPayload).not.toHaveProperty('chatwootBaseUrl')
   })
 
   it('skips users muted by effective settings', async () => {
@@ -144,9 +219,7 @@ describe('chat notification push delivery service', () => {
       pushEnabled: true,
       soundEnabled: true,
     })
-    const transport = {
-      sendNotification: vi.fn(async () => ({ status: 'sent' as const })),
-    }
+    const transport = createTransport()
     const service = createChatNotificationPushDeliveryService({
       recipientResolver: createRecipientResolver(),
       repository,
@@ -169,9 +242,7 @@ describe('chat notification push delivery service', () => {
   it('does not resend duplicate delivery attempts', async () => {
     const repository = createRepository()
     repository.recordPushDeliveryAttempt.mockResolvedValueOnce(null)
-    const transport = {
-      sendNotification: vi.fn(async () => ({ status: 'sent' as const })),
-    }
+    const transport = createTransport()
     const service = createChatNotificationPushDeliveryService({
       recipientResolver: createRecipientResolver(),
       repository,
@@ -193,12 +264,10 @@ describe('chat notification push delivery service', () => {
 
   it('marks expired subscriptions on 410 or 404 transport results', async () => {
     const repository = createRepository()
-    const transport = {
-      sendNotification: vi.fn(async () => ({
-        errorCode: 'web_push_410',
-        status: 'expired' as const,
-      })),
-    }
+    const transport = createTransport({
+      errorCode: 'web_push_410',
+      status: 'expired',
+    })
     const service = createChatNotificationPushDeliveryService({
       now: () => new Date('2026-05-23T00:00:00.000Z'),
       recipientResolver: createRecipientResolver(),
@@ -225,12 +294,10 @@ describe('chat notification push delivery service', () => {
 
   it('records non-expiring transport failures', async () => {
     const repository = createRepository()
-    const transport = {
-      sendNotification: vi.fn(async () => ({
-        errorCode: 'web_push_500',
-        status: 'failed' as const,
-      })),
-    }
+    const transport = createTransport({
+      errorCode: 'web_push_500',
+      status: 'failed',
+    })
     const service = createChatNotificationPushDeliveryService({
       now: () => new Date('2026-05-23T00:00:00.000Z'),
       recipientResolver: createRecipientResolver(),
