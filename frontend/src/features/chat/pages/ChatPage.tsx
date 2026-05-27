@@ -19,6 +19,7 @@ import {
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
+import { clearAppIconBadge } from '../../../pwa/serviceWorkerRuntime'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import type { ChatPageState } from './chatPageState'
@@ -246,6 +247,7 @@ export function ChatPage() {
 
   useEffect(() => {
     isMountedRef.current = true
+    void clearAppIconBadge()
     const bootstrapTimerId = window.setTimeout(() => {
       void loadInitialChat()
     }, 0)

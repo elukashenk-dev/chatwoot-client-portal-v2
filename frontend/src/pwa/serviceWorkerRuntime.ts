@@ -40,6 +40,9 @@ type RegisterPortalPushMessageListenerOptions = {
   activeThreadId?: string | null
 }
 type UpdateListener = (snapshot: ServiceWorkerUpdateSnapshot) => void
+type AppBadgingNavigator = Navigator & {
+  clearAppBadge?: () => Promise<void>
+}
 
 const updateListeners = new Set<UpdateListener>()
 const SERVICE_WORKER_READY_TIMEOUT_MS = 2000
@@ -384,6 +387,26 @@ export function registerPortalPushMessageListener(
       handleControllerChange,
     )
     postClientReadyState('PORTAL_PUSH_CLIENT_NOT_READY')
+  }
+}
+
+export async function clearAppIconBadge() {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const clearAppBadge = (navigator as AppBadgingNavigator).clearAppBadge
+
+  if (typeof clearAppBadge !== 'function') {
+    return false
+  }
+
+  try {
+    await clearAppBadge.call(navigator)
+
+    return true
+  } catch {
+    return false
   }
 }
 

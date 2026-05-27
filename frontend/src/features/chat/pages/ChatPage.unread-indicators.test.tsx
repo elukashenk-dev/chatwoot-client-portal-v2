@@ -20,6 +20,7 @@ type RegisterPortalPushMessageListener = (
 ) => () => void
 
 const serviceWorkerRuntimeMock = vi.hoisted(() => ({
+  clearAppIconBadge: vi.fn(async () => false),
   registerPortalPushMessageListener: vi.fn<RegisterPortalPushMessageListener>(
     () => vi.fn(),
   ),
@@ -31,6 +32,7 @@ vi.mock('../../../pwa/serviceWorkerRuntime', async (importOriginal) => {
 
   return {
     ...actual,
+    clearAppIconBadge: serviceWorkerRuntimeMock.clearAppIconBadge,
     registerPortalPushMessageListener:
       serviceWorkerRuntimeMock.registerPortalPushMessageListener,
   }
@@ -256,6 +258,7 @@ describe('ChatPage unread indicators', () => {
   const scrollIntoView = vi.fn()
 
   beforeEach(() => {
+    serviceWorkerRuntimeMock.clearAppIconBadge.mockClear()
     serviceWorkerRuntimeMock.registerPortalPushMessageListener.mockClear()
     vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
     Element.prototype.scrollIntoView = scrollIntoView
@@ -265,6 +268,44 @@ describe('ChatPage unread indicators', () => {
     vi.restoreAllMocks()
     fetchMock.mockReset()
     scrollIntoView.mockReset()
+  })
+
+  it('clears the app icon badge when the chat page opens', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createJsonResponse(createNotificationSettings('private:me'))
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
   })
 
   it('shows and clears a local unread dot for another chat push', async () => {

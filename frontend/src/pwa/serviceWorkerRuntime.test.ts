@@ -380,4 +380,17 @@ describe('serviceWorkerRuntime', () => {
       type: 'PORTAL_PUSH_CLIENT_NOT_READY',
     })
   })
+
+  it('clears the app icon badge when the browser supports badging', async () => {
+    const clearAppBadge = vi.fn(async () => undefined)
+    Object.defineProperty(globalThis.navigator, 'clearAppBadge', {
+      configurable: true,
+      value: clearAppBadge,
+    })
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.clearAppIconBadge()).resolves.toBe(true)
+    expect(clearAppBadge).toHaveBeenCalledTimes(1)
+  })
 })

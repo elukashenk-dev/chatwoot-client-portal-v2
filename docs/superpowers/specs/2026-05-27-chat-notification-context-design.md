@@ -9,13 +9,17 @@ Extend the current `Уведомления` slice with two small user-facing imp
 2. Local unread indicator: when a new message arrives in another chat while the
    portal is open, the chat switcher menu shows a small red dot next to that
    chat title.
+3. Minimal PWA app icon badge signal: when the service worker shows a system
+   chat push notification, it sets a device-local app icon badge without a
+   count where the platform supports the Badging API; opening the chat page
+   clears it.
 
 The approved visual placement is option `B`: the dot appears immediately after
 the chat title and is raised slightly above the text baseline.
 
 Backend unread-state is explicitly out of scope for this slice. It remains a
-follow-up for persistent unread counters, cross-device sync, PWA app-icon
-badges, and unread state after a full browser/PWA restart.
+follow-up for persistent unread counters, cross-device sync, counted PWA
+app-icon badges, and unread state after a full browser/PWA restart.
 
 ## Scope
 
@@ -29,6 +33,9 @@ This slice includes:
 - local frontend unread state keyed by `threadId`;
 - unread dot rendering in `ChatHeader` chat switcher menu;
 - clearing the dot when the user opens that thread;
+- empty/countless PWA app icon badge signal on system push notifications, with
+  safe no-op behavior on unsupported platforms;
+- clearing the app icon badge when the chat page opens;
 - targeted backend, service worker, and frontend tests.
 
 This slice does not add:
@@ -36,7 +43,7 @@ This slice does not add:
 - persistent unread counters in the portal database;
 - server-side read receipts;
 - unread sync across devices;
-- PWA app-icon badge counts;
+- durable or counted PWA app-icon badge counts;
 - notification center;
 - email notifications;
 - message text in push notifications;
@@ -226,4 +233,4 @@ Manual/browser smoke:
 
 Backend unread-state remains a separate product slice. It should be designed
 when we want durable unread counters, cross-device sync, notification center
-integration, and PWA app-icon badge counts.
+integration, and counted PWA app-icon badges.

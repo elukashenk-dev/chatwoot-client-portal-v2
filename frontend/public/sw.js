@@ -218,6 +218,22 @@ async function handlePushEvent(event) {
     notificationCopy.title,
     notificationOptions,
   )
+  await setAppIconBadge()
+}
+
+async function setAppIconBadge() {
+  if (
+    typeof navigator === 'undefined' ||
+    typeof navigator.setAppBadge !== 'function'
+  ) {
+    return
+  }
+
+  try {
+    await navigator.setAppBadge()
+  } catch {
+    // App badge support and permission behavior differs by browser/platform.
+  }
 }
 
 function buildNotificationCopy(payload) {

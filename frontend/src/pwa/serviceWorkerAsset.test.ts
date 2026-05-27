@@ -10,8 +10,13 @@ type Listener = (event: {
 }) => void
 
 function loadServiceWorker({
+  appBadge = {},
   clientsList = [],
 }: {
+  appBadge?: {
+    clearAppBadge?: () => Promise<void>
+    setAppBadge?: (contents?: number) => Promise<void>
+  }
   clientsList?: Array<{
     focused?: boolean
     id: string
@@ -41,10 +46,20 @@ function loadServiceWorker({
     open: vi.fn(),
   }
 
-  new Function('self', 'caches', 'clients', 'Response', 'URL', 'fetch', source)(
+  new Function(
+    'self',
+    'caches',
+    'clients',
+    'navigator',
+    'Response',
+    'URL',
+    'fetch',
+    source,
+  )(
     serviceWorkerScope,
     cachesScope,
     clientsScope,
+    appBadge,
     Response,
     URL,
     vi.fn(),
@@ -124,6 +139,28 @@ describe('service worker push notifications', () => {
         tag: 'portal-chat-message-default-9002',
       }),
     )
+  })
+
+  it('sets an app icon badge when a system notification is shown', async () => {
+    const setAppBadge = vi.fn(async () => undefined)
+    const { listeners, showNotification } = loadServiceWorker({
+      appBadge: {
+        setAppBadge,
+      },
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      notificationTag: 'portal-chat-message-default-9010',
+      tenantSlug: 'default',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(showNotification).toHaveBeenCalled()
+    expect(setAppBadge).toHaveBeenCalledWith()
   })
 
   it('shows a system notification when the push-ready portal client is hidden', async () => {
@@ -223,6 +260,54 @@ describe('service worker push notifications', () => {
       expect.arrayContaining([expect.any(MessagePort)]),
     )
     expect(showNotification).not.toHaveBeenCalled()
+  })
+
+  it('does not set an app icon badge when a visible client suppresses the system notification', async () => {
+    const setAppBadge = vi.fn(async () => undefined)
+    const postMessage = vi.fn(
+      (_message: unknown, transfer?: Transferable[]) => {
+        const [responsePort] = transfer ?? []
+        if (responsePort instanceof MessagePort) {
+          responsePort.postMessage({
+            handled: true,
+          })
+        }
+      },
+    )
+    const { listeners, showNotification } = loadServiceWorker({
+      appBadge: {
+        setAppBadge,
+      },
+      clientsList: [
+        {
+          focused: false,
+          id: 'client-1',
+          postMessage,
+          url: 'https://lk.provgroup.ru/app',
+          visibilityState: 'visible',
+        },
+      ],
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(messageListener).toBeDefined()
+    expect(pushListener).toBeDefined()
+
+    markClientPushReady(messageListener!, 'client-1', 'group:155')
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9011,
+      notificationTag: 'portal-chat-message-default-9011',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(showNotification).not.toHaveBeenCalled()
+    expect(setAppBadge).not.toHaveBeenCalled()
   })
 
   it('shows a system notification when the visible portal client reports that another chat is active', async () => {
