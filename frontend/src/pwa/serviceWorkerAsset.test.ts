@@ -127,16 +127,7 @@ describe('service worker push notifications', () => {
   })
 
   it('shows a system notification when the push-ready portal client is hidden', async () => {
-    const postMessage = vi.fn(
-      (_message: unknown, transfer?: Transferable[]) => {
-        const [responsePort] = transfer ?? []
-        if (responsePort instanceof MessagePort) {
-          responsePort.postMessage({
-            handled: false,
-          })
-        }
-      },
-    )
+    const postMessage = vi.fn()
     const { listeners, showNotification } = loadServiceWorker({
       clientsList: [
         {
@@ -165,22 +156,7 @@ describe('service worker push notifications', () => {
       url: '/',
     })
 
-    expect(postMessage).toHaveBeenCalledWith(
-      {
-        payload: {
-          chatwootMessageId: null,
-          notificationTag: 'portal-chat-message-default-9003',
-          tenantSlug: 'default',
-          threadId: 'group:155',
-          threadTitle: 'ООО Уточки',
-          threadType: 'group',
-          type: 'chat_message',
-          url: '/',
-        },
-        type: 'PORTAL_PUSH_MESSAGE',
-      },
-      expect.arrayContaining([expect.any(MessagePort)]),
-    )
+    expect(postMessage).not.toHaveBeenCalled()
     expect(showNotification).toHaveBeenCalledWith(
       'ООО Уточки',
       expect.objectContaining({

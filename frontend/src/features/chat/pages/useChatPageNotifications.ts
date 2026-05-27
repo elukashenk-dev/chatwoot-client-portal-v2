@@ -6,6 +6,7 @@ import { useChatNotificationSound } from './useChatNotificationSound'
 import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 
 type UseChatPageNotificationsOptions = {
+  canSuppressActiveThreadPush: boolean
   chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   messages: ChatMessage[]
   onOtherThreadPush: (threadId: string) => void
@@ -14,6 +15,7 @@ type UseChatPageNotificationsOptions = {
 }
 
 export function useChatPageNotifications({
+  canSuppressActiveThreadPush,
   chatNotificationsPanel,
   messages,
   onOtherThreadPush,
@@ -39,6 +41,10 @@ export function useChatPageNotifications({
             return false
           }
 
+          if (!canSuppressActiveThreadPush) {
+            return false
+          }
+
           void refreshChatSnapshot()
 
           return true
@@ -47,7 +53,12 @@ export function useChatPageNotifications({
           activeThreadId: selectedThreadId,
         },
       ),
-    [onOtherThreadPush, refreshChatSnapshot, selectedThreadId],
+    [
+      canSuppressActiveThreadPush,
+      onOtherThreadPush,
+      refreshChatSnapshot,
+      selectedThreadId,
+    ],
   )
 
   const selectedThreadNotificationSettings =

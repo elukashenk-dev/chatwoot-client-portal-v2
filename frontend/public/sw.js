@@ -242,14 +242,15 @@ function buildNotificationCopy(payload) {
 }
 
 function isReadyPortalClient(client) {
-  return PUSH_READY_CLIENT_IDS.has(client.id) && isSameOriginUrl(client.url)
+  return (
+    client.visibilityState === 'visible' &&
+    PUSH_READY_CLIENT_IDS.has(client.id) &&
+    isSameOriginUrl(client.url)
+  )
 }
 
 function canClientSuppressPush(client, threadId) {
-  return (
-    client.visibilityState === 'visible' &&
-    isPushReadyForThread(client, threadId)
-  )
+  return isPushReadyForThread(client, threadId)
 }
 
 async function notifyPortalClients({ clientsList, payload }) {

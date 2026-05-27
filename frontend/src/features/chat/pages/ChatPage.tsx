@@ -325,6 +325,11 @@ export function ChatPage() {
           threadId: pageState.selectedThreadId,
         })
       : []
+  const canSuppressActiveThreadPush =
+    historyFragment === null &&
+    pageState.status === 'ready' &&
+    pageState.snapshot.result === 'ready' &&
+    pageState.snapshot.activeThread?.id === pageState.selectedThreadId
   const markUnreadThread = useCallback(
     (threadId: string) => {
       setUnreadThreadIds((currentValue) => {
@@ -345,6 +350,7 @@ export function ChatPage() {
     [pageState.selectedThreadId, pageState.threads],
   )
   const selectedThreadNotificationSettings = useChatPageNotifications({
+    canSuppressActiveThreadPush,
     chatNotificationsPanel,
     messages: visibleMessages,
     onOtherThreadPush: markUnreadThread,

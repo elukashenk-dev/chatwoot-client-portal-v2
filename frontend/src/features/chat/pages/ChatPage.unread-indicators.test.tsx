@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,8 +8,10 @@ import type { PortalPushMessagePayload } from '../../../pwa/serviceWorkerRuntime
 import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import type {
   ChatMessage,
+  ChatMessageContextResponse,
   ChatMessagesSnapshot,
   ChatNotificationSettings,
+  ChatThreadSearchResponse,
 } from '../types'
 
 type RegisterPortalPushMessageListener = (
@@ -157,6 +159,77 @@ function createOtherThreadPush(): PortalPushMessagePayload {
   }
 }
 
+function createCurrentThreadPush(): PortalPushMessagePayload {
+  return {
+    chatwootMessageId: 9002,
+    tenantSlug: 'buhfirma',
+    threadId: privateThread.id,
+    threadTitle: privateThread.title,
+    threadType: privateThread.type,
+    type: 'chat_message',
+    url: '/',
+  }
+}
+
+function createOldSearchResponse(): ChatThreadSearchResponse {
+  return {
+    activeThread: privateThread,
+    hasMoreOlder: false,
+    items: [
+      {
+        afterSnippet: 'Спасибо, посмотрю сегодня.',
+        authorName: 'Ольга Support',
+        authorRole: 'agent',
+        beforeSnippet: 'Перед этим клиент уточнил условия договора.',
+        content: 'Вот тот самый договор, который вы искали.',
+        createdAt: '2026-02-12T06:14:00.000Z',
+        direction: 'incoming',
+        id: 'message:190',
+        matchRanges: [{ start: 15, end: 22 }],
+        messageId: 190,
+      },
+    ],
+    nextOlderCursor: null,
+    query: 'договор',
+    reason: 'none',
+    result: 'ready',
+  }
+}
+
+function createContextResponse(): ChatMessageContextResponse {
+  return {
+    activeThread: privateThread,
+    earlierCursor: 188,
+    hasMoreEarlier: true,
+    hasMoreLater: true,
+    laterCursor: 191,
+    messages: [
+      createMessage({
+        authorName: 'ДО',
+        content: 'Перед этим клиент уточнил условия договора.',
+        createdAt: '2026-02-12T06:12:00.000Z',
+        id: 188,
+      }),
+      createMessage({
+        content: 'Вот тот самый договор, который вы искали.',
+        createdAt: '2026-02-12T06:14:00.000Z',
+        id: 190,
+      }),
+      createMessage({
+        authorName: 'Вы',
+        authorRole: 'current_user',
+        content: 'Спасибо, посмотрю сегодня.',
+        createdAt: '2026-02-12T06:16:00.000Z',
+        direction: 'outgoing',
+        id: 191,
+      }),
+    ],
+    reason: 'none',
+    result: 'ready',
+    targetMessageId: 190,
+  }
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -180,15 +253,18 @@ async function getLatestPushHandler() {
 
 describe('ChatPage unread indicators', () => {
   const fetchMock = vi.fn<typeof fetch>()
+  const scrollIntoView = vi.fn()
 
   beforeEach(() => {
     serviceWorkerRuntimeMock.registerPortalPushMessageListener.mockClear()
     vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
+    Element.prototype.scrollIntoView = scrollIntoView
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
     fetchMock.mockReset()
+    scrollIntoView.mockReset()
   })
 
   it('shows and clears a local unread dot for another chat push', async () => {
@@ -356,5 +432,77 @@ describe('ChatPage unread indicators', () => {
     expect(
       screen.getByTestId('thread-unread-dot-group:154'),
     ).toBeInTheDocument()
+  })
+
+  it('does not suppress same-chat browser push while a history fragment is visible', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createJsonResponse(createNotificationSettings('private:me'))
+      }
+
+      if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
+        return createJsonResponse(createOldSearchResponse())
+      }
+
+      if (
+        url === '/api/chat/threads/private%3Ame/messages/context?messageId=190'
+      ) {
+        return createJsonResponse(createContextResponse())
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    const user = userEvent.setup()
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Поиск по чату' }))
+    fireEvent.change(
+      await screen.findByLabelText('Поиск по чату', {}, CHAT_PAGE_LOAD_TIMEOUT),
+      {
+        target: { value: 'договор' },
+      },
+    )
+
+    const openPlaceButtons = await screen.findAllByRole('button', {
+      name: 'Открыть место в чате',
+    })
+    await user.click(openPlaceButtons[openPlaceButtons.length - 1]!)
+
+    expect(
+      await screen.findByText('Показан фрагмент истории'),
+    ).toBeInTheDocument()
+
+    const handler = await getLatestPushHandler()
+    const requestCountBeforePush = fetchMock.mock.calls.length
+
+    expect(handler?.(createCurrentThreadPush())).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(requestCountBeforePush)
   })
 })
