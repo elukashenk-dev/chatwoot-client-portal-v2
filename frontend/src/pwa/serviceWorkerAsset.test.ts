@@ -191,6 +191,36 @@ describe('service worker push notifications', () => {
     expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
   })
 
+  it('serializes concurrent app icon badge count increments', async () => {
+    const setAppBadge = vi.fn(async () => undefined)
+    const { listeners } = loadServiceWorker({
+      appBadge: {
+        setAppBadge,
+      },
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await Promise.all([
+      dispatchPush(pushListener!, {
+        notificationTag: 'portal-chat-message-default-9014',
+        tenantSlug: 'default',
+        type: 'chat_message',
+        url: '/',
+      }),
+      dispatchPush(pushListener!, {
+        notificationTag: 'portal-chat-message-default-9015',
+        tenantSlug: 'default',
+        type: 'chat_message',
+        url: '/',
+      }),
+    ])
+
+    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
+  })
+
   it('resets the local app icon badge count after a clear message', async () => {
     const clearAppBadge = vi.fn(async () => undefined)
     const setAppBadge = vi.fn(async () => undefined)

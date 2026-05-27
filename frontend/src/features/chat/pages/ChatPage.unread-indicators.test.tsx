@@ -270,7 +270,7 @@ describe('ChatPage unread indicators', () => {
     scrollIntoView.mockReset()
   })
 
-  it('clears the app icon badge when the chat page opens', async () => {
+  it('clears the app icon badge when the chat page opens and resumes', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)
 
@@ -304,6 +304,15 @@ describe('ChatPage unread indicators', () => {
       {},
       CHAT_PAGE_LOAD_TIMEOUT,
     )
+
+    expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
+
+    serviceWorkerRuntimeMock.clearAppIconBadge.mockClear()
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
 
     expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
   })

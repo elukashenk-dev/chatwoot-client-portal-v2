@@ -252,8 +252,17 @@ export function ChatPage() {
       void loadInitialChat()
     }, 0)
 
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        void clearAppIconBadge()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       window.clearTimeout(bootstrapTimerId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       isMountedRef.current = false
     }
   }, [loadInitialChat])

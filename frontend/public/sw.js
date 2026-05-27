@@ -15,6 +15,7 @@ const APP_SHELL_URLS = [
 const PUSH_READY_CLIENT_IDS = new Set()
 const PUSH_READY_CLIENT_THREAD_IDS = new Map()
 let fallbackAppBadgeCount = 0
+let appBadgeMutationQueue = Promise.resolve()
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -241,34 +242,46 @@ async function setAppIconBadge() {
   }
 
   try {
-    const badgeCount = await incrementAppBadgeCount()
-    await navigator.setAppBadge(badgeCount)
+    await runAppBadgeMutation(async () => {
+      const badgeCount = await incrementAppBadgeCount()
+
+      await navigator.setAppBadge(badgeCount)
+    })
   } catch {
     // App badge support and permission behavior differs by browser/platform.
   }
 }
 
 async function resetAppIconBadge() {
-  fallbackAppBadgeCount = 0
+  await runAppBadgeMutation(async () => {
+    fallbackAppBadgeCount = 0
 
-  try {
-    await writePersistedAppBadgeCount(0)
-  } catch {
-    // IndexedDB can be unavailable in some browser/service-worker states.
-  }
+    try {
+      await writePersistedAppBadgeCount(0)
+    } catch {
+      // IndexedDB can be unavailable in some browser/service-worker states.
+    }
 
-  if (
-    typeof navigator === 'undefined' ||
-    typeof navigator.clearAppBadge !== 'function'
-  ) {
-    return
-  }
+    if (
+      typeof navigator === 'undefined' ||
+      typeof navigator.clearAppBadge !== 'function'
+    ) {
+      return
+    }
 
-  try {
-    await navigator.clearAppBadge()
-  } catch {
-    // App badge support and permission behavior differs by browser/platform.
-  }
+    try {
+      await navigator.clearAppBadge()
+    } catch {
+      // App badge support and permission behavior differs by browser/platform.
+    }
+  })
+}
+
+function runAppBadgeMutation(operation) {
+  const queuedMutation = appBadgeMutationQueue.then(operation, operation)
+  appBadgeMutationQueue = queuedMutation.catch(() => {})
+
+  return queuedMutation
 }
 
 async function incrementAppBadgeCount() {
