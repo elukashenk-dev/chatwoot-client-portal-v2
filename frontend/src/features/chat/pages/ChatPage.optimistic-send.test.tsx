@@ -48,6 +48,9 @@ function createDeferredResponse() {
 
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
+    session: {
+      expiresAt: '2026-06-10T10:00:00.000Z',
+    },
     user: {
       email: 'name@group.ru',
       fullName: 'Portal User',
@@ -82,6 +85,42 @@ function createReadySnapshot(
   }
 }
 
+function createNotificationSettingsResponse() {
+  return createJsonResponse({
+    effective: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    global: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    overrides: {
+      newMessagesEnabled: null,
+      pushEnabled: null,
+      soundEnabled: null,
+    },
+    threadId: privateThread.id,
+  })
+}
+
+function createSupportAvailabilityResponse() {
+  return createJsonResponse({
+    currentStatus: 'online',
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -111,6 +150,8 @@ describe('ChatPage optimistic text send', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockReturnValueOnce(sendResponse.promise)
 
     renderChatRoute()
@@ -158,7 +199,7 @@ describe('ChatPage optimistic text send', () => {
       expect(screen.queryByLabelText('Отправляется')).not.toBeInTheDocument()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[3] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       clientMessageKey: string
       content: string
@@ -179,6 +220,8 @@ describe('ChatPage optimistic text send', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockResolvedValueOnce(
         createJsonResponse(
           {
@@ -233,10 +276,10 @@ describe('ChatPage optimistic text send', () => {
     expect(screen.getByText('Повтор после сбоя')).toBeInTheDocument()
 
     const firstRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[3]?.[1]?.body),
+      String(fetchMock.mock.calls[5]?.[1]?.body),
     ) as { clientMessageKey: string }
     const retryRequestBody = JSON.parse(
-      String(fetchMock.mock.calls[4]?.[1]?.body),
+      String(fetchMock.mock.calls[6]?.[1]?.body),
     ) as { clientMessageKey: string }
 
     expect(retryRequestBody.clientMessageKey).toBe(

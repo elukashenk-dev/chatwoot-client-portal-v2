@@ -31,6 +31,22 @@ function createJsonResponse(body: unknown, status: number) {
   })
 }
 
+function createAuthenticatedSessionResponse() {
+  return createJsonResponse(
+    {
+      session: {
+        expiresAt: '2026-06-10T10:00:00.000Z',
+      },
+      user: {
+        email: 'user@example.com',
+        fullName: 'Portal User',
+        id: 42,
+      },
+    },
+    200,
+  )
+}
+
 function createChatNotReadyResponse() {
   return createJsonResponse(
     {
@@ -184,20 +200,11 @@ describe('LoginPage', () => {
           401,
         ),
       )
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          {
-            user: {
-              email: 'name@company.ru',
-              fullName: 'Portal User',
-              id: 7,
-            },
-          },
-          200,
-        ),
-      )
+      .mockResolvedValueOnce(createAuthenticatedSessionResponse())
       .mockResolvedValueOnce(createChatThreadsResponse())
       .mockResolvedValueOnce(createChatNotReadyResponse())
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
     renderAuthRoutes(['/auth/login'])
 
@@ -261,16 +268,7 @@ describe('LoginPage', () => {
       const url = String(input)
 
       if (url === '/api/auth/me') {
-        return createJsonResponse(
-          {
-            user: {
-              email: 'name@company.ru',
-              fullName: 'Portal User',
-              id: 7,
-            },
-          },
-          200,
-        )
+        return createAuthenticatedSessionResponse()
       }
 
       if (url === '/api/chat/threads') {
@@ -356,21 +354,12 @@ describe('LoginPage', () => {
   ])(
     'redirects authenticated public auth route %s to the app shell',
     async (initialEntry, publicPageHeading) => {
-      fetchMock.mockResolvedValueOnce(
-        createJsonResponse(
-          {
-            user: {
-              email: 'name@company.ru',
-              fullName: 'Portal User',
-              id: 7,
-            },
-          },
-          200,
-        ),
-      )
       fetchMock
+        .mockResolvedValueOnce(createAuthenticatedSessionResponse())
         .mockResolvedValueOnce(createChatThreadsResponse())
         .mockResolvedValueOnce(createChatNotReadyResponse())
+        .mockResolvedValueOnce(createNotificationSettingsResponse())
+        .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
       renderAuthRoutes([initialEntry])
 
@@ -390,7 +379,7 @@ describe('LoginPage', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'Сессию не удалось проверить',
+        name: 'Нужно проверить сессию.',
       }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled()

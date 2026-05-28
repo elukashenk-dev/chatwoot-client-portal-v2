@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -61,6 +61,9 @@ function createJsonResponse(body: unknown, status = 200) {
 
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
+    session: {
+      expiresAt: '2026-06-10T10:00:00.000Z',
+    },
     user: {
       email: 'name@group.ru',
       fullName: 'Portal User',
@@ -136,6 +139,27 @@ function createSupportAvailabilityResponse() {
   })
 }
 
+function createNotificationSettingsResponse() {
+  return createJsonResponse({
+    effective: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    global: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    overrides: {
+      newMessagesEnabled: null,
+      pushEnabled: null,
+      soundEnabled: null,
+    },
+    threadId: privateThread.id,
+  })
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -169,11 +193,31 @@ describe('ChatPage runtime hardening', () => {
   })
 
   it('shows an offline state and disables composer actions while the browser is offline', async () => {
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
 
     renderChatRoute()
 
@@ -182,6 +226,16 @@ describe('ChatPage runtime hardening', () => {
       {},
       CHAT_PAGE_LOAD_TIMEOUT,
     )
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/chat/support-availability',
+        expect.objectContaining({
+          credentials: 'include',
+          method: 'GET',
+        }),
+      )
+    })
+    await act(async () => undefined)
 
     act(() => {
       setNavigatorOnline(false)
@@ -205,59 +259,80 @@ describe('ChatPage runtime hardening', () => {
   })
 
   it('resyncs the chat snapshot when the browser comes back online', async () => {
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Последнее сохраненное сообщение.',
-                contentType: 'text',
-                createdAt: '2026-04-21T09:12:00.000Z',
-                direction: 'incoming',
-                id: 101,
-                status: 'sent',
-              },
-            ],
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Последнее сохраненное сообщение.',
-                contentType: 'text',
-                createdAt: '2026-04-21T09:12:00.000Z',
-                direction: 'incoming',
-                id: 101,
-                status: 'sent',
-              },
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Новый ответ после восстановления соединения.',
-                contentType: 'text',
-                createdAt: '2026-04-21T09:17:00.000Z',
-                direction: 'incoming',
-                id: 102,
-                status: 'sent',
-              },
-            ],
-          }),
-        ),
-      )
+    let messageRequestCount = 0
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        messageRequestCount += 1
+
+        return createJsonResponse(
+          createReadySnapshot(
+            messageRequestCount === 1
+              ? {
+                  messages: [
+                    {
+                      attachments: [],
+                      authorName: 'Ольга Support',
+                      authorRole: 'agent',
+                      content: 'Последнее сохраненное сообщение.',
+                      contentType: 'text',
+                      createdAt: '2026-04-21T09:12:00.000Z',
+                      direction: 'incoming',
+                      id: 101,
+                      status: 'sent',
+                    },
+                  ],
+                }
+              : {
+                  messages: [
+                    {
+                      attachments: [],
+                      authorName: 'Ольга Support',
+                      authorRole: 'agent',
+                      content: 'Последнее сохраненное сообщение.',
+                      contentType: 'text',
+                      createdAt: '2026-04-21T09:12:00.000Z',
+                      direction: 'incoming',
+                      id: 101,
+                      status: 'sent',
+                    },
+                    {
+                      attachments: [],
+                      authorName: 'Ольга Support',
+                      authorRole: 'agent',
+                      content: 'Новый ответ после восстановления соединения.',
+                      contentType: 'text',
+                      createdAt: '2026-04-21T09:17:00.000Z',
+                      direction: 'incoming',
+                      id: 102,
+                      status: 'sent',
+                    },
+                  ],
+                },
+          ),
+        )
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
 
     renderChatRoute()
 
@@ -280,14 +355,14 @@ describe('ChatPage runtime hardening', () => {
     expect(
       await screen.findByText('Новый ответ после восстановления соединения.'),
     ).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/chat/messages?threadId=private%3Ame',
       expect.objectContaining({
         credentials: 'include',
         method: 'GET',
       }),
     )
+    expect(messageRequestCount).toBe(2)
   })
 
   it('switches to offline mode when send fails before the browser dispatches an offline event', async () => {
@@ -297,6 +372,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
@@ -337,6 +413,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(
@@ -413,6 +490,7 @@ describe('ChatPage runtime hardening', () => {
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
@@ -497,6 +575,10 @@ describe('ChatPage runtime hardening', () => {
 
       if (url === '/api/chat/support-availability') {
         return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
       }
 
       throw new Error(`Unexpected request: ${url}`)

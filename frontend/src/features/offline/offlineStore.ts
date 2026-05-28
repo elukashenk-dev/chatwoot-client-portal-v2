@@ -9,6 +9,8 @@ import type {
   OfflineTenantContextRecord,
 } from './types'
 
+export { clearRejectedAuthSnapshot } from './offlineAuthCleanup'
+
 type RecordGuard<TRecord> = (candidate: unknown) => candidate is TRecord
 
 type OfflineUserScope = {

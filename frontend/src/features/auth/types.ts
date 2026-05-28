@@ -13,6 +13,15 @@ export type AuthenticatedPortalUser = {
   id: number
 }
 
+export type AuthenticatedSession = {
+  expiresAt: string
+}
+
+export type AuthenticatedPortalSession = {
+  session: AuthenticatedSession
+  user: AuthenticatedPortalUser
+}
+
 export type RegisterRequestFormValues = {
   email: string
   fullName: string

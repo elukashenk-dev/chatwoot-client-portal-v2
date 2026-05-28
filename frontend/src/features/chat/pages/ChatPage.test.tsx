@@ -109,6 +109,9 @@ function createJsonResponse(body: unknown, status = 200) {
 
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
+    session: {
+      expiresAt: '2026-06-10T10:00:00.000Z',
+    },
     user: {
       email: 'name@group.ru',
       fullName: 'Portal User',
@@ -180,6 +183,27 @@ function createSupportAvailabilityResponse(
   })
 }
 
+function createNotificationSettingsResponse() {
+  return createJsonResponse({
+    effective: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    global: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    overrides: {
+      newMessagesEnabled: null,
+      pushEnabled: null,
+      soundEnabled: null,
+    },
+    threadId: privateThread.id,
+  })
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <AuthSessionProvider>
@@ -235,12 +259,19 @@ describe('ChatPage', () => {
     MockMediaRecorder.isTypeSupported.mockClear()
   })
 
-  it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
-    fetchMock
+  function mockInitialReadyChatResponses(
+    snapshot: ChatMessagesSnapshot = createReadySnapshot(),
+  ) {
+    return fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createJsonResponse(snapshot))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
+  }
+
+  it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
+    mockInitialReadyChatResponses()
 
     renderChatRoute()
 
@@ -302,6 +333,10 @@ describe('ChatPage', () => {
         return createSupportAvailabilityResponse('outside_hours')
       }
 
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
       return createJsonResponse({}, 404)
     })
 
@@ -348,6 +383,10 @@ describe('ChatPage', () => {
 
       if (url === '/api/chat/support-availability') {
         return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
       }
 
       if (url === '/api/chat/threads/private%3Ame/info') {
@@ -451,11 +490,7 @@ describe('ChatPage', () => {
   it('restores focus to the chat menu trigger when Escape closes the menu', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+    mockInitialReadyChatResponses()
 
     renderChatRoute()
 
@@ -487,52 +522,45 @@ describe('ChatPage', () => {
   it('loads older messages through the bounded history cursor', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: true,
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Последнее сообщение.',
-                contentType: 'text',
-                createdAt: '2026-04-21T10:00:00.000Z',
-                direction: 'incoming',
-                id: 205,
-                status: 'sent',
-              },
-            ],
-            nextOlderCursor: 205,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: false,
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Вы',
-                authorRole: 'current_user',
-                content: 'Ранее отправленное сообщение.',
-                contentType: 'text',
-                createdAt: '2026-04-20T08:00:00.000Z',
-                direction: 'outgoing',
-                id: 120,
-                status: 'sent',
-              },
-            ],
-            nextOlderCursor: null,
-          }),
-        ),
-      )
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        hasMoreOlder: true,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Ольга Support',
+            authorRole: 'agent',
+            content: 'Последнее сообщение.',
+            contentType: 'text',
+            createdAt: '2026-04-21T10:00:00.000Z',
+            direction: 'incoming',
+            id: 205,
+            status: 'sent',
+          },
+        ],
+        nextOlderCursor: 205,
+      }),
+    ).mockResolvedValueOnce(
+      createJsonResponse(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [
+            {
+              attachments: [],
+              authorName: 'Вы',
+              authorRole: 'current_user',
+              content: 'Ранее отправленное сообщение.',
+              contentType: 'text',
+              createdAt: '2026-04-20T08:00:00.000Z',
+              direction: 'outgoing',
+              id: 120,
+              status: 'sent',
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      ),
+    )
 
     renderChatRoute()
 
@@ -551,7 +579,7 @@ describe('ChatPage', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Последнее сообщение.')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
       expect.objectContaining({
         credentials: 'include',
@@ -563,42 +591,35 @@ describe('ChatPage', () => {
   it('keeps the visible transcript when older history loading fails', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: true,
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Текущее сообщение остается на экране.',
-                contentType: 'text',
-                createdAt: '2026-04-21T10:00:00.000Z',
-                direction: 'incoming',
-                id: 205,
-                status: 'sent',
-              },
-            ],
-            nextOlderCursor: 205,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse(
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        hasMoreOlder: true,
+        messages: [
           {
-            error: {
-              code: 'invalid_history_cursor',
-              message: 'History cursor is invalid.',
-            },
+            attachments: [],
+            authorName: 'Ольга Support',
+            authorRole: 'agent',
+            content: 'Текущее сообщение остается на экране.',
+            contentType: 'text',
+            createdAt: '2026-04-21T10:00:00.000Z',
+            direction: 'incoming',
+            id: 205,
+            status: 'sent',
           },
-          400,
-        ),
-      )
+        ],
+        nextOlderCursor: 205,
+      }),
+    ).mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          error: {
+            code: 'invalid_history_cursor',
+            message: 'History cursor is invalid.',
+          },
+        },
+        400,
+      ),
+    )
 
     renderChatRoute()
 
@@ -625,43 +646,36 @@ describe('ChatPage', () => {
   it('does not merge a non-ready older history response into the ready transcript', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: true,
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Ольга Support',
-                authorRole: 'agent',
-                content: 'Готовая история остается видимой.',
-                contentType: 'text',
-                createdAt: '2026-04-21T10:00:00.000Z',
-                direction: 'incoming',
-                id: 205,
-                status: 'sent',
-              },
-            ],
-            nextOlderCursor: 205,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: false,
-            messages: [],
-            nextOlderCursor: null,
-            activeThread: null,
-            reason: 'thread_invalid',
-            result: 'not_ready',
-          }),
-        ),
-      )
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        hasMoreOlder: true,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Ольга Support',
+            authorRole: 'agent',
+            content: 'Готовая история остается видимой.',
+            contentType: 'text',
+            createdAt: '2026-04-21T10:00:00.000Z',
+            direction: 'incoming',
+            id: 205,
+            status: 'sent',
+          },
+        ],
+        nextOlderCursor: 205,
+      }),
+    ).mockResolvedValueOnce(
+      createJsonResponse(
+        createReadySnapshot({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+          activeThread: null,
+          reason: 'thread_invalid',
+          result: 'not_ready',
+        }),
+      ),
+    )
 
     renderChatRoute()
 
@@ -688,36 +702,31 @@ describe('ChatPage', () => {
   it('sends a text reply to a selected message and clears reply state after success', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            content: 'Отвечаю на вопрос',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:32:00.000Z',
-            direction: 'outgoing',
-            id: 503,
-            replyTo: {
-              attachmentName: null,
-              authorName: 'Ольга Support',
-              content: 'Здравствуйте, вижу ваше обращение.',
-              direction: 'incoming',
-              messageId: 101,
-            },
-            status: 'sent',
+    mockInitialReadyChatResponses().mockResolvedValueOnce(
+      createJsonResponse({
+        activeThread: privateThread,
+        reason: 'none',
+        result: 'ready',
+        sentMessage: {
+          attachments: [],
+          authorName: 'Вы',
+          authorRole: 'current_user',
+          content: 'Отвечаю на вопрос',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:32:00.000Z',
+          direction: 'outgoing',
+          id: 503,
+          replyTo: {
+            attachmentName: null,
+            authorName: 'Ольга Support',
+            content: 'Здравствуйте, вижу ваше обращение.',
+            direction: 'incoming',
+            messageId: 101,
           },
-        }),
-      )
+          status: 'sent',
+        },
+      }),
+    )
 
     renderChatRoute()
 
@@ -756,7 +765,7 @@ describe('ChatPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       replyToMessageId: number
     }
@@ -773,38 +782,33 @@ describe('ChatPage', () => {
   it('sends one attachment with a text caption through multipart', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [
-              {
-                fileSize: 1024,
-                fileType: 'file',
-                id: 77,
-                name: 'signed-act.pdf',
-                thumbUrl: '',
-                url: '/api/chat/threads/private%3Ame/attachments/601/77',
-              },
-            ],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            content: 'Черновик остается',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:35:00.000Z',
-            direction: 'outgoing',
-            id: 601,
-            status: 'sent',
-          },
-        }),
-      )
+    mockInitialReadyChatResponses().mockResolvedValueOnce(
+      createJsonResponse({
+        activeThread: privateThread,
+        reason: 'none',
+        result: 'ready',
+        sentMessage: {
+          attachments: [
+            {
+              fileSize: 1024,
+              fileType: 'file',
+              id: 77,
+              name: 'signed-act.pdf',
+              thumbUrl: '',
+              url: '/api/chat/threads/private%3Ame/attachments/601/77',
+            },
+          ],
+          authorName: 'Вы',
+          authorRole: 'current_user',
+          content: 'Черновик остается',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:35:00.000Z',
+          direction: 'outgoing',
+          id: 601,
+          status: 'sent',
+        },
+      }),
+    )
 
     renderChatRoute()
 
@@ -830,12 +834,12 @@ describe('ChatPage', () => {
       expect(textarea).toHaveFocus()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -856,38 +860,33 @@ describe('ChatPage', () => {
     const user = userEvent.setup()
     const { getUserMedia, stopTrack } = stubMicrophoneAccess()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [
-              {
-                fileSize: 11,
-                fileType: 'audio',
-                id: 78,
-                name: 'voice-message.webm',
-                thumbUrl: '',
-                url: '/api/chat/threads/private%3Ame/attachments/602/78',
-              },
-            ],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            content: null,
-            contentType: 'text',
-            createdAt: '2026-04-21T09:36:00.000Z',
-            direction: 'outgoing',
-            id: 602,
-            status: 'sent',
-          },
-        }),
-      )
+    mockInitialReadyChatResponses().mockResolvedValueOnce(
+      createJsonResponse({
+        activeThread: privateThread,
+        reason: 'none',
+        result: 'ready',
+        sentMessage: {
+          attachments: [
+            {
+              fileSize: 11,
+              fileType: 'audio',
+              id: 78,
+              name: 'voice-message.webm',
+              thumbUrl: '',
+              url: '/api/chat/threads/private%3Ame/attachments/602/78',
+            },
+          ],
+          authorName: 'Вы',
+          authorRole: 'current_user',
+          content: null,
+          contentType: 'text',
+          createdAt: '2026-04-21T09:36:00.000Z',
+          direction: 'outgoing',
+          id: 602,
+          status: 'sent',
+        },
+      }),
+    )
 
     renderChatRoute()
 
@@ -911,12 +910,12 @@ describe('ChatPage', () => {
     expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
     expect(stopTrack).toHaveBeenCalledTimes(1)
 
-    const [, requestOptions] = fetchMock.mock.calls[4] ?? []
+    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -934,22 +933,17 @@ describe('ChatPage', () => {
   it('does not let a voice recording error mask the next failed text send state', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          {
-            error: {
-              code: 'chatwoot_unavailable',
-              message: 'Chatwoot temporarily unavailable.',
-            },
+    mockInitialReadyChatResponses().mockResolvedValueOnce(
+      createJsonResponse(
+        {
+          error: {
+            code: 'chatwoot_unavailable',
+            message: 'Chatwoot temporarily unavailable.',
           },
-          503,
-        ),
-      )
+        },
+        503,
+      ),
+    )
 
     renderChatRoute()
 
@@ -980,44 +974,37 @@ describe('ChatPage', () => {
     expect(
       screen.queryByText('Голосовая запись недоступна в этом браузере.'),
     ).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 
   it('allows the first text send to bootstrap a conversation without a selected conversation id', async () => {
     const user = userEvent.setup()
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            messages: [],
-            activeThread: privateThread,
-            reason: 'conversation_missing',
-            result: 'not_ready',
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            content: 'Первое сообщение',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:32:00.000Z',
-            direction: 'outgoing',
-            id: 503,
-            status: 'sent',
-          },
-        }),
-      )
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        messages: [],
+        activeThread: privateThread,
+        reason: 'conversation_missing',
+        result: 'not_ready',
+      }),
+    ).mockResolvedValueOnce(
+      createJsonResponse({
+        activeThread: privateThread,
+        reason: 'none',
+        result: 'ready',
+        sentMessage: {
+          attachments: [],
+          authorName: 'Вы',
+          authorRole: 'current_user',
+          content: 'Первое сообщение',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:32:00.000Z',
+          direction: 'outgoing',
+          id: 503,
+          status: 'sent',
+        },
+      }),
+    )
 
     renderChatRoute()
 
@@ -1035,7 +1022,7 @@ describe('ChatPage', () => {
     expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
 
     const requestBody = JSON.parse(
-      String(fetchMock.mock.calls[4]?.[1]?.body),
+      String(fetchMock.mock.calls[5]?.[1]?.body),
     ) as {
       threadId?: string
     }
@@ -1046,31 +1033,25 @@ describe('ChatPage', () => {
   it('opens backend realtime and merges new message snapshots into the visible transcript', async () => {
     vi.stubGlobal('EventSource', MockEventSource)
 
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(
-        createJsonResponse(
-          createReadySnapshot({
-            hasMoreOlder: true,
-            messages: [
-              {
-                attachments: [],
-                authorName: 'Вы',
-                authorRole: 'current_user',
-                content: 'Старое сообщение остается.',
-                contentType: 'text',
-                createdAt: '2026-04-21T09:12:00.000Z',
-                direction: 'outgoing',
-                id: 101,
-                status: 'sent',
-              },
-            ],
-            nextOlderCursor: 101,
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        hasMoreOlder: true,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            content: 'Старое сообщение остается.',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:12:00.000Z',
+            direction: 'outgoing',
+            id: 101,
+            status: 'sent',
+          },
+        ],
+        nextOlderCursor: 101,
+      }),
+    )
 
     renderChatRoute()
 

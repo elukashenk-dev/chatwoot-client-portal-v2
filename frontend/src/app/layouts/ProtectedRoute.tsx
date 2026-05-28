@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { routePaths } from '../routePaths'
 import { useAuthSession } from '../../features/auth/lib/authSessionContext'
+import { LocalDeviceDataRemoval } from '../../features/offline/LocalDeviceDataRemoval'
 import { AppWelcomeScreen } from '../../features/tenant/components/AppWelcomeScreen'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
@@ -52,9 +53,49 @@ function ProtectedSessionError({
   )
 }
 
+function ProtectedSessionCheckRequired({
+  canRemoveLocalData,
+  onRemoveLocalData,
+  onRetry,
+}: {
+  canRemoveLocalData: boolean
+  onRemoveLocalData: () => Promise<void>
+  onRetry: () => void
+}) {
+  return (
+    <PortalFrame>
+      <section className="mx-auto w-full max-w-md space-y-5">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+            Нужно проверить сессию.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            Подключитесь к интернету, чтобы продолжить.
+          </p>
+        </div>
+
+        <PrimaryButton onClick={onRetry} type="button">
+          Повторить
+        </PrimaryButton>
+
+        {canRemoveLocalData ? (
+          <LocalDeviceDataRemoval onConfirm={onRemoveLocalData} />
+        ) : null}
+      </section>
+    </PortalFrame>
+  )
+}
+
 export function ProtectedRoute() {
   const location = useLocation()
-  const { errorMessage, refreshSession, status, user } = useAuthSession()
+  const {
+    errorMessage,
+    localDeviceDataRemovalAvailable,
+    refreshSession,
+    removeLocalDeviceData,
+    status,
+    user,
+  } = useAuthSession()
 
   if (status === 'checking') {
     return <ProtectedSessionCheck userName={user?.fullName} />
@@ -64,6 +105,18 @@ export function ProtectedRoute() {
     return (
       <ProtectedSessionError
         errorMessage={errorMessage}
+        onRetry={() => {
+          void refreshSession()
+        }}
+      />
+    )
+  }
+
+  if (status === 'session_check_required') {
+    return (
+      <ProtectedSessionCheckRequired
+        canRemoveLocalData={localDeviceDataRemovalAvailable}
+        onRemoveLocalData={removeLocalDeviceData}
         onRetry={() => {
           void refreshSession()
         }}

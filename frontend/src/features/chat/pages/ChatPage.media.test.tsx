@@ -29,6 +29,9 @@ function createJsonResponse(body: unknown, status = 200) {
 
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
+    session: {
+      expiresAt: '2026-06-10T10:00:00.000Z',
+    },
     user: {
       email: 'name@group.ru',
       fullName: 'Portal User',

@@ -41,6 +41,9 @@ function createDeferredResponse() {
 
 function createAuthenticatedUserResponse() {
   return createJsonResponse({
+    session: {
+      expiresAt: '2026-06-10T10:00:00.000Z',
+    },
     user: {
       email: 'name@group.ru',
       fullName: 'Portal User',
@@ -54,6 +57,42 @@ function createThreadsResponse() {
     activeThreadId: privateThread.id,
     threads: [privateThread],
   }
+}
+
+function createNotificationSettingsResponse() {
+  return createJsonResponse({
+    effective: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    global: {
+      newMessagesEnabled: true,
+      pushEnabled: false,
+      soundEnabled: true,
+    },
+    overrides: {
+      newMessagesEnabled: null,
+      pushEnabled: null,
+      soundEnabled: null,
+    },
+    threadId: privateThread.id,
+  })
+}
+
+function createSupportAvailabilityResponse() {
+  return createJsonResponse({
+    currentStatus: 'online',
+    outOfOfficeMessage: null,
+    reason: 'none',
+    result: 'ready',
+    workingHours: {
+      enabled: false,
+      isWithinWorkingHours: null,
+      rows: [],
+      timezone: 'UTC',
+    },
+  })
 }
 
 function createReadySnapshot(): ChatMessagesSnapshot {
@@ -227,6 +266,14 @@ describe('ChatPage search context regressions', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
         return createJsonResponse({
           ...createOldSearchResponse(),
@@ -376,6 +423,14 @@ describe('ChatPage search context regressions', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
         searchCount += 1
 
@@ -468,6 +523,14 @@ describe('ChatPage search context regressions', () => {
 
       if (url === '/api/chat/messages?threadId=private%3Ame') {
         return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
       }
 
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {
@@ -614,6 +677,14 @@ describe('ChatPage search context regressions', () => {
 
       if (url === '/api/chat/messages?threadId=private%3Ame') {
         return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
       }
 
       if (url.startsWith('/api/chat/threads/private%3Ame/search?')) {

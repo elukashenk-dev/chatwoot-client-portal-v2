@@ -1,5 +1,5 @@
 import type {
-  AuthenticatedPortalUser,
+  AuthenticatedPortalSession,
   LoginFormValues,
   PasswordResetRequestFormValues,
   RegisterRequestFormValues,
@@ -14,10 +14,6 @@ type ApiErrorResponse = {
     code?: string
     message?: string
   }
-}
-
-type AuthUserResponse = {
-  user: AuthenticatedPortalUser
 }
 
 type AuthRequestOptions = {
@@ -148,14 +144,14 @@ async function request<TResponse>(
   return payload as TResponse
 }
 
-export async function getCurrentUser({ signal }: AuthRequestOptions = {}) {
+type AuthSessionResponse = AuthenticatedPortalSession
+
+export async function getCurrentSession({ signal }: AuthRequestOptions = {}) {
   try {
-    const response = await request<AuthUserResponse>('/auth/me', {
+    return await request<AuthSessionResponse>('/auth/me', {
       method: 'GET',
       signal,
     })
-
-    return response.user
   } catch (error) {
     if (error instanceof ApiClientError && error.statusCode === 401) {
       return null
@@ -165,16 +161,18 @@ export async function getCurrentUser({ signal }: AuthRequestOptions = {}) {
   }
 }
 
+export async function getCurrentUser(options: AuthRequestOptions = {}) {
+  return (await getCurrentSession(options))?.user ?? null
+}
+
 export async function login(credentials: LoginFormValues) {
-  const response = await request<AuthUserResponse>('/auth/login', {
+  return request<AuthSessionResponse>('/auth/login', {
     body: JSON.stringify(credentials),
     headers: {
       'Content-Type': 'application/json',
     },
     method: 'POST',
   })
-
-  return response.user
 }
 
 export async function logout() {

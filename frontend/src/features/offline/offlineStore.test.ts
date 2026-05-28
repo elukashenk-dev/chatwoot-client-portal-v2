@@ -7,6 +7,7 @@ import {
 } from './offlineDatabase'
 import {
   clearCurrentUserOfflineData,
+  clearRejectedAuthSnapshot,
   offlineStore,
   pruneOfflineData,
   removeLocalDeviceDataAndBlockCachedOpen,
@@ -297,6 +298,56 @@ describe('offline store database', () => {
     await expect(
       offlineStore.readLocalDeviceSignout('lk.buhfirma.ru', 'buhfirma', 7),
     ).resolves.toMatchObject({ tenantSlug: 'buhfirma', userId: 7 })
+  })
+
+  it('clears rejected auth cache without removing unsent outbox', async () => {
+    await offlineStore.saveLastActiveIdentity({
+      host: 'lk.buhfirma.ru',
+      savedAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+    await offlineStore.saveAuthSnapshot({
+      lastVerifiedAt: '2026-05-27T10:00:00.000Z',
+      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
+      savedAt: '2026-05-27T10:00:00.000Z',
+      sessionExpiresAt: '2026-06-10T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      user: {
+        email: 'name@company.ru',
+        fullName: 'Portal User',
+        id: 7,
+      },
+      userId: 7,
+    })
+    await putRawRecord(
+      'chat_text_outbox',
+      'buhfirma:7:private:me:portal-send:keep',
+      createQueuedOutboxRecord({
+        clientMessageKey: 'portal-send:keep',
+      }),
+    )
+
+    await clearRejectedAuthSnapshot({
+      host: 'lk.buhfirma.ru',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    await expect(
+      offlineStore.readAuthSnapshot('buhfirma', 7),
+    ).resolves.toBeNull()
+    await expect(
+      offlineStore.readLastActiveIdentity('lk.buhfirma.ru'),
+    ).resolves.toBeNull()
+    await expect(
+      readRawRecord(
+        'chat_text_outbox',
+        'buhfirma:7:private:me:portal-send:keep',
+      ),
+    ).resolves.toMatchObject({
+      status: 'queued',
+    })
   })
 
   it('does not remove last active identity when it belongs to another user', async () => {
