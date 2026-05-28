@@ -20,6 +20,10 @@ type PublicTenantResponse = {
   tenant: PublicTenantContext
 }
 
+export type TenantRequestOptions = {
+  signal?: AbortSignal
+}
+
 export class TenantClientError extends Error {
   readonly code?: string
   readonly statusCode: number
@@ -55,7 +59,9 @@ async function parseJsonBody(response: Response) {
   }
 }
 
-export async function getPublicTenantContext() {
+export async function getPublicTenantContext({
+  signal,
+}: TenantRequestOptions = {}) {
   let response: Response
 
   try {
@@ -63,6 +69,7 @@ export async function getPublicTenantContext() {
       cache: 'no-store',
       credentials: 'include',
       method: 'GET',
+      signal,
     })
   } catch {
     throw new TenantClientError({

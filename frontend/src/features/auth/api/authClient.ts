@@ -20,6 +20,10 @@ type AuthUserResponse = {
   user: AuthenticatedPortalUser
 }
 
+type AuthRequestOptions = {
+  signal?: AbortSignal
+}
+
 export type RegistrationVerificationRequestResponse = {
   delivery: 'sent' | 'existing_pending'
   email: string
@@ -109,7 +113,7 @@ async function parseJsonBody(response: Response) {
 
 async function request<TResponse>(
   path: string,
-  init: RequestInit,
+  init: RequestInit & AuthRequestOptions,
 ): Promise<TResponse> {
   let response: Response
 
@@ -144,10 +148,11 @@ async function request<TResponse>(
   return payload as TResponse
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser({ signal }: AuthRequestOptions = {}) {
   try {
     const response = await request<AuthUserResponse>('/auth/me', {
       method: 'GET',
+      signal,
     })
 
     return response.user

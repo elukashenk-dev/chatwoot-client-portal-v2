@@ -14,7 +14,7 @@ type TenantSplashScreenProps = {
 
 function TenantSplashContent({
   description = 'Загружаем настройки.',
-  title = 'Открываем кабинет',
+  title = 'Открываем кабинет.',
 }: Pick<TenantSplashScreenProps, 'description' | 'title'>) {
   const { tenant } = useTenantIdentity()
   const brandName = tenant?.displayName ?? 'Клиентский портал'

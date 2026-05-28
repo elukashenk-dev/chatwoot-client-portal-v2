@@ -67,11 +67,13 @@ async function request<TResponse>(
     formData,
     method = 'GET',
     networkErrorMessage = NETWORK_ERROR_MESSAGE,
+    signal,
   }: {
     body?: unknown
     formData?: FormData
     method?: 'DELETE' | 'GET' | 'PATCH' | 'POST'
     networkErrorMessage?: string
+    signal?: AbortSignal
   } = {},
 ): Promise<TResponse> {
   let response: Response
@@ -86,6 +88,7 @@ async function request<TResponse>(
               'Content-Type': 'application/json',
             },
       method,
+      signal,
       ...(formData !== undefined
         ? { body: formData }
         : body === undefined
@@ -116,9 +119,11 @@ async function request<TResponse>(
 
 export async function getChatMessages({
   beforeMessageId,
+  signal,
   threadId,
 }: {
   beforeMessageId?: number | null
+  signal?: AbortSignal
   threadId: string
 }) {
   const searchParams = new URLSearchParams()
@@ -133,11 +138,16 @@ export async function getChatMessages({
 
   return request<ChatMessagesSnapshot>(
     `/chat/messages${query ? `?${query}` : ''}`,
+    {
+      signal,
+    },
   )
 }
 
-export async function getChatThreads() {
-  return request<ChatThreadsResponse>('/chat/threads')
+export async function getChatThreads({
+  signal,
+}: { signal?: AbortSignal } = {}) {
+  return request<ChatThreadsResponse>('/chat/threads', { signal })
 }
 
 export async function getChatSupportAvailability() {
