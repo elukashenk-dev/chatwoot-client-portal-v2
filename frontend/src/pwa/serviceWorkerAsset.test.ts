@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 
 type Listener = (event: {
   data?: unknown
@@ -105,7 +107,31 @@ function markClientPushReady(
   })
 }
 
+async function clearAppBadgeDatabase() {
+  if (typeof indexedDB === 'undefined') {
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(APP_BADGE_DATABASE_NAME)
+
+    request.onsuccess = () => {
+      resolve()
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to clear app badge database.'))
+    }
+    request.onblocked = () => {
+      resolve()
+    }
+  })
+}
+
 describe('service worker push notifications', () => {
+  beforeEach(async () => {
+    await clearAppBadgeDatabase()
+  })
+
   it('uses payload notification tags so pending notifications do not collapse new messages', async () => {
     const { listeners, showNotification } = loadServiceWorker()
     const pushListener = listeners.get('push')?.[0]
