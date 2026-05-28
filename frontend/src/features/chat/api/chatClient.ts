@@ -27,21 +27,25 @@ type ApiErrorResponse = {
 
 export class ChatApiClientError extends Error {
   readonly code?: string
+  readonly retryAfterSeconds: number | null
   readonly statusCode: number
 
   constructor({
     code,
     message,
+    retryAfterSeconds = null,
     statusCode,
   }: {
     code?: string
     message: string
+    retryAfterSeconds?: number | null
     statusCode: number
   }) {
     super(message)
 
     this.name = 'ChatApiClientError'
     this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
     this.statusCode = statusCode
   }
 }
@@ -58,6 +62,30 @@ async function parseJsonBody(response: Response) {
   } catch {
     return null
   }
+}
+
+function parseRetryAfterSeconds(response: Response) {
+  const retryAfter = response.headers.get('Retry-After')
+
+  if (!retryAfter) {
+    return null
+  }
+
+  const seconds = Number(retryAfter)
+
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds)
+  }
+
+  const retryAtMs = Date.parse(retryAfter)
+
+  if (!Number.isFinite(retryAtMs)) {
+    return null
+  }
+
+  const delaySeconds = Math.ceil((retryAtMs - Date.now()) / 1000)
+
+  return delaySeconds > 0 ? delaySeconds : null
 }
 
 async function request<TResponse>(
@@ -110,6 +138,7 @@ async function request<TResponse>(
     throw new ChatApiClientError({
       code: errorPayload?.error?.code,
       message: errorPayload?.error?.message ?? networkErrorMessage,
+      retryAfterSeconds: parseRetryAfterSeconds(response),
       statusCode: response.status,
     })
   }

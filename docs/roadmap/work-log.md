@@ -10,11 +10,13 @@
   Chatwoot.
 - Собран рабочий portal baseline: auth/session, registration, password reset,
   protected app shell, chat read/send, attachments, realtime и PWA foundation.
-- Offline-first PWA MVP Slices 01-05 реализовали backend session metadata,
+- Offline-first PWA MVP Slices 01-06 реализовали backend session metadata,
   isolated `idb` offline stores, cached tenant startup, bounded cached auth
   session с `offlineAccessUntil`, local-device data removal и display-only
-  cached chat read model с thread/message snapshots; backend остается session,
-  send и freshness authority.
+  cached chat read model с thread/message snapshots, а также durable text
+  outbox core с foreground drain, retry/backoff, fallback lease и
+  privacy-safe outcome diagnostics; backend остается session, send и freshness
+  authority.
 - Browser не получает Chatwoot authority; portal backend остается единственной
   authority-зоной для auth, session, send, realtime и Chatwoot access.
 - Chatwoot остается system of record для contacts, conversations, messages и
@@ -171,5 +173,5 @@
 
 ## Recommended Next Step
 
-- Продолжить Offline-first PWA MVP Slice 06:
-  `2026-05-27-offline-first-pwa-06-outbox-core.md`.
+- Продолжить Offline-first PWA MVP Slice 07:
+  `2026-05-27-offline-first-pwa-07-chat-ui-integration.md`.
