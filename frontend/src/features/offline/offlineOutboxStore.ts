@@ -97,6 +97,24 @@ function isUserOutboxRecord(
   )
 }
 
+function isSameOutboxRecordScope(
+  record: OfflineTextOutboxRecord,
+  expected: OutboxRecordKeyInput,
+) {
+  return (
+    record.clientMessageKey === expected.clientMessageKey &&
+    record.tenantSlug === expected.tenantSlug &&
+    record.threadId === expected.threadId &&
+    record.userId === expected.userId
+  )
+}
+
+function isPastOrInvalidTimestamp(value: string, nowMs: number) {
+  const valueMs = new Date(value).getTime()
+
+  return !Number.isFinite(valueMs) || valueMs <= nowMs
+}
+
 async function listOutboxRecords() {
   const database = await openOfflineDatabase()
 
@@ -133,7 +151,12 @@ export const offlineOutboxStore = {
     const database = await openOfflineDatabase()
 
     try {
-      return (await database.get('chat_text_outbox', outboxKey(record))) ?? null
+      const value = await database.get('chat_text_outbox', outboxKey(record))
+
+      return isOfflineTextOutboxRecord(value) &&
+        isSameOutboxRecordScope(value, record)
+        ? value
+        : null
     } finally {
       database.close()
     }
@@ -193,13 +216,13 @@ export const offlineOutboxStore = {
         if (record.status === 'queued') {
           return (
             !record.nextAttemptAt ||
-            new Date(record.nextAttemptAt).getTime() <= nowMs
+            isPastOrInvalidTimestamp(record.nextAttemptAt, nowMs)
           )
         }
 
         return (
           record.sendingLeaseExpiresAt !== null &&
-          new Date(record.sendingLeaseExpiresAt).getTime() <= nowMs
+          isPastOrInvalidTimestamp(record.sendingLeaseExpiresAt, nowMs)
         )
       })
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))

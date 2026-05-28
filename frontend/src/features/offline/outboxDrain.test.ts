@@ -228,6 +228,81 @@ it('ignores corrupted outbox records instead of trusting raw IndexedDB values', 
   ])
 })
 
+it('returns null when a raw outbox record is corrupted or stored under the wrong scope', async () => {
+  await putRawRecord(
+    'chat_text_outbox',
+    'buhfirma:7:private:me:portal-send:corrupted',
+    {
+      clientMessageKey: 'portal-send:corrupted',
+      content: 'Broken text',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    },
+  )
+  await putRawRecord(
+    'chat_text_outbox',
+    'buhfirma:7:private:me:portal-send:wrong-scope',
+    createQueuedOutboxRecord({
+      clientMessageKey: 'portal-send:wrong-scope',
+      tenantSlug: 'stroyfirma',
+    }),
+  )
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord({
+      clientMessageKey: 'portal-send:corrupted',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    }),
+  ).resolves.toBeNull()
+  await expect(
+    offlineOutboxStore.readOutboxRecord({
+      clientMessageKey: 'portal-send:wrong-scope',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    }),
+  ).resolves.toBeNull()
+})
+
+it('treats invalid retry timestamps as due instead of blocking local sends forever', async () => {
+  await offlineOutboxStore.saveOutboxRecord(
+    createQueuedOutboxRecord({
+      clientMessageKey: 'portal-send:invalid-next-at',
+      createdAt: '2026-05-27T10:00:01.000Z',
+      nextAttemptAt: 'not-a-date',
+      status: 'queued',
+    }),
+  )
+  await offlineOutboxStore.saveOutboxRecord(
+    createQueuedOutboxRecord({
+      clientMessageKey: 'portal-send:invalid-lease',
+      createdAt: '2026-05-27T10:00:02.000Z',
+      sendOwnerId: 'old-tab',
+      sendingLeaseExpiresAt: 'not-a-date',
+      sendingStartedAt: '2026-05-27T09:59:00.000Z',
+      status: 'sending',
+    }),
+  )
+
+  await expect(
+    offlineOutboxStore.listDueOutboxRecords({
+      now: new Date('2026-05-27T10:00:01.000Z'),
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    }),
+  ).resolves.toMatchObject([
+    {
+      clientMessageKey: 'portal-send:invalid-next-at',
+    },
+    {
+      clientMessageKey: 'portal-send:invalid-lease',
+    },
+  ])
+})
+
 it('sends queued records with the original clientMessageKey, deletes them and emits reconciliation', async () => {
   const record = createQueuedOutboxRecord()
   const onDrainOutcome = vi.fn()
