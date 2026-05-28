@@ -7,6 +7,8 @@ import { hashPassword } from './lib/password.js'
 import { seedDefaultTenant, testEnv } from './test/appTestHelpers.js'
 import { createTestDatabase } from './test/testDatabase.js'
 
+const fixedNow = new Date('2026-04-21T12:00:00.000Z')
+
 describe('buildApp auth integration', () => {
   let app: ReturnType<typeof buildApp>
   let database: DatabaseClient
@@ -18,6 +20,7 @@ describe('buildApp auth integration', () => {
     app = buildApp({
       database,
       env: testEnv,
+      now: () => fixedNow,
     })
     await app.ready()
   })
@@ -50,6 +53,9 @@ describe('buildApp auth integration', () => {
 
     expect(loginResponse.statusCode).toBe(200)
     expect(loginResponse.json()).toEqual({
+      session: {
+        expiresAt: '2026-05-05T12:00:00.000Z',
+      },
       user: {
         email: 'name@company.ru',
         fullName: 'Portal User',
@@ -77,6 +83,9 @@ describe('buildApp auth integration', () => {
 
     expect(meResponse.statusCode).toBe(200)
     expect(meResponse.json()).toEqual({
+      session: {
+        expiresAt: '2026-05-05T12:00:00.000Z',
+      },
       user: {
         email: 'name@company.ru',
         fullName: 'Portal User',

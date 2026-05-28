@@ -13,6 +13,11 @@ export type PublicPortalUser = {
   id: number
 }
 
+export type PublicPortalSession = {
+  expiresAt: Date
+  user: PublicPortalUser
+}
+
 type CreateAuthServiceOptions = {
   db: AppDatabase
   env: AppEnv
@@ -34,7 +39,44 @@ export function createAuthService({
 }: CreateAuthServiceOptions) {
   const repository = createAuthRepository(db)
 
+  async function resolveCurrentSession({
+    sessionToken,
+    tenantId,
+  }: {
+    sessionToken: string
+    tenantId: number
+  }): Promise<PublicPortalSession | null> {
+    const resolvedAt = now()
+    const session = await repository.findUserBySessionTokenHash({
+      now: resolvedAt,
+      tenantId,
+      tokenHash: hashSessionToken(sessionToken),
+    })
+
+    if (!session) {
+      return null
+    }
+
+    await repository.touchSession({
+      at: resolvedAt,
+      sessionId: session.sessionId,
+      tenantId,
+    })
+
+    return {
+      expiresAt: session.expiresAt,
+      user: {
+        ...session.user,
+        email: normalizeEmail(session.user.email),
+      },
+    }
+  }
+
   return {
+    async getCurrentSession(input: { sessionToken: string; tenantId: number }) {
+      return resolveCurrentSession(input)
+    },
+
     async getCurrentUser({
       sessionToken,
       tenantId,
@@ -42,27 +84,9 @@ export function createAuthService({
       sessionToken: string
       tenantId: number
     }): Promise<PublicPortalUser | null> {
-      const resolvedAt = now()
-      const session = await repository.findUserBySessionTokenHash({
-        now: resolvedAt,
-        tenantId,
-        tokenHash: hashSessionToken(sessionToken),
-      })
-
-      if (!session) {
-        return null
-      }
-
-      await repository.touchSession({
-        at: resolvedAt,
-        sessionId: session.sessionId,
-        tenantId,
-      })
-
-      return {
-        ...session.user,
-        email: normalizeEmail(session.user.email),
-      }
+      return (
+        (await resolveCurrentSession({ sessionToken, tenantId }))?.user ?? null
+      )
     },
 
     async login({

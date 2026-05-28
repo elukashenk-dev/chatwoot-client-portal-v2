@@ -108,9 +108,24 @@ describe('auth service tenant scope', () => {
       email: 'name@company.ru',
       fullName: 'Tenant A User',
     })
+    expect(tenantASession.expiresAt.toISOString()).toBe(
+      '2026-05-05T12:00:00.000Z',
+    )
     expect(tenantBSession.user).toMatchObject({
       email: 'name@company.ru',
       fullName: 'Tenant B User',
+    })
+    await expect(
+      authService.getCurrentSession({
+        sessionToken: tenantASession.sessionToken,
+        tenantId: tenantA.id,
+      }),
+    ).resolves.toMatchObject({
+      expiresAt: new Date('2026-05-05T12:00:00.000Z'),
+      user: {
+        email: 'name@company.ru',
+        fullName: 'Tenant A User',
+      },
     })
     expect(
       await authService.getCurrentUser({

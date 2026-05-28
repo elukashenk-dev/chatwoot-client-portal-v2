@@ -141,6 +141,7 @@ describe('chat notification push delivery service', () => {
       JSON.stringify({
         chatwootMessageId: 9001,
         notificationTag: 'portal-chat-message-default-9001',
+        portalUserId: 7,
         tenantSlug: 'default',
         threadId: 'private:me',
         threadTitle: 'Личный чат',
@@ -198,6 +199,7 @@ describe('chat notification push delivery service', () => {
     expect(parsedPayload).toMatchObject({
       chatwootMessageId: 9001,
       notificationTag: 'portal-chat-message-default-9001',
+      portalUserId: 7,
       tenantSlug: 'default',
       threadId: 'group:155',
       threadTitle: null,

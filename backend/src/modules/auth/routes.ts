@@ -49,6 +49,9 @@ export function registerAuthRoutes(
     )
 
     return {
+      session: {
+        expiresAt: session.expiresAt.toISOString(),
+      },
       user: session.user,
     }
   })
@@ -80,18 +83,21 @@ export function registerAuthRoutes(
       throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
     }
 
-    const user = await authService.getCurrentUser({
+    const session = await authService.getCurrentSession({
       sessionToken,
       tenantId: tenant.id,
     })
 
-    if (!user) {
+    if (!session) {
       clearSessionCookie(reply, env)
       throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
     }
 
     return {
-      user,
+      session: {
+        expiresAt: session.expiresAt.toISOString(),
+      },
+      user: session.user,
     }
   })
 }

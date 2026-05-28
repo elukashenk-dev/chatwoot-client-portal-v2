@@ -60,6 +60,7 @@ type BuildAppOptions = {
   chatwootFetchFn?: typeof fetch
   database: DatabaseClient
   env: AppEnv
+  now?: () => Date
 }
 
 type RuntimeChatwootClientFactoryOptions = {
@@ -87,7 +88,12 @@ export function createRuntimeChatwootClientFactory({
   })
 }
 
-export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
+export function buildApp({
+  chatwootFetchFn,
+  database,
+  env,
+  now,
+}: BuildAppOptions) {
   const app = Fastify({
     logger:
       env.NODE_ENV === 'test'
@@ -120,6 +126,7 @@ export function buildApp({ chatwootFetchFn, database, env }: BuildAppOptions) {
   const authService = createAuthService({
     db: database.db,
     env,
+    ...(now ? { now } : {}),
   })
   const chatwootClientFactory = createRuntimeChatwootClientFactory({
     chatwootFetchFn,

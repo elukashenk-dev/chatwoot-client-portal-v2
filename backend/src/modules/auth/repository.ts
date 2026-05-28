@@ -23,6 +23,7 @@ type TenantTokenScope = {
 }
 
 type SessionUserRecord = {
+  expiresAt: Date
   sessionId: number
   user: {
     email: string
@@ -73,6 +74,7 @@ export function createAuthRepository(db: AppDatabase) {
       const [session] = await db
         .select({
           email: portalUsers.email,
+          expiresAt: portalSessions.expiresAt,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
           sessionId: portalSessions.id,
@@ -95,6 +97,7 @@ export function createAuthRepository(db: AppDatabase) {
       }
 
       return {
+        expiresAt: session.expiresAt,
         sessionId: session.sessionId,
         user: {
           email: session.email,
