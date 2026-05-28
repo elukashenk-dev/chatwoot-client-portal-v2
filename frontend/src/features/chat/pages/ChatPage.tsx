@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ChatApiClientError, getChatMessages } from '../api/chatClient'
+import { ChatApiClientError } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
@@ -13,7 +13,6 @@ import {
 } from '../components/MessageComposer'
 import {
   isFirstConversationBootstrapReady,
-  mergeOlderMessages,
   toComposerReplyTarget,
 } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
@@ -21,20 +20,23 @@ import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { clearAppIconBadge } from '../../../pwa/serviceWorkerRuntime'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
-import type { ChatPageState } from './chatPageState'
+import { INITIAL_CHAT_PAGE_STATE, type ChatPageState } from './chatPageState'
 import { useChatAttachmentSend } from './useChatAttachmentSend'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
-import { useChatPageNotifications } from './useChatPageNotifications'
 import { useChatNotificationsPanel } from './useChatNotificationsPanel'
+import { useChatOlderMessages } from './useChatOlderMessages'
+import { useChatPageNotifications } from './useChatPageNotifications'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatSearchResultContext } from './useChatSearchResultContext'
 import { useChatSnapshotRefresh } from './useChatSnapshotRefresh'
 import { useChatSupportAvailability } from './useChatSupportAvailability'
 import { useChatThreadSelection } from './useChatThreadSelection'
+import { useOfflineChatCachePersistence } from './useOfflineChatCachePersistence'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
 const OFFLINE_RUNTIME_MESSAGE =
@@ -42,20 +44,19 @@ const OFFLINE_RUNTIME_MESSAGE =
 
 export function ChatPage() {
   const isMountedRef = useRef(false)
+  const { tenant } = useTenantIdentity()
   const { refreshSession, user } = useAuthSession()
-  const [pageState, setPageState] = useState<ChatPageState>({
-    selectedThreadId: null,
-    snapshot: null,
-    status: 'loading',
-    threads: [],
-  })
+  const [pageState, setPageState] = useState<ChatPageState>(
+    INITIAL_CHAT_PAGE_STATE,
+  )
+  const tenantSlug = tenant?.slug ?? null
+  const userId = user?.id ?? null
   const [unreadThreadIds, setUnreadThreadIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
     null,
   )
-  const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
   const [replyTarget, setReplyTarget] =
     useState<MessageComposerReplyTarget | null>(null)
@@ -136,6 +137,8 @@ export function ChatPage() {
     setPageState,
     setReplyTarget,
     setSendErrorMessage,
+    tenantSlug,
+    userId,
   })
   const chatInfoPanel = useChatInfoPanel({
     handleConnectionUnavailableError,
@@ -174,76 +177,16 @@ export function ChatPage() {
     isMountedRef,
     markBrowserOnline,
   })
-  async function handleLoadOlderMessages() {
-    if (
-      !isBrowserOnline ||
-      pageState.status !== 'ready' ||
-      !pageState.snapshot.activeThread ||
-      !pageState.selectedThreadId ||
-      !pageState.snapshot.nextOlderCursor
-    ) {
-      return
-    }
-
-    setIsLoadingOlder(true)
-    setHistoryErrorMessage(null)
-    const threadId = pageState.selectedThreadId
-
-    try {
-      const olderSnapshot = await getChatMessages({
-        beforeMessageId: pageState.snapshot.nextOlderCursor,
-        threadId,
-      })
-
-      if (!isMountedRef.current) {
-        return
-      }
-
-      if (olderSnapshot.result !== 'ready') {
-        setHistoryErrorMessage(
-          'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
-        )
-
-        return
-      }
-
-      markBrowserOnline()
-      setPageState((currentState) => {
-        if (
-          currentState.status !== 'ready' ||
-          currentState.selectedThreadId !== threadId ||
-          olderSnapshot.activeThread?.id !== threadId
-        ) {
-          return currentState
-        }
-
-        return {
-          snapshot: mergeOlderMessages(currentState.snapshot, olderSnapshot),
-          selectedThreadId: currentState.selectedThreadId,
-          status: 'ready',
-          threads: currentState.threads,
-        }
-      })
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
-      }
-
-      if (await handleUnauthorizedChatError(error)) {
-        return
-      }
-
-      handleConnectionUnavailableError(error)
-
-      setHistoryErrorMessage(
-        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
-      )
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoadingOlder(false)
-      }
-    }
-  }
+  const { handleLoadOlderMessages, isLoadingOlder } = useChatOlderMessages({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline,
+    isMountedRef,
+    markBrowserOnline,
+    pageState,
+    setHistoryErrorMessage,
+    setPageState,
+  })
 
   useEffect(() => {
     isMountedRef.current = true
@@ -277,9 +220,15 @@ export function ChatPage() {
   })
   const resyncStatus = useChatResumeResync({
     canAttemptResync: isBrowserOnline || navigatorHintIsOnline,
+    forceFullReloadOnResync: pageState.isUsingCachedData,
     loadInitialChat,
     refreshChatSnapshot,
     snapshotExists: Boolean(pageState.snapshot),
+  })
+  useOfflineChatCachePersistence({
+    pageState,
+    tenantSlug,
+    userId,
   })
 
   const snapshot = pageState.snapshot
@@ -290,6 +239,7 @@ export function ChatPage() {
   const headerThread = snapshot?.activeThread ?? selectedThread
   const realtimeThreadId =
     pageState.status === 'ready' &&
+    !pageState.isUsingCachedData &&
     pageState.snapshot.result === 'ready' &&
     pageState.snapshot.activeThread &&
     pageState.selectedThreadId
@@ -306,6 +256,7 @@ export function ChatPage() {
   const isReady = snapshot?.result === 'ready' && Boolean(snapshot.activeThread)
   const canSend =
     pageState.status === 'ready' &&
+    !pageState.isUsingCachedData &&
     Boolean(pageState.selectedThreadId) &&
     (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
   const shouldRenderTranscript =
@@ -379,16 +330,22 @@ export function ChatPage() {
       return
     }
 
-    setUnreadThreadIds((currentValue) => {
-      if (!currentValue.has(selectedThreadId)) {
-        return currentValue
-      }
+    const clearUnreadTimerId = window.setTimeout(() => {
+      setUnreadThreadIds((currentValue) => {
+        if (!currentValue.has(selectedThreadId)) {
+          return currentValue
+        }
 
-      const nextValue = new Set(currentValue)
-      nextValue.delete(selectedThreadId)
+        const nextValue = new Set(currentValue)
+        nextValue.delete(selectedThreadId)
 
-      return nextValue
-    })
+        return nextValue
+      })
+    }, 0)
+
+    return () => {
+      window.clearTimeout(clearUnreadTimerId)
+    }
   }, [pageState])
   const transcriptMessages = historyFragment
     ? historyFragment.messages
@@ -442,8 +399,10 @@ export function ChatPage() {
         unreadThreadIds={unreadThreadIds}
       />
       <ChatRuntimeAlerts
+        cachedSavedAt={pageState.cachedSavedAt}
         isOnline={isBrowserOnline}
         isRealtimeSupported={isRealtimeSupported}
+        isUsingCachedData={pageState.isUsingCachedData}
         resyncStatus={resyncStatus}
       />
 

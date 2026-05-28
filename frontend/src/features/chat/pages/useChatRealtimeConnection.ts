@@ -3,7 +3,10 @@ import { useEffect } from 'react'
 
 import { openChatRealtime } from '../api/chatRealtimeClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
-import type { ChatPageState } from './chatPageState'
+import {
+  ONLINE_CHAT_PAGE_CACHE_STATE,
+  type ChatPageState,
+} from './chatPageState'
 
 type UseChatRealtimeConnectionInput = {
   isMountedRef: MutableRefObject<boolean>
@@ -40,6 +43,7 @@ export function useChatRealtimeConnection({
           }
 
           return {
+            ...ONLINE_CHAT_PAGE_CACHE_STATE,
             snapshot: realtimeSnapshot,
             selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
@@ -64,6 +68,7 @@ export function useChatRealtimeConnection({
           }
 
           return {
+            ...ONLINE_CHAT_PAGE_CACHE_STATE,
             snapshot: mergeRealtimeSnapshot({
               currentSnapshot: currentState.snapshot,
               realtimeSnapshot,

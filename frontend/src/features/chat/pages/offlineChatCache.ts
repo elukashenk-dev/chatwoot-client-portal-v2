@@ -1,0 +1,175 @@
+import { offlineStore } from '../../offline/offlineStore'
+import {
+  OFFLINE_MESSAGE_SNAPSHOT_LIMIT,
+  type OfflineChatThreadListRecord,
+} from '../../offline/types'
+import { isFirstConversationBootstrapReady } from '../lib/chatSnapshot'
+import type { ChatMessagesSnapshot, ChatThreadSummary } from '../types'
+
+type OfflineChatScope = {
+  tenantSlug: string
+  userId: number
+}
+
+type SaveOfflineThreadListInput = OfflineChatScope & {
+  activeThreadId: string
+  savedAt?: string
+  threads: ChatThreadSummary[]
+}
+
+type SaveOfflineMessageSnapshotInput = OfflineChatScope & {
+  savedAt?: string
+  snapshot: ChatMessagesSnapshot
+  threadId: string
+}
+
+export type OfflineChatFallback = {
+  cachedSavedAt: string
+  selectedThreadId: string
+  snapshot: ChatMessagesSnapshot
+  threads: ChatThreadSummary[]
+}
+
+export function shouldSaveOfflineMessageSnapshot(
+  snapshot: ChatMessagesSnapshot,
+) {
+  return (
+    snapshot.result === 'ready' || isFirstConversationBootstrapReady(snapshot)
+  )
+}
+
+export function toBoundedOfflineMessageSnapshot(
+  snapshot: ChatMessagesSnapshot,
+): ChatMessagesSnapshot {
+  const messages = snapshot.messages.slice(-OFFLINE_MESSAGE_SNAPSHOT_LIMIT)
+  const wasTrimmed = messages.length < snapshot.messages.length
+
+  return {
+    ...snapshot,
+    hasMoreOlder: snapshot.hasMoreOlder || wasTrimmed,
+    messages,
+    nextOlderCursor: wasTrimmed
+      ? (messages[0]?.id ?? snapshot.nextOlderCursor)
+      : snapshot.nextOlderCursor,
+  }
+}
+
+export async function saveOfflineThreadList({
+  activeThreadId,
+  savedAt = new Date().toISOString(),
+  tenantSlug,
+  threads,
+  userId,
+}: SaveOfflineThreadListInput) {
+  await offlineStore.saveThreadList({
+    activeThreadId,
+    savedAt,
+    tenantSlug,
+    threads,
+    userId,
+  })
+}
+
+export async function saveOfflineMessageSnapshot({
+  savedAt = new Date().toISOString(),
+  snapshot,
+  tenantSlug,
+  threadId,
+  userId,
+}: SaveOfflineMessageSnapshotInput) {
+  if (!shouldSaveOfflineMessageSnapshot(snapshot)) {
+    return
+  }
+
+  await offlineStore.saveMessageSnapshot({
+    savedAt,
+    snapshot: toBoundedOfflineMessageSnapshot(snapshot),
+    tenantSlug,
+    threadId,
+    userId,
+  })
+}
+
+export function selectCachedThreadId({
+  cachedThreads,
+  preferredThreadId,
+}: {
+  cachedThreads: OfflineChatThreadListRecord
+  preferredThreadId: string | null
+}) {
+  const threadIds = new Set<string>(
+    cachedThreads.threads.map((thread) => thread.id),
+  )
+
+  if (preferredThreadId && threadIds.has(preferredThreadId)) {
+    return preferredThreadId
+  }
+
+  if (threadIds.has(cachedThreads.activeThreadId)) {
+    return cachedThreads.activeThreadId
+  }
+
+  return cachedThreads.threads[0]?.id ?? null
+}
+
+export async function readOfflineChatFallback({
+  preferredThreadId,
+  tenantSlug,
+  userId,
+}: OfflineChatScope & {
+  preferredThreadId: string | null
+}): Promise<OfflineChatFallback | null> {
+  try {
+    const cachedThreads = await offlineStore.readThreadList(tenantSlug, userId)
+
+    if (!cachedThreads) {
+      return null
+    }
+
+    const selectedThreadId = selectCachedThreadId({
+      cachedThreads,
+      preferredThreadId,
+    })
+
+    if (!selectedThreadId) {
+      return null
+    }
+
+    const cachedSnapshot = await offlineStore.readMessageSnapshot(
+      tenantSlug,
+      userId,
+      selectedThreadId,
+    )
+
+    if (!cachedSnapshot) {
+      return null
+    }
+
+    if (!shouldSaveOfflineMessageSnapshot(cachedSnapshot.snapshot)) {
+      return null
+    }
+
+    if (
+      cachedSnapshot.snapshot.result === 'ready' &&
+      !cachedSnapshot.snapshot.activeThread
+    ) {
+      return null
+    }
+
+    if (
+      cachedSnapshot.snapshot.activeThread &&
+      cachedSnapshot.snapshot.activeThread.id !== selectedThreadId
+    ) {
+      return null
+    }
+
+    return {
+      cachedSavedAt: cachedSnapshot.savedAt,
+      selectedThreadId,
+      snapshot: cachedSnapshot.snapshot,
+      threads: cachedThreads.threads,
+    }
+  } catch {
+    return null
+  }
+}

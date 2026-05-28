@@ -14,7 +14,10 @@ import {
   type OptimisticTextSend,
 } from '../lib/optimisticTextMessages'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
-import type { ChatPageState } from './chatPageState'
+import {
+  ONLINE_CHAT_PAGE_CACHE_STATE,
+  type ChatPageState,
+} from './chatPageState'
 
 const DEFAULT_TEXT_SEND_ERROR_MESSAGE =
   'Не удалось отправить сообщение. Попробуйте еще раз.'
@@ -128,6 +131,7 @@ export function useOptimisticTextSend({
             currentState.status === 'ready' ? currentState.snapshot : null
 
           return {
+            ...ONLINE_CHAT_PAGE_CACHE_STATE,
             snapshot: buildSnapshotFromSendResult({
               currentSnapshot,
               sendResult,
@@ -233,19 +237,15 @@ export function useOptimisticTextSend({
 
       setOptimisticTextSends((currentSends) =>
         currentSends.map((send) =>
-          send.clientMessageKey === clientMessageKey && send.threadId === threadId
+          send.clientMessageKey === clientMessageKey &&
+          send.threadId === threadId
             ? retrySend
             : send,
         ),
       )
       void sendOptimisticText(retrySend)
     },
-    [
-      isBrowserOnline,
-      optimisticTextSends,
-      sendOptimisticText,
-      threadId,
-    ],
+    [isBrowserOnline, optimisticTextSends, sendOptimisticText, threadId],
   )
 
   return {

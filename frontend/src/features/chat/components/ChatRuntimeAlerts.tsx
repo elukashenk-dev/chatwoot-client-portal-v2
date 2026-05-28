@@ -1,14 +1,20 @@
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 
 type ChatRuntimeAlertsProps = {
+  cachedSavedAt?: string | null
+  hasQueuedSends?: boolean
   isOnline: boolean
   isRealtimeSupported: boolean
+  isUsingCachedData?: boolean
   resyncStatus: 'idle' | 'resyncing' | 'error'
 }
 
 export function ChatRuntimeAlerts({
+  cachedSavedAt,
+  hasQueuedSends = false,
   isOnline,
   isRealtimeSupported,
+  isUsingCachedData = false,
   resyncStatus,
 }: ChatRuntimeAlertsProps) {
   const messages = []
@@ -23,6 +29,24 @@ export function ChatRuntimeAlerts({
       message:
         'Не удалось обновить чат после восстановления соединения. Попробуйте еще раз.',
       tone: 'error' as const,
+    })
+  }
+
+  if (isUsingCachedData) {
+    messages.push({
+      message: isOnline
+        ? 'Показываем сохраненные данные. Обновляем чат после восстановления связи.'
+        : cachedSavedAt
+          ? 'Нет соединения. Показываем сохраненные данные. Обновим чат после восстановления связи.'
+          : 'Нет соединения. Показываем сохраненные данные.',
+      tone: 'info' as const,
+    })
+  }
+
+  if (hasQueuedSends) {
+    messages.push({
+      message: 'Сообщения будут отправлены, когда соединение восстановится.',
+      tone: 'info' as const,
     })
   }
 

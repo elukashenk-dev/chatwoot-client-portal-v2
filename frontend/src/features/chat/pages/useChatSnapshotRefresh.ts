@@ -8,7 +8,10 @@ import {
 import { getChatMessages } from '../api/chatClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
-import type { ChatPageState } from './chatPageState'
+import {
+  ONLINE_CHAT_PAGE_CACHE_STATE,
+  type ChatPageState,
+} from './chatPageState'
 
 type UseChatSnapshotRefreshOptions = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -51,6 +54,7 @@ export function useChatSnapshotRefresh({
           latestSnapshot.result === 'ready'
         ) {
           return {
+            ...ONLINE_CHAT_PAGE_CACHE_STATE,
             snapshot: mergeRealtimeSnapshot({
               currentSnapshot: currentState.snapshot,
               realtimeSnapshot: latestSnapshot,
@@ -62,6 +66,7 @@ export function useChatSnapshotRefresh({
         }
 
         return {
+          ...ONLINE_CHAT_PAGE_CACHE_STATE,
           snapshot: latestSnapshot,
           selectedThreadId: currentState.selectedThreadId,
           status: 'ready',

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 type UseChatResumeResyncInput = {
   canAttemptResync: boolean
+  forceFullReloadOnResync?: boolean
   loadInitialChat: () => Promise<void>
   refreshChatSnapshot: () => Promise<void>
   snapshotExists: boolean
@@ -11,6 +12,7 @@ const LIFECYCLE_RESYNC_MIN_INTERVAL_MS = 15_000
 
 export function useChatResumeResync({
   canAttemptResync,
+  forceFullReloadOnResync = false,
   loadInitialChat,
   refreshChatSnapshot,
   snapshotExists,
@@ -38,7 +40,7 @@ export function useChatResumeResync({
 
       lastLifecycleResyncAtRef.current = now
 
-      if (!snapshotExists) {
+      if (forceFullReloadOnResync || !snapshotExists) {
         await loadInitialChat()
         return
       }
@@ -52,7 +54,13 @@ export function useChatResumeResync({
         setResyncStatus('error')
       }
     },
-    [canAttemptResync, loadInitialChat, refreshChatSnapshot, snapshotExists],
+    [
+      canAttemptResync,
+      forceFullReloadOnResync,
+      loadInitialChat,
+      refreshChatSnapshot,
+      snapshotExists,
+    ],
   )
 
   useEffect(() => {

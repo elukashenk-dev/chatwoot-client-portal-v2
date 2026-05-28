@@ -8,7 +8,10 @@ import {
 
 import { sendChatAttachment } from '../api/chatClient'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
-import type { ChatPageState } from './chatPageState'
+import {
+  ONLINE_CHAT_PAGE_CACHE_STATE,
+  type ChatPageState,
+} from './chatPageState'
 
 type UseChatAttachmentSendOptions = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -98,6 +101,7 @@ export function useChatAttachmentSend({
             currentState.status === 'ready' ? currentState.snapshot : null
 
           return {
+            ...ONLINE_CHAT_PAGE_CACHE_STATE,
             snapshot: buildSnapshotFromSendResult({
               currentSnapshot,
               sendResult,
