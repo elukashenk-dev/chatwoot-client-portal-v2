@@ -56,6 +56,38 @@ export function createRequestTimeout(timeoutMs = BOOT_REQUEST_TIMEOUT_MS) {
   }
 }
 
+export function withBootReadDeadline<T>(
+  promise: Promise<T>,
+  fallbackValue: T,
+  timeoutMs = BOOT_ONLINE_REQUIRED_MS,
+) {
+  let timeoutId: number | null = null
+
+  return new Promise<T>((resolve) => {
+    let isSettled = false
+
+    const settle = (value: T) => {
+      if (isSettled) {
+        return
+      }
+
+      isSettled = true
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId)
+      }
+
+      resolve(value)
+    }
+
+    timeoutId = window.setTimeout(() => {
+      settle(fallbackValue)
+    }, timeoutMs)
+
+    void promise.then(settle, () => settle(fallbackValue))
+  })
+}
+
 export function isNetworkOrTimeoutError(error: unknown) {
   if (typeof error !== 'object' || error === null) {
     return false

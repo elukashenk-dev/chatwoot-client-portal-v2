@@ -317,6 +317,21 @@ describe('AuthSessionProvider offline startup', () => {
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
   })
 
+  it('requires online session check when cached auth read never settles', async () => {
+    vi.spyOn(offlineStore, 'readLocalDeviceSignout').mockReturnValueOnce(
+      new Promise(() => {}),
+    )
+    useBootFakeTimers()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+
+    renderProtectedRoute()
+
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+
+    expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+  })
+
   it('blocks cached protected shell when local device signout marker exists', async () => {
     await saveTenantAndCachedAuth()
     await offlineStore.saveLocalDeviceSignout({

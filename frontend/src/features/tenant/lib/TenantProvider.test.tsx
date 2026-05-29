@@ -323,6 +323,27 @@ describe('TenantProvider', () => {
     expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
   })
 
+  it('leaves splash when saved tenant cache read never settles', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(offlineStore, 'readTenantContext').mockReturnValueOnce(
+      new Promise(() => {}),
+    )
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    render(
+      <TenantProvider>
+        <TenantProbe />
+      </TenantProvider>,
+    )
+
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+
+    expect(
+      screen.getByText('Сохраненные данные недоступны. Нужно подключение.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
+  })
+
   it('invalidates cached tenant on authoritative rejection', async () => {
     await offlineStore.saveTenantContext(cachedTenantRecord())
     fetchMock.mockResolvedValueOnce(

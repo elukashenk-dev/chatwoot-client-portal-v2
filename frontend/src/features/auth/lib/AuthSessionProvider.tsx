@@ -5,6 +5,7 @@ import {
   BOOT_CACHE_FALLBACK_MS,
   BOOT_ONLINE_REQUIRED_MS,
   createRequestTimeout,
+  withBootReadDeadline,
 } from '../../offline/bootCoordinator'
 import {
   clearCurrentUserOfflineData,
@@ -24,6 +25,7 @@ import {
 } from './authSessionContext'
 import {
   completePendingLocalDeviceSignout,
+  type CachedAuthSessionReadResult,
   type OfflineAuthScope,
   readCachedAuthSession,
   saveOnlineAuthSnapshot,
@@ -159,10 +161,17 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     const host = window.location.host
     const requestTimeout = createRequestTimeout()
     requestTimeoutRef.current = requestTimeout
-    const cachedSessionPromise = readCachedAuthSession({
-      host,
-      tenantSlug: tenant?.slug ?? null,
-    })
+    const cachedSessionPromise =
+      withBootReadDeadline<CachedAuthSessionReadResult>(
+        readCachedAuthSession({
+          host,
+          tenantSlug: tenant?.slug ?? null,
+        }),
+        {
+          scope: null,
+          status: 'session_check_required',
+        },
+      )
     const currentSessionPromise = getCurrentSession({
       signal: requestTimeout.signal,
     })

@@ -7,6 +7,7 @@ import {
   BOOT_SLOW_NOTICE_MS,
   createRequestTimeout,
   isNetworkOrTimeoutError,
+  withBootReadDeadline,
 } from '../../offline/bootCoordinator'
 import { offlineStore } from '../../offline/offlineStore'
 import { isOfflineStorageUnavailableError } from '../../offline/storagePersistence'
@@ -32,6 +33,7 @@ type TenantProviderProps = {
 type CachedTenantReadResult =
   | Awaited<ReturnType<typeof offlineStore.readTenantContext>>
   | 'cache_read_failed'
+  | 'cache_read_timeout'
   | 'storage_unavailable'
 
 const authoritativeTenantFailureCodes = new Set([
@@ -101,6 +103,14 @@ function isTenantStartupUnavailable(error: unknown) {
   )
 }
 
+function isUnavailableCachedTenantRead(cachedTenant: CachedTenantReadResult) {
+  return (
+    cachedTenant === 'storage_unavailable' ||
+    cachedTenant === 'cache_read_failed' ||
+    cachedTenant === 'cache_read_timeout'
+  )
+}
+
 export function TenantProvider({ children }: TenantProviderProps) {
   const isMountedRef = useRef(false)
   const startupAttemptRef = useRef(0)
@@ -140,15 +150,16 @@ export function TenantProvider({ children }: TenantProviderProps) {
     const host = window.location.host
     const requestTimeout = createRequestTimeout()
     requestTimeoutRef.current = requestTimeout
-    const cachedTenantPromise: Promise<CachedTenantReadResult> = offlineStore
-      .readTenantContext(host)
-      .catch((error: unknown) => {
+    const cachedTenantPromise = withBootReadDeadline<CachedTenantReadResult>(
+      offlineStore.readTenantContext(host).catch((error: unknown) => {
         if (isOfflineStorageUnavailableError(error)) {
           return 'storage_unavailable' as const
         }
 
         return 'cache_read_failed' as const
-      })
+      }),
+      'cache_read_timeout',
+    )
     const onlineTenantPromise = getPublicTenantContext({
       signal: requestTimeout.signal,
     })
@@ -181,10 +192,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
         return false
       }
 
-      if (
-        cachedTenant === 'storage_unavailable' ||
-        cachedTenant === 'cache_read_failed'
-      ) {
+      if (isUnavailableCachedTenantRead(cachedTenant)) {
         showStorageUnavailable()
         return false
       }
@@ -227,10 +235,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
       }, BOOT_CACHE_FALLBACK_MS),
       window.setTimeout(() => {
         void cachedTenantPromise.then((cachedTenant) => {
-          if (
-            cachedTenant === 'storage_unavailable' ||
-            cachedTenant === 'cache_read_failed'
-          ) {
+          if (isUnavailableCachedTenantRead(cachedTenant)) {
             showStorageUnavailable()
             return
           }
