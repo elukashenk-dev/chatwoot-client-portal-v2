@@ -13,6 +13,26 @@ describe('loadEnv', () => {
     expect(loadEnv(baseRawEnv).CHATWOOT_REQUEST_TIMEOUT_MS).toBeUndefined()
   })
 
+  it('does not expose retired single-tenant Chatwoot runtime env values', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      CHATWOOT_ACCOUNT_ID: '1',
+      CHATWOOT_API_ACCESS_TOKEN: 'token',
+      CHATWOOT_BASE_URL: 'https://chatwoot.example.test',
+      CHATWOOT_PORTAL_INBOX_ID: '2',
+      CHATWOOT_WEBHOOK_CALLBACK_URL:
+        'https://lk.example.test/api/integrations/chatwoot/webhooks/account',
+      CHATWOOT_WEBHOOK_SECRET: 'webhook-secret',
+    })
+
+    expect('CHATWOOT_ACCOUNT_ID' in env).toBe(false)
+    expect('CHATWOOT_API_ACCESS_TOKEN' in env).toBe(false)
+    expect('CHATWOOT_BASE_URL' in env).toBe(false)
+    expect('CHATWOOT_PORTAL_INBOX_ID' in env).toBe(false)
+    expect('CHATWOOT_WEBHOOK_CALLBACK_URL' in env).toBe(false)
+    expect('CHATWOOT_WEBHOOK_SECRET' in env).toBe(false)
+  })
+
   it('leaves attachment proxy extra origins empty by default', () => {
     expect(loadEnv(baseRawEnv).CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS).toEqual(
       [],

@@ -310,6 +310,10 @@ AUTH_RATE_LIMIT_MAX=100 pnpm dev:backend
 Для конкретного tenant host:
 
 ```bash
+E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+E2E_CHATWOOT_ACCOUNT_ID=3 \
+E2E_CHATWOOT_PORTAL_INBOX_ID=6 \
+E2E_CHATWOOT_API_ACCESS_TOKEN="$BUHFIRMA_TOKEN" \
 PLAYWRIGHT_BASE_URL=http://buhfirma.127.0.0.1.nip.io:5173 \
 E2E_TENANT_SLUG=buhfirma \
 pnpm test:e2e
@@ -318,6 +322,10 @@ pnpm test:e2e
 Для второго tenant:
 
 ```bash
+E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+E2E_CHATWOOT_ACCOUNT_ID=1 \
+E2E_CHATWOOT_PORTAL_INBOX_ID=8 \
+E2E_CHATWOOT_API_ACCESS_TOKEN="$ZUBI_TOKEN" \
 PLAYWRIGHT_BASE_URL=http://zubi.127.0.0.1.nip.io:5173 \
 E2E_TENANT_SLUG=zubi \
 pnpm test:e2e

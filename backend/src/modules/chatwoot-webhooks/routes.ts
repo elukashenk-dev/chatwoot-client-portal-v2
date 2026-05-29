@@ -14,10 +14,7 @@ type RegisterChatwootWebhookRoutesOptions = {
   ) => ChatwootWebhookService
 }
 
-const CHATWOOT_WEBHOOK_PATHS = [
-  '/api/chatwoot/webhooks',
-  '/api/integrations/chatwoot/webhooks/account',
-]
+const CHATWOOT_WEBHOOK_PATH = '/api/chatwoot/webhooks'
 
 function parseJsonRawBody(rawBody: Buffer) {
   try {
@@ -88,8 +85,6 @@ export function registerChatwootWebhookRoutes(
       })
     }
 
-    for (const path of CHATWOOT_WEBHOOK_PATHS) {
-      webhookApp.post(path, handleWebhookRequest)
-    }
+    webhookApp.post(CHATWOOT_WEBHOOK_PATH, handleWebhookRequest)
   })
 }

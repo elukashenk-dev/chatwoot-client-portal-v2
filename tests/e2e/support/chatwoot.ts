@@ -54,17 +54,18 @@ export async function createChatwootContactForE2e({
   email: string
   name: string
 }) {
-  const env = loadE2eEnv()
-  const inboxId = Number(getRequiredRawEnv('CHATWOOT_PORTAL_INBOX_ID'))
+  loadE2eEnv()
+
+  const accountId = getRequiredRawEnv('E2E_CHATWOOT_ACCOUNT_ID')
+  const apiAccessToken = getRequiredRawEnv('E2E_CHATWOOT_API_ACCESS_TOKEN')
+  const baseUrl = getRequiredRawEnv('E2E_CHATWOOT_BASE_URL')
+  const inboxId = Number(getRequiredRawEnv('E2E_CHATWOOT_PORTAL_INBOX_ID'))
 
   if (!Number.isInteger(inboxId) || inboxId <= 0) {
-    throw new Error('CHATWOOT_PORTAL_INBOX_ID must be a positive integer.')
+    throw new Error('E2E_CHATWOOT_PORTAL_INBOX_ID must be a positive integer.')
   }
 
-  const requestUrl = new URL(
-    `/api/v1/accounts/${env.CHATWOOT_ACCOUNT_ID}/contacts`,
-    env.CHATWOOT_BASE_URL,
-  )
+  const requestUrl = new URL(`/api/v1/accounts/${accountId}/contacts`, baseUrl)
   const response = await fetch(requestUrl, {
     body: JSON.stringify({
       blocked: false,
@@ -75,7 +76,7 @@ export async function createChatwootContactForE2e({
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      api_access_token: env.CHATWOOT_API_ACCESS_TOKEN ?? '',
+      api_access_token: apiAccessToken,
     },
     method: 'POST',
   })

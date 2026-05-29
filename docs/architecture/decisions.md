@@ -69,9 +69,10 @@
 - решение:
   runtime не строится вокруг глобальных `CHATWOOT_ACCOUNT_ID` и
   `CHATWOOT_PORTAL_INBOX_ID`. Chatwoot base URL, account ID, portal inbox ID,
-  runtime API token и webhook secret берутся из current tenant. Старые
-  `CHATWOOT_*` env names допустимы только как bootstrap/dev input, но не как
-  runtime authority.
+  runtime API token и webhook secret берутся из current tenant.
+  Single-tenant `CHATWOOT_*` env names больше не являются ни runtime
+  authority, ни bootstrap/dev input. Bootstrap выполняется только через
+  tenant-owned `DEFAULT_TENANT_CHATWOOT_*` variables.
 - причина:
   один portal deploy может обслуживать tenants с разными Chatwoot accounts или
   installations. Global Chatwoot env возвращают single-tenant assumption и риск

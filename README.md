@@ -17,8 +17,8 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - Portal database всегда отдельная от runtime-базы Chatwoot.
 - Tenant определяется по `Host`/domain; production convention:
   `lk.<client-domain>`.
-- Runtime Chatwoot config хранится у tenant, а не в глобальных
-  `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`.
+- Runtime Chatwoot config хранится у tenant. Глобальные `CHATWOOT_*` env values
+  не являются backend runtime authority.
 
 ## Текущий Baseline
 

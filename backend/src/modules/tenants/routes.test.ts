@@ -13,10 +13,6 @@ const tenantSecretKey = Buffer.alloc(32, 5).toString('base64')
 
 const baseTestEnv: AppEnv = {
   APP_ORIGIN: 'https://lk.default.test',
-  CHATWOOT_ACCOUNT_ID: undefined,
-  CHATWOOT_API_ACCESS_TOKEN: undefined,
-  CHATWOOT_BASE_URL: undefined,
-  CHATWOOT_PORTAL_INBOX_ID: undefined,
   CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS: [],
   DATABASE_URL:
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
@@ -368,7 +364,7 @@ describe('tenant routes and request context', () => {
             },
             method: 'POST',
             payload: Buffer.from('{}'),
-            url: '/api/integrations/chatwoot/webhooks/account',
+            url: '/api/chatwoot/webhooks',
           }),
         ])
 
@@ -514,7 +510,7 @@ describe('tenant routes and request context', () => {
         },
         method: 'POST',
         payload: signedWithDefaultSecret.rawBody,
-        url: '/api/integrations/chatwoot/webhooks/account',
+        url: '/api/chatwoot/webhooks',
       })
 
       expect(wrongSecretResponse.statusCode).toBe(401)
@@ -537,7 +533,7 @@ describe('tenant routes and request context', () => {
         },
         method: 'POST',
         payload: signedWithSecondSecret.rawBody,
-        url: '/api/integrations/chatwoot/webhooks/account',
+        url: '/api/chatwoot/webhooks',
       })
 
       expect(currentTenantSecretResponse.statusCode).toBe(200)

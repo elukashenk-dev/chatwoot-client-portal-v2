@@ -61,7 +61,7 @@ describe('configureTenantChatwootWebhook', () => {
       configurePortalInboxWebhook: vi.fn().mockResolvedValue({
         id: 9,
         secret: 'new-webhook-secret',
-        url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
+        url: 'https://lk.buhfirma.test/api/chatwoot/webhooks',
       }),
     }
     const createChatwootClient = vi
@@ -82,7 +82,7 @@ describe('configureTenantChatwootWebhook', () => {
       portalInboxId: 9,
     })
     expect(chatwootClient.configurePortalInboxWebhook).toHaveBeenCalledWith({
-      url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
+      url: 'https://lk.buhfirma.test/api/chatwoot/webhooks',
     })
     expect(result).toMatchObject({
       action: 'updated',
@@ -117,7 +117,7 @@ describe('configureTenantChatwootWebhook', () => {
       configurePortalInboxWebhook: vi.fn().mockResolvedValue({
         id: 9,
         secret: null,
-        url: 'https://lk.buhfirma.test/api/integrations/chatwoot/webhooks/account',
+        url: 'https://lk.buhfirma.test/api/chatwoot/webhooks',
       }),
     })
 

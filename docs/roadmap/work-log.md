@@ -165,6 +165,13 @@
   tenant/auth/chat данные при плохой связи после предыдущего online входа,
   текстовые сообщения ставятся в локальную durable outbox и доставляются после
   восстановления соединения; backend остается единственной authority-зоной.
+- No-legacy cleanup gate удалил single-tenant `CHATWOOT_*` runtime/env
+  compatibility из backend env и Chatwoot client construction; tenant bootstrap
+  остается только через `DEFAULT_TENANT_CHATWOOT_*`, а e2e harness использует
+  отдельные `E2E_CHATWOOT_*` values.
+- Chatwoot webhook callback surface сужен до одного canonical route
+  `/api/chatwoot/webhooks`; совместимый
+  `/api/integrations/chatwoot/webhooks/account` больше не обслуживается.
 
 ## Current Baseline
 
@@ -183,6 +190,7 @@
 
 ## Recommended Next Step
 
-- Run Installed PWA Smoke on real Android Chrome and iOS/iPadOS Home Screen
-  devices using `docs/operations/installed-pwa-smoke.md`; if both platforms
-  pass or any blocker is explicitly accepted, continue to SMS fallback gateway.
+- Checkpoint commit no-legacy cleanup, deploy it to `lk.provgroup.ru`,
+  reconfigure the `provgroup` Chatwoot webhook to `/api/chatwoot/webhooks`, then
+  run Installed PWA Smoke on real Android Chrome and iOS/iPadOS Home Screen
+  devices before continuing to SMS fallback gateway.

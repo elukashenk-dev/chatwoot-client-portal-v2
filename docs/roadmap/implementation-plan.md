@@ -41,8 +41,8 @@
 - один portal deploy может обслуживать несколько tenants;
 - dedicated install остается тем же runtime с одним tenant;
 - tenant определяется по `Host`/domain;
-- runtime Chatwoot config берется из tenant, а не из глобальных
-  `CHATWOOT_ACCOUNT_ID` / `CHATWOOT_PORTAL_INBOX_ID`;
+- runtime Chatwoot config берется из tenant; глобальные `CHATWOOT_*` env values
+  не являются backend runtime authority;
 - customer auth, persistence, chat runtime, webhooks, frontend metadata и PWA
   identity уже tenant-aware;
 - browser работает с `threadId`, а backend мапит threads на Chatwoot

@@ -9,8 +9,7 @@ import {
   encryptTenantSecret,
 } from '../modules/tenants/secrets.js'
 
-const TENANT_CHATWOOT_WEBHOOK_PATH =
-  '/api/integrations/chatwoot/webhooks/account'
+const TENANT_CHATWOOT_WEBHOOK_PATH = '/api/chatwoot/webhooks'
 
 type ConfigureTenantWebhookOptions = {
   callbackUrl?: string | undefined

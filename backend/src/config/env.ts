@@ -135,14 +135,8 @@ const envSchema = z
     SESSION_TTL_DAYS: z.coerce.number().int().positive().max(90).default(14),
     AUTH_RATE_LIMIT_MAX: optionalPositiveInt.default(5),
     AUTH_RATE_LIMIT_WINDOW_MS: optionalPositiveInt.default(60_000),
-    CHATWOOT_BASE_URL: optionalUrlString,
-    CHATWOOT_ACCOUNT_ID: optionalPositiveInt,
-    CHATWOOT_API_ACCESS_TOKEN: optionalNonEmptyString,
-    CHATWOOT_PORTAL_INBOX_ID: optionalPositiveInt,
     CHATWOOT_REQUEST_TIMEOUT_MS: optionalPositiveInt,
     CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS: optionalUrlList,
-    CHATWOOT_WEBHOOK_CALLBACK_URL: optionalUrlString,
-    CHATWOOT_WEBHOOK_SECRET: optionalNonEmptyString,
     PORTAL_TENANT_SECRET_KEY: optionalNonEmptyString,
     DEFAULT_TENANT_SLUG: optionalNonEmptyString,
     DEFAULT_TENANT_DISPLAY_NAME: optionalNonEmptyString,
@@ -166,51 +160,6 @@ const envSchema = z
     PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: pushSubscriptionAllowedOrigins,
   })
   .superRefine((env, context) => {
-    const hasChatwootConfig = Boolean(
-      env.CHATWOOT_BASE_URL ||
-      env.CHATWOOT_ACCOUNT_ID !== undefined ||
-      env.CHATWOOT_API_ACCESS_TOKEN ||
-      env.CHATWOOT_PORTAL_INBOX_ID !== undefined,
-    )
-
-    if (hasChatwootConfig) {
-      if (!env.CHATWOOT_BASE_URL) {
-        context.addIssue({
-          code: 'custom',
-          message:
-            'CHATWOOT_BASE_URL is required when Chatwoot integration is configured',
-          path: ['CHATWOOT_BASE_URL'],
-        })
-      }
-
-      if (!env.CHATWOOT_ACCOUNT_ID) {
-        context.addIssue({
-          code: 'custom',
-          message:
-            'CHATWOOT_ACCOUNT_ID is required when Chatwoot integration is configured',
-          path: ['CHATWOOT_ACCOUNT_ID'],
-        })
-      }
-
-      if (!env.CHATWOOT_API_ACCESS_TOKEN) {
-        context.addIssue({
-          code: 'custom',
-          message:
-            'CHATWOOT_API_ACCESS_TOKEN is required when Chatwoot integration is configured',
-          path: ['CHATWOOT_API_ACCESS_TOKEN'],
-        })
-      }
-
-      if (!env.CHATWOOT_PORTAL_INBOX_ID) {
-        context.addIssue({
-          code: 'custom',
-          message:
-            'CHATWOOT_PORTAL_INBOX_ID is required when Chatwoot integration is configured',
-          path: ['CHATWOOT_PORTAL_INBOX_ID'],
-        })
-      }
-    }
-
     const hasSmtpConfig = Boolean(
       env.SMTP_HOST || env.SMTP_FROM || env.SMTP_USER || env.SMTP_PASS,
     )

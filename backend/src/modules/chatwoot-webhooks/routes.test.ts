@@ -68,33 +68,23 @@ describe('registerChatwootWebhookRoutes', () => {
     })
   })
 
-  it('keeps the documented integrations webhook path as a compatible callback URL', async () => {
-    const rawBody = Buffer.from(
-      JSON.stringify({
-        event: 'message_created',
-        id: 502,
-      }),
-    )
-
+  it('does not keep the retired integrations webhook compatibility path', async () => {
     const response = await app.inject({
       headers: {
         'content-type': 'application/json',
       },
       method: 'POST',
-      payload: rawBody,
+      payload: Buffer.from(
+        JSON.stringify({
+          event: 'message_created',
+          id: 502,
+        }),
+      ),
       url: '/api/integrations/chatwoot/webhooks/account',
     })
 
-    expect(response.statusCode).toBe(200)
-    expect(handleWebhook).toHaveBeenCalledWith(
-      expect.objectContaining({
-        payload: {
-          event: 'message_created',
-          id: 502,
-        },
-        rawBody,
-      }),
-    )
+    expect(response.statusCode).toBe(404)
+    expect(handleWebhook).not.toHaveBeenCalled()
   })
 
   it('rejects malformed webhook JSON with a controlled error', async () => {

@@ -1,4 +1,3 @@
-import type { AppEnv } from '../../config/env.js'
 import { normalizeEmail } from '../../lib/email.js'
 import { findChatwootContactById } from './contactLookup.js'
 import {
@@ -143,17 +142,8 @@ export type ChatwootClientConfig = {
   portalInboxId: number
 }
 
-type ChatwootEnvConfig = Pick<
-  AppEnv,
-  | 'CHATWOOT_ACCOUNT_ID'
-  | 'CHATWOOT_API_ACCESS_TOKEN'
-  | 'CHATWOOT_BASE_URL'
-  | 'CHATWOOT_PORTAL_INBOX_ID'
->
-
 type CreateChatwootClientOptions = {
   config?: ChatwootClientConfig | null | undefined
-  env?: ChatwootEnvConfig | undefined
   fetchFn?: typeof fetch
   requestTimeoutMs?: number | undefined
 }
@@ -161,20 +151,6 @@ type CreateChatwootClientOptions = {
 type CreateChatwootClientFactoryOptions = {
   fetchFn?: typeof fetch
   requestTimeoutMs?: number | undefined
-}
-
-function resolveConfigFromEnv(env: ChatwootEnvConfig) {
-  return env.CHATWOOT_BASE_URL &&
-    env.CHATWOOT_ACCOUNT_ID &&
-    env.CHATWOOT_API_ACCESS_TOKEN &&
-    env.CHATWOOT_PORTAL_INBOX_ID
-    ? {
-        accountId: env.CHATWOOT_ACCOUNT_ID,
-        apiAccessToken: env.CHATWOOT_API_ACCESS_TOKEN,
-        baseUrl: env.CHATWOOT_BASE_URL,
-        portalInboxId: env.CHATWOOT_PORTAL_INBOX_ID,
-      }
-    : null
 }
 
 function normalizeConfig(
@@ -190,17 +166,6 @@ function normalizeConfig(
     baseUrl: normalizeBaseUrl(config.baseUrl),
     portalInboxId: config.portalInboxId,
   }
-}
-
-function resolveInitialConfig({
-  config,
-  env,
-}: Pick<CreateChatwootClientOptions, 'config' | 'env'>) {
-  if (config !== undefined) {
-    return normalizeConfig(config)
-  }
-
-  return normalizeConfig(env ? resolveConfigFromEnv(env) : null)
 }
 
 function normalizeBaseUrl(value: string) {
@@ -577,14 +542,10 @@ function collectPortalContactSourceIds(
 
 export function createChatwootClient({
   config: initialConfig,
-  env,
   fetchFn = fetch,
   requestTimeoutMs: inputRequestTimeoutMs,
 }: CreateChatwootClientOptions) {
-  const config = resolveInitialConfig({
-    config: initialConfig,
-    env,
-  })
+  const config = normalizeConfig(initialConfig)
   const requestTimeoutMs = normalizeChatwootRequestTimeoutMs(
     inputRequestTimeoutMs,
   )

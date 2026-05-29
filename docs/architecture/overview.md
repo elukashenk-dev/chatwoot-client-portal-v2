@@ -249,13 +249,7 @@ Chatwoot signed webhook -> portal backend -> tenant-scoped SSE fanout -> browser
   валидирует актуальный доступ пользователя к thread;
 - browser не подписывается напрямую на Chatwoot events.
 
-Основной callback route:
-
-```text
-/api/integrations/chatwoot/webhooks/account
-```
-
-Также существует совместимый backend route:
+Callback route:
 
 ```text
 /api/chatwoot/webhooks
@@ -302,8 +296,9 @@ Tenant-aware PWA endpoints:
 - continuation token fields остаются в `verification_records`;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
-- env values single-tenant bootstrap вида допустимы только как bootstrap/dev
-  input, а не как runtime source of truth.
+- single-tenant `CHATWOOT_*` env values не являются runtime source of truth и
+  не используются как bootstrap/dev input; bootstrap идет только через
+  tenant-owned `DEFAULT_TENANT_CHATWOOT_*` values.
 
 ## API Surface
 
@@ -334,7 +329,6 @@ API `v2` остается простым и явным:
 - `/api/chat/messages`;
 - `/api/chat/messages/attachment`;
 - `/api/chat/realtime`;
-- `/api/integrations/chatwoot/webhooks/account`;
 - `/api/chatwoot/webhooks`.
 
 ## Repository Shape

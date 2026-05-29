@@ -318,6 +318,7 @@ CHATWOOT_BASE_URL
 CHATWOOT_ACCOUNT_ID
 CHATWOOT_API_ACCESS_TOKEN
 CHATWOOT_PORTAL_INBOX_ID
+CHATWOOT_WEBHOOK_CALLBACK_URL
 CHATWOOT_WEBHOOK_SECRET
 ```
 
@@ -375,7 +376,7 @@ Expected:
 - portal inbox is `Channel::Api`;
 - `lock_to_single_conversation` is true or was updated;
 - API Channel webhook URL points to:
-  `https://lk.provgroup.ru/api/integrations/chatwoot/webhooks/account`;
+  `https://lk.provgroup.ru/api/chatwoot/webhooks`;
 - webhook secret is stored in the portal tenant record.
 
 These are the only approved Chatwoot-side changes in this runbook.
