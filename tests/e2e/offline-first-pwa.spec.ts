@@ -1,6 +1,7 @@
 import { expect, type BrowserContext, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { expectControlledStorageLossState } from './support/controlledStorageLoss.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -38,9 +39,11 @@ const OFFLINE_STORE_NAMES = [
   'push_stale_markers',
 ] as const
 
-const CONTROLLED_STORAGE_LOSS_TIMEOUT = {
-  timeout: 12_000,
-} as const
+const OFFLINE_SAVED_CHAT_NOTICE = 'Нет связи. Показываем сохраненные сообщения.'
+const OFFLINE_QUEUED_TEXT_NOTICE =
+  'Нет связи. 1 сообщение в очереди. Отправим, когда связь восстановится.'
+const RETIRED_COMPOSER_OFFLINE_NOTICE =
+  'Нет соединения. Сообщения будут отправлены, когда соединение восстановится.'
 
 type BrowserLastActiveIdentity = {
   tenantSlug: string
@@ -799,16 +802,6 @@ async function deleteOfflineDatabase(page: Page) {
   )
 }
 
-async function expectControlledStorageLossState(page: Page) {
-  await expect(
-    page.getByRole('heading', {
-      name: /Нужно подключение к интернету\.|Нужно проверить сессию\./,
-    }),
-  ).toBeVisible(CONTROLLED_STORAGE_LOSS_TIMEOUT)
-  await expect(page.getByRole('button', { name: 'Повторить' })).toBeVisible()
-  await expect(page.getByText('Личный чат')).toHaveCount(0)
-}
-
 test('opens saved chat during slow startup and queues offline text', async ({
   context,
   page,
@@ -835,14 +828,14 @@ test('opens saved chat during slow startup and queues offline text', async ({
   apiRoutes.setApiOffline(true)
   await page.reload()
   await expect(page.getByText('Личный чат')).toBeVisible()
-  await expect(
-    page.getByText('Нет соединения. Показываем сохраненные данные.'),
-  ).toBeVisible()
+  await expect(page.getByText(OFFLINE_SAVED_CHAT_NOTICE)).toBeVisible()
 
   const identity = await readLastActiveIdentity(page)
 
   await page.getByRole('textbox', { name: 'Сообщение' }).fill('Тест offline')
   await page.getByRole('button', { name: 'Отправить' }).click()
+  await expect(page.getByText(OFFLINE_QUEUED_TEXT_NOTICE)).toBeVisible()
+  await expect(page.getByText(RETIRED_COMPOSER_OFFLINE_NOTICE)).toHaveCount(0)
   await expect(page.getByLabel('В очереди')).toBeVisible()
   await expect
     .poll(

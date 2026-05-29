@@ -29,6 +29,7 @@ type UseChatOutboxDrainIntegrationInput = {
   handleOutboxSendSucceeded: (event: OutboxSendSucceededEvent) => void
   hydrateOptimisticTextSendsFromOutbox: (result: OutboxHydrationResult) => void
   isBrowserOnline: boolean
+  markBrowserOffline: () => void
   pageState: ChatPageState
   refreshSession: () => Promise<void>
   tenantSlug: string | null
@@ -40,6 +41,7 @@ export function useChatOutboxDrainIntegration({
   handleOutboxSendSucceeded,
   hydrateOptimisticTextSendsFromOutbox,
   isBrowserOnline,
+  markBrowserOffline,
   pageState,
   refreshSession,
   tenantSlug,
@@ -127,6 +129,10 @@ export function useChatOutboxDrainIntegration({
         return
       }
 
+      if (event.category === 'network_retry' && event.statusCode === 0) {
+        markBrowserOffline()
+      }
+
       try {
         const result = await loadSelectedThreadOutboxRecords()
         if (result !== null) {
@@ -139,6 +145,7 @@ export function useChatOutboxDrainIntegration({
     [
       hydrateOptimisticTextSendsFromOutbox,
       loadSelectedThreadOutboxRecords,
+      markBrowserOffline,
       pageState.selectedThreadId,
       tenantSlug,
       userId,

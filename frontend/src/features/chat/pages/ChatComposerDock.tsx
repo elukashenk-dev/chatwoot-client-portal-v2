@@ -5,9 +5,6 @@ import type {
   SendMessageInput,
 } from '../components/message-composer/types'
 
-const OFFLINE_COMPOSER_QUEUE_MESSAGE =
-  'Нет соединения. Сообщения будут отправлены, когда соединение восстановится.'
-
 type ChatComposerDockProps = {
   canSend: boolean
   handleSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
@@ -35,9 +32,6 @@ export function ChatComposerDock({
       disabled={!canSend}
       errorMessage={sendErrorMessage}
       isSending={isSending}
-      offlineAlertMessage={
-        isBrowserOnline ? null : OFFLINE_COMPOSER_QUEUE_MESSAGE
-      }
       onCancelReply={onCancelReply}
       onSend={handleSendMessage}
       onSendAttachment={handleSendAttachment}

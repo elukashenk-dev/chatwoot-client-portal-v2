@@ -8,7 +8,10 @@ import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
-import { isFirstConversationBootstrapReady, toComposerReplyTarget } from '../lib/chatSnapshot'
+import {
+  isFirstConversationBootstrapReady,
+  toComposerReplyTarget,
+} from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
@@ -47,10 +50,16 @@ export function ChatPage() {
   )
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
-  const [outboxDrainRequestSignal, requestOutboxDrain] = useReducer((value: number) => value + 1, 0)
-  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null)
+  const [outboxDrainRequestSignal, requestOutboxDrain] = useReducer(
+    (value: number) => value + 1,
+    0,
+  )
+  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
+    null,
+  )
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
-  const [replyTarget, setReplyTarget] = useState<MessageComposerReplyTarget | null>(null)
+  const [replyTarget, setReplyTarget] =
+    useState<MessageComposerReplyTarget | null>(null)
   const {
     isOnline: isBrowserOnline,
     markOffline: markBrowserOffline,
@@ -273,29 +282,29 @@ export function ChatPage() {
     handleSendMessage,
     hydrateOptimisticTextSendsFromOutbox,
     optimisticTextSends,
-  } =
-    useOptimisticTextSend({
-      canUseOfflineTextQueue,
-      isBrowserOnline,
-      onOutboxRecordQueued: requestOutboxDrain,
-      onTextSendStarted: () => {
-        clearHistoryFragment()
-        clearSendError()
-      },
-      pageState,
-      replyTarget,
-      setPageState,
-      setSendErrorMessage,
-      tenantSlug,
-      threadId: pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID,
-      userId,
-    })
+  } = useOptimisticTextSend({
+    canUseOfflineTextQueue,
+    isBrowserOnline,
+    onOutboxRecordQueued: requestOutboxDrain,
+    onTextSendStarted: () => {
+      clearHistoryFragment()
+      clearSendError()
+    },
+    pageState,
+    replyTarget,
+    setPageState,
+    setSendErrorMessage,
+    tenantSlug,
+    threadId: pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID,
+    userId,
+  })
 
   useChatOutboxDrainIntegration({
     drainRequestSignal: outboxDrainRequestSignal,
     handleOutboxSendSucceeded,
     hydrateOptimisticTextSendsFromOutbox,
     isBrowserOnline,
+    markBrowserOffline,
     pageState,
     refreshSession,
     tenantSlug,
@@ -351,6 +360,7 @@ export function ChatPage() {
     <>
       <ChatHeader
         activeThread={headerThread}
+        isConnectionAvailable={isBrowserOnline}
         onOpenThreadSearch={() => {
           clearSearchResultOpenError()
           chatSearchPanel.openChatSearch()
@@ -376,10 +386,16 @@ export function ChatPage() {
         unreadThreadIds={unreadThreadIds}
       />
       <ChatRuntimeAlerts
-        cachedSavedAt={pageState.cachedSavedAt}
+        isChatAvailable={shouldRenderTranscript}
         isOnline={isBrowserOnline}
         isRealtimeSupported={isRealtimeSupported}
-        isUsingCachedData={pageState.isUsingCachedData}
+        queuedSendCount={
+          optimisticTextSends.filter(
+            (send) =>
+              send.threadId === pageState.selectedThreadId &&
+              send.status !== 'failed',
+          ).length
+        }
         resyncStatus={resyncStatus}
       />
 

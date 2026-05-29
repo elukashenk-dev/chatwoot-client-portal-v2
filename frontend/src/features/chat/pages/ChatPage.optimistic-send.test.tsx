@@ -427,9 +427,16 @@ describe('ChatPage optimistic text send', () => {
 
     expect(
       await screen.findByText(
-        'Нет соединения. Сообщения будут отправлены, когда соединение восстановится.',
+        'Нет связи. 1 сообщение в очереди. Отправим, когда связь восстановится.',
       ),
     ).toBeInTheDocument()
+    expect(screen.getByText('Нет связи')).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Нет соединения. Сообщения будут отправлены, когда соединение восстановится.',
+      ),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Проверяем')).not.toBeInTheDocument()
     expect(screen.queryByText(/отправка отключена/i)).not.toBeInTheDocument()
     expect(await screen.findByLabelText('В очереди')).toBeInTheDocument()
     expect(getMessagePostCalls()).toHaveLength(0)
@@ -454,10 +461,9 @@ describe('ChatPage optimistic text send', () => {
     const user = userEvent.setup()
     const initialHydration = createDeferredValue<OfflineTextOutboxRecord[]>()
 
-    vi.spyOn(
-      offlineOutboxStore,
-      'listThreadOutboxRecords',
-    ).mockReturnValueOnce(initialHydration.promise)
+    vi.spyOn(offlineOutboxStore, 'listThreadOutboxRecords').mockReturnValueOnce(
+      initialHydration.promise,
+    )
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
@@ -610,63 +616,59 @@ describe('ChatPage optimistic text send', () => {
     expect(screen.getByLabelText('В очереди')).toBeInTheDocument()
   })
 
-  it(
-    'drains a queued text message on mount and reconciles it to the canonical backend message',
-    async () => {
-      await offlineOutboxStore.saveOutboxRecord(
-        createOutboxRecord({
-          clientMessageKey: 'portal-send:drain-on-mount',
-          content: 'Drain me',
+  it('drains a queued text message on mount and reconciles it to the canonical backend message', async () => {
+    await offlineOutboxStore.saveOutboxRecord(
+      createOutboxRecord({
+        clientMessageKey: 'portal-send:drain-on-mount',
+        content: 'Drain me',
+      }),
+    )
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: 'portal-send:drain-on-mount',
+            content: 'Drain me',
+            contentType: 'text',
+            createdAt: '2026-05-27T10:00:01.000Z',
+            direction: 'outgoing',
+            id: 601,
+            status: 'sent',
+          },
         }),
       )
 
-      fetchMock
-        .mockResolvedValueOnce(createAuthenticatedUserResponse())
-        .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-        .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-        .mockResolvedValueOnce(createNotificationSettingsResponse())
-        .mockResolvedValueOnce(createSupportAvailabilityResponse())
-        .mockResolvedValueOnce(
-          createJsonResponse({
-            activeThread: privateThread,
-            reason: 'none',
-            result: 'ready',
-            sentMessage: {
-              attachments: [],
-              authorName: 'Вы',
-              authorRole: 'current_user',
-              clientMessageKey: 'portal-send:drain-on-mount',
-              content: 'Drain me',
-              contentType: 'text',
-              createdAt: '2026-05-27T10:00:01.000Z',
-              direction: 'outgoing',
-              id: 601,
-              status: 'sent',
-            },
-          }),
-        )
+    renderChatRoute()
 
-      renderChatRoute()
-
-      await waitForInitialChatRequests()
-      await waitFor(() => {
-        expect(getMessagePostCalls()).toHaveLength(1)
-      })
-      await waitFor(() => {
-        expect(screen.queryByLabelText('В очереди')).not.toBeInTheDocument()
-      })
-      expect(screen.getByText('Drain me')).toBeInTheDocument()
-      await expect(
-        offlineOutboxStore.readOutboxRecord({
-          clientMessageKey: 'portal-send:drain-on-mount',
-          tenantSlug: 'buhfirma',
-          threadId: 'private:me',
-          userId: 7,
-        }),
-      ).resolves.toBeNull()
-    },
-    10_000,
-  )
+    await waitForInitialChatRequests()
+    await waitFor(() => {
+      expect(getMessagePostCalls()).toHaveLength(1)
+    })
+    await waitFor(() => {
+      expect(screen.queryByLabelText('В очереди')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Drain me')).toBeInTheDocument()
+    await expect(
+      offlineOutboxStore.readOutboxRecord({
+        clientMessageKey: 'portal-send:drain-on-mount',
+        tenantSlug: 'buhfirma',
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).resolves.toBeNull()
+  }, 10_000)
 
   it('updates the visible local bubble when drain marks the outbox record failed', async () => {
     await offlineOutboxStore.saveOutboxRecord(

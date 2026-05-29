@@ -191,7 +191,7 @@ describe('ChatPage offline cache', () => {
 
     expect(
       await screen.findByText(
-        /Нет соединения\. Показываем сохраненные данные\./,
+        'Нет связи. Показываем сохраненные сообщения.',
         {},
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
@@ -230,7 +230,7 @@ describe('ChatPage offline cache', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(/Нет соединения\. Показываем сохраненные данные\./),
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
     ).not.toBeInTheDocument()
   })
 
@@ -262,7 +262,7 @@ describe('ChatPage offline cache', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(/Нет соединения\. Показываем сохраненные данные\./),
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
     ).not.toBeInTheDocument()
   })
 
@@ -348,7 +348,7 @@ describe('ChatPage offline cache', () => {
 
     expect(
       await screen.findByText(
-        /Нет соединения\. Показываем сохраненные данные\./,
+        'Нет связи. Показываем сохраненные сообщения.',
         {},
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
@@ -365,7 +365,7 @@ describe('ChatPage offline cache', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Личный чат онлайн')).toBeInTheDocument()
     expect(
-      screen.queryByText(/Нет соединения\. Показываем сохраненные данные\./),
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
     ).not.toBeInTheDocument()
   })
 

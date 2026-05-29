@@ -1,77 +1,87 @@
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 
 type ChatRuntimeAlertsProps = {
-  cachedSavedAt?: string | null
-  hasQueuedSends?: boolean
+  isChatAvailable?: boolean
   isOnline: boolean
   isRealtimeSupported: boolean
-  isUsingCachedData?: boolean
+  queuedSendCount?: number
   resyncStatus: 'idle' | 'resyncing' | 'error'
 }
 
+function getQueuedMessageWord(count: number) {
+  const absoluteCount = Math.abs(count)
+  const lastTwoDigits = absoluteCount % 100
+  const lastDigit = absoluteCount % 10
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return 'сообщений'
+  }
+
+  if (lastDigit === 1) {
+    return 'сообщение'
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return 'сообщения'
+  }
+
+  return 'сообщений'
+}
+
 export function ChatRuntimeAlerts({
-  cachedSavedAt,
-  hasQueuedSends = false,
+  isChatAvailable = false,
   isOnline,
   isRealtimeSupported,
-  isUsingCachedData = false,
+  queuedSendCount = 0,
   resyncStatus,
 }: ChatRuntimeAlertsProps) {
-  const messages = []
+  let notice: {
+    message: string
+    tone: 'error' | 'info'
+  } | null = null
 
   if (isOnline && resyncStatus === 'resyncing') {
-    messages.push({
-      message: 'Соединение восстановлено. Обновляем чат...',
-      tone: 'info' as const,
-    })
+    notice = {
+      message: 'Связь восстановилась. Обновляем чат...',
+      tone: 'info',
+    }
   } else if (isOnline && resyncStatus === 'error') {
-    messages.push({
+    notice = {
       message:
-        'Не удалось обновить чат после восстановления соединения. Попробуйте еще раз.',
-      tone: 'error' as const,
-    })
-  }
-
-  if (isUsingCachedData) {
-    messages.push({
-      message: isOnline
-        ? 'Показываем сохраненные данные. Обновляем чат после восстановления связи.'
-        : cachedSavedAt
-          ? 'Нет соединения. Показываем сохраненные данные. Обновим чат после восстановления связи.'
-          : 'Нет соединения. Показываем сохраненные данные.',
-      tone: 'info' as const,
-    })
-  }
-
-  if (hasQueuedSends) {
-    messages.push({
-      message: 'Сообщения будут отправлены, когда соединение восстановится.',
-      tone: 'info' as const,
-    })
-  }
-
-  if (isOnline && !isRealtimeSupported) {
-    messages.push({
+        'Не удалось обновить чат. Проверьте соединение и попробуйте снова.',
+      tone: 'error',
+    }
+  } else if (!isOnline) {
+    notice =
+      queuedSendCount > 0
+        ? {
+            message: `Нет связи. ${queuedSendCount} ${getQueuedMessageWord(
+              queuedSendCount,
+            )} в очереди. Отправим, когда связь восстановится.`,
+            tone: 'info',
+          }
+        : {
+            message: isChatAvailable
+              ? 'Нет связи. Показываем сохраненные сообщения.'
+              : 'Нет связи. Чат откроется после восстановления связи.',
+            tone: 'info',
+          }
+  } else if (!isRealtimeSupported) {
+    notice = {
       message:
         'Автообновление недоступно в этом браузере. При необходимости обновите чат вручную.',
-      tone: 'info' as const,
-    })
+      tone: 'info',
+    }
   }
 
-  if (messages.length === 0) {
+  if (!notice) {
     return null
   }
 
   return (
     <div className="relative z-10 border-b border-slate-200/70 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-6">
-      <div className="mx-auto flex w-full max-w-[620px] flex-col gap-2">
-        {messages.map((item) => (
-          <InlineAlert
-            key={item.message}
-            message={item.message}
-            tone={item.tone}
-          />
-        ))}
+      <div className="mx-auto w-full max-w-[620px]">
+        <InlineAlert message={notice.message} tone={notice.tone} />
       </div>
     </div>
   )

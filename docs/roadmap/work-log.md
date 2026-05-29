@@ -50,6 +50,9 @@
 - Chat composer footer упрощен до чистого input-row без лишней внутренней
   bordered surface; attachment/voice icon controls остаются без постоянной
   внешней декорации, а send остается primary action.
+- Offline/PWA chat connection state показывает один unified notice под header:
+  composer больше не дублирует offline warning, а header при потере связи
+  показывает `Нет связи` вместо support availability `Проверяем`.
 - Composer attachment/voice controls используют существующий chat accent color
   вместо слабого neutral gray; hover и disabled states сохранены.
 - Mobile chat transcript скрывает визуальный scrollbar, сохраняя scroll
@@ -190,7 +193,6 @@
 
 ## Recommended Next Step
 
-- Checkpoint commit no-legacy cleanup, deploy it to `lk.provgroup.ru`,
-  reconfigure the `provgroup` Chatwoot webhook to `/api/chatwoot/webhooks`, then
-  run Installed PWA Smoke on real Android Chrome and iOS/iPadOS Home Screen
-  devices before continuing to SMS fallback gateway.
+- Checkpoint commit Unified Connection Notice, deploy it to `lk.provgroup.ru`,
+  then repeat poor-connection/offline Installed PWA Smoke on real Android Chrome
+  and iOS/iPadOS Home Screen devices before continuing offline/PWA follow-ups.

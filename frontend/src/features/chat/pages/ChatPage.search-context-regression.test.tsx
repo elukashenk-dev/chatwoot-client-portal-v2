@@ -2,10 +2,11 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AppRoutes } from '../../../app/AppRoutes'
-import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import type { ChatMessagesSnapshot, ChatThreadSearchResponse } from '../types'
+import {
+  renderChatRoute,
+  setupOfflineChatTestEnvironment,
+} from '../../../test/chatPageTestHarness'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -222,20 +223,12 @@ function createContextResponse({
   }
 }
 
-function renderChatRoute() {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries: ['/app/chat'] },
-  )
-}
-
 describe('ChatPage search context regressions', () => {
   const fetchMock = vi.fn<typeof fetch>()
   const scrollIntoView = vi.fn()
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await setupOfflineChatTestEnvironment()
     vi.stubGlobal('fetch', fetchMock)
     Element.prototype.scrollIntoView = scrollIntoView
   })

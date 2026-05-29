@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
-import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   MicrophoneIcon,
   PaperclipIcon,
@@ -33,7 +32,6 @@ type MessageComposerProps = {
   disabled: boolean
   errorMessage: string | null
   isSending: boolean
-  offlineAlertMessage?: string | null
   onCancelReply: () => void
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
@@ -46,7 +44,6 @@ export function MessageComposer({
   disabled,
   errorMessage,
   isSending,
-  offlineAlertMessage = null,
   onCancelReply,
   onSend,
   onSendAttachment,
@@ -354,12 +351,6 @@ export function MessageComposer({
       )}
     >
       <div className="mx-auto w-full max-w-[620px]">
-        {offlineAlertMessage ? (
-          <div className="mb-3">
-            <InlineAlert message={offlineAlertMessage} tone="error" />
-          </div>
-        ) : null}
-
         {replyTarget ? (
           <ComposerReplyPreview
             disabled={isSending || isVoiceRecorderBusy}

@@ -2,10 +2,13 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { AppRoutes } from '../../../app/AppRoutes'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
-import { renderWithRouter } from '../../../test/renderWithRouter'
 import type { ChatMessagesSnapshot } from '../types'
+import {
+  MockEventSource,
+  MockMediaRecorder,
+  renderChatRoute,
+  setupOfflineChatTestEnvironment,
+} from '../../../test/chatPageTestHarness'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -23,78 +26,6 @@ function createThreadsResponse(overrides: Record<string, unknown> = {}) {
     activeThreadId: privateThread.id,
     threads: [privateThread],
     ...overrides,
-  }
-}
-
-class MockEventSource {
-  static instances: MockEventSource[] = []
-
-  readonly listeners = new Map<string, Set<(event: MessageEvent) => void>>()
-  readonly close = vi.fn()
-  readonly url: string
-  readonly withCredentials: boolean | undefined
-
-  constructor(url: string | URL, init?: EventSourceInit) {
-    this.url = String(url)
-    this.withCredentials = init?.withCredentials
-    MockEventSource.instances.push(this)
-  }
-
-  addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
-    const listeners = this.listeners.get(type) ?? new Set()
-    const callback =
-      typeof listener === 'function'
-        ? listener
-        : listener.handleEvent.bind(listener)
-
-    listeners.add(callback as (event: MessageEvent) => void)
-    this.listeners.set(type, listeners)
-  }
-
-  emit(type: string, data: unknown) {
-    const event = new MessageEvent(type, {
-      data: JSON.stringify(data),
-    })
-
-    for (const listener of this.listeners.get(type) ?? []) {
-      listener(event)
-    }
-  }
-}
-
-class MockMediaRecorder {
-  static instances: MockMediaRecorder[] = []
-  static isTypeSupported = vi.fn(
-    (mimeType: string) => mimeType === 'audio/webm;codecs=opus',
-  )
-
-  mimeType: string
-  ondataavailable: ((event: BlobEvent) => void) | null = null
-  onerror: ((event: Event) => void) | null = null
-  onstop: ((event: Event) => void) | null = null
-  state: RecordingState = 'inactive'
-  stream: MediaStream
-
-  constructor(stream: MediaStream, options?: MediaRecorderOptions) {
-    this.stream = stream
-    this.mimeType = options?.mimeType ?? 'audio/webm'
-    MockMediaRecorder.instances.push(this)
-  }
-
-  start() {
-    this.state = 'recording'
-  }
-
-  stop() {
-    if (this.state === 'inactive') {
-      return
-    }
-
-    this.state = 'inactive'
-    this.ondataavailable?.({
-      data: new Blob(['voice-bytes'], { type: this.mimeType }),
-    } as BlobEvent)
-    this.onstop?.(new Event('stop'))
   }
 }
 
@@ -204,15 +135,6 @@ function createNotificationSettingsResponse() {
   })
 }
 
-function renderChatRoute() {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries: ['/app/chat'] },
-  )
-}
-
 const originalNavigatorMediaDevices = globalThis.navigator.mediaDevices
 
 function stubMicrophoneAccess() {
@@ -243,7 +165,16 @@ function stubMicrophoneAccess() {
 describe('ChatPage', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
-  beforeEach(() => {
+  function getMessagePostCalls() {
+    return fetchMock.mock.calls.filter(
+      ([url, options]) =>
+        String(url).includes('/api/chat/messages') &&
+        options?.method === 'POST',
+    )
+  }
+
+  beforeEach(async () => {
+    await setupOfflineChatTestEnvironment()
     vi.stubGlobal('fetch', fetchMock)
   })
 
@@ -702,32 +633,38 @@ describe('ChatPage', () => {
   it('sends a text reply to a selected message and clears reply state after success', async () => {
     const user = userEvent.setup()
 
-    mockInitialReadyChatResponses().mockResolvedValueOnce(
-      createJsonResponse({
-        activeThread: privateThread,
-        reason: 'none',
-        result: 'ready',
-        sentMessage: {
-          attachments: [],
-          authorName: 'Вы',
-          authorRole: 'current_user',
-          content: 'Отвечаю на вопрос',
-          contentType: 'text',
-          createdAt: '2026-04-21T09:32:00.000Z',
-          direction: 'outgoing',
-          id: 503,
-          replyTo: {
-            attachmentName: null,
-            authorName: 'Ольга Support',
-            content: 'Здравствуйте, вижу ваше обращение.',
-            direction: 'incoming',
-            messageId: 101,
-          },
-          status: 'sent',
-        },
-      }),
-    )
+    mockInitialReadyChatResponses().mockImplementationOnce(
+      async (_input, options) => {
+        const requestBody = JSON.parse(String(options?.body)) as {
+          clientMessageKey: string
+        }
 
+        return createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: 'Отвечаю на вопрос',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:32:00.000Z',
+            direction: 'outgoing',
+            id: 503,
+            replyTo: {
+              attachmentName: null,
+              authorName: 'Ольга Support',
+              content: 'Здравствуйте, вижу ваше обращение.',
+              direction: 'incoming',
+              messageId: 101,
+            },
+            status: 'sent',
+          },
+        })
+      },
+    )
     renderChatRoute()
 
     const sourceMessageText = await screen.findByText(
@@ -764,8 +701,11 @@ describe('ChatPage', () => {
         screen.queryByRole('button', { name: 'Отменить ответ' }),
       ).not.toBeInTheDocument()
     })
+    await waitFor(() => {
+      expect(getMessagePostCalls()).toHaveLength(1)
+    })
 
-    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
+    const [, requestOptions] = getMessagePostCalls()[0] ?? []
     const requestBody = JSON.parse(String(requestOptions?.body)) as {
       replyToMessageId: number
     }
@@ -937,11 +877,11 @@ describe('ChatPage', () => {
       createJsonResponse(
         {
           error: {
-            code: 'chatwoot_unavailable',
-            message: 'Chatwoot temporarily unavailable.',
+            code: 'thread_access_denied',
+            message: 'Нет доступа к этому чату.',
           },
         },
-        503,
+        403,
       ),
     )
 
@@ -987,8 +927,12 @@ describe('ChatPage', () => {
         reason: 'conversation_missing',
         result: 'not_ready',
       }),
-    ).mockResolvedValueOnce(
-      createJsonResponse({
+    ).mockImplementationOnce(async (_input, options) => {
+      const requestBody = JSON.parse(String(options?.body)) as {
+        clientMessageKey: string
+      }
+
+      return createJsonResponse({
         activeThread: privateThread,
         reason: 'none',
         result: 'ready',
@@ -996,6 +940,7 @@ describe('ChatPage', () => {
           attachments: [],
           authorName: 'Вы',
           authorRole: 'current_user',
+          clientMessageKey: requestBody.clientMessageKey,
           content: 'Первое сообщение',
           contentType: 'text',
           createdAt: '2026-04-21T09:32:00.000Z',
@@ -1003,8 +948,8 @@ describe('ChatPage', () => {
           id: 503,
           status: 'sent',
         },
-      }),
-    )
+      })
+    })
 
     renderChatRoute()
 
@@ -1021,8 +966,12 @@ describe('ChatPage', () => {
 
     expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
 
+    await waitFor(() => {
+      expect(getMessagePostCalls()).toHaveLength(1)
+    })
+
     const requestBody = JSON.parse(
-      String(fetchMock.mock.calls[5]?.[1]?.body),
+      String(getMessagePostCalls()[0]?.[1]?.body),
     ) as {
       threadId?: string
     }
@@ -1061,7 +1010,9 @@ describe('ChatPage', () => {
       CHAT_PAGE_LOAD_TIMEOUT,
     )
 
-    expect(MockEventSource.instances).toHaveLength(1)
+    await waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
     expect(MockEventSource.instances[0]?.url).toContain(
       '/api/chat/realtime?threadId=private%3Ame',
     )

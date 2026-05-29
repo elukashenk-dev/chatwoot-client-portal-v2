@@ -31,6 +31,7 @@ import {
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
+  isConnectionAvailable: boolean
   onOpenThreadInfo: () => void
   onOpenThreadMedia: () => void
   onOpenThreadNotifications: () => void
@@ -53,6 +54,7 @@ function focusElement(element: HTMLElement | null) {
 
 export function ChatHeader({
   activeThread,
+  isConnectionAvailable,
   onOpenThreadInfo,
   onOpenThreadMedia,
   onOpenThreadNotifications,
@@ -197,8 +199,12 @@ export function ChatHeader({
     }
   }
 
-  const supportPresence =
-    getSupportAvailabilityPresentation(supportAvailability)
+  const supportPresence = isConnectionAvailable
+    ? getSupportAvailabilityPresentation(supportAvailability)
+    : {
+        label: 'Нет связи',
+        tone: 'checking' as const,
+      }
   const supportTeamName = tenant
     ? `Команда ${tenant.displayName}`
     : 'Команда поддержки'

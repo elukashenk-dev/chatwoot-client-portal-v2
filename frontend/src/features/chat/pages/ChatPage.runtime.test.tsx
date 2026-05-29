@@ -5,10 +5,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
+import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
+import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import type { ChatMessagesSnapshot } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
+}
+const OFFLINE_SAVED_MESSAGES_NOTICE =
+  'Нет связи. Показываем сохраненные сообщения.'
+const OFFLINE_QUEUED_MESSAGE_NOTICE =
+  'Нет связи. 1 сообщение в очереди. Отправим, когда связь восстановится.'
+const RETIRED_OFFLINE_NOTICE =
+  'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.'
+
+const tenantContextValue = {
+  errorMessage: null,
+  isUsingCachedData: false,
+  status: 'ready' as const,
+  tenant: {
+    displayName: 'Бухфирма',
+    primaryDomain: 'lk.buhfirma.ru',
+    publicBaseUrl: 'https://lk.buhfirma.ru',
+    slug: 'buhfirma',
+  },
 }
 
 class MockEventSource {
@@ -162,11 +182,32 @@ function createNotificationSettingsResponse() {
 
 function renderChatRoute() {
   renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
+    <TenantIdentityContext.Provider value={tenantContextValue}>
+      <AuthSessionProvider>
+        <AppRoutes />
+      </AuthSessionProvider>
+    </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )
+}
+
+function setNavigatorStorageEstimate({
+  quota = 1000,
+  usage = 100,
+}: {
+  quota?: number
+  usage?: number
+} = {}) {
+  Object.defineProperty(navigator, 'storage', {
+    configurable: true,
+    value: {
+      estimate: vi.fn(async () => ({
+        quota,
+        usage,
+      })),
+      persist: vi.fn(async () => true),
+    },
+  })
 }
 
 function setNavigatorOnline(value: boolean) {
@@ -179,10 +220,12 @@ function setNavigatorOnline(value: boolean) {
 describe('ChatPage runtime hardening', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await clearOfflineDatabaseForTests()
     MockEventSource.instances = []
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('EventSource', MockEventSource)
+    setNavigatorStorageEstimate()
     setNavigatorOnline(true)
   })
 
@@ -243,16 +286,17 @@ describe('ChatPage runtime hardening', () => {
     })
 
     expect(
-      await screen.findByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-      ),
+      await screen.findByText(OFFLINE_SAVED_MESSAGES_NOTICE),
     ).toBeInTheDocument()
+    expect(screen.getByText('Нет связи')).toBeInTheDocument()
     expect(
-      within(screen.getByRole('contentinfo')).getByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
+      within(screen.getByRole('contentinfo')).queryByText(
+        RETIRED_OFFLINE_NOTICE,
       ),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+    ).not.toBeDisabled()
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toBeDisabled()
@@ -391,15 +435,14 @@ describe('ChatPage runtime hardening', () => {
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
     expect(
-      await screen.findByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-      ),
+      await screen.findByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
     ).toBeInTheDocument()
+    expect(screen.getByText('Нет связи')).toBeInTheDocument()
     expect(
-      within(screen.getByRole('contentinfo')).getByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
+      within(screen.getByRole('contentinfo')).queryByText(
+        RETIRED_OFFLINE_NOTICE,
       ),
-    ).toBeInTheDocument()
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
     expect(
       screen.queryByText('Не удалось отправить сообщение. Попробуйте еще раз.'),
@@ -461,9 +504,7 @@ describe('ChatPage runtime hardening', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
-    await screen.findByText(
-      'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-    )
+    await screen.findByText(OFFLINE_QUEUED_MESSAGE_NOTICE)
 
     act(() => {
       window.dispatchEvent(new Event('online'))
@@ -473,9 +514,7 @@ describe('ChatPage runtime hardening', () => {
       await screen.findByText('Связь вернулась, чат снова обновляется.'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-      ),
+      screen.queryByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('textbox', { name: 'Сообщение' }),
@@ -508,9 +547,7 @@ describe('ChatPage runtime hardening', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
-    await screen.findByText(
-      'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-    )
+    await screen.findByText(OFFLINE_QUEUED_MESSAGE_NOTICE)
 
     act(() => {
       MockEventSource.instances[0]?.emit(
@@ -537,9 +574,7 @@ describe('ChatPage runtime hardening', () => {
       await screen.findByText('Realtime снова доставляет сообщения.'),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(
-        'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.',
-      ),
+      screen.queryByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('textbox', { name: 'Сообщение' }),
