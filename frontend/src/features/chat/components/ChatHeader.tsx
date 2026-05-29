@@ -15,6 +15,10 @@ import type {
   ChatSupportAvailabilityResponse,
   ChatThreadSummary,
 } from '../types'
+import {
+  ChatHeaderPresence,
+  type ChatHeaderPresenceTone,
+} from './ChatHeaderPresence'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellIcon,
@@ -199,11 +203,14 @@ export function ChatHeader({
     }
   }
 
-  const supportPresence = isConnectionAvailable
+  const supportPresence: {
+    label: string
+    tone: ChatHeaderPresenceTone
+  } = isConnectionAvailable
     ? getSupportAvailabilityPresentation(supportAvailability)
     : {
         label: 'Нет связи',
-        tone: 'checking' as const,
+        tone: 'offline',
       }
   const supportTeamName = tenant
     ? `Команда ${tenant.displayName}`
@@ -319,35 +326,11 @@ export function ChatHeader({
           <h1 className="truncate text-[16px] font-semibold leading-tight text-slate-900 sm:text-[17px]">
             {threadTitle}
           </h1>
-          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-slate-500 sm:text-[13px]">
-            <span className="min-w-0 truncate">{threadSubtitle}</span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                'h-1.5 w-1.5 shrink-0 rounded-full',
-                supportPresence.tone === 'online'
-                  ? 'bg-[#46a266] shadow-[0_0_0_2px_rgb(70_162_102_/_0.14)]'
-                  : supportPresence.tone === 'later'
-                    ? 'bg-[#d6932c] shadow-[0_0_0_2px_rgb(214_147_44_/_0.14)]'
-                    : 'bg-slate-400 shadow-[0_0_0_2px_rgb(148_163_184_/_0.16)]',
-              )}
-            />
-            <span
-              aria-label={supportPresence.label}
-              className={cn(
-                'shrink-0 font-normal',
-                supportPresence.tone === 'online'
-                  ? 'text-[#3f8a57]'
-                  : supportPresence.tone === 'later'
-                    ? 'text-[#a76712]'
-                    : 'text-slate-500',
-              )}
-              role="status"
-              title={supportPresence.label}
-            >
-              {supportPresence.label}
-            </span>
-          </div>
+          <ChatHeaderPresence
+            label={supportPresence.label}
+            subtitle={threadSubtitle}
+            tone={supportPresence.tone}
+          />
         </div>
 
         <div className="relative shrink-0" ref={chatMenuRef}>

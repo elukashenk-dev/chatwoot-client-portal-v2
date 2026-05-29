@@ -83,6 +83,9 @@ export function ChatTranscript({
 }: ChatTranscriptProps) {
   const [contextMenu, setContextMenu] = useState<MessageContextMenuState>(null)
   const [copyStatusText, setCopyStatusText] = useState('')
+  const [revealedActionMessageId, setRevealedActionMessageId] = useState<
+    number | null
+  >(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const messageListRef = useRef<HTMLDivElement | null>(null)
   const scrollElementRef = useRef<HTMLElement | null>(null)
@@ -282,6 +285,7 @@ export function ChatTranscript({
     if (contextMenu) {
       setContextMenu(null)
     }
+    setRevealedActionMessageId(null)
 
     shouldAutoFollowNewMessagesRef.current =
       isTranscriptNearBottom(scrollElement)
@@ -310,6 +314,7 @@ export function ChatTranscript({
       x: position.x,
       y: position.y,
     })
+    setRevealedActionMessageId(message.id)
   }
 
   function handleOpenActionMenu(
@@ -329,6 +334,7 @@ export function ChatTranscript({
       x: position.x,
       y: position.y,
     })
+    setRevealedActionMessageId(message.id)
   }
 
   async function handleCopyMessage(message: ChatMessage) {
@@ -433,12 +439,17 @@ export function ChatTranscript({
                   blockPosition={blockPosition}
                   hasDateDivider={hasDateDivider}
                   index={index}
+                  isActionButtonRevealed={
+                    revealedActionMessageId === message.id ||
+                    contextMenu?.message.id === message.id
+                  }
                   isConnectionAvailable={isConnectionAvailable}
                   isHighlighted={highlightedMessageId === message.id}
                   message={message}
                   onOpenActionMenu={handleOpenActionMenu}
                   onOpenContextMenu={handleOpenContextMenu}
                   onReplyToMessage={onReplyToMessage}
+                  onRevealActionButton={setRevealedActionMessageId}
                   onRetryTextMessage={onRetryTextMessage}
                 />
               </div>

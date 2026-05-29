@@ -18,6 +18,7 @@ import {
   getBubbleRadiusClass,
   getMessageWrapperSpacingClass,
   isInteractiveEventTarget,
+  shouldRevealMessageActionsOnTap,
   shouldRenderAuthorName,
   type MessageBlockPosition,
 } from './utils'
@@ -36,11 +37,13 @@ type MessageBubbleProps = {
   hasDateDivider: boolean
   index: number
   isConnectionAvailable: boolean
+  isActionButtonRevealed?: boolean
   isHighlighted?: boolean
   message: ChatMessage
   onOpenActionMenu: (message: ChatMessage, triggerElement: HTMLElement) => void
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
   onReplyToMessage: (message: ChatMessage) => void
+  onRevealActionButton: (messageId: number) => void
   onRetryTextMessage: (clientMessageKey: string) => void
 }
 
@@ -232,11 +235,13 @@ export function MessageBubble({
   hasDateDivider,
   index,
   isConnectionAvailable,
+  isActionButtonRevealed = false,
   isHighlighted = false,
   message,
   onOpenActionMenu,
   onOpenContextMenu,
   onReplyToMessage,
+  onRevealActionButton,
   onRetryTextMessage,
 }: MessageBubbleProps) {
   const isOutgoing = message.authorRole === 'current_user'
@@ -398,9 +403,13 @@ export function MessageBubble({
           <button
             aria-label={`Действия с сообщением ${message.authorName}`}
             className={cn(
-              'absolute top-1 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/70 bg-white/95 text-slate-500 opacity-0 shadow-sm transition hover:opacity-100 hover:text-brand-800 focus:opacity-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 group-focus-within:opacity-100 group-hover:opacity-100',
+              'absolute top-1 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/70 bg-white/95 text-slate-500 shadow-sm transition hover:opacity-100 hover:text-brand-800 focus:opacity-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 group-focus-within:opacity-100 group-hover:opacity-100',
+              isActionButtonRevealed ? 'opacity-100' : 'opacity-0',
               isOutgoing ? '-left-10' : '-right-10',
             )}
+            data-message-action-visible={
+              isActionButtonRevealed ? 'true' : 'false'
+            }
             onClick={(event) => {
               event.stopPropagation()
               onOpenActionMenu(message, event.currentTarget)
@@ -419,6 +428,15 @@ export function MessageBubble({
               : 'transition-transform duration-150 ease-out',
           )}
           data-message-swipe-surface
+          onClick={(event) => {
+            if (isInteractiveEventTarget(event.target) || !canReplyToMessage) {
+              return
+            }
+
+            if (shouldRevealMessageActionsOnTap()) {
+              onRevealActionButton(message.id)
+            }
+          }}
           onContextMenu={(event) => {
             if (isInteractiveEventTarget(event.target) || !canReplyToMessage) {
               return

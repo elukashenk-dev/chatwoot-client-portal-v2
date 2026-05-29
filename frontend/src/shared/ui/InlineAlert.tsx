@@ -1,6 +1,6 @@
 import { cn } from '../lib/cn'
 
-type InlineAlertTone = 'error' | 'info' | 'success'
+type InlineAlertTone = 'error' | 'info' | 'success' | 'warning'
 
 type InlineAlertProps = {
   message?: string | null
@@ -11,6 +11,7 @@ const toneClassMap: Record<InlineAlertTone, string> = {
   error: 'border-[#f1d2d8] bg-[#fff9f9]/90 text-[#8f4350]',
   info: 'border-brand-200 bg-brand-50 text-brand-900',
   success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+  warning: 'border-[#f0c6ce] bg-[#fff6f7]/95 text-[#80313d]',
 }
 
 const phonePattern = /\+7\s*\(\d{3}\)\s*\d{2}-\d{3}-\d{2}/g

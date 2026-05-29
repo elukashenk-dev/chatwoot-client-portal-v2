@@ -45,6 +45,11 @@ describe('ChatRuntimeAlerts', () => {
     expect(
       screen.getByText('Нет связи. Показываем сохраненные сообщения.'),
     ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveClass(
+      'border-[#f0c6ce]',
+      'bg-[#fff6f7]/95',
+      'text-[#80313d]',
+    )
     expect(
       container.querySelectorAll('[role="status"], [role="alert"]'),
     ).toHaveLength(1)

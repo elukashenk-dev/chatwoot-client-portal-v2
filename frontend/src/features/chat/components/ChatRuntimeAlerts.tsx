@@ -37,7 +37,7 @@ export function ChatRuntimeAlerts({
 }: ChatRuntimeAlertsProps) {
   let notice: {
     message: string
-    tone: 'error' | 'info'
+    tone: 'error' | 'info' | 'warning'
   } | null = null
 
   if (isOnline && resyncStatus === 'resyncing') {
@@ -58,13 +58,13 @@ export function ChatRuntimeAlerts({
             message: `Нет связи. ${queuedSendCount} ${getQueuedMessageWord(
               queuedSendCount,
             )} в очереди. Отправим, когда связь восстановится.`,
-            tone: 'info',
+            tone: 'warning',
           }
         : {
             message: isChatAvailable
               ? 'Нет связи. Показываем сохраненные сообщения.'
               : 'Нет связи. Чат откроется после восстановления связи.',
-            tone: 'info',
+            tone: 'warning',
           }
   } else if (!isRealtimeSupported) {
     notice = {

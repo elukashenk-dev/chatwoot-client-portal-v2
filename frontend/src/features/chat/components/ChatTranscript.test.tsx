@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessage } from '../types'
 import { ChatTranscript } from './ChatTranscript'
@@ -89,7 +89,27 @@ function getSwipeIndicator(container: HTMLElement) {
   return indicator
 }
 
+function stubCoarsePointer() {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      addEventListener: vi.fn(),
+      addListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: query.includes('pointer: coarse'),
+      media: query,
+      onchange: null,
+      removeEventListener: vi.fn(),
+      removeListener: vi.fn(),
+    })),
+  )
+}
+
 describe('ChatTranscript', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
     const { container } = renderTranscript([
       createMessage({
@@ -393,6 +413,31 @@ describe('ChatTranscript', () => {
     })
     expect(actionsButton).toHaveFocus()
     expect(onReplyToMessage).not.toHaveBeenCalled()
+  })
+
+  it('reveals the message action trigger after tapping a bubble on touch devices', () => {
+    stubCoarsePointer()
+
+    const { container } = renderTranscript([
+      createMessage({
+        content: 'Сообщение с touch-меню',
+        id: 2,
+      }),
+    ])
+
+    const actionsButton = screen.getByRole('button', {
+      name: /Действия с сообщением/,
+    })
+
+    expect(actionsButton).toHaveAttribute(
+      'data-message-action-visible',
+      'false',
+    )
+
+    fireEvent.click(getBubble(container, 2))
+
+    expect(actionsButton).toHaveAttribute('data-message-action-visible', 'true')
+    expect(actionsButton).toHaveClass('opacity-100')
   })
 
   it('copies message text from the keyboard action menu', async () => {

@@ -111,6 +111,10 @@ export function shouldUseDesktopMessageContextMenu() {
   return window.matchMedia?.('(pointer: fine)').matches ?? true
 }
 
+export function shouldRevealMessageActionsOnTap() {
+  return window.matchMedia?.('(pointer: coarse)').matches ?? false
+}
+
 export function getMessageCopyText(message: ChatMessage) {
   const parts: string[] = []
   const content = message.content?.trim()
