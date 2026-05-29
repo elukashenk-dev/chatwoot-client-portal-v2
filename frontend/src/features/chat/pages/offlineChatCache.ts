@@ -23,11 +23,21 @@ type SaveOfflineMessageSnapshotInput = OfflineChatScope & {
   threadId: string
 }
 
+type ConsumePushStaleMarkersInput = OfflineChatScope & {
+  refreshThread: (threadId: string) => Promise<ChatMessagesSnapshot>
+  threads: ChatThreadSummary[]
+}
+
 export type OfflineChatFallback = {
   cachedSavedAt: string
   selectedThreadId: string
   snapshot: ChatMessagesSnapshot
   threads: ChatThreadSummary[]
+}
+
+export type PushStaleThreadRefresh = {
+  snapshot: ChatMessagesSnapshot
+  threadId: string
 }
 
 export function shouldSaveOfflineMessageSnapshot(
@@ -172,4 +182,46 @@ export async function readOfflineChatFallback({
   } catch {
     return null
   }
+}
+
+export async function consumePushStaleMarkersForKnownThreads({
+  refreshThread,
+  tenantSlug,
+  threads,
+  userId,
+}: ConsumePushStaleMarkersInput): Promise<PushStaleThreadRefresh[]> {
+  const knownThreadIds = new Set<string>(threads.map((thread) => thread.id))
+  const markers = (
+    await offlineStore.listPushStaleMarkers(tenantSlug, userId)
+  ).filter((marker) => knownThreadIds.has(marker.threadId))
+  const refreshed: PushStaleThreadRefresh[] = []
+
+  for (const threadId of [
+    ...new Set(markers.map((marker) => marker.threadId)),
+  ]) {
+    const snapshot = await refreshThread(threadId)
+    const canUseRefresh =
+      shouldSaveOfflineMessageSnapshot(snapshot) &&
+      snapshot.activeThread?.id === threadId
+
+    if (!canUseRefresh) {
+      continue
+    }
+
+    await saveOfflineMessageSnapshot({
+      snapshot,
+      tenantSlug,
+      threadId,
+      userId,
+    })
+    await offlineStore.deletePushStaleMarkers(
+      markers.filter((marker) => marker.threadId === threadId),
+    )
+    refreshed.push({
+      snapshot,
+      threadId,
+    })
+  }
+
+  return refreshed
 }

@@ -350,6 +350,41 @@ describe('offline store database', () => {
     })
   })
 
+  it('lists and deletes push stale markers only for the current user scope', async () => {
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9001,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9002,
+      createdAt: '2026-05-27T10:01:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 8,
+    })
+
+    const markers = await offlineStore.listPushStaleMarkers('buhfirma', 7)
+
+    expect(markers).toHaveLength(1)
+    expect(markers[0]).toMatchObject({
+      chatwootMessageId: 9001,
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    await offlineStore.deletePushStaleMarkers(markers)
+
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toEqual([])
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 8),
+    ).resolves.toHaveLength(1)
+  })
+
   it('does not remove last active identity when it belongs to another user', async () => {
     await offlineStore.saveLastActiveIdentity({
       host: 'lk.buhfirma.ru',

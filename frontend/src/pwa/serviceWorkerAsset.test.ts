@@ -11,9 +11,86 @@ type Listener = (event: {
   waitUntil?: (promise: Promise<unknown>) => void
 }) => void
 
+type IndexedDbPutCall = {
+  key: IDBValidKey
+  storeName: string
+  value: unknown
+}
+
+function createServiceWorkerIndexedDbFake({
+  failOpen = false,
+  failPut = false,
+}: {
+  failOpen?: boolean
+  failPut?: boolean
+} = {}) {
+  const putCalls: IndexedDbPutCall[] = []
+  const createdStores = new Set<string>()
+  const indexedDB = {
+    open: vi.fn(() => {
+      const database = {
+        close: vi.fn(),
+        createObjectStore: vi.fn((storeName: string) => {
+          createdStores.add(storeName)
+        }),
+        objectStoreNames: {
+          contains: (storeName: string) => createdStores.has(storeName),
+        },
+        transaction: vi.fn((storeName: string) => {
+          const transaction = {
+            error: null as Error | null,
+            objectStore: () => ({
+              put: (value: unknown, key: IDBValidKey) => {
+                putCalls.push({ key, storeName, value })
+                queueMicrotask(() => {
+                  if (failPut) {
+                    transaction.error = new Error('put failed')
+                    transaction.onerror?.()
+                    return
+                  }
+
+                  transaction.oncomplete?.()
+                })
+              },
+            }),
+            onabort: null as (() => void) | null,
+            oncomplete: null as (() => void) | null,
+            onerror: null as (() => void) | null,
+          }
+
+          return transaction
+        }),
+      }
+      const request = {
+        error: null as Error | null,
+        result: database,
+        onerror: null as (() => void) | null,
+        onsuccess: null as (() => void) | null,
+        onupgradeneeded: null as (() => void) | null,
+      }
+
+      queueMicrotask(() => {
+        if (failOpen) {
+          request.error = new Error('open failed')
+          request.onerror?.()
+          return
+        }
+
+        request.onupgradeneeded?.()
+        request.onsuccess?.()
+      })
+
+      return request
+    }),
+  }
+
+  return { createdStores, indexedDB, putCalls }
+}
+
 function loadServiceWorker({
   appBadge = {},
   clientsList = [],
+  indexedDB = globalThis.indexedDB,
 }: {
   appBadge?: {
     clearAppBadge?: () => Promise<void>
@@ -26,6 +103,7 @@ function loadServiceWorker({
     url: string
     visibilityState?: string
   }>
+  indexedDB?: unknown
 } = {}) {
   const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
   const listeners = new Map<string, Listener[]>()
@@ -53,6 +131,7 @@ function loadServiceWorker({
     'caches',
     'clients',
     'navigator',
+    'indexedDB',
     'Response',
     'URL',
     'fetch',
@@ -62,6 +141,7 @@ function loadServiceWorker({
     cachesScope,
     clientsScope,
     appBadge,
+    indexedDB,
     Response,
     URL,
     vi.fn(),
@@ -360,6 +440,7 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9004',
       chatwootMessageId: 9004,
+      portalUserId: 7,
       tenantSlug: 'default',
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',
@@ -373,6 +454,7 @@ describe('service worker push notifications', () => {
         payload: {
           chatwootMessageId: 9004,
           notificationTag: 'portal-chat-message-default-9004',
+          portalUserId: 7,
           tenantSlug: 'default',
           threadId: 'group:155',
           threadTitle: 'ООО Уточки',
@@ -607,5 +689,132 @@ describe('service worker push notifications', () => {
         tag: 'portal-chat-message-default-9008',
       }),
     )
+  })
+
+  it('persists push stale marker only when payload has tenant and portal user binding', async () => {
+    const indexedDbFake = createServiceWorkerIndexedDbFake()
+    const { listeners, showNotification } = loadServiceWorker({
+      indexedDB: indexedDbFake.indexedDB,
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9101,
+      notificationTag: 'portal-chat-message-default-9101',
+      portalUserId: 7,
+      tenantSlug: 'default',
+      threadId: 'private:me',
+      threadTitle: 'Личный чат',
+      threadType: 'private',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(indexedDbFake.createdStores).toEqual(
+      new Set([
+        'tenant_contexts',
+        'last_active_identities',
+        'local_device_signouts',
+        'auth_snapshots',
+        'chat_thread_lists',
+        'chat_message_snapshots',
+        'chat_text_outbox',
+        'sync_leases',
+        'push_stale_markers',
+      ]),
+    )
+    expect(indexedDbFake.putCalls).toEqual([
+      {
+        key: 'default:7:private:me:9101',
+        storeName: 'push_stale_markers',
+        value: {
+          chatwootMessageId: 9101,
+          createdAt: expect.any(String),
+          tenantSlug: 'default',
+          threadId: 'private:me',
+          userId: 7,
+        },
+      },
+    ])
+    expect(showNotification).toHaveBeenCalledWith(
+      'Личный чат',
+      expect.objectContaining({
+        body: 'Новое сообщение в личном чате',
+        tag: 'portal-chat-message-default-9101',
+      }),
+    )
+  })
+
+  it('does not persist push stale marker without portalUserId', async () => {
+    const indexedDbFake = createServiceWorkerIndexedDbFake()
+    const { listeners } = loadServiceWorker({
+      indexedDB: indexedDbFake.indexedDB,
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9102,
+      notificationTag: 'portal-chat-message-default-9102',
+      tenantSlug: 'default',
+      threadId: 'private:me',
+      threadTitle: 'Личный чат',
+      threadType: 'private',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(indexedDbFake.indexedDB.open).not.toHaveBeenCalled()
+    expect(indexedDbFake.putCalls).toEqual([])
+  })
+
+  it('still shows a system notification when stale marker persistence fails', async () => {
+    const indexedDbFake = createServiceWorkerIndexedDbFake({
+      failOpen: true,
+    })
+    const { listeners, showNotification } = loadServiceWorker({
+      indexedDB: indexedDbFake.indexedDB,
+    })
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9103,
+      notificationTag: 'portal-chat-message-default-9103',
+      portalUserId: 7,
+      tenantSlug: 'default',
+      threadId: 'private:me',
+      threadTitle: 'Личный чат',
+      threadType: 'private',
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(indexedDbFake.indexedDB.open).toHaveBeenCalled()
+    expect(showNotification).toHaveBeenCalledWith(
+      'Личный чат',
+      expect.objectContaining({
+        body: 'Новое сообщение в личном чате',
+        tag: 'portal-chat-message-default-9103',
+      }),
+    )
+  })
+
+  it('keeps API routes out of service worker fetch handling', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+
+    expect(source).toContain("requestUrl.pathname.startsWith('/api/')")
+  })
+
+  it('declares stamped build assets and default branding images in the app shell', () => {
+    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+
+    expect(source).toContain('__PORTAL_SERVICE_WORKER_ASSETS_JSON__')
+    expect(source).toContain('/default-branding/auth-header.png')
+    expect(source).toContain('/default-branding/auth-footer.png')
   })
 })

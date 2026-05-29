@@ -59,6 +59,7 @@ describe('useChatPageNotifications', () => {
     expect(
       handler?.({
         chatwootMessageId: 9001,
+        portalUserId: 7,
         tenantSlug: 'buhfirma',
         threadId: 'private:me',
         threadTitle: 'Личный чат',
@@ -73,6 +74,7 @@ describe('useChatPageNotifications', () => {
     expect(
       handler?.({
         chatwootMessageId: 9002,
+        portalUserId: 7,
         tenantSlug: 'buhfirma',
         threadId: 'group:155',
         threadTitle: 'ООО Уточки',

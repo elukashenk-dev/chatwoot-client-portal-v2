@@ -352,6 +352,7 @@ describe('serviceWorkerRuntime', () => {
         data: {
           payload: {
             chatwootMessageId: 9004,
+            portalUserId: 7,
             tenantSlug: 'buhfirma',
             threadId: 'group:155',
             threadTitle: 'ООО Уточки',
@@ -369,6 +370,7 @@ describe('serviceWorkerRuntime', () => {
 
     expect(handler).toHaveBeenCalledWith({
       chatwootMessageId: 9004,
+      portalUserId: 7,
       tenantSlug: 'buhfirma',
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',
@@ -378,6 +380,51 @@ describe('serviceWorkerRuntime', () => {
     })
     expect(controller.postMessage).toHaveBeenCalledWith({
       type: 'PORTAL_PUSH_CLIENT_NOT_READY',
+    })
+  })
+
+  it('queries the active service worker status through a message channel', async () => {
+    const controller = new MockServiceWorker('activated')
+    const registration = new MockServiceWorkerRegistration()
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: controller as unknown as ServiceWorker,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+    controller.postMessage.mockImplementationOnce((_message, transfer) => {
+      const port = transfer?.[0] as MessagePort
+
+      port.postMessage({
+        assetCount: 12,
+        revision: '2026-05-27T10:00:00.000Z',
+        type: 'PORTAL_SERVICE_WORKER_STATUS_RESULT',
+      })
+    })
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.queryActiveServiceWorkerStatus()).resolves.toEqual({
+      assetCount: 12,
+      revision: '2026-05-27T10:00:00.000Z',
+      status: 'ready',
+    })
+  })
+
+  it('returns unavailable when no active service worker can answer status', async () => {
+    const registration = new MockServiceWorkerRegistration()
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: null,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.queryActiveServiceWorkerStatus()).resolves.toEqual({
+      reason: 'no_active_worker',
+      status: 'unavailable',
     })
   })
 

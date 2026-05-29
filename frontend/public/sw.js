@@ -5,12 +5,31 @@ const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 const APP_BADGE_STORE_NAME = 'state'
 const APP_BADGE_COUNT_KEY = 'chat_push_count'
 const APP_BADGE_MAX_COUNT = 9999
+const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
+const PORTAL_OFFLINE_DATABASE_VERSION = 1
+const PORTAL_OFFLINE_STORES = [
+  'tenant_contexts',
+  'last_active_identities',
+  'local_device_signouts',
+  'auth_snapshots',
+  'chat_thread_lists',
+  'chat_message_snapshots',
+  'chat_text_outbox',
+  'sync_leases',
+  'push_stale_markers',
+]
+const BUILD_ASSET_URLS = parseBuildAssetUrls(
+  '__PORTAL_SERVICE_WORKER_ASSETS_JSON__',
+)
 const APP_SHELL_URLS = [
   '/',
+  '/default-branding/auth-header.png',
+  '/default-branding/auth-footer.png',
   '/favicon.svg',
   '/pwa-icons/icon-192.png',
   '/pwa-icons/icon-512.png',
   '/pwa-icons/icon-maskable-512.png',
+  ...BUILD_ASSET_URLS,
 ]
 const PUSH_READY_CLIENT_IDS = new Set()
 const PUSH_READY_CLIENT_THREAD_IDS = new Map()
@@ -41,6 +60,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting()
+    return
+  }
+
+  if (event.data?.type === 'PORTAL_SERVICE_WORKER_STATUS') {
+    const replyTarget = event.ports?.[0] ?? event.source
+
+    replyTarget?.postMessage({
+      assetCount: APP_SHELL_URLS.length,
+      revision: SERVICE_WORKER_REVISION,
+      type: 'PORTAL_SERVICE_WORKER_STATUS_RESULT',
+    })
     return
   }
 
@@ -131,6 +161,18 @@ function shouldHandleStaticRequest(request) {
   )
 }
 
+function parseBuildAssetUrls(rawValue) {
+  try {
+    const parsed = JSON.parse(rawValue)
+
+    return Array.isArray(parsed)
+      ? parsed.filter((value) => typeof value === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
 function isTenantDynamicMetadataRequest(pathname) {
   return (
     pathname === '/manifest.webmanifest' ||
@@ -213,6 +255,7 @@ async function handlePushEvent(event) {
     return
   }
 
+  const staleMarkerPersistence = persistPushStaleMarkerBestEffort(payload)
   const notificationCopy = buildNotificationCopy(payload)
   const notificationOptions = {
     body: notificationCopy.body,
@@ -231,6 +274,7 @@ async function handlePushEvent(event) {
     notificationOptions,
   )
   await setAppIconBadge()
+  await staleMarkerPersistence
 }
 
 async function setAppIconBadge() {
@@ -381,6 +425,85 @@ async function writePersistedAppBadgeCount(count) {
   })
 }
 
+async function persistPushStaleMarkerBestEffort(payload) {
+  try {
+    await persistPushStaleMarker(payload)
+  } catch {
+    // Push notifications must still be delivered if IndexedDB is unavailable.
+  }
+}
+
+async function persistPushStaleMarker(payload) {
+  if (
+    !payload.tenantSlug ||
+    payload.portalUserId === null ||
+    !payload.threadId ||
+    payload.chatwootMessageId === null
+  ) {
+    return
+  }
+
+  const database = await openPortalOfflineDatabase()
+  const key = `${payload.tenantSlug}:${payload.portalUserId}:${payload.threadId}:${payload.chatwootMessageId}`
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction('push_stale_markers', 'readwrite')
+    transaction.objectStore('push_stale_markers').put(
+      {
+        chatwootMessageId: payload.chatwootMessageId,
+        createdAt: new Date().toISOString(),
+        tenantSlug: payload.tenantSlug,
+        threadId: payload.threadId,
+        userId: payload.portalUserId,
+      },
+      key,
+    )
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onerror = () => {
+      database.close()
+      reject(transaction.error)
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(transaction.error)
+    }
+  })
+}
+
+function openPortalOfflineDatabase() {
+  if (typeof indexedDB === 'undefined') {
+    return Promise.reject(new Error('IndexedDB is unavailable.'))
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(
+      PORTAL_OFFLINE_DATABASE_NAME,
+      PORTAL_OFFLINE_DATABASE_VERSION,
+    )
+
+    request.onupgradeneeded = () => {
+      const database = request.result
+
+      for (const storeName of PORTAL_OFFLINE_STORES) {
+        if (!database.objectStoreNames.contains(storeName)) {
+          database.createObjectStore(storeName)
+        }
+      }
+    }
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(
+        request.error ?? new Error('Failed to open portal offline database.'),
+      )
+    }
+  })
+}
+
 function buildNotificationCopy(payload) {
   if (payload.threadTitle && payload.threadType === 'group') {
     return {
@@ -482,6 +605,7 @@ function readPushPayload(data) {
     return {
       chatwootMessageId: null,
       notificationTag: null,
+      portalUserId: null,
       tenantSlug: null,
       threadId: null,
       threadTitle: null,
@@ -507,6 +631,9 @@ function readPushPayload(data) {
         payload.notificationTag.length > 0
           ? payload.notificationTag
           : null,
+      portalUserId: Number.isSafeInteger(payload.portalUserId)
+        ? payload.portalUserId
+        : null,
       tenantSlug:
         typeof payload.tenantSlug === 'string' ? payload.tenantSlug : null,
       threadId:
@@ -531,6 +658,7 @@ function readPushPayload(data) {
     return {
       chatwootMessageId: null,
       notificationTag: null,
+      portalUserId: null,
       tenantSlug: null,
       threadId: null,
       threadTitle: null,

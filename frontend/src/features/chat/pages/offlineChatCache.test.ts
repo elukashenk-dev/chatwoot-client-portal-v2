@@ -4,6 +4,7 @@ import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import type { ChatMessagesSnapshot } from '../types'
 import {
+  consumePushStaleMarkersForKnownThreads,
   readOfflineChatFallback,
   saveOfflineMessageSnapshot,
   selectCachedThreadId,
@@ -194,5 +195,121 @@ describe('offlineChatCache', () => {
         userId: 7,
       }),
     ).resolves.toBeNull()
+  })
+
+  it('refreshes known current-user stale marker threads and leaves other user markers untouched', async () => {
+    const refreshedSnapshot = createReadySnapshot({
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Fresh from push marker',
+          contentType: 'text',
+          createdAt: '2026-05-27T10:05:00.000Z',
+          direction: 'incoming',
+          id: 9010,
+          status: 'sent',
+        },
+      ],
+    })
+    const refreshThread = vi.fn(async () => refreshedSnapshot)
+
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9001,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9002,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 8,
+    })
+
+    await expect(
+      consumePushStaleMarkersForKnownThreads({
+        refreshThread,
+        tenantSlug: 'buhfirma',
+        threads: [privateThread],
+        userId: 7,
+      }),
+    ).resolves.toEqual([
+      {
+        snapshot: refreshedSnapshot,
+        threadId: 'private:me',
+      },
+    ])
+
+    expect(refreshThread).toHaveBeenCalledWith('private:me')
+    await expect(
+      offlineStore.readMessageSnapshot('buhfirma', 7, 'private:me'),
+    ).resolves.toMatchObject({
+      snapshot: refreshedSnapshot,
+    })
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toEqual([])
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 8),
+    ).resolves.toHaveLength(1)
+  })
+
+  it('keeps push stale markers when the refresh fails', async () => {
+    const refreshThread = vi.fn(async () => {
+      throw new Error('network unavailable')
+    })
+
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9003,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    await expect(
+      consumePushStaleMarkersForKnownThreads({
+        refreshThread,
+        tenantSlug: 'buhfirma',
+        threads: [privateThread],
+        userId: 7,
+      }),
+    ).rejects.toThrow('network unavailable')
+
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toHaveLength(1)
+  })
+
+  it('keeps push stale markers when the refresh result is not for the marker thread', async () => {
+    const refreshedSnapshot = createReadySnapshot({
+      activeThread: groupThread,
+    })
+    const refreshThread = vi.fn(async () => refreshedSnapshot)
+
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9004,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    await expect(
+      consumePushStaleMarkersForKnownThreads({
+        refreshThread,
+        tenantSlug: 'buhfirma',
+        threads: [privateThread],
+        userId: 7,
+      }),
+    ).resolves.toEqual([])
+
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toHaveLength(1)
   })
 })

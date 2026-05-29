@@ -157,6 +157,10 @@
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
+- Offline-first PWA MVP Slice 08 реализован: production service worker получает
+  Vite manifest assets в app shell, отдает revision/status для runtime checks,
+  не перехватывает `/api/*`, а push stale markers сохраняются и потребляются
+  только в tenant/user/thread/message scope.
 
 ## Current Baseline
 
@@ -175,5 +179,5 @@
 
 ## Recommended Next Step
 
-- Продолжить Offline-first PWA MVP Slice 08:
-  `2026-05-27-offline-first-pwa-08-service-worker-pwa-hardening.md`.
+- Продолжить Offline-first PWA MVP Slice 09:
+  `2026-05-27-offline-first-pwa-09-runtime-e2e-closure.md`.

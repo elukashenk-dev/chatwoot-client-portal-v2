@@ -27,12 +27,14 @@ import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatNotificationsPanel } from './useChatNotificationsPanel'
 import { useChatOlderMessages } from './useChatOlderMessages'
 import { useChatPageNotifications } from './useChatPageNotifications'
+import { useChatPushStaleMarkerRefresh } from './useChatPushStaleMarkerRefresh'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatSearchResultContext } from './useChatSearchResultContext'
 import { useChatSnapshotRefresh } from './useChatSnapshotRefresh'
 import { useChatSupportAvailability } from './useChatSupportAvailability'
 import { useChatThreadSelection } from './useChatThreadSelection'
+import { useChatUnreadThreadMarkers } from './useChatUnreadThreadMarkers'
 import { useOfflineChatCachePersistence } from './useOfflineChatCachePersistence'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -46,7 +48,6 @@ export function ChatPage() {
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
   const [outboxDrainRequestSignal, requestOutboxDrain] = useReducer((value: number) => value + 1, 0)
-  const [unreadThreadIds, setUnreadThreadIds] = useState<ReadonlySet<string>>(() => new Set())
   const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null)
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
   const [replyTarget, setReplyTarget] = useState<MessageComposerReplyTarget | null>(null)
@@ -225,6 +226,13 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
+  useChatPushStaleMarkerRefresh({
+    isBrowserOnline,
+    pageState,
+    setPageState,
+    tenantSlug,
+    userId,
+  })
 
   const snapshot = pageState.snapshot
   const selectedThread =
@@ -306,25 +314,8 @@ export function ChatPage() {
     pageState.status === 'ready' &&
     pageState.snapshot.result === 'ready' &&
     pageState.snapshot.activeThread?.id === pageState.selectedThreadId
-  const markUnreadThread = useCallback(
-    (threadId: string) => {
-      setUnreadThreadIds((currentValue) => {
-        if (
-          threadId === pageState.selectedThreadId ||
-          !pageState.threads.some((thread) => thread.id === threadId) ||
-          currentValue.has(threadId)
-        ) {
-          return currentValue
-        }
-
-        const nextValue = new Set(currentValue)
-        nextValue.add(threadId)
-
-        return nextValue
-      })
-    },
-    [pageState.selectedThreadId, pageState.threads],
-  )
+  const { markUnreadThread, unreadThreadIds } =
+    useChatUnreadThreadMarkers(pageState)
   const selectedThreadNotificationSettings = useChatPageNotifications({
     canSuppressActiveThreadPush,
     chatNotificationsPanel,
@@ -333,34 +324,6 @@ export function ChatPage() {
     refreshChatSnapshot,
     selectedThreadId: pageState.selectedThreadId,
   })
-  useEffect(() => {
-    const selectedThreadId = pageState.selectedThreadId
-
-    if (
-      !selectedThreadId ||
-      pageState.status !== 'ready' ||
-      pageState.snapshot.activeThread?.id !== selectedThreadId
-    ) {
-      return
-    }
-
-    const clearUnreadTimerId = window.setTimeout(() => {
-      setUnreadThreadIds((currentValue) => {
-        if (!currentValue.has(selectedThreadId)) {
-          return currentValue
-        }
-
-        const nextValue = new Set(currentValue)
-        nextValue.delete(selectedThreadId)
-
-        return nextValue
-      })
-    }, 0)
-
-    return () => {
-      window.clearTimeout(clearUnreadTimerId)
-    }
-  }, [pageState])
   const transcriptMessages = historyFragment
     ? historyFragment.messages
     : visibleMessages

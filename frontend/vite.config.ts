@@ -8,6 +8,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
+    build: {
+      manifest: 'asset-manifest.json',
+    },
     plugins: [tailwindcss(), react()],
     server: {
       allowedHosts: ['.127.0.0.1.nip.io'],

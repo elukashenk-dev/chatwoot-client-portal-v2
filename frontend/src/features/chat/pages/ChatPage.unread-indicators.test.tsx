@@ -6,6 +6,9 @@ import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type { PortalPushMessagePayload } from '../../../pwa/serviceWorkerRuntime'
 import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
+import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
+import { offlineStore } from '../../offline/offlineStore'
+import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import type {
   ChatMessage,
   ChatMessageContextResponse,
@@ -55,6 +58,18 @@ const groupThread = {
   title: 'ООО "Ромашка"',
   type: 'group',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
+const tenantContextValue = {
+  errorMessage: null,
+  isUsingCachedData: false,
+  status: 'ready' as const,
+  tenant: {
+    displayName: 'Бухфирма',
+    primaryDomain: 'lk.buhfirma.ru',
+    publicBaseUrl: 'https://lk.buhfirma.ru',
+    slug: 'buhfirma',
+  },
+}
 
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -155,6 +170,7 @@ function createNotificationSettings(
 function createOtherThreadPush(): PortalPushMessagePayload {
   return {
     chatwootMessageId: 9001,
+    portalUserId: 7,
     tenantSlug: 'buhfirma',
     threadId: 'group:154',
     threadTitle: 'ООО "Ромашка"',
@@ -167,6 +183,7 @@ function createOtherThreadPush(): PortalPushMessagePayload {
 function createCurrentThreadPush(): PortalPushMessagePayload {
   return {
     chatwootMessageId: 9002,
+    portalUserId: 7,
     tenantSlug: 'buhfirma',
     threadId: privateThread.id,
     threadTitle: privateThread.title,
@@ -240,6 +257,17 @@ function renderChatRoute() {
     <AuthSessionProvider>
       <AppRoutes />
     </AuthSessionProvider>,
+    { initialEntries: ['/app/chat'] },
+  )
+}
+
+function renderChatRouteWithTenant() {
+  renderWithRouter(
+    <TenantIdentityContext.Provider value={tenantContextValue}>
+      <AuthSessionProvider>
+        <AppRoutes />
+      </AuthSessionProvider>
+    </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )
 }
@@ -318,6 +346,78 @@ describe('ChatPage unread indicators', () => {
     document.dispatchEvent(new Event('visibilitychange'))
 
     expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
+  })
+
+  it('consumes stored push stale markers by refreshing known threads after chat startup', async () => {
+    const groupSnapshot = createReadySnapshot({
+      activeThread: groupThread,
+      messages: [
+        createMessage({
+          authorName: 'Иван Петров',
+          authorRole: 'group_member',
+          content: 'Fresh from stored push marker',
+          direction: 'incoming',
+          id: 814,
+        }),
+      ],
+    })
+
+    await clearOfflineDatabaseForTests()
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9101,
+      createdAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'group:154',
+      userId: 7,
+    })
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/messages?threadId=group%3A154') {
+        return createJsonResponse(groupSnapshot)
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createJsonResponse(createNotificationSettings('private:me'))
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRouteWithTenant()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await waitFor(async () => {
+      await expect(
+        offlineStore.readMessageSnapshot('buhfirma', 7, 'group:154'),
+      ).resolves.toMatchObject({
+        snapshot: groupSnapshot,
+      })
+    })
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toEqual([])
   })
 
   it('shows and clears a local unread dot for another chat push', async () => {

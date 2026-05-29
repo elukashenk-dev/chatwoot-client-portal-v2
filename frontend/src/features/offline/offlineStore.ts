@@ -1,11 +1,15 @@
 import { openOfflineDatabase, type OfflineStoreName } from './offlineDatabase'
+import {
+  deletePushStaleMarkers,
+  listPushStaleMarkers,
+  savePushStaleMarker,
+} from './offlinePushStaleMarkers'
 import type {
   OfflineAuthSnapshotRecord,
   OfflineChatMessageSnapshotRecord,
   OfflineChatThreadListRecord,
   OfflineLastActiveIdentityRecord,
   OfflineLocalDeviceSignoutRecord,
-  OfflinePushStaleMarkerRecord,
   OfflineTenantContextRecord,
 } from './types'
 
@@ -25,10 +29,6 @@ function scopedUserKey(tenantSlug: string, userId: number) {
 
 function scopedThreadKey(tenantSlug: string, userId: number, threadId: string) {
   return `${tenantSlug}:${userId}:${threadId}`
-}
-
-function pushMarkerKey(record: OfflinePushStaleMarkerRecord) {
-  return `${record.tenantSlug}:${record.userId}:${record.threadId}:${record.chatwootMessageId}`
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -304,6 +304,8 @@ export const offlineStore = {
   saveLocalDeviceSignout(record: OfflineLocalDeviceSignoutRecord) {
     return putOfflineRecord('local_device_signouts', record.host, record)
   },
+  deletePushStaleMarkers,
+  listPushStaleMarkers,
   saveMessageSnapshot(record: OfflineChatMessageSnapshotRecord) {
     return putOfflineRecord(
       'chat_message_snapshots',
@@ -311,9 +313,7 @@ export const offlineStore = {
       record,
     )
   },
-  savePushStaleMarker(record: OfflinePushStaleMarkerRecord) {
-    return putOfflineRecord('push_stale_markers', pushMarkerKey(record), record)
-  },
+  savePushStaleMarker,
   saveTenantContext(record: OfflineTenantContextRecord) {
     return putOfflineRecord('tenant_contexts', record.host, record)
   },
