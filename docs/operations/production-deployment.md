@@ -35,7 +35,7 @@ Production runtime uses:
 - isolated portal Postgres;
 - tenant-owned encrypted Chatwoot runtime config;
 - tenant API Channel webhook configuration;
-- Chatwoot `v4.13+` `Channel::Api.secret` as webhook signature secret source.
+- Chatwoot `v4.13+` `Channel::Api.secret` as webhook signature secret source;
 - explicit deploy source gate: clean production deploys come from a reviewed
   commit, while WIP device-preview deploys must use `--allow-dirty-preview` and
   `--preview-label`.
@@ -78,6 +78,14 @@ Default retention:
 - expired rate-limit buckets: `24` hours after reset;
 - expired sessions: `7` days after expiry;
 - expired verification records: `30` days after expiry.
+
+## OS Upgrade Follow-Up
+
+Uncontrolled OS upgrades can restart Redis/PostgreSQL/network services while
+Chatwoot web/worker keep running with stale realtime connections. The policy is
+not applied yet; track it through
+`docs/findings/F-OPS-001-apt-daily-chatwoot-realtime.md` before relying on
+Chatwoot realtime for support SLAs or real production users.
 
 ## Real Server Notes
 

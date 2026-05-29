@@ -169,6 +169,10 @@ portal_chat_threads
 portal_chat_message_sends
 portal_rate_limit_buckets
 chatwoot_webhook_deliveries
+portal_user_notification_preferences
+portal_chat_notification_preferences
+portal_push_subscriptions
+portal_push_deliveries
 ```
 
 Future admin/branding tables must also be tenant-scoped:
@@ -326,7 +330,13 @@ PWA identity rules:
 - app name and short name come from tenant identity/branding;
 - icon URLs are tenant-aware;
 - manifest and icon metadata must not cache another tenant's identity;
-- service worker must not cache tenant-sensitive API responses as static shell.
+- service worker must not cache tenant-sensitive API responses as static shell;
+- app shell/assets may be cached for offline launch, but `/api/*` remains
+  network/backend authority;
+- browser offline data lives in scoped IndexedDB `portal-offline` under
+  tenant/user/thread identity;
+- durable text outbox is a frontend-domain module; `ChatPage` can request drain
+  but must not own outbox persistence or backend send authority.
 
 iOS/iPadOS:
 
@@ -615,16 +625,18 @@ First model remains:
 one tenant -> one Chatwoot account -> one portal API inbox
 ```
 
-### Push Notifications
+### Notification Follow-Ups
 
-Deferred until after admin/branding and deployment runbook work.
+Basic chat notifications are implemented: tenant-scoped global preferences,
+thread overrides, in-portal sound, Web Push subscriptions, safe push payloads
+without message text and push delivery bookkeeping.
 
-Future requirements:
+Deferred notification work:
 
-- tenant-scoped push subscriptions;
-- notification preferences;
-- duplicate suppression by tenant/message scope;
-- no sensitive message body in push payload unless explicitly approved.
+- notification center/inbox with a list of events;
+- cross-device durable unread counters beyond the current local indicators;
+- email/digest notifications if that channel is explicitly opened;
+- tenant-admin notification policy screen.
 
 ## 12. Risk Checklist
 

@@ -34,7 +34,12 @@
 - `MT-8R Codebase Audit And Refactoring Readiness`;
 - `MT-8.5 Portal UI/UX Baseline Review`;
 - chat thread runtime follow-up: portal-owned `threadId`, личный чат и
-  групповые чаты через Chatwoot contact attributes.
+  групповые чаты через Chatwoot contact attributes;
+- notifications slice: global settings, chat-level overrides, in-portal sound,
+  Web Push subscription lifecycle and safe tenant-scoped push delivery;
+- Offline-first PWA MVP and follow-ups: app shell cache, scoped IndexedDB
+  snapshots, durable text outbox, foreground drain, Background Sync progressive
+  enhancement and unified startup/connection UX.
 
 Текущий baseline:
 
@@ -47,6 +52,8 @@
   identity уже tenant-aware;
 - browser работает с `threadId`, а backend мапит threads на Chatwoot
   conversations через `portal_chat_threads`;
+- installed PWA can reopen cached tenant/auth/chat state after a previous online
+  login and queue text while offline without browser Chatwoot authority;
 - migration history сжата в clean baseline; старая portal chat mapping schema
   и старые portal users не сохраняются.
 
@@ -366,7 +373,7 @@ Exit criteria:
 Эти slices не являются текущим roadmap и не начинаются до закрытия `MT-9`/`MT-10`
 или отдельного явного решения.
 
-### Push Notifications
+### Notification Center And Advanced Notifications
 
 Status:
 
@@ -374,17 +381,16 @@ Status:
 
 Reason:
 
-- push зависит от production-ready service worker lifecycle, notification
-  privacy policy, tenant-aware routing and preferences.
+- базовые chat notifications уже реализованы; оставшийся scope шире, чем
+  текущий chat/PWA baseline, и требует отдельного продукта, UX и privacy review.
 
 Minimum future scope:
 
-- in-app unread/badge state;
-- notification preferences;
-- Web Push/VAPID strategy;
-- push subscription persistence with tenant scope;
-- webhook-to-push routing only for relevant tenant user;
-- duplicate suppression and expired subscription cleanup.
+- notification inbox/center со списком событий;
+- cross-device unread counters beyond the current local indicators;
+- email/digest notifications, если этот канал явно откроем;
+- tenant-admin notification policy screen;
+- retention/cleanup policy для новых notification event records.
 
 ### Multi-Domain / Custom Domains
 

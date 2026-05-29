@@ -219,6 +219,6 @@
 
 ## Recommended Next Step
 
-- Run real-device smoke for installed PWA launch on fast, slow and offline
-  connection; confirm the startup screen is skipped on fast launches and stable
-  when shown on slow launches.
+- Open `MT-9` with the `F-MT-004` Chatwoot permissions spike and define the
+  separate encrypted per-tenant admin-verification token boundary before adding
+  tenant admin or branding writes.

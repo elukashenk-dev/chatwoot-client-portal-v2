@@ -19,4 +19,5 @@
 - [operations/production-clean-reinstall.md](operations/production-clean-reinstall.md) - clean reinstall runbook.
 - [operations/production-server-notes.md](operations/production-server-notes.md) - факты о production VM.
 - [operations/chatwoot-4-13-upgrade-notes.md](operations/chatwoot-4-13-upgrade-notes.md) - Chatwoot 4.13 notes.
+- [operations/installed-pwa-smoke.md](operations/installed-pwa-smoke.md) - smoke для установленного Offline-first PWA.
 - [findings/](findings/) - открытые review findings.

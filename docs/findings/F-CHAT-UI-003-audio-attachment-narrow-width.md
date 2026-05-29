@@ -3,7 +3,7 @@
 - `status`: `deferred`
 - `found_in`: auth shell markup cleanup and chat markup review
 - `risk`: `low`
-- `urgency`: re-evaluate in `MT-8.5 Portal UI/UX Baseline Review`; fix in a focused chat attachment UI polish slice if narrow mobile audio/voice states remain in the accepted baseline
+- `urgency`: deferred; fix in a focused chat attachment UI polish slice if narrow mobile audio/voice states remain problematic on real devices
 - `area`: frontend chat transcript, audio attachment rendering, voice messages
 - `evidence`:
   - `frontend/src/features/chat/components/chat-transcript/AttachmentCard.tsx` renders audio controls with `className="mt-3 w-full min-w-[220px] max-w-full"`.

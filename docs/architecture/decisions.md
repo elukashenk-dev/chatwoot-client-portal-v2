@@ -305,3 +305,39 @@
   authority mappings и короткоживущие runtime/service traces; без retention они
   постепенно превращаются в мусор, но удалять пользовательские thread mappings
   автоматически нельзя.
+
+## D-022. Offline-first PWA не переносит backend authority в браузер
+
+- дата: `2026-05-29`
+- решение:
+  установленный PWA может открывать сохраненные tenant/auth/chat snapshots при
+  плохой связи и хранить durable text outbox в frontend-domain offline модуле.
+  Browser storage scoped by tenant/user/thread помогает UX, но не становится
+  source of truth: backend остается authority для session, send, freshness,
+  Chatwoot access и final delivery status. Service worker кэширует app
+  shell/assets и не перехватывает `/api/*`.
+- граница:
+  attachments/voice остаются online-only. Background Sync используется только
+  как progressive enhancement для text outbox drain; foreground drain on app
+  open/online/visibility остается primary path, особенно для iOS/iPadOS.
+- причина:
+  offline-first нужен для устойчивого UX при плохой связи, но выдача Chatwoot
+  или send authority в browser нарушила бы главный security boundary портала.
+
+## D-023. Chat notifications tenant-scoped and privacy-preserving
+
+- дата: `2026-05-27`
+- решение:
+  chat notifications хранятся и доставляются только в tenant/user/thread scope.
+  Push subscriptions принадлежат portal user внутри tenant, а push delivery из
+  Chatwoot `message_created` webhooks проходит через portal backend. Публичный
+  push payload содержит безопасный chat-title context и routing metadata, но не
+  содержит текст сообщения, автора, attachment names, Chatwoot IDs или internal
+  portal IDs в user-visible copy.
+- граница:
+  notification center, email/digest notifications и tenant-admin notification
+  policy screen остаются отдельными future scopes.
+- причина:
+  системные уведомления полезны для чата, но они легко раскрывают sensitive
+  данные на lock screen или в notification tray. Tenant scope и минимальный
+  payload сохраняют privacy и multi-tenant isolation.
