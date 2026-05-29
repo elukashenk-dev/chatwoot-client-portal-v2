@@ -348,6 +348,22 @@ describe('LoginPage', () => {
     expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
   })
 
+  it('shows the same startup screen while public auth session is checking', () => {
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    renderAuthRoutes(['/auth/login'])
+
+    expect(
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Проверяем, нужно ли открыть форму входа или защищенную клиентскую зону.',
+      ),
+    ).not.toBeInTheDocument()
+  })
+
   it.each([
     ['/auth/register', 'Создать аккаунт'],
     ['/auth/password-reset/request', 'Восстановление пароля'],

@@ -69,6 +69,7 @@ function LazyRoute({ children }: { children: ReactNode }) {
         <TenantSplashScreen
           description="Загружаем экран."
           mode="inline"
+          statusLabel="Загружаем экран"
           title="Открываем кабинет"
         />
       }

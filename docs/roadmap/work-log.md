@@ -186,6 +186,10 @@
   tenant/user/thread `portal-offline` scope, foreground drain остается primary
   path, а iOS продолжает полагаться на send-on-next-open/online/visibility
   behavior.
+- PWA startup continuity slice реализован: tenant boot, auth session checking,
+  lazy route fallback и chat loading используют один brand-ready
+  `AppStartupScreen`, чтобы после системного PWA splash не было смены разных
+  загрузочных экранов.
 
 ## Current Baseline
 
@@ -204,6 +208,5 @@
 
 ## Recommended Next Step
 
-- Resume SMS fallback gateway implementation from the current Offline-first PWA
-  baseline, keeping native SMS actions separate from the durable chat text
-  outbox.
+- Deploy PWA startup continuity slice to production and run real-device smoke
+  for installed PWA launch on slow/offline connection.

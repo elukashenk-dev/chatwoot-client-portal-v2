@@ -9,14 +9,13 @@ import { PrimaryButton } from '../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../shared/ui/PortalFrame'
 import { RefreshIcon } from '../../shared/ui/icons'
 
-function ProtectedSessionCheck({ userName }: { userName?: string | null }) {
+function ProtectedSessionCheck() {
   return (
     <AppWelcomeScreen
       description="Проверяем доступ и готовим защищенную зону."
       mode="screen"
       statusLabel="Проверяем сессию"
-      title={userName ? undefined : 'Открываем кабинет'}
-      userName={userName}
+      title="Открываем кабинет"
     />
   )
 }
@@ -98,7 +97,7 @@ export function ProtectedRoute() {
   } = useAuthSession()
 
   if (status === 'checking') {
-    return <ProtectedSessionCheck userName={user?.fullName} />
+    return <ProtectedSessionCheck />
   }
 
   if (status === 'error') {

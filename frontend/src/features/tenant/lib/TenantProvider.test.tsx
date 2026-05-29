@@ -115,7 +115,7 @@ describe('TenantProvider', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: 'Открываем кабинет.' }),
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Загружаем настройки.')).toBeInTheDocument()
     expect(screen.queryByText('no tenant')).not.toBeInTheDocument()

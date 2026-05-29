@@ -363,7 +363,8 @@ export function TenantProvider({ children }: TenantProviderProps) {
       {status === 'slow_connection' ? (
         <TenantSplashScreen
           description="Связь отвечает медленно. Проверяем сохраненные данные."
-          title="Открываем кабинет."
+          statusLabel="Проверяем сохраненные данные"
+          title="Открываем кабинет"
         />
       ) : null}
       {status === 'online_required' ? (

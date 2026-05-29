@@ -10,6 +10,7 @@ export function ChatLoadingState({ userName }: ChatLoadingStateProps) {
       description="Подключаем переписку и последние сообщения."
       showChatPreview
       statusLabel="Готовим чат"
+      title="Открываем кабинет"
       userName={userName}
     />
   )
