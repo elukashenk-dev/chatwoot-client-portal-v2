@@ -964,11 +964,10 @@ describe('ChatPage', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
-    expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
-
     await waitFor(() => {
       expect(getMessagePostCalls()).toHaveLength(1)
     })
+    expect(await screen.findByText('Первое сообщение')).toBeInTheDocument()
 
     const requestBody = JSON.parse(
       String(getMessagePostCalls()[0]?.[1]?.body),

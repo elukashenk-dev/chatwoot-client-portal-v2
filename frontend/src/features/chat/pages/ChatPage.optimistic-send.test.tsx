@@ -270,7 +270,9 @@ describe('ChatPage optimistic text send', () => {
     await user.type(textarea, 'Новое сообщение')
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
-    expect(textarea).toHaveValue('')
+    await waitFor(() => {
+      expect(textarea).toHaveValue('')
+    })
     expect(screen.getByText('Новое сообщение')).toBeInTheDocument()
     expect(screen.getByLabelText('Отправляется')).toBeInTheDocument()
     expect(screen.queryByText('Отправка')).not.toBeInTheDocument()
@@ -396,6 +398,22 @@ describe('ChatPage optimistic text send', () => {
 
   it('queues text while offline and keeps the original client message key for later drain', async () => {
     const user = userEvent.setup()
+    const registerBackgroundSync = vi.fn(async () => undefined)
+    const serviceWorkerContainer = new EventTarget()
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: Object.assign(serviceWorkerContainer, {
+        controller: {
+          postMessage: vi.fn(),
+        } as unknown as ServiceWorker,
+        ready: Promise.resolve({
+          sync: {
+            register: registerBackgroundSync,
+          },
+        } as unknown as ServiceWorkerRegistration),
+      }),
+    })
 
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
@@ -454,6 +472,11 @@ describe('ChatPage optimistic text send', () => {
           status: 'queued',
         },
       ])
+    })
+    await waitFor(() => {
+      expect(registerBackgroundSync).toHaveBeenCalledWith(
+        'portal-text-outbox-drain',
+      )
     })
   })
 
@@ -598,7 +621,7 @@ describe('ChatPage optimistic text send', () => {
   it('renders a queued text message restored from durable outbox after reload', async () => {
     await offlineOutboxStore.saveOutboxRecord(
       createOutboxRecord({
-        nextAttemptAt: '2026-05-27T10:10:00.000Z',
+        nextAttemptAt: '2099-01-01T00:00:00.000Z',
       }),
     )
 

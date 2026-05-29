@@ -7,6 +7,12 @@ const APP_BADGE_COUNT_KEY = 'chat_push_count'
 const APP_BADGE_MAX_COUNT = 9999
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
 const PORTAL_OFFLINE_DATABASE_VERSION = 1
+const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
+const TEXT_OUTBOX_BACKGROUND_SYNC_TAG = 'portal-text-outbox-drain'
+const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
+const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
+const TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS = 5_000
+const TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE = 'Не удалось отправить сообщение.'
 const PORTAL_OFFLINE_STORES = [
   'tenant_contexts',
   'last_active_identities',
@@ -106,6 +112,14 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('push', (event) => {
   event.waitUntil(handlePushEvent(event))
+})
+
+self.addEventListener('sync', (event) => {
+  if (event.tag !== TEXT_OUTBOX_BACKGROUND_SYNC_TAG) {
+    return
+  }
+
+  event.waitUntil(drainTextOutboxInBackgroundSync())
 })
 
 self.addEventListener('notificationclick', (event) => {
@@ -234,6 +248,707 @@ function shouldCacheResponse(response) {
     response.headers.get('cache-control')?.toLowerCase() ?? ''
 
   return !cacheControl.includes('no-store')
+}
+
+async function drainTextOutboxInBackgroundSync() {
+  if (await hasVisiblePortalClient()) {
+    return
+  }
+
+  const host = getServiceWorkerHost()
+
+  if (!host) {
+    return
+  }
+
+  const identity = await readLastActiveIdentityForHost(host)
+
+  if (!identity || (await hasLocalDeviceSignout(host, identity))) {
+    return
+  }
+
+  await withTextOutboxDrainLock(identity, () =>
+    drainTextOutboxForIdentity(identity),
+  )
+}
+
+async function hasVisiblePortalClient() {
+  try {
+    const clientsList = await clients.matchAll({
+      includeUncontrolled: false,
+      type: 'window',
+    })
+
+    return clientsList.some(
+      (client) =>
+        client.visibilityState === 'visible' && isSameOriginUrl(client.url),
+    )
+  } catch {
+    return false
+  }
+}
+
+function getServiceWorkerHost() {
+  try {
+    return new URL(self.location.origin).host
+  } catch {
+    return null
+  }
+}
+
+async function readLastActiveIdentityForHost(host) {
+  const record = await readPortalOfflineRecord('last_active_identities', host)
+
+  return isLastActiveIdentityRecord(record) && record.host === host
+    ? record
+    : null
+}
+
+async function hasLocalDeviceSignout(host, identity) {
+  const record = await readPortalOfflineRecord('local_device_signouts', host)
+
+  return (
+    isLocalDeviceSignoutRecord(record) &&
+    record.host === host &&
+    record.tenantSlug === identity.tenantSlug &&
+    record.userId === identity.userId
+  )
+}
+
+async function drainTextOutboxForIdentity(identity) {
+  const dueRecords = await listDueTextOutboxRecords(identity, new Date())
+
+  for (const record of dueRecords) {
+    const attemptAt = new Date()
+    const ownerId = createTextOutboxOwnerId()
+    const sendingRecord = await markTextOutboxSending(
+      record,
+      ownerId,
+      attemptAt,
+    )
+
+    try {
+      const sendResult = await sendBackgroundTextMessage(sendingRecord)
+
+      if (isSendResultForTextOutboxRecord(sendResult, sendingRecord)) {
+        try {
+          await deleteTextOutboxRecord(sendingRecord)
+        } catch {
+          // Backend accepted the message; local cleanup is best-effort.
+        }
+
+        try {
+          await saveSentMessageSnapshotFromBackgroundSend(
+            identity,
+            sendingRecord,
+            sendResult,
+          )
+        } catch {
+          // Cached transcript refresh is best-effort after a successful send.
+        }
+        continue
+      }
+
+      await markTextOutboxQueued(
+        sendingRecord,
+        null,
+        TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE,
+        new Date(),
+      )
+    } catch (error) {
+      const apiError = getBackgroundSendErrorDetails(error)
+
+      if (apiError.statusCode === 401) {
+        await markTextOutboxQueued(
+          sendingRecord,
+          null,
+          apiError.message,
+          new Date(),
+        )
+        return
+      }
+
+      if (
+        apiError.statusCode === 403 ||
+        apiError.code === 'thread_access_denied'
+      ) {
+        await markTextOutboxFailed(
+          sendingRecord,
+          apiError.code,
+          apiError.message,
+          new Date(),
+        )
+        continue
+      }
+
+      if (apiError.statusCode === 409) {
+        if (apiError.code === 'chat_send_in_progress') {
+          await markTextOutboxQueued(
+            sendingRecord,
+            new Date(
+              Date.now() + TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS,
+            ).toISOString(),
+            apiError.message,
+            new Date(),
+          )
+          continue
+        }
+
+        if (apiError.code === 'client_message_key_conflict') {
+          await markTextOutboxFailed(
+            sendingRecord,
+            apiError.code,
+            apiError.message,
+            new Date(),
+          )
+          continue
+        }
+      }
+
+      if (apiError.statusCode === 429) {
+        await markTextOutboxQueued(
+          sendingRecord,
+          addRetryAfter(new Date(), apiError.retryAfterSeconds) ??
+            addTextOutboxBackoff(new Date(), sendingRecord.attemptCount),
+          apiError.message,
+          new Date(),
+        )
+        continue
+      }
+
+      await markTextOutboxQueued(
+        sendingRecord,
+        addTextOutboxBackoff(new Date(), sendingRecord.attemptCount),
+        apiError.message,
+        new Date(),
+      )
+    }
+  }
+}
+
+async function sendBackgroundTextMessage(record) {
+  const body = {
+    clientMessageKey: record.clientMessageKey,
+    content: record.content,
+    threadId: record.threadId,
+  }
+
+  if (typeof record.replyToMessageId === 'number') {
+    body.replyToMessageId = record.replyToMessageId
+  }
+
+  let response
+
+  try {
+    response = await fetch('/api/chat/messages', {
+      body: JSON.stringify(body),
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    })
+  } catch {
+    throw {
+      code: null,
+      message: TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE,
+      retryAfterSeconds: null,
+      statusCode: 0,
+    }
+  }
+
+  const payload = await readJsonResponseBody(response)
+
+  if (!response.ok) {
+    const errorPayload = isObject(payload) ? payload.error : null
+
+    throw {
+      code:
+        isObject(errorPayload) && typeof errorPayload.code === 'string'
+          ? errorPayload.code
+          : null,
+      message:
+        isObject(errorPayload) && typeof errorPayload.message === 'string'
+          ? errorPayload.message
+          : TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE,
+      retryAfterSeconds: parseRetryAfterSeconds(response),
+      statusCode: response.status,
+    }
+  }
+
+  return payload
+}
+
+function getBackgroundSendErrorDetails(error) {
+  return {
+    code: isObject(error) && typeof error.code === 'string' ? error.code : null,
+    message:
+      isObject(error) && typeof error.message === 'string'
+        ? error.message
+        : TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE,
+    retryAfterSeconds:
+      isObject(error) && typeof error.retryAfterSeconds === 'number'
+        ? error.retryAfterSeconds
+        : null,
+    statusCode:
+      isObject(error) && typeof error.statusCode === 'number'
+        ? error.statusCode
+        : 0,
+  }
+}
+
+async function readJsonResponseBody(response) {
+  const contentType = response.headers.get('content-type')
+
+  if (!contentType?.includes('application/json')) {
+    return null
+  }
+
+  try {
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+function parseRetryAfterSeconds(response) {
+  const retryAfter = response.headers.get('Retry-After')
+
+  if (!retryAfter) {
+    return null
+  }
+
+  const seconds = Number(retryAfter)
+
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds)
+  }
+
+  const retryAtMs = Date.parse(retryAfter)
+
+  if (!Number.isFinite(retryAtMs)) {
+    return null
+  }
+
+  const delaySeconds = Math.ceil((retryAtMs - Date.now()) / 1000)
+
+  return delaySeconds > 0 ? delaySeconds : null
+}
+
+function addTextOutboxBackoff(now, attemptCount) {
+  const delayMs = Math.min(60_000, 1000 * 2 ** Math.max(0, attemptCount - 1))
+
+  return new Date(now.getTime() + delayMs).toISOString()
+}
+
+function addRetryAfter(now, retryAfterSeconds) {
+  if (
+    typeof retryAfterSeconds === 'number' &&
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds > 0
+  ) {
+    return new Date(now.getTime() + retryAfterSeconds * 1000).toISOString()
+  }
+
+  return null
+}
+
+async function listDueTextOutboxRecords(identity, now) {
+  const records = await listPortalOfflineRecords('chat_text_outbox')
+  const nowMs = now.getTime()
+
+  return records
+    .filter(isTextOutboxRecord)
+    .filter(
+      (record) =>
+        record.tenantSlug === identity.tenantSlug &&
+        record.userId === identity.userId &&
+        (record.status === 'queued' || record.status === 'sending'),
+    )
+    .filter((record) => {
+      if (record.status === 'queued') {
+        return (
+          !record.nextAttemptAt ||
+          isPastOrInvalidTimestamp(record.nextAttemptAt, nowMs)
+        )
+      }
+
+      return (
+        record.sendingLeaseExpiresAt !== null &&
+        isPastOrInvalidTimestamp(record.sendingLeaseExpiresAt, nowMs)
+      )
+    })
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}
+
+function isSendResultForTextOutboxRecord(result, record) {
+  return (
+    isObject(result) &&
+    result.result === 'ready' &&
+    isObject(result.activeThread) &&
+    result.activeThread.id === record.threadId &&
+    isObject(result.sentMessage) &&
+    result.sentMessage.clientMessageKey === record.clientMessageKey
+  )
+}
+
+async function markTextOutboxSending(record, ownerId, now) {
+  const nextRecord = {
+    ...record,
+    attemptCount: record.attemptCount + 1,
+    errorCode: null,
+    errorMessage: null,
+    lastAttemptAt: now.toISOString(),
+    nextAttemptAt: null,
+    sendOwnerId: ownerId,
+    sendingLeaseExpiresAt: new Date(
+      now.getTime() + TEXT_OUTBOX_SEND_LEASE_MS,
+    ).toISOString(),
+    sendingStartedAt: now.toISOString(),
+    status: 'sending',
+    updatedAt: now.toISOString(),
+  }
+
+  await putPortalOfflineRecord(
+    'chat_text_outbox',
+    textOutboxKey(record),
+    nextRecord,
+  )
+
+  return nextRecord
+}
+
+function markTextOutboxQueued(record, nextAttemptAt, errorMessage, now) {
+  return putPortalOfflineRecord('chat_text_outbox', textOutboxKey(record), {
+    ...record,
+    errorCode: null,
+    errorMessage,
+    nextAttemptAt,
+    sendOwnerId: null,
+    sendingLeaseExpiresAt: null,
+    sendingStartedAt: null,
+    status: 'queued',
+    updatedAt: now.toISOString(),
+  })
+}
+
+function markTextOutboxFailed(record, errorCode, errorMessage, now) {
+  return putPortalOfflineRecord('chat_text_outbox', textOutboxKey(record), {
+    ...record,
+    errorCode,
+    errorMessage,
+    nextAttemptAt: null,
+    sendOwnerId: null,
+    sendingLeaseExpiresAt: null,
+    sendingStartedAt: null,
+    status: 'failed',
+    updatedAt: now.toISOString(),
+  })
+}
+
+function deleteTextOutboxRecord(record) {
+  return deletePortalOfflineRecord('chat_text_outbox', textOutboxKey(record))
+}
+
+async function saveSentMessageSnapshotFromBackgroundSend(
+  identity,
+  record,
+  sendResult,
+) {
+  if (!isObject(sendResult.sentMessage)) {
+    return
+  }
+
+  const key = scopedThreadKey(
+    identity.tenantSlug,
+    identity.userId,
+    record.threadId,
+  )
+  const current = await readPortalOfflineRecord('chat_message_snapshots', key)
+  const currentSnapshot = isMessageSnapshotRecord(current)
+    ? current.snapshot
+    : null
+  const sentMessage = sendResult.sentMessage
+  const messages = (currentSnapshot?.messages ?? []).filter(
+    (message) =>
+      message.id !== sentMessage.id &&
+      (!sentMessage.clientMessageKey ||
+        message.clientMessageKey !== sentMessage.clientMessageKey),
+  )
+
+  messages.push(sentMessage)
+
+  await putPortalOfflineRecord('chat_message_snapshots', key, {
+    savedAt: new Date().toISOString(),
+    snapshot: {
+      activeThread: sendResult.activeThread,
+      hasMoreOlder: currentSnapshot?.hasMoreOlder ?? false,
+      messages: sortMessagesByTimeline(messages).slice(
+        -PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT,
+      ),
+      nextOlderCursor: currentSnapshot?.nextOlderCursor ?? null,
+      reason: sendResult.reason,
+      result: sendResult.result,
+    },
+    tenantSlug: identity.tenantSlug,
+    threadId: record.threadId,
+    userId: identity.userId,
+  })
+}
+
+function sortMessagesByTimeline(messages) {
+  return [...messages].sort((left, right) => {
+    const leftTime = new Date(left.createdAt).getTime()
+    const rightTime = new Date(right.createdAt).getTime()
+
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime
+    }
+
+    return left.id - right.id
+  })
+}
+
+async function withTextOutboxDrainLock(identity, operation) {
+  const lockName = `portal-outbox:${identity.tenantSlug}:${identity.userId}`
+
+  if (navigator?.locks?.request) {
+    return navigator.locks.request(lockName, operation)
+  }
+
+  const ownerId = createTextOutboxOwnerId()
+  const acquired = await tryAcquireTextOutboxDrainLease(identity, ownerId)
+
+  if (!acquired) {
+    return null
+  }
+
+  try {
+    return await operation()
+  } finally {
+    await releaseTextOutboxDrainLease(identity, ownerId)
+  }
+}
+
+function tryAcquireTextOutboxDrainLease(identity, ownerId) {
+  return mutateTextOutboxDrainLease(
+    identity,
+    async ({ key, store, transaction }) => {
+      const current = await idbRequestToPromise(store.get(key))
+      const currentExpiresAt = current
+        ? new Date(current.expiresAt).getTime()
+        : 0
+      const currentExpired =
+        !Number.isFinite(currentExpiresAt) || currentExpiresAt <= Date.now()
+
+      if (current && !currentExpired) {
+        await idbTransactionDone(transaction)
+        return false
+      }
+
+      await idbRequestToPromise(
+        store.put(
+          {
+            expiresAt: new Date(
+              Date.now() + TEXT_OUTBOX_DRAIN_LEASE_MS,
+            ).toISOString(),
+            ownerId,
+          },
+          key,
+        ),
+      )
+      await idbTransactionDone(transaction)
+      return true
+    },
+  )
+}
+
+function releaseTextOutboxDrainLease(identity, ownerId) {
+  return mutateTextOutboxDrainLease(
+    identity,
+    async ({ key, store, transaction }) => {
+      const current = await idbRequestToPromise(store.get(key))
+
+      if (current?.ownerId === ownerId) {
+        await idbRequestToPromise(store.delete(key))
+      }
+
+      await idbTransactionDone(transaction)
+    },
+  )
+}
+
+async function mutateTextOutboxDrainLease(identity, operation) {
+  const database = await openPortalOfflineDatabase()
+  const transaction = database.transaction('sync_leases', 'readwrite')
+  const store = transaction.objectStore('sync_leases')
+
+  try {
+    return await operation({
+      key: `portal-outbox:${identity.tenantSlug}:${identity.userId}`,
+      store,
+      transaction,
+    })
+  } finally {
+    database.close()
+  }
+}
+
+function listPortalOfflineRecords(storeName) {
+  return withPortalOfflineStore(storeName, 'readonly', async (store) =>
+    idbRequestToPromise(store.getAll()),
+  )
+}
+
+function readPortalOfflineRecord(storeName, key) {
+  return withPortalOfflineStore(storeName, 'readonly', async (store) =>
+    idbRequestToPromise(store.get(key)),
+  )
+}
+
+function putPortalOfflineRecord(storeName, key, value) {
+  return withPortalOfflineStore(storeName, 'readwrite', async (store) => {
+    await idbRequestToPromise(store.put(value, key))
+  })
+}
+
+function deletePortalOfflineRecord(storeName, key) {
+  return withPortalOfflineStore(storeName, 'readwrite', async (store) => {
+    await idbRequestToPromise(store.delete(key))
+  })
+}
+
+async function withPortalOfflineStore(storeName, mode, operation) {
+  const database = await openPortalOfflineDatabase()
+  const transaction = database.transaction(storeName, mode)
+  const store = transaction.objectStore(storeName)
+
+  try {
+    const result = await operation(store)
+
+    await idbTransactionDone(transaction)
+
+    return result
+  } finally {
+    database.close()
+  }
+}
+
+function idbRequestToPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('IndexedDB request failed.'))
+    }
+  })
+}
+
+function idbTransactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => {
+      resolve()
+    }
+    transaction.onerror = () => {
+      reject(transaction.error ?? new Error('IndexedDB transaction failed.'))
+    }
+    transaction.onabort = () => {
+      reject(transaction.error ?? new Error('IndexedDB transaction aborted.'))
+    }
+  })
+}
+
+function isTextOutboxRecord(value) {
+  return (
+    isObject(value) &&
+    Number.isFinite(value.attemptCount) &&
+    typeof value.clientMessageKey === 'string' &&
+    typeof value.content === 'string' &&
+    typeof value.createdAt === 'string' &&
+    isNullableString(value.errorCode) &&
+    isNullableString(value.errorMessage) &&
+    isNullableString(value.lastAttemptAt) &&
+    isNullableString(value.nextAttemptAt) &&
+    (value.replyTo === null || isObject(value.replyTo)) &&
+    isNullableNumber(value.replyToMessageId) &&
+    isNullableString(value.sendOwnerId) &&
+    isNullableString(value.sendingLeaseExpiresAt) &&
+    isNullableString(value.sendingStartedAt) &&
+    (value.status === 'failed' ||
+      value.status === 'queued' ||
+      value.status === 'sending') &&
+    typeof value.tenantSlug === 'string' &&
+    typeof value.threadId === 'string' &&
+    typeof value.updatedAt === 'string' &&
+    Number.isFinite(value.userId)
+  )
+}
+
+function isLastActiveIdentityRecord(value) {
+  return (
+    isObject(value) &&
+    typeof value.host === 'string' &&
+    typeof value.savedAt === 'string' &&
+    typeof value.tenantSlug === 'string' &&
+    Number.isFinite(value.userId)
+  )
+}
+
+function isLocalDeviceSignoutRecord(value) {
+  return (
+    isObject(value) &&
+    typeof value.createdAt === 'string' &&
+    typeof value.host === 'string' &&
+    typeof value.tenantSlug === 'string' &&
+    Number.isFinite(value.userId)
+  )
+}
+
+function isMessageSnapshotRecord(value) {
+  return (
+    isObject(value) &&
+    typeof value.savedAt === 'string' &&
+    isObject(value.snapshot) &&
+    Array.isArray(value.snapshot.messages) &&
+    typeof value.tenantSlug === 'string' &&
+    typeof value.threadId === 'string' &&
+    Number.isFinite(value.userId)
+  )
+}
+
+function isNullableString(value) {
+  return value === null || typeof value === 'string'
+}
+
+function isNullableNumber(value) {
+  return value === null || Number.isFinite(value)
+}
+
+function isPastOrInvalidTimestamp(value, nowMs) {
+  const valueMs = new Date(value).getTime()
+
+  return !Number.isFinite(valueMs) || valueMs <= nowMs
+}
+
+function textOutboxKey(record) {
+  return `${record.tenantSlug}:${record.userId}:${record.threadId}:${record.clientMessageKey}`
+}
+
+function scopedThreadKey(tenantSlug, userId, threadId) {
+  return `${tenantSlug}:${userId}:${threadId}`
+}
+
+function createTextOutboxOwnerId() {
+  if (self.crypto?.randomUUID) {
+    return self.crypto.randomUUID()
+  }
+
+  return `portal-outbox-owner:${Date.now()}:${Math.random().toString(36).slice(2)}`
+}
+
+function isObject(value) {
+  return typeof value === 'object' && value !== null
 }
 
 function isPushReadyForThread(client, threadId) {

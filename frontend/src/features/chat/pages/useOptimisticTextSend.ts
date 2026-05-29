@@ -6,7 +6,10 @@ import {
   type SetStateAction,
 } from 'react'
 
-import { offlineOutboxStore } from '../../offline/offlineOutboxStore'
+import {
+  retryFailedOfflineTextOutboxRecord,
+  saveOfflineTextOutboxRecord,
+} from '../../offline/offlineTextOutboxQueue'
 import { isOfflineStorageQuotaError } from '../../offline/storagePersistence'
 import type { OfflineTextOutboxRecord } from '../../offline/types'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
@@ -162,7 +165,11 @@ export function useOptimisticTextSend({
 
   const handleSendMessage = useCallback(
     async ({ clientMessageKey, content, replyToMessageId }: TextSendInput) => {
-      if (tenantSlug === null || userId === null || pageState.status !== 'ready') {
+      if (
+        tenantSlug === null ||
+        userId === null ||
+        pageState.status !== 'ready'
+      ) {
         return false
       }
 
@@ -184,7 +191,7 @@ export function useOptimisticTextSend({
       })
 
       try {
-        await offlineOutboxStore.saveOutboxRecord({
+        await saveOfflineTextOutboxRecord({
           attemptCount: 0,
           clientMessageKey,
           content,
@@ -258,7 +265,7 @@ export function useOptimisticTextSend({
       }
 
       try {
-        const retryRecord = await offlineOutboxStore.retryFailedOutboxRecord({
+        const retryRecord = await retryFailedOfflineTextOutboxRecord({
           clientMessageKey,
           tenantSlug,
           threadId,
