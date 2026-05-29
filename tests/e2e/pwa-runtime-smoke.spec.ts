@@ -1,5 +1,27 @@
 import { expect, test } from '@playwright/test'
 
+test('serves install shell metadata used by installed PWAs', async ({
+  request,
+}) => {
+  const response = await request.get('/')
+
+  expect(response.ok()).toBe(true)
+
+  const html = await response.text()
+
+  expect(html).toContain(
+    'rel="manifest" href="/api/tenant/manifest.webmanifest"',
+  )
+  expect(html).toContain('rel="apple-touch-icon"')
+  expect(html).toContain('name="mobile-web-app-capable" content="yes"')
+  expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"')
+  expect(html).toContain(
+    'name="apple-mobile-web-app-status-bar-style" content="default"',
+  )
+  expect(html).toContain('name="theme-color" content="#112540"')
+  expect(html).toContain('viewport-fit=cover')
+})
+
 test('serves the PWA manifest with installable app metadata', async ({
   request,
 }) => {

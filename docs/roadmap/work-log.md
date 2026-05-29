@@ -183,7 +183,6 @@
 
 ## Recommended Next Step
 
-- Start SMS fallback gateway from the verified Offline-first PWA baseline:
-  run the SMSGate Private Server spike, then implement
-  `sms_fallback_metadata` caching and the native `sms:` emergency action for
-  `private:me`.
+- Run Installed PWA Smoke on real Android Chrome and iOS/iPadOS Home Screen
+  devices using `docs/operations/installed-pwa-smoke.md`; if both platforms
+  pass or any blocker is explicitly accepted, continue to SMS fallback gateway.

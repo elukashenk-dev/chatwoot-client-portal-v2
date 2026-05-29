@@ -221,6 +221,9 @@ http://buhfirma.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 http://zubi.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 ```
 
+Installed PWA smoke для реальных Android/iOS устройств описан отдельно:
+`docs/operations/installed-pwa-smoke.md`.
+
 Основной ручной сценарий:
 
 - открыть оба tenant hosts в разных вкладках;
