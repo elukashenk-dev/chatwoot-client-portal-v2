@@ -179,11 +179,12 @@
   clean commit `bfeae36`; automated production-origin PWA smoke подтвердил
   stamped service worker, offline launch с сохраненным чатом и один unified
   notice для offline/outbox state.
-- Background Outbox Drain follow-up реализован: durable text outbox регистрирует
-  one-off Background Sync как progressive enhancement, service worker
-  opportunistically drains due text records через тот же tenant/user/thread
-  `portal-offline` scope, foreground drain остается primary path, а iOS
-  продолжает полагаться на send-on-next-open/online/visibility behavior.
+- Background Outbox Drain follow-up реализован и deployed на `lk.provgroup.ru`
+  из clean commit `e91636b`: durable text outbox регистрирует one-off
+  Background Sync как progressive enhancement, service worker opportunistically
+  drains due text records через тот же tenant/user/thread `portal-offline`
+  scope, foreground drain остается primary path, а iOS продолжает полагаться на
+  send-on-next-open/online/visibility behavior.
 
 ## Current Baseline
 
@@ -202,8 +203,7 @@
 
 ## Recommended Next Step
 
-- Checkpoint commit Background Outbox Drain, deploy to production, then run
-  real-device smoke: Android Chrome installed PWA queues offline text, app is
-  closed, network returns and background sync is observed if available; iOS/iPadOS
-  Home Screen preserves queued text and sends on next open without promising
-  background delivery.
+- Run real-device Background Outbox Drain smoke: Android Chrome installed PWA
+  queues offline text, app is closed, network returns and background sync is
+  observed if available; iOS/iPadOS Home Screen preserves queued text and sends
+  on next open without promising background delivery.
