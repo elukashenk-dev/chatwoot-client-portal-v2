@@ -198,8 +198,9 @@
   показан, держится минимальное стабильное время; fast startup сразу открывает
   чат или auth-экран без второго мелькнувшего загрузочного экрана.
 - Production deploy Startup anti-flicker gate выполнен на `lk.provgroup.ru` из
-  clean commit `68f428c`; post-deploy smoke подтвердил health, tenant manifest,
-  `/api/tenant`, root app shell и stamped `/sw.js` с новыми frontend assets.
+  clean commit `af4fe43`; post-deploy smoke подтвердил health, tenant manifest,
+  `/api/tenant`, root app shell, inline chat startup fallback и stamped
+  `/sw.js` с новыми frontend assets.
 
 ## Current Baseline
 
