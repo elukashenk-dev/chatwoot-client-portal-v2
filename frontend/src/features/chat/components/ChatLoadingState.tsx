@@ -1,4 +1,4 @@
-import { AppStartupScreen } from '../../tenant/components/AppStartupScreen'
+import { DeferredStartupScreen } from '../../tenant/components/StartupScreenGate'
 
 type ChatLoadingStateProps = {
   userName?: string | null
@@ -6,7 +6,7 @@ type ChatLoadingStateProps = {
 
 export function ChatLoadingState({ userName }: ChatLoadingStateProps) {
   return (
-    <AppStartupScreen
+    <DeferredStartupScreen
       description="Подключаем переписку и последние сообщения."
       showChatPreview
       statusLabel="Готовим чат"

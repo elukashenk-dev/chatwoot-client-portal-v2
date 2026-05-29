@@ -193,6 +193,10 @@
 - Production deploy PWA startup continuity выполнен на `lk.provgroup.ru` из
   clean commit `f75018b`; post-deploy smoke подтвердил health, tenant manifest,
   `/api/tenant`, root app shell и stamped `/sw.js` с новыми frontend assets.
+- Startup anti-flicker gate реализован поверх PWA startup continuity:
+  `AppStartupScreen` появляется только после короткой задержки и, если уже
+  показан, держится минимальное стабильное время; fast startup сразу открывает
+  чат или auth-экран без второго мелькнувшего загрузочного экрана.
 
 ## Current Baseline
 
@@ -211,5 +215,5 @@
 
 ## Recommended Next Step
 
-- Run real-device smoke for installed PWA launch on slow/offline connection and
-  confirm the startup screen no longer switches between different loading UIs.
+- Deploy Startup anti-flicker gate to production and run real-device smoke for
+  installed PWA launch on fast, slow and offline connection.

@@ -24,7 +24,7 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
-import { AppStartupScreen } from '../components/AppStartupScreen'
+import { StartupScreenGate } from '../components/StartupScreenGate'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -356,30 +356,38 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   const shouldRenderChildren =
     status === 'ready' || status === 'ready_cached' || status === 'error'
+  const isStartupPending =
+    status === 'loading' || status === 'slow_connection'
+  const startupScreenProps =
+    status === 'slow_connection'
+      ? {
+          description:
+            'Связь отвечает медленно. Проверяем сохраненные данные.',
+          statusLabel: 'Проверяем сохраненные данные',
+          title: 'Открываем кабинет',
+        }
+      : {
+          description: 'Загружаем настройки.',
+          statusLabel: 'Открываем кабинет',
+          title: 'Открываем кабинет',
+        }
 
   return (
     <TenantIdentityContext.Provider value={value}>
-      {status === 'loading' ? (
-        <AppStartupScreen
-          description="Загружаем настройки."
-          statusLabel="Открываем кабинет"
-          title="Открываем кабинет"
-        />
-      ) : null}
-      {status === 'slow_connection' ? (
-        <AppStartupScreen
-          description="Связь отвечает медленно. Проверяем сохраненные данные."
-          statusLabel="Проверяем сохраненные данные"
-          title="Открываем кабинет"
-        />
-      ) : null}
+      {status === 'online_required' ? null : (
+        <StartupScreenGate
+          active={isStartupPending}
+          fallback={startupScreenProps}
+        >
+          {shouldRenderChildren ? children : null}
+        </StartupScreenGate>
+      )}
       {status === 'online_required' ? (
         <TenantOnlineRequiredState
           description={errorMessage ?? undefined}
           onRetry={startTenantLoad}
         />
       ) : null}
-      {shouldRenderChildren ? children : null}
     </TenantIdentityContext.Provider>
   )
 }

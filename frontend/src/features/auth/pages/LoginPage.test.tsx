@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -137,6 +137,7 @@ describe('LoginPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
     fetchMock.mockReset()
@@ -338,9 +339,18 @@ describe('LoginPage', () => {
   })
 
   it('shows the app welcome screen while protected session is checking', () => {
+    vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
     renderAuthRoutes(['/app/chat'])
+
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(450)
+    })
 
     expect(
       screen.getByRole('heading', { name: 'Открываем кабинет' }),
@@ -349,9 +359,18 @@ describe('LoginPage', () => {
   })
 
   it('shows the same startup screen while public auth session is checking', () => {
+    vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
     renderAuthRoutes(['/auth/login'])
+
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(450)
+    })
 
     expect(
       screen.getByRole('heading', { name: 'Открываем кабинет' }),

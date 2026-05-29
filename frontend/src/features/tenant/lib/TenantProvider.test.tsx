@@ -105,7 +105,8 @@ describe('TenantProvider', () => {
     fetchMock.mockReset()
   })
 
-  it('shows the boot splash while tenant identity is loading', () => {
+  it('does not show the boot splash before the anti-flicker delay', async () => {
+    vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
     render(
@@ -113,6 +114,14 @@ describe('TenantProvider', () => {
         <TenantProbe />
       </TenantProvider>,
     )
+
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Загружаем настройки.')).not.toBeInTheDocument()
+    expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
+
+    await advanceBootTimers(450)
 
     expect(
       screen.getByRole('heading', { name: 'Открываем кабинет' }),
