@@ -891,19 +891,19 @@ docs/sms-fallback-gateway-design
 This branch should contain only the research/spec artifacts.
 
 Before implementation, the Offline-first PWA MVP must be completed and accepted
-as the current runtime baseline. SMS fallback is the immediate follow-up slice,
-but it should start only after the Offline-first branch has closed its own
-review, required browser tests, and checkpoint commit.
+as the current runtime baseline. SMS fallback was originally planned as the
+follow-up after Offline-first PWA, but implementation must be reconfirmed
+against the current `docs/roadmap/work-log.md` recommended next step before any
+code starts.
 
 The only SMS work that may remain before that point is docs alignment and, if
 explicitly approved, external operational research that does not change portal
-runtime code. Feature implementation branches start from the post-offline-first
+runtime code. Feature implementation branches start from the current accepted
 `main`.
 
 After spec approval:
 
 ```text
-feature/offline-first-pwa        -> prerequisite baseline, separate scope
 feature/sms-gateway-private-spike
 feature/sms-fallback-bridge
 feature/sms-fallback-pwa

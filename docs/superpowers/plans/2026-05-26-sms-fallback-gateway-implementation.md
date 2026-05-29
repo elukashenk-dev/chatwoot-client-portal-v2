@@ -114,12 +114,14 @@
 - Read: `docs/architecture/overview.md`
 - Read: `docs/roadmap/implementation-plan.md`
 - Read: `docs/architecture/decisions.md`
-- Read: `docs/superpowers/specs/2026-05-27-offline-first-pwa-design.md`
+- Read: `docs/operations/installed-pwa-smoke.md`
 
 - [ ] **Step 1: Confirm Offline-first PWA MVP baseline exists**
 
-Read `docs/roadmap/work-log.md` and the final status of the Offline-first PWA
-branch.
+Read `docs/roadmap/work-log.md`, `docs/architecture/decisions.md` and
+`docs/architecture/overview.md`. Confirm that the current `main` baseline
+includes Offline-first PWA MVP, durable text outbox and the PWA startup/connection
+UX decisions.
 
 Expected:
 
@@ -128,8 +130,8 @@ Offline-first PWA MVP is complete, reviewed, tested, checkpointed, and merged
 or otherwise explicitly accepted as the baseline for SMS fallback.
 ```
 
-If this is not true, do not start SMS implementation. Return to the
-Offline-first PWA plan or keep this branch docs-only.
+If this is not true, do not start SMS implementation. Fix the current
+Offline-first PWA baseline first or keep this branch docs-only.
 
 - [ ] **Step 2: Start from a clean post-Offline-first `main` worktree**
 
@@ -154,8 +156,8 @@ If the current worktree is dirty with unrelated changes, create a sibling worktr
 - [ ] **Step 3: Confirm this scope is approved as the next follow-up slice**
 
 Read the end of `docs/roadmap/work-log.md`. If SMS fallback is not listed as
-the recommended next implementation scope after Offline-first PWA, add no code.
-Ask for explicit approval or add only this plan/spec artifact in a docs branch.
+the recommended next implementation scope, add no code. Ask for explicit
+approval or keep this branch docs-only.
 
 - [ ] **Step 4: Keep the implementation branches separate**
 
