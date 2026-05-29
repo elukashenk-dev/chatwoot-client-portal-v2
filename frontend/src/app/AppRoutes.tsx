@@ -5,7 +5,7 @@ import { AppShellLayout } from './layouts/AppShellLayout'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
-import { TenantSplashScreen } from '../features/tenant/components/TenantSplashScreen'
+import { AppStartupScreen } from '../features/tenant/components/AppStartupScreen'
 
 function lazyRouteComponent<TProps extends object>(
   loadComponent: () => Promise<ComponentType<TProps>>,
@@ -66,7 +66,7 @@ function LazyRoute({ children }: { children: ReactNode }) {
   return (
     <Suspense
       fallback={
-        <TenantSplashScreen
+        <AppStartupScreen
           description="Загружаем экран."
           mode="inline"
           statusLabel="Загружаем экран"

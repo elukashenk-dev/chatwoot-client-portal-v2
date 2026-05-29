@@ -24,7 +24,7 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
-import { TenantSplashScreen } from '../components/TenantSplashScreen'
+import { AppStartupScreen } from '../components/AppStartupScreen'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -359,9 +359,15 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   return (
     <TenantIdentityContext.Provider value={value}>
-      {status === 'loading' ? <TenantSplashScreen /> : null}
+      {status === 'loading' ? (
+        <AppStartupScreen
+          description="Загружаем настройки."
+          statusLabel="Открываем кабинет"
+          title="Открываем кабинет"
+        />
+      ) : null}
       {status === 'slow_connection' ? (
-        <TenantSplashScreen
+        <AppStartupScreen
           description="Связь отвечает медленно. Проверяем сохраненные данные."
           statusLabel="Проверяем сохраненные данные"
           title="Открываем кабинет"

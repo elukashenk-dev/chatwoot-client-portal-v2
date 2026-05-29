@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { routePaths } from '../routePaths'
 import { useAuthSession } from '../../features/auth/lib/authSessionContext'
 import { LocalDeviceDataRemoval } from '../../features/offline/LocalDeviceDataRemoval'
-import { AppWelcomeScreen } from '../../features/tenant/components/AppWelcomeScreen'
+import { AppStartupScreen } from '../../features/tenant/components/AppStartupScreen'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../shared/ui/PortalFrame'
@@ -11,7 +11,7 @@ import { RefreshIcon } from '../../shared/ui/icons'
 
 function ProtectedSessionCheck() {
   return (
-    <AppWelcomeScreen
+    <AppStartupScreen
       description="Проверяем доступ и готовим защищенную зону."
       mode="screen"
       statusLabel="Проверяем сессию"
