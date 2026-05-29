@@ -29,6 +29,7 @@ import {
 export type { MessageComposerReplyTarget } from './message-composer/types'
 
 type MessageComposerProps = {
+  attachmentDisabled?: boolean
   disabled: boolean
   errorMessage: string | null
   isSending: boolean
@@ -37,9 +38,11 @@ type MessageComposerProps = {
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
   replyTarget: MessageComposerReplyTarget | null
+  voiceDisabled?: boolean
 }
 
 export function MessageComposer({
+  attachmentDisabled = false,
   disabled,
   errorMessage,
   isSending,
@@ -48,8 +51,10 @@ export function MessageComposer({
   onSend,
   onSendAttachment,
   replyTarget,
+  voiceDisabled = false,
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
+  const [isTextSendPending, setIsTextSendPending] = useState(false)
   const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
     null,
   )
@@ -68,6 +73,8 @@ export function MessageComposer({
   const normalizedDraft = draft.trim()
   const replyToMessageId = replyTarget?.id ?? null
   const shouldPrioritizeTextDraft = normalizedDraft.length > 0
+  const isAttachmentSendDisabled = Boolean(attachmentDisabled)
+  const isVoiceSendDisabled = Boolean(voiceDisabled)
 
   const {
     cancelVoiceRecording,
@@ -79,6 +86,7 @@ export function MessageComposer({
     status: voiceRecorderStatus,
   } = useVoiceRecorder({
     canStartRecording:
+      !isVoiceSendDisabled &&
       !disabled &&
       !isSending &&
       selectedAttachment === null &&
@@ -95,21 +103,28 @@ export function MessageComposer({
     normalizedDraft.length > 0 &&
     !disabled &&
     !isSending &&
+    !isTextSendPending &&
     !isVoiceRecorderBusy
   const canSendAttachment =
     selectedAttachment !== null &&
+    !isAttachmentSendDisabled &&
     !disabled &&
     !isSending &&
     !isVoiceRecorderBusy
   const canSend = canSendAttachment || canSendText
   const canStartVoiceRecording =
+    !isVoiceSendDisabled &&
     !disabled &&
     !isSending &&
     !isVoiceRecorderBusy &&
     selectedAttachment === null &&
     !shouldPrioritizeTextDraft
   const isAttachmentControlDisabled =
-    disabled || isSending || isVoiceRecorderBusy || shouldPrioritizeTextDraft
+    isAttachmentSendDisabled ||
+    disabled ||
+    isSending ||
+    isVoiceRecorderBusy ||
+    shouldPrioritizeTextDraft
   const composerErrorMessage = voiceErrorMessage ?? errorMessage
   const recordingDuration = formatRecordingDuration(recordingElapsedMs)
 
@@ -171,7 +186,7 @@ export function MessageComposer({
     onCancelReply()
   }
 
-  function submitText() {
+  async function submitText() {
     if (!canSendText) {
       return
     }
@@ -185,19 +200,28 @@ export function MessageComposer({
     pendingClientMessageKeyRef.current = clientMessageKey
     pendingContentRef.current = normalizedDraft
     pendingReplyToMessageIdRef.current = replyToMessageId
+    setIsTextSendPending(true)
 
-    pendingClientMessageKeyRef.current = null
-    pendingContentRef.current = null
-    pendingReplyToMessageIdRef.current = null
-    shouldRestoreFocusRef.current = true
-    onCancelReply()
-    setDraft('')
+    try {
+      const wasAccepted = await onSend({
+        clientMessageKey,
+        content: normalizedDraft,
+        replyToMessageId,
+      })
 
-    void onSend({
-      clientMessageKey,
-      content: normalizedDraft,
-      replyToMessageId,
-    })
+      if (!wasAccepted) {
+        return
+      }
+
+      pendingClientMessageKeyRef.current = null
+      pendingContentRef.current = null
+      pendingReplyToMessageIdRef.current = null
+      shouldRestoreFocusRef.current = true
+      onCancelReply()
+      setDraft('')
+    } finally {
+      setIsTextSendPending(false)
+    }
   }
 
   async function submitAttachmentFile(
@@ -207,7 +231,13 @@ export function MessageComposer({
       content = null,
     }: { allowVoiceRecorderBusy?: boolean; content?: string | null } = {},
   ) {
+    const isVoiceAttachment = allowVoiceRecorderBusy
+    const isMediaSendDisabled = isVoiceAttachment
+      ? isVoiceSendDisabled
+      : isAttachmentSendDisabled
+
     if (
+      isMediaSendDisabled ||
       disabled ||
       isSending ||
       (!allowVoiceRecorderBusy && isVoiceRecorderBusy)
@@ -282,7 +312,7 @@ export function MessageComposer({
       return
     }
 
-    submitText()
+    await submitText()
   }
 
   function selectAttachment(file: File | null) {

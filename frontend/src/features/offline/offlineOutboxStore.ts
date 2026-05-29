@@ -6,6 +6,14 @@ type OutboxRecordKeyInput = Pick<
   'clientMessageKey' | 'tenantSlug' | 'threadId' | 'userId'
 >
 
+type RetryFailedOutboxRecordInput = {
+  clientMessageKey: string
+  now?: Date
+  tenantSlug: string
+  threadId: string
+  userId: number
+}
+
 function outboxKey(record: OutboxRecordKeyInput) {
   return `${record.tenantSlug}:${record.userId}:${record.threadId}:${record.clientMessageKey}`
 }
@@ -137,6 +145,56 @@ async function putOutboxRecord(record: OfflineTextOutboxRecord) {
   }
 }
 
+async function readOutboxRecord(record: OutboxRecordKeyInput) {
+  const database = await openOfflineDatabase()
+
+  try {
+    const value = await database.get('chat_text_outbox', outboxKey(record))
+
+    return isOfflineTextOutboxRecord(value) &&
+      isSameOutboxRecordScope(value, record)
+      ? value
+      : null
+  } finally {
+    database.close()
+  }
+}
+
+async function retryFailedOutboxRecord({
+  clientMessageKey,
+  now = new Date(),
+  tenantSlug,
+  threadId,
+  userId,
+}: RetryFailedOutboxRecordInput) {
+  const existing = await readOutboxRecord({
+    clientMessageKey,
+    tenantSlug,
+    threadId,
+    userId,
+  })
+
+  if (!existing || existing.status !== 'failed') {
+    return null
+  }
+
+  const retryRecord = {
+    ...existing,
+    errorCode: null,
+    errorMessage: null,
+    nextAttemptAt: null,
+    sendOwnerId: null,
+    sendingLeaseExpiresAt: null,
+    sendingStartedAt: null,
+    status: 'queued',
+    updatedAt: now.toISOString(),
+  } satisfies OfflineTextOutboxRecord
+
+  await putOutboxRecord(retryRecord)
+
+  return retryRecord
+}
+
 export const offlineOutboxStore = {
   async deleteOutboxRecord(record: OutboxRecordKeyInput) {
     const database = await openOfflineDatabase()
@@ -147,20 +205,7 @@ export const offlineOutboxStore = {
       database.close()
     }
   },
-  async readOutboxRecord(record: OutboxRecordKeyInput) {
-    const database = await openOfflineDatabase()
-
-    try {
-      const value = await database.get('chat_text_outbox', outboxKey(record))
-
-      return isOfflineTextOutboxRecord(value) &&
-        isSameOutboxRecordScope(value, record)
-        ? value
-        : null
-    } finally {
-      database.close()
-    }
-  },
+  readOutboxRecord,
   async listThreadOutboxRecords({
     tenantSlug,
     threadId,
@@ -285,6 +330,7 @@ export const offlineOutboxStore = {
 
     return putOutboxRecord(nextRecord).then(() => nextRecord)
   },
+  retryFailedOutboxRecord,
   saveOutboxRecord: putOutboxRecord,
 }
 

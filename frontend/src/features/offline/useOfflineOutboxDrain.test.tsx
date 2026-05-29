@@ -170,3 +170,48 @@ it('does not treat user id zero as a missing scope', async () => {
     )
   })
 })
+
+it('drains again through the lock when the request signal changes', async () => {
+  const onAuthRejected = vi.fn()
+  const onDrainOutcome = vi.fn()
+  const onSendSucceeded = vi.fn()
+
+  drainOfflineTextOutboxMock.mockResolvedValue('drained')
+
+  const { rerender } = renderHook(
+    ({ drainRequestSignal }) =>
+      useOfflineOutboxDrain({
+        drainRequestSignal,
+        enabled: true,
+        onAuthRejected,
+        onDrainOutcome,
+        onSendSucceeded,
+        tenantSlug: 'buhfirma',
+        userId: 7,
+      }),
+    {
+      initialProps: {
+        drainRequestSignal: 0,
+      },
+    },
+  )
+
+  await waitFor(() => {
+    expect(withOutboxDrainLockMock).toHaveBeenCalledTimes(1)
+  })
+
+  rerender({ drainRequestSignal: 1 })
+
+  await waitFor(() => {
+    expect(withOutboxDrainLockMock).toHaveBeenCalledTimes(2)
+  })
+  expect(drainOfflineTextOutboxMock).toHaveBeenCalledTimes(2)
+  expect(drainOfflineTextOutboxMock).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      onDrainOutcome,
+      onSendSucceeded,
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    }),
+  )
+})

@@ -3,24 +3,30 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type MutableRefObject,
   type SetStateAction,
 } from 'react'
 
-import { sendChatMessage } from '../api/chatClient'
+import { offlineOutboxStore } from '../../offline/offlineOutboxStore'
+import { isOfflineStorageQuotaError } from '../../offline/storagePersistence'
+import type { OfflineTextOutboxRecord } from '../../offline/types'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
 import {
   createOptimisticTextSend,
   type OptimisticTextSend,
 } from '../lib/optimisticTextMessages'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
+import type { ChatSendResult } from '../types'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   type ChatPageState,
 } from './chatPageState'
 
-const DEFAULT_TEXT_SEND_ERROR_MESSAGE =
-  'Не удалось отправить сообщение. Попробуйте еще раз.'
+const OUTBOX_WRITE_ERROR_MESSAGE =
+  'Не удалось сохранить сообщение на этом устройстве. Попробуйте позже.'
+const OUTBOX_QUOTA_ERROR_MESSAGE =
+  'На устройстве мало места. Освободите место и попробуйте еще раз.'
+const OFFLINE_QUEUE_STORAGE_UNAVAILABLE_MESSAGE =
+  'На устройстве недостаточно места для офлайн-отправки сообщений.'
 
 type TextSendInput = {
   clientMessageKey: string
@@ -29,166 +35,184 @@ type TextSendInput = {
 }
 
 type UseOptimisticTextSendInput = {
-  handleConnectionUnavailableError: (error: unknown) => boolean
-  handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
+  canUseOfflineTextQueue: boolean
   isBrowserOnline: boolean
-  isMountedRef: MutableRefObject<boolean>
-  markBrowserOnline: () => void
+  onOutboxRecordQueued?: () => void
   onTextSendStarted?: () => void
   pageState: ChatPageState
   replyTarget: MessageComposerReplyTarget | null
   setPageState: Dispatch<SetStateAction<ChatPageState>>
+  setSendErrorMessage: Dispatch<SetStateAction<string | null>>
+  tenantSlug: string | null
+  threadId: string
+  userId: number | null
+}
+
+type OutboxSendSucceededEvent = {
+  record: OfflineTextOutboxRecord
+  sendResult: ChatSendResult
+}
+
+type HydrateOptimisticTextSendsFromOutboxInput = {
+  records: OfflineTextOutboxRecord[]
+  requestedAt: Date
   threadId: string
 }
 
-function getTextSendErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : DEFAULT_TEXT_SEND_ERROR_MESSAGE
+function toOptimisticTextSendFromOutboxRecord(
+  record: OfflineTextOutboxRecord,
+  index: number,
+): OptimisticTextSend {
+  return {
+    clientMessageKey: record.clientMessageKey,
+    content: record.content,
+    createdAt: record.createdAt,
+    errorMessage: record.errorMessage,
+    id: -1_000_000 - index,
+    replyTo: record.replyTo,
+    replyToMessageId: record.replyToMessageId,
+    status: record.status,
+    threadId: record.threadId,
+  }
 }
 
 export function useOptimisticTextSend({
-  handleConnectionUnavailableError,
-  handleUnauthorizedChatError,
+  canUseOfflineTextQueue,
   isBrowserOnline,
-  isMountedRef,
-  markBrowserOnline,
+  onOutboxRecordQueued,
   onTextSendStarted,
   pageState,
   replyTarget,
   setPageState,
+  setSendErrorMessage,
+  tenantSlug,
   threadId,
+  userId,
 }: UseOptimisticTextSendInput) {
   const optimisticMessageIdRef = useRef(-1)
   const [optimisticTextSends, setOptimisticTextSends] = useState<
     OptimisticTextSend[]
   >([])
 
-  const markOptimisticTextSendFailed = useCallback(
-    (clientMessageKey: string, threadId: string, errorMessage: string) => {
-      setOptimisticTextSends((currentSends) =>
-        currentSends.map((send) =>
-          send.clientMessageKey === clientMessageKey &&
-          send.threadId === threadId
-            ? {
-                ...send,
-                errorMessage,
-                status: 'failed',
-              }
-            : send,
-        ),
-      )
+  const hydrateOptimisticTextSendsFromOutbox = useCallback(
+    ({
+      records,
+      requestedAt,
+      threadId: hydratedThreadId,
+    }: HydrateOptimisticTextSendsFromOutboxInput) => {
+      setOptimisticTextSends((currentSends) => {
+        const hydratedSends = records.map(toOptimisticTextSendFromOutboxRecord)
+        const hydratedKeys = new Set(
+          hydratedSends.map(
+            (send) => `${send.threadId}:${send.clientMessageKey}`,
+          ),
+        )
+        const requestedAtMs = requestedAt.getTime()
+        const preservedSends = currentSends.filter((send) => {
+          if (send.threadId !== hydratedThreadId) {
+            return true
+          }
+
+          if (hydratedKeys.has(`${send.threadId}:${send.clientMessageKey}`)) {
+            return false
+          }
+
+          const createdAtMs = new Date(send.createdAt).getTime()
+
+          return !Number.isFinite(createdAtMs) || createdAtMs >= requestedAtMs
+        })
+
+        return [...preservedSends, ...hydratedSends]
+      })
     },
     [],
   )
 
-  const sendOptimisticText = useCallback(
-    async (optimisticSend: OptimisticTextSend) => {
-      try {
-        const sendResult = await sendChatMessage({
-          clientMessageKey: optimisticSend.clientMessageKey,
-          content: optimisticSend.content,
-          replyToMessageId: optimisticSend.replyToMessageId,
-          threadId: optimisticSend.threadId,
-        })
-
-        if (!isMountedRef.current) {
-          return false
+  const handleOutboxSendSucceeded = useCallback(
+    ({ record, sendResult }: OutboxSendSucceededEvent) => {
+      setOptimisticTextSends((currentSends) =>
+        currentSends.filter(
+          (send) =>
+            send.clientMessageKey !== record.clientMessageKey ||
+            send.threadId !== record.threadId,
+        ),
+      )
+      setPageState((currentState) => {
+        if (currentState.selectedThreadId !== record.threadId) {
+          return currentState
         }
 
-        if (sendResult.result !== 'ready' || !sendResult.sentMessage) {
-          markOptimisticTextSendFailed(
-            optimisticSend.clientMessageKey,
-            optimisticSend.threadId,
-            DEFAULT_TEXT_SEND_ERROR_MESSAGE,
-          )
-          return false
+        const currentSnapshot =
+          currentState.status === 'ready' ? currentState.snapshot : null
+
+        return {
+          ...ONLINE_CHAT_PAGE_CACHE_STATE,
+          snapshot: buildSnapshotFromSendResult({
+            currentSnapshot,
+            sendResult,
+          }),
+          selectedThreadId: currentState.selectedThreadId,
+          status: 'ready',
+          threads: currentState.threads,
         }
-
-        if (sendResult.activeThread?.id !== optimisticSend.threadId) {
-          markOptimisticTextSendFailed(
-            optimisticSend.clientMessageKey,
-            optimisticSend.threadId,
-            DEFAULT_TEXT_SEND_ERROR_MESSAGE,
-          )
-          return false
-        }
-
-        markBrowserOnline()
-        setOptimisticTextSends((currentSends) =>
-          currentSends.filter(
-            (send) =>
-              send.clientMessageKey !== optimisticSend.clientMessageKey ||
-              send.threadId !== optimisticSend.threadId,
-          ),
-        )
-        setPageState((currentState) => {
-          if (currentState.selectedThreadId !== optimisticSend.threadId) {
-            return currentState
-          }
-
-          const currentSnapshot =
-            currentState.status === 'ready' ? currentState.snapshot : null
-
-          return {
-            ...ONLINE_CHAT_PAGE_CACHE_STATE,
-            snapshot: buildSnapshotFromSendResult({
-              currentSnapshot,
-              sendResult,
-            }),
-            selectedThreadId: currentState.selectedThreadId,
-            status: 'ready',
-            threads: currentState.threads,
-          }
-        })
-
-        return true
-      } catch (error) {
-        if (!isMountedRef.current) {
-          return false
-        }
-
-        if (await handleUnauthorizedChatError(error)) {
-          return false
-        }
-
-        handleConnectionUnavailableError(error)
-        markOptimisticTextSendFailed(
-          optimisticSend.clientMessageKey,
-          optimisticSend.threadId,
-          getTextSendErrorMessage(error),
-        )
-
-        return false
-      }
+      })
     },
-    [
-      handleConnectionUnavailableError,
-      handleUnauthorizedChatError,
-      isMountedRef,
-      markBrowserOnline,
-      markOptimisticTextSendFailed,
-      setPageState,
-    ],
+    [setPageState],
   )
 
   const handleSendMessage = useCallback(
     async ({ clientMessageKey, content, replyToMessageId }: TextSendInput) => {
-      if (!isBrowserOnline || pageState.status !== 'ready') {
+      if (tenantSlug === null || userId === null || pageState.status !== 'ready') {
         return false
       }
 
+      if (!isBrowserOnline && !canUseOfflineTextQueue) {
+        setSendErrorMessage(OFFLINE_QUEUE_STORAGE_UNAVAILABLE_MESSAGE)
+        return false
+      }
+
+      const now = new Date()
       const optimisticSend = createOptimisticTextSend({
         clientMessageKey,
         content,
         id: optimisticMessageIdRef.current,
-        now: new Date(),
+        now,
         replyTarget,
         replyToMessageId: replyToMessageId ?? null,
+        status: isBrowserOnline ? 'sending' : 'queued',
         threadId,
       })
 
-      onTextSendStarted?.()
+      try {
+        await offlineOutboxStore.saveOutboxRecord({
+          attemptCount: 0,
+          clientMessageKey,
+          content,
+          createdAt: now.toISOString(),
+          errorCode: null,
+          errorMessage: null,
+          lastAttemptAt: null,
+          nextAttemptAt: null,
+          replyTo: optimisticSend.replyTo,
+          replyToMessageId: replyToMessageId ?? null,
+          sendOwnerId: null,
+          sendingLeaseExpiresAt: null,
+          sendingStartedAt: null,
+          status: 'queued',
+          tenantSlug,
+          threadId,
+          updatedAt: now.toISOString(),
+          userId,
+        })
+      } catch (error) {
+        setSendErrorMessage(
+          isOfflineStorageQuotaError(error)
+            ? OUTBOX_QUOTA_ERROR_MESSAGE
+            : OUTBOX_WRITE_ERROR_MESSAGE,
+        )
+        return false
+      }
+
       optimisticMessageIdRef.current -= 1
       setOptimisticTextSends((currentSends) => [
         ...currentSends.filter(
@@ -198,24 +222,28 @@ export function useOptimisticTextSend({
         ),
         optimisticSend,
       ])
-
-      void sendOptimisticText(optimisticSend)
+      onTextSendStarted?.()
+      onOutboxRecordQueued?.()
 
       return true
     },
     [
+      canUseOfflineTextQueue,
       isBrowserOnline,
+      onOutboxRecordQueued,
       onTextSendStarted,
       pageState,
       replyTarget,
-      sendOptimisticText,
+      setSendErrorMessage,
+      tenantSlug,
       threadId,
+      userId,
     ],
   )
 
   const handleRetryTextMessage = useCallback(
-    (clientMessageKey: string) => {
-      if (!isBrowserOnline) {
+    async (clientMessageKey: string) => {
+      if (!isBrowserOnline || tenantSlug === null || userId === null) {
         return
       }
 
@@ -225,32 +253,59 @@ export function useOptimisticTextSend({
           send.threadId === threadId,
       )
 
-      if (!optimisticSend || optimisticSend.status === 'sending') {
+      if (!optimisticSend || optimisticSend.status !== 'failed') {
         return
       }
 
-      const retrySend = {
-        ...optimisticSend,
-        errorMessage: null,
-        status: 'sending' as const,
-      }
+      try {
+        const retryRecord = await offlineOutboxStore.retryFailedOutboxRecord({
+          clientMessageKey,
+          tenantSlug,
+          threadId,
+          userId,
+        })
 
-      setOptimisticTextSends((currentSends) =>
-        currentSends.map((send) =>
-          send.clientMessageKey === clientMessageKey &&
-          send.threadId === threadId
-            ? retrySend
-            : send,
-        ),
-      )
-      void sendOptimisticText(retrySend)
+        if (!retryRecord) {
+          return
+        }
+
+        setOptimisticTextSends((currentSends) =>
+          currentSends.map((send) =>
+            send.clientMessageKey === clientMessageKey &&
+            send.threadId === threadId
+              ? {
+                  ...send,
+                  errorMessage: null,
+                  status: 'sending',
+                }
+              : send,
+          ),
+        )
+        onOutboxRecordQueued?.()
+      } catch (error) {
+        setSendErrorMessage(
+          isOfflineStorageQuotaError(error)
+            ? OUTBOX_QUOTA_ERROR_MESSAGE
+            : OUTBOX_WRITE_ERROR_MESSAGE,
+        )
+      }
     },
-    [isBrowserOnline, optimisticTextSends, sendOptimisticText, threadId],
+    [
+      isBrowserOnline,
+      onOutboxRecordQueued,
+      optimisticTextSends,
+      setSendErrorMessage,
+      tenantSlug,
+      threadId,
+      userId,
+    ],
   )
 
   return {
+    handleOutboxSendSucceeded,
     handleRetryTextMessage,
     handleSendMessage,
+    hydrateOptimisticTextSendsFromOutbox,
     optimisticTextSends,
   }
 }

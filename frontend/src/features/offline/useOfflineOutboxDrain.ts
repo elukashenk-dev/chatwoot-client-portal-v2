@@ -12,6 +12,7 @@ type OutboxDrainSuccessEvent = {
 }
 
 export function useOfflineOutboxDrain({
+  drainRequestSignal = 0,
   enabled,
   onAuthRejected,
   onDrainOutcome,
@@ -19,6 +20,7 @@ export function useOfflineOutboxDrain({
   tenantSlug,
   userId,
 }: {
+  drainRequestSignal?: number
   enabled: boolean
   onAuthRejected: () => void | Promise<void>
   onDrainOutcome?: (event: DrainOutcomeEvent) => void | Promise<void>
@@ -83,6 +85,7 @@ export function useOfflineOutboxDrain({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [
+    drainRequestSignal,
     enabled,
     onAuthRejected,
     onDrainOutcome,

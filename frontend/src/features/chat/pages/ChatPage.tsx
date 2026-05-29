@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 
 import { ChatApiClientError } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
@@ -7,23 +7,20 @@ import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
-import {
-  MessageComposer,
-  type MessageComposerReplyTarget,
-} from '../components/MessageComposer'
-import {
-  isFirstConversationBootstrapReady,
-  toComposerReplyTarget,
-} from '../lib/chatSnapshot'
+import type { MessageComposerReplyTarget } from '../components/MessageComposer'
+import { isFirstConversationBootstrapReady, toComposerReplyTarget } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { clearAppIconBadge } from '../../../pwa/serviceWorkerRuntime'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
+import { ChatComposerDock } from './ChatComposerDock'
 import { INITIAL_CHAT_PAGE_STATE, type ChatPageState } from './chatPageState'
 import { useChatAttachmentSend } from './useChatAttachmentSend'
+import { useChatOutboxDrainIntegration } from './useChatOutboxDrainIntegration'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
@@ -39,27 +36,20 @@ import { useChatThreadSelection } from './useChatThreadSelection'
 import { useOfflineChatCachePersistence } from './useOfflineChatCachePersistence'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
-const OFFLINE_RUNTIME_MESSAGE =
-  'Нет соединения. Новые сообщения временно не обновляются, а отправка отключена.'
-
 export function ChatPage() {
   const isMountedRef = useRef(false)
   const { tenant } = useTenantIdentity()
-  const { refreshSession, user } = useAuthSession()
+  const { refreshSession, sessionSource, user } = useAuthSession()
   const [pageState, setPageState] = useState<ChatPageState>(
     INITIAL_CHAT_PAGE_STATE,
   )
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
-  const [unreadThreadIds, setUnreadThreadIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  )
-  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
-    null,
-  )
+  const [outboxDrainRequestSignal, requestOutboxDrain] = useReducer((value: number) => value + 1, 0)
+  const [unreadThreadIds, setUnreadThreadIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null)
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
-  const [replyTarget, setReplyTarget] =
-    useState<MessageComposerReplyTarget | null>(null)
+  const [replyTarget, setReplyTarget] = useState<MessageComposerReplyTarget | null>(null)
   const {
     isOnline: isBrowserOnline,
     markOffline: markBrowserOffline,
@@ -67,6 +57,11 @@ export function ChatPage() {
     navigatorHintIsOnline,
   } = useBrowserConnectionState()
   const isRealtimeSupported = typeof EventSource !== 'undefined'
+  const canUseOfflineTextQueue = useOfflineTextQueueAvailability({
+    sessionSource,
+    tenantSlug,
+    userId,
+  })
 
   const handleUnauthorizedChatError = useCallback(
     async (error: unknown) => {
@@ -255,21 +250,26 @@ export function ChatPage() {
 
   const isReady = snapshot?.result === 'ready' && Boolean(snapshot.activeThread)
   const canSend =
+    tenantSlug !== null &&
+    userId !== null &&
     pageState.status === 'ready' &&
-    !pageState.isUsingCachedData &&
     Boolean(pageState.selectedThreadId) &&
     (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
   const shouldRenderTranscript =
     pageState.status === 'ready' &&
     (pageState.snapshot.result === 'ready' ||
       isFirstConversationBootstrapReady(pageState.snapshot))
-  const { handleRetryTextMessage, handleSendMessage, optimisticTextSends } =
+  const {
+    handleOutboxSendSucceeded,
+    handleRetryTextMessage,
+    handleSendMessage,
+    hydrateOptimisticTextSendsFromOutbox,
+    optimisticTextSends,
+  } =
     useOptimisticTextSend({
-      handleConnectionUnavailableError,
-      handleUnauthorizedChatError,
+      canUseOfflineTextQueue,
       isBrowserOnline,
-      isMountedRef,
-      markBrowserOnline,
+      onOutboxRecordQueued: requestOutboxDrain,
       onTextSendStarted: () => {
         clearHistoryFragment()
         clearSendError()
@@ -277,8 +277,22 @@ export function ChatPage() {
       pageState,
       replyTarget,
       setPageState,
+      setSendErrorMessage,
+      tenantSlug,
       threadId: pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID,
+      userId,
     })
+
+  useChatOutboxDrainIntegration({
+    drainRequestSignal: outboxDrainRequestSignal,
+    handleOutboxSendSucceeded,
+    hydrateOptimisticTextSendsFromOutbox,
+    isBrowserOnline,
+    pageState,
+    refreshSession,
+    tenantSlug,
+    userId,
+  })
   const visibleMessages =
     pageState.status === 'ready' && pageState.selectedThreadId
       ? mergeOptimisticTextMessages({
@@ -478,17 +492,17 @@ export function ChatPage() {
           />
         ) : null}
 
-        <MessageComposer
-          disabled={!canSend || !isBrowserOnline}
-          errorMessage={sendErrorMessage}
+        <ChatComposerDock
+          canSend={canSend}
+          handleSendAttachment={handleSendAttachment}
+          handleSendMessage={handleSendMessage}
+          isBrowserOnline={isBrowserOnline}
           isSending={isSending}
-          offlineAlertMessage={isBrowserOnline ? null : OFFLINE_RUNTIME_MESSAGE}
           onCancelReply={() => {
             setReplyTarget(null)
           }}
-          onSend={handleSendMessage}
-          onSendAttachment={handleSendAttachment}
           replyTarget={replyTarget}
+          sendErrorMessage={sendErrorMessage}
         />
       </div>
       <ChatAuxiliaryPages

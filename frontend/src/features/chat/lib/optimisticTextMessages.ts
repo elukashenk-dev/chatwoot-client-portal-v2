@@ -4,7 +4,7 @@ import type {
 } from '../types'
 import type { MessageComposerReplyTarget } from '../components/message-composer/types'
 
-export type OptimisticTextSendStatus = 'failed' | 'sending'
+export type OptimisticTextSendStatus = 'failed' | 'queued' | 'sending'
 
 export type OptimisticTextSend = {
   clientMessageKey: string
@@ -25,6 +25,7 @@ export type CreateOptimisticTextSendInput = {
   now: Date
   replyTarget: MessageComposerReplyTarget | null
   replyToMessageId: number | null
+  status?: OptimisticTextSendStatus
   threadId: string
 }
 
@@ -35,6 +36,7 @@ export function createOptimisticTextSend({
   now,
   replyTarget,
   replyToMessageId,
+  status = 'sending',
   threadId,
 }: CreateOptimisticTextSendInput): OptimisticTextSend {
   return {
@@ -54,7 +56,7 @@ export function createOptimisticTextSend({
           }
         : null,
     replyToMessageId,
-    status: 'sending',
+    status,
     threadId,
   }
 }

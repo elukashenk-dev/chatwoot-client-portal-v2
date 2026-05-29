@@ -1,8 +1,46 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { MessageComposer } from './MessageComposer'
+import {
+  MessageComposer,
+  type MessageComposerReplyTarget,
+} from './MessageComposer'
+
+const voiceRecorderState = vi.hoisted(() => ({
+  cancelVoiceRecording: vi.fn(),
+  clearErrorMessage: vi.fn(),
+  errorMessage: null as string | null,
+  finishVoiceRecording: vi.fn(),
+  lastOptions: null as null | {
+    canStartRecording: boolean
+    onSendVoiceAttachment: (file: File) => Promise<boolean>
+  },
+  recordingElapsedMs: 0,
+  startVoiceRecording: vi.fn(),
+  status: 'idle',
+}))
+
+vi.mock('./message-composer/useVoiceRecorder', () => ({
+  useVoiceRecorder: vi.fn(
+    (options: {
+      canStartRecording: boolean
+      onSendVoiceAttachment: (file: File) => Promise<boolean>
+    }) => {
+      voiceRecorderState.lastOptions = options
+
+      return {
+        cancelVoiceRecording: voiceRecorderState.cancelVoiceRecording,
+        clearErrorMessage: voiceRecorderState.clearErrorMessage,
+        errorMessage: voiceRecorderState.errorMessage,
+        finishVoiceRecording: voiceRecorderState.finishVoiceRecording,
+        recordingElapsedMs: voiceRecorderState.recordingElapsedMs,
+        startVoiceRecording: voiceRecorderState.startVoiceRecording,
+        status: voiceRecorderState.status,
+      }
+    },
+  ),
+}))
 
 function renderComposer() {
   return render(
@@ -33,7 +71,30 @@ function getSideControl(
   return sideControl
 }
 
+function createDeferredValue<TValue>() {
+  let resolveValue!: (value: TValue) => void
+  const promise = new Promise<TValue>((resolve) => {
+    resolveValue = resolve
+  })
+
+  return {
+    promise,
+    resolve: resolveValue,
+  }
+}
+
 describe('MessageComposer', () => {
+  afterEach(() => {
+    voiceRecorderState.cancelVoiceRecording.mockReset()
+    voiceRecorderState.clearErrorMessage.mockReset()
+    voiceRecorderState.errorMessage = null
+    voiceRecorderState.finishVoiceRecording.mockReset()
+    voiceRecorderState.lastOptions = null
+    voiceRecorderState.recordingElapsedMs = 0
+    voiceRecorderState.startVoiceRecording.mockReset()
+    voiceRecorderState.status = 'idle'
+  })
+
   it('renders the primary input row without an extra bordered surface wrapper', () => {
     renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
@@ -143,5 +204,167 @@ describe('MessageComposer', () => {
     expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
     expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+  })
+
+  it('keeps draft and reply target when text outbox write fails', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn(async () => false)
+    const onCancelReply = vi.fn()
+    const replyTarget = {
+      attachmentName: null,
+      authorName: 'Поддержка',
+      content: 'Предыдущее сообщение',
+      direction: 'incoming',
+      id: 77,
+    } satisfies MessageComposerReplyTarget
+
+    render(
+      <MessageComposer
+        disabled={false}
+        errorMessage="Не удалось сохранить сообщение на этом устройстве."
+        isSending={false}
+        onCancelReply={onCancelReply}
+        onSend={onSend}
+        onSendAttachment={vi.fn(async () => true)}
+        replyTarget={replyTarget}
+      />,
+    )
+
+    await user.type(screen.getByRole('textbox', { name: 'Сообщение' }), 'Offline')
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    expect(screen.getByRole('textbox', { name: 'Сообщение' })).toHaveValue(
+      'Offline',
+    )
+    expect(screen.getByText('Предыдущее сообщение')).toBeInTheDocument()
+    expect(onCancelReply).not.toHaveBeenCalled()
+  })
+
+  it('prevents duplicate text submits while text acceptance is pending', async () => {
+    const user = userEvent.setup()
+    const sendAcceptance = createDeferredValue<boolean>()
+    const onSend = vi.fn(() => sendAcceptance.promise)
+
+    render(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={onSend}
+        onSendAttachment={vi.fn(async () => true)}
+        replyTarget={null}
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const sendButton = screen.getByRole('button', { name: 'Отправить' })
+
+    await user.type(textarea, 'Slow write')
+    await user.click(sendButton)
+
+    await waitFor(() => {
+      expect(sendButton).toBeDisabled()
+    })
+    await user.click(sendButton)
+    expect(onSend).toHaveBeenCalledTimes(1)
+
+    sendAcceptance.resolve(true)
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('')
+    })
+  })
+
+  it('does not submit an already selected attachment after attachment send is disabled', async () => {
+    const user = userEvent.setup()
+    const onSendAttachment = vi.fn(async () => true)
+    const attachment = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+
+    const { rerender } = render(
+      <MessageComposer
+        attachmentDisabled={false}
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={vi.fn(async () => true)}
+        onSendAttachment={onSendAttachment}
+        replyTarget={null}
+      />,
+    )
+
+    await user.upload(screen.getByLabelText('Файл вложения'), attachment)
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
+
+    rerender(
+      <MessageComposer
+        attachmentDisabled
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={vi.fn(async () => true)}
+        onSendAttachment={onSendAttachment}
+        replyTarget={null}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachment).not.toHaveBeenCalled()
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
+  })
+
+  it('does not submit a pending voice recording after voice send is disabled', async () => {
+    const user = userEvent.setup()
+    const onSendAttachment = vi.fn(async () => true)
+    const replyTarget = {
+      attachmentName: null,
+      authorName: 'Поддержка',
+      content: 'Голосом нельзя без сети',
+      direction: 'incoming',
+      id: 88,
+    } satisfies MessageComposerReplyTarget
+
+    voiceRecorderState.status = 'recording'
+    voiceRecorderState.finishVoiceRecording.mockImplementation(() => {
+      void voiceRecorderState.lastOptions?.onSendVoiceAttachment(
+        new File(['voice'], 'voice.webm', { type: 'audio/webm' }),
+      )
+    })
+
+    const { rerender } = render(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={vi.fn(async () => true)}
+        onSendAttachment={onSendAttachment}
+        replyTarget={replyTarget}
+        voiceDisabled={false}
+      />,
+    )
+
+    rerender(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={vi.fn(async () => true)}
+        onSendAttachment={onSendAttachment}
+        replyTarget={replyTarget}
+        voiceDisabled
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Отправить голосовое' }))
+
+    expect(onSendAttachment).not.toHaveBeenCalled()
+    expect(screen.getByText('Голосом нельзя без сети')).toBeInTheDocument()
   })
 })

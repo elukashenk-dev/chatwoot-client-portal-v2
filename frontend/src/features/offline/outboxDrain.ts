@@ -120,6 +120,17 @@ async function emitDrainOutcome(
   }
 }
 
+function isSendResultForOutboxRecord(
+  result: ChatSendResult,
+  record: OfflineTextOutboxRecord,
+) {
+  return (
+    result.result === 'ready' &&
+    result.sentMessage?.clientMessageKey === record.clientMessageKey &&
+    result.activeThread?.id === record.threadId
+  )
+}
+
 export async function drainOfflineTextOutbox({
   now = () => new Date(),
   onDrainOutcome,
@@ -159,7 +170,7 @@ export async function drainOfflineTextOutbox({
         threadId: record.threadId,
       })
 
-      if (result.result === 'ready' && result.sentMessage) {
+      if (isSendResultForOutboxRecord(result, sendingRecord)) {
         try {
           await offlineOutboxStore.deleteOutboxRecord(sendingRecord)
         } catch {

@@ -65,7 +65,9 @@ function isLocalTextSend(message: ChatMessage) {
     message.authorRole === 'current_user' &&
     message.attachments.length === 0 &&
     Boolean(message.clientMessageKey) &&
-    (message.status === 'sending' || message.status === 'failed')
+    (message.status === 'queued' ||
+      message.status === 'sending' ||
+      message.status === 'failed')
   )
 }
 
@@ -81,6 +83,14 @@ function AgentNameHeader({ message }: { message: ChatMessage }) {
 }
 
 function MessageStatusIcon({ message }: { message: ChatMessage }) {
+  if (message.status === 'queued') {
+    return (
+      <span aria-label="В очереди" data-message-status-icon="queued">
+        <ClockIcon className="h-3 w-3 shrink-0" />
+      </span>
+    )
+  }
+
   if (message.status === 'sending') {
     return (
       <span aria-label="Отправляется" data-message-status-icon="sending">

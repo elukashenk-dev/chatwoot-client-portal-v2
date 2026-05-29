@@ -59,20 +59,39 @@ async function putRawRecord(
   }
 }
 
-function createSendResult(content = 'Queued text'): ChatSendResult {
+function createSendResult({
+  activeThreadId = 'private:me',
+  clientMessageKey = 'portal-send:abc',
+  content = 'Queued text',
+}: {
+  activeThreadId?: 'private:me' | `group:${number}`
+  clientMessageKey?: string
+  content?: string
+} = {}): ChatSendResult {
+  const activeThread =
+    activeThreadId === 'private:me'
+      ? {
+          id: activeThreadId,
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private' as const,
+        }
+      : {
+          id: activeThreadId,
+          subtitle: 'Групповой чат',
+          title: 'Другой чат',
+          type: 'group' as const,
+        }
+
   return {
-    activeThread: {
-      id: 'private:me',
-      subtitle: 'Вы и поддержка',
-      title: 'Личный чат',
-      type: 'private',
-    },
+    activeThread,
     reason: 'none',
     result: 'ready',
     sentMessage: {
       attachments: [],
       authorName: 'Вы',
       authorRole: 'current_user',
+      clientMessageKey,
       content,
       contentType: 'text',
       createdAt: '2026-05-27T10:00:01.000Z',
@@ -352,6 +371,67 @@ it('sends queued records with the original clientMessageKey, deletes them and em
   expect(outcome).not.toHaveProperty('replyTo')
 })
 
+it('keeps a record queued when a nominally successful ack belongs to another client message key', async () => {
+  const record = createQueuedOutboxRecord()
+  const onDrainOutcome = vi.fn()
+  const onSendSucceeded = vi.fn()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+  sendChatMessageMock.mockResolvedValueOnce(
+    createSendResult({ clientMessageKey: 'portal-send:other' }),
+  )
+
+  await drainOfflineTextOutbox({
+    now: () => new Date('2026-05-27T10:00:01.000Z'),
+    onDrainOutcome,
+    onSendSucceeded,
+    sendChatMessage: sendChatMessageMock,
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord(record),
+  ).resolves.toMatchObject({
+    errorMessage: 'Не удалось отправить сообщение.',
+    status: 'queued',
+  })
+  expect(onSendSucceeded).not.toHaveBeenCalled()
+  expect(onDrainOutcome).toHaveBeenCalledWith({
+    category: 'network_retry',
+    clientMessageKey: 'portal-send:abc',
+    tenantSlug: 'buhfirma',
+    threadId: 'private:me',
+    userId: 7,
+  })
+})
+
+it('keeps a record queued when a nominally successful ack belongs to another thread', async () => {
+  const record = createQueuedOutboxRecord()
+  const onSendSucceeded = vi.fn()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+  sendChatMessageMock.mockResolvedValueOnce(
+    createSendResult({ activeThreadId: 'group:42' }),
+  )
+
+  await drainOfflineTextOutbox({
+    now: () => new Date('2026-05-27T10:00:01.000Z'),
+    onSendSucceeded,
+    sendChatMessage: sendChatMessageMock,
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord(record),
+  ).resolves.toMatchObject({
+    errorMessage: 'Не удалось отправить сообщение.',
+    status: 'queued',
+  })
+  expect(onSendSucceeded).not.toHaveBeenCalled()
+})
+
 it('does not requeue a sent record when success callback fails', async () => {
   const record = createQueuedOutboxRecord()
 
@@ -605,7 +685,9 @@ it('retries expired sending leases with the original clientMessageKey', async ()
   })
 
   await offlineOutboxStore.saveOutboxRecord(record)
-  sendChatMessageMock.mockResolvedValueOnce(createSendResult())
+  sendChatMessageMock.mockResolvedValueOnce(
+    createSendResult({ clientMessageKey: 'portal-send:stale' }),
+  )
 
   await drainOfflineTextOutbox({
     now: () => new Date('2026-05-27T10:00:01.000Z'),

@@ -312,6 +312,23 @@ describe('ChatTranscript', () => {
     expect(audio).toHaveAttribute('controls')
   })
 
+  it('renders queued local text sends with an accessible status label', () => {
+    renderTranscript([
+      createMessage({
+        clientMessageKey: 'portal-send:queued',
+        content: 'Сообщение без сети',
+        id: -1000,
+        status: 'queued',
+      }),
+    ])
+
+    expect(screen.getByText('Сообщение без сети')).toBeInTheDocument()
+    expect(screen.getByLabelText('В очереди')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Действия с сообщением/ }),
+    ).not.toBeInTheDocument()
+  })
+
   it('opens a desktop context menu for reply actions', () => {
     const onReplyToMessage = vi.fn()
     const { container } = renderTranscript(
