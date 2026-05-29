@@ -175,6 +175,10 @@
 - Chatwoot webhook callback surface сужен до одного canonical route
   `/api/chatwoot/webhooks`; совместимый
   `/api/integrations/chatwoot/webhooks/account` больше не обслуживается.
+- Production deploy Unified Connection Notice выполнен на `lk.provgroup.ru` из
+  clean commit `bfeae36`; automated production-origin PWA smoke подтвердил
+  stamped service worker, offline launch с сохраненным чатом и один unified
+  notice для offline/outbox state.
 
 ## Current Baseline
 
@@ -193,6 +197,5 @@
 
 ## Recommended Next Step
 
-- Checkpoint commit Unified Connection Notice, deploy it to `lk.provgroup.ru`,
-  then repeat poor-connection/offline Installed PWA Smoke on real Android Chrome
-  and iOS/iPadOS Home Screen devices before continuing offline/PWA follow-ups.
+- Repeat poor-connection/offline Installed PWA Smoke on real Android Chrome and
+  iOS/iPadOS Home Screen devices, then continue offline/PWA follow-ups.
