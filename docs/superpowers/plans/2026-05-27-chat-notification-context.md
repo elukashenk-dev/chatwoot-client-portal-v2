@@ -14,8 +14,9 @@
 
 - Branch: `feature/chat-notifications`.
 - Approved spec: `docs/superpowers/specs/2026-05-27-chat-notification-context-design.md`.
-- Existing related finding: `docs/findings/F-TEST-001-backend-suite-pglite-migration-cost.md`.
-- Because of `F-TEST-001`, full backend suite is not a routine local gate for this slice. Use targeted backend tests plus targeted frontend/SW tests.
+- Historical note: `F-TEST-001` was closed after this slice by caching a
+  migrated PGlite template for backend tests, so the full backend suite is again
+  suitable as a routine backend regression gate.
 - Project rule: do not commit each task. Do one checkpoint commit after implementation, review, fixes, targeted checks, and required tests are complete.
 
 Run before implementation:
