@@ -197,6 +197,9 @@
   `AppStartupScreen` появляется только после короткой задержки и, если уже
   показан, держится минимальное стабильное время; fast startup сразу открывает
   чат или auth-экран без второго мелькнувшего загрузочного экрана.
+- Production deploy Startup anti-flicker gate выполнен на `lk.provgroup.ru` из
+  clean commit `68f428c`; post-deploy smoke подтвердил health, tenant manifest,
+  `/api/tenant`, root app shell и stamped `/sw.js` с новыми frontend assets.
 
 ## Current Baseline
 
@@ -215,5 +218,6 @@
 
 ## Recommended Next Step
 
-- Deploy Startup anti-flicker gate to production and run real-device smoke for
-  installed PWA launch on fast, slow and offline connection.
+- Run real-device smoke for installed PWA launch on fast, slow and offline
+  connection; confirm the startup screen is skipped on fast launches and stable
+  when shown on slow launches.
