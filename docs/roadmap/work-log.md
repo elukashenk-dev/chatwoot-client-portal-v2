@@ -190,6 +190,9 @@
   lazy route fallback и chat loading используют один brand-ready
   `AppStartupScreen`, чтобы после системного PWA splash не было смены разных
   загрузочных экранов.
+- Production deploy PWA startup continuity выполнен на `lk.provgroup.ru` из
+  clean commit `f75018b`; post-deploy smoke подтвердил health, tenant manifest,
+  `/api/tenant`, root app shell и stamped `/sw.js` с новыми frontend assets.
 
 ## Current Baseline
 
@@ -208,5 +211,5 @@
 
 ## Recommended Next Step
 
-- Deploy PWA startup continuity slice to production and run real-device smoke
-  for installed PWA launch on slow/offline connection.
+- Run real-device smoke for installed PWA launch on slow/offline connection and
+  confirm the startup screen no longer switches between different loading UIs.
