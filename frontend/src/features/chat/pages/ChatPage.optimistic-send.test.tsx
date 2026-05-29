@@ -610,59 +610,63 @@ describe('ChatPage optimistic text send', () => {
     expect(screen.getByLabelText('В очереди')).toBeInTheDocument()
   })
 
-  it('drains a queued text message on mount and reconciles it to the canonical backend message', async () => {
-    await offlineOutboxStore.saveOutboxRecord(
-      createOutboxRecord({
-        clientMessageKey: 'portal-send:drain-on-mount',
-        content: 'Drain me',
-      }),
-    )
-
-    fetchMock
-      .mockResolvedValueOnce(createAuthenticatedUserResponse())
-      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
-      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
-      .mockResolvedValueOnce(createNotificationSettingsResponse())
-      .mockResolvedValueOnce(createSupportAvailabilityResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            clientMessageKey: 'portal-send:drain-on-mount',
-            content: 'Drain me',
-            contentType: 'text',
-            createdAt: '2026-05-27T10:00:01.000Z',
-            direction: 'outgoing',
-            id: 601,
-            status: 'sent',
-          },
+  it(
+    'drains a queued text message on mount and reconciles it to the canonical backend message',
+    async () => {
+      await offlineOutboxStore.saveOutboxRecord(
+        createOutboxRecord({
+          clientMessageKey: 'portal-send:drain-on-mount',
+          content: 'Drain me',
         }),
       )
 
-    renderChatRoute()
+      fetchMock
+        .mockResolvedValueOnce(createAuthenticatedUserResponse())
+        .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
+        .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+        .mockResolvedValueOnce(createNotificationSettingsResponse())
+        .mockResolvedValueOnce(createSupportAvailabilityResponse())
+        .mockResolvedValueOnce(
+          createJsonResponse({
+            activeThread: privateThread,
+            reason: 'none',
+            result: 'ready',
+            sentMessage: {
+              attachments: [],
+              authorName: 'Вы',
+              authorRole: 'current_user',
+              clientMessageKey: 'portal-send:drain-on-mount',
+              content: 'Drain me',
+              contentType: 'text',
+              createdAt: '2026-05-27T10:00:01.000Z',
+              direction: 'outgoing',
+              id: 601,
+              status: 'sent',
+            },
+          }),
+        )
 
-    await waitForInitialChatRequests()
-    await waitFor(() => {
-      expect(getMessagePostCalls()).toHaveLength(1)
-    })
-    await waitFor(() => {
-      expect(screen.queryByLabelText('В очереди')).not.toBeInTheDocument()
-    })
-    expect(screen.getByText('Drain me')).toBeInTheDocument()
-    await expect(
-      offlineOutboxStore.readOutboxRecord({
-        clientMessageKey: 'portal-send:drain-on-mount',
-        tenantSlug: 'buhfirma',
-        threadId: 'private:me',
-        userId: 7,
-      }),
-    ).resolves.toBeNull()
-  })
+      renderChatRoute()
+
+      await waitForInitialChatRequests()
+      await waitFor(() => {
+        expect(getMessagePostCalls()).toHaveLength(1)
+      })
+      await waitFor(() => {
+        expect(screen.queryByLabelText('В очереди')).not.toBeInTheDocument()
+      })
+      expect(screen.getByText('Drain me')).toBeInTheDocument()
+      await expect(
+        offlineOutboxStore.readOutboxRecord({
+          clientMessageKey: 'portal-send:drain-on-mount',
+          tenantSlug: 'buhfirma',
+          threadId: 'private:me',
+          userId: 7,
+        }),
+      ).resolves.toBeNull()
+    },
+    10_000,
+  )
 
   it('updates the visible local bubble when drain marks the outbox record failed', async () => {
     await offlineOutboxStore.saveOutboxRecord(

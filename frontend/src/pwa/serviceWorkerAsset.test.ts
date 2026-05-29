@@ -328,11 +328,9 @@ describe('service worker push notifications', () => {
   })
 
   it('resets the local app icon badge count after a clear message', async () => {
-    const clearAppBadge = vi.fn(async () => undefined)
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
-        clearAppBadge,
         setAppBadge,
       },
     })
@@ -363,7 +361,6 @@ describe('service worker push notifications', () => {
       url: '/',
     })
 
-    expect(clearAppBadge).toHaveBeenCalledTimes(1)
     expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
     expect(setAppBadge).toHaveBeenNthCalledWith(2, 1)
   })

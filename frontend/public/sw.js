@@ -297,6 +297,8 @@ async function setAppIconBadge() {
 }
 
 async function resetAppIconBadge() {
+  // The foreground window clears the platform badge. The worker resets only
+  // its persisted fallback count so controlled pages can keep SW messaging on.
   await runAppBadgeMutation(async () => {
     fallbackAppBadgeCount = 0
 
@@ -304,19 +306,6 @@ async function resetAppIconBadge() {
       await writePersistedAppBadgeCount(0)
     } catch {
       // IndexedDB can be unavailable in some browser/service-worker states.
-    }
-
-    if (
-      typeof navigator === 'undefined' ||
-      typeof navigator.clearAppBadge !== 'function'
-    ) {
-      return
-    }
-
-    try {
-      await navigator.clearAppBadge()
-    } catch {
-      // App badge support and permission behavior differs by browser/platform.
     }
   })
 }

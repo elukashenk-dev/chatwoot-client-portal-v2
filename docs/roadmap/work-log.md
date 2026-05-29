@@ -161,6 +161,10 @@
   Vite manifest assets в app shell, отдает revision/status для runtime checks,
   не перехватывает `/api/*`, а push stale markers сохраняются и потребляются
   только в tenant/user/thread/message scope.
+- Offline-first PWA MVP реализован: установленный portal открывает сохраненные
+  tenant/auth/chat данные при плохой связи после предыдущего online входа,
+  текстовые сообщения ставятся в локальную durable outbox и доставляются после
+  восстановления соединения; backend остается единственной authority-зоной.
 
 ## Current Baseline
 
@@ -179,5 +183,7 @@
 
 ## Recommended Next Step
 
-- Продолжить Offline-first PWA MVP Slice 09:
-  `2026-05-27-offline-first-pwa-09-runtime-e2e-closure.md`.
+- Start SMS fallback gateway from the verified Offline-first PWA baseline:
+  run the SMSGate Private Server spike, then implement
+  `sms_fallback_metadata` caching and the native `sms:` emergency action for
+  `private:me`.
