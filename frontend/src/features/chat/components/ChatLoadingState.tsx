@@ -8,6 +8,7 @@ export function ChatLoadingState({ userName }: ChatLoadingStateProps) {
   return (
     <DeferredStartupScreen
       description="Подключаем переписку и последние сообщения."
+      mode="inline"
       showChatPreview
       statusLabel="Готовим чат"
       title="Открываем кабинет"
