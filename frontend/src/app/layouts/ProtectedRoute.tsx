@@ -3,6 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { routePaths } from '../routePaths'
 import { useAuthSession } from '../../features/auth/lib/authSessionContext'
 import { LocalDeviceDataRemoval } from '../../features/offline/LocalDeviceDataRemoval'
+import { useTenantIdentity } from '../../features/tenant/lib/useTenantIdentity'
+import { createStartupSurfaceBrand } from '../../features/tenant/startup/startupSurfaceBrand'
 import { useStartupSurfaceReport } from '../../features/tenant/startup/startupSurfaceContext'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
@@ -84,9 +86,11 @@ export function ProtectedRoute() {
     status,
     user,
   } = useAuthSession()
+  const { tenant } = useTenantIdentity()
 
   useStartupSurfaceReport({
     active: status === 'checking',
+    ...createStartupSurfaceBrand(tenant),
     description: 'Проверяем доступ и готовим защищенную зону.',
     phase: 'session',
     statusLabel: 'Проверяем сессию',

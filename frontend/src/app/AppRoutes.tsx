@@ -5,6 +5,8 @@ import { AppShellLayout } from './layouts/AppShellLayout'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
+import { useTenantIdentity } from '../features/tenant/lib/useTenantIdentity'
+import { createStartupSurfaceBrand } from '../features/tenant/startup/startupSurfaceBrand'
 import { useStartupSurfaceReport } from '../features/tenant/startup/startupSurfaceContext'
 
 function lazyRouteComponent<TProps extends object>(
@@ -63,8 +65,11 @@ const UserNotificationsPage = lazyRouteComponent(() =>
 )
 
 function RouteChunkStartupFallback() {
+  const { tenant } = useTenantIdentity()
+
   useStartupSurfaceReport({
     active: true,
+    ...createStartupSurfaceBrand(tenant),
     description: 'Загружаем экран.',
     phase: 'route',
     statusLabel: 'Загружаем экран',

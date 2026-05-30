@@ -214,11 +214,11 @@ describe('ChatPage', () => {
     })
 
     expect(
-      screen.getAllByRole('heading', { name: 'Добро пожаловать, Portal' }),
+      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
     ).toHaveLength(1)
     expect(
       screen
-        .getByRole('heading', { name: 'Добро пожаловать, Portal' })
+        .getByRole('heading', { name: 'Открываем кабинет' })
         .closest('.fixed'),
     ).toHaveClass('inset-0')
     expect(screen.getByText('Готовим чат')).toBeInTheDocument()

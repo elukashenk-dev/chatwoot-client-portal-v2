@@ -44,13 +44,13 @@ describe('ChatLoadingState', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: 'Добро пожаловать, Иван' }),
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Готовим чат')).toBeInTheDocument()
     expect(screen.getAllByRole('heading')).toHaveLength(1)
     expect(
       screen
-        .getByRole('heading', { name: 'Добро пожаловать, Иван' })
+        .getByRole('heading', { name: 'Открываем кабинет' })
         .closest('.fixed'),
     ).toHaveClass('inset-0')
   })

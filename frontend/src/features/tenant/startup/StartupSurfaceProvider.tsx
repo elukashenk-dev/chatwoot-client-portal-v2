@@ -39,6 +39,8 @@ function selectActiveReport(reports: Map<string, StartupSurfaceReport>) {
 
 function toScreenProps(report: StartupSurfaceReport): AppStartupScreenProps {
   return {
+    brandMonogram: report.brandMonogram,
+    brandName: report.brandName,
     description: report.description,
     mode: 'screen',
     showChatPreview: report.showChatPreview,
@@ -48,10 +50,15 @@ function toScreenProps(report: StartupSurfaceReport): AppStartupScreenProps {
   }
 }
 
+function dismissPreRootStartupSurface() {
+  document.getElementById('portal-pre-root-startup')?.remove()
+}
+
 export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState(
     new Map<string, StartupSurfaceReport>(),
   )
+  const [hasReceivedReport, setHasReceivedReport] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [canRelease, setCanRelease] = useState(false)
   const [visibleSurface, setVisibleSurface] =
@@ -60,6 +67,7 @@ export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
 
   const updateReport = useCallback(
     (id: string, report: StartupSurfaceReport) => {
+      setHasReceivedReport(true)
       setReports((currentReports) => {
         const nextReports = new Map(currentReports)
         nextReports.set(id, report)
@@ -92,6 +100,12 @@ export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(showTimer)
     }
   }, [activeReport, isVisible])
+
+  useEffect(() => {
+    if (isVisible || (hasReceivedReport && !activeReport)) {
+      dismissPreRootStartupSurface()
+    }
+  }, [activeReport, hasReceivedReport, isVisible])
 
   useEffect(() => {
     if (!activeReport || !isVisible) {

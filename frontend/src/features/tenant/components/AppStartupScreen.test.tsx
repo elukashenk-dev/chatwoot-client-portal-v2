@@ -42,7 +42,7 @@ describe('AppStartupScreen', () => {
     )
 
     expect(
-      screen.getByRole('heading', { name: 'Добро пожаловать, Иван' }),
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
     expect(screen.getByText('ProvGroup')).toBeInTheDocument()
     expect(screen.getByText('PR')).toBeInTheDocument()
@@ -57,7 +57,20 @@ describe('AppStartupScreen', () => {
 
     expect(container.querySelectorAll('.app-skeleton')).toHaveLength(4)
     expect(
-      screen.getByRole('heading', { name: 'Добро пожаловать' }),
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
+  })
+
+  it('uses report-owned brand fields when rendered outside tenant context', () => {
+    render(
+      <AppStartupScreen
+        brandMonogram="PG"
+        brandName="PROVGROUP"
+        statusLabel="Готовим чат"
+      />,
+    )
+
+    expect(screen.getByText('PROVGROUP')).toBeInTheDocument()
+    expect(screen.getByText('PG')).toBeInTheDocument()
   })
 })

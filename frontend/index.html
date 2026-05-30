@@ -20,14 +20,112 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <style>
+      html,
       body {
         background: #f3f7fc;
+        margin: 0;
+        min-height: 100%;
+      }
+
+      #portal-pre-root-startup {
+        align-items: center;
+        background: #ffffff;
+        color: #0f172a;
+        display: flex;
+        font-family:
+          'Segoe UI Variable', 'Segoe UI', 'Helvetica Neue', Arial,
+          BlinkMacSystemFont, system-ui, sans-serif;
+        inset: 0;
+        justify-content: center;
+        min-height: 100dvh;
+        position: fixed;
+        text-align: center;
+        z-index: 1;
+      }
+
+      .portal-pre-root-startup__content {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        max-width: 28rem;
+        padding: 2rem;
+        width: 100%;
+      }
+
+      .portal-pre-root-startup__logo {
+        align-items: center;
+        background: #112540;
+        border-radius: 18px;
+        box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
+        color: #ffffff;
+        display: flex;
+        font-size: 18px;
+        font-weight: 600;
+        height: 56px;
+        justify-content: center;
+        margin-bottom: 12px;
+        width: 56px;
+      }
+
+      .portal-pre-root-startup__brand {
+        color: rgb(35 71 118 / 0.85);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0;
+        margin: 0;
+        max-width: 11rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .portal-pre-root-startup__line {
+        background: linear-gradient(
+          90deg,
+          transparent,
+          #c4d5ed,
+          transparent
+        );
+        height: 1px;
+        margin-top: 10px;
+        width: 56px;
+      }
+
+      .portal-pre-root-startup__title {
+        color: #0f172a;
+        font-size: 30px;
+        font-weight: 600;
+        line-height: 1.2;
+        margin: 28px 0 0;
+      }
+
+      .portal-pre-root-startup__description {
+        color: #64748b;
+        font-size: 15px;
+        line-height: 1.6;
+        margin: 8px 0 0;
       }
     </style>
     <title>Клиентский портал</title>
   </head>
   <body>
     <div id="root"></div>
+    <div
+      id="portal-pre-root-startup"
+      aria-live="polite"
+      role="status"
+    >
+      <div class="portal-pre-root-startup__content">
+        <div class="portal-pre-root-startup__logo" aria-hidden="true">ЛК</div>
+        <p class="portal-pre-root-startup__brand">Клиентский портал</p>
+        <div class="portal-pre-root-startup__line" aria-hidden="true"></div>
+        <h1 class="portal-pre-root-startup__title">Открываем кабинет</h1>
+        <p class="portal-pre-root-startup__description">
+          Загружаем приложение.
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

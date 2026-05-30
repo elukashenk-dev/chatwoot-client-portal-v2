@@ -15,15 +15,21 @@ import {
 
 function Reporter({
   active,
+  brandMonogram,
+  brandName,
   phase,
   statusLabel,
 }: {
   active: boolean
+  brandMonogram?: string
+  brandName?: string
   phase: StartupSurfacePhase
   statusLabel: string
 }) {
   useStartupSurfaceReport({
     active,
+    brandMonogram,
+    brandName,
     description: `${statusLabel} description`,
     phase,
     statusLabel,
@@ -35,16 +41,26 @@ function Reporter({
 
 function Harness({
   active,
+  brandMonogram,
+  brandName,
   phase = 'tenant',
   statusLabel = 'Загружаем настройки',
 }: {
   active: boolean
+  brandMonogram?: string
+  brandName?: string
   phase?: StartupSurfacePhase
   statusLabel?: string
 }) {
   return (
     <StartupSurfaceProvider>
-      <Reporter active={active} phase={phase} statusLabel={statusLabel} />
+      <Reporter
+        active={active}
+        brandMonogram={brandMonogram}
+        brandName={brandName}
+        phase={phase}
+        statusLabel={statusLabel}
+      />
       <div>Ready child</div>
       <StartupSurfaceOverlay />
     </StartupSurfaceProvider>
@@ -85,6 +101,45 @@ describe('StartupSurfaceProvider', () => {
       screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Загружаем настройки')).toBeInTheDocument()
+  })
+
+  it('uses brand fields reported from tenant-aware phases', async () => {
+    vi.useFakeTimers()
+    render(<Harness active brandMonogram="PG" brandName="PROVGROUP" />)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STARTUP_SURFACE_SHOW_DELAY_MS)
+    })
+
+    expect(screen.getByText('PROVGROUP')).toBeInTheDocument()
+    expect(screen.getByText('PG')).toBeInTheDocument()
+  })
+
+  it('keeps the pre-root splash until the startup overlay is ready', async () => {
+    vi.useFakeTimers()
+    const preRootSplash = document.createElement('div')
+    preRootSplash.id = 'portal-pre-root-startup'
+    preRootSplash.textContent = 'pre-root splash'
+    document.body.append(preRootSplash)
+
+    render(<Harness active />)
+
+    expect(document.getElementById('portal-pre-root-startup')).not.toBeNull()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STARTUP_SURFACE_SHOW_DELAY_MS - 1)
+    })
+
+    expect(document.getElementById('portal-pre-root-startup')).not.toBeNull()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(document.getElementById('portal-pre-root-startup')).toBeNull()
+    expect(
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
+    ).toBeInTheDocument()
   })
 
   it('updates the visible phase in place without duplicating headings', async () => {

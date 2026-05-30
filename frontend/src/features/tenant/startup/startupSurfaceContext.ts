@@ -33,6 +33,8 @@ export function useStartupSurfaceReport(report: StartupSurfaceReport) {
   const id = useId()
   const {
     active,
+    brandMonogram,
+    brandName,
     description,
     phase,
     showChatPreview,
@@ -43,6 +45,8 @@ export function useStartupSurfaceReport(report: StartupSurfaceReport) {
   const stableReport = useMemo(
     () => ({
       active,
+      brandMonogram,
+      brandName,
       description,
       phase,
       showChatPreview,
@@ -50,7 +54,17 @@ export function useStartupSurfaceReport(report: StartupSurfaceReport) {
       title,
       userName,
     }),
-    [active, description, phase, showChatPreview, statusLabel, title, userName],
+    [
+      active,
+      brandMonogram,
+      brandName,
+      description,
+      phase,
+      showChatPreview,
+      statusLabel,
+      title,
+      userName,
+    ],
   )
 
   if (!context) {

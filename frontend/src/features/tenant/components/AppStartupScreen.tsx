@@ -7,16 +7,14 @@ import { useTenantIdentity } from '../lib/useTenantIdentity'
 export type AppStartupScreenMode = 'screen' | 'inline'
 
 export type AppStartupScreenProps = {
+  brandMonogram?: string
+  brandName?: string
   description?: string
   mode?: AppStartupScreenMode
   showChatPreview?: boolean
   statusLabel?: string
   title?: string
   userName?: string | null
-}
-
-function getFirstName(userName?: string | null) {
-  return userName?.trim().split(/\s+/)[0] ?? ''
 }
 
 function ChatPreviewSkeleton() {
@@ -34,20 +32,20 @@ function ChatPreviewSkeleton() {
 }
 
 function AppStartupContent({
+  brandMonogram,
+  brandName: reportedBrandName,
   description,
   showChatPreview = false,
   statusLabel = 'Готовим приложение',
   title,
-  userName,
-}: Omit<AppStartupScreenProps, 'mode'>) {
+}: Omit<AppStartupScreenProps, 'mode' | 'userName'>) {
   const { tenant } = useTenantIdentity()
-  const brandName = tenant?.displayName ?? 'Клиентский портал'
-  const brandMonogram = tenant
-    ? createTenantMonogram(tenant.displayName)
-    : undefined
-  const firstName = getFirstName(userName)
-  const resolvedTitle =
-    title ?? (firstName ? `Добро пожаловать, ${firstName}` : 'Добро пожаловать')
+  const brandName =
+    reportedBrandName ?? tenant?.displayName ?? 'Клиентский портал'
+  const resolvedBrandMonogram =
+    brandMonogram ??
+    (tenant ? createTenantMonogram(tenant.displayName) : undefined)
+  const resolvedTitle = title ?? 'Открываем кабинет'
   const resolvedDescription =
     description ??
     (tenant
@@ -60,7 +58,7 @@ function AppStartupContent({
       aria-live="polite"
       className="mx-auto flex w-full max-w-md flex-col items-center text-center"
     >
-      <BrandMark monogram={brandMonogram} name={brandName} />
+      <BrandMark monogram={resolvedBrandMonogram} name={brandName} />
 
       <h1 className="mt-7 text-[30px] font-semibold leading-tight text-slate-900">
         {resolvedTitle}
@@ -81,20 +79,22 @@ function AppStartupContent({
 }
 
 export function AppStartupScreen({
+  brandMonogram,
+  brandName,
   description,
   mode = 'screen',
   showChatPreview,
   statusLabel,
   title,
-  userName,
 }: AppStartupScreenProps) {
   const content = (
     <AppStartupContent
+      brandMonogram={brandMonogram}
+      brandName={brandName}
       description={description}
       showChatPreview={showChatPreview}
       statusLabel={statusLabel}
       title={title}
-      userName={userName}
     />
   )
 
