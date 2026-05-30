@@ -3,6 +3,7 @@ import {
   clearCurrentUserOfflineData,
   offlineStore,
 } from '../../offline/offlineStore'
+import { saveStartupAuthSession } from '../../offline/startupCache'
 import {
   OFFLINE_AUTH_GRACE_MS,
   type OfflineAuthSnapshotRecord,
@@ -180,12 +181,7 @@ export async function saveOnlineAuthSnapshot({
     tenantSlug,
     userId: currentSession.user.id,
   }
-
-  await offlineStore.saveLastActiveIdentity({
-    ...scope,
-    savedAt: now.toISOString(),
-  })
-  await offlineStore.saveAuthSnapshot({
+  const snapshot = {
     lastVerifiedAt: now.toISOString(),
     offlineAccessUntil: calculateOfflineAccessUntil({
       now,
@@ -196,8 +192,18 @@ export async function saveOnlineAuthSnapshot({
     tenantSlug,
     user: currentSession.user,
     userId: currentSession.user.id,
+  }
+
+  await offlineStore.saveLastActiveIdentity({
+    ...scope,
+    savedAt: now.toISOString(),
   })
+  await offlineStore.saveAuthSnapshot(snapshot)
   await offlineStore.deleteLocalDeviceSignout(host)
+  saveStartupAuthSession({
+    host,
+    snapshot,
+  })
 
   return scope
 }

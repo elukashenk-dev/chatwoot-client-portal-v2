@@ -4,8 +4,13 @@ import {
   listPushStaleMarkers,
   savePushStaleMarker,
 } from './offlinePushStaleMarkers'
+import {
+  deleteStartupAuthSession,
+  deleteStartupChatFallback,
+} from './startupCache'
 import type {
   OfflineAuthSnapshotRecord,
+  OfflineChatMessagePageRecord,
   OfflineChatMessageSnapshotRecord,
   OfflineChatThreadListRecord,
   OfflineLastActiveIdentityRecord,
@@ -29,6 +34,15 @@ function scopedUserKey(tenantSlug: string, userId: number) {
 
 function scopedThreadKey(tenantSlug: string, userId: number, threadId: string) {
   return `${tenantSlug}:${userId}:${threadId}`
+}
+
+function scopedMessagePageKey(
+  tenantSlug: string,
+  userId: number,
+  threadId: string,
+  pageCursor: string,
+) {
+  return `${tenantSlug}:${userId}:${threadId}:${pageCursor}`
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -134,6 +148,18 @@ function isMessageSnapshotRecord(
     isString(value.tenantSlug) &&
     isString(value.threadId) &&
     isNumber(value.userId)
+  )
+}
+
+function isMessagePageRecord(
+  value: unknown,
+): value is OfflineChatMessagePageRecord {
+  const record = value as Partial<OfflineChatMessagePageRecord>
+
+  return (
+    isMessageSnapshotRecord(value) &&
+    isString(record.pageCursor) &&
+    (record.pageCursor === 'latest' || record.pageCursor.startsWith('before:'))
   )
 }
 
@@ -273,6 +299,24 @@ export const offlineStore = {
       ? record
       : null
   },
+  async readMessagePage(
+    tenantSlug: string,
+    userId: number,
+    threadId: string,
+    pageCursor: string,
+  ) {
+    const record = await readOfflineRecord(
+      'chat_message_pages',
+      scopedMessagePageKey(tenantSlug, userId, threadId, pageCursor),
+      isMessagePageRecord,
+    )
+
+    return record &&
+      isSameThreadScope(record, tenantSlug, userId, threadId) &&
+      record.pageCursor === pageCursor
+      ? record
+      : null
+  },
   async readTenantContext(host: string) {
     const record = await readOfflineRecord(
       'tenant_contexts',
@@ -313,6 +357,18 @@ export const offlineStore = {
       record,
     )
   },
+  saveMessagePage(record: OfflineChatMessagePageRecord) {
+    return putOfflineRecord(
+      'chat_message_pages',
+      scopedMessagePageKey(
+        record.tenantSlug,
+        record.userId,
+        record.threadId,
+        record.pageCursor,
+      ),
+      record,
+    )
+  },
   savePushStaleMarker,
   saveTenantContext(record: OfflineTenantContextRecord) {
     return putOfflineRecord('tenant_contexts', record.host, record)
@@ -331,11 +387,12 @@ export async function clearCurrentUserOfflineData({
   tenantSlug,
   userId,
 }: OfflineUserScope) {
-  const database = await openOfflineDatabase()
   const userKey = scopedUserKey(tenantSlug, userId)
   const userPrefix = `${userKey}:`
+  let database: Awaited<ReturnType<typeof openOfflineDatabase>> | null = null
 
   try {
+    database = await openOfflineDatabase()
     const transaction = database.transaction(
       [
         'last_active_identities',
@@ -343,6 +400,7 @@ export async function clearCurrentUserOfflineData({
         'auth_snapshots',
         'chat_thread_lists',
         'chat_message_snapshots',
+        'chat_message_pages',
         'chat_text_outbox',
         'push_stale_markers',
         'sync_leases',
@@ -378,6 +436,7 @@ export async function clearCurrentUserOfflineData({
 
     for (const storeName of [
       'chat_message_snapshots',
+      'chat_message_pages',
       'chat_text_outbox',
       'push_stale_markers',
     ] as const) {
@@ -394,7 +453,13 @@ export async function clearCurrentUserOfflineData({
 
     await transaction.done
   } finally {
-    database.close()
+    database?.close()
+    deleteStartupAuthSession(host)
+    deleteStartupChatFallback({
+      host,
+      tenantSlug,
+      userId,
+    })
   }
 }
 
@@ -453,7 +518,12 @@ export async function pruneOfflineData({
 
   try {
     const transaction = database.transaction(
-      ['push_stale_markers', 'chat_thread_lists', 'chat_message_snapshots'],
+      [
+        'push_stale_markers',
+        'chat_thread_lists',
+        'chat_message_snapshots',
+        'chat_message_pages',
+      ],
       'readwrite',
     )
     let markerCursor = await transaction
@@ -471,6 +541,7 @@ export async function pruneOfflineData({
     for (const storeName of [
       'chat_thread_lists',
       'chat_message_snapshots',
+      'chat_message_pages',
     ] as const) {
       let cursor = await transaction.objectStore(storeName).openCursor()
 

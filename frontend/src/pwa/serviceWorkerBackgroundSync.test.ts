@@ -5,6 +5,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
+const PORTAL_OFFLINE_DATABASE_VERSION = 2
 const PORTAL_OFFLINE_STORES = [
   'tenant_contexts',
   'last_active_identities',
@@ -12,6 +13,7 @@ const PORTAL_OFFLINE_STORES = [
   'auth_snapshots',
   'chat_thread_lists',
   'chat_message_snapshots',
+  'chat_message_pages',
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
@@ -86,7 +88,10 @@ function loadServiceWorker({
 
 async function openPortalOfflineDatabaseForTests() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = testIndexedDB.open(PORTAL_OFFLINE_DATABASE_NAME, 1)
+    const request = testIndexedDB.open(
+      PORTAL_OFFLINE_DATABASE_NAME,
+      PORTAL_OFFLINE_DATABASE_VERSION,
+    )
 
     request.onupgradeneeded = () => {
       for (const storeName of PORTAL_OFFLINE_STORES) {

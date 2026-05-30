@@ -5,8 +5,10 @@ import { offlineStore } from '../../offline/offlineStore'
 import type { ChatMessagesSnapshot } from '../types'
 import {
   consumePushStaleMarkersForKnownThreads,
+  readOfflineOlderMessagePage,
   readOfflineChatFallback,
   saveOfflineMessageSnapshot,
+  saveOfflineOlderMessagePage,
   selectCachedThreadId,
   shouldSaveOfflineMessageSnapshot,
   toBoundedOfflineMessageSnapshot,
@@ -192,6 +194,76 @@ describe('offlineChatCache', () => {
       readOfflineChatFallback({
         preferredThreadId: privateThread.id,
         tenantSlug: 'buhfirma',
+        userId: 7,
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('saves and reads offline older message pages by cursor scope', async () => {
+    const olderSnapshot = createReadySnapshot({
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Более раннее сохраненное сообщение.',
+          contentType: 'text',
+          createdAt: '2026-04-20T09:12:00.000Z',
+          direction: 'incoming',
+          id: 77,
+          status: 'sent',
+        },
+      ],
+    })
+
+    await saveOfflineOlderMessagePage({
+      pageCursor: 'before:101',
+      snapshot: olderSnapshot,
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+
+    await expect(
+      readOfflineOlderMessagePage({
+        pageCursor: 'before:101',
+        tenantSlug: 'buhfirma',
+        threadId: privateThread.id,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      messages: [expect.objectContaining({ id: 77 })],
+      result: 'ready',
+    })
+    await expect(
+      readOfflineOlderMessagePage({
+        pageCursor: 'before:101',
+        tenantSlug: 'buhfirma',
+        threadId: groupThread.id,
+        userId: 7,
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('does not persist invalid older message pages', async () => {
+    await saveOfflineOlderMessagePage({
+      pageCursor: 'before:101',
+      snapshot: createReadySnapshot({
+        activeThread: null,
+        messages: [],
+        reason: 'chatwoot_unavailable',
+        result: 'unavailable',
+      }),
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+
+    await expect(
+      readOfflineOlderMessagePage({
+        pageCursor: 'before:101',
+        tenantSlug: 'buhfirma',
+        threadId: privateThread.id,
         userId: 7,
       }),
     ).resolves.toBeNull()

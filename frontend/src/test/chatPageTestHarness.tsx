@@ -93,6 +93,7 @@ export class MockMediaRecorder {
 }
 
 export async function setupOfflineChatTestEnvironment() {
+  window.localStorage.clear()
   await clearOfflineDatabaseForTests()
   Object.defineProperty(globalThis.navigator, 'onLine', {
     configurable: true,

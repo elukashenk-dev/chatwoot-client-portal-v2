@@ -23,6 +23,15 @@ type SaveOfflineMessageSnapshotInput = OfflineChatScope & {
   threadId: string
 }
 
+type SaveOfflineMessagePageInput = SaveOfflineMessageSnapshotInput & {
+  pageCursor: 'latest' | `before:${number}`
+}
+
+type ReadOfflineOlderMessagePageInput = OfflineChatScope & {
+  pageCursor: `before:${number}`
+  threadId: string
+}
+
 type ConsumePushStaleMarkersInput = OfflineChatScope & {
   refreshThread: (threadId: string) => Promise<ChatMessagesSnapshot>
   threads: ChatThreadSummary[]
@@ -98,6 +107,94 @@ export async function saveOfflineMessageSnapshot({
     threadId,
     userId,
   })
+}
+
+export async function saveOfflineLatestMessagePage({
+  savedAt = new Date().toISOString(),
+  snapshot,
+  tenantSlug,
+  threadId,
+  userId,
+}: SaveOfflineMessageSnapshotInput) {
+  await saveOfflineMessagePage({
+    pageCursor: 'latest',
+    savedAt,
+    snapshot,
+    tenantSlug,
+    threadId,
+    userId,
+  })
+}
+
+export async function saveOfflineOlderMessagePage({
+  pageCursor,
+  savedAt = new Date().toISOString(),
+  snapshot,
+  tenantSlug,
+  threadId,
+  userId,
+}: SaveOfflineMessagePageInput) {
+  await saveOfflineMessagePage({
+    pageCursor,
+    savedAt,
+    snapshot,
+    tenantSlug,
+    threadId,
+    userId,
+  })
+}
+
+async function saveOfflineMessagePage({
+  pageCursor,
+  savedAt = new Date().toISOString(),
+  snapshot,
+  tenantSlug,
+  threadId,
+  userId,
+}: SaveOfflineMessagePageInput) {
+  if (!shouldSaveOfflineMessageSnapshot(snapshot)) {
+    return
+  }
+
+  await offlineStore.saveMessagePage({
+    pageCursor,
+    savedAt,
+    snapshot,
+    tenantSlug,
+    threadId,
+    userId,
+  })
+}
+
+export async function readOfflineOlderMessagePage({
+  pageCursor,
+  tenantSlug,
+  threadId,
+  userId,
+}: ReadOfflineOlderMessagePageInput): Promise<ChatMessagesSnapshot | null> {
+  try {
+    const cachedPage = await offlineStore.readMessagePage(
+      tenantSlug,
+      userId,
+      threadId,
+      pageCursor,
+    )
+
+    if (!cachedPage || !shouldSaveOfflineMessageSnapshot(cachedPage.snapshot)) {
+      return null
+    }
+
+    if (
+      cachedPage.snapshot.activeThread &&
+      cachedPage.snapshot.activeThread.id !== threadId
+    ) {
+      return null
+    }
+
+    return cachedPage.snapshot
+  } catch {
+    return null
+  }
 }
 
 export function selectCachedThreadId({

@@ -234,6 +234,7 @@ const fetchMock = vi.fn<typeof fetch>()
 
 describe('ChatPage optimistic text send', () => {
   beforeEach(async () => {
+    window.localStorage.clear()
     await clearOfflineDatabaseForTests()
     setNavigatorStorageEstimate()
     vi.stubGlobal('fetch', fetchMock)
@@ -243,6 +244,7 @@ describe('ChatPage optimistic text send', () => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     fetchMock.mockReset()
+    window.localStorage.clear()
   })
 
   it('queues a durable online text record and lets foreground drain reconcile it', async () => {

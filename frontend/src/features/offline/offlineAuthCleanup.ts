@@ -1,4 +1,8 @@
 import { openOfflineDatabase } from './offlineDatabase'
+import {
+  deleteStartupAuthSession,
+  deleteStartupChatFallback,
+} from './startupCache'
 
 type OfflineUserScope = {
   host: string
@@ -11,10 +15,11 @@ export async function clearRejectedAuthSnapshot({
   tenantSlug,
   userId,
 }: OfflineUserScope) {
-  const database = await openOfflineDatabase()
   const userKey = `${tenantSlug}:${userId}`
+  let database: Awaited<ReturnType<typeof openOfflineDatabase>> | null = null
 
   try {
+    database = await openOfflineDatabase()
     const transaction = database.transaction(
       ['last_active_identities', 'auth_snapshots'],
       'readwrite',
@@ -30,6 +35,12 @@ export async function clearRejectedAuthSnapshot({
 
     await transaction.done
   } finally {
-    database.close()
+    database?.close()
+    deleteStartupAuthSession(host)
+    deleteStartupChatFallback({
+      host,
+      tenantSlug,
+      userId,
+    })
   }
 }

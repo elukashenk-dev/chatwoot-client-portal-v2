@@ -763,6 +763,7 @@ describe('service worker push notifications', () => {
         'auth_snapshots',
         'chat_thread_lists',
         'chat_message_snapshots',
+        'chat_message_pages',
         'chat_text_outbox',
         'sync_leases',
         'push_stale_markers',

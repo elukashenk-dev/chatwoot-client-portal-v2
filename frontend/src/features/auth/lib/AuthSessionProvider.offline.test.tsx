@@ -4,21 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ProtectedRoute } from '../../../app/layouts/ProtectedRoute'
 import { routePaths } from '../../../app/routePaths'
-import {
-  BOOT_CACHE_FALLBACK_MS,
-  BOOT_ONLINE_REQUIRED_MS,
-  BOOT_REQUEST_TIMEOUT_MS,
-} from '../../offline/bootCoordinator'
+import { BOOT_ONLINE_REQUIRED_MS } from '../../offline/bootCoordinator'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import {
   offlineStore,
   removeLocalDeviceDataAndBlockCachedOpen,
 } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
-import {
-  StartupSurfaceOverlay,
-  StartupSurfaceProvider,
-} from '../../tenant/startup/StartupSurfaceProvider'
 import { AuthSessionProvider } from './AuthSessionProvider'
 import { useAuthSession } from './authSessionContext'
 
@@ -134,6 +126,37 @@ async function saveTenantAndCachedAuth({
   })
 }
 
+function saveStartupAuthSnapshot({
+  offlineAccessUntil = '2099-05-28T10:00:00.000Z',
+}: {
+  offlineAccessUntil?: string
+} = {}) {
+  window.localStorage.setItem(
+    `portal.startup.auth:${window.location.host}`,
+    JSON.stringify({
+      record: {
+        host: window.location.host,
+        snapshot: {
+          lastVerifiedAt: '2026-05-27T09:55:00.000Z',
+          offlineAccessUntil,
+          savedAt: '2026-05-27T09:55:00.000Z',
+          sessionExpiresAt: '2026-06-10T10:00:00.000Z',
+          tenantSlug: 'buhfirma',
+          user: {
+            email: 'name@company.ru',
+            fullName: 'Portal User',
+            id: 7,
+          },
+          userId: 7,
+        },
+        tenantSlug: 'buhfirma',
+        userId: 7,
+      },
+      version: 1,
+    }),
+  )
+}
+
 function AuthProbe() {
   const { removeLocalDeviceData, sessionSource, status, user } =
     useAuthSession()
@@ -162,24 +185,21 @@ function renderAuthProbe() {
 
 function renderProtectedRoute() {
   render(
-    <StartupSurfaceProvider>
-      <TenantIdentityContext.Provider value={tenantContextValue}>
-        <AuthSessionProvider>
-          <MemoryRouter initialEntries={['/app/chat']}>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route path="/app/chat" element={<div>Protected chat</div>} />
-              </Route>
-              <Route
-                element={<div>Login route</div>}
-                path={routePaths.auth.login}
-              />
-            </Routes>
-          </MemoryRouter>
-        </AuthSessionProvider>
-      </TenantIdentityContext.Provider>
-      <StartupSurfaceOverlay />
-    </StartupSurfaceProvider>,
+    <TenantIdentityContext.Provider value={tenantContextValue}>
+      <AuthSessionProvider>
+        <MemoryRouter initialEntries={['/app/chat']}>
+          <Routes>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/app/chat" element={<div>Protected chat</div>} />
+            </Route>
+            <Route
+              element={<div>Login route</div>}
+              path={routePaths.auth.login}
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthSessionProvider>
+    </TenantIdentityContext.Provider>,
   )
 }
 
@@ -188,6 +208,7 @@ describe('AuthSessionProvider offline startup', () => {
 
   beforeEach(async () => {
     vi.stubGlobal('fetch', fetchMock)
+    window.localStorage.clear()
     await clearOfflineDatabaseForTests()
   })
 
@@ -195,31 +216,50 @@ describe('AuthSessionProvider offline startup', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    window.localStorage.clear()
     fetchMock.mockReset()
   })
 
   it('opens protected auth from cached snapshot when /auth/me is slow', async () => {
-    await saveTenantAndCachedAuth()
-    useBootFakeTimers()
+    await saveTenantAndCachedAuth({
+      offlineAccessUntil: '2099-05-28T10:00:00.000Z',
+    })
     fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
 
     renderAuthProbe()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
-
-    expect(screen.getByText('authenticated')).toBeInTheDocument()
+    expect(await screen.findByText('authenticated')).toBeInTheDocument()
     expect(screen.getByText('cached')).toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
+  })
 
-    await advanceBootTimers(BOOT_REQUEST_TIMEOUT_MS - BOOT_CACHE_FALLBACK_MS)
+  it('opens protected auth on the first render from startup cache', () => {
+    saveStartupAuthSnapshot()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
 
-    expect(screen.getByText('authenticated')).toBeInTheDocument()
-    expect(screen.getByText('cached')).toBeInTheDocument()
+    renderProtectedRoute()
+
+    expect(screen.getByText('Protected chat')).toBeInTheDocument()
+    expect(screen.queryByText('Login route')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Нужно проверить сессию.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not open protected auth from an invalid startup auth expiry', () => {
+    saveStartupAuthSnapshot({
+      offlineAccessUntil: 'not-a-date',
+    })
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+
+    renderProtectedRoute()
+
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Login route')).not.toBeInTheDocument()
   })
 
   it('does not let delayed cached auth fallback overwrite a fresh online session', async () => {
     await saveTenantAndCachedAuth()
-    useBootFakeTimers()
     const signoutRead =
       createDeferred<
         Awaited<ReturnType<typeof offlineStore.readLocalDeviceSignout>>
@@ -233,15 +273,13 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderAuthProbe()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
-
     await act(async () => {
       onlineSession.resolve(
         createSessionResponse({ email: 'online@company.ru' }),
       )
     })
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByText('online')).toBeInTheDocument()
     })
 
@@ -268,7 +306,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -302,7 +340,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -318,7 +356,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -352,7 +390,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -449,6 +487,11 @@ describe('AuthSessionProvider offline startup', () => {
 
   it('clears rejected auth snapshot on 401 and routes to login', async () => {
     await saveTenantAndCachedAuth()
+    saveStartupAuthSnapshot()
+    window.localStorage.setItem(
+      `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      'stale chat mirror',
+    )
     fetchMock.mockResolvedValueOnce(createUnauthorizedResponse())
 
     renderProtectedRoute()
@@ -460,6 +503,16 @@ describe('AuthSessionProvider offline startup', () => {
     await expect(
       offlineStore.readLastActiveIdentity(window.location.host),
     ).resolves.toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.auth:${window.location.host}`,
+      ),
+    ).toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      ),
+    ).toBeNull()
   })
 
   it('routes to login on 401 even when offline cleanup fails', async () => {

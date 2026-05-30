@@ -2,9 +2,12 @@ import { useEffect } from 'react'
 
 import {
   saveOfflineMessageSnapshot,
+  saveOfflineLatestMessagePage,
   saveOfflineThreadList,
+  toBoundedOfflineMessageSnapshot,
 } from './offlineChatCache'
 import type { ChatPageState } from './chatPageState'
+import { saveStartupChatFallback } from '../../offline/startupCache'
 
 type UseOfflineChatCachePersistenceInput = {
   pageState: ChatPageState
@@ -59,11 +62,26 @@ export function useOfflineChatCachePersistence({
       threadId: pageState.selectedThreadId,
       userId,
     }).catch(() => undefined)
+    void saveOfflineLatestMessagePage({
+      snapshot: pageState.snapshot,
+      tenantSlug,
+      threadId: pageState.selectedThreadId,
+      userId,
+    }).catch(() => undefined)
+    saveStartupChatFallback({
+      host: window.location.host,
+      selectedThreadId: pageState.selectedThreadId,
+      snapshot: toBoundedOfflineMessageSnapshot(pageState.snapshot),
+      tenantSlug,
+      threads: pageState.threads,
+      userId,
+    })
   }, [
     pageState.isUsingCachedData,
     pageState.selectedThreadId,
     pageState.snapshot,
     pageState.status,
+    pageState.threads,
     tenantSlug,
     userId,
   ])

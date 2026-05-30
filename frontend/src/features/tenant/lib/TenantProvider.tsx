@@ -2,14 +2,20 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
-  BOOT_SLOW_NOTICE_MS,
   createRequestTimeout,
   isNetworkOrTimeoutError,
   withBootReadDeadline,
 } from '../../offline/bootCoordinator'
 import { offlineStore } from '../../offline/offlineStore'
+import {
+  deleteStartupAuthSession,
+  deleteStartupChatFallbacksForHost,
+  deleteStartupTenantContext,
+  readStartupTenantContext,
+  saveStartupTenantContext,
+} from '../../offline/startupCache'
 import { isOfflineStorageUnavailableError } from '../../offline/storagePersistence'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../../shared/ui/PortalFrame'
@@ -24,7 +30,6 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
-import { useStartupSurfaceReport } from '../startup/startupSurfaceContext'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -112,16 +117,26 @@ function isUnavailableCachedTenantRead(cachedTenant: CachedTenantReadResult) {
 }
 
 export function TenantProvider({ children }: TenantProviderProps) {
+  const [startupTenantRecord] = useState(() =>
+    readStartupTenantContext(window.location.host),
+  )
+  const initialStatus: TenantIdentityStatus = startupTenantRecord
+    ? 'ready_cached'
+    : 'loading'
   const isMountedRef = useRef(false)
   const startupAttemptRef = useRef(0)
-  const statusRef = useRef<TenantIdentityStatus>('loading')
+  const statusRef = useRef<TenantIdentityStatus>(initialStatus)
   const deadlineTimersRef = useRef<number[]>([])
   const requestTimeoutRef = useRef<{ cancel: () => void } | null>(null)
 
-  const [tenant, setTenant] = useState<PublicTenantContext | null>(null)
-  const [status, setStatus] = useState<TenantIdentityStatus>('loading')
+  const [tenant, setTenant] = useState<PublicTenantContext | null>(
+    startupTenantRecord?.tenant ?? null,
+  )
+  const [status, setStatus] = useState<TenantIdentityStatus>(initialStatus)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [isUsingCachedData, setIsUsingCachedData] = useState(false)
+  const [isUsingCachedData, setIsUsingCachedData] = useState(
+    startupTenantRecord !== null,
+  )
 
   const setTenantStatus = useCallback((nextStatus: TenantIdentityStatus) => {
     statusRef.current = nextStatus
@@ -159,21 +174,27 @@ export function TenantProvider({ children }: TenantProviderProps) {
         return 'cache_read_failed' as const
       }),
       'cache_read_timeout',
+      BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
     )
     const onlineTenantPromise = getPublicTenantContext({
       signal: requestTimeout.signal,
     })
+    const shouldPreserveVisibleTenant =
+      statusRef.current === 'ready' || statusRef.current === 'ready_cached'
 
-    setTenant(null)
-    setIsUsingCachedData(false)
     setErrorMessage(null)
-    setTenantStatus('loading')
+
+    if (!shouldPreserveVisibleTenant) {
+      setTenant(null)
+      setIsUsingCachedData(false)
+      setTenantStatus('loading')
+    }
 
     const isCurrentAttempt = () =>
       isMountedRef.current && startupAttemptRef.current === attemptId
 
     const showStorageUnavailable = () => {
-      if (!isCurrentAttempt()) {
+      if (!isCurrentAttempt() || statusRef.current !== 'loading') {
         return
       }
 
@@ -185,10 +206,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
     }
 
     const openCachedTenant = (cachedTenant: CachedTenantReadResult) => {
-      if (
-        statusRef.current !== 'loading' &&
-        statusRef.current !== 'slow_connection'
-      ) {
+      if (statusRef.current !== 'loading') {
         return false
       }
 
@@ -203,6 +221,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
       clearDeadlineTimers()
       applyTenantDocumentMetadata(cachedTenant.tenant)
+      saveStartupTenantContext(cachedTenant)
       setTenant(cachedTenant.tenant)
       setIsUsingCachedData(true)
       setErrorMessage(null)
@@ -210,8 +229,11 @@ export function TenantProvider({ children }: TenantProviderProps) {
       return true
     }
 
-    const showOnlineRequired = () => {
-      if (!isCurrentAttempt()) {
+    const showOnlineRequired = ({ force = false }: { force?: boolean } = {}) => {
+      if (
+        !isCurrentAttempt() ||
+        (!force && statusRef.current !== 'loading')
+      ) {
         return
       }
 
@@ -224,15 +246,9 @@ export function TenantProvider({ children }: TenantProviderProps) {
       setTenantStatus('online_required')
     }
 
+    void cachedTenantPromise.then(openCachedTenant)
+
     deadlineTimersRef.current.push(
-      window.setTimeout(() => {
-        if (isCurrentAttempt() && statusRef.current === 'loading') {
-          setTenantStatus('slow_connection')
-        }
-      }, BOOT_SLOW_NOTICE_MS),
-      window.setTimeout(() => {
-        void cachedTenantPromise.then(openCachedTenant)
-      }, BOOT_CACHE_FALLBACK_MS),
       window.setTimeout(() => {
         void cachedTenantPromise.then((cachedTenant) => {
           if (isUnavailableCachedTenantRead(cachedTenant)) {
@@ -249,15 +265,19 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
     void onlineTenantPromise
       .then(async (publicTenant) => {
+        const tenantRecord = {
+          host,
+          savedAt: new Date().toISOString(),
+          tenant: publicTenant,
+        }
+
         try {
-          await offlineStore.saveTenantContext({
-            host,
-            savedAt: new Date().toISOString(),
-            tenant: publicTenant,
-          })
+          await offlineStore.saveTenantContext(tenantRecord)
         } catch {
           // Online tenant success remains authoritative; cache is best effort.
         }
+
+        saveStartupTenantContext(tenantRecord)
 
         if (!isCurrentAttempt()) {
           return
@@ -282,10 +302,13 @@ export function TenantProvider({ children }: TenantProviderProps) {
           } catch {
             // Authoritative tenant rejection still wins over cache cleanup errors.
           }
+          deleteStartupTenantContext(host)
+          deleteStartupAuthSession(host)
+          deleteStartupChatFallbacksForHost(host)
 
           if (isCurrentAttempt()) {
             cancelStartupRequest()
-            showOnlineRequired()
+            showOnlineRequired({ force: true })
           }
 
           return
@@ -330,7 +353,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
     isMountedRef.current = true
     let isStartupQueued = true
 
-    queueMicrotask(() => {
+    void Promise.resolve().then(() => {
       if (isStartupQueued) {
         startTenantLoad()
       }
@@ -356,21 +379,6 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   const shouldRenderChildren =
     status === 'ready' || status === 'ready_cached' || status === 'error'
-  const isStartupPending = status === 'loading' || status === 'slow_connection'
-
-  useStartupSurfaceReport({
-    active: isStartupPending,
-    description:
-      status === 'slow_connection'
-        ? 'Связь отвечает медленно. Проверяем сохраненные данные.'
-        : 'Загружаем настройки.',
-    phase: status === 'slow_connection' ? 'tenant_slow' : 'tenant',
-    statusLabel:
-      status === 'slow_connection'
-        ? 'Проверяем сохраненные данные'
-        : 'Загружаем настройки',
-    title: 'Открываем кабинет',
-  })
 
   return (
     <TenantIdentityContext.Provider value={value}>

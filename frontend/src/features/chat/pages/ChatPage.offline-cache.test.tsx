@@ -8,7 +8,6 @@ import {
   type AuthSessionContextValue,
 } from '../../auth/lib/authSessionContext'
 import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
-import { BOOT_CACHE_FALLBACK_MS } from '../../offline/bootCoordinator'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
@@ -135,6 +134,30 @@ function createReadySnapshot(
   }
 }
 
+function saveStartupChatFallback({
+  savedAt = '2026-05-27T10:00:00.000Z',
+  snapshot = createReadySnapshot(),
+}: {
+  savedAt?: string
+  snapshot?: ChatMessagesSnapshot
+} = {}) {
+  window.localStorage.setItem(
+    `portal.startup.chat:${window.location.host}:buhfirma:7`,
+    JSON.stringify({
+      record: {
+        cachedSavedAt: savedAt,
+        host: window.location.host,
+        selectedThreadId: privateThread.id,
+        snapshot,
+        tenantSlug: 'buhfirma',
+        threads: [privateThread],
+        userId: 7,
+      },
+      version: 1,
+    }),
+  )
+}
+
 function renderChatRoute() {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
@@ -181,6 +204,18 @@ function createHangingFetch(signal?: AbortSignal | null) {
   })
 }
 
+function createDeferred<TValue>() {
+  let resolveValue!: (value: TValue) => void
+  const promise = new Promise<TValue>((resolve) => {
+    resolveValue = resolve
+  })
+
+  return {
+    promise,
+    resolve: resolveValue,
+  }
+}
+
 describe('ChatPage offline cache', () => {
   const fetchMock = vi.fn<typeof fetch>()
   const originalFetch = globalThis.fetch
@@ -190,6 +225,7 @@ describe('ChatPage offline cache', () => {
       configurable: true,
       value: fetchMock,
     })
+    window.localStorage.clear()
     await clearOfflineDatabaseForTests()
   })
 
@@ -200,6 +236,7 @@ describe('ChatPage offline cache', () => {
       configurable: true,
       value: originalFetch,
     })
+    window.localStorage.clear()
     fetchMock.mockReset()
   })
 
@@ -284,18 +321,162 @@ describe('ChatPage offline cache', () => {
       await screen.findByText(
         'Здравствуйте, вижу ваше обращение.',
         {},
-        { timeout: BOOT_CACHE_FALLBACK_MS + 1500 },
+        { timeout: 1000 },
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Нет связи. Показываем сохраненные сообщения.'),
+      screen.getByRole('status', { name: 'Соединение...' }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Готовим чат')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
+    ).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/chat/threads',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
       }),
     )
+  })
+
+  it('renders startup cached chat on the first render before IndexedDB cache opens', () => {
+    saveStartupChatFallback()
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        return createHangingFetch(init?.signal)
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(
+      screen.getByText('Здравствуйте, вижу ваше обращение.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('status', { name: 'Соединение...' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
+    ).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps startup cached chat visible when network fails before IndexedDB fallback is available', async () => {
+    saveStartupChatFallback()
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        throw new TypeError('network down')
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(
+      screen.getByText('Здравствуйте, вижу ваше обращение.'),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/chat/threads',
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        }),
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Нет связи' })).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('Здравствуйте, вижу ваше обращение.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Чат временно недоступен')).not.toBeInTheDocument()
+  })
+
+  it('does not let older IndexedDB fallback overwrite startup cached chat', async () => {
+    saveStartupChatFallback({
+      savedAt: '2026-05-27T10:05:00.000Z',
+      snapshot: createReadySnapshot({
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Ольга Support',
+            authorRole: 'agent',
+            content: 'Свежий startup cache.',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:15:00.000Z',
+            direction: 'incoming',
+            id: 202,
+            status: 'sent',
+          },
+        ],
+      }),
+    })
+    await offlineStore.saveThreadList({
+      activeThreadId: privateThread.id,
+      savedAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [privateThread],
+      userId: 7,
+    })
+    const staleIndexedDbSnapshot = createReadySnapshot({
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Старый IndexedDB cache.',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:10:00.000Z',
+          direction: 'incoming',
+          id: 90,
+          status: 'sent',
+        },
+      ],
+    })
+    const delayedIndexedDbSnapshot =
+      createDeferred<
+        Awaited<ReturnType<typeof offlineStore.readMessageSnapshot>>
+      >()
+
+    vi.spyOn(offlineStore, 'readMessageSnapshot').mockReturnValueOnce(
+      delayedIndexedDbSnapshot.promise,
+    )
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        throw new TypeError('network down')
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(screen.getByText('Свежий startup cache.')).toBeInTheDocument()
+    delayedIndexedDbSnapshot.resolve({
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: staleIndexedDbSnapshot,
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('status', { name: 'Нет связи' })).toBeInTheDocument()
+    })
+    expect(screen.getByText('Свежий startup cache.')).toBeInTheDocument()
+    expect(screen.queryByText('Старый IndexedDB cache.')).not.toBeInTheDocument()
   })
 
   it('keeps controlled unavailable state when chat bootstrap is offline without cache', async () => {
@@ -515,5 +696,106 @@ describe('ChatPage offline cache', () => {
         },
       })
     })
+  })
+
+  it('does not let delayed cached fallback overwrite a fast online snapshot', async () => {
+    const staleCachedSnapshot = createReadySnapshot({
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Старое сохраненное сообщение.',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:10:00.000Z',
+          direction: 'incoming',
+          id: 90,
+          status: 'sent',
+        },
+      ],
+    })
+    const freshOnlineSnapshot = createReadySnapshot({
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Свежий онлайн ответ.',
+          contentType: 'text',
+          createdAt: '2026-04-21T09:15:00.000Z',
+          direction: 'incoming',
+          id: 202,
+          status: 'sent',
+        },
+      ],
+    })
+    const delayedCachedSnapshot =
+      createDeferred<
+        Awaited<ReturnType<typeof offlineStore.readMessageSnapshot>>
+      >()
+
+    await offlineStore.saveThreadList({
+      activeThreadId: privateThread.id,
+      savedAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [privateThread],
+      userId: 7,
+    })
+    vi.spyOn(offlineStore, 'readMessageSnapshot').mockReturnValueOnce(
+      delayedCachedSnapshot.promise,
+    )
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(freshOnlineSnapshot)
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Свежий онлайн ответ.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Старое сохраненное сообщение.'),
+    ).not.toBeInTheDocument()
+
+    delayedCachedSnapshot.resolve({
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: staleCachedSnapshot,
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Старое сохраненное сообщение.'),
+      ).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Свежий онлайн ответ.')).toBeInTheDocument()
   })
 })

@@ -51,6 +51,7 @@ function readBuildAssetUrls() {
 function assertRequiredBuildAssets({ assetUrls, manifest }) {
   const startupEntry = manifest['index.html']
   const chatEntry = manifest['src/features/chat/pages/ChatPage.tsx']
+  const chatRouteImport = 'src/features/chat/pages/ChatPage.tsx'
 
   if (!isManifestEntry(startupEntry)) {
     throw new Error(
@@ -58,16 +59,22 @@ function assertRequiredBuildAssets({ assetUrls, manifest }) {
     )
   }
 
-  if (!isManifestEntry(chatEntry)) {
+  if (
+    Array.isArray(startupEntry.dynamicImports) &&
+    startupEntry.dynamicImports.includes(chatRouteImport)
+  ) {
     throw new Error(
-      `Vite asset manifest at ${manifestPath} did not contain the chat route entry.`,
+      `Vite asset manifest at ${manifestPath} still treated the chat route as a lazy startup dependency.`,
     )
   }
 
-  for (const [label, assetPath] of [
-    ['startup entry', startupEntry.file],
-    ['chat route entry', chatEntry.file],
-  ]) {
+  const requiredEntries = [['startup entry', startupEntry.file]]
+
+  if (isManifestEntry(chatEntry)) {
+    requiredEntries.push(['chat route entry', chatEntry.file])
+  }
+
+  for (const [label, assetPath] of requiredEntries) {
     if (!assetUrls.includes(`/${assetPath}`)) {
       throw new Error(
         `Vite asset manifest at ${manifestPath} did not include the ${label} asset in the service worker asset list.`,

@@ -338,7 +338,7 @@ describe('LoginPage', () => {
     expect(screen.queryByText('Личный чат')).not.toBeInTheDocument()
   })
 
-  it('shows the app welcome screen while protected session is checking', () => {
+  it('does not render a legacy startup screen while protected session is checking', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
@@ -353,20 +353,12 @@ describe('LoginPage', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: 'Открываем кабинет' }),
-    ).toBeInTheDocument()
-    expect(
-      screen
-        .getByRole('heading', { name: 'Открываем кабинет' })
-        .closest('.fixed'),
-    ).toHaveClass('inset-0')
-    expect(
-      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
-    ).toHaveLength(1)
-    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Проверяем сессию')).not.toBeInTheDocument()
   })
 
-  it('shows the same startup screen while public auth session is checking', () => {
+  it('does not render a legacy startup screen while public auth session is checking', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
@@ -381,14 +373,9 @@ describe('LoginPage', () => {
     })
 
     expect(
-      screen.getByRole('heading', { name: 'Открываем кабинет' }),
-    ).toBeInTheDocument()
-    expect(
-      screen
-        .getByRole('heading', { name: 'Открываем кабинет' })
-        .closest('.fixed'),
-    ).toHaveClass('inset-0')
-    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Проверяем сессию')).not.toBeInTheDocument()
     expect(
       screen.queryByText(
         'Проверяем, нужно ли открыть форму входа или защищенную клиентскую зону.',
@@ -396,7 +383,7 @@ describe('LoginPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('keeps one startup heading while checking public auth session', () => {
+  it('keeps public auth route blank while checking public auth session', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
@@ -407,14 +394,9 @@ describe('LoginPage', () => {
     })
 
     expect(
-      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
-    ).toHaveLength(1)
-    expect(
-      screen
-        .getByRole('heading', { name: 'Открываем кабинет' })
-        .closest('.fixed'),
-    ).toHaveClass('inset-0')
-    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Проверяем сессию')).not.toBeInTheDocument()
   })
 
   it.each([

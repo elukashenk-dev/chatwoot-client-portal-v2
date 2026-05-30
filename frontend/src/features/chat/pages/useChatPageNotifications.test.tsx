@@ -40,6 +40,7 @@ describe('useChatPageNotifications', () => {
 
     renderHook(() =>
       useChatPageNotifications({
+        canLoadNotificationSettings: true,
         canSuppressActiveThreadPush: true,
         chatNotificationsPanel,
         messages: [],

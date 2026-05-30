@@ -186,25 +186,15 @@
   tenant/user/thread `portal-offline` scope, foreground drain остается primary
   path, а iOS продолжает полагаться на send-on-next-open/online/visibility
   behavior.
-- PWA startup continuity slice реализован: tenant boot, auth session checking,
-  lazy route fallback и chat loading используют один brand-ready
-  `AppStartupScreen`, чтобы после системного PWA splash не было смены разных
-  загрузочных экранов.
-- Production deploy PWA startup continuity выполнен на `lk.provgroup.ru` из
-  clean commit `f75018b`; post-deploy smoke подтвердил health, tenant manifest,
-  `/api/tenant`, root app shell и stamped `/sw.js` с новыми frontend assets.
-- Startup anti-flicker gate реализован поверх PWA startup continuity:
-  `AppStartupScreen` появляется только после короткой задержки и, если уже
-  показан, держится минимальное стабильное время; fast startup сразу открывает
-  чат или auth-экран без второго мелькнувшего загрузочного экрана.
-- Production deploy Startup anti-flicker gate выполнен на `lk.provgroup.ru` из
-  clean commit `af4fe43`; post-deploy smoke подтвердил health, tenant manifest,
-  `/api/tenant`, root app shell, inline chat startup fallback и stamped
-  `/sw.js` с новыми frontend assets.
-- Unified startup surface follow-up реализован: tenant boot, auth session,
-  lazy route fallback и initial chat loading теперь report-ятся в один
-  root-level startup coordinator; старый nested `StartupScreenGate` удален, а
-  initial document background выровнен с PWA splash surface.
+- Telegram-like instant cached chat boot заменил web startup surfaces:
+  после native PWA splash синхронный startup mirror открывает сохраненные
+  tenant/auth/chat данные сразу, сеть проверяется и обновляет snapshot в фоне,
+  hanging VPN/network не блокирует cached shell, а web fallback/loading экраны
+  `AppStartupScreen`, `ChatLoadingState`, pre-root splash и startup coordinator
+  удалены.
+- Offline chat cache расширен до older message pages в `portal-offline`
+  schema v2, чтобы сохраненная история могла открываться глубже без сети в
+  текущем tenant/user/thread scope.
 
 ## Current Baseline
 

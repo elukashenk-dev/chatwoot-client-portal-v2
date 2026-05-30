@@ -7,6 +7,7 @@ import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 
 type UseChatPageNotificationsOptions = {
   canSuppressActiveThreadPush: boolean
+  canLoadNotificationSettings: boolean
   chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   messages: ChatMessage[]
   onOtherThreadPush: (threadId: string) => void
@@ -15,6 +16,7 @@ type UseChatPageNotificationsOptions = {
 }
 
 export function useChatPageNotifications({
+  canLoadNotificationSettings,
   canSuppressActiveThreadPush,
   chatNotificationsPanel,
   messages,
@@ -23,10 +25,12 @@ export function useChatPageNotifications({
   selectedThreadId,
 }: UseChatPageNotificationsOptions): ChatNotificationSettings | null {
   useEffect(() => {
-    void chatNotificationsPanel.loadChatNotificationSettings()
+    if (canLoadNotificationSettings) {
+      void chatNotificationsPanel.loadChatNotificationSettings()
+    }
     // The panel object is intentionally not a dependency: this effect is keyed to the selected chat only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedThreadId])
+  }, [canLoadNotificationSettings, selectedThreadId])
 
   useEffect(
     () =>

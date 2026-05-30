@@ -202,7 +202,7 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
   }
 
-  it('shows one unified startup surface while initial chat runtime is loading', async () => {
+  it('does not render a legacy startup surface while initial chat runtime is loading', async () => {
     fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockReturnValueOnce(new Promise<Response>(() => {}))
@@ -210,18 +210,18 @@ describe('ChatPage', () => {
     renderChatRoute()
 
     await waitFor(() => {
-      expect(screen.getByText('Готовим чат')).toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/chat/threads',
+        expect.objectContaining({
+          credentials: 'include',
+          method: 'GET',
+        }),
+      )
     })
-
     expect(
-      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
-    ).toHaveLength(1)
-    expect(
-      screen
-        .getByRole('heading', { name: 'Открываем кабинет' })
-        .closest('.fixed'),
-    ).toHaveClass('inset-0')
-    expect(screen.getByText('Готовим чат')).toBeInTheDocument()
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Готовим чат')).not.toBeInTheDocument()
   })
 
   it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {

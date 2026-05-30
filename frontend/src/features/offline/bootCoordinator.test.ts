@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
   BOOT_REQUEST_TIMEOUT_MS,
-  BOOT_SLOW_NOTICE_MS,
   createRequestTimeout,
-  getBootStatusForElapsedMs,
   isNetworkOrTimeoutError,
+  withBootReadDeadline,
 } from './bootCoordinator'
 
 afterEach(() => {
@@ -15,17 +14,24 @@ afterEach(() => {
 })
 
 describe('boot coordinator', () => {
-  it('moves through slow and fallback deadlines', () => {
-    expect(getBootStatusForElapsedMs(0, false)).toBe('checking_online')
-    expect(getBootStatusForElapsedMs(BOOT_SLOW_NOTICE_MS, false)).toBe(
-      'slow_connection',
+  it('keeps distinct local cache, online-required and request deadlines', () => {
+    expect(BOOT_LOCAL_CACHE_READ_DEADLINE_MS).toBeLessThan(
+      BOOT_ONLINE_REQUIRED_MS,
     )
-    expect(getBootStatusForElapsedMs(BOOT_CACHE_FALLBACK_MS, true)).toBe(
-      'opening_saved_data',
+    expect(BOOT_ONLINE_REQUIRED_MS).toBeLessThan(BOOT_REQUEST_TIMEOUT_MS)
+  })
+
+  it('bounds local cache reads with a short deadline', async () => {
+    vi.useFakeTimers()
+    const boundedRead = withBootReadDeadline(
+      new Promise<string>(() => undefined),
+      'cache_read_timeout',
+      BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
     )
-    expect(getBootStatusForElapsedMs(BOOT_ONLINE_REQUIRED_MS, false)).toBe(
-      'online_required',
-    )
+
+    vi.advanceTimersByTime(BOOT_LOCAL_CACHE_READ_DEADLINE_MS)
+
+    await expect(boundedRead).resolves.toBe('cache_read_timeout')
   })
 
   it('creates a timeout handle that aborts after request timeout', () => {

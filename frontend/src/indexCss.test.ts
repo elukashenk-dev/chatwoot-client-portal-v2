@@ -12,9 +12,9 @@ const source = readFileSync(
 )
 
 describe('index.css', () => {
-  it('aligns the initial document background with the pwa startup surface', () => {
+  it('aligns the initial document background with the cached chat surface', () => {
     expect(source).toContain('body {')
-    expect(source).toContain('background: #f3f7fc;')
+    expect(source).toContain('background: #fff;')
   })
 
   it('hides the chat transcript scrollbar on mobile viewports', () => {

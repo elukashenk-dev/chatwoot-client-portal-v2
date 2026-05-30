@@ -1,8 +1,8 @@
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 
 type ChatRuntimeAlertsProps = {
+  connectionStatus: 'connecting' | 'offline' | 'online'
   isChatAvailable?: boolean
-  isOnline: boolean
   isRealtimeSupported: boolean
   queuedSendCount?: number
   resyncStatus: 'idle' | 'resyncing' | 'error'
@@ -29,8 +29,8 @@ function getQueuedMessageWord(count: number) {
 }
 
 export function ChatRuntimeAlerts({
+  connectionStatus,
   isChatAvailable = false,
-  isOnline,
   isRealtimeSupported,
   queuedSendCount = 0,
   resyncStatus,
@@ -40,18 +40,18 @@ export function ChatRuntimeAlerts({
     tone: 'error' | 'info' | 'warning'
   } | null = null
 
-  if (isOnline && resyncStatus === 'resyncing') {
+  if (connectionStatus === 'online' && resyncStatus === 'resyncing') {
     notice = {
       message: 'Связь восстановилась. Обновляем чат...',
       tone: 'info',
     }
-  } else if (isOnline && resyncStatus === 'error') {
+  } else if (connectionStatus === 'online' && resyncStatus === 'error') {
     notice = {
       message:
         'Не удалось обновить чат. Проверьте соединение и попробуйте снова.',
       tone: 'error',
     }
-  } else if (!isOnline) {
+  } else if (connectionStatus === 'offline') {
     notice =
       queuedSendCount > 0
         ? {
@@ -66,7 +66,7 @@ export function ChatRuntimeAlerts({
               : 'Нет связи. Чат откроется после восстановления связи.',
             tone: 'warning',
           }
-  } else if (!isRealtimeSupported) {
+  } else if (connectionStatus === 'online' && !isRealtimeSupported) {
     notice = {
       message:
         'Автообновление недоступно в этом браузере. При необходимости обновите чат вручную.',

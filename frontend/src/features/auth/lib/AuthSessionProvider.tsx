@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
   createRequestTimeout,
   withBootReadDeadline,
@@ -13,6 +13,7 @@ import {
   offlineStore,
   removeLocalDeviceDataAndBlockCachedOpen,
 } from '../../offline/offlineStore'
+import { readStartupAuthSession } from '../../offline/startupCache'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getCurrentSession, login, logout } from '../api/authClient'
 import type { AuthenticatedPortalUser, LoginFormValues } from '../types'
@@ -36,22 +37,37 @@ type AuthSessionProviderProps = {
   children: ReactNode
 }
 
+type CachedSessionOpenMode =
+  | 'allow_session_check_required'
+  | 'authenticated_only'
+
 export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
   const { tenant } = useTenantIdentity()
+  const [startupAuthSession] = useState(() =>
+    readStartupAuthSession({
+      host: window.location.host,
+      tenantSlug: tenant?.slug ?? null,
+    }),
+  )
+  const initialStatus: AuthSessionStatus = startupAuthSession
+    ? 'authenticated'
+    : 'checking'
   const isMountedRef = useRef(false)
   const startupAttemptRef = useRef(0)
-  const statusRef = useRef<AuthSessionStatus>('checking')
+  const statusRef = useRef<AuthSessionStatus>(initialStatus)
   const deadlineTimersRef = useRef<number[]>([])
   const requestTimeoutRef = useRef<{ cancel: () => void } | null>(null)
 
-  const [status, setStatus] = useState<AuthSessionStatus>('checking')
-  const [user, setUser] = useState<AuthenticatedPortalUser | null>(null)
+  const [status, setStatus] = useState<AuthSessionStatus>(initialStatus)
+  const [user, setUser] = useState<AuthenticatedPortalUser | null>(
+    startupAuthSession?.snapshot.user ?? null,
+  )
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [sessionSource, setSessionSource] = useState<AuthSessionSource | null>(
-    null,
+    startupAuthSession ? 'cached' : null,
   )
   const [offlineRemovalScope, setOfflineRemovalScope] =
-    useState<OfflineAuthScope | null>(null)
+    useState<OfflineAuthScope | null>(startupAuthSession?.scope ?? null)
 
   const setAuthStatus = useCallback((nextStatus: AuthSessionStatus) => {
     statusRef.current = nextStatus
@@ -110,9 +126,11 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     async ({
       cachedSessionPromise,
       isCurrentAttempt,
+      mode,
     }: {
       cachedSessionPromise: ReturnType<typeof readCachedAuthSession>
       isCurrentAttempt: () => boolean
+      mode: CachedSessionOpenMode
     }) => {
       const canUseCachedFallback = () =>
         isCurrentAttempt() && statusRef.current === 'checking'
@@ -128,15 +146,16 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
       }
 
       if (cachedSession.status === 'session_check_required') {
-        clearDeadlineTimers()
-        cancelStartupRequest()
-        requireOnlineSessionCheck(cachedSession.scope)
+        if (mode === 'allow_session_check_required') {
+          clearDeadlineTimers()
+          cancelStartupRequest()
+          requireOnlineSessionCheck(cachedSession.scope)
+        }
 
         return false
       }
 
       clearDeadlineTimers()
-      cancelStartupRequest()
       setUser(cachedSession.snapshot.user)
       setSessionSource('cached')
       setOfflineRemovalScope(cachedSession.scope)
@@ -171,6 +190,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           scope: null,
           status: 'session_check_required',
         },
+        BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
       )
     const currentSessionPromise = getCurrentSession({
       signal: requestTimeout.signal,
@@ -178,16 +198,26 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     const isCurrentAttempt = () =>
       isMountedRef.current && startupAttemptRef.current === attemptId
 
-    setAuthStatus('checking')
     setErrorMessage(null)
+
+    if (statusRef.current !== 'authenticated') {
+      setAuthStatus('checking')
+    }
+
+    void openCachedSession({
+      cachedSessionPromise,
+      isCurrentAttempt,
+      mode: 'authenticated_only',
+    })
 
     deadlineTimersRef.current.push(
       window.setTimeout(() => {
-        void openCachedSession({ cachedSessionPromise, isCurrentAttempt })
-      }, BOOT_CACHE_FALLBACK_MS),
-      window.setTimeout(() => {
         if (isCurrentAttempt() && statusRef.current === 'checking') {
-          void openCachedSession({ cachedSessionPromise, isCurrentAttempt })
+          void openCachedSession({
+            cachedSessionPromise,
+            isCurrentAttempt,
+            mode: 'allow_session_check_required',
+          })
         }
       }, BOOT_ONLINE_REQUIRED_MS),
     )
@@ -202,6 +232,8 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           let identity: Awaited<
             ReturnType<typeof offlineStore.readLastActiveIdentity>
           > = null
+          let rejectedScope: OfflineAuthScope | null =
+            startupAuthSession?.scope ?? null
           let signoutScope: OfflineAuthScope | null = null
 
           try {
@@ -215,16 +247,19 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
                   userId: pendingLocalSignout.userId,
                 }
               : null
+            rejectedScope = identity
+              ? {
+                  host,
+                  tenantSlug: identity.tenantSlug,
+                  userId: identity.userId,
+                }
+              : rejectedScope
 
             if (signoutScope) {
               await clearCurrentUserOfflineData(signoutScope)
               await offlineStore.deleteLocalDeviceSignout(host)
-            } else if (identity) {
-              await clearRejectedAuthSnapshot({
-                host,
-                tenantSlug: identity.tenantSlug,
-                userId: identity.userId,
-              })
+            } else if (rejectedScope) {
+              await clearRejectedAuthSnapshot(rejectedScope)
             }
           } catch {
             identity = null
@@ -242,13 +277,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           setOfflineRemovalScope(
             signoutScope
               ? null
-              : identity
-                ? {
-                    host,
-                    tenantSlug: identity.tenantSlug,
-                    userId: identity.userId,
-                  }
-                : null,
+              : rejectedScope,
           )
           setAuthStatus('unauthenticated')
           return
@@ -319,7 +348,11 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
             return
           }
 
-          await openCachedSession({ cachedSessionPromise, isCurrentAttempt })
+          await openCachedSession({
+            cachedSessionPromise,
+            isCurrentAttempt,
+            mode: 'allow_session_check_required',
+          })
           return
         }
 
@@ -336,6 +369,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     openCachedSession,
     saveOnlineSessionSnapshot,
     setAuthStatus,
+    startupAuthSession,
     tenant,
   ])
 
@@ -414,7 +448,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     isMountedRef.current = true
     let isStartupQueued = true
 
-    queueMicrotask(() => {
+    void Promise.resolve().then(() => {
       if (isStartupQueued) {
         void resolveCurrentSession()
       }
