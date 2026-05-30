@@ -199,22 +199,37 @@ function isTenantDynamicMetadataRequest(pathname) {
 
 async function handleNavigationRequest(request) {
   const cache = await caches.open(STATIC_CACHE)
+  const cachedResponse = (await cache.match(request)) || (await cache.match('/'))
+
+  if (cachedResponse) {
+    void refreshNavigationCache(request, cache)
+
+    return cachedResponse
+  }
 
   try {
-    const response = await fetch(request)
-
-    if (shouldCacheResponse(response)) {
-      await cache.put(request, response.clone())
-    }
-
-    return response
+    return await fetchAndCacheNavigationRequest(request, cache)
   } catch (error) {
-    return (
-      (await cache.match(request)) ||
-      (await cache.match('/')) ||
-      Response.error()
-    )
+    return Response.error()
   }
+}
+
+async function refreshNavigationCache(request, cache) {
+  try {
+    await fetchAndCacheNavigationRequest(request, cache)
+  } catch {
+    // Cached app shell has already been served; refresh is best-effort.
+  }
+}
+
+async function fetchAndCacheNavigationRequest(request, cache) {
+  const response = await fetch(request)
+
+  if (shouldCacheResponse(response)) {
+    await cache.put(request, response.clone())
+  }
+
+  return response
 }
 
 async function handleStaticRequest(request) {

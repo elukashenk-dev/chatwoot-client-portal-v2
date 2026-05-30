@@ -7,6 +7,8 @@ const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 
 type Listener = (event: {
   data?: unknown
+  request?: Request
+  respondWith?: (response: Promise<Response> | Response) => void
   source?: { id?: string }
   waitUntil?: (promise: Promise<unknown>) => void
 }) => void
@@ -89,13 +91,18 @@ function createServiceWorkerIndexedDbFake({
 
 function loadServiceWorker({
   appBadge = {},
+  cacheStorage = {
+    open: vi.fn(),
+  },
   clientsList = [],
+  fetch = vi.fn() as unknown as typeof globalThis.fetch,
   indexedDB = globalThis.indexedDB,
 }: {
   appBadge?: {
     clearAppBadge?: () => Promise<void>
     setAppBadge?: (contents?: number) => Promise<void>
   }
+  cacheStorage?: Pick<CacheStorage, 'open'>
   clientsList?: Array<{
     focused?: boolean
     id: string
@@ -103,6 +110,7 @@ function loadServiceWorker({
     url: string
     visibilityState?: string
   }>
+  fetch?: typeof globalThis.fetch
   indexedDB?: unknown
 } = {}) {
   const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
@@ -122,9 +130,6 @@ function loadServiceWorker({
   const clientsScope = {
     matchAll: vi.fn(async () => clientsList),
   }
-  const cachesScope = {
-    open: vi.fn(),
-  }
 
   new Function(
     'self',
@@ -138,19 +143,60 @@ function loadServiceWorker({
     source,
   )(
     serviceWorkerScope,
-    cachesScope,
+    cacheStorage,
     clientsScope,
     appBadge,
     indexedDB,
     Response,
     URL,
-    vi.fn(),
+    fetch,
   )
 
   return {
     listeners,
     showNotification,
   }
+}
+
+function normalizeCacheRequestKey(request: RequestInfo | URL) {
+  if (typeof request === 'string') {
+    return new URL(request, 'https://lk.provgroup.ru').pathname
+  }
+
+  if (request instanceof URL) {
+    return request.pathname
+  }
+
+  return new URL(request.url).pathname
+}
+
+function createCacheWithResponses(records: Record<string, Response>) {
+  const responses = new Map(Object.entries(records))
+
+  return {
+    match: vi.fn(async (request: RequestInfo | URL) => {
+      const response = responses.get(normalizeCacheRequestKey(request))
+
+      return response?.clone()
+    }),
+    put: vi.fn(async (request: RequestInfo | URL, response: Response) => {
+      responses.set(normalizeCacheRequestKey(request), response.clone())
+    }),
+  } satisfies Pick<Cache, 'match' | 'put'>
+}
+
+async function waitForTextOrTimeout(
+  responsePromise: Promise<Response>,
+  timeoutMs = 25,
+) {
+  return Promise.race([
+    responsePromise.then((response) => response.text()),
+    new Promise<'timeout'>((resolve) => {
+      setTimeout(() => {
+        resolve('timeout')
+      }, timeoutMs)
+    }),
+  ])
 }
 
 async function dispatchPush(
@@ -805,6 +851,51 @@ describe('service worker push notifications', () => {
     const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
 
     expect(source).toContain("requestUrl.pathname.startsWith('/api/')")
+  })
+
+  it('serves the cached app shell immediately when navigation network hangs', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      () => new Promise<Response>(() => {}),
+    )
+    const cachedShell = new Response('<html>cached app shell</html>', {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      status: 200,
+    })
+    const cache = createCacheWithResponses({
+      '/': cachedShell,
+    })
+    const { listeners } = loadServiceWorker({
+      cacheStorage: {
+        open: vi.fn(async () => cache as unknown as Cache),
+      },
+      fetch,
+    })
+    const fetchListener = listeners.get('fetch')?.[0]
+    const request = {
+      destination: '',
+      method: 'GET',
+      mode: 'navigate',
+      url: 'https://lk.provgroup.ru/app/chat',
+    } as unknown as Request
+    let responsePromise: Promise<Response> | null = null
+
+    expect(fetchListener).toBeDefined()
+
+    fetchListener!({
+      request,
+      respondWith: (response) => {
+        responsePromise = Promise.resolve(response)
+      },
+      waitUntil: vi.fn(),
+    })
+
+    expect(responsePromise).not.toBeNull()
+    await expect(waitForTextOrTimeout(responsePromise!)).resolves.toBe(
+      '<html>cached app shell</html>',
+    )
+    expect(fetch).toHaveBeenCalledWith(request)
   })
 
   it('declares stamped build assets and default branding images in the app shell', () => {
