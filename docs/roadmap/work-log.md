@@ -187,10 +187,11 @@
   path, а iOS продолжает полагаться на send-on-next-open/online/visibility
   behavior.
 - Telegram-like instant cached chat boot заменил web startup surfaces:
-  после native PWA splash сохраненные tenant/auth/chat данные открывают чат
-  сразу, сеть проверяется и обновляет snapshot в фоне, hanging VPN/network не
-  блокирует cached shell, а web fallback/loading экраны `AppStartupScreen`,
-  `ChatLoadingState`, pre-root splash и startup coordinator удалены.
+  после native PWA splash синхронный startup mirror открывает сохраненные
+  tenant/auth/chat данные сразу, сеть проверяется и обновляет snapshot в фоне,
+  hanging VPN/network не блокирует cached shell, а web fallback/loading экраны
+  `AppStartupScreen`, `ChatLoadingState`, pre-root splash и startup coordinator
+  удалены.
 - Offline chat cache расширен до older message pages в `portal-offline`
   schema v2, чтобы сохраненная история могла открываться глубже без сети в
   текущем tenant/user/thread scope.

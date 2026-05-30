@@ -4,6 +4,10 @@ import {
   listPushStaleMarkers,
   savePushStaleMarker,
 } from './offlinePushStaleMarkers'
+import {
+  deleteStartupAuthSession,
+  deleteStartupChatFallback,
+} from './startupCache'
 import type {
   OfflineAuthSnapshotRecord,
   OfflineChatMessagePageRecord,
@@ -383,11 +387,12 @@ export async function clearCurrentUserOfflineData({
   tenantSlug,
   userId,
 }: OfflineUserScope) {
-  const database = await openOfflineDatabase()
   const userKey = scopedUserKey(tenantSlug, userId)
   const userPrefix = `${userKey}:`
+  let database: Awaited<ReturnType<typeof openOfflineDatabase>> | null = null
 
   try {
+    database = await openOfflineDatabase()
     const transaction = database.transaction(
       [
         'last_active_identities',
@@ -448,7 +453,13 @@ export async function clearCurrentUserOfflineData({
 
     await transaction.done
   } finally {
-    database.close()
+    database?.close()
+    deleteStartupAuthSession(host)
+    deleteStartupChatFallback({
+      host,
+      tenantSlug,
+      userId,
+    })
   }
 }
 

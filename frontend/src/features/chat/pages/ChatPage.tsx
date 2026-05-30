@@ -16,6 +16,7 @@ import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { clearAppIconBadge } from '../../../pwa/serviceWorkerRuntime'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { readStartupChatFallback } from '../../offline/startupCache'
 import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
@@ -48,11 +49,30 @@ export function ChatPage() {
   const isMountedRef = useRef(false)
   const { tenant } = useTenantIdentity()
   const { refreshSession, sessionSource, user } = useAuthSession()
-  const [pageState, setPageState] = useState<ChatPageState>(
-    INITIAL_CHAT_PAGE_STATE,
-  )
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
+  const [startupChatFallback] = useState(() =>
+    tenantSlug && userId !== null
+      ? readStartupChatFallback({
+          host: window.location.host,
+          preferredThreadId: null,
+          tenantSlug,
+          userId,
+        })
+      : null,
+  )
+  const [pageState, setPageState] = useState<ChatPageState>(() =>
+    startupChatFallback
+      ? {
+          cachedSavedAt: startupChatFallback.cachedSavedAt,
+          isUsingCachedData: true,
+          selectedThreadId: startupChatFallback.selectedThreadId,
+          snapshot: startupChatFallback.snapshot,
+          status: 'ready',
+          threads: startupChatFallback.threads,
+        }
+      : INITIAL_CHAT_PAGE_STATE,
+  )
   const [outboxDrainRequestSignal, requestOutboxDrain] = useReducer(
     (value: number) => value + 1,
     0,
@@ -359,6 +379,8 @@ export function ChatPage() {
   const { markUnreadThread, unreadThreadIds } =
     useChatUnreadThreadMarkers(pageState)
   const selectedThreadNotificationSettings = useChatPageNotifications({
+    canLoadNotificationSettings:
+      canUseBackend && pageState.status === 'ready' && !pageState.isUsingCachedData,
     canSuppressActiveThreadPush,
     chatNotificationsPanel,
     messages: visibleMessages,

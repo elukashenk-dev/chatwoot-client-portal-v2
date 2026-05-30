@@ -221,6 +221,7 @@ describe('ChatPage runtime hardening', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
   beforeEach(async () => {
+    window.localStorage.clear()
     await clearOfflineDatabaseForTests()
     MockEventSource.instances = []
     vi.stubGlobal('fetch', fetchMock)
@@ -232,6 +233,7 @@ describe('ChatPage runtime hardening', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     fetchMock.mockReset()
+    window.localStorage.clear()
     setNavigatorOnline(true)
   })
 

@@ -73,6 +73,16 @@ function cachedTenantRecord() {
   }
 }
 
+function saveStartupTenantRecord() {
+  window.localStorage.setItem(
+    `portal.startup.tenant:${window.location.host}`,
+    JSON.stringify({
+      record: cachedTenantRecord(),
+      version: 1,
+    }),
+  )
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((nextResolve) => {
@@ -94,6 +104,7 @@ describe('TenantProvider', () => {
 
   beforeEach(async () => {
     vi.stubGlobal('fetch', fetchMock)
+    window.localStorage.clear()
     document.head.innerHTML = ''
     document.title = 'Клиентский портал'
     appendMetadata('application-name')
@@ -106,6 +117,7 @@ describe('TenantProvider', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    window.localStorage.clear()
     fetchMock.mockReset()
   })
 
@@ -176,6 +188,15 @@ describe('TenantProvider', () => {
   })
 
   it('shows online-required state when tenant context is authoritatively unavailable', async () => {
+    saveStartupTenantRecord()
+    window.localStorage.setItem(
+      `portal.startup.auth:${window.location.host}`,
+      'stale auth mirror',
+    )
+    window.localStorage.setItem(
+      `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      'stale chat mirror',
+    )
     fetchMock.mockResolvedValueOnce(
       createJsonResponse(
         {
@@ -203,6 +224,21 @@ describe('TenantProvider', () => {
       ),
     ).toBeInTheDocument()
     expect(document.title).toBe('Клиентский портал')
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.tenant:${window.location.host}`,
+      ),
+    ).toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.auth:${window.location.host}`,
+      ),
+    ).toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      ),
+    ).toBeNull()
   })
 
   it('opens cached tenant immediately when online tenant request hangs', async () => {
@@ -216,6 +252,24 @@ describe('TenantProvider', () => {
     )
 
     expect(await screen.findByText('ready_cached')).toBeInTheDocument()
+    expect(screen.getByText('cached tenant')).toBeInTheDocument()
+    expect(screen.getByText('Бухфирма')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders startup cached tenant on the first render before IndexedDB cache opens', () => {
+    saveStartupTenantRecord()
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    renderTenant(
+      <TenantProvider>
+        <TenantProbe />
+      </TenantProvider>,
+    )
+
+    expect(screen.getByText('ready_cached')).toBeInTheDocument()
     expect(screen.getByText('cached tenant')).toBeInTheDocument()
     expect(screen.getByText('Бухфирма')).toBeInTheDocument()
     expect(

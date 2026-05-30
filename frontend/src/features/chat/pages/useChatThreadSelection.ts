@@ -64,7 +64,9 @@ export function useChatThreadSelection({
   userId,
 }: UseChatThreadSelectionInput) {
   const loadRequestIdRef = useRef(0)
+  const pageStateRef = useRef(pageState)
   const selectedThreadIdRef = useRef(pageState.selectedThreadId)
+  pageStateRef.current = pageState
   selectedThreadIdRef.current = pageState.selectedThreadId
 
   const openCachedChatFallback = useCallback(
@@ -105,6 +107,16 @@ export function useChatThreadSelection({
       } else {
         markBrowserOffline()
         setChatReachability('offline')
+      }
+
+      const visibleState = pageStateRef.current
+
+      if (
+        visibleState.status === 'ready' &&
+        visibleState.isUsingCachedData &&
+        visibleState.selectedThreadId === fallback.selectedThreadId
+      ) {
+        return true
       }
 
       setPageState({
@@ -222,6 +234,12 @@ export function useChatThreadSelection({
 
       if (canUseOfflineFallback) {
         setChatReachability('offline')
+
+        const visibleState = pageStateRef.current
+
+        if (visibleState.status === 'ready' && visibleState.isUsingCachedData) {
+          return
+        }
       }
 
       cacheFallbackAllowed = false

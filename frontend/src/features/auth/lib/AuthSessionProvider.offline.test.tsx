@@ -126,6 +126,37 @@ async function saveTenantAndCachedAuth({
   })
 }
 
+function saveStartupAuthSnapshot({
+  offlineAccessUntil = '2099-05-28T10:00:00.000Z',
+}: {
+  offlineAccessUntil?: string
+} = {}) {
+  window.localStorage.setItem(
+    `portal.startup.auth:${window.location.host}`,
+    JSON.stringify({
+      record: {
+        host: window.location.host,
+        snapshot: {
+          lastVerifiedAt: '2026-05-27T09:55:00.000Z',
+          offlineAccessUntil,
+          savedAt: '2026-05-27T09:55:00.000Z',
+          sessionExpiresAt: '2026-06-10T10:00:00.000Z',
+          tenantSlug: 'buhfirma',
+          user: {
+            email: 'name@company.ru',
+            fullName: 'Portal User',
+            id: 7,
+          },
+          userId: 7,
+        },
+        tenantSlug: 'buhfirma',
+        userId: 7,
+      },
+      version: 1,
+    }),
+  )
+}
+
 function AuthProbe() {
   const { removeLocalDeviceData, sessionSource, status, user } =
     useAuthSession()
@@ -177,6 +208,7 @@ describe('AuthSessionProvider offline startup', () => {
 
   beforeEach(async () => {
     vi.stubGlobal('fetch', fetchMock)
+    window.localStorage.clear()
     await clearOfflineDatabaseForTests()
   })
 
@@ -184,6 +216,7 @@ describe('AuthSessionProvider offline startup', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    window.localStorage.clear()
     fetchMock.mockReset()
   })
 
@@ -198,6 +231,31 @@ describe('AuthSessionProvider offline startup', () => {
     expect(await screen.findByText('authenticated')).toBeInTheDocument()
     expect(screen.getByText('cached')).toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
+  })
+
+  it('opens protected auth on the first render from startup cache', () => {
+    saveStartupAuthSnapshot()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+
+    renderProtectedRoute()
+
+    expect(screen.getByText('Protected chat')).toBeInTheDocument()
+    expect(screen.queryByText('Login route')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Нужно проверить сессию.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not open protected auth from an invalid startup auth expiry', () => {
+    saveStartupAuthSnapshot({
+      offlineAccessUntil: 'not-a-date',
+    })
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+
+    renderProtectedRoute()
+
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Login route')).not.toBeInTheDocument()
   })
 
   it('does not let delayed cached auth fallback overwrite a fresh online session', async () => {
@@ -429,6 +487,11 @@ describe('AuthSessionProvider offline startup', () => {
 
   it('clears rejected auth snapshot on 401 and routes to login', async () => {
     await saveTenantAndCachedAuth()
+    saveStartupAuthSnapshot()
+    window.localStorage.setItem(
+      `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      'stale chat mirror',
+    )
     fetchMock.mockResolvedValueOnce(createUnauthorizedResponse())
 
     renderProtectedRoute()
@@ -440,6 +503,16 @@ describe('AuthSessionProvider offline startup', () => {
     await expect(
       offlineStore.readLastActiveIdentity(window.location.host),
     ).resolves.toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.auth:${window.location.host}`,
+      ),
+    ).toBeNull()
+    expect(
+      window.localStorage.getItem(
+        `portal.startup.chat:${window.location.host}:buhfirma:7`,
+      ),
+    ).toBeNull()
   })
 
   it('routes to login on 401 even when offline cleanup fails', async () => {
