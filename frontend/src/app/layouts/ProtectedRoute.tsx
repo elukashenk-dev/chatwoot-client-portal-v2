@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { routePaths } from '../routePaths'
 import { useAuthSession } from '../../features/auth/lib/authSessionContext'
 import { LocalDeviceDataRemoval } from '../../features/offline/LocalDeviceDataRemoval'
-import { StartupScreenGate } from '../../features/tenant/components/StartupScreenGate'
+import { useStartupSurfaceReport } from '../../features/tenant/startup/startupSurfaceContext'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
 import { PortalFrame } from '../../shared/ui/PortalFrame'
@@ -85,6 +85,14 @@ export function ProtectedRoute() {
     user,
   } = useAuthSession()
 
+  useStartupSurfaceReport({
+    active: status === 'checking',
+    description: 'Проверяем доступ и готовим защищенную зону.',
+    phase: 'session',
+    statusLabel: 'Проверяем сессию',
+    title: 'Открываем кабинет',
+  })
+
   if (status === 'error') {
     return (
       <ProtectedSessionError
@@ -108,25 +116,13 @@ export function ProtectedRoute() {
     )
   }
 
-  return (
-    <StartupScreenGate
-      active={status === 'checking'}
-      fallback={{
-        description: 'Проверяем доступ и готовим защищенную зону.',
-        mode: 'screen',
-        statusLabel: 'Проверяем сессию',
-        title: 'Открываем кабинет',
-      }}
-    >
-      {status === 'authenticated' && user ? (
-        <Outlet />
-      ) : (
-        <Navigate
-          replace
-          state={{ from: location }}
-          to={routePaths.auth.login}
-        />
-      )}
-    </StartupScreenGate>
+  if (status === 'checking') {
+    return null
+  }
+
+  return status === 'authenticated' && user ? (
+    <Outlet />
+  ) : (
+    <Navigate replace state={{ from: location }} to={routePaths.auth.login} />
   )
 }

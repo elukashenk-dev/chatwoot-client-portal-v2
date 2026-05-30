@@ -355,6 +355,14 @@ describe('LoginPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
+    expect(
+      screen
+        .getByRole('heading', { name: 'Открываем кабинет' })
+        .closest('.fixed'),
+    ).toHaveClass('inset-0')
+    expect(
+      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
+    ).toHaveLength(1)
     expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
   })
 
@@ -375,12 +383,38 @@ describe('LoginPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Открываем кабинет' }),
     ).toBeInTheDocument()
+    expect(
+      screen
+        .getByRole('heading', { name: 'Открываем кабинет' })
+        .closest('.fixed'),
+    ).toHaveClass('inset-0')
     expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
     expect(
       screen.queryByText(
         'Проверяем, нужно ли открыть форму входа или защищенную клиентскую зону.',
       ),
     ).not.toBeInTheDocument()
+  })
+
+  it('keeps one startup heading while checking public auth session', () => {
+    vi.useFakeTimers()
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    renderAuthRoutes(['/auth/login'])
+
+    act(() => {
+      vi.advanceTimersByTime(450)
+    })
+
+    expect(
+      screen.getAllByRole('heading', { name: 'Открываем кабинет' }),
+    ).toHaveLength(1)
+    expect(
+      screen
+        .getByRole('heading', { name: 'Открываем кабинет' })
+        .closest('.fixed'),
+    ).toHaveClass('inset-0')
+    expect(screen.getByText('Проверяем сессию')).toBeInTheDocument()
   })
 
   it.each([

@@ -5,7 +5,7 @@ import { AppShellLayout } from './layouts/AppShellLayout'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
-import { DeferredStartupScreen } from '../features/tenant/components/StartupScreenGate'
+import { useStartupSurfaceReport } from '../features/tenant/startup/startupSurfaceContext'
 
 function lazyRouteComponent<TProps extends object>(
   loadComponent: () => Promise<ComponentType<TProps>>,
@@ -62,20 +62,21 @@ const UserNotificationsPage = lazyRouteComponent(() =>
   ),
 )
 
+function RouteChunkStartupFallback() {
+  useStartupSurfaceReport({
+    active: true,
+    description: 'Загружаем экран.',
+    phase: 'route',
+    statusLabel: 'Загружаем экран',
+    title: 'Открываем кабинет',
+  })
+
+  return null
+}
+
 function LazyRoute({ children }: { children: ReactNode }) {
   return (
-    <Suspense
-      fallback={
-        <DeferredStartupScreen
-          description="Загружаем экран."
-          mode="inline"
-          statusLabel="Загружаем экран"
-          title="Открываем кабинет"
-        />
-      }
-    >
-      {children}
-    </Suspense>
+    <Suspense fallback={<RouteChunkStartupFallback />}>{children}</Suspense>
   )
 }
 

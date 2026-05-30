@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -10,6 +11,10 @@ import {
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantAuthShell } from '../components/TenantAuthShell'
+import {
+  StartupSurfaceOverlay,
+  StartupSurfaceProvider,
+} from '../startup/StartupSurfaceProvider'
 import { TenantProvider } from './TenantProvider'
 import { createTenantMonogram } from './tenantIdentityMetadata'
 import { useTenantIdentity } from './useTenantIdentity'
@@ -85,6 +90,15 @@ function createDeferred<T>() {
   }
 }
 
+function renderWithStartupSurface(ui: ReactElement) {
+  return render(
+    <StartupSurfaceProvider>
+      {ui}
+      <StartupSurfaceOverlay />
+    </StartupSurfaceProvider>,
+  )
+}
+
 describe('TenantProvider', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
@@ -109,7 +123,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -142,7 +156,7 @@ describe('TenantProvider', () => {
       }),
     )
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
         <TenantAuthShell description="Описание" title="Клиентский портал">
@@ -185,7 +199,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockResolvedValueOnce(createTenantResponse())
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -209,7 +223,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -231,13 +245,14 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
 
     await advanceBootTimers(BOOT_SLOW_NOTICE_MS)
+    await advanceBootTimers(0)
 
     expect(
       screen.getByText(
@@ -261,7 +276,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -297,7 +312,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -318,7 +333,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -339,7 +354,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -367,7 +382,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -397,7 +412,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -422,7 +437,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -444,7 +459,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockResolvedValueOnce(createTenantResponse())
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -478,7 +493,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockReturnValueOnce(onlineTenant.promise)
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -508,7 +523,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    render(
+    renderWithStartupSurface(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,

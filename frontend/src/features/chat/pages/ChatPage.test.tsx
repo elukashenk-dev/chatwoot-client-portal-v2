@@ -179,6 +179,7 @@ describe('ChatPage', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     Object.defineProperty(globalThis.navigator, 'mediaDevices', {
       configurable: true,
@@ -200,6 +201,28 @@ describe('ChatPage', () => {
       .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
   }
+
+  it('shows one unified startup surface while initial chat runtime is loading', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockReturnValueOnce(new Promise<Response>(() => {}))
+
+    renderChatRoute()
+
+    await waitFor(() => {
+      expect(screen.getByText('Готовим чат')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getAllByRole('heading', { name: 'Добро пожаловать, Portal' }),
+    ).toHaveLength(1)
+    expect(
+      screen
+        .getByRole('heading', { name: 'Добро пожаловать, Portal' })
+        .closest('.fixed'),
+    ).toHaveClass('inset-0')
+    expect(screen.getByText('Готовим чат')).toBeInTheDocument()
+  })
 
   it('renders the backend-owned ready transcript without direct chat authority in the browser', async () => {
     mockInitialReadyChatResponses()

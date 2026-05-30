@@ -201,6 +201,10 @@
   clean commit `af4fe43`; post-deploy smoke подтвердил health, tenant manifest,
   `/api/tenant`, root app shell, inline chat startup fallback и stamped
   `/sw.js` с новыми frontend assets.
+- Unified startup surface follow-up реализован: tenant boot, auth session,
+  lazy route fallback и initial chat loading теперь report-ятся в один
+  root-level startup coordinator; старый nested `StartupScreenGate` удален, а
+  initial document background выровнен с PWA splash surface.
 
 ## Current Baseline
 

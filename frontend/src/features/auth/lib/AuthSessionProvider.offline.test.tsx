@@ -15,6 +15,10 @@ import {
   removeLocalDeviceDataAndBlockCachedOpen,
 } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
+import {
+  StartupSurfaceOverlay,
+  StartupSurfaceProvider,
+} from '../../tenant/startup/StartupSurfaceProvider'
 import { AuthSessionProvider } from './AuthSessionProvider'
 import { useAuthSession } from './authSessionContext'
 
@@ -158,21 +162,24 @@ function renderAuthProbe() {
 
 function renderProtectedRoute() {
   render(
-    <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>
-        <MemoryRouter initialEntries={['/app/chat']}>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route path="/app/chat" element={<div>Protected chat</div>} />
-            </Route>
-            <Route
-              element={<div>Login route</div>}
-              path={routePaths.auth.login}
-            />
-          </Routes>
-        </MemoryRouter>
-      </AuthSessionProvider>
-    </TenantIdentityContext.Provider>,
+    <StartupSurfaceProvider>
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <AuthSessionProvider>
+          <MemoryRouter initialEntries={['/app/chat']}>
+            <Routes>
+              <Route element={<ProtectedRoute />}>
+                <Route path="/app/chat" element={<div>Protected chat</div>} />
+              </Route>
+              <Route
+                element={<div>Login route</div>}
+                path={routePaths.auth.login}
+              />
+            </Routes>
+          </MemoryRouter>
+        </AuthSessionProvider>
+      </TenantIdentityContext.Provider>
+      <StartupSurfaceOverlay />
+    </StartupSurfaceProvider>,
   )
 }
 

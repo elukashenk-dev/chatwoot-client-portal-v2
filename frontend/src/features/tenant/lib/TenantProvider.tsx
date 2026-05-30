@@ -24,7 +24,7 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
-import { StartupScreenGate } from '../components/StartupScreenGate'
+import { useStartupSurfaceReport } from '../startup/startupSurfaceContext'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -356,32 +356,29 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   const shouldRenderChildren =
     status === 'ready' || status === 'ready_cached' || status === 'error'
-  const isStartupPending =
-    status === 'loading' || status === 'slow_connection'
-  const startupScreenProps =
-    status === 'slow_connection'
-      ? {
-          description:
-            'Связь отвечает медленно. Проверяем сохраненные данные.',
-          statusLabel: 'Проверяем сохраненные данные',
-          title: 'Открываем кабинет',
-        }
-      : {
-          description: 'Загружаем настройки.',
-          statusLabel: 'Открываем кабинет',
-          title: 'Открываем кабинет',
-        }
+  const isStartupPending = status === 'loading' || status === 'slow_connection'
+
+  useStartupSurfaceReport({
+    active: isStartupPending,
+    description:
+      status === 'slow_connection'
+        ? 'Связь отвечает медленно. Проверяем сохраненные данные.'
+        : 'Загружаем настройки.',
+    phase: status === 'slow_connection' ? 'tenant_slow' : 'tenant',
+    statusLabel:
+      status === 'slow_connection'
+        ? 'Проверяем сохраненные данные'
+        : 'Загружаем настройки',
+    title: 'Открываем кабинет',
+  })
 
   return (
     <TenantIdentityContext.Provider value={value}>
-      {status === 'online_required' ? null : (
-        <StartupScreenGate
-          active={isStartupPending}
-          fallback={startupScreenProps}
-        >
-          {shouldRenderChildren ? children : null}
-        </StartupScreenGate>
-      )}
+      {status === 'online_required'
+        ? null
+        : shouldRenderChildren
+          ? children
+          : null}
       {status === 'online_required' ? (
         <TenantOnlineRequiredState
           description={errorMessage ?? undefined}
