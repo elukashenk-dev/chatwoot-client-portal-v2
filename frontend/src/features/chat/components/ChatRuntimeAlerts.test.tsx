@@ -7,8 +7,8 @@ describe('ChatRuntimeAlerts', () => {
   it('renders one compact offline notice with queued text count', () => {
     const { container } = render(
       <ChatRuntimeAlerts
+        connectionStatus="offline"
         isChatAvailable
-        isOnline={false}
         isRealtimeSupported
         queuedSendCount={1}
         resyncStatus="idle"
@@ -34,8 +34,8 @@ describe('ChatRuntimeAlerts', () => {
   it('renders one offline notice for saved chat data without queued sends', () => {
     const { container } = render(
       <ChatRuntimeAlerts
+        connectionStatus="offline"
         isChatAvailable
-        isOnline={false}
         isRealtimeSupported
         queuedSendCount={0}
         resyncStatus="idle"
@@ -58,8 +58,8 @@ describe('ChatRuntimeAlerts', () => {
   it('keeps reconnecting status as a single notice', () => {
     const { container } = render(
       <ChatRuntimeAlerts
+        connectionStatus="online"
         isChatAvailable
-        isOnline
         isRealtimeSupported
         queuedSendCount={2}
         resyncStatus="resyncing"
@@ -72,5 +72,24 @@ describe('ChatRuntimeAlerts', () => {
     expect(
       container.querySelectorAll('[role="status"], [role="alert"]'),
     ).toHaveLength(1)
+  })
+
+  it('does not render saved-chat offline notice while cached boot is connecting', () => {
+    const { container } = render(
+      <ChatRuntimeAlerts
+        connectionStatus="connecting"
+        isChatAvailable
+        isRealtimeSupported
+        queuedSendCount={0}
+        resyncStatus="idle"
+      />,
+    )
+
+    expect(
+      screen.queryByText('Нет связи. Показываем сохраненные сообщения.'),
+    ).not.toBeInTheDocument()
+    expect(
+      container.querySelectorAll('[role="status"], [role="alert"]'),
+    ).toHaveLength(0)
   })
 })

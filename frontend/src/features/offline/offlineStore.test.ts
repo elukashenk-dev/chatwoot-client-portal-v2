@@ -15,6 +15,7 @@ import {
 import {
   OFFLINE_DATABASE_NAME,
   OFFLINE_DATABASE_VERSION,
+  type OfflineChatMessagePageRecord,
   type OfflineTextOutboxRecord,
 } from './types'
 
@@ -77,13 +78,14 @@ describe('offline store database', () => {
     await clearOfflineDatabaseForTests()
   })
 
-  it('opens stable portal-offline database with schema version 1', async () => {
+  it('opens stable portal-offline database with schema version 2', async () => {
     const database = await openOfflineDatabase()
 
     expect(database.name).toBe(OFFLINE_DATABASE_NAME)
     expect(database.version).toBe(OFFLINE_DATABASE_VERSION)
     expect(Array.from(database.objectStoreNames).sort()).toEqual([
       'auth_snapshots',
+      'chat_message_pages',
       'chat_message_snapshots',
       'chat_text_outbox',
       'chat_thread_lists',
@@ -95,6 +97,48 @@ describe('offline store database', () => {
     ])
 
     database.close()
+  })
+
+  it('stores and reads message pages by tenant user thread and cursor scope', async () => {
+    const record: OfflineChatMessagePageRecord = {
+      pageCursor: 'before:101',
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: {
+        activeThread: {
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+        },
+        hasMoreOlder: false,
+        messages: [],
+        nextOlderCursor: null,
+        reason: 'none',
+        result: 'ready',
+      },
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    }
+
+    await offlineStore.saveMessagePage(record)
+
+    await expect(
+      offlineStore.readMessagePage(
+        'buhfirma',
+        7,
+        'private:me',
+        'before:101',
+      ),
+    ).resolves.toEqual(record)
+    await expect(
+      offlineStore.readMessagePage(
+        'buhfirma',
+        8,
+        'private:me',
+        'before:101',
+      ),
+    ).resolves.toBeNull()
   })
 
   it('stores tenant and auth records under host and tenant/user scopes', async () => {
@@ -252,6 +296,18 @@ describe('offline store database', () => {
       userId: 7,
     })
     await putRawRecord(
+      'chat_message_pages',
+      'buhfirma:7:private:me:before:101',
+      {
+        pageCursor: 'before:101',
+        savedAt: '2026-05-27T10:00:00.000Z',
+        snapshot: { messages: [] },
+        tenantSlug: 'buhfirma',
+        threadId: 'private:me',
+        userId: 7,
+      },
+    )
+    await putRawRecord(
       'chat_text_outbox',
       'buhfirma:7:private:me:portal-send:test',
       createQueuedOutboxRecord(),
@@ -282,6 +338,9 @@ describe('offline store database', () => {
     ).resolves.toMatchObject({ user: { id: 8 } })
     await expect(
       readRawRecord('chat_message_snapshots', 'buhfirma:7:private:me'),
+    ).resolves.toBeUndefined()
+    await expect(
+      readRawRecord('chat_message_pages', 'buhfirma:7:private:me:before:101'),
     ).resolves.toBeUndefined()
     await expect(
       readRawRecord(
@@ -438,6 +497,18 @@ describe('offline store database', () => {
       threads: [],
       userId: 8,
     })
+    await putRawRecord(
+      'chat_message_pages',
+      'buhfirma:8:private:me:before:101',
+      {
+        pageCursor: 'before:101',
+        savedAt: '2026-04-01T10:00:00.000Z',
+        snapshot: { messages: [] },
+        tenantSlug: 'buhfirma',
+        threadId: 'private:me',
+        userId: 8,
+      },
+    )
     await offlineStore.saveThreadList({
       activeThreadId: 'private:me',
       savedAt: '2026-04-01T10:00:00.000Z',
@@ -468,6 +539,9 @@ describe('offline store database', () => {
       readRawRecord('push_stale_markers', 'buhfirma:7:private:me:9001'),
     ).resolves.toBeUndefined()
     await expect(offlineStore.readThreadList('buhfirma', 8)).resolves.toBeNull()
+    await expect(
+      readRawRecord('chat_message_pages', 'buhfirma:8:private:me:before:101'),
+    ).resolves.toBeUndefined()
     await expect(
       offlineStore.readThreadList('buhfirma', 9),
     ).resolves.toMatchObject({ userId: 9 })

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
   createRequestTimeout,
   withBootReadDeadline,
@@ -35,6 +35,10 @@ import {
 type AuthSessionProviderProps = {
   children: ReactNode
 }
+
+type CachedSessionOpenMode =
+  | 'allow_session_check_required'
+  | 'authenticated_only'
 
 export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
   const { tenant } = useTenantIdentity()
@@ -110,9 +114,11 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     async ({
       cachedSessionPromise,
       isCurrentAttempt,
+      mode,
     }: {
       cachedSessionPromise: ReturnType<typeof readCachedAuthSession>
       isCurrentAttempt: () => boolean
+      mode: CachedSessionOpenMode
     }) => {
       const canUseCachedFallback = () =>
         isCurrentAttempt() && statusRef.current === 'checking'
@@ -128,15 +134,16 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
       }
 
       if (cachedSession.status === 'session_check_required') {
-        clearDeadlineTimers()
-        cancelStartupRequest()
-        requireOnlineSessionCheck(cachedSession.scope)
+        if (mode === 'allow_session_check_required') {
+          clearDeadlineTimers()
+          cancelStartupRequest()
+          requireOnlineSessionCheck(cachedSession.scope)
+        }
 
         return false
       }
 
       clearDeadlineTimers()
-      cancelStartupRequest()
       setUser(cachedSession.snapshot.user)
       setSessionSource('cached')
       setOfflineRemovalScope(cachedSession.scope)
@@ -171,6 +178,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           scope: null,
           status: 'session_check_required',
         },
+        BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
       )
     const currentSessionPromise = getCurrentSession({
       signal: requestTimeout.signal,
@@ -181,13 +189,20 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     setAuthStatus('checking')
     setErrorMessage(null)
 
+    void openCachedSession({
+      cachedSessionPromise,
+      isCurrentAttempt,
+      mode: 'authenticated_only',
+    })
+
     deadlineTimersRef.current.push(
       window.setTimeout(() => {
-        void openCachedSession({ cachedSessionPromise, isCurrentAttempt })
-      }, BOOT_CACHE_FALLBACK_MS),
-      window.setTimeout(() => {
         if (isCurrentAttempt() && statusRef.current === 'checking') {
-          void openCachedSession({ cachedSessionPromise, isCurrentAttempt })
+          void openCachedSession({
+            cachedSessionPromise,
+            isCurrentAttempt,
+            mode: 'allow_session_check_required',
+          })
         }
       }, BOOT_ONLINE_REQUIRED_MS),
     )
@@ -319,7 +334,11 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
             return
           }
 
-          await openCachedSession({ cachedSessionPromise, isCurrentAttempt })
+          await openCachedSession({
+            cachedSessionPromise,
+            isCurrentAttempt,
+            mode: 'allow_session_check_required',
+          })
           return
         }
 
@@ -414,7 +433,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     isMountedRef.current = true
     let isStartupQueued = true
 
-    queueMicrotask(() => {
+    void Promise.resolve().then(() => {
       if (isStartupQueued) {
         void resolveCurrentSession()
       }

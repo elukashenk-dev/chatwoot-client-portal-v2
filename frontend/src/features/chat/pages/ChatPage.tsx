@@ -3,7 +3,6 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { ChatApiClientError } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
-import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
@@ -21,7 +20,11 @@ import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQue
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import { ChatComposerDock } from './ChatComposerDock'
-import { INITIAL_CHAT_PAGE_STATE, type ChatPageState } from './chatPageState'
+import {
+  INITIAL_CHAT_PAGE_STATE,
+  type ChatPageState,
+  type ChatReachability,
+} from './chatPageState'
 import { useChatAttachmentSend } from './useChatAttachmentSend'
 import { useChatOutboxDrainIntegration } from './useChatOutboxDrainIntegration'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
@@ -66,15 +69,32 @@ export function ChatPage() {
     markOnline: markBrowserOnline,
     navigatorHintIsOnline,
   } = useBrowserConnectionState()
+  const [chatReachability, setChatReachability] =
+    useState<ChatReachability>(() =>
+      typeof navigator === 'undefined' || navigator.onLine
+        ? 'connecting'
+        : 'offline',
+    )
   const isRealtimeSupported = typeof EventSource !== 'undefined'
   const canUseOfflineTextQueue = useOfflineTextQueueAvailability({
     sessionSource,
     tenantSlug,
     userId,
   })
-  const isUsingCachedChatData =
-    pageState.status === 'ready' && pageState.isUsingCachedData
-  const isConnectionAvailable = isBrowserOnline && !isUsingCachedChatData
+  const connectionStatus: ChatReachability = isBrowserOnline
+    ? chatReachability
+    : 'offline'
+  const canUseBackend = connectionStatus === 'online'
+
+  const markChatOnline = useCallback(() => {
+    markBrowserOnline()
+    setChatReachability('online')
+  }, [markBrowserOnline])
+
+  const markChatOffline = useCallback(() => {
+    markBrowserOffline()
+    setChatReachability('offline')
+  }, [markBrowserOffline])
 
   const handleUnauthorizedChatError = useCallback(
     async (error: unknown) => {
@@ -95,11 +115,11 @@ export function ChatPage() {
         return false
       }
 
-      markBrowserOffline()
+      markChatOffline()
 
       return true
     },
-    [markBrowserOffline],
+    [markChatOffline],
   )
 
   const {
@@ -113,9 +133,9 @@ export function ChatPage() {
   } = useChatSearchResultContext({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline: isConnectionAvailable,
+    isBrowserOnline: canUseBackend,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
     setHistoryErrorMessage,
   })
@@ -128,9 +148,9 @@ export function ChatPage() {
   } = useChatAttachmentSend({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline: isConnectionAvailable,
+    isBrowserOnline: canUseBackend,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     onAttachmentSendStarted: clearHistoryFragment,
     pageState,
     setPageState,
@@ -139,9 +159,11 @@ export function ChatPage() {
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOffline,
-    markBrowserOnline,
+    markBrowserOffline: markChatOffline,
+    markBrowserOnline: markChatOnline,
+    navigatorHintIsOnline,
     pageState,
+    setChatReachability,
     setHistoryErrorMessage,
     setPageState,
     setReplyTarget,
@@ -149,11 +171,12 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
+  const loadInitialChatRef = useRef(loadInitialChat)
   const chatInfoPanel = useChatInfoPanel({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
   const chatMediaPanel = useChatMediaPanel({
@@ -161,14 +184,14 @@ export function ChatPage() {
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
   const chatNotificationsPanel = useChatNotificationsPanel({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
   const chatSearchPanel = useChatSearchPanel({
@@ -176,32 +199,38 @@ export function ChatPage() {
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
   })
   const supportAvailability = useChatSupportAvailability({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline: isConnectionAvailable && pageState.status === 'ready',
+    isBrowserOnline: canUseBackend && pageState.status === 'ready',
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
   })
   const { handleLoadOlderMessages, isLoadingOlder } = useChatOlderMessages({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline: isConnectionAvailable,
+    isBrowserOnline: canUseBackend,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     pageState,
     setHistoryErrorMessage,
     setPageState,
+    tenantSlug,
+    userId,
   })
+
+  useEffect(() => {
+    loadInitialChatRef.current = loadInitialChat
+  }, [loadInitialChat])
 
   useEffect(() => {
     isMountedRef.current = true
     void clearAppIconBadge()
     const bootstrapTimerId = window.setTimeout(() => {
-      void loadInitialChat()
+      void loadInitialChatRef.current()
     }, 0)
 
     function handleVisibilityChange() {
@@ -217,13 +246,13 @@ export function ChatPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       isMountedRef.current = false
     }
-  }, [loadInitialChat])
+  }, [])
 
   const refreshChatSnapshot = useChatSnapshotRefresh({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     selectedThreadId: pageState.selectedThreadId,
     setPageState,
   })
@@ -240,7 +269,7 @@ export function ChatPage() {
     userId,
   })
   useChatPushStaleMarkerRefresh({
-    isBrowserOnline: isConnectionAvailable,
+    isBrowserOnline: canUseBackend,
     pageState,
     setPageState,
     tenantSlug,
@@ -264,7 +293,7 @@ export function ChatPage() {
 
   useChatRealtimeConnection({
     isMountedRef,
-    markBrowserOnline,
+    markBrowserOnline: markChatOnline,
     setPageState,
     threadId: realtimeThreadId,
   })
@@ -288,7 +317,7 @@ export function ChatPage() {
     optimisticTextSends,
   } = useOptimisticTextSend({
     canUseOfflineTextQueue,
-    isBrowserOnline: isConnectionAvailable,
+    isBrowserOnline: canUseBackend,
     onOutboxRecordQueued: requestOutboxDrain,
     onTextSendStarted: () => {
       clearHistoryFragment()
@@ -307,8 +336,8 @@ export function ChatPage() {
     drainRequestSignal: outboxDrainRequestSignal,
     handleOutboxSendSucceeded,
     hydrateOptimisticTextSendsFromOutbox,
-    isBrowserOnline: isConnectionAvailable,
-    markBrowserOffline,
+    isBrowserOnline: canUseBackend,
+    markBrowserOffline: markChatOffline,
     pageState,
     refreshSession,
     tenantSlug,
@@ -364,7 +393,7 @@ export function ChatPage() {
     <>
       <ChatHeader
         activeThread={headerThread}
-        isConnectionAvailable={isConnectionAvailable}
+        connectionStatus={connectionStatus}
         onOpenThreadSearch={() => {
           clearSearchResultOpenError()
           chatSearchPanel.openChatSearch()
@@ -391,7 +420,7 @@ export function ChatPage() {
       />
       <ChatRuntimeAlerts
         isChatAvailable={shouldRenderTranscript}
-        isOnline={isConnectionAvailable}
+        connectionStatus={connectionStatus}
         isRealtimeSupported={isRealtimeSupported}
         queuedSendCount={
           optimisticTextSends.filter(
@@ -404,10 +433,6 @@ export function ChatPage() {
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
-        {pageState.status === 'loading' ? (
-          <ChatLoadingState userName={user?.fullName} />
-        ) : null}
-
         {pageState.status === 'error' ? (
           <ChatNotReadyState
             isUnavailable
@@ -460,7 +485,7 @@ export function ChatPage() {
                 : null
             }
             historyErrorMessage={historyErrorMessage}
-            isConnectionAvailable={isConnectionAvailable}
+            isConnectionAvailable={canUseBackend}
             isLoadingOlder={isLoadingOlder}
             messages={transcriptMessages}
             onLoadOlder={() => {
@@ -479,7 +504,7 @@ export function ChatPage() {
           canSend={canSend}
           handleSendAttachment={handleSendAttachment}
           handleSendMessage={handleSendMessage}
-          isBrowserOnline={isConnectionAvailable}
+          isBrowserOnline={canUseBackend}
           isSending={isSending}
           onCancelReply={() => {
             setReplyTarget(null)

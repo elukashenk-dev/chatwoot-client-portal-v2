@@ -1,5 +1,7 @@
 import type { ChatMessagesSnapshot, ChatThreadSummary } from '../types'
 
+export type ChatReachability = 'connecting' | 'offline' | 'online'
+
 export type ChatPageCacheState = {
   cachedSavedAt: string | null
   isUsingCachedData: boolean

@@ -6,7 +6,7 @@ const APP_BADGE_STORE_NAME = 'state'
 const APP_BADGE_COUNT_KEY = 'chat_push_count'
 const APP_BADGE_MAX_COUNT = 9999
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
-const PORTAL_OFFLINE_DATABASE_VERSION = 1
+const PORTAL_OFFLINE_DATABASE_VERSION = 2
 const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
 const TEXT_OUTBOX_BACKGROUND_SYNC_TAG = 'portal-text-outbox-drain'
 const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
@@ -20,6 +20,7 @@ const PORTAL_OFFLINE_STORES = [
   'auth_snapshots',
   'chat_thread_lists',
   'chat_message_snapshots',
+  'chat_message_pages',
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',

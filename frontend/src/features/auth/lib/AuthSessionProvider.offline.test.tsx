@@ -4,21 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ProtectedRoute } from '../../../app/layouts/ProtectedRoute'
 import { routePaths } from '../../../app/routePaths'
-import {
-  BOOT_CACHE_FALLBACK_MS,
-  BOOT_ONLINE_REQUIRED_MS,
-  BOOT_REQUEST_TIMEOUT_MS,
-} from '../../offline/bootCoordinator'
+import { BOOT_ONLINE_REQUIRED_MS } from '../../offline/bootCoordinator'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import {
   offlineStore,
   removeLocalDeviceDataAndBlockCachedOpen,
 } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
-import {
-  StartupSurfaceOverlay,
-  StartupSurfaceProvider,
-} from '../../tenant/startup/StartupSurfaceProvider'
 import { AuthSessionProvider } from './AuthSessionProvider'
 import { useAuthSession } from './authSessionContext'
 
@@ -162,24 +154,21 @@ function renderAuthProbe() {
 
 function renderProtectedRoute() {
   render(
-    <StartupSurfaceProvider>
-      <TenantIdentityContext.Provider value={tenantContextValue}>
-        <AuthSessionProvider>
-          <MemoryRouter initialEntries={['/app/chat']}>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route path="/app/chat" element={<div>Protected chat</div>} />
-              </Route>
-              <Route
-                element={<div>Login route</div>}
-                path={routePaths.auth.login}
-              />
-            </Routes>
-          </MemoryRouter>
-        </AuthSessionProvider>
-      </TenantIdentityContext.Provider>
-      <StartupSurfaceOverlay />
-    </StartupSurfaceProvider>,
+    <TenantIdentityContext.Provider value={tenantContextValue}>
+      <AuthSessionProvider>
+        <MemoryRouter initialEntries={['/app/chat']}>
+          <Routes>
+            <Route element={<ProtectedRoute />}>
+              <Route path="/app/chat" element={<div>Protected chat</div>} />
+            </Route>
+            <Route
+              element={<div>Login route</div>}
+              path={routePaths.auth.login}
+            />
+          </Routes>
+        </MemoryRouter>
+      </AuthSessionProvider>
+    </TenantIdentityContext.Provider>,
   )
 }
 
@@ -199,27 +188,20 @@ describe('AuthSessionProvider offline startup', () => {
   })
 
   it('opens protected auth from cached snapshot when /auth/me is slow', async () => {
-    await saveTenantAndCachedAuth()
-    useBootFakeTimers()
+    await saveTenantAndCachedAuth({
+      offlineAccessUntil: '2099-05-28T10:00:00.000Z',
+    })
     fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
 
     renderAuthProbe()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
-
-    expect(screen.getByText('authenticated')).toBeInTheDocument()
+    expect(await screen.findByText('authenticated')).toBeInTheDocument()
     expect(screen.getByText('cached')).toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
-
-    await advanceBootTimers(BOOT_REQUEST_TIMEOUT_MS - BOOT_CACHE_FALLBACK_MS)
-
-    expect(screen.getByText('authenticated')).toBeInTheDocument()
-    expect(screen.getByText('cached')).toBeInTheDocument()
   })
 
   it('does not let delayed cached auth fallback overwrite a fresh online session', async () => {
     await saveTenantAndCachedAuth()
-    useBootFakeTimers()
     const signoutRead =
       createDeferred<
         Awaited<ReturnType<typeof offlineStore.readLocalDeviceSignout>>
@@ -233,15 +215,13 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderAuthProbe()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
-
     await act(async () => {
       onlineSession.resolve(
         createSessionResponse({ email: 'online@company.ru' }),
       )
     })
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(screen.getByText('online')).toBeInTheDocument()
     })
 
@@ -268,7 +248,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -302,7 +282,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -318,7 +298,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
@@ -352,7 +332,7 @@ describe('AuthSessionProvider offline startup', () => {
 
     renderProtectedRoute()
 
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()

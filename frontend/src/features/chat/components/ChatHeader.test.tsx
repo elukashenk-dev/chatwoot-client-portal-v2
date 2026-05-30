@@ -69,7 +69,11 @@ const authSession: AuthSessionContextValue = {
   },
 }
 
-function renderHeader({ isConnectionAvailable = true } = {}) {
+function renderHeader({
+  connectionStatus = 'online',
+}: {
+  connectionStatus?: 'connecting' | 'offline' | 'online'
+} = {}) {
   renderWithRouter(
     <TenantIdentityContext.Provider
       value={{
@@ -87,7 +91,7 @@ function renderHeader({ isConnectionAvailable = true } = {}) {
       <AuthSessionContext.Provider value={authSession}>
         <ChatHeader
           activeThread={privateThread}
-          isConnectionAvailable={isConnectionAvailable}
+          connectionStatus={connectionStatus}
           onOpenThreadInfo={vi.fn()}
           onOpenThreadMedia={vi.fn()}
           onOpenThreadNotifications={vi.fn()}
@@ -105,13 +109,27 @@ function renderHeader({ isConnectionAvailable = true } = {}) {
 }
 
 describe('ChatHeader', () => {
-  it('prioritizes the connection status over the support subtitle on mobile', () => {
-    renderHeader({ isConnectionAvailable: false })
+  it('prioritizes offline connection status over the support subtitle on mobile', () => {
+    renderHeader({ connectionStatus: 'offline' })
 
     const subtitle = screen.getByText('Вы и поддержка')
     const offlineStatus = screen.getByRole('status', { name: 'Нет связи' })
 
     expect(subtitle).toHaveClass('hidden', 'sm:inline')
     expect(offlineStatus).toHaveClass('font-semibold', 'text-[#9f3141]')
+  })
+
+  it('shows connecting status while cached chat is checking the backend', () => {
+    renderHeader({ connectionStatus: 'connecting' })
+
+    expect(
+      screen.getByRole('status', { name: 'Соединение...' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows support availability when backend is reachable', () => {
+    renderHeader({ connectionStatus: 'online' })
+
+    expect(screen.getByRole('status', { name: 'На связи' })).toBeInTheDocument()
   })
 })

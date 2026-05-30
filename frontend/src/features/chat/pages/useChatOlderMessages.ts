@@ -12,6 +12,10 @@ import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   type ChatPageState,
 } from './chatPageState'
+import {
+  readOfflineOlderMessagePage,
+  saveOfflineOlderMessagePage,
+} from './offlineChatCache'
 
 type UseChatOlderMessagesInput = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -22,6 +26,8 @@ type UseChatOlderMessagesInput = {
   pageState: ChatPageState
   setHistoryErrorMessage: Dispatch<SetStateAction<string | null>>
   setPageState: Dispatch<SetStateAction<ChatPageState>>
+  tenantSlug: string | null
+  userId: number | null
 }
 
 export function useChatOlderMessages({
@@ -33,12 +39,13 @@ export function useChatOlderMessages({
   pageState,
   setHistoryErrorMessage,
   setPageState,
+  tenantSlug,
+  userId,
 }: UseChatOlderMessagesInput) {
   const [isLoadingOlder, setIsLoadingOlder] = useState(false)
 
   const handleLoadOlderMessages = useCallback(async () => {
     if (
-      !isBrowserOnline ||
       pageState.status !== 'ready' ||
       !pageState.snapshot.activeThread ||
       !pageState.selectedThreadId ||
@@ -49,11 +56,57 @@ export function useChatOlderMessages({
 
     setIsLoadingOlder(true)
     setHistoryErrorMessage(null)
+    const beforeMessageId = pageState.snapshot.nextOlderCursor
+    const pageCursor = `before:${beforeMessageId}` as const
     const threadId = pageState.selectedThreadId
+
+    if (!isBrowserOnline) {
+      const cachedOlderSnapshot =
+        tenantSlug && userId !== null
+          ? await readOfflineOlderMessagePage({
+              pageCursor,
+              tenantSlug,
+              threadId,
+              userId,
+            })
+          : null
+
+      if (!isMountedRef.current) {
+        return
+      }
+
+      if (!cachedOlderSnapshot) {
+        setHistoryErrorMessage(
+          'Более ранние сообщения не сохранены на этом устройстве.',
+        )
+        setIsLoadingOlder(false)
+        return
+      }
+
+      setPageState((currentState) => {
+        if (
+          currentState.status !== 'ready' ||
+          currentState.selectedThreadId !== threadId ||
+          cachedOlderSnapshot.activeThread?.id !== threadId
+        ) {
+          return currentState
+        }
+
+        return {
+          ...currentState,
+          snapshot: mergeOlderMessages(
+            currentState.snapshot,
+            cachedOlderSnapshot,
+          ),
+        }
+      })
+      setIsLoadingOlder(false)
+      return
+    }
 
     try {
       const olderSnapshot = await getChatMessages({
-        beforeMessageId: pageState.snapshot.nextOlderCursor,
+        beforeMessageId,
         threadId,
       })
 
@@ -67,6 +120,16 @@ export function useChatOlderMessages({
         )
 
         return
+      }
+
+      if (tenantSlug && userId !== null) {
+        void saveOfflineOlderMessagePage({
+          pageCursor,
+          snapshot: olderSnapshot,
+          tenantSlug,
+          threadId,
+          userId,
+        }).catch(() => undefined)
       }
 
       markBrowserOnline()
@@ -115,6 +178,8 @@ export function useChatOlderMessages({
     pageState,
     setHistoryErrorMessage,
     setPageState,
+    tenantSlug,
+    userId,
   ])
 
   return {

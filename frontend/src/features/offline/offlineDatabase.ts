@@ -4,6 +4,7 @@ import {
   OFFLINE_DATABASE_NAME,
   OFFLINE_DATABASE_VERSION,
   type OfflineAuthSnapshotRecord,
+  type OfflineChatMessagePageRecord,
   type OfflineChatMessageSnapshotRecord,
   type OfflineChatThreadListRecord,
   type OfflineLastActiveIdentityRecord,
@@ -21,6 +22,7 @@ export const OFFLINE_STORES = [
   'auth_snapshots',
   'chat_thread_lists',
   'chat_message_snapshots',
+  'chat_message_pages',
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
@@ -36,6 +38,10 @@ export interface PortalOfflineDatabase extends DBSchema {
   chat_message_snapshots: {
     key: string
     value: OfflineChatMessageSnapshotRecord
+  }
+  chat_message_pages: {
+    key: string
+    value: OfflineChatMessagePageRecord
   }
   chat_text_outbox: {
     key: string

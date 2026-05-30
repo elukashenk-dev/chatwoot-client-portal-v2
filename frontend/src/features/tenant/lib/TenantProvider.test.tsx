@@ -3,18 +3,13 @@ import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
   BOOT_REQUEST_TIMEOUT_MS,
-  BOOT_SLOW_NOTICE_MS,
 } from '../../offline/bootCoordinator'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantAuthShell } from '../components/TenantAuthShell'
-import {
-  StartupSurfaceOverlay,
-  StartupSurfaceProvider,
-} from '../startup/StartupSurfaceProvider'
 import { TenantProvider } from './TenantProvider'
 import { createTenantMonogram } from './tenantIdentityMetadata'
 import { useTenantIdentity } from './useTenantIdentity'
@@ -90,13 +85,8 @@ function createDeferred<T>() {
   }
 }
 
-function renderWithStartupSurface(ui: ReactElement) {
-  return render(
-    <StartupSurfaceProvider>
-      {ui}
-      <StartupSurfaceOverlay />
-    </StartupSurfaceProvider>,
-  )
+function renderTenant(ui: ReactElement) {
+  return render(ui)
 }
 
 describe('TenantProvider', () => {
@@ -119,31 +109,6 @@ describe('TenantProvider', () => {
     fetchMock.mockReset()
   })
 
-  it('does not show the boot splash before the anti-flicker delay', async () => {
-    vi.useFakeTimers()
-    fetchMock.mockReturnValueOnce(new Promise(() => {}))
-
-    renderWithStartupSurface(
-      <TenantProvider>
-        <TenantProbe />
-      </TenantProvider>,
-    )
-
-    expect(
-      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
-    ).not.toBeInTheDocument()
-    expect(screen.queryByText('Загружаем настройки.')).not.toBeInTheDocument()
-    expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
-
-    await advanceBootTimers(450)
-
-    expect(
-      screen.getByRole('heading', { name: 'Открываем кабинет' }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Загружаем настройки.')).toBeInTheDocument()
-    expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
-  })
-
   it('loads public tenant context and applies document metadata', async () => {
     fetchMock.mockResolvedValueOnce(
       createJsonResponse({
@@ -156,7 +121,7 @@ describe('TenantProvider', () => {
       }),
     )
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
         <TenantAuthShell description="Описание" title="Клиентский портал">
@@ -199,7 +164,7 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockResolvedValueOnce(createTenantResponse())
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -223,7 +188,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -240,43 +205,29 @@ describe('TenantProvider', () => {
     expect(document.title).toBe('Клиентский портал')
   })
 
-  it('opens cached tenant when online tenant request is slow', async () => {
+  it('opens cached tenant immediately when online tenant request hangs', async () => {
     await offlineStore.saveTenantContext(cachedTenantRecord())
-    vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
 
-    await advanceBootTimers(BOOT_SLOW_NOTICE_MS)
-    await advanceBootTimers(0)
-
-    expect(
-      screen.getByText(
-        'Связь отвечает медленно. Проверяем сохраненные данные.',
-      ),
-    ).toBeInTheDocument()
-
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS - BOOT_SLOW_NOTICE_MS)
-
-    expect(screen.getByText('ready_cached')).toBeInTheDocument()
+    expect(await screen.findByText('ready_cached')).toBeInTheDocument()
     expect(screen.getByText('cached tenant')).toBeInTheDocument()
     expect(screen.getByText('Бухфирма')).toBeInTheDocument()
-
-    await advanceBootTimers(BOOT_REQUEST_TIMEOUT_MS - BOOT_CACHE_FALLBACK_MS)
-
-    expect(screen.getByText('ready_cached')).toBeInTheDocument()
-    expect(screen.getByText('cached tenant')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
   })
 
-  it('leaves splash with online-required state when tenant cache is missing', async () => {
+  it('shows online-required state when tenant cache is missing', async () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -305,20 +256,20 @@ describe('TenantProvider', () => {
     expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
   })
 
-  it('leaves splash with controlled copy when saved tenant storage is unavailable', async () => {
+  it('shows controlled copy when saved tenant storage is unavailable', async () => {
     vi.useFakeTimers()
     vi.spyOn(offlineStore, 'readTenantContext').mockRejectedValueOnce(
       new DOMException('IndexedDB unavailable', 'InvalidStateError'),
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
 
-    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+    await advanceBootTimers(BOOT_LOCAL_CACHE_READ_DEADLINE_MS)
 
     expect(
       screen.getByText('Сохраненные данные недоступны. Нужно подключение.'),
@@ -326,20 +277,20 @@ describe('TenantProvider', () => {
     expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
   })
 
-  it('leaves splash with controlled copy when saved tenant cache read fails', async () => {
+  it('shows controlled copy when saved tenant cache read fails', async () => {
     vi.useFakeTimers()
     vi.spyOn(offlineStore, 'readTenantContext').mockRejectedValueOnce(
       new Error('cache read failed'),
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
 
-    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+    await advanceBootTimers(BOOT_LOCAL_CACHE_READ_DEADLINE_MS)
 
     expect(
       screen.getByText('Сохраненные данные недоступны. Нужно подключение.'),
@@ -347,20 +298,20 @@ describe('TenantProvider', () => {
     expect(screen.queryByText('no tenant')).not.toBeInTheDocument()
   })
 
-  it('leaves splash when saved tenant cache read never settles', async () => {
+  it('shows controlled copy when saved tenant cache read never settles', async () => {
     vi.useFakeTimers()
     vi.spyOn(offlineStore, 'readTenantContext').mockReturnValueOnce(
       new Promise(() => {}),
     )
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
 
-    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+    await advanceBootTimers(BOOT_LOCAL_CACHE_READ_DEADLINE_MS)
 
     expect(
       screen.getByText('Сохраненные данные недоступны. Нужно подключение.'),
@@ -382,7 +333,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -412,7 +363,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -437,7 +388,7 @@ describe('TenantProvider', () => {
       ),
     )
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -459,7 +410,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockResolvedValueOnce(createTenantResponse())
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
@@ -474,13 +425,11 @@ describe('TenantProvider', () => {
     expect(screen.getByText('ready')).toBeInTheDocument()
     expect(screen.getByText('online tenant')).toBeInTheDocument()
     expect(
-      screen.queryByText(
-        'Связь отвечает медленно. Проверяем сохраненные данные.',
-      ),
+      screen.queryByText('Проверяем сохраненные данные'),
     ).not.toBeInTheDocument()
   })
 
-  it('does not let delayed cache fallback overwrite a fresh online tenant', async () => {
+  it('does not let delayed cache read overwrite a fresh online tenant', async () => {
     vi.useFakeTimers()
     const cachedTenant =
       createDeferred<
@@ -493,13 +442,11 @@ describe('TenantProvider', () => {
     )
     fetchMock.mockReturnValueOnce(onlineTenant.promise)
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,
     )
-
-    await advanceBootTimers(BOOT_CACHE_FALLBACK_MS)
 
     await act(async () => {
       onlineTenant.resolve(createTenantResponse('Fresh Tenant'))
@@ -523,7 +470,7 @@ describe('TenantProvider', () => {
     vi.useFakeTimers()
     fetchMock.mockReturnValueOnce(new Promise(() => {}))
 
-    renderWithStartupSurface(
+    renderTenant(
       <TenantProvider>
         <TenantProbe />
       </TenantProvider>,

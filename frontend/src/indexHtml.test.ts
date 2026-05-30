@@ -12,9 +12,10 @@ const source = readFileSync(
 )
 
 describe('index.html', () => {
-  it('renders a pre-root startup splash before the React bundle loads', () => {
-    expect(source).toContain('id="portal-pre-root-startup"')
-    expect(source).toContain('Клиентский портал')
-    expect(source).toContain('Открываем кабинет')
+  it('does not render a portal-owned startup splash before the React bundle loads', () => {
+    expect(source).not.toContain('id="portal-pre-root-startup"')
+    expect(source).not.toContain('Открываем кабинет')
+    expect(source).not.toContain('Готовим чат')
+    expect(source).not.toContain('Загружаем экран')
   })
 })

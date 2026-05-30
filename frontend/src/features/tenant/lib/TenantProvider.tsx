@@ -2,9 +2,8 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  BOOT_CACHE_FALLBACK_MS,
+  BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_ONLINE_REQUIRED_MS,
-  BOOT_SLOW_NOTICE_MS,
   createRequestTimeout,
   isNetworkOrTimeoutError,
   withBootReadDeadline,
@@ -24,7 +23,6 @@ import {
   type TenantIdentityStatus,
 } from './tenantIdentityContext'
 import { applyTenantDocumentMetadata } from './tenantIdentityMetadata'
-import { useStartupSurfaceReport } from '../startup/startupSurfaceContext'
 
 type TenantProviderProps = {
   children: ReactNode
@@ -159,6 +157,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
         return 'cache_read_failed' as const
       }),
       'cache_read_timeout',
+      BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
     )
     const onlineTenantPromise = getPublicTenantContext({
       signal: requestTimeout.signal,
@@ -185,10 +184,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
     }
 
     const openCachedTenant = (cachedTenant: CachedTenantReadResult) => {
-      if (
-        statusRef.current !== 'loading' &&
-        statusRef.current !== 'slow_connection'
-      ) {
+      if (statusRef.current !== 'loading') {
         return false
       }
 
@@ -224,15 +220,9 @@ export function TenantProvider({ children }: TenantProviderProps) {
       setTenantStatus('online_required')
     }
 
+    void cachedTenantPromise.then(openCachedTenant)
+
     deadlineTimersRef.current.push(
-      window.setTimeout(() => {
-        if (isCurrentAttempt() && statusRef.current === 'loading') {
-          setTenantStatus('slow_connection')
-        }
-      }, BOOT_SLOW_NOTICE_MS),
-      window.setTimeout(() => {
-        void cachedTenantPromise.then(openCachedTenant)
-      }, BOOT_CACHE_FALLBACK_MS),
       window.setTimeout(() => {
         void cachedTenantPromise.then((cachedTenant) => {
           if (isUnavailableCachedTenantRead(cachedTenant)) {
@@ -330,7 +320,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
     isMountedRef.current = true
     let isStartupQueued = true
 
-    queueMicrotask(() => {
+    void Promise.resolve().then(() => {
       if (isStartupQueued) {
         startTenantLoad()
       }
@@ -356,21 +346,6 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
   const shouldRenderChildren =
     status === 'ready' || status === 'ready_cached' || status === 'error'
-  const isStartupPending = status === 'loading' || status === 'slow_connection'
-
-  useStartupSurfaceReport({
-    active: isStartupPending,
-    description:
-      status === 'slow_connection'
-        ? 'Связь отвечает медленно. Проверяем сохраненные данные.'
-        : 'Загружаем настройки.',
-    phase: status === 'slow_connection' ? 'tenant_slow' : 'tenant',
-    statusLabel:
-      status === 'slow_connection'
-        ? 'Проверяем сохраненные данные'
-        : 'Загружаем настройки',
-    title: 'Открываем кабинет',
-  })
 
   return (
     <TenantIdentityContext.Provider value={value}>

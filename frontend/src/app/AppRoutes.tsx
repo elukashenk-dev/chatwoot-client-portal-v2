@@ -5,9 +5,7 @@ import { AppShellLayout } from './layouts/AppShellLayout'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
-import { useTenantIdentity } from '../features/tenant/lib/useTenantIdentity'
-import { createStartupSurfaceBrand } from '../features/tenant/startup/startupSurfaceBrand'
-import { useStartupSurfaceReport } from '../features/tenant/startup/startupSurfaceContext'
+import { ChatPage } from '../features/chat/pages/ChatPage'
 
 function lazyRouteComponent<TProps extends object>(
   loadComponent: () => Promise<ComponentType<TProps>>,
@@ -50,9 +48,6 @@ const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
     (module) => module.PasswordResetSetPasswordPage,
   ),
 )
-const ChatPage = lazyRouteComponent(() =>
-  import('../features/chat/pages/ChatPage').then((module) => module.ChatPage),
-)
 const SettingsPage = lazyRouteComponent(() =>
   import('../features/settings/pages/SettingsPage').then(
     (module) => module.SettingsPage,
@@ -64,25 +59,8 @@ const UserNotificationsPage = lazyRouteComponent(() =>
   ),
 )
 
-function RouteChunkStartupFallback() {
-  const { tenant } = useTenantIdentity()
-
-  useStartupSurfaceReport({
-    active: true,
-    ...createStartupSurfaceBrand(tenant),
-    description: 'Загружаем экран.',
-    phase: 'route',
-    statusLabel: 'Загружаем экран',
-    title: 'Открываем кабинет',
-  })
-
-  return null
-}
-
 function LazyRoute({ children }: { children: ReactNode }) {
-  return (
-    <Suspense fallback={<RouteChunkStartupFallback />}>{children}</Suspense>
-  )
+  return <Suspense fallback={null}>{children}</Suspense>
 }
 
 export function AppRoutes() {
@@ -160,11 +138,7 @@ export function AppRoutes() {
           />
           <Route
             path="chat"
-            element={
-              <LazyRoute>
-                <ChatPage />
-              </LazyRoute>
-            }
+            element={<ChatPage />}
           />
           <Route
             path="settings"

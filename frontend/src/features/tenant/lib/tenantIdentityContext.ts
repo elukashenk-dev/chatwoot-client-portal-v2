@@ -8,7 +8,6 @@ export type TenantIdentityStatus =
   | 'online_required'
   | 'ready'
   | 'ready_cached'
-  | 'slow_connection'
 
 export type TenantIdentityContextValue = {
   errorMessage: string | null
