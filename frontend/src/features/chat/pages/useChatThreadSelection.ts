@@ -10,6 +10,12 @@ import { getChatMessages, getChatThreads } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
 import {
+  BOOT_CACHE_FALLBACK_MS,
+  BOOT_REQUEST_TIMEOUT_MS,
+  createRequestTimeout,
+  withBootReadDeadline,
+} from '../../offline/bootCoordinator'
+import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   readChatPageCacheState,
   type ChatPageState,
@@ -23,6 +29,7 @@ type UseChatThreadSelectionInput = {
   handleConnectionUnavailableError: (error: unknown) => boolean
   handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
   isMountedRef: MutableRefObject<boolean>
+  markBrowserOffline: () => void
   markBrowserOnline: () => void
   pageState: ChatPageState
   setHistoryErrorMessage: Dispatch<SetStateAction<string | null>>
@@ -41,6 +48,7 @@ export function useChatThreadSelection({
   handleConnectionUnavailableError,
   handleUnauthorizedChatError,
   isMountedRef,
+  markBrowserOffline,
   markBrowserOnline,
   pageState,
   setHistoryErrorMessage,
@@ -56,9 +64,11 @@ export function useChatThreadSelection({
 
   const openCachedChatFallback = useCallback(
     async ({
+      canOpen,
       preferredThreadId,
       requestId,
     }: {
+      canOpen?: () => boolean
       preferredThreadId: string | null
       requestId: number
     }) => {
@@ -66,20 +76,26 @@ export function useChatThreadSelection({
         return false
       }
 
-      const fallback = await readOfflineChatFallback({
-        preferredThreadId,
-        tenantSlug,
-        userId,
-      })
+      const fallback = await withBootReadDeadline(
+        readOfflineChatFallback({
+          preferredThreadId,
+          tenantSlug,
+          userId,
+        }),
+        null,
+        BOOT_CACHE_FALLBACK_MS,
+      )
 
       if (
         !fallback ||
         !isMountedRef.current ||
-        loadRequestIdRef.current !== requestId
+        loadRequestIdRef.current !== requestId ||
+        canOpen?.() === false
       ) {
         return false
       }
 
+      markBrowserOffline()
       setPageState({
         cachedSavedAt: fallback.cachedSavedAt,
         isUsingCachedData: true,
@@ -91,12 +107,36 @@ export function useChatThreadSelection({
 
       return true
     },
-    [isMountedRef, setPageState, tenantSlug, userId],
+    [isMountedRef, markBrowserOffline, setPageState, tenantSlug, userId],
   )
 
   const loadInitialChat = useCallback(async () => {
     const requestId = loadRequestIdRef.current + 1
     loadRequestIdRef.current = requestId
+    const requestTimeout = createRequestTimeout(BOOT_REQUEST_TIMEOUT_MS)
+    let cacheFallbackAllowed = true
+    let cachedFallbackOpened = false
+    let cachedFallbackPromise: Promise<boolean> | null = null
+    const tryOpenCachedFallback = () => {
+      if (!cacheFallbackAllowed) {
+        return Promise.resolve(false)
+      }
+
+      cachedFallbackPromise ??= openCachedChatFallback({
+        canOpen: () => cacheFallbackAllowed,
+        preferredThreadId: selectedThreadIdRef.current,
+        requestId,
+      }).then((opened) => {
+        cachedFallbackOpened = cachedFallbackOpened || opened
+
+        return opened
+      })
+
+      return cachedFallbackPromise
+    }
+    const cacheFallbackTimerId = window.setTimeout(() => {
+      void tryOpenCachedFallback()
+    }, BOOT_CACHE_FALLBACK_MS)
 
     setHistoryErrorMessage(null)
     setPageState((currentState) => ({
@@ -108,7 +148,9 @@ export function useChatThreadSelection({
     }))
 
     try {
-      const threadsResponse = await getChatThreads()
+      const threadsResponse = await getChatThreads({
+        signal: requestTimeout.signal,
+      })
       const selectedThreadId =
         threadsResponse.activeThreadId ??
         getFallbackThreadId(threadsResponse.threads)
@@ -122,7 +164,13 @@ export function useChatThreadSelection({
         }).catch(() => undefined)
       }
 
-      const snapshot = await getChatMessages({ threadId: selectedThreadId })
+      const snapshot = await getChatMessages({
+        signal: requestTimeout.signal,
+        threadId: selectedThreadId,
+      })
+      window.clearTimeout(cacheFallbackTimerId)
+      cacheFallbackAllowed = false
+      requestTimeout.cancel()
 
       if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
         return
@@ -137,26 +185,31 @@ export function useChatThreadSelection({
         threads: threadsResponse.threads,
       })
     } catch (error) {
+      window.clearTimeout(cacheFallbackTimerId)
+      requestTimeout.cancel()
+
       if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
         return
       }
 
       if (await handleUnauthorizedChatError(error)) {
+        cacheFallbackAllowed = false
         return
       }
 
       const canUseOfflineFallback = handleConnectionUnavailableError(error)
+      const cachedFallbackAlreadyOpened =
+        cachedFallbackOpened ||
+        (cachedFallbackPromise ? await cachedFallbackPromise : false)
 
       if (
-        canUseOfflineFallback &&
-        (await openCachedChatFallback({
-          preferredThreadId: selectedThreadIdRef.current,
-          requestId,
-        }))
+        cachedFallbackAlreadyOpened ||
+        (canUseOfflineFallback && (await tryOpenCachedFallback()))
       ) {
         return
       }
 
+      cacheFallbackAllowed = false
       setPageState((currentState) => ({
         ...ONLINE_CHAT_PAGE_CACHE_STATE,
         errorMessage:
@@ -192,6 +245,7 @@ export function useChatThreadSelection({
 
       const requestId = loadRequestIdRef.current + 1
       loadRequestIdRef.current = requestId
+      const requestTimeout = createRequestTimeout(BOOT_CACHE_FALLBACK_MS)
 
       setHistoryErrorMessage(null)
       setReplyTarget(null)
@@ -205,7 +259,11 @@ export function useChatThreadSelection({
       }))
 
       try {
-        const snapshot = await getChatMessages({ threadId })
+        const snapshot = await getChatMessages({
+          signal: requestTimeout.signal,
+          threadId,
+        })
+        requestTimeout.cancel()
 
         if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
           return
@@ -220,6 +278,8 @@ export function useChatThreadSelection({
           threads: currentState.threads,
         }))
       } catch (error) {
+        requestTimeout.cancel()
+
         if (!isMountedRef.current || loadRequestIdRef.current !== requestId) {
           return
         }

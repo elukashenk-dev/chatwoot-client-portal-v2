@@ -3,10 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
+import {
+  AuthSessionContext,
+  type AuthSessionContextValue,
+} from '../../auth/lib/authSessionContext'
 import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
+import { BOOT_CACHE_FALLBACK_MS } from '../../offline/bootCoordinator'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
+import { ChatPage } from './ChatPage'
 import type { ChatMessagesSnapshot } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
@@ -31,6 +37,12 @@ const privateThread = {
   title: 'Личный чат',
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
+const cachedAuthUser = {
+  email: 'name@company.ru',
+  fullName: 'Portal User',
+  id: 7,
+}
 
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -134,6 +146,41 @@ function renderChatRoute() {
   )
 }
 
+function renderChatPageWithCachedAuth() {
+  const authContextValue = {
+    errorMessage: null,
+    localDeviceDataRemovalAvailable: true,
+    refreshSession: vi.fn(async () => undefined),
+    removeLocalDeviceData: vi.fn(async () => undefined),
+    sessionSource: 'cached',
+    signIn: vi.fn(async () => cachedAuthUser),
+    signOut: vi.fn(async () => undefined),
+    status: 'authenticated',
+    user: cachedAuthUser,
+  } satisfies AuthSessionContextValue
+
+  renderWithRouter(
+    <TenantIdentityContext.Provider value={tenantContextValue}>
+      <AuthSessionContext.Provider value={authContextValue}>
+        <ChatPage />
+      </AuthSessionContext.Provider>
+    </TenantIdentityContext.Provider>,
+    { initialEntries: ['/app/chat'] },
+  )
+}
+
+function createHangingFetch(signal?: AbortSignal | null) {
+  return new Promise<Response>((_resolve, reject) => {
+    signal?.addEventListener(
+      'abort',
+      () => {
+        reject(new DOMException('Request timed out.', 'AbortError'))
+      },
+      { once: true },
+    )
+  })
+}
+
 describe('ChatPage offline cache', () => {
   const fetchMock = vi.fn<typeof fetch>()
   const originalFetch = globalThis.fetch
@@ -147,6 +194,7 @@ describe('ChatPage offline cache', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,
@@ -203,6 +251,51 @@ describe('ChatPage offline cache', () => {
     expect(
       screen.getByRole('button', { name: 'Прикрепить файл' }),
     ).toBeDisabled()
+  })
+
+  it('opens cached chat when VPN keeps startup chat requests hanging', async () => {
+    await offlineStore.saveThreadList({
+      activeThreadId: privateThread.id,
+      savedAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [privateThread],
+      userId: 7,
+    })
+    await offlineStore.saveMessageSnapshot({
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: createReadySnapshot(),
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        return createHangingFetch(init?.signal)
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(
+      await screen.findByText(
+        'Здравствуйте, вижу ваше обращение.',
+        {},
+        { timeout: BOOT_CACHE_FALLBACK_MS + 1500 },
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Нет связи. Показываем сохраненные сообщения.'),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/threads',
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    )
   })
 
   it('keeps controlled unavailable state when chat bootstrap is offline without cache', async () => {

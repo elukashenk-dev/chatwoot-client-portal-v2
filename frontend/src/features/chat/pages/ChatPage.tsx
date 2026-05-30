@@ -72,6 +72,9 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
+  const isUsingCachedChatData =
+    pageState.status === 'ready' && pageState.isUsingCachedData
+  const isConnectionAvailable = isBrowserOnline && !isUsingCachedChatData
 
   const handleUnauthorizedChatError = useCallback(
     async (error: unknown) => {
@@ -110,7 +113,7 @@ export function ChatPage() {
   } = useChatSearchResultContext({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     isMountedRef,
     markBrowserOnline,
     selectedThreadId: pageState.selectedThreadId,
@@ -125,7 +128,7 @@ export function ChatPage() {
   } = useChatAttachmentSend({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     isMountedRef,
     markBrowserOnline,
     onAttachmentSendStarted: clearHistoryFragment,
@@ -136,6 +139,7 @@ export function ChatPage() {
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isMountedRef,
+    markBrowserOffline,
     markBrowserOnline,
     pageState,
     setHistoryErrorMessage,
@@ -178,14 +182,14 @@ export function ChatPage() {
   const supportAvailability = useChatSupportAvailability({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline: isBrowserOnline && pageState.status === 'ready',
+    isBrowserOnline: isConnectionAvailable && pageState.status === 'ready',
     isMountedRef,
     markBrowserOnline,
   })
   const { handleLoadOlderMessages, isLoadingOlder } = useChatOlderMessages({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     isMountedRef,
     markBrowserOnline,
     pageState,
@@ -236,7 +240,7 @@ export function ChatPage() {
     userId,
   })
   useChatPushStaleMarkerRefresh({
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     pageState,
     setPageState,
     tenantSlug,
@@ -284,7 +288,7 @@ export function ChatPage() {
     optimisticTextSends,
   } = useOptimisticTextSend({
     canUseOfflineTextQueue,
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     onOutboxRecordQueued: requestOutboxDrain,
     onTextSendStarted: () => {
       clearHistoryFragment()
@@ -303,7 +307,7 @@ export function ChatPage() {
     drainRequestSignal: outboxDrainRequestSignal,
     handleOutboxSendSucceeded,
     hydrateOptimisticTextSendsFromOutbox,
-    isBrowserOnline,
+    isBrowserOnline: isConnectionAvailable,
     markBrowserOffline,
     pageState,
     refreshSession,
@@ -360,7 +364,7 @@ export function ChatPage() {
     <>
       <ChatHeader
         activeThread={headerThread}
-        isConnectionAvailable={isBrowserOnline}
+        isConnectionAvailable={isConnectionAvailable}
         onOpenThreadSearch={() => {
           clearSearchResultOpenError()
           chatSearchPanel.openChatSearch()
@@ -387,7 +391,7 @@ export function ChatPage() {
       />
       <ChatRuntimeAlerts
         isChatAvailable={shouldRenderTranscript}
-        isOnline={isBrowserOnline}
+        isOnline={isConnectionAvailable}
         isRealtimeSupported={isRealtimeSupported}
         queuedSendCount={
           optimisticTextSends.filter(
@@ -456,7 +460,7 @@ export function ChatPage() {
                 : null
             }
             historyErrorMessage={historyErrorMessage}
-            isConnectionAvailable={isBrowserOnline}
+            isConnectionAvailable={isConnectionAvailable}
             isLoadingOlder={isLoadingOlder}
             messages={transcriptMessages}
             onLoadOlder={() => {
@@ -475,7 +479,7 @@ export function ChatPage() {
           canSend={canSend}
           handleSendAttachment={handleSendAttachment}
           handleSendMessage={handleSendMessage}
-          isBrowserOnline={isBrowserOnline}
+          isBrowserOnline={isConnectionAvailable}
           isSending={isSending}
           onCancelReply={() => {
             setReplyTarget(null)

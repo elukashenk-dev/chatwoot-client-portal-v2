@@ -813,6 +813,13 @@ test('opens saved chat during slow startup and queues offline text', async ({
   await ensureServiceWorkerControlsPage(page)
   await expect(page.getByText('Cached online message')).toBeVisible()
 
+  apiRoutes.hang('/api/chat/threads')
+  await page.reload()
+  await expect(page.getByText('Личный чат')).toBeVisible()
+  await expect(page.getByText(OFFLINE_SAVED_CHAT_NOTICE)).toBeVisible()
+  await expect(page.getByText('Cached online message')).toBeVisible()
+  apiRoutes.unhang('/api/chat/threads')
+
   apiRoutes.hang('/api/tenant')
   apiRoutes.hang('/api/auth/me')
 
