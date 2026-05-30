@@ -115,7 +115,7 @@ describe('StartupSurfaceProvider', () => {
     expect(screen.getByText('PG')).toBeInTheDocument()
   })
 
-  it('keeps the pre-root splash until the startup overlay is ready', async () => {
+  it('hydrates the pre-root splash into the startup overlay without waiting for the anti-flicker delay', async () => {
     vi.useFakeTimers()
     const preRootSplash = document.createElement('div')
     preRootSplash.id = 'portal-pre-root-startup'
@@ -124,16 +124,40 @@ describe('StartupSurfaceProvider', () => {
 
     render(<Harness active />)
 
-    expect(document.getElementById('portal-pre-root-startup')).not.toBeNull()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(document.getElementById('portal-pre-root-startup')).toBeNull()
+    expect(
+      screen.getByRole('heading', { name: 'Открываем кабинет' }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the pre-root splash through a short inactive gap before the first overlay', async () => {
+    vi.useFakeTimers()
+    const preRootSplash = document.createElement('div')
+    preRootSplash.id = 'portal-pre-root-startup'
+    preRootSplash.textContent = 'pre-root splash'
+    document.body.append(preRootSplash)
+
+    const { rerender } = render(<Harness active={false} />)
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(STARTUP_SURFACE_SHOW_DELAY_MS - 1)
+      await vi.advanceTimersByTimeAsync(0)
     })
 
     expect(document.getElementById('portal-pre-root-startup')).not.toBeNull()
+    expect(
+      screen.queryByRole('heading', { name: 'Открываем кабинет' }),
+    ).not.toBeInTheDocument()
+
+    rerender(
+      <Harness active phase="chat" statusLabel="Готовим чат" />,
+    )
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(0)
     })
 
     expect(document.getElementById('portal-pre-root-startup')).toBeNull()

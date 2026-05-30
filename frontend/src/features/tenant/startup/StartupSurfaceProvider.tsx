@@ -54,6 +54,10 @@ function dismissPreRootStartupSurface() {
   document.getElementById('portal-pre-root-startup')?.remove()
 }
 
+function hasPreRootStartupSurface() {
+  return document.getElementById('portal-pre-root-startup') !== null
+}
+
 export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState(
     new Map<string, StartupSurfaceReport>(),
@@ -90,11 +94,15 @@ export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
       return undefined
     }
 
+    const showDelay = hasPreRootStartupSurface()
+      ? 0
+      : STARTUP_SURFACE_SHOW_DELAY_MS
+
     const showTimer = window.setTimeout(() => {
       setVisibleSurface(toScreenProps(activeReport))
       setCanRelease(false)
       setIsVisible(true)
-    }, STARTUP_SURFACE_SHOW_DELAY_MS)
+    }, showDelay)
 
     return () => {
       window.clearTimeout(showTimer)
@@ -102,8 +110,21 @@ export function StartupSurfaceProvider({ children }: { children: ReactNode }) {
   }, [activeReport, isVisible])
 
   useEffect(() => {
-    if (isVisible || (hasReceivedReport && !activeReport)) {
+    if (isVisible) {
       dismissPreRootStartupSurface()
+      return undefined
+    }
+
+    if (!hasReceivedReport || activeReport) {
+      return undefined
+    }
+
+    const idleReleaseTimer = window.setTimeout(() => {
+      dismissPreRootStartupSurface()
+    }, STARTUP_SURFACE_SHOW_DELAY_MS)
+
+    return () => {
+      window.clearTimeout(idleReleaseTimer)
     }
   }, [activeReport, hasReceivedReport, isVisible])
 
