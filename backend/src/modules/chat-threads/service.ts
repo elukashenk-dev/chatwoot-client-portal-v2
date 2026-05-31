@@ -66,6 +66,16 @@ function createContactConfigurationError(code: string) {
   return new ApiError(403, code, CONFIGURATION_ERROR_MESSAGE)
 }
 
+function isSkippableGroupListConfigurationError(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    (error.code === 'portal_group_contact_disabled' ||
+      error.code === 'portal_group_contact_type_invalid' ||
+      error.code === 'portal_contact_disabled' ||
+      error.code === 'portal_contact_type_invalid')
+  )
+}
+
 export function createChatThreadsService({
   contactRepository,
   chatThreadsRepository,
@@ -267,10 +277,18 @@ export function createChatThreadsService({
           await chatwootClient.findContactById(groupContactId)
 
         if (!groupContact) {
-          throw createContactConfigurationError('portal_group_contact_missing')
+          continue
         }
 
-        assertPortalGroupContactEnabled(groupContact)
+        try {
+          assertPortalGroupContactEnabled(groupContact)
+        } catch (error) {
+          if (isSkippableGroupListConfigurationError(error)) {
+            continue
+          }
+
+          throw error
+        }
 
         await chatThreadsRepository.upsertGroupThread({
           chatwootContactId: groupContact.id,
