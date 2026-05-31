@@ -686,6 +686,76 @@ describe('createChatThreadsService', () => {
     expect(chatwootClient.findContactById).toHaveBeenNthCalledWith(2, 154)
   })
 
+  it('keeps valid chats available when one referenced group is disabled while listing threads', async () => {
+    const chatwootClient = createChatwootClientStub({
+      groupContactIds: '154,203',
+    })
+
+    chatwootClient.findContactById.mockImplementation(async (contactId) => {
+      if (contactId === 44) {
+        return {
+          customAttributes: {
+            portal_client_group_contact_ids: '154,203',
+            portal_contact_type: 'person',
+            portal_enabled: true,
+          },
+          email: 'ivan@example.com',
+          id: 44,
+          name: 'Иван Петров',
+        }
+      }
+
+      if (contactId === 154) {
+        return {
+          customAttributes: {
+            portal_contact_type: 'group',
+            portal_enabled: true,
+          },
+          email: 'office@romashka.ru',
+          id: 154,
+          name: 'ООО "Ромашка"',
+        }
+      }
+
+      if (contactId === 203) {
+        return {
+          customAttributes: {
+            portal_contact_type: 'group',
+            portal_enabled: false,
+          },
+          email: 'disabled@romashka.ru',
+          id: 203,
+          name: 'Отключенная группа',
+        }
+      }
+
+      return null
+    })
+
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
+
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+        }),
+        expect.objectContaining({
+          id: 'group:154',
+        }),
+      ],
+    })
+    expect(chatThreadsRepository.upsertGroupThread).toHaveBeenCalledTimes(1)
+    expect(chatThreadsRepository.upsertGroupThread).toHaveBeenCalledWith({
+      chatwootContactId: 154,
+      chatwootInboxId: 9,
+      now: new Date('2026-05-15T10:00:00.000Z'),
+    })
+  })
+
   it('fails closed before group lookups when the membership list is oversized', async () => {
     const chatwootClient = createChatwootClientStub({
       groupContactIds: Array.from({ length: 21 }, (_, index) =>
@@ -704,21 +774,27 @@ describe('createChatThreadsService', () => {
     expect(chatwootClient.findContactById).toHaveBeenCalledWith(44)
   })
 
-  it('fails closed when a referenced group contact is missing', async () => {
+  it('omits a referenced group contact that is missing while listing threads', async () => {
     const chatwootClient = createChatwootClientStub({
       groupContactIds: '999',
     })
-    const service = createService({ chatwootClient })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
 
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
-    ).rejects.toMatchObject({
-      code: 'portal_group_contact_missing',
-      statusCode: 403,
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+        }),
+      ],
     })
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
-  it('fails closed when a referenced group contact has the wrong type', async () => {
+  it('omits a referenced group contact that has the wrong type while listing threads', async () => {
     const chatwootClient = createChatwootClientStub({
       groupContactOverrides: {
         customAttributes: {
@@ -727,17 +803,23 @@ describe('createChatThreadsService', () => {
         },
       },
     })
-    const service = createService({ chatwootClient })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
 
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
-    ).rejects.toMatchObject({
-      code: 'portal_group_contact_type_invalid',
-      statusCode: 403,
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+        }),
+      ],
     })
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
-  it('fails closed when a referenced group contact is disabled', async () => {
+  it('omits a referenced group contact that is disabled while listing threads', async () => {
     const chatwootClient = createChatwootClientStub({
       groupContactOverrides: {
         customAttributes: {
@@ -746,14 +828,68 @@ describe('createChatThreadsService', () => {
         },
       },
     })
-    const service = createService({ chatwootClient })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
 
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
-    ).rejects.toMatchObject({
-      code: 'portal_group_contact_disabled',
-      statusCode: 403,
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+        }),
+      ],
     })
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
+  })
+
+  it('omits a referenced group contact with missing portal attributes while listing threads', async () => {
+    const chatwootClient = createChatwootClientStub({
+      groupContactOverrides: {
+        customAttributes: {},
+      },
+    })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
+
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+        }),
+      ],
+    })
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
+  })
+
+  it('still fails closed when directly opening a disabled group thread', async () => {
+    const chatwootClient = createChatwootClientStub({
+      groupContactOverrides: {
+        customAttributes: {
+          portal_contact_type: 'group',
+          portal_enabled: false,
+        },
+      },
+    })
+    const chatThreadsRepository = createChatThreadsPersistenceRepositoryStub()
+    const service = createService({ chatThreadsRepository, chatwootClient })
+
+    await expect(
+      service.getCurrentUserThreadContext({
+        threadId: 'group:154',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      activeThread: null,
+      chatwootConversation: null,
+      reason: 'thread_access_denied',
+      result: 'not_ready',
+    })
+    expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
   it('fails closed before group lookups when the current person contact is disabled', async () => {

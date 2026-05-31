@@ -37,6 +37,13 @@ const privateThread = {
   type: 'private',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
 
+const cachedGroupThread = {
+  id: 'group:254',
+  subtitle: 'Групповой чат',
+  title: 'Отключенная группа',
+  type: 'group',
+} satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
 const cachedAuthUser = {
   email: 'name@company.ru',
   fullName: 'Portal User',
@@ -136,10 +143,14 @@ function createReadySnapshot(
 
 function saveStartupChatFallback({
   savedAt = '2026-05-27T10:00:00.000Z',
+  selectedThreadId = privateThread.id,
   snapshot = createReadySnapshot(),
+  threads = [privateThread],
 }: {
   savedAt?: string
+  selectedThreadId?: string
   snapshot?: ChatMessagesSnapshot
+  threads?: NonNullable<ChatMessagesSnapshot['activeThread']>[]
 } = {}) {
   window.localStorage.setItem(
     `portal.startup.chat:${window.location.host}:buhfirma:7`,
@@ -147,10 +158,10 @@ function saveStartupChatFallback({
       record: {
         cachedSavedAt: savedAt,
         host: window.location.host,
-        selectedThreadId: privateThread.id,
+        selectedThreadId,
         snapshot,
         tenantSlug: 'buhfirma',
-        threads: [privateThread],
+        threads,
         userId: 7,
       },
       version: 1,
@@ -368,6 +379,93 @@ describe('ChatPage offline cache', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('retargets a stale cached group chat when authoritative startup threads no longer include it', async () => {
+    saveStartupChatFallback({
+      selectedThreadId: cachedGroupThread.id,
+      snapshot: createReadySnapshot({
+        activeThread: cachedGroupThread,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Portal User',
+            authorRole: 'group_member',
+            content: 'Кеш старого отключенного группового чата.',
+            contentType: 'text',
+            createdAt: '2026-05-27T09:58:00.000Z',
+            direction: 'outgoing',
+            id: 25401,
+            status: 'sent',
+          },
+        ],
+      }),
+      threads: [privateThread, cachedGroupThread],
+    })
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(
+          createReadySnapshot({
+            messages: [
+              {
+                attachments: [],
+                authorName: 'Ольга Support',
+                authorRole: 'agent',
+                content: 'Актуальный личный чат после проверки доступа.',
+                contentType: 'text',
+                createdAt: '2026-05-27T10:01:00.000Z',
+                direction: 'incoming',
+                id: 102,
+                status: 'sent',
+              },
+            ],
+          }),
+        )
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(
+      screen.getByText('Кеш старого отключенного группового чата.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Отключенная группа' }),
+    ).toBeInTheDocument()
+
+    expect(
+      await screen.findByText(
+        'Актуальный личный чат после проверки доступа.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Личный чат' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Кеш старого отключенного группового чата.'),
+    ).not.toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/chat/messages?threadId=group%3A254',
+      expect.anything(),
+    )
+  })
+
   it('keeps startup cached chat visible when network fails before IndexedDB fallback is available', async () => {
     saveStartupChatFallback()
     fetchMock.mockImplementation(async (input) => {
@@ -394,12 +492,16 @@ describe('ChatPage offline cache', () => {
       )
     })
     await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Нет связи' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('status', { name: 'Нет связи' }),
+      ).toBeInTheDocument()
     })
     expect(
       screen.getByText('Здравствуйте, вижу ваше обращение.'),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Чат временно недоступен')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Чат временно недоступен'),
+    ).not.toBeInTheDocument()
   })
 
   it('does not let older IndexedDB fallback overwrite startup cached chat', async () => {
@@ -473,10 +575,14 @@ describe('ChatPage offline cache', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByRole('status', { name: 'Нет связи' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('status', { name: 'Нет связи' }),
+      ).toBeInTheDocument()
     })
     expect(screen.getByText('Свежий startup cache.')).toBeInTheDocument()
-    expect(screen.queryByText('Старый IndexedDB cache.')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Старый IndexedDB cache.'),
+    ).not.toBeInTheDocument()
   })
 
   it('keeps controlled unavailable state when chat bootstrap is offline without cache', async () => {
