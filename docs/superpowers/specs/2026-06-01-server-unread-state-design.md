@@ -285,6 +285,12 @@ Service worker не должен увеличивать badge на `+1` лока
 - если count отсутствует, не делать локальный increment. Новый product contract
   требует server total; legacy migration fallback не нужен.
 
+Накопившиеся system/browser push notifications не являются unread state.
+Количество висящих notifications, их закрытие, клик по ним или отсутствие
+закрытия сами по себе не должны увеличивать, уменьшать или очищать unread
+counts. Notification click может только открыть portal; unread очищается только
+если после этого backend успешно отдал snapshot открытого thread.
+
 ### Push Disabled And Foreground Refresh
 
 Push settings управляют только фоновыми browser notifications и background
@@ -374,6 +380,10 @@ Frontend:
 - Foreground unread refresh не зависит от push permission, active push
   subscription или `pushEnabled`.
 - Browser badge является presentation layer, не source of truth.
+- Накопившиеся system notifications являются presentation layer, не source of
+  truth; service worker не выводит unread из количества показанных,
+  несмахнутых, закрытых или clicked notifications. Click может привести к clear
+  только через обычный backend snapshot flow.
 - Offline/cached open не очищает server unread.
 - Backend не доверяет browser-sent unread values.
 
@@ -415,6 +425,8 @@ Service worker:
 
 - `totalUnreadCount=3` sets app badge to `3`;
 - `totalUnreadCount=0` clears badge;
+- two shown notifications with the same `totalUnreadCount=5` keep setting badge
+  to `5`, not `10`;
 - active client suppression does not increment badge locally;
 - legacy increment behavior is removed.
 
@@ -423,6 +435,9 @@ Service worker:
 - Server DB stores unread rows per user/thread/message.
 - User with private and multiple group chats sees independent counts.
 - App icon badge shows server total unread count, not number of push events.
+- Pending/shown browser notifications do not change unread counts by being left
+  open, dismissed, clicked, or accumulated; click may clear only through the
+  normal backend snapshot flow after portal opens.
 - Opened portal shows menu unread indicators from `/api/chat/threads` even when
   push is disabled.
 - Chat menu button shows a red dot when another thread has unread.

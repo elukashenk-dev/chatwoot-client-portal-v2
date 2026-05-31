@@ -29,6 +29,7 @@
 - Remove the old local unread implementation instead of keeping it beside the server model.
 - This is a new product without real users; do not implement backward compatibility or migrations for legacy offline/startup chat cache records. Tests and fixtures must be updated to the new `unreadCount` shape.
 - Treat `/api/chat/threads` as the visible unread source of truth. Every user-facing `totalUnreadCount` must equal the sum of `unreadCount` for threads the current user can currently see; do not count stale unread rows for inaccessible groups in app badge or push totals.
+- Treat shown/pending browser notifications as presentation only. Leaving notifications open, dismissing them, clicking them, or accumulating multiple system notifications must not increment, decrement, clear, or otherwise derive unread state by notification lifecycle alone. A notification click may clear unread only if it opens the portal and the normal backend snapshot clear flow succeeds.
 - Foreground unread refresh must not depend on push permission, active subscription, or `pushEnabled`. An opened portal refreshes `/api/chat/threads` on initial load, tab visibility resume, and a modest foreground interval while backend is reachable.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
@@ -2696,6 +2697,33 @@ it('clears the app icon badge when server total unread count is zero', async () 
 
   expect(clearAppBadge).toHaveBeenCalled()
 })
+
+it('does not derive the app icon badge count from accumulated shown notifications', async () => {
+  const setAppBadge = vi.fn(async () => undefined)
+  const { listeners, showNotification } = loadServiceWorker({
+    appBadge: { setAppBadge },
+  })
+  const pushListener = listeners.get('push')?.[0]
+
+  await dispatchPush(pushListener!, {
+    notificationTag: 'portal-chat-message-default-9012',
+    tenantSlug: 'default',
+    totalUnreadCount: 5,
+    type: 'chat_message',
+    url: '/',
+  })
+  await dispatchPush(pushListener!, {
+    notificationTag: 'portal-chat-message-default-9013',
+    tenantSlug: 'default',
+    totalUnreadCount: 5,
+    type: 'chat_message',
+    url: '/',
+  })
+
+  expect(showNotification).toHaveBeenCalledTimes(2)
+  expect(setAppBadge).toHaveBeenNthCalledWith(1, 5)
+  expect(setAppBadge).toHaveBeenNthCalledWith(2, 5)
+})
 ```
 
 Update active-client suppression test so a visible active client does not call local increment. If the client handles the push, the foreground app will refresh snapshot and set exact badge from the backend response.
@@ -3042,6 +3070,7 @@ Cached/offline chat path does not clear unread.
 Push disabled does not disable unread writes.
 Foreground unread refresh updates `/api/chat/threads` without checking push permission, push subscription, or pushEnabled.
 Service worker sets badge from totalUnreadCount and does not increment locally.
+Accumulated shown browser notifications do not change unread counts or derive a larger badge count.
 Old React Set unread marker implementation is deleted.
 ```
 
@@ -3082,6 +3111,7 @@ Skip this commit if `work-log.md` was not changed.
 - [ ] Push `totalUnreadCount` uses the same visible-thread total as `/api/chat/threads`.
 - [ ] Opened portal refreshes unread menu indicators from `/api/chat/threads` even when push is disabled.
 - [ ] Service worker sets/clears badge from server total, not push-event increments.
+- [ ] Accumulated, dismissed, clicked, or left-open system notifications do not change unread counts by notification lifecycle alone and do not derive badge totals.
 - [ ] `ChatHeader` renders a binary red dot on the menu button when another thread has unread.
 - [ ] `ChatHeader` renders numeric unread badges inside the menu and hides per-thread badges for `0`.
 - [ ] `useChatUnreadThreadMarkers` and old local dot marker wiring are deleted.
