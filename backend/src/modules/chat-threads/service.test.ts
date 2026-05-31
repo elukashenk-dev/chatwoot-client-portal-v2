@@ -647,12 +647,14 @@ describe('createChatThreadsService', () => {
       activeThreadId: 'private:me',
       threads: [
         {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
           id: 'private:me',
           subtitle: 'Вы и поддержка',
           title: 'Личный чат',
           type: 'private',
         },
         {
+          avatarUrl: null,
           id: 'group:154',
           subtitle: 'Групповой чат',
           title: 'ООО "Ромашка"',
@@ -971,6 +973,7 @@ describe('createChatThreadsService', () => {
       activeThreadId: 'private:me',
       threads: [
         {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
           id: 'private:me',
           subtitle: 'Вы и поддержка',
           title: 'Личный чат',
@@ -978,6 +981,38 @@ describe('createChatThreadsService', () => {
         },
       ],
     })
+  })
+
+  it('returns portal-owned avatar URLs for private and group threads', async () => {
+    const service = createService({
+      chatwootClient: createChatwootClientStub({
+        groupContactOverrides: {
+          avatarUrl: 'https://chatwoot.test/rails/active_storage/group.png',
+        },
+      }),
+    })
+
+    await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual(
+      {
+        activeThreadId: 'private:me',
+        threads: [
+          {
+            avatarUrl: '/api/tenant/icons/icon-192.png',
+            id: 'private:me',
+            subtitle: 'Вы и поддержка',
+            title: 'Личный чат',
+            type: 'private',
+          },
+          {
+            avatarUrl: '/api/chat/threads/group%3A154/avatar',
+            id: 'group:154',
+            subtitle: 'Групповой чат',
+            title: 'ООО "Ромашка"',
+            type: 'group',
+          },
+        ],
+      },
+    )
   })
 
   it('uses email lookup and persists a contact link when a portal link does not exist yet', async () => {

@@ -41,8 +41,26 @@ async function buildAttachmentProxyRoutesTestApp({
     }),
     status: 206,
   }),
+  getCurrentUserChatMessageAvatar = vi.fn().mockResolvedValue({
+    body: new Response('avatar-bytes').body,
+    headers: new Headers({
+      'content-length': '12',
+      'content-type': 'image/png',
+      'set-cookie': 'leaked=1',
+    }),
+    status: 200,
+  }),
+  getCurrentUserThreadAvatar = vi.fn().mockResolvedValue({
+    body: new Response('thread-avatar-bytes').body,
+    headers: new Headers({
+      'content-type': 'image/png',
+    }),
+    status: 200,
+  }),
 }: {
   getCurrentUserChatAttachment?: ChatMessagesService['getCurrentUserChatAttachment']
+  getCurrentUserChatMessageAvatar?: ChatMessagesService['getCurrentUserChatMessageAvatar']
+  getCurrentUserThreadAvatar?: ChatMessagesService['getCurrentUserThreadAvatar']
 } = {}) {
   const app = Fastify({ logger: false })
   const authService = {
@@ -70,6 +88,8 @@ async function buildAttachmentProxyRoutesTestApp({
     createChatMessagesService: () =>
       ({
         getCurrentUserChatAttachment,
+        getCurrentUserChatMessageAvatar,
+        getCurrentUserThreadAvatar,
       }) as unknown as ChatMessagesService,
     env: testEnv,
   })
@@ -78,6 +98,8 @@ async function buildAttachmentProxyRoutesTestApp({
   return {
     app,
     getCurrentUserChatAttachment,
+    getCurrentUserChatMessageAvatar,
+    getCurrentUserThreadAvatar,
   }
 }
 
@@ -111,6 +133,60 @@ describe('chat attachment proxy routes', () => {
         threadId: 'group:154',
         userId: 7,
         variant: 'original',
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('streams agent avatar content through the message service', async () => {
+    const { app, getCurrentUserChatMessageAvatar } =
+      await buildAttachmentProxyRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/private%3Ame/messages/502/avatar',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.payload).toBe('avatar-bytes')
+      expect(response.headers['content-type']).toBe('image/png')
+      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(response.headers['set-cookie']).toBeUndefined()
+      expect(getCurrentUserChatMessageAvatar).toHaveBeenCalledWith({
+        messageId: 502,
+        threadId: 'private:me',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('streams thread avatar content through the message service', async () => {
+    const { app, getCurrentUserThreadAvatar } =
+      await buildAttachmentProxyRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/group%3A154/avatar',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.payload).toBe('thread-avatar-bytes')
+      expect(response.headers['content-type']).toBe('image/png')
+      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(getCurrentUserThreadAvatar).toHaveBeenCalledWith({
+        threadId: 'group:154',
+        userId: 7,
       })
     } finally {
       await app.close()

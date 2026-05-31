@@ -35,6 +35,7 @@ describe('findChatwootContactById', () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
       createJsonResponse({
         payload: {
+          avatar_url: '/rails/active_storage/group-avatar.png',
           custom_attributes: {
             portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
@@ -48,6 +49,7 @@ describe('findChatwootContactById', () => {
     )
 
     await expect(createLookup(fetchFn)(44)).resolves.toEqual({
+      avatarUrl: 'http://127.0.0.1:3000/rails/active_storage/group-avatar.png',
       customAttributes: {
         portal_client_group_contact_ids: '154',
         portal_contact_type: 'person',

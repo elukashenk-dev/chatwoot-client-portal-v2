@@ -78,12 +78,14 @@ export const PRIVATE_CHAT_THREAD_ID = 'private:me'
 
 export type ChatThreadSummary =
   | {
+      avatarUrl?: string | null
       id: typeof PRIVATE_CHAT_THREAD_ID
       subtitle: string
       title: string
       type: 'private'
     }
   | {
+      avatarUrl?: string | null
       id: `group:${number}`
       subtitle: string
       title: string

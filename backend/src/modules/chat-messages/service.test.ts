@@ -331,7 +331,7 @@ describe('createChatMessagesService', () => {
       hasMoreOlder: true,
       messages: [
         {
-          authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
+          authorAvatarUrl: '/api/chat/threads/private%3Ame/messages/21/avatar',
           authorName: 'Анна Смирнова',
           content: 'Agent reply',
           direction: 'incoming',

@@ -107,10 +107,17 @@ function createService({
     recoverCurrentUserWritableThreadContext: vi.fn(),
   }
   const findConversationMessageById = vi.fn().mockResolvedValue(message)
+  const findContactById = vi.fn().mockResolvedValue({
+    avatarUrl: 'https://chatwoot.test/rails/active_storage/group-avatar.png',
+    email: 'office@example.test',
+    id: 154,
+    name: 'Бухгалтерия',
+  })
 
   return {
     attachmentFetchFn,
     chatThreadsService,
+    findContactById,
     findConversationMessageById,
     service: createChatMessagesService({
       attachmentAllowedOrigins,
@@ -125,6 +132,7 @@ function createService({
       chatwootClient: {
         createConversationIncomingAttachmentMessage: vi.fn(),
         createConversationIncomingMessage: vi.fn(),
+        findContactById,
         findConversationMessageById,
         findConversationMessageBySourceId: vi.fn(),
         listConversationMessages: vi.fn(),
@@ -167,6 +175,61 @@ describe('chat attachment proxy service', () => {
         'accept-encoding',
       ),
     ).toBe('identity')
+    expect(result.status).toBe(206)
+    expect(result.headers.get('content-type')).toBe('image/png')
+    await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
+  })
+
+  it('streams an agent avatar through a backend-owned fetch', async () => {
+    const { attachmentFetchFn, findConversationMessageById, service } =
+      createService({
+        message: createChatwootMessage({
+          attachments: [],
+          content: 'Agent reply',
+          id: 502,
+          sender: {
+            avatarUrl: 'https://chatwoot.test/rails/active_storage/avatar.png',
+            id: 8,
+            name: 'Support',
+            type: 'user',
+          },
+        }),
+      })
+
+    const result = await service.getCurrentUserChatMessageAvatar({
+      messageId: 502,
+      threadId: 'group:154',
+      userId: 7,
+    })
+
+    expect(findConversationMessageById).toHaveBeenCalledWith(101, 502)
+    expect(attachmentFetchFn).toHaveBeenCalledWith(
+      'https://chatwoot.test/rails/active_storage/avatar.png',
+      expect.any(Object),
+    )
+    expect(
+      new Headers(vi.mocked(attachmentFetchFn).mock.calls[0]?.[1]?.headers).get(
+        'accept-encoding',
+      ),
+    ).toBe('identity')
+    expect(result.status).toBe(206)
+    expect(result.headers.get('content-type')).toBe('image/png')
+    await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
+  })
+
+  it('streams a group thread avatar through a backend-owned fetch', async () => {
+    const { attachmentFetchFn, findContactById, service } = createService()
+
+    const result = await service.getCurrentUserThreadAvatar({
+      threadId: 'group:154',
+      userId: 7,
+    })
+
+    expect(findContactById).toHaveBeenCalledWith(154)
+    expect(attachmentFetchFn).toHaveBeenCalledWith(
+      'https://chatwoot.test/rails/active_storage/group-avatar.png',
+      expect.any(Object),
+    )
     expect(result.status).toBe(206)
     expect(result.headers.get('content-type')).toBe('image/png')
     await expect(new Response(result.body).text()).resolves.toBe('proxy-body')

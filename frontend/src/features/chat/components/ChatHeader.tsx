@@ -19,6 +19,7 @@ import {
   ChatHeaderPresence,
   type ChatHeaderPresenceTone,
 } from './ChatHeaderPresence'
+import { ChatAvatar } from './ChatAvatar'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellIcon,
@@ -324,9 +325,14 @@ export function ChatHeader({
           ) : null}
         </div>
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white">
+        <ChatAvatar
+          alt={threadTitle}
+          avatarUrl={activeThread?.avatarUrl}
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white"
+          title={threadTitle}
+        >
           {tenantMonogram}
-        </div>
+        </ChatAvatar>
 
         <div className="min-w-0 flex-1 py-0.5">
           <h1 className="truncate text-[16px] font-semibold leading-tight text-slate-900 sm:text-[17px]">
