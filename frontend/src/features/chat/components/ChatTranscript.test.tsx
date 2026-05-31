@@ -197,7 +197,7 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
   })
 
-  it('renders an agent avatar on the first incoming bubble in a group', () => {
+  it('renders an agent initials avatar on the first incoming bubble without loading a direct avatar URL', () => {
     const { container } = renderTranscript([
       createMessage({
         authorAvatarUrl: 'https://chatwoot.example.test/agent-avatar.png',
@@ -233,11 +233,8 @@ describe('ChatTranscript', () => {
     const avatars = container.querySelectorAll('[data-agent-avatar]')
     expect(avatars).toHaveLength(1)
     expect(avatars[0]).toHaveAttribute('aria-label', 'Агент Ольга Support')
-    expect(avatars[0]).not.toHaveTextContent('ОS')
-    expect(avatars[0]?.querySelector('img')).toHaveAttribute(
-      'src',
-      'https://chatwoot.example.test/agent-avatar.png',
-    )
+    expect(avatars[0]).toHaveTextContent('ОS')
+    expect(avatars[0]?.querySelector('img')).toBeNull()
     expect(getBubble(container, 1)).toHaveClass(
       'rounded-[0.7rem]',
       'rounded-tl-[0.3rem]',

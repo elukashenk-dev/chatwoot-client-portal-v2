@@ -172,17 +172,12 @@ function RetryTextSend({
 }
 
 function AgentAvatar({
-  avatarUrl,
   authorName,
   isVisible,
 }: {
-  avatarUrl: string | null | undefined
   authorName: string
   isVisible: boolean
 }) {
-  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null)
-  const shouldRenderImage = Boolean(avatarUrl) && avatarUrl !== failedAvatarUrl
-
   return (
     <div className="mr-2 mt-0.5 flex w-8 shrink-0 justify-center sm:mr-2.5 sm:w-9">
       {isVisible ? (
@@ -192,18 +187,7 @@ function AgentAvatar({
           data-agent-avatar
           title={authorName}
         >
-          {shouldRenderImage ? (
-            <img
-              alt=""
-              className="h-full w-full object-cover"
-              onError={() => {
-                setFailedAvatarUrl(avatarUrl ?? null)
-              }}
-              src={avatarUrl ?? undefined}
-            />
-          ) : (
-            getAuthorInitials(authorName)
-          )}
+          {getAuthorInitials(authorName)}
         </div>
       ) : null}
     </div>
@@ -383,7 +367,6 @@ export function MessageBubble({
     >
       {hasAgentAvatarSlot ? (
         <AgentAvatar
-          avatarUrl={message.authorAvatarUrl}
           authorName={message.authorName}
           isVisible={shouldRenderAgentAvatar}
         />

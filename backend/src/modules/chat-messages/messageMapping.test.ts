@@ -47,6 +47,40 @@ describe('mapPortalMessage', () => {
     })
   })
 
+  it('does not expose direct Chatwoot agent avatar URLs', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: 'Agent reply',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 502,
+        messageType: 1,
+        private: false,
+        sender: {
+          avatarUrl: 'https://chatwoot.test/rails/active_storage/avatar.png',
+          id: 8,
+          name: 'Support',
+          type: 'user',
+        },
+        sourceId: null,
+        status: 'sent',
+      },
+      {
+        currentUserId: 13,
+        threadId: 'private:me',
+        threadType: 'private',
+      },
+    )
+
+    expect(message).toMatchObject({
+      authorAvatarUrl: null,
+      authorName: 'Support',
+      authorRole: 'agent',
+    })
+  })
+
   it('normalizes confirmed portal-send outgoing messages to sent even when Chatwoot reports failed delivery status', () => {
     const message = mapPortalMessage(
       {

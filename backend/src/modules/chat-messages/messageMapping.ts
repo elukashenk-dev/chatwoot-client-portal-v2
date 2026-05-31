@@ -46,10 +46,6 @@ function getContactFallbackName(message: ChatwootMessage) {
   return message.sender?.name?.trim() || 'Участник'
 }
 
-function getAgentAvatarUrl(message: ChatwootMessage) {
-  return message.sender?.avatarUrl?.trim() || null
-}
-
 function mapMessagePresentation(
   message: ChatwootMessage,
   { currentUserId, ledgerAuthorsByMessageId, threadType }: MessageThreadContext,
@@ -64,7 +60,7 @@ function mapMessagePresentation(
 
   if (message.messageType !== 0) {
     return {
-      authorAvatarUrl: getAgentAvatarUrl(message),
+      authorAvatarUrl: null,
       authorName: getAgentAuthorName(message),
       authorRole: 'agent',
       content: normalizedContent,
