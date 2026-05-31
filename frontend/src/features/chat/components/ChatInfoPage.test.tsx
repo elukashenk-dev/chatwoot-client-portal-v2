@@ -11,6 +11,7 @@ import { ChatInfoPage } from './ChatInfoPage'
 const privateInfo = {
   accessLabel: 'Вы и поддержка',
   activeThread: {
+    avatarUrl: '/api/tenant/icons/icon-192.png',
     id: 'private:me',
     subtitle: 'Вы и поддержка',
     title: 'Личный чат',
@@ -78,6 +79,10 @@ describe('ChatInfoPage', () => {
       screen.getByRole('heading', { name: 'Информация о чате' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Личный чат')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/tenant/icons/icon-192.png',
+    )
     expect(screen.getByText('Тип чата')).toBeInTheDocument()
     expect(screen.getByText('Личный')).toBeInTheDocument()
     expect(screen.getByText('Ваш куратор')).toBeInTheDocument()

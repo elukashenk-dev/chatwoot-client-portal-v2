@@ -18,6 +18,7 @@ import {
   createAttachmentProxyFetcher,
   createAttachmentProxyUnavailableError,
 } from './attachmentProxy.js'
+import { createChatAvatarProxyMethods } from './avatarProxyService.js'
 import {
   formatGroupThreadContent,
   normalizeGroupAuthorDisplayName,
@@ -109,7 +110,8 @@ type CreateChatMessagesServiceOptions = {
     | 'findConversationMessageBySourceId'
     | 'listConversationMessages'
     | 'listConversationMessagesAfter'
-  >
+  > &
+    Partial<Pick<ChatwootClient, 'findContactById'>>
   now?: () => Date
 }
 
@@ -421,6 +423,11 @@ export function createChatMessagesService({
     fetchFn: attachmentFetchFn,
     requestTimeoutMs: inputAttachmentRequestTimeoutMs,
   })
+  const chatAvatarProxyMethods = createChatAvatarProxyMethods({
+    chatThreadsService,
+    chatwootClient,
+    fetchAllowedAttachment,
+  })
 
   async function findLedgerAuthorsForMessages({
     context,
@@ -586,6 +593,8 @@ export function createChatMessagesService({
         throw error
       }
     },
+
+    ...chatAvatarProxyMethods,
 
     async getCurrentUserChatMedia({
       beforeMessageId = null,

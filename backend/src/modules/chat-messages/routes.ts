@@ -1,8 +1,5 @@
-import { Readable } from 'node:stream'
-import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-
 import type { MultipartFile, MultipartValue } from '@fastify/multipart'
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
@@ -12,18 +9,11 @@ import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
-import {
-  ATTACHMENT_PROXY_CACHE_CONTROL,
-  copyAttachmentProxyHeaders,
-  getRangeHeader,
-} from './attachmentProxyHeaders.js'
+import { registerChatAttachmentProxyRoutes } from './attachmentProxyRoutes.js'
+import { registerChatAvatarProxyRoutes } from './avatarProxyRoutes.js'
 import { registerChatMessageContextRoutes } from './contextRoutes.js'
 import type { ChatSendRateLimiter } from './rateLimit.js'
-import type {
-  ChatAttachmentProxyVariant,
-  ChatMessagesService,
-  PortalAttachmentUpload,
-} from './service.js'
+import type { ChatMessagesService, PortalAttachmentUpload } from './service.js'
 import { CHAT_ATTACHMENT_MAX_BYTES } from './service.js'
 
 const CHAT_ATTACHMENT_FIELD_MAX_BYTES = 16 * 1024
@@ -37,14 +27,6 @@ const chatMessagesQuerySchema = z
   .object({
     beforeMessageId: z.coerce.number().int().positive().optional(),
     threadId: publicThreadIdSchema.optional(),
-  })
-  .strict()
-
-const attachmentProxyParamsSchema = z
-  .object({
-    attachmentId: z.coerce.number().int().positive(),
-    messageId: z.coerce.number().int().positive(),
-    threadId: publicThreadIdSchema,
   })
   .strict()
 
@@ -312,66 +294,17 @@ export function registerChatMessagesRoutes(
     env,
   }: RegisterChatMessagesRoutesOptions,
 ) {
-  async function sendAttachmentProxy({
-    reply,
-    request,
-    variant,
-  }: {
-    reply: FastifyReply
-    request: FastifyRequest
-    variant: ChatAttachmentProxyVariant
-  }) {
-    const user = await resolveAuthenticatedPortalUser({
-      authService,
-      env,
-      reply,
-      request,
-    })
-    const params = attachmentProxyParamsSchema.parse(request.params)
-    const attachment = await createChatMessagesService(
-      request,
-    ).getCurrentUserChatAttachment({
-      attachmentId: params.attachmentId,
-      messageId: params.messageId,
-      rangeHeader: getRangeHeader(request),
-      threadId: params.threadId,
-      userId: user.id,
-      variant,
-    })
+  registerChatAttachmentProxyRoutes(app, {
+    authService,
+    createChatMessagesService,
+    env,
+  })
 
-    copyAttachmentProxyHeaders({
-      headers: attachment.headers,
-      reply,
-    })
-    reply.header('cache-control', ATTACHMENT_PROXY_CACHE_CONTROL)
-    reply.code(attachment.status)
-
-    if (!attachment.body) {
-      return reply.send()
-    }
-
-    return reply.send(Readable.fromWeb(attachment.body as NodeReadableStream))
-  }
-
-  app.get(
-    '/api/chat/threads/:threadId/attachments/:messageId/:attachmentId',
-    async (request, reply) =>
-      sendAttachmentProxy({
-        reply,
-        request,
-        variant: 'original',
-      }),
-  )
-
-  app.get(
-    '/api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb',
-    async (request, reply) =>
-      sendAttachmentProxy({
-        reply,
-        request,
-        variant: 'thumb',
-      }),
-  )
+  registerChatAvatarProxyRoutes(app, {
+    authService,
+    createChatMessagesService,
+    env,
+  })
 
   app.get('/api/chat/threads/:threadId/media', async (request, reply) => {
     const user = await resolveAuthenticatedPortalUser({

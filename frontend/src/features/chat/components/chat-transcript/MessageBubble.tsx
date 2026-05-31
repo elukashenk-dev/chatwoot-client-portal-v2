@@ -9,6 +9,7 @@ import {
   ReplyIcon,
 } from '../../../../shared/ui/icons'
 import type { ChatMessage } from '../../types'
+import { ChatAvatar } from '../ChatAvatar'
 
 import { AttachmentCard } from './AttachmentCard'
 import { ReplyQuote } from './ReplyQuote'
@@ -173,22 +174,26 @@ function RetryTextSend({
 
 function AgentAvatar({
   authorName,
+  avatarUrl,
   isVisible,
 }: {
   authorName: string
+  avatarUrl?: string | null
   isVisible: boolean
 }) {
   return (
     <div className="mr-2 mt-0.5 flex w-8 shrink-0 justify-center sm:mr-2.5 sm:w-9">
       {isVisible ? (
-        <div
+        <ChatAvatar
           aria-label={`Агент ${authorName}`}
+          alt={`Агент ${authorName}`}
+          avatarUrl={avatarUrl}
           className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[11px] font-medium leading-none text-slate-500 sm:h-9 sm:w-9 sm:text-[12px]"
           data-agent-avatar
           title={authorName}
         >
           {getAuthorInitials(authorName)}
-        </div>
+        </ChatAvatar>
       ) : null}
     </div>
   )
@@ -368,6 +373,7 @@ export function MessageBubble({
       {hasAgentAvatarSlot ? (
         <AgentAvatar
           authorName={message.authorName}
+          avatarUrl={message.authorAvatarUrl}
           isVisible={shouldRenderAgentAvatar}
         />
       ) : null}

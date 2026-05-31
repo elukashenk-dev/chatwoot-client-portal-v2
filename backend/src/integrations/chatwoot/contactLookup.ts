@@ -3,6 +3,7 @@ import type { createChatwootFetch } from './request.js'
 import { readChatwootJson } from './request.js'
 
 export type ChatwootContact = {
+  avatarUrl?: string | null
   customAttributes?: Record<string, unknown>
   email: string | null
   id: number
@@ -37,6 +38,20 @@ function readObject(value: unknown) {
   return isPlainObject(value) ? value : null
 }
 
+function resolveChatwootAssetUrl(value: string | null, baseUrl: string) {
+  const trimmedValue = value?.trim()
+
+  if (!trimmedValue) {
+    return null
+  }
+
+  try {
+    return new URL(trimmedValue, baseUrl).href
+  } catch {
+    return null
+  }
+}
+
 function parseContactDetailsResponse(payload: unknown) {
   if (!isPlainObject(payload) || !isPlainObject(payload.payload)) {
     throw new ChatwootClientRequestError(
@@ -47,7 +62,7 @@ function parseContactDetailsResponse(payload: unknown) {
   return payload.payload
 }
 
-function mapContact(payload: unknown): ChatwootContact {
+function mapContact(payload: unknown, baseUrl: string): ChatwootContact {
   if (!isPlainObject(payload)) {
     throw new ChatwootClientRequestError(
       'Chatwoot contact lookup returned an invalid contact payload.',
@@ -63,8 +78,13 @@ function mapContact(payload: unknown): ChatwootContact {
   }
 
   const customAttributes = readObject(payload.custom_attributes)
+  const avatarUrl = resolveChatwootAssetUrl(
+    readString(payload.avatar_url) ?? readString(payload.thumbnail),
+    baseUrl,
+  )
 
   return {
+    ...(avatarUrl ? { avatarUrl } : {}),
     ...(customAttributes ? { customAttributes } : {}),
     email: readString(payload.email),
     id,
@@ -117,7 +137,7 @@ export async function findChatwootContactById({
       unavailableMessage: 'Chatwoot contact lookup is unavailable.',
     })
 
-    return mapContact(parseContactDetailsResponse(payload))
+    return mapContact(parseContactDetailsResponse(payload), config.baseUrl)
   } finally {
     request.clearTimeout()
   }

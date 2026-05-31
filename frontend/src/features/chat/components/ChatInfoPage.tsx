@@ -9,6 +9,7 @@ import type {
   ChatSupportAvailabilityResponse,
   ChatThreadInfoResponse,
 } from '../types'
+import { ChatAvatar } from './ChatAvatar'
 
 type ChatInfoPageProps = {
   info: ChatThreadInfoResponse | null
@@ -151,6 +152,7 @@ export function ChatInfoPage({
   const startedAt = formatDateTime(info?.startedAt ?? null)
   const lastActivityAt = formatDateTime(info?.lastActivityAt ?? null)
   const isUnavailable = !info || info.result !== 'ready'
+  const threadTitle = info?.activeThread?.title ?? 'Чат'
 
   return (
     <ChatFullScreenPanel
@@ -165,11 +167,16 @@ export function ChatInfoPage({
       {info ? (
         <div className="mx-auto max-w-md">
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-brand-900 text-base font-semibold text-white">
+            <ChatAvatar
+              alt={threadTitle}
+              avatarUrl={info.activeThread?.avatarUrl}
+              className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-brand-900 text-base font-semibold text-white"
+              title={threadTitle}
+            >
               {monogram}
-            </div>
+            </ChatAvatar>
             <h2 className="mt-3 max-w-full truncate text-[18px] font-semibold leading-tight">
-              {info.activeThread?.title ?? 'Чат'}
+              {threadTitle}
             </h2>
             <p className="mt-1 max-w-full truncate text-[13px] text-slate-500">
               {info.activeThread?.subtitle ?? info.supportLabel}

@@ -15,6 +15,7 @@ import type {
 import { ChatHeader } from './ChatHeader'
 
 const privateThread = {
+  avatarUrl: '/api/tenant/icons/icon-192.png',
   id: 'private:me',
   subtitle: 'Вы и поддержка',
   title: 'Личный чат',
@@ -109,6 +110,15 @@ function renderHeader({
 }
 
 describe('ChatHeader', () => {
+  it('renders the active thread avatar image in the header', () => {
+    renderHeader()
+
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/tenant/icons/icon-192.png',
+    )
+  })
+
   it('prioritizes offline connection status over the support subtitle on mobile', () => {
     renderHeader({ connectionStatus: 'offline' })
 

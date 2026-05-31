@@ -3,12 +3,14 @@ import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 
 export type PublicChatThreadSummary =
   | {
+      avatarUrl?: string | null
       id: typeof PRIVATE_CHAT_THREAD_ID
       subtitle: string
       title: string
       type: 'private'
     }
   | {
+      avatarUrl?: string | null
       id: `group:${number}`
       subtitle: string
       title: string
@@ -72,6 +74,7 @@ export type PublicChatThreadInfo = {
 
 export function buildPrivateThread(): PublicChatThreadSummary {
   return {
+    avatarUrl: '/api/tenant/icons/icon-192.png',
     id: PRIVATE_CHAT_THREAD_ID,
     subtitle: 'Вы и поддержка',
     title: 'Личный чат',
@@ -79,11 +82,18 @@ export function buildPrivateThread(): PublicChatThreadSummary {
   }
 }
 
+export function buildPortalThreadAvatarUrl(threadId: string) {
+  return `/api/chat/threads/${encodeURIComponent(threadId)}/avatar`
+}
+
 export function buildGroupThread(
   contact: ChatwootContact,
 ): PublicChatThreadSummary {
+  const threadId = `group:${contact.id}` as const
+
   return {
-    id: `group:${contact.id}`,
+    avatarUrl: contact.avatarUrl ? buildPortalThreadAvatarUrl(threadId) : null,
+    id: threadId,
     subtitle: 'Групповой чат',
     title: contact.name?.trim() || `Группа ${contact.id}`,
     type: 'group',

@@ -135,12 +135,14 @@ describe('chat threads app wiring', () => {
         activeThreadId: 'private:me',
         threads: [
           {
+            avatarUrl: '/api/tenant/icons/icon-192.png',
             id: 'private:me',
             subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
           },
           {
+            avatarUrl: null,
             id: 'group:154',
             subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',

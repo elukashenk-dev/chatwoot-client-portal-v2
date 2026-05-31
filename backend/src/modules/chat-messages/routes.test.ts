@@ -51,6 +51,7 @@ async function buildMessagesRoutesTestApp({
   }
   const chatMessagesService = {
     getCurrentUserChatAttachment: vi.fn(),
+    getCurrentUserChatMessageAvatar: vi.fn(),
     getCurrentUserChatMedia: vi.fn().mockResolvedValue({
       activeThread: null,
       hasMoreOlder: false,
@@ -79,6 +80,7 @@ async function buildMessagesRoutesTestApp({
       result: 'not_ready',
       targetMessageId: 1,
     }),
+    getCurrentUserThreadAvatar: vi.fn(),
     getCurrentUserChatMessages: vi.fn().mockResolvedValue({
       activeThread: null,
       hasMoreOlder: false,

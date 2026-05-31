@@ -47,7 +47,7 @@ describe('mapPortalMessage', () => {
     })
   })
 
-  it('does not expose direct Chatwoot agent avatar URLs', () => {
+  it('maps agent avatars to portal-authorized proxy URLs', () => {
     const message = mapPortalMessage(
       {
         attachments: [],
@@ -75,7 +75,40 @@ describe('mapPortalMessage', () => {
     )
 
     expect(message).toMatchObject({
-      authorAvatarUrl: null,
+      authorAvatarUrl: '/api/chat/threads/private%3Ame/messages/502/avatar',
+      authorName: 'Support',
+      authorRole: 'agent',
+    })
+  })
+
+  it('uses the tenant icon as the agent avatar fallback when Chatwoot has no sender photo', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: 'Agent reply',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 503,
+        messageType: 1,
+        private: false,
+        sender: {
+          id: 8,
+          name: 'Support',
+          type: 'user',
+        },
+        sourceId: null,
+        status: 'sent',
+      },
+      {
+        currentUserId: 13,
+        threadId: 'private:me',
+        threadType: 'private',
+      },
+    )
+
+    expect(message).toMatchObject({
+      authorAvatarUrl: '/api/tenant/icons/icon-192.png',
       authorName: 'Support',
       authorRole: 'agent',
     })

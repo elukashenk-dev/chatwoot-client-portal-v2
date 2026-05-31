@@ -46,9 +46,35 @@ function getContactFallbackName(message: ChatwootMessage) {
   return message.sender?.name?.trim() || 'Участник'
 }
 
+function buildPortalMessageAvatarUrl({
+  messageId,
+  threadId,
+}: {
+  messageId: number
+  threadId: string
+}) {
+  return `/api/chat/threads/${encodeURIComponent(
+    threadId,
+  )}/messages/${messageId}/avatar`
+}
+
+function getAgentAvatarUrl(message: ChatwootMessage, threadId: string) {
+  return message.sender?.avatarUrl?.trim()
+    ? buildPortalMessageAvatarUrl({
+        messageId: message.id,
+        threadId,
+      })
+    : '/api/tenant/icons/icon-192.png'
+}
+
 function mapMessagePresentation(
   message: ChatwootMessage,
-  { currentUserId, ledgerAuthorsByMessageId, threadType }: MessageThreadContext,
+  {
+    currentUserId,
+    ledgerAuthorsByMessageId,
+    threadId,
+    threadType,
+  }: MessageThreadContext,
 ): {
   authorAvatarUrl: string | null
   authorName: string
@@ -60,7 +86,7 @@ function mapMessagePresentation(
 
   if (message.messageType !== 0) {
     return {
-      authorAvatarUrl: null,
+      authorAvatarUrl: getAgentAvatarUrl(message, threadId),
       authorName: getAgentAuthorName(message),
       authorRole: 'agent',
       content: normalizedContent,
