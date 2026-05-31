@@ -29,6 +29,7 @@
 - Remove the old local unread implementation instead of keeping it beside the server model.
 - This is a new product without real users; do not implement backward compatibility or migrations for legacy offline/startup chat cache records. Tests and fixtures must be updated to the new `unreadCount` shape.
 - Treat `/api/chat/threads` as the visible unread source of truth. Every user-facing `totalUnreadCount` must equal the sum of `unreadCount` for threads the current user can currently see; do not count stale unread rows for inaccessible groups in app badge or push totals.
+- Foreground unread refresh must not depend on push permission, active subscription, or `pushEnabled`. An opened portal refreshes `/api/chat/threads` on initial load, tab visibility resume, and a modest foreground interval while backend is reachable.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
 ## File Structure
@@ -65,6 +66,7 @@ Frontend files to modify:
 - `frontend/src/features/chat/pages/chatPageState.ts` - add small helpers for applying unread counts.
 - `frontend/src/features/chat/pages/ChatPage.tsx` - remove old marker hook and update server counts on load/open/push.
 - `frontend/src/features/chat/pages/useChatPageNotifications.ts` - replace `onOtherThreadPush` marker callback with server-count handling.
+- `frontend/src/features/chat/pages/useChatForegroundUnreadRefresh.ts` - refresh visible unread counts while the portal is open, independent of push settings.
 - `frontend/src/features/chat/pages/useChatThreadSelection.ts` - set exact app badge total after thread list and message snapshot.
 - `frontend/src/features/chat/pages/useChatSnapshotRefresh.ts` - apply unread summary after active thread refresh.
 - `frontend/src/features/chat/components/ChatHeader.tsx` - render the menu-button red dot and numeric per-thread unread badges.
@@ -75,6 +77,7 @@ Frontend files to modify:
 Frontend tests to modify:
 
 - `frontend/src/features/chat/pages/ChatPage.unread-indicators.test.tsx` - convert from local dot tests to server-count tests.
+- `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx` - foreground refresh behavior when push is disabled.
 - `frontend/src/features/chat/components/ChatHeader.test.tsx` - menu-button red dot, numeric badge rendering, and accessibility.
 - `frontend/src/pwa/serviceWorkerAsset.test.ts` - exact app badge behavior.
 - `frontend/src/pwa/serviceWorkerRuntime.test.ts` - exact badge runtime helper.
@@ -2015,6 +2018,7 @@ git commit -m "feat: add unread count frontend contract"
 **Files:**
 
 - Delete: `frontend/src/features/chat/pages/useChatUnreadThreadMarkers.ts`
+- Create: `frontend/src/features/chat/pages/useChatForegroundUnreadRefresh.ts`
 - Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
 - Modify: `frontend/src/features/chat/pages/useChatPageNotifications.ts`
 - Modify: `frontend/src/features/chat/pages/useChatThreadSelection.ts`
@@ -2022,6 +2026,7 @@ git commit -m "feat: add unread count frontend contract"
 - Modify: `frontend/src/features/chat/components/ChatHeader.tsx`
 - Modify: `frontend/src/features/chat/components/ChatHeader.test.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.unread-indicators.test.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx`
 
 - [ ] **Step 1: Convert ChatHeader tests to menu dot and numeric badges**
 
@@ -2081,6 +2086,7 @@ Chat menu button does not show a red dot when only the selected thread has unrea
 Thread menu shows numeric unread badge from /api/chat/threads.
 Opening group:154 clears only group:154 after /api/chat/messages returns unread.totalUnreadCount.
 private:me unread count remains when group:154 is opened.
+Push disabled: foreground /api/chat/threads refresh still shows menu red dot and numeric badge without a push event.
 Push for another thread applies threadUnreadCount and totalUnreadCount.
 Push for active thread refreshes snapshot and does not create a local marker.
 Offline cached chat does not clear unread or app badge.
@@ -2226,7 +2232,242 @@ const nextThreads = latestSnapshot.unread
 
 Use `nextThreads` in both merge and replace branches.
 
-- [ ] **Step 8: Apply push counts without local markers**
+- [ ] **Step 8: Add foreground unread refresh independent of push**
+
+Create `frontend/src/features/chat/pages/useChatForegroundUnreadRefresh.ts`:
+
+```ts
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from 'react'
+
+import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
+import { getChatThreads } from '../api/chatClient'
+import type { ChatPageState } from './chatPageState'
+
+const FOREGROUND_UNREAD_REFRESH_INTERVAL_MS = 45_000
+
+type UseChatForegroundUnreadRefreshOptions = {
+  enabled: boolean
+  handleConnectionUnavailableError: (error: unknown) => boolean
+  handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
+  isMountedRef: RefObject<boolean>
+  markBrowserOnline: () => void
+  setPageState: Dispatch<SetStateAction<ChatPageState>>
+}
+
+export function useChatForegroundUnreadRefresh({
+  enabled,
+  handleConnectionUnavailableError,
+  handleUnauthorizedChatError,
+  isMountedRef,
+  markBrowserOnline,
+  setPageState,
+}: UseChatForegroundUnreadRefreshOptions) {
+  const isRefreshingRef = useRef(false)
+
+  const refreshUnreadThreads = useCallback(async () => {
+    if (!enabled || isRefreshingRef.current) {
+      return
+    }
+
+    isRefreshingRef.current = true
+
+    try {
+      const threadsResponse = await getChatThreads()
+
+      if (!isMountedRef.current) {
+        return
+      }
+
+      markBrowserOnline()
+      void setAppIconBadgeCount(threadsResponse.totalUnreadCount)
+      setPageState((currentState) => {
+        if (currentState.status !== 'ready') {
+          return currentState
+        }
+
+        return {
+          ...currentState,
+          threads: threadsResponse.threads,
+        }
+      })
+    } catch (error) {
+      if (await handleUnauthorizedChatError(error)) {
+        return
+      }
+
+      if (handleConnectionUnavailableError(error)) {
+        return
+      }
+
+      throw error
+    } finally {
+      isRefreshingRef.current = false
+    }
+  }, [
+    enabled,
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isMountedRef,
+    markBrowserOnline,
+    setPageState,
+  ])
+
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        void refreshUnreadThreads()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshUnreadThreads()
+      }
+    }, FOREGROUND_UNREAD_REFRESH_INTERVAL_MS)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.clearInterval(intervalId)
+    }
+  }, [enabled, refreshUnreadThreads])
+
+  return {
+    refreshUnreadThreads,
+  }
+}
+```
+
+Wire it in `frontend/src/features/chat/pages/ChatPage.tsx`:
+
+```ts
+import { useChatForegroundUnreadRefresh } from './useChatForegroundUnreadRefresh'
+```
+
+Call it after `useChatSnapshotRefresh`:
+
+```ts
+useChatForegroundUnreadRefresh({
+  enabled:
+    canUseBackend &&
+    pageState.status === 'ready' &&
+    !pageState.isUsingCachedData,
+  handleConnectionUnavailableError,
+  handleUnauthorizedChatError,
+  isMountedRef,
+  markBrowserOnline: markChatOnline,
+  setPageState,
+})
+```
+
+Do not read `selectedThreadNotificationSettings`, browser push permission, service worker status, or `pushEnabled` in this hook. It is a foreground portal refresh, not a push feature. It must never clear unread; it only refreshes `/api/chat/threads`, updates visible thread counts, and sets exact app badge total from the thread-list response.
+
+In `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx`, add a foreground refresh test using the file's existing `fetchMock`, `createJsonResponse`, `createAuthenticatedUserResponse`, `createReadySnapshot`, `createNotificationSettingsResponse`, `createSupportAvailabilityResponse`, and `renderChatRoute` helpers.
+
+If the file still only has a private thread fixture, add:
+
+```ts
+const groupThread = {
+  id: 'group:154',
+  subtitle: 'Групповой чат',
+  title: 'ООО Ромашка',
+  type: 'group',
+} satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+```
+
+Then add:
+
+```ts
+it('refreshes unread menu indicators in the foreground when push is disabled', async () => {
+  let threadRequestCount = 0
+
+  fetchMock.mockImplementation(async (input) => {
+    const url = String(input)
+
+    if (url === '/api/auth/me') {
+      return createAuthenticatedUserResponse()
+    }
+
+    if (url === '/api/chat/threads') {
+      threadRequestCount += 1
+
+      return createJsonResponse({
+        activeThreadId: privateThread.id,
+        threads:
+          threadRequestCount === 1
+            ? [
+                { ...privateThread, unreadCount: 0 },
+                { ...groupThread, unreadCount: 0 },
+              ]
+            : [
+                { ...privateThread, unreadCount: 0 },
+                { ...groupThread, unreadCount: 2 },
+              ],
+        totalUnreadCount: threadRequestCount === 1 ? 0 : 2,
+      })
+    }
+
+    if (url === '/api/chat/messages?threadId=private%3Ame') {
+      return createJsonResponse(createReadySnapshot())
+    }
+
+    if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+      return createNotificationSettingsResponse()
+    }
+
+    if (url === '/api/chat/support-availability') {
+      return createSupportAvailabilityResponse()
+    }
+
+    throw new Error(`Unexpected request: ${url}`)
+  })
+
+  renderChatRoute()
+  await screen.findByText(
+    'Здравствуйте, вижу ваше обращение.',
+    {},
+    CHAT_PAGE_LOAD_TIMEOUT,
+  )
+
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: 'visible',
+  })
+  document.dispatchEvent(new Event('visibilitychange'))
+  await waitFor(() => expect(threadRequestCount).toBeGreaterThanOrEqual(2))
+
+  expect(
+    await screen.findByRole('button', {
+      name: /Открыть навигацию, есть непрочитанные сообщения/,
+    }),
+  ).toBeVisible()
+
+  await screen
+    .getByRole('button', {
+      name: /Открыть навигацию, есть непрочитанные сообщения/,
+    })
+    .click()
+  expect(screen.getByRole('menuitem', { name: /ООО Ромашка/ })).toContainText(
+    '2',
+  )
+})
+```
+
+The test must not dispatch a service worker push message; it proves foreground unread refresh works with push disabled.
+
+- [ ] **Step 9: Apply push counts without local markers**
 
 In `frontend/src/features/chat/pages/useChatPageNotifications.ts`, replace `onOtherThreadPush` with:
 
@@ -2263,17 +2504,17 @@ onUnreadPush: (payload) => {
 
 If the pushed thread is not in the current thread list, `applyThreadUnreadCount` leaves the list unchanged and the app badge still uses `totalUnreadCount`. The backend payload total is already visible-authoritative; the menu-button red dot follows the current frontend thread list until the next `/api/chat/threads` refresh.
 
-- [ ] **Step 9: Run targeted frontend tests**
+- [ ] **Step 10: Run targeted frontend tests**
 
 Run:
 
 ```bash
-pnpm --dir frontend test -- src/features/chat/components/ChatHeader.test.tsx src/features/chat/pages/ChatPage.unread-indicators.test.tsx src/features/chat/pages/useChatPageNotifications.test.tsx
+pnpm --dir frontend test -- src/features/chat/components/ChatHeader.test.tsx src/features/chat/pages/ChatPage.unread-indicators.test.tsx src/features/chat/pages/ChatPage.runtime.test.tsx src/features/chat/pages/useChatPageNotifications.test.tsx
 ```
 
 Expected: PASS.
 
-- [ ] **Step 10: Verify old implementation is gone**
+- [ ] **Step 11: Verify old implementation is gone**
 
 Run:
 
@@ -2283,7 +2524,7 @@ rg -n "useChatUnreadThreadMarkers|unreadThreadIds|markUnreadThread|thread-unread
 
 Expected: no production references. `clearAppIconBadge` may remain in `serviceWorkerRuntime.ts` and its tests because exact zero uses it internally, but `ChatPage` must not call it unconditionally.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add frontend/src/features/chat frontend/src/pwa/serviceWorkerRuntime.ts frontend/src/pwa/serviceWorkerRuntime.test.ts
@@ -2682,6 +2923,7 @@ Chat menu button red dot appears when another visible thread has unread and hide
 Older pagination does not clear unread.
 Cached/offline chat path does not clear unread.
 Push disabled does not disable unread writes.
+Foreground unread refresh updates `/api/chat/threads` without checking push permission, push subscription, or pushEnabled.
 Service worker sets badge from totalUnreadCount and does not increment locally.
 Old React Set unread marker implementation is deleted.
 ```
@@ -2721,6 +2963,7 @@ Skip this commit if `work-log.md` was not changed.
 - [ ] Failed, denied, unavailable, older-page, and cached/offline reads do not clear unread.
 - [ ] Push payload includes `threadUnreadCount` and `totalUnreadCount`.
 - [ ] Push `totalUnreadCount` uses the same visible-thread total as `/api/chat/threads`.
+- [ ] Opened portal refreshes unread menu indicators from `/api/chat/threads` even when push is disabled.
 - [ ] Service worker sets/clears badge from server total, not push-event increments.
 - [ ] `ChatHeader` renders a binary red dot on the menu button when another thread has unread.
 - [ ] `ChatHeader` renders numeric unread badges inside the menu and hides per-thread badges for `0`.

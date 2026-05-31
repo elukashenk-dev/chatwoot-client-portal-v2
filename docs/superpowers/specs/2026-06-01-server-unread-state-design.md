@@ -276,6 +276,23 @@ Service worker не должен увеличивать badge на `+1` лока
 - если count отсутствует, не делать локальный increment. Новый product contract
   требует server total; legacy migration fallback не нужен.
 
+### Push Disabled And Foreground Refresh
+
+Push settings управляют только фоновыми browser notifications и background
+service worker delivery. Они не управляют server unread state и не управляют
+метками внутри уже открытого портала.
+
+Открытый portal должен обновлять unread через `/api/chat/threads` независимо от
+push permission, active subscription и `pushEnabled`:
+
+- при initial chat load;
+- при возврате вкладки в `visible`;
+- легким foreground interval, пока chat открыт и backend доступен.
+
+Этот foreground refresh обновляет `threads[].unreadCount`, menu red dot,
+numeric badges и exact app badge total. Он не очищает unread; clear остается
+только за успешным `GET /api/chat/messages?threadId=...`.
+
 ### Frontend State
 
 Frontend хранит unread как часть thread list state:
@@ -325,6 +342,7 @@ Frontend:
 - `ChatHeader` numeric per-thread badge rendering;
 - `ChatHeader` red dot on the menu button when another thread has unread;
 - `ChatPage` thread state updates on push/open;
+- foreground `/api/chat/threads` refresh that does not depend on push settings;
 - `serviceWorkerRuntime` helper для set/clear app badge by exact count;
 - `sw.js` exact badge handling;
 - удаление `useChatUnreadThreadMarkers`.
@@ -339,6 +357,8 @@ Frontend:
 - Если push disabled или browser не получил push, background app badge может не
   обновиться мгновенно, но server counts остаются точными и подтянутся при
   следующем foreground load.
+- Foreground unread refresh не зависит от push permission, active push
+  subscription или `pushEnabled`.
 - Browser badge является presentation layer, не source of truth.
 - Offline/cached open не очищает server unread.
 - Backend не доверяет browser-sent unread values.
@@ -371,6 +391,8 @@ Frontend:
 - thread menu показывает numeric unread badge;
 - opening thread removes its count and preserves other thread counts;
 - old local push marker hook removed;
+- opened portal refreshes `/api/chat/threads` for unread counts even when push
+  is disabled;
 - push payload updates thread count and app badge exact total;
 - active opened thread suppresses browser notification without creating a false
   local unread marker.
@@ -387,6 +409,8 @@ Service worker:
 - Server DB stores unread rows per user/thread/message.
 - User with private and multiple group chats sees independent counts.
 - App icon badge shows server total unread count, not number of push events.
+- Opened portal shows menu unread indicators from `/api/chat/threads` even when
+  push is disabled.
 - Chat menu button shows a red dot when another thread has unread.
 - Opening one chat clears only that chat after backend snapshot success.
 - Other chat counts remain.
