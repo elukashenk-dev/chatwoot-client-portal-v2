@@ -27,6 +27,7 @@
 - Keep unread independent from push subscription state. Push may be disabled, but unread rows still exist.
 - Clear unread only after a successful latest message snapshot for a thread. Do not clear on offline cache, failed requests, denied access, or older-page pagination.
 - Remove the old local unread implementation instead of keeping it beside the server model.
+- This is a new product without real users; do not implement backward compatibility or migrations for legacy offline/startup chat cache records. Tests and fixtures must be updated to the new `unreadCount` shape.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
 ## File Structure
@@ -1796,25 +1797,101 @@ async function postSetAppBadgeMessage(count: number) {
 
 If this duplicates logic from `postClearAppBadgeMessage`, refactor only enough to share worker message posting. Do not change unrelated service worker lifecycle behavior.
 
-- [ ] **Step 7: Run frontend type/runtime tests**
+- [ ] **Step 7: Run runtime test**
 
 Run:
 
 ```bash
 pnpm --dir frontend test -- src/pwa/serviceWorkerRuntime.test.ts
-pnpm --dir frontend typecheck
 ```
 
-Expected after fixture updates: PASS.
+Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Do not commit yet**
+
+Do not create a checkpoint commit at the end of this task. The required `unreadCount` type change intentionally breaks existing test fixtures until Task 7 updates them. Commit Task 6 and Task 7 together after typecheck passes.
+
+## Task 7: Migrate Chat Thread Fixtures To The New Shape
+
+**Files:**
+
+- Modify: `frontend/src/features/chat/**/*.test.ts*`
+- Modify: `frontend/src/features/auth/**/*.test.ts*`
+- Modify: `frontend/src/features/offline/**/*.test.ts*`
+- Modify: `frontend/src/pwa/serviceWorkerBackgroundSync.test.ts`
+- Modify: `backend/src/modules/chat-*/**/*.test.ts`
+- Modify: `tests/e2e/*.spec.ts`
+
+- [ ] **Step 1: Find all thread fixtures that need `unreadCount`**
+
+Run:
 
 ```bash
-git add frontend/src/features/chat/types.ts frontend/src/features/chat/pages/chatPageState.ts frontend/src/pwa/serviceWorkerPushMessages.ts frontend/src/pwa/serviceWorkerRuntime.ts frontend/src/pwa/serviceWorkerRuntime.test.ts
-git commit -m "feat: add frontend unread count types"
+rg -n "activeThread:\\s*\\{|const privateThread = \\{|const groupThread = \\{|satisfies NonNullable<ChatMessagesSnapshot\\['activeThread'\\]>|satisfies ChatThreadSummary|threads:\\s*\\[|activeThreadId: 'private:me'" backend/src frontend/src tests/e2e -S
 ```
 
-## Task 7: Replace Local Chat Unread Markers With Server Counts
+Expected: a list of backend, frontend, pwa, offline and e2e tests that construct `ChatThreadSummary` or `ChatMessagesSnapshot.activeThread` objects.
+
+- [ ] **Step 2: Update fixtures to include explicit unread counts**
+
+For every private/group thread fixture, add `unreadCount: 0` unless the test is specifically about unread behavior.
+
+Example:
+
+```ts
+const privateThread = {
+  id: 'private:me',
+  subtitle: 'Вы и поддержка',
+  title: 'Личный чат',
+  type: 'private',
+  unreadCount: 0,
+} satisfies ChatThreadSummary
+```
+
+For thread list API fixture responses, add `totalUnreadCount: 0` unless the test is specifically about unread behavior:
+
+```ts
+return {
+  activeThreadId: privateThread.id,
+  threads: [privateThread],
+  totalUnreadCount: 0,
+}
+```
+
+This is not a runtime backward-compatibility migration. It only updates repository tests and mocked API responses to the new product contract.
+
+- [ ] **Step 3: Update offline/startup cache tests to the new contract**
+
+Update tests in:
+
+```text
+frontend/src/features/chat/pages/offlineChatCache.test.ts
+frontend/src/features/offline/offlineStore.test.ts
+frontend/src/features/auth/lib/AuthSessionProvider.offline.test.tsx
+```
+
+Use `unreadCount: 0` in cached thread records and `totalUnreadCount: 0` in cached thread-list-like fixtures. Do not add logic that accepts old cached records without `unreadCount`.
+
+- [ ] **Step 4: Run typecheck and affected fixture tests**
+
+Run:
+
+```bash
+pnpm --dir frontend typecheck
+pnpm --dir frontend test -- src/features/chat/pages/offlineChatCache.test.ts src/features/offline/offlineStore.test.ts src/features/chat/components/ChatHeader.test.tsx src/features/chat/pages/ChatPage.unread-indicators.test.tsx src/pwa/serviceWorkerRuntime.test.ts
+pnpm --dir backend test -- src/modules/chat-threads/service.test.ts src/modules/chat-messages/service.test.ts src/modules/chatwoot-webhooks/service.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit Task 6 and Task 7 together**
+
+```bash
+git add frontend/src/features frontend/src/pwa backend/src/modules tests/e2e
+git commit -m "feat: add unread count frontend contract"
+```
+
+## Task 8: Replace Local Chat Unread Markers With Server Counts
 
 **Files:**
 
@@ -2095,7 +2172,7 @@ git rm frontend/src/features/chat/pages/useChatUnreadThreadMarkers.ts
 git commit -m "feat: replace chat unread markers with server counts"
 ```
 
-## Task 8: Make Service Worker Badge Exact
+## Task 9: Make Service Worker Badge Exact
 
 **Files:**
 
@@ -2194,19 +2271,20 @@ async function setAppIconBadge(payload) {
       fallbackAppBadgeCount = totalUnreadCount
       await writePersistedAppBadgeCount(totalUnreadCount)
 
-      if (
-        typeof navigator === 'undefined' ||
-        typeof navigator.setAppBadge !== 'function'
-      ) {
+      if (typeof navigator === 'undefined') {
         return
       }
 
       if (totalUnreadCount === 0) {
         if (typeof navigator.clearAppBadge === 'function') {
           await navigator.clearAppBadge()
-        } else {
+        } else if (typeof navigator.setAppBadge === 'function') {
           await navigator.setAppBadge(0)
         }
+        return
+      }
+
+      if (typeof navigator.setAppBadge !== 'function') {
         return
       }
 
@@ -2259,7 +2337,7 @@ git add frontend/public/sw.js frontend/src/pwa/serviceWorkerAsset.test.ts fronte
 git commit -m "feat: set app badge from server unread total"
 ```
 
-## Task 9: Browser Flow Coverage
+## Task 10: Browser Flow Coverage
 
 **Files:**
 
@@ -2360,7 +2438,10 @@ test('chat menu shows server unread counts and clears opened thread only', async
     },
   )
 
-  await page.goto('/chat')
+  await page.goto('/auth/login')
+  await fillLoginForm(page)
+  await page.getByRole('button', { name: 'Войти' }).click()
+  await expect(page).toHaveURL(/\/app\/chat/)
   await expect(
     page.getByRole('button', {
       name: /Открыть навигацию, есть непрочитанные сообщения/,
@@ -2375,7 +2456,11 @@ test('chat menu shows server unread counts and clears opened thread only', async
   await expect(page.getByText('1')).toBeVisible()
 
   await page.getByRole('menuitem', { name: /ООО Ромашка/ }).click()
-  await page.getByRole('button', { name: 'Меню' }).click()
+  await page
+    .getByRole('button', {
+      name: /Открыть навигацию, есть непрочитанные сообщения/,
+    })
+    .click()
   await expect(
     page.getByRole('menuitem', { name: /ООО Ромашка/ }),
   ).not.toContainText('5')
@@ -2385,7 +2470,7 @@ test('chat menu shows server unread counts and clears opened thread only', async
 })
 ```
 
-Adjust selectors to the actual login/session test helper used by this file. The test must prove that opening one group clears only that group.
+Use the existing login helper from this file. The test must prove that opening one group clears only that group.
 
 - [ ] **Step 2: Run e2e test and verify it fails if frontend is incomplete**
 
@@ -2404,7 +2489,7 @@ git add tests/e2e/chat-notifications.spec.ts
 git commit -m "test: cover chat unread browser flow"
 ```
 
-## Task 10: Final Cleanup, Review, And Baseline Docs
+## Task 11: Final Cleanup, Review, And Baseline Docs
 
 **Files:**
 
