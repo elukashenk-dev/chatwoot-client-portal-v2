@@ -96,14 +96,33 @@ cached snapshot, unread не сбрасывается.
 
 ### UI
 
+На самой кнопке меню чатов показываем маленькую красную точку, если есть
+unread хотя бы в одном чате, кроме текущего открытого. Точка не показывает
+число; ее задача - подсказать пользователю "открой меню, там есть
+непрочитанные сообщения".
+
+```text
+selectedThreadId = private:me
+
+private:me -> 0
+group:154  -> 1
+group:155  -> 0
+
+menu button -> red dot
+```
+
+Если unread есть только в текущем открытом чате, точку на кнопке меню не
+показываем. В нормальном online flow такого состояния почти не должно быть,
+потому что успешное открытие текущего чата сбрасывает его unread.
+
 В меню чатов показываем компактный unread badge рядом с названием чата:
 
 - `1`-`99` как число;
 - `99+` для больших значений;
 - если count равен `0`, badge не показывается.
 
-Красную точку можно использовать как visual fallback только если дизайн не
-позволяет показать число, но data model должна отдавать число.
+Красная точка на кнопке меню не заменяет числовые badges внутри меню. Data
+model всегда отдает числа, а точка вычисляется на frontend из server counts.
 
 На иконке установленной PWA показываем общий unread count. Если count `0`,
 badge очищается.
@@ -286,7 +305,8 @@ Backend:
 Frontend:
 
 - `ChatThreadSummary.unreadCount`;
-- `ChatHeader` badge rendering;
+- `ChatHeader` numeric per-thread badge rendering;
+- `ChatHeader` red dot on the menu button when another thread has unread;
 - `ChatPage` thread state updates on push/open;
 - `serviceWorkerRuntime` helper для set/clear app badge by exact count;
 - `sw.js` exact badge handling;
@@ -330,6 +350,7 @@ Backend:
 
 Frontend:
 
+- chat menu button показывает красную точку, если unread есть в другом чате;
 - thread menu показывает numeric unread badge;
 - opening thread removes its count and preserves other thread counts;
 - old local push marker hook removed;
@@ -350,6 +371,7 @@ Service worker:
 - Server DB stores unread rows per user/thread/message.
 - User with private and multiple group chats sees independent counts.
 - App icon badge shows server total unread count, not number of push events.
+- Chat menu button shows a red dot when another thread has unread.
 - Opening one chat clears only that chat after backend snapshot success.
 - Other chat counts remain.
 - Local React `Set<threadId>` unread marker implementation is gone.

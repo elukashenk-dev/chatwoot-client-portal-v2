@@ -65,7 +65,7 @@ Frontend files to modify:
 - `frontend/src/features/chat/pages/useChatPageNotifications.ts` - replace `onOtherThreadPush` marker callback with server-count handling.
 - `frontend/src/features/chat/pages/useChatThreadSelection.ts` - set exact app badge total after thread list and message snapshot.
 - `frontend/src/features/chat/pages/useChatSnapshotRefresh.ts` - apply unread summary after active thread refresh.
-- `frontend/src/features/chat/components/ChatHeader.tsx` - render numeric unread badges.
+- `frontend/src/features/chat/components/ChatHeader.tsx` - render the menu-button red dot and numeric per-thread unread badges.
 - `frontend/src/pwa/serviceWorkerPushMessages.ts` - parse unread counts in foreground push messages.
 - `frontend/src/pwa/serviceWorkerRuntime.ts` - add exact app badge setter and remove ChatPage reliance on unconditional clear.
 - `frontend/public/sw.js` - parse push counts and set badge to exact total instead of local increment.
@@ -73,14 +73,14 @@ Frontend files to modify:
 Frontend tests to modify:
 
 - `frontend/src/features/chat/pages/ChatPage.unread-indicators.test.tsx` - convert from local dot tests to server-count tests.
-- `frontend/src/features/chat/components/ChatHeader.test.tsx` - numeric badge rendering and accessibility.
+- `frontend/src/features/chat/components/ChatHeader.test.tsx` - menu-button red dot, numeric badge rendering, and accessibility.
 - `frontend/src/pwa/serviceWorkerAsset.test.ts` - exact app badge behavior.
 - `frontend/src/pwa/serviceWorkerRuntime.test.ts` - exact badge runtime helper.
 - Existing chat tests with thread fixtures - add `unreadCount: 0` or use test builders that set it.
 
 E2E tests to modify or add:
 
-- `tests/e2e/chat-notifications.spec.ts` - browser-level menu badge and open-thread clear behavior with mocked API/push payloads.
+- `tests/e2e/chat-notifications.spec.ts` - browser-level menu-button dot, menu badges, and open-thread clear behavior with mocked API/push payloads.
 
 ## Task 0: Baseline And Inventory
 
@@ -1827,13 +1827,18 @@ git commit -m "feat: add frontend unread count types"
 - Modify: `frontend/src/features/chat/components/ChatHeader.test.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.unread-indicators.test.tsx`
 
-- [ ] **Step 1: Convert ChatHeader tests to numeric badges**
+- [ ] **Step 1: Convert ChatHeader tests to menu dot and numeric badges**
 
 In `frontend/src/features/chat/components/ChatHeader.test.tsx`, add or update tests so threads have `unreadCount`.
 
 Expected assertions:
 
 ```ts
+expect(
+  screen.getByRole('button', {
+    name: /есть непрочитанные сообщения/i,
+  }),
+).toBeInTheDocument()
 expect(screen.getByText('5')).toBeInTheDocument()
 expect(
   screen.getByLabelText('ООО Ромашка, 5 непрочитанных'),
@@ -1848,6 +1853,8 @@ For large counts:
 ```ts
 expect(screen.getByText('99+')).toBeInTheDocument()
 ```
+
+Add a negative case: when only `selectedThreadId` has `unreadCount > 0`, the menu button red dot is hidden because the dot means "another chat needs attention".
 
 - [ ] **Step 2: Convert ChatPage unread tests**
 
@@ -1873,6 +1880,8 @@ function createThreadsResponse() {
 Add test cases:
 
 ```text
+Chat menu button shows a red dot when another thread has unread.
+Chat menu button does not show a red dot when only the selected thread has unread.
 Thread menu shows numeric unread badge from /api/chat/threads.
 Opening group:154 clears only group:154 after /api/chat/messages returns unread.totalUnreadCount.
 private:me unread count remains when group:154 is opened.
@@ -1891,11 +1900,47 @@ pnpm --dir frontend test -- src/features/chat/components/ChatHeader.test.tsx src
 
 Expected: FAIL because UI still uses local `unreadThreadIds` and `clearAppIconBadge`.
 
-- [ ] **Step 4: Render numeric badges in ChatHeader**
+- [ ] **Step 4: Render menu-button dot and numeric badges in ChatHeader**
 
 In `frontend/src/features/chat/components/ChatHeader.tsx`:
 
 - remove `unreadThreadIds` prop and `EMPTY_UNREAD_THREAD_IDS`;
+- compute menu-button attention from server counts:
+
+```ts
+const hasUnreadInAnotherThread = threads.some(
+  (thread) => thread.id !== selectedThreadId && thread.unreadCount > 0,
+)
+```
+
+- render a small red dot on the menu button when `hasUnreadInAnotherThread` is true:
+
+```tsx
+<button
+  aria-expanded={isNavMenuOpen}
+  aria-haspopup="menu"
+  aria-label={
+    hasUnreadInAnotherThread
+      ? isNavMenuOpen
+        ? 'Закрыть навигацию, есть непрочитанные сообщения'
+        : 'Открыть навигацию, есть непрочитанные сообщения'
+      : isNavMenuOpen
+        ? 'Закрыть навигацию'
+        : 'Открыть навигацию'
+  }
+  className="relative inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+>
+  <MenuIcon className="h-6 w-6" />
+  {hasUnreadInAnotherThread ? (
+    <span
+      aria-hidden="true"
+      className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-600 shadow-[0_0_0_2px_white]"
+      data-testid="chat-menu-unread-dot"
+    />
+  ) : null}
+</button>
+```
+
 - compute `const unreadCount = thread.unreadCount`;
 - replace red dot with compact text badge:
 
@@ -1912,7 +1957,7 @@ In `frontend/src/features/chat/components/ChatHeader.tsx`:
 }
 ```
 
-Keep text inside the menu item from overflowing. The badge must not resize the menu unpredictably.
+Keep text inside the menu item from overflowing. The badge must not resize the menu unpredictably. The menu-button dot is binary only; do not render a number on the menu button.
 
 - [ ] **Step 5: Remove old local marker hook from ChatPage**
 
@@ -2020,7 +2065,7 @@ onUnreadPush: (payload) => {
 }
 ```
 
-If the pushed thread is not in the current thread list, `applyThreadUnreadCount` leaves the list unchanged and the app badge still uses `totalUnreadCount`.
+If the pushed thread is not in the current thread list, `applyThreadUnreadCount` leaves the list unchanged and the app badge still uses `totalUnreadCount`. The menu-button red dot follows the current visible thread list; if an unknown thread is not shown in the menu, the dot does not need to light up for it.
 
 - [ ] **Step 9: Run targeted frontend tests**
 
@@ -2220,7 +2265,7 @@ git commit -m "feat: set app badge from server unread total"
 
 - Modify: `tests/e2e/chat-notifications.spec.ts`
 
-- [ ] **Step 1: Add e2e test for menu badge and open clear**
+- [ ] **Step 1: Add e2e test for menu-button dot, menu badge, and open clear**
 
 In `tests/e2e/chat-notifications.spec.ts`, add a mocked API test:
 
@@ -2316,7 +2361,16 @@ test('chat menu shows server unread counts and clears opened thread only', async
   )
 
   await page.goto('/chat')
-  await page.getByRole('button', { name: 'Меню' }).click()
+  await expect(
+    page.getByRole('button', {
+      name: /Открыть навигацию, есть непрочитанные сообщения/,
+    }),
+  ).toBeVisible()
+  await page
+    .getByRole('button', {
+      name: /Открыть навигацию, есть непрочитанные сообщения/,
+    })
+    .click()
   await expect(page.getByText('5')).toBeVisible()
   await expect(page.getByText('1')).toBeVisible()
 
@@ -2418,6 +2472,7 @@ Webhook accepted-dedupe cannot skip unread after an unread-write failure.
 Duplicate webhooks are safe because unread insert is idempotent.
 Thread list total sums only visible thread counts.
 Opening group:154 clears group:154 only.
+Chat menu button red dot appears when another visible thread has unread and hides when no other visible thread has unread.
 Older pagination does not clear unread.
 Cached/offline chat path does not clear unread.
 Push disabled does not disable unread writes.
@@ -2432,7 +2487,8 @@ If all checks pass and the slice is accepted, update `docs/roadmap/work-log.md` 
 ```markdown
 - Added server-owned chat unread state: backend stores per-user/thread/message
   unread rows, thread APIs expose exact counts, opening a chat clears that
-  thread after a successful snapshot, and PWA badge uses server total unread.
+  thread after a successful snapshot, the chat menu button signals unread in
+  other chats, and PWA badge uses server total unread.
 ```
 
 Update the single `Recommended Next Step` block at the end of the file to the next product/architecture step.
@@ -2458,7 +2514,8 @@ Skip this commit if `work-log.md` was not changed.
 - [ ] Failed, denied, unavailable, older-page, and cached/offline reads do not clear unread.
 - [ ] Push payload includes `threadUnreadCount` and `totalUnreadCount`.
 - [ ] Service worker sets/clears badge from server total, not push-event increments.
-- [ ] `ChatHeader` renders numeric unread badges and hides badge for `0`.
+- [ ] `ChatHeader` renders a binary red dot on the menu button when another thread has unread.
+- [ ] `ChatHeader` renders numeric unread badges inside the menu and hides per-thread badges for `0`.
 - [ ] `useChatUnreadThreadMarkers` and old local dot marker wiring are deleted.
 - [ ] Existing push notification delivery behavior still works.
 - [ ] Targeted backend, frontend, service worker, and e2e tests pass.
