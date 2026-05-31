@@ -278,7 +278,7 @@ describe('createChatUnreadRepository', () => {
     }
   })
 
-  it('clears only the opened thread without calculating hidden-thread totals', async () => {
+  it('clears the opened thread and returns visible total without counting hidden threads', async () => {
     const seeded = await seedUserAndThreads()
     const repository = createChatUnreadRepository(seeded.database.db, {
       tenantId: seeded.tenantId,
@@ -300,24 +300,35 @@ describe('createChatUnreadRepository', () => {
           portalUserId: seeded.userId,
           threadId: 'group:154',
         },
+        {
+          chatwootMessageId: 701,
+          now: new Date('2026-06-01T09:02:00.000Z'),
+          portalChatThreadId: seeded.groupThreadId,
+          portalUserId: seeded.userId,
+          threadId: 'group:203',
+        },
       ])
 
       await expect(
-        repository.clearThreadUnread({
+        repository.clearThreadUnreadAndCountVisible({
           portalUserId: seeded.userId,
           threadId: 'group:154',
+          visibleThreadIds: ['private:me', 'group:154'],
         }),
-      ).resolves.toBeUndefined()
+      ).resolves.toEqual({
+        totalUnreadCount: 1,
+      })
 
       await expect(
         repository.countUnreadByThread({
           portalUserId: seeded.userId,
-          threadIds: ['private:me', 'group:154'],
+          threadIds: ['private:me', 'group:154', 'group:203'],
         }),
       ).resolves.toEqual(
         new Map([
           ['private:me', 1],
           ['group:154', 0],
+          ['group:203', 1],
         ]),
       )
     } finally {
@@ -498,22 +509,47 @@ export function createChatUnreadRepository(
       return counts.get(threadId) ?? 0
     },
 
-    async clearThreadUnread({
+    async clearThreadUnreadAndCountVisible({
       portalUserId,
       threadId,
+      visibleThreadIds,
     }: {
       portalUserId: number
       threadId: string
+      visibleThreadIds: string[]
     }) {
-      await db
-        .delete(portalChatUnreadMessages)
-        .where(
-          and(
-            eq(portalChatUnreadMessages.tenantId, tenantId),
-            eq(portalChatUnreadMessages.portalUserId, portalUserId),
-            eq(portalChatUnreadMessages.threadId, threadId),
-          ),
-        )
+      return db.transaction(async (tx) => {
+        await tx
+          .delete(portalChatUnreadMessages)
+          .where(
+            and(
+              eq(portalChatUnreadMessages.tenantId, tenantId),
+              eq(portalChatUnreadMessages.portalUserId, portalUserId),
+              eq(portalChatUnreadMessages.threadId, threadId),
+            ),
+          )
+
+        if (visibleThreadIds.length === 0) {
+          return { totalUnreadCount: 0 }
+        }
+
+        const rows = await tx
+          .select({
+            unreadCount: count(),
+          })
+          .from(portalChatUnreadMessages)
+          .where(
+            and(
+              eq(portalChatUnreadMessages.tenantId, tenantId),
+              eq(portalChatUnreadMessages.portalUserId, portalUserId),
+              inArray(portalChatUnreadMessages.threadId, visibleThreadIds),
+            ),
+          )
+
+        return {
+          totalUnreadCount: toCount(rows[0]?.unreadCount),
+        }
+      })
     },
   }
 }
@@ -564,7 +600,9 @@ const threadMapping = {
 
 function createRepository() {
   return {
-    clearThreadUnread: vi.fn(async () => undefined),
+    clearThreadUnreadAndCountVisible: vi.fn(async () => ({
+      totalUnreadCount: 3,
+    })),
     countThreadUnreadForUser: vi.fn(async () => 2),
     countUnreadByThread: vi.fn(async () => new Map([['group:154', 2]])),
     insertUnreadMessages: vi.fn(async () => undefined),
@@ -646,7 +684,7 @@ describe('createChatUnreadService', () => {
     expect(repository.insertUnreadMessages).not.toHaveBeenCalled()
   })
 
-  it('clears a thread and returns the cleared thread id', async () => {
+  it('clears a thread and returns the cleared thread id with visible total', async () => {
     const repository = createRepository()
     const service = createChatUnreadService({
       recipientResolver: createRecipientResolver(),
@@ -657,9 +695,16 @@ describe('createChatUnreadService', () => {
       service.clearOpenedThreadUnread({
         portalUserId: 7,
         threadId: 'group:154',
+        visibleThreadIds: ['private:me', 'group:154'],
       }),
     ).resolves.toEqual({
       clearedThreadId: 'group:154',
+      totalUnreadCount: 3,
+    })
+    expect(repository.clearThreadUnreadAndCountVisible).toHaveBeenCalledWith({
+      portalUserId: 7,
+      threadId: 'group:154',
+      visibleThreadIds: ['private:me', 'group:154'],
     })
   })
 })
@@ -691,7 +736,7 @@ type CreateChatUnreadServiceOptions = {
   >
   repository: Pick<
     ChatUnreadRepository,
-    | 'clearThreadUnread'
+    | 'clearThreadUnreadAndCountVisible'
     | 'countThreadUnreadForUser'
     | 'countUnreadByThread'
     | 'insertUnreadMessages'
@@ -755,17 +800,21 @@ export function createChatUnreadService({
     async clearOpenedThreadUnread({
       portalUserId,
       threadId,
+      visibleThreadIds,
     }: {
       portalUserId: number
       threadId: string
+      visibleThreadIds: string[]
     }) {
-      await repository.clearThreadUnread({
+      const clearResult = await repository.clearThreadUnreadAndCountVisible({
         portalUserId,
         threadId,
+        visibleThreadIds,
       })
 
       return {
         clearedThreadId: threadId,
+        totalUnreadCount: clearResult.totalUnreadCount,
       }
     },
   }
@@ -1141,6 +1190,7 @@ it('clears unread after a successful latest snapshot', async () => {
   const unreadService = {
     clearOpenedThreadUnread: vi.fn(async () => ({
       clearedThreadId: 'private:me',
+      totalUnreadCount: 3,
     })),
   }
   const chatThreadsService = createChatThreadsServiceStub()
@@ -1172,16 +1222,23 @@ it('clears unread after a successful latest snapshot', async () => {
   expect(unreadService.clearOpenedThreadUnread).toHaveBeenCalledWith({
     portalUserId: 7,
     threadId: 'private:me',
+    visibleThreadIds: ['private:me'],
   })
   expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
     userId: 7,
   })
+  expect(
+    chatThreadsService.listCurrentUserThreads.mock.invocationCallOrder[0],
+  ).toBeLessThan(
+    unreadService.clearOpenedThreadUnread.mock.invocationCallOrder[0],
+  )
 })
 
 it('does not clear unread for older message pagination', async () => {
   const unreadService = {
     clearOpenedThreadUnread: vi.fn(async () => ({
       clearedThreadId: 'private:me',
+      totalUnreadCount: 3,
     })),
   }
   const chatwootClient = createChatwootClientStub({
@@ -1370,23 +1427,36 @@ async function attachUnreadClearSummary({
     return snapshot
   }
 
+  const visibleThreads = await chatThreadsService.listCurrentUserThreads({
+    userId,
+  })
+  const visibleThreadIds = visibleThreads.threads.map((thread) => thread.id)
+
+  if (!visibleThreadIds.includes(threadId)) {
+    return snapshot
+  }
+
   const unreadClear = await chatUnreadService.clearOpenedThreadUnread({
     portalUserId: userId,
     threadId,
-  })
-  const visibleThreads = await chatThreadsService.listCurrentUserThreads({
-    userId,
+    visibleThreadIds,
   })
 
   return {
     ...snapshot,
     unread: {
       clearedThreadId: unreadClear.clearedThreadId,
-      totalUnreadCount: visibleThreads.totalUnreadCount,
+      totalUnreadCount: unreadClear.totalUnreadCount,
     },
   }
 }
 ```
+
+Important ordering: `listCurrentUserThreads` runs before clear only to capture
+the visible thread ids. After `clearOpenedThreadUnread` starts, the endpoint must
+not call Chatwoot or rebuild the current thread list to compute the response.
+The clear service returns the post-clear visible total from the same DB operation
+that deleted the opened thread unread rows.
 
 Use it only for latest snapshot responses after Chatwoot messages have been fetched and mapped:
 
@@ -2258,6 +2328,8 @@ type UseChatForegroundUnreadRefreshOptions = {
   handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
   isMountedRef: RefObject<boolean>
   markBrowserOnline: () => void
+  onSelectedThreadUnavailable: () => void
+  selectedThreadId: string | null
   setPageState: Dispatch<SetStateAction<ChatPageState>>
 }
 
@@ -2267,9 +2339,13 @@ export function useChatForegroundUnreadRefresh({
   handleUnauthorizedChatError,
   isMountedRef,
   markBrowserOnline,
+  onSelectedThreadUnavailable,
+  selectedThreadId,
   setPageState,
 }: UseChatForegroundUnreadRefreshOptions) {
   const isRefreshingRef = useRef(false)
+  const selectedThreadIdRef = useRef(selectedThreadId)
+  selectedThreadIdRef.current = selectedThreadId
 
   const refreshUnreadThreads = useCallback(async () => {
     if (!enabled || isRefreshingRef.current) {
@@ -2287,6 +2363,18 @@ export function useChatForegroundUnreadRefresh({
 
       markBrowserOnline()
       void setAppIconBadgeCount(threadsResponse.totalUnreadCount)
+      const currentSelectedThreadId = selectedThreadIdRef.current
+      const selectedThreadStillVisible =
+        currentSelectedThreadId === null ||
+        threadsResponse.threads.some(
+          (thread) => thread.id === currentSelectedThreadId,
+        )
+
+      if (!selectedThreadStillVisible) {
+        onSelectedThreadUnavailable()
+        return
+      }
+
       setPageState((currentState) => {
         if (currentState.status !== 'ready') {
           return currentState
@@ -2316,6 +2404,7 @@ export function useChatForegroundUnreadRefresh({
     handleUnauthorizedChatError,
     isMountedRef,
     markBrowserOnline,
+    onSelectedThreadUnavailable,
     setPageState,
   ])
 
@@ -2359,6 +2448,10 @@ import { useChatForegroundUnreadRefresh } from './useChatForegroundUnreadRefresh
 Call it after `useChatSnapshotRefresh`:
 
 ```ts
+const handleSelectedThreadUnavailable = useCallback(() => {
+  void loadInitialChat()
+}, [loadInitialChat])
+
 useChatForegroundUnreadRefresh({
   enabled:
     canUseBackend &&
@@ -2368,11 +2461,19 @@ useChatForegroundUnreadRefresh({
   handleUnauthorizedChatError,
   isMountedRef,
   markBrowserOnline: markChatOnline,
+  onSelectedThreadUnavailable: handleSelectedThreadUnavailable,
+  selectedThreadId: pageState.selectedThreadId,
   setPageState,
 })
 ```
 
 Do not read `selectedThreadNotificationSettings`, browser push permission, service worker status, or `pushEnabled` in this hook. It is a foreground portal refresh, not a push feature. It must never clear unread; it only refreshes `/api/chat/threads`, updates visible thread counts, and sets exact app badge total from the thread-list response.
+
+If the refreshed thread list no longer contains the selected thread, the hook
+must not keep the old snapshot on screen. It should call
+`onSelectedThreadUnavailable`, and `ChatPage` should delegate that to
+`loadInitialChat()` so the normal initial load path selects the backend
+`activeThreadId` and fetches its snapshot.
 
 In `frontend/src/features/chat/pages/ChatPage.runtime.test.tsx`, add a foreground refresh test using the file's existing `fetchMock`, `createJsonResponse`, `createAuthenticatedUserResponse`, `createReadySnapshot`, `createNotificationSettingsResponse`, `createSupportAvailabilityResponse`, and `renderChatRoute` helpers.
 
@@ -2391,6 +2492,7 @@ Then add:
 
 ```ts
 it('refreshes unread menu indicators in the foreground when push is disabled', async () => {
+  const user = userEvent.setup()
   let threadRequestCount = 0
 
   fetchMock.mockImplementation(async (input) => {
@@ -2441,11 +2543,13 @@ it('refreshes unread menu indicators in the foreground when push is disabled', a
     CHAT_PAGE_LOAD_TIMEOUT,
   )
 
-  Object.defineProperty(document, 'visibilityState', {
-    configurable: true,
-    value: 'visible',
+  act(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
   })
-  document.dispatchEvent(new Event('visibilitychange'))
   await waitFor(() => expect(threadRequestCount).toBeGreaterThanOrEqual(2))
 
   expect(
@@ -2454,18 +2558,31 @@ it('refreshes unread menu indicators in the foreground when push is disabled', a
     }),
   ).toBeVisible()
 
-  await screen
-    .getByRole('button', {
+  await user.click(
+    screen.getByRole('button', {
       name: /Открыть навигацию, есть непрочитанные сообщения/,
-    })
-    .click()
+    }),
+  )
   expect(screen.getByRole('menuitem', { name: /ООО Ромашка/ })).toContainText(
     '2',
   )
 })
 ```
 
-The test must not dispatch a service worker push message; it proves foreground unread refresh works with push disabled.
+If the test file does not already import them, add `act` to the existing
+Testing Library React import and add `userEvent` from
+`@testing-library/user-event`. The test must not dispatch a service worker push
+message; it proves foreground unread refresh works with push disabled.
+
+Add a companion runtime test for disappearing selected threads:
+
+```text
+Initial /api/chat/threads returns private:me + group:154.
+The page is showing group:154 as the selected snapshot.
+Foreground refresh /api/chat/threads returns only private:me and activeThreadId private:me.
+The page calls the normal initial/snapshot load path and fetches /api/chat/messages?threadId=private%3Ame.
+The old group:154 snapshot is not left as the active chat.
+```
 
 - [ ] **Step 9: Apply push counts without local markers**
 

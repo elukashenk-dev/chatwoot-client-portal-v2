@@ -194,15 +194,23 @@ authoritative snapshot:
 
 1. Проверяет доступ к thread через текущий chat thread runtime.
 2. Получает Chatwoot-backed snapshot.
-3. Если snapshot успешный и относится к запрошенному `threadId`, удаляет unread
-   rows `(tenant_id, portal_user_id, thread_id)`.
-4. Возвращает snapshot.
+3. Если snapshot успешный и относится к запрошенному `threadId`, получает
+   current visible thread list для user и запоминает visible `threadId` values.
+4. Затем одной backend DB-операцией удаляет unread rows
+   `(tenant_id, portal_user_id, thread_id)` и пересчитывает remaining total
+   только по заранее полученным visible `threadId` values.
+5. Возвращает snapshot вместе с unread summary.
 
 Clear выполняется только после успешного snapshot и должен быть fail-closed.
 Если clear временно упал, endpoint не должен отдавать ложный статус
 "прочитано"; для MVP предпочтительно вернуть ошибку либо выполнить clear в той
 же успешной backend операции до ответа. Implementation plan должен выбрать
 поведение, при котором UI не очищает count без server authority.
+
+После clear backend не должен зависеть от Chatwoot или повторного
+`listCurrentUserThreads` для вычисления ответа. Все внешние/current-thread-list
+зависимости выполняются до clear. После clear остается только внутренняя
+DB-операция: delete opened thread unread + count remaining visible unread.
 
 ### Thread List API
 
@@ -247,9 +255,10 @@ cleanup: такие rows не попадают в пользовательски
 }
 ```
 
-`unread.totalUnreadCount` после clear пересчитывается по тому же visible-thread
-правилу, что и `/api/chat/threads`. Не считать здесь все unread rows user из
-DB, иначе app badge может показать unread для чатов, которых нет в меню.
+`unread.totalUnreadCount` после clear возвращается той же DB-операцией, которая
+очистила открытый thread, используя visible thread ids, полученные до clear. Не
+считать здесь все unread rows user из DB, иначе app badge может показать unread
+для чатов, которых нет в меню.
 
 ### Push Payload
 
@@ -292,6 +301,11 @@ push permission, active subscription и `pushEnabled`:
 Этот foreground refresh обновляет `threads[].unreadCount`, menu red dot,
 numeric badges и exact app badge total. Он не очищает unread; clear остается
 только за успешным `GET /api/chat/messages?threadId=...`.
+
+Если foreground refresh вернул thread list, где больше нет текущего выбранного
+thread, frontend не должен продолжать показывать устаревший snapshot как
+активный чат. Нужно перейти через обычный thread selection/snapshot path к
+вернувшемуся `activeThreadId`.
 
 ### Frontend State
 
