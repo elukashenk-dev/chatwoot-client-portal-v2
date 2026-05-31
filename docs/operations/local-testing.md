@@ -1,7 +1,10 @@
-# Local Testing Cheatsheet
+# Local Environment Setup
 
-Короткая актуальная шпаргалка для ручного запуска
-`chatwoot-client-portal-v2` в multi-tenant режиме.
+Runbook для локального запуска `chatwoot-client-portal-v2` в production-like
+multi-tenant режиме. Здесь хранятся только setup-команды для окружения,
+bootstrap tenants, dev servers и auto-checks.
+
+Полные MCP/QA сценарии и результаты прогонов находятся в отдельных документах.
 
 ## Что Должно Быть Уже Поднято
 
@@ -87,9 +90,11 @@ Chatwoot API tokens не записывать в docs и не коммитить
 
 ```bash
 read -rsp "BUHFIRMA Chatwoot token: " BUHFIRMA_TOKEN; echo
+read -rsp "STROYFIRMA Chatwoot token: " STROYFIRMA_TOKEN; echo
 read -rsp "ZUBI Chatwoot token: " ZUBI_TOKEN; echo
 
 BUHFIRMA_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+STROYFIRMA_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ZUBI_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
 
@@ -99,11 +104,16 @@ ZUBI_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 
 ```text
 buhfirma.127.0.0.1.nip.io
+stroyfirma.127.0.0.1.nip.io
 zubi.127.0.0.1.nip.io
 ```
 
-`nip.io` резолвит оба hostnames в `127.0.0.1`, но для browser/backend это
+`nip.io` резолвит эти hostnames в `127.0.0.1`, но для browser/backend это
 разные tenant hosts.
+
+`default` tenant на `127.0.0.1` может оставаться в локальной БД как dev
+bootstrap tenant. Для production-like multi-tenant проверок использовать
+tenant hosts выше, а не `default`.
 
 ### buhfirma
 
@@ -117,6 +127,26 @@ DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=3 \
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=6 \
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$BUHFIRMA_TOKEN" \
 DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$BUHFIRMA_WEBHOOK_SECRET" \
+pnpm --dir backend tenant:bootstrap-default
+```
+
+### stroyfirma
+
+`stroyfirma` использует тот же local Chatwoot instance, но отдельный Chatwoot
+account `5`. Локальный portal `Channel::Api` inbox для этого account - `9`.
+Если локальная Chatwoot DB пересоздана и id поменялись, сначала проверить
+актуальный API Channel inbox в Chatwoot admin.
+
+```bash
+DEFAULT_TENANT_SLUG=stroyfirma \
+DEFAULT_TENANT_DISPLAY_NAME="Стройфирма" \
+DEFAULT_TENANT_PRIMARY_DOMAIN=stroyfirma.127.0.0.1.nip.io \
+DEFAULT_TENANT_PUBLIC_BASE_URL=http://stroyfirma.127.0.0.1.nip.io:5173 \
+DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=5 \
+DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=9 \
+DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$STROYFIRMA_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$STROYFIRMA_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
 
@@ -135,10 +165,19 @@ DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$ZUBI_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
 
+Проверить фактический список локальных tenants:
+
+```bash
+set -a && source .env && set +a
+psql "$DATABASE_URL" -c \
+  "select slug, display_name, primary_domain, chatwoot_account_id, chatwoot_portal_inbox_id, status from portal_tenants order by slug;"
+```
+
 ## 6. Проверить Chatwoot Связку Tenants
 
 ```bash
 pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=buhfirma
+pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=stroyfirma
 pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=zubi
 ```
 
@@ -184,6 +223,7 @@ pnpm dev:web --host 0.0.0.0
 
 ```text
 http://buhfirma.127.0.0.1.nip.io:5173
+http://stroyfirma.127.0.0.1.nip.io:5173
 http://zubi.127.0.0.1.nip.io:5173
 ```
 
@@ -193,6 +233,7 @@ http://zubi.127.0.0.1.nip.io:5173
 
 ```bash
 pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=buhfirma
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=stroyfirma
 pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=zubi
 ```
 
@@ -205,12 +246,16 @@ pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=zubi
   Chatwoot v4.13+);
 - `secretStored: true`.
 
-## 10. Быстрый Smoke Руками
+## 10. Проверить Готовность Окружения
+
+Эти проверки подтверждают, что локальное окружение поднято. Полные QA сценарии
+не хранить в этом файле.
 
 Проверить public tenant context:
 
 ```text
 http://buhfirma.127.0.0.1.nip.io:5173/api/tenant
+http://stroyfirma.127.0.0.1.nip.io:5173/api/tenant
 http://zubi.127.0.0.1.nip.io:5173/api/tenant
 ```
 
@@ -218,21 +263,25 @@ http://zubi.127.0.0.1.nip.io:5173/api/tenant
 
 ```text
 http://buhfirma.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
+http://stroyfirma.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 http://zubi.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 ```
 
 Installed PWA smoke для реальных Android/iOS устройств описан отдельно:
 `docs/operations/installed-pwa-smoke.md`.
 
-Основной ручной сценарий:
+Полные MCP Playwright сценарии для production, staging и local
+production-like окружений:
+`docs/operations/production-mcp-playwright-test-cycle.md`.
 
-- открыть оба tenant hosts в разных вкладках;
-- убедиться, что видны разные порталы;
-- зарегистрировать пользователя buhfirma;
-- зарегистрировать пользователя zubi;
-- в каждом tenant дойти до чата;
-- отправить сообщение и получить ответ от агента;
-- проверить isolation: email из tenant A должен получать отказ в tenant B.
+Подготовка Chatwoot contacts, portal registration test users, group contacts,
+обязательных `portal_*` custom attributes и Mailpit registration flow описана
+отдельно:
+`docs/operations/local-cross-tenant-test-data.md`.
+
+Последний результат MCP Playwright прогона записывать сюда, перезаписывая файл
+целиком:
+`docs/operations/mcp-playwright-latest-results.md`.
 
 Коды registration/password reset смотреть в Mailpit:
 
@@ -319,7 +368,19 @@ E2E_TENANT_SLUG=buhfirma \
 pnpm test:e2e
 ```
 
-Для второго tenant:
+Для stroyfirma:
+
+```bash
+E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
+E2E_CHATWOOT_ACCOUNT_ID=5 \
+E2E_CHATWOOT_PORTAL_INBOX_ID=9 \
+E2E_CHATWOOT_API_ACCESS_TOKEN="$STROYFIRMA_TOKEN" \
+PLAYWRIGHT_BASE_URL=http://stroyfirma.127.0.0.1.nip.io:5173 \
+E2E_TENANT_SLUG=stroyfirma \
+pnpm test:e2e
+```
+
+Для zubi:
 
 ```bash
 E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
