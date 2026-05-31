@@ -337,6 +337,105 @@ describe('ChatPage optimistic text send', () => {
     ).resolves.toBeNull()
   })
 
+  it('retries a transient online send failure after backoff and reconciles the local bubble', async () => {
+    const user = userEvent.setup()
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: 'synthetic_failure',
+              message: 'Synthetic send failure.',
+            },
+          },
+          500,
+        ),
+      )
+      .mockImplementationOnce(async (_url, options) => {
+        const requestBody = JSON.parse(String(options?.body)) as {
+          clientMessageKey: string
+          content: string
+        }
+
+        return createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: requestBody.content,
+            contentType: 'text',
+            createdAt: '2026-04-21T09:31:00.000Z',
+            direction: 'outgoing',
+            id: 502,
+            status: 'sent',
+          },
+        })
+      })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+    await waitForInitialChatRequests()
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Повтор после 500',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    expect(await screen.findByText('Повтор после 500')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(getMessagePostCalls()).toHaveLength(1)
+    })
+    await waitFor(() => {
+      expect(screen.getByLabelText('В очереди')).toBeInTheDocument()
+    })
+    await waitFor(
+      () => {
+        expect(getMessagePostCalls()).toHaveLength(2)
+      },
+      { timeout: 4000 },
+    )
+    await waitFor(() => {
+      expect(screen.queryByLabelText('В очереди')).not.toBeInTheDocument()
+    })
+
+    const [, firstRequestOptions] = getMessagePostCalls()[0] ?? []
+    const [, retryRequestOptions] = getMessagePostCalls()[1] ?? []
+    const firstRequestBody = JSON.parse(String(firstRequestOptions?.body)) as {
+      clientMessageKey: string
+    }
+    const retryRequestBody = JSON.parse(String(retryRequestOptions?.body)) as {
+      clientMessageKey: string
+    }
+
+    expect(retryRequestBody.clientMessageKey).toBe(
+      firstRequestBody.clientMessageKey,
+    )
+    await expect(
+      offlineOutboxStore.readOutboxRecord({
+        clientMessageKey: firstRequestBody.clientMessageKey,
+        tenantSlug: 'buhfirma',
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).resolves.toBeNull()
+  })
+
   it('retries a failed durable text record through the outbox drain path', async () => {
     await offlineOutboxStore.saveOutboxRecord(
       createOutboxRecord({
