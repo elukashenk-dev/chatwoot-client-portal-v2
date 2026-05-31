@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { ChatMessagesSnapshot, ChatThreadSummary } from '../chat/types'
 import {
   clearOfflineDatabaseForTests,
   openOfflineDatabase,
@@ -357,6 +358,70 @@ describe('offline store database', () => {
     await expect(
       offlineStore.readLocalDeviceSignout('lk.buhfirma.ru', 'buhfirma', 7),
     ).resolves.toMatchObject({ tenantSlug: 'buhfirma', userId: 7 })
+  })
+
+  it('blocks late chat cache writes after local device data removal', async () => {
+    await removeLocalDeviceDataAndBlockCachedOpen({
+      host: 'lk.buhfirma.ru',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    const activeThread = {
+      id: 'private:me',
+      subtitle: 'Вы и поддержка',
+      title: 'Личный чат',
+      type: 'private',
+    } satisfies ChatThreadSummary
+    const snapshot: ChatMessagesSnapshot = {
+      activeThread,
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+      reason: 'none',
+      result: 'ready',
+    }
+
+    await offlineStore.saveThreadList({
+      activeThreadId: 'private:me',
+      savedAt: '2026-05-27T10:01:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [activeThread],
+      userId: 7,
+    })
+    await offlineStore.saveMessageSnapshot({
+      savedAt: '2026-05-27T10:01:00.000Z',
+      snapshot,
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+    await offlineStore.saveMessagePage({
+      pageCursor: 'latest',
+      savedAt: '2026-05-27T10:01:00.000Z',
+      snapshot,
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9001,
+      createdAt: '2026-05-27T10:01:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    await expect(offlineStore.readThreadList('buhfirma', 7)).resolves.toBeNull()
+    await expect(
+      offlineStore.readMessageSnapshot('buhfirma', 7, 'private:me'),
+    ).resolves.toBeNull()
+    await expect(
+      offlineStore.readMessagePage('buhfirma', 7, 'private:me', 'latest'),
+    ).resolves.toBeNull()
+    await expect(
+      offlineStore.listPushStaleMarkers('buhfirma', 7),
+    ).resolves.toEqual([])
   })
 
   it('clears rejected auth cache without removing unsent outbox', async () => {

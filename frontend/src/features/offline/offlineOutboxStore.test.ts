@@ -1,7 +1,11 @@
 import { beforeEach, expect, it } from 'vitest'
 
 import { clearOfflineDatabaseForTests } from './offlineDatabase'
-import { offlineOutboxStore } from './offlineOutboxStore'
+import {
+  offlineOutboxStore,
+  tryAcquireOutboxDrainLease,
+} from './offlineOutboxStore'
+import { removeLocalDeviceDataAndBlockCachedOpen } from './offlineStore'
 import type { OfflineTextOutboxRecord } from './types'
 
 beforeEach(async () => {
@@ -72,4 +76,42 @@ it('queues a failed outbox record for explicit retry without changing the client
     clientMessageKey: 'portal-send:failed-retry',
     status: 'queued',
   })
+})
+
+it('blocks late outbox writes after local device data removal', async () => {
+  await removeLocalDeviceDataAndBlockCachedOpen({
+    host: 'lk.buhfirma.ru',
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+  const record = createOutboxRecord()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord({
+      clientMessageKey: record.clientMessageKey,
+      tenantSlug: record.tenantSlug,
+      threadId: record.threadId,
+      userId: record.userId,
+    }),
+  ).resolves.toBeNull()
+})
+
+it('blocks late outbox drain leases after local device data removal', async () => {
+  await removeLocalDeviceDataAndBlockCachedOpen({
+    host: 'lk.buhfirma.ru',
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(
+    tryAcquireOutboxDrainLease({
+      leaseMs: 30_000,
+      now: new Date('2026-05-27T10:00:00.000Z'),
+      ownerId: 'late-drain',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    }),
+  ).resolves.toBe(false)
 })

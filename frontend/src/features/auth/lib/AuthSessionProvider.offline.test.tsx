@@ -158,7 +158,7 @@ function saveStartupAuthSnapshot({
 }
 
 function AuthProbe() {
-  const { removeLocalDeviceData, sessionSource, status, user } =
+  const { removeLocalDeviceData, sessionSource, signOut, status, user } =
     useAuthSession()
 
   return (
@@ -168,6 +168,9 @@ function AuthProbe() {
       <span>{user?.email ?? 'no user'}</span>
       <button onClick={() => void removeLocalDeviceData()} type="button">
         Remove local data
+      </button>
+      <button onClick={() => void signOut()} type="button">
+        Sign out
       </button>
     </div>
   )
@@ -483,6 +486,73 @@ describe('AuthSessionProvider offline startup', () => {
     await expect(
       offlineStore.readAuthSnapshot('buhfirma', 7),
     ).resolves.toBeNull()
+  })
+
+  it('blocks cached chat writes after explicit sign out', async () => {
+    await saveTenantAndCachedAuth()
+    await offlineStore.saveThreadList({
+      activeThreadId: 'private:me',
+      savedAt: '2026-05-27T09:55:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [
+        {
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+        },
+      ],
+      userId: 7,
+    })
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createSessionResponse()
+      }
+
+      if (url === '/api/auth/logout') {
+        return new Response(null, { status: 204 })
+      }
+
+      return new Response(null, { status: 404 })
+    })
+
+    renderAuthProbe()
+
+    expect(await screen.findByText('authenticated')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('unauthenticated')).toBeInTheDocument()
+    })
+    await expect(
+      offlineStore.readAuthSnapshot('buhfirma', 7),
+    ).resolves.toBeNull()
+    await expect(offlineStore.readThreadList('buhfirma', 7)).resolves.toBeNull()
+    await expect(
+      offlineStore.readLocalDeviceSignout(window.location.host, 'buhfirma', 7),
+    ).resolves.toMatchObject({
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    await offlineStore.saveThreadList({
+      activeThreadId: 'private:me',
+      savedAt: '2026-05-27T10:01:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [
+        {
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+        },
+      ],
+      userId: 7,
+    })
+
+    await expect(offlineStore.readThreadList('buhfirma', 7)).resolves.toBeNull()
   })
 
   it('clears rejected auth snapshot on 401 and routes to login', async () => {
