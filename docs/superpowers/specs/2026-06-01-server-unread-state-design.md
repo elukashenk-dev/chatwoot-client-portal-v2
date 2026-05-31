@@ -79,6 +79,19 @@ group:155  -> 1
 2 + 5 + 1 = 8
 ```
 
+Все пользовательские totals считаются только по чатам, которые текущий user
+сейчас видит и может открыть. Канонический total:
+
+```text
+sum(GET /api/chat/threads.threads[].unreadCount)
+```
+
+`GET /api/chat/threads` является source of truth для видимого unread state.
+`GET /api/chat/messages.unread.totalUnreadCount` и push
+`totalUnreadCount` должны использовать то же правило. Если в DB есть unread
+rows для чата, который user больше не видит, эти rows не участвуют ни в
+меню, ни в app badge, ни в push total.
+
 ### Сброс Непрочитанных
 
 При успешной загрузке snapshot для `group:154` backend удаляет unread только
@@ -215,8 +228,10 @@ Clear выполняется только после успешного snapshot
 ```
 
 Unread counts возвращаются только для threads, которые доступны текущему user в
-этом ответе. Если в DB остались unread rows для больше недоступной group,
-frontend их не показывает; cleanup можно оставить maintenance-задаче.
+этом ответе. `totalUnreadCount` всегда равен сумме `unreadCount` по threads из
+этого же ответа. Если в DB остались unread rows для больше недоступной group,
+они могут быть удалены отдельным cleanup, но correctness не зависит от
+cleanup: такие rows не попадают в пользовательские totals.
 
 ### Chat Messages API
 
@@ -232,10 +247,9 @@ frontend их не показывает; cleanup можно оставить mai
 }
 ```
 
-Если проще для implementation, summary можно не добавлять в первый slice, а
-frontend после успешного open локально выставит opened thread count в `0`.
-Однако app badge точнее обновлять через server total. Рекомендуется добавить
-минимальный `unread.totalUnreadCount` в chat messages response.
+`unread.totalUnreadCount` после clear пересчитывается по тому же visible-thread
+правилу, что и `/api/chat/threads`. Не считать здесь все unread rows user из
+DB, иначе app badge может показать unread для чатов, которых нет в меню.
 
 ### Push Payload
 
@@ -250,15 +264,17 @@ Push payload должен содержать server counts:
 }
 ```
 
+`totalUnreadCount` в push payload - это visible-thread total для recipient, то
+есть тот же total, который recipient получил бы из `GET /api/chat/threads`.
+Push delivery не должен отправлять app badge total, посчитанный по всем unread
+rows user без проверки текущей доступности threads.
+
 Service worker не должен увеличивать badge на `+1` локально. Он должен:
 
 - если `totalUnreadCount` есть, вызвать `setAppBadge(totalUnreadCount)`;
 - если count `0`, очистить badge;
-- если count отсутствует из-за старого backend payload, fallback может оставить
-  текущую legacy increment-логику только на migration period.
-
-После завершения slice legacy fallback следует удалить, если все production
-payload уже обновлены.
+- если count отсутствует, не делать локальный increment. Новый product contract
+  требует server total; legacy migration fallback не нужен.
 
 ### Frontend State
 
@@ -281,8 +297,9 @@ type ChatThreadSummary = {
 
 - если payload содержит `threadUnreadCount`, обновляет count этого thread;
 - если payload содержит `totalUnreadCount`, обновляет app badge total;
-- если pushed thread неизвестен текущему списку, frontend не показывает его,
-  но app badge можно обновить total count.
+- если pushed thread неизвестен текущему списку, frontend не показывает его в
+  меню до следующей загрузки `/api/chat/threads`, но app badge можно обновить
+  из payload, потому что payload total уже visible-authoritative.
 
 При успешном open thread:
 
@@ -363,8 +380,7 @@ Service worker:
 - `totalUnreadCount=3` sets app badge to `3`;
 - `totalUnreadCount=0` clears badge;
 - active client suppression does not increment badge locally;
-- legacy increment behavior is removed or isolated behind explicit migration
-  fallback.
+- legacy increment behavior is removed.
 
 ## Acceptance Criteria
 

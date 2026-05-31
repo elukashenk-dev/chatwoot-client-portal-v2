@@ -4,7 +4,7 @@
 
 **Goal:** Build a lightweight server-owned unread system for portal chat: per-user, per-thread counts for private and group chats, exact app badge total, and read reset after a successful backend snapshot.
 
-**Architecture:** Backend stores one unread row per `(tenant, user, thread, Chatwoot message)` and is the only source of truth. Webhooks write unread rows idempotently before push counts are built; `GET /api/chat/threads` exposes counts, and successful latest `GET /api/chat/messages` clears the opened thread fail-closed. Frontend removes local unread marker state and renders server counts from API/push payloads.
+**Architecture:** Backend stores one unread row per `(tenant, user, thread, Chatwoot message)` and is the only source of truth. Webhooks write unread rows idempotently before push counts are built; `GET /api/chat/threads` exposes visible-thread counts as the canonical unread total, and successful latest `GET /api/chat/messages` clears the opened thread fail-closed. Frontend removes local unread marker state and renders server counts from API/push payloads.
 
 **Tech Stack:** TypeScript, Fastify, Drizzle ORM, Postgres/PGlite, React 19, Vite, Service Worker, Vitest, Testing Library, Playwright.
 
@@ -28,6 +28,7 @@
 - Clear unread only after a successful latest message snapshot for a thread. Do not clear on offline cache, failed requests, denied access, or older-page pagination.
 - Remove the old local unread implementation instead of keeping it beside the server model.
 - This is a new product without real users; do not implement backward compatibility or migrations for legacy offline/startup chat cache records. Tests and fixtures must be updated to the new `unreadCount` shape.
+- Treat `/api/chat/threads` as the visible unread source of truth. Every user-facing `totalUnreadCount` must equal the sum of `unreadCount` for threads the current user can currently see; do not count stale unread rows for inaccessible groups in app badge or push totals.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
 ## File Structure
@@ -47,7 +48,7 @@ Backend files to modify:
 - `backend/src/app.ts` - wire `chat-unread` repository/service into webhooks, thread list, messages, and push delivery.
 - `backend/src/modules/chatwoot-webhooks/service.ts` - record unread idempotently for accepted `message_created` events before the accepted duplicate return path can skip retries.
 - `backend/src/modules/chatwoot-webhooks/service.test.ts` - ordering and event coverage.
-- `backend/src/modules/chat-notifications/pushDeliveryService.ts` - include exact unread counts in push payload.
+- `backend/src/modules/chat-notifications/pushDeliveryService.ts` - include exact visible-thread unread counts in push payload.
 - `backend/src/modules/chat-notifications/pushDeliveryService.test.ts` - payload count assertions.
 - `backend/src/modules/chat-threads/types.ts` - add `unreadCount` to thread summaries and `totalUnreadCount` to thread list response.
 - `backend/src/modules/chat-threads/service.ts` - attach unread counts to visible threads.
@@ -274,7 +275,7 @@ describe('createChatUnreadRepository', () => {
     }
   })
 
-  it('clears only the opened thread and returns the remaining total', async () => {
+  it('clears only the opened thread without calculating hidden-thread totals', async () => {
     const seeded = await seedUserAndThreads()
     const repository = createChatUnreadRepository(seeded.database.db, {
       tenantId: seeded.tenantId,
@@ -303,7 +304,7 @@ describe('createChatUnreadRepository', () => {
           portalUserId: seeded.userId,
           threadId: 'group:154',
         }),
-      ).resolves.toEqual({ totalUnreadCount: 1 })
+      ).resolves.toBeUndefined()
 
       await expect(
         repository.countUnreadByThread({
@@ -456,20 +457,6 @@ export function createChatUnreadRepository(
     return result
   }
 
-  async function countTotalUnreadForUser(portalUserId: number) {
-    const [row] = await db
-      .select({ unreadCount: count() })
-      .from(portalChatUnreadMessages)
-      .where(
-        and(
-          eq(portalChatUnreadMessages.tenantId, tenantId),
-          eq(portalChatUnreadMessages.portalUserId, portalUserId),
-        ),
-      )
-
-    return toCount(row?.unreadCount)
-  }
-
   return {
     async insertUnreadMessages(rows: InsertUnreadMessageInput[]) {
       if (rows.length === 0) {
@@ -492,8 +479,6 @@ export function createChatUnreadRepository(
     },
 
     countUnreadByThread,
-
-    countTotalUnreadForUser,
 
     async countThreadUnreadForUser({
       portalUserId,
@@ -526,10 +511,6 @@ export function createChatUnreadRepository(
             eq(portalChatUnreadMessages.threadId, threadId),
           ),
         )
-
-      return {
-        totalUnreadCount: await countTotalUnreadForUser(portalUserId),
-      }
     },
   }
 }
@@ -580,9 +561,8 @@ const threadMapping = {
 
 function createRepository() {
   return {
-    clearThreadUnread: vi.fn(async () => ({ totalUnreadCount: 3 })),
+    clearThreadUnread: vi.fn(async () => undefined),
     countThreadUnreadForUser: vi.fn(async () => 2),
-    countTotalUnreadForUser: vi.fn(async () => 5),
     countUnreadByThread: vi.fn(async () => new Map([['group:154', 2]])),
     insertUnreadMessages: vi.fn(async () => undefined),
   }
@@ -663,7 +643,7 @@ describe('createChatUnreadService', () => {
     expect(repository.insertUnreadMessages).not.toHaveBeenCalled()
   })
 
-  it('clears a thread and returns the remaining total', async () => {
+  it('clears a thread and returns the cleared thread id', async () => {
     const repository = createRepository()
     const service = createChatUnreadService({
       recipientResolver: createRecipientResolver(),
@@ -677,7 +657,6 @@ describe('createChatUnreadService', () => {
       }),
     ).resolves.toEqual({
       clearedThreadId: 'group:154',
-      totalUnreadCount: 3,
     })
   })
 })
@@ -711,7 +690,6 @@ type CreateChatUnreadServiceOptions = {
     ChatUnreadRepository,
     | 'clearThreadUnread'
     | 'countThreadUnreadForUser'
-    | 'countTotalUnreadForUser'
     | 'countUnreadByThread'
     | 'insertUnreadMessages'
   >
@@ -771,10 +749,6 @@ export function createChatUnreadService({
       return repository.countThreadUnreadForUser(input)
     },
 
-    async countTotalUnreadForUser(portalUserId: number) {
-      return repository.countTotalUnreadForUser(portalUserId)
-    },
-
     async clearOpenedThreadUnread({
       portalUserId,
       threadId,
@@ -782,14 +756,13 @@ export function createChatUnreadService({
       portalUserId: number
       threadId: string
     }) {
-      const result = await repository.clearThreadUnread({
+      await repository.clearThreadUnread({
         portalUserId,
         threadId,
       })
 
       return {
         clearedThreadId: threadId,
-        totalUnreadCount: result.totalUnreadCount,
       }
     },
   }
@@ -1104,19 +1077,58 @@ it('returns unread counts for private and group threads independently', async ()
     threadIds: ['private:me', 'group:154'],
   })
 })
+
+it('excludes unread rows for inaccessible groups from totalUnreadCount', async () => {
+  const unreadService = {
+    countUnreadByThread: vi.fn(
+      async () =>
+        new Map([
+          ['private:me', 2],
+          ['group:154', 5],
+        ]),
+    ),
+  }
+  const service = createService({
+    chatwootClient: createChatwootClientStub({ groupContactIds: '' }),
+    unreadService,
+  })
+
+  await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual({
+    activeThreadId: 'private:me',
+    threads: [
+      expect.objectContaining({
+        id: 'private:me',
+        unreadCount: 2,
+      }),
+    ],
+    totalUnreadCount: 2,
+  })
+  expect(unreadService.countUnreadByThread).toHaveBeenCalledWith({
+    portalUserId: 7,
+    threadIds: ['private:me'],
+  })
+})
 ```
 
 - [ ] **Step 2: Add failing message clear service tests**
 
-In `backend/src/modules/chat-messages/service.test.ts`, extend `createChatMessagesService` setup with:
+In `backend/src/modules/chat-messages/service.test.ts`, extend `createChatThreadsServiceStub` with the canonical thread-list total:
 
 ```ts
-const unreadService = {
-  clearOpenedThreadUnread: vi.fn(async () => ({
-    clearedThreadId: 'private:me',
-    totalUnreadCount: 3,
-  })),
-}
+listCurrentUserThreads: vi.fn().mockResolvedValue({
+  activeThreadId: 'private:me',
+  threads: [
+    {
+      avatarUrl: '/api/tenant/icons/icon-192.png',
+      id: 'private:me',
+      subtitle: 'Вы и поддержка',
+      title: 'Личный чат',
+      type: 'private',
+      unreadCount: 3,
+    },
+  ],
+  totalUnreadCount: 3,
+}),
 ```
 
 Add tests:
@@ -1126,9 +1138,9 @@ it('clears unread after a successful latest snapshot', async () => {
   const unreadService = {
     clearOpenedThreadUnread: vi.fn(async () => ({
       clearedThreadId: 'private:me',
-      totalUnreadCount: 3,
     })),
   }
+  const chatThreadsService = createChatThreadsServiceStub()
   const chatwootClient = createChatwootClientStub({
     listConversationMessages: vi.fn().mockResolvedValue({
       hasMoreOlder: false,
@@ -1138,7 +1150,7 @@ it('clears unread after a successful latest snapshot', async () => {
   })
   const service = createChatMessagesService({
     chatThreadsRepository: createChatThreadsRepositoryStub(),
-    chatThreadsService: createChatThreadsServiceStub(),
+    chatThreadsService,
     chatUnreadService: unreadService,
     chatwootClient,
   })
@@ -1158,13 +1170,15 @@ it('clears unread after a successful latest snapshot', async () => {
     portalUserId: 7,
     threadId: 'private:me',
   })
+  expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
+    userId: 7,
+  })
 })
 
 it('does not clear unread for older message pagination', async () => {
   const unreadService = {
     clearOpenedThreadUnread: vi.fn(async () => ({
       clearedThreadId: 'private:me',
-      totalUnreadCount: 0,
     })),
   }
   const chatwootClient = createChatwootClientStub({
@@ -1316,6 +1330,13 @@ This keeps stale DB rows for inaccessible groups out of the thread-list total.
 Extend `CreateChatMessagesServiceOptions` with:
 
 ```ts
+chatThreadsService: Pick<
+  ChatThreadsService,
+  | 'ensureCurrentUserWritableThreadContext'
+  | 'getCurrentUserThreadContext'
+  | 'listCurrentUserThreads'
+  | 'recoverCurrentUserWritableThreadContext'
+>
 chatUnreadService?: Pick<ChatUnreadService, 'clearOpenedThreadUnread'>
 ```
 
@@ -1324,12 +1345,14 @@ Add helper:
 ```ts
 async function attachUnreadClearSummary({
   beforeMessageId,
+  chatThreadsService,
   chatUnreadService,
   snapshot,
   threadId,
   userId,
 }: {
   beforeMessageId: number | null
+  chatThreadsService: Pick<ChatThreadsService, 'listCurrentUserThreads'>
   chatUnreadService?: Pick<ChatUnreadService, 'clearOpenedThreadUnread'>
   snapshot: ChatMessagesSnapshot
   threadId: string
@@ -1344,14 +1367,20 @@ async function attachUnreadClearSummary({
     return snapshot
   }
 
-  const unread = await chatUnreadService.clearOpenedThreadUnread({
+  const unreadClear = await chatUnreadService.clearOpenedThreadUnread({
     portalUserId: userId,
     threadId,
+  })
+  const visibleThreads = await chatThreadsService.listCurrentUserThreads({
+    userId,
   })
 
   return {
     ...snapshot,
-    unread,
+    unread: {
+      clearedThreadId: unreadClear.clearedThreadId,
+      totalUnreadCount: visibleThreads.totalUnreadCount,
+    },
   }
 }
 ```
@@ -1369,6 +1398,7 @@ const snapshot = buildMessagesSnapshot(context, {
 
 return attachUnreadClearSummary({
   beforeMessageId,
+  chatThreadsService,
   chatUnreadService,
   snapshot,
   threadId,
@@ -1376,7 +1406,7 @@ return attachUnreadClearSummary({
 })
 ```
 
-Do not call clear for `not_ready`, `unavailable`, failed Chatwoot requests, denied threads, or `beforeMessageId`.
+Do not call clear for `not_ready`, `unavailable`, failed Chatwoot requests, denied threads, or `beforeMessageId`. The message response total must come from the same visible-thread path as `/api/chat/threads`, not from a raw "all unread rows for user" count.
 
 - [ ] **Step 7: Wire unread service into app factories**
 
@@ -1384,6 +1414,7 @@ In `backend/src/app.ts`:
 
 - pass `chatUnreadService: createChatUnreadServiceForRequest(request)` to `createChatThreadsService`;
 - pass `chatUnreadService: createChatUnreadServiceForRequest(request)` to `createChatMessagesService`.
+- ensure the same `createChatThreadsServiceForRequest(request)` factory is later passed to push delivery so push totals use the canonical visible thread list.
 
 Avoid creating a new unread service more than needed inside a single request factory if the code becomes noisy; correctness matters more than micro-optimization.
 
@@ -1441,12 +1472,40 @@ git commit -m "feat: expose chat unread counts"
 
 - [ ] **Step 1: Add failing push payload tests**
 
-In `backend/src/modules/chat-notifications/pushDeliveryService.test.ts`, extend `createRepository` with:
+In `backend/src/modules/chat-notifications/pushDeliveryService.test.ts`, add a visible thread-list stub:
 
 ```ts
-countThreadUnreadForUser: vi.fn(async () => 6),
-countTotalUnreadForUser: vi.fn(async () => 9),
+function createChatThreadsService() {
+  return {
+    listCurrentUserThreads: vi.fn(async () => ({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private' as const,
+          unreadCount: 6,
+        },
+        {
+          avatarUrl: null,
+          id: 'group:154' as const,
+          subtitle: 'Групповой чат',
+          title: 'ООО Ромашка',
+          type: 'group' as const,
+          unreadCount: 3,
+        },
+      ],
+      totalUnreadCount: 9,
+    })),
+  }
+}
 ```
+
+Pass `chatThreadsService: createChatThreadsService()` in each existing
+`createChatNotificationPushDeliveryService` test setup unless the test needs a
+custom stub.
 
 Update the generic payload test to expect:
 
@@ -1469,11 +1528,60 @@ expect(transport.sendNotification).toHaveBeenCalledWith(
 )
 ```
 
-Add assertion that muted users do not need unread counts for payload:
+Add assertion that muted users do not need visible-thread totals for payload:
 
 ```ts
-expect(repository.countThreadUnreadForUser).not.toHaveBeenCalled()
-expect(repository.countTotalUnreadForUser).not.toHaveBeenCalled()
+expect(chatThreadsService.listCurrentUserThreads).not.toHaveBeenCalled()
+```
+
+Add a defensive test for access drift:
+
+```ts
+it('skips delivery when the recipient no longer sees the pushed thread', async () => {
+  const chatThreadsService = {
+    listCurrentUserThreads: vi.fn(async () => ({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private' as const,
+          unreadCount: 2,
+        },
+      ],
+      totalUnreadCount: 2,
+    })),
+  }
+  const service = createChatNotificationPushDeliveryService({
+    chatThreadsService,
+    recipientResolver: {
+      resolveRecipients: vi.fn(async () => [
+        {
+          portalChatThreadId: 22,
+          portalUserId: 7,
+          threadId: 'group:154',
+          threadTitle: 'ООО Ромашка',
+          threadType: 'group' as const,
+        },
+      ]),
+    },
+    repository: createRepository(),
+    transport: createTransport(),
+  })
+
+  await expect(
+    service.deliverMessageCreated({
+      chatwootMessageId: 9001,
+      tenantSlug: 'default',
+      threadMapping,
+    }),
+  ).resolves.toMatchObject({ skipped: 1, sent: 0 })
+  expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
+    userId: 7,
+  })
+})
 ```
 
 - [ ] **Step 2: Run push tests and verify they fail**
@@ -1486,18 +1594,15 @@ pnpm --dir backend test -- src/modules/chat-notifications/pushDeliveryService.te
 
 Expected: FAIL because payload lacks count fields.
 
-- [ ] **Step 3: Update push delivery repository contract**
+- [ ] **Step 3: Update push delivery service contract**
 
-In `backend/src/modules/chat-notifications/pushDeliveryService.ts`, keep `PushDeliveryRepository` focused on notification settings/delivery rows and add a separate unread dependency:
+In `backend/src/modules/chat-notifications/pushDeliveryService.ts`, keep `PushDeliveryRepository` focused on notification settings/delivery rows and add the visible thread-list dependency:
 
 ```ts
-unreadRepository: Pick<
-  ChatUnreadRepository,
-  'countThreadUnreadForUser' | 'countTotalUnreadForUser'
->
+chatThreadsService: Pick<ChatThreadsService, 'listCurrentUserThreads'>
 ```
 
-The implementation must read counts from `portal_chat_unread_messages`, not from push delivery state.
+The implementation must reuse the same visible-thread source of truth as `/api/chat/threads`. Do not add or call a raw `countTotalUnreadForUser` method for push payloads.
 
 - [ ] **Step 4: Build payload with exact counts**
 
@@ -1508,31 +1613,45 @@ threadUnreadCount: number
 totalUnreadCount: number
 ```
 
-Before calling `buildPayload`, after effective settings allow push:
+Before calling `buildPayload`, after effective settings allow push and after active subscriptions exist:
 
 ```ts
-const [threadUnreadCount, totalUnreadCount] = await Promise.all([
-  unreadRepository.countThreadUnreadForUser({
-    portalUserId: recipient.portalUserId,
-    threadId: recipient.threadId,
-  }),
-  unreadRepository.countTotalUnreadForUser(recipient.portalUserId),
-])
+const subscriptions = await repository.listActivePushSubscriptions(
+  recipient.portalUserId,
+)
+summary.subscriptions += subscriptions.length
+
+if (subscriptions.length === 0) {
+  continue
+}
+
+const currentThreads = await chatThreadsService.listCurrentUserThreads({
+  userId: recipient.portalUserId,
+})
+const pushedThread = currentThreads.threads.find(
+  (thread) => thread.id === recipient.threadId,
+)
+
+if (!pushedThread) {
+  summary.skipped += 1
+  continue
+}
+
+const threadUnreadCount = pushedThread.unreadCount
+const totalUnreadCount = currentThreads.totalUnreadCount
 ```
 
-Then include both counts in the JSON payload.
+Then include both counts in the JSON payload. This makes push `totalUnreadCount` match the menu-visible total instead of counting stale unread rows for inaccessible groups.
 
-- [ ] **Step 5: Wire repository methods in app**
+- [ ] **Step 5: Wire thread-list service in app**
 
-Pass the separate unread repository into `createChatNotificationPushDeliveryService`:
+Pass the request-scoped thread-list service into `createChatNotificationPushDeliveryService`:
 
 ```ts
-unreadRepository: createChatUnreadRepository(database.db, {
-  tenantId: tenant.id,
-}),
+chatThreadsService: createChatThreadsServiceForRequest(request),
 ```
 
-This keeps notification preferences/push delivery bookkeeping separated from unread persistence.
+This keeps notification preferences/push delivery bookkeeping separated from unread persistence and keeps one visible-count rule for `/api/chat/threads`, message clear summaries, and push payloads.
 
 - [ ] **Step 6: Run push tests**
 
@@ -2142,7 +2261,7 @@ onUnreadPush: (payload) => {
 }
 ```
 
-If the pushed thread is not in the current thread list, `applyThreadUnreadCount` leaves the list unchanged and the app badge still uses `totalUnreadCount`. The menu-button red dot follows the current visible thread list; if an unknown thread is not shown in the menu, the dot does not need to light up for it.
+If the pushed thread is not in the current thread list, `applyThreadUnreadCount` leaves the list unchanged and the app badge still uses `totalUnreadCount`. The backend payload total is already visible-authoritative; the menu-button red dot follows the current frontend thread list until the next `/api/chat/threads` refresh.
 
 - [ ] **Step 9: Run targeted frontend tests**
 
@@ -2556,6 +2675,8 @@ Unread writes do not happen for private Chatwoot messages.
 Webhook accepted-dedupe cannot skip unread after an unread-write failure.
 Duplicate webhooks are safe because unread insert is idempotent.
 Thread list total sums only visible thread counts.
+Message clear summary total sums only visible thread counts after clear.
+Push payload total sums only visible thread counts and skips access-drifted threads.
 Opening group:154 clears group:154 only.
 Chat menu button red dot appears when another visible thread has unread and hides when no other visible thread has unread.
 Older pagination does not clear unread.
@@ -2594,10 +2715,12 @@ Skip this commit if `work-log.md` was not changed.
 - [ ] Duplicate webhook/message id does not increase counts.
 - [ ] `message_updated` and private Chatwoot messages do not create unread.
 - [ ] `GET /api/chat/threads` returns `totalUnreadCount` and `threads[].unreadCount`.
+- [ ] `totalUnreadCount` equals the sum of visible `threads[].unreadCount`, not all unread DB rows for the user.
 - [ ] User with private plus multiple group chats sees independent counts.
 - [ ] Latest successful `GET /api/chat/messages?threadId=...` clears only that thread.
 - [ ] Failed, denied, unavailable, older-page, and cached/offline reads do not clear unread.
 - [ ] Push payload includes `threadUnreadCount` and `totalUnreadCount`.
+- [ ] Push `totalUnreadCount` uses the same visible-thread total as `/api/chat/threads`.
 - [ ] Service worker sets/clears badge from server total, not push-event increments.
 - [ ] `ChatHeader` renders a binary red dot on the menu button when another thread has unread.
 - [ ] `ChatHeader` renders numeric unread badges inside the menu and hides per-thread badges for `0`.
