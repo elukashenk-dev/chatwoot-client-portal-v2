@@ -2,7 +2,7 @@ import { openOfflineDatabase, type OfflineStoreName } from './offlineDatabase'
 import {
   deletePushStaleMarkers,
   listPushStaleMarkers,
-  savePushStaleMarker,
+  savePushStaleMarker as savePushStaleMarkerRecord,
 } from './offlinePushStaleMarkers'
 import {
   deleteStartupAuthSession,
@@ -15,6 +15,7 @@ import type {
   OfflineChatThreadListRecord,
   OfflineLastActiveIdentityRecord,
   OfflineLocalDeviceSignoutRecord,
+  OfflinePushStaleMarkerRecord,
   OfflineTenantContextRecord,
 } from './types'
 
@@ -222,6 +223,32 @@ async function deleteOfflineRecord(storeName: OfflineStoreName, key: string) {
   }
 }
 
+export async function isUserScopedOfflineWriteBlocked(
+  tenantSlug: string,
+  userId: number,
+) {
+  const database = await openOfflineDatabase()
+
+  try {
+    const records = await database.getAll('local_device_signouts')
+
+    return records.some(
+      (record) =>
+        isLocalDeviceSignoutRecord(record) &&
+        isSameUserScope(record, tenantSlug, userId),
+    )
+  } finally {
+    database.close()
+  }
+}
+
+async function shouldSkipUserScopedCacheWrite(record: {
+  tenantSlug: string
+  userId: number
+}) {
+  return isUserScopedOfflineWriteBlocked(record.tenantSlug, record.userId)
+}
+
 export const offlineStore = {
   deleteLocalDeviceSignout(host: string) {
     return deleteOfflineRecord('local_device_signouts', host)
@@ -350,14 +377,22 @@ export const offlineStore = {
   },
   deletePushStaleMarkers,
   listPushStaleMarkers,
-  saveMessageSnapshot(record: OfflineChatMessageSnapshotRecord) {
+  async saveMessageSnapshot(record: OfflineChatMessageSnapshotRecord) {
+    if (await shouldSkipUserScopedCacheWrite(record)) {
+      return
+    }
+
     return putOfflineRecord(
       'chat_message_snapshots',
       scopedThreadKey(record.tenantSlug, record.userId, record.threadId),
       record,
     )
   },
-  saveMessagePage(record: OfflineChatMessagePageRecord) {
+  async saveMessagePage(record: OfflineChatMessagePageRecord) {
+    if (await shouldSkipUserScopedCacheWrite(record)) {
+      return
+    }
+
     return putOfflineRecord(
       'chat_message_pages',
       scopedMessagePageKey(
@@ -369,11 +404,21 @@ export const offlineStore = {
       record,
     )
   },
-  savePushStaleMarker,
+  async savePushStaleMarker(record: OfflinePushStaleMarkerRecord) {
+    if (await shouldSkipUserScopedCacheWrite(record)) {
+      return
+    }
+
+    await savePushStaleMarkerRecord(record)
+  },
   saveTenantContext(record: OfflineTenantContextRecord) {
     return putOfflineRecord('tenant_contexts', record.host, record)
   },
-  saveThreadList(record: OfflineChatThreadListRecord) {
+  async saveThreadList(record: OfflineChatThreadListRecord) {
+    if (await shouldSkipUserScopedCacheWrite(record)) {
+      return
+    }
+
     return putOfflineRecord(
       'chat_thread_lists',
       scopedUserKey(record.tenantSlug, record.userId),
@@ -387,6 +432,20 @@ export async function clearCurrentUserOfflineData({
   tenantSlug,
   userId,
 }: OfflineUserScope) {
+  return clearCurrentUserOfflineDataWithOptions(
+    { host, tenantSlug, userId },
+    { preserveLocalDeviceSignout: false },
+  )
+}
+
+async function clearCurrentUserOfflineDataWithOptions(
+  { host, tenantSlug, userId }: OfflineUserScope,
+  {
+    preserveLocalDeviceSignout,
+  }: {
+    preserveLocalDeviceSignout: boolean
+  },
+) {
   const userKey = scopedUserKey(tenantSlug, userId)
   const userPrefix = `${userKey}:`
   let database: Awaited<ReturnType<typeof openOfflineDatabase>> | null = null
@@ -421,6 +480,7 @@ export async function clearCurrentUserOfflineData({
     }
 
     if (
+      !preserveLocalDeviceSignout &&
       isLocalDeviceSignoutRecord(signout) &&
       signout.tenantSlug === tenantSlug &&
       signout.userId === userId
@@ -466,12 +526,16 @@ export async function clearCurrentUserOfflineData({
 export async function removeLocalDeviceDataAndBlockCachedOpen(
   input: OfflineUserScope,
 ) {
-  await clearCurrentUserOfflineData(input)
-  await offlineStore.saveLocalDeviceSignout({
+  const signout = {
     createdAt: new Date().toISOString(),
     host: input.host,
     tenantSlug: input.tenantSlug,
     userId: input.userId,
+  }
+
+  await offlineStore.saveLocalDeviceSignout(signout)
+  await clearCurrentUserOfflineDataWithOptions(input, {
+    preserveLocalDeviceSignout: true,
   })
 }
 

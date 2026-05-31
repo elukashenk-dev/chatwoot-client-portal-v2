@@ -411,7 +411,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
       await logout()
 
       if (offlineRemovalScope) {
-        await clearCurrentUserOfflineData(offlineRemovalScope)
+        await removeLocalDeviceDataAndBlockCachedOpen(offlineRemovalScope)
       }
 
       if (isMountedRef.current) {

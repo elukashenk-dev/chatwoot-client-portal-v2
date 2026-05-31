@@ -1,4 +1,5 @@
 import { openOfflineDatabase } from './offlineDatabase'
+import { isUserScopedOfflineWriteBlocked } from './offlineStore'
 import type { OfflineSyncLeaseRecord, OfflineTextOutboxRecord } from './types'
 
 type OutboxRecordKeyInput = Pick<
@@ -136,6 +137,10 @@ async function listOutboxRecords() {
 }
 
 async function putOutboxRecord(record: OfflineTextOutboxRecord) {
+  if (await isUserScopedOfflineWriteBlocked(record.tenantSlug, record.userId)) {
+    return
+  }
+
   const database = await openOfflineDatabase()
 
   try {
@@ -347,6 +352,10 @@ export async function tryAcquireOutboxDrainLease({
   tenantSlug: string
   userId: number
 }) {
+  if (await isUserScopedOfflineWriteBlocked(tenantSlug, userId)) {
+    return false
+  }
+
   const database = await openOfflineDatabase()
   const key = drainLeaseKey(tenantSlug, userId)
 
