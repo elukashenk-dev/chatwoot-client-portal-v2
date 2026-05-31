@@ -148,7 +148,7 @@ Runtime-модель определяется фактической Chatwoot-с
 
 ```text
 buhfirma -> chatwoot.shared.ru / account 3
-stroyfirma -> chatwoot.shared.ru / account 4
+stroyfirma -> chatwoot.shared.ru / account 5
 zubi -> chatwoot.zubi.ru / account 1
 ```
 

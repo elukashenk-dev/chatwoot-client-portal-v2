@@ -264,6 +264,7 @@ Local development:
 
 ```text
 buhfirma.127.0.0.1.nip.io:5173
+stroyfirma.127.0.0.1.nip.io:5173
 zubi.127.0.0.1.nip.io:5173
 ```
 
