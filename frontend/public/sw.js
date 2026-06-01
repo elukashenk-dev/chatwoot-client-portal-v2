@@ -1090,11 +1090,7 @@ async function closePortalChatNotifications() {
       const tag =
         typeof notification.tag === 'string' ? notification.tag : null
 
-      if (
-        tag?.startsWith('portal-chat-unread-') ||
-        tag?.startsWith('portal-chat-thread-') ||
-        tag?.startsWith('portal-chat-message-')
-      ) {
+      if (tag?.startsWith('portal-chat-message-')) {
         notification.close()
       }
     }

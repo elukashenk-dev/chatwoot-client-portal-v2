@@ -264,20 +264,20 @@ describe('service worker push notifications', () => {
     await clearAppBadgeDatabase()
   })
 
-  it('renotifies per-thread tagged notifications so repeated messages alert again', async () => {
+  it('renotifies duplicate per-message tagged notifications', async () => {
     const { listeners, showNotification } = loadServiceWorker()
     const pushListener = listeners.get('push')?.[0]
 
     expect(pushListener).toBeDefined()
 
     await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-thread-default-private-me',
+      notificationTag: 'portal-chat-message-default-9001',
       tenantSlug: 'default',
       type: 'chat_message',
       url: '/',
     })
     await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-thread-default-private-me',
+      notificationTag: 'portal-chat-message-default-9001',
       tenantSlug: 'default',
       type: 'chat_message',
       url: '/',
@@ -288,7 +288,7 @@ describe('service worker push notifications', () => {
       'Новое сообщение',
       expect.objectContaining({
         renotify: true,
-        tag: 'portal-chat-thread-default-private-me',
+        tag: 'portal-chat-message-default-9001',
         timestamp: expect.any(Number),
       }),
     )
@@ -297,7 +297,7 @@ describe('service worker push notifications', () => {
       'Новое сообщение',
       expect.objectContaining({
         renotify: true,
-        tag: 'portal-chat-thread-default-private-me',
+        tag: 'portal-chat-message-default-9001',
         timestamp: expect.any(Number),
       }),
     )
@@ -434,14 +434,27 @@ describe('service worker push notifications', () => {
   it('closes pending portal chat notifications after a clear message', async () => {
     const chatNotification = {
       close: vi.fn(),
+      tag: 'portal-chat-message-default-9001',
+    }
+    const legacyThreadNotification = {
+      close: vi.fn(),
       tag: 'portal-chat-thread-default-private-me',
+    }
+    const legacyUnreadNotification = {
+      close: vi.fn(),
+      tag: 'portal-chat-unread-default',
     }
     const unrelatedNotification = {
       close: vi.fn(),
       tag: 'external-notification',
     }
     const { listeners } = loadServiceWorker({
-      notifications: [chatNotification, unrelatedNotification],
+      notifications: [
+        chatNotification,
+        legacyThreadNotification,
+        legacyUnreadNotification,
+        unrelatedNotification,
+      ],
     })
     const messageListener = listeners.get('message')?.[0]
     const pendingPromises: Promise<unknown>[] = []
@@ -460,6 +473,8 @@ describe('service worker push notifications', () => {
     await Promise.all(pendingPromises)
 
     expect(chatNotification.close).toHaveBeenCalledTimes(1)
+    expect(legacyThreadNotification.close).not.toHaveBeenCalled()
+    expect(legacyUnreadNotification.close).not.toHaveBeenCalled()
     expect(unrelatedNotification.close).not.toHaveBeenCalled()
   })
 
