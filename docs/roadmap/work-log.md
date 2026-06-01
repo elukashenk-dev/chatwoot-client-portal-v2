@@ -175,6 +175,10 @@
   `lk.provgroup.ru` из clean commit `ee1c0d2`; push tap открывает конкретный
   chat thread, а открытие thread закрывает только его pending system
   notifications.
+- Chat boot восстанавливает последний открытый thread из startup/cache, если он
+  все еще доступен в server-visible thread list; deep-link thread остается выше
+  по приоритету, а недоступный thread безопасно падает обратно на backend
+  default.
 - Offline-first PWA MVP Slice 08 реализован: production service worker получает
   Vite manifest assets в app shell, отдает revision/status для runtime checks,
   не перехватывает `/api/*`, а push stale markers сохраняются и потребляются
@@ -228,5 +232,4 @@
 
 ## Recommended Next Step
 
-- Close `F-CHAT-004`: restore the last opened chat on online app boot when the
-  thread is still available.
+- Close `F-MT-004` before starting `MT-9` tenant admin and branding rebuild.

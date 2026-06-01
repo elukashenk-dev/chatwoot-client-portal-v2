@@ -474,6 +474,90 @@ describe('ChatPage offline cache', () => {
     )
   })
 
+  it('keeps the startup cached group chat selected when it is still available online', async () => {
+    saveStartupChatFallback({
+      selectedThreadId: cachedGroupThread.id,
+      snapshot: createReadySnapshot({
+        activeThread: cachedGroupThread,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Portal User',
+            authorRole: 'group_member',
+            content: 'Кеш последнего открытого группового чата.',
+            contentType: 'text',
+            createdAt: '2026-05-27T09:58:00.000Z',
+            direction: 'outgoing',
+            id: 25401,
+            status: 'sent',
+          },
+        ],
+      }),
+      threads: [privateThreadList, cachedGroupThreadList],
+    })
+    const groupSnapshot = createReadySnapshot({
+      activeThread: cachedGroupThread,
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Ольга Support',
+          authorRole: 'agent',
+          content: 'Актуальный групповой чат после online boot.',
+          contentType: 'text',
+          createdAt: '2026-05-27T10:02:00.000Z',
+          direction: 'incoming',
+          id: 25402,
+          status: 'sent',
+        },
+      ],
+    })
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse({
+          activeThreadId: privateThread.id,
+          threads: [privateThreadList, cachedGroupThreadList],
+          totalUnreadCount: 0,
+        })
+      }
+
+      if (url === '/api/chat/messages?threadId=group%3A254') {
+        return createJsonResponse(groupSnapshot)
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/group%3A254/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatPageWithCachedAuth()
+
+    expect(
+      screen.getByText('Кеш последнего открытого группового чата.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        'Актуальный групповой чат после online boot.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Отключенная группа' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/chat/messages?threadId=private%3Ame',
+      expect.anything(),
+    )
+  })
+
   it('keeps startup cached chat visible when network fails before IndexedDB fallback is available', async () => {
     saveStartupChatFallback()
     fetchMock.mockImplementation(async (input) => {
