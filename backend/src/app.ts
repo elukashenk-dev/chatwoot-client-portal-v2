@@ -37,6 +37,8 @@ import { createChatThreadContactRepository } from './modules/chat-threads/contac
 import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
 import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
 import { createChatThreadsService } from './modules/chat-threads/service.js'
+import { createChatUnreadRepository } from './modules/chat-unread/repository.js'
+import { createChatUnreadService } from './modules/chat-unread/service.js'
 import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/repository.js'
 import { registerChatwootWebhookRoutes } from './modules/chatwoot-webhooks/routes.js'
 import { createChatwootWebhookService } from './modules/chatwoot-webhooks/service.js'
@@ -200,23 +202,42 @@ export function buildApp({
       }),
       vapidConfig,
     })
+  const createChatNotificationRecipientResolverForRequest = (
+    request: FastifyRequest,
+  ) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatNotificationRecipientResolver({
+      chatThreadsRepository: createChatThreadsRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      chatwootClient: createChatwootClientForRequest(request),
+      contactRepository: createChatThreadContactRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+    })
+  }
   const createPushDeliveryServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
     return createChatNotificationPushDeliveryService({
-      recipientResolver: createChatNotificationRecipientResolver({
-        chatThreadsRepository: createChatThreadsRepository(database.db, {
-          tenantId: tenant.id,
-        }),
-        chatwootClient: createChatwootClientForRequest(request),
-        contactRepository: createChatThreadContactRepository(database.db, {
-          tenantId: tenant.id,
-        }),
-      }),
+      recipientResolver:
+        createChatNotificationRecipientResolverForRequest(request),
       repository: createChatNotificationsRepository(database.db, {
         tenantId: tenant.id,
       }),
       transport: pushTransport,
+    })
+  }
+  const createChatUnreadServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatUnreadService({
+      recipientResolver:
+        createChatNotificationRecipientResolverForRequest(request),
+      repository: createChatUnreadRepository(database.db, {
+        tenantId: tenant.id,
+      }),
     })
   }
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
@@ -241,6 +262,7 @@ export function buildApp({
 
     return createChatwootWebhookService({
       chatMessagesService: createChatMessagesServiceForRequest(request),
+      chatUnreadService: createChatUnreadServiceForRequest(request),
       chatwootAccountId: tenant.chatwoot.accountId,
       chatwootPortalInboxId: tenant.chatwoot.portalInboxId,
       pushDeliveryService: createPushDeliveryServiceForRequest(request),

@@ -19,6 +19,9 @@ type RecordDelivery =
 type DeliverMessageCreated = NonNullable<
   CreateChatwootWebhookServiceOptions['pushDeliveryService']
 >['deliverMessageCreated']
+type RecordMessageCreatedUnread = NonNullable<
+  CreateChatwootWebhookServiceOptions['chatUnreadService']
+>['recordMessageCreatedUnread']
 
 const webhookSecret = 'test-webhook-secret'
 const now = new Date('2026-04-21T12:00:00.000Z')
@@ -74,6 +77,7 @@ function createService(
   overrides: {
     findConversationMappingByChatwootConversationId?: FindConversationMapping
     getCurrentUserChatMessages?: GetCurrentUserChatMessages
+    chatUnreadService?: CreateChatwootWebhookServiceOptions['chatUnreadService']
     publishThreadMessages?: PublishThreadMessages
     pushDeliveryService?: CreateChatwootWebhookServiceOptions['pushDeliveryService']
     realtimeHub?: CreateChatwootWebhookServiceOptions['realtimeHub']
@@ -103,6 +107,7 @@ function createService(
     overrides.recordDelivery ??
     vi.fn<RecordDelivery>().mockResolvedValue('recorded')
   const pushDeliveryService = overrides.pushDeliveryService
+  const chatUnreadService = overrides.chatUnreadService
   const realtimeHub =
     overrides.realtimeHub ??
     ({
@@ -116,6 +121,7 @@ function createService(
     chatMessagesService: {
       getCurrentUserChatMessages,
     },
+    ...(chatUnreadService ? { chatUnreadService } : {}),
     chatwootAccountId: 3,
     chatwootPortalInboxId: 9,
     now: () => now,
@@ -133,6 +139,7 @@ function createService(
   return {
     findConversationMappingByChatwootConversationId,
     getCurrentUserChatMessages,
+    chatUnreadService,
     publishThreadMessages,
     pushDeliveryService,
     recordDelivery,
@@ -422,6 +429,71 @@ describe('createChatwootWebhookService', () => {
     })
   })
 
+  it('records unread before push delivery for accepted message_created events', async () => {
+    const calls: string[] = []
+    const recordMessageCreatedUnread = vi
+      .fn<RecordMessageCreatedUnread>()
+      .mockImplementation(async () => {
+        calls.push('unread')
+
+        return { recipients: 1 }
+      })
+    const deliverMessageCreated = vi
+      .fn<DeliverMessageCreated>()
+      .mockImplementation(async () => {
+        calls.push('push')
+
+        return {
+          expired: 0,
+          failed: 0,
+          recipients: 1,
+          sent: 1,
+          skipped: 0,
+          subscriptions: 1,
+        }
+      })
+    const { service } = createService({
+      chatUnreadService: {
+        recordMessageCreatedUnread,
+      },
+      pushDeliveryService: {
+        deliverMessageCreated,
+      },
+    })
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).resolves.toEqual({
+      deliveredClients: 2,
+      result: 'accepted',
+    })
+    expect(recordMessageCreatedUnread).toHaveBeenCalledWith({
+      chatwootMessageId: 501,
+      threadMapping: {
+        chatwootConversationId: 101,
+        portalChatThreadId: 1,
+        threadId: 'private:me',
+        threadType: 'private',
+        userId: 7,
+      },
+    })
+    expect(calls).toEqual(['unread', 'push'])
+  })
+
   it('does not trigger push delivery for message_updated events', async () => {
     const deliverMessageCreated = vi.fn<DeliverMessageCreated>()
     const { service } = createService({
@@ -451,6 +523,75 @@ describe('createChatwootWebhookService', () => {
       result: 'accepted',
     })
     expect(deliverMessageCreated).not.toHaveBeenCalled()
+  })
+
+  it('does not record unread for message_updated events', async () => {
+    const recordMessageCreatedUnread = vi.fn<RecordMessageCreatedUnread>()
+    const { service } = createService({
+      chatUnreadService: {
+        recordMessageCreatedUnread,
+      },
+    })
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_updated',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).resolves.toEqual({
+      deliveredClients: 2,
+      result: 'accepted',
+    })
+    expect(recordMessageCreatedUnread).not.toHaveBeenCalled()
+  })
+
+  it('does not mark a webhook accepted when unread write fails', async () => {
+    const recordDelivery = vi.fn<RecordDelivery>().mockResolvedValue('recorded')
+    const recordMessageCreatedUnread = vi
+      .fn<RecordMessageCreatedUnread>()
+      .mockRejectedValue(new Error('unread db unavailable'))
+    const { service } = createService({
+      chatUnreadService: {
+        recordMessageCreatedUnread,
+      },
+      recordDelivery,
+    })
+    const webhook = createSignedWebhook({
+      account: {
+        id: 3,
+      },
+      conversation: {
+        account_id: 3,
+        id: 101,
+        inbox_id: 9,
+      },
+      event: 'message_created',
+      id: 501,
+      inbox: {
+        id: 9,
+      },
+      private: false,
+    })
+
+    await expect(service.handleWebhook(webhook)).rejects.toThrow(
+      'unread db unavailable',
+    )
+    expect(recordDelivery).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'accepted',
+      }),
+    )
   })
 
   it('keeps webhook accepted when push delivery fails', async () => {

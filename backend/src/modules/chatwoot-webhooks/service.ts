@@ -10,6 +10,7 @@ import { ApiError } from '../../lib/errors.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import type { ChatNotificationPushDeliveryService } from '../chat-notifications/pushDeliveryService.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
+import type { ChatUnreadService } from '../chat-unread/service.js'
 import type {
   ChatwootWebhookDeliveryStatus,
   ChatwootWebhookRepository,
@@ -37,6 +38,7 @@ type CreateChatwootWebhookServiceOptions = {
       userId: number
     }) => Promise<ChatMessagesSnapshot>
   }
+  chatUnreadService?: Pick<ChatUnreadService, 'recordMessageCreatedUnread'>
   chatwootAccountId: number
   chatwootPortalInboxId: number
   now?: () => Date
@@ -286,6 +288,7 @@ async function publishCurrentSnapshot({
 
 export function createChatwootWebhookService({
   chatMessagesService,
+  chatUnreadService,
   chatwootAccountId,
   chatwootPortalInboxId,
   now = () => new Date(),
@@ -430,6 +433,13 @@ export function createChatwootWebhookService({
         return isDuplicate
           ? { result: 'duplicate' }
           : buildIgnoredResult('unmapped_conversation')
+      }
+
+      if (eventName === 'message_created' && chatUnreadService) {
+        await chatUnreadService.recordMessageCreatedUnread({
+          chatwootMessageId,
+          threadMapping: mapping,
+        })
       }
 
       const isDuplicate = await recordDeliveryOrReturnDuplicate({
