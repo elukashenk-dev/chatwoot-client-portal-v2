@@ -330,7 +330,7 @@ export async function setAppIconBadgeCount(count: number) {
 
   if (typeof setAppBadge === 'function') {
     try {
-      await setAppBadge.call(navigator, badgeCount)
+      await setAppBadge.call(navigator)
       didSetBrowserBadge = true
     } catch {
       didSetBrowserBadge = false

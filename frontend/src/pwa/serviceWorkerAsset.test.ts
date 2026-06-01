@@ -303,7 +303,7 @@ describe('service worker push notifications', () => {
     )
   })
 
-  it('sets an exact app icon badge count when a system notification is shown', async () => {
+  it('sets an app icon unread marker when a system notification is shown', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners, showNotification } = loadServiceWorker({
       appBadge: {
@@ -323,10 +323,10 @@ describe('service worker push notifications', () => {
     })
 
     expect(showNotification).toHaveBeenCalled()
-    expect(setAppBadge).toHaveBeenCalledWith(1)
+    expect(setAppBadge).toHaveBeenCalledWith()
   })
 
-  it('uses the exact unread count from each shown system notification', async () => {
+  it('keeps the app icon badge as a boolean unread marker for positive counts', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
@@ -352,11 +352,11 @@ describe('service worker push notifications', () => {
       url: '/',
     })
 
-    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
-    expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
+    expect(setAppBadge).toHaveBeenNthCalledWith(1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2)
   })
 
-  it('serializes concurrent exact app icon badge count writes', async () => {
+  it('serializes concurrent app icon badge marker writes', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
@@ -384,8 +384,8 @@ describe('service worker push notifications', () => {
       }),
     ])
 
-    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
-    expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
+    expect(setAppBadge).toHaveBeenNthCalledWith(1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2)
   })
 
   it('resets the local app icon badge count after a clear message', async () => {
@@ -426,8 +426,8 @@ describe('service worker push notifications', () => {
       url: '/',
     })
 
-    expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
-    expect(setAppBadge).toHaveBeenNthCalledWith(2, 1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(1)
+    expect(setAppBadge).toHaveBeenNthCalledWith(2)
     expect(clearAppBadge).toHaveBeenCalledTimes(1)
   })
 
@@ -711,6 +711,7 @@ describe('service worker push notifications', () => {
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',
       threadType: 'group',
+      threadUnreadCount: 4,
       type: 'chat_message',
       url: '/',
     })
@@ -730,8 +731,35 @@ describe('service worker push notifications', () => {
     expect(showNotification).toHaveBeenCalledWith(
       'ООО Уточки',
       expect.objectContaining({
-        body: 'Новое сообщение в групповом чате',
+        body: '4 новых сообщения в группе',
         tag: 'portal-chat-message-default-9006',
+      }),
+    )
+  })
+
+  it('uses unread count in private chat system notification copy', async () => {
+    const { listeners, showNotification } = loadServiceWorker()
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9009,
+      notificationTag: 'portal-chat-message-default-9009',
+      tenantSlug: 'default',
+      threadId: 'private:me',
+      threadTitle: 'Личный чат',
+      threadType: 'private',
+      threadUnreadCount: 1,
+      type: 'chat_message',
+      url: '/',
+    })
+
+    expect(showNotification).toHaveBeenCalledWith(
+      'Личный чат',
+      expect.objectContaining({
+        body: '1 новое сообщение в личном чате',
+        tag: 'portal-chat-message-default-9009',
       }),
     )
   })

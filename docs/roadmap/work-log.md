@@ -155,13 +155,14 @@
   tenant-scoped push delivery из Chatwoot `message_created` webhooks, safe
   chat-title context в PWA push payload без текста сообщения и локальная
   красная точка для чатов с новыми сообщениями вне текущего активного чата,
-  плюс минимальный локальный PWA app-icon badge count по показанным системным
+  плюс минимальный локальный PWA app-icon unread marker по показанным системным
   push на поддерживаемых платформах.
 - Непрочитанные сообщения чата переведены на backend-owned state:
   `/api/chat/threads` возвращает per-thread и total unread только по доступным
   threads, открытие snapshot чата сбрасывает unread этого thread, а frontend
   показывает red dot на кнопке меню чатов, числовые badges внутри меню и
-  обновляет app badge точным backend count независимо от push-настроек.
+  обновляет app-icon unread marker по backend total независимо от
+  push-настроек.
 - Production deploy backend-owned chat unread state выполнен на
   `lk.provgroup.ru` из clean commit `5b18e8d`; production migration применена,
   stack healthy и public health/tenant/PWA manifest smoke проходят.

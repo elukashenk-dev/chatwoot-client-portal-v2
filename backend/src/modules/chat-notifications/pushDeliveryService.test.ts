@@ -182,7 +182,7 @@ describe('chat notification push delivery service', () => {
       },
       JSON.stringify({
         chatwootMessageId: 9001,
-        notificationTag: 'portal-chat-thread-default-private-me',
+        notificationTag: 'portal-chat-unread-default',
         portalUserId: 7,
         tenantSlug: 'default',
         threadId: 'private:me',
@@ -264,7 +264,7 @@ describe('chat notification push delivery service', () => {
 
     expect(parsedPayload).toMatchObject({
       chatwootMessageId: 9001,
-      notificationTag: 'portal-chat-thread-default-group-155',
+      notificationTag: 'portal-chat-unread-default',
       portalUserId: 7,
       tenantSlug: 'default',
       threadId: 'group:155',

@@ -101,16 +101,8 @@ function toNotificationTagPart(value: string) {
   )
 }
 
-function buildNotificationTag({
-  tenantSlug,
-  threadId,
-}: {
-  tenantSlug: string
-  threadId: string
-}) {
-  return `portal-chat-thread-${toNotificationTagPart(
-    tenantSlug,
-  )}-${toNotificationTagPart(threadId)}`
+function buildNotificationTag({ tenantSlug }: { tenantSlug: string }) {
+  return `portal-chat-unread-${toNotificationTagPart(tenantSlug)}`
 }
 
 function buildPushTopic({
@@ -199,7 +191,6 @@ export function createChatNotificationPushDeliveryService({
           chatwootMessageId: input.chatwootMessageId,
           notificationTag: buildNotificationTag({
             tenantSlug: input.tenantSlug,
-            threadId: recipient.threadId,
           }),
           portalUserId: recipient.portalUserId,
           tenantSlug: input.tenantSlug,

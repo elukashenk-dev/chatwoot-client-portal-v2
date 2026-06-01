@@ -4,7 +4,6 @@ const PUSH_CLIENT_RESPONSE_TIMEOUT_MS = 700
 const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 const APP_BADGE_STORE_NAME = 'state'
 const APP_BADGE_COUNT_KEY = 'chat_push_count'
-const APP_BADGE_MAX_COUNT = 9999
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
 const PORTAL_OFFLINE_DATABASE_VERSION = 2
 const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
@@ -90,7 +89,7 @@ self.addEventListener('message', (event) => {
     const badgeCount = Number.isSafeInteger(event.data.count)
       ? event.data.count
       : 0
-    const setPromise = setExactAppIconBadge(badgeCount)
+    const setPromise = setAppIconUnreadMarker(badgeCount)
     event.waitUntil?.(setPromise)
     return
   }
@@ -1015,11 +1014,11 @@ async function handlePushEvent(event) {
     notificationCopy.title,
     notificationOptions,
   )
-  await setExactAppIconBadge(payload.totalUnreadCount)
+  await setAppIconUnreadMarker(payload.totalUnreadCount)
   await staleMarkerPersistence
 }
 
-async function setExactAppIconBadge(count) {
+async function setAppIconUnreadMarker(count) {
   if (
     typeof count !== 'number' ||
     !Number.isFinite(count) ||
@@ -1031,20 +1030,20 @@ async function setExactAppIconBadge(count) {
 
   try {
     await runAppBadgeMutation(async () => {
-      const badgeCount = Math.min(Math.floor(count), APP_BADGE_MAX_COUNT)
+      const hasUnread = Math.floor(count) > 0
 
       try {
-        await writePersistedAppBadgeCount(badgeCount)
+        await writePersistedAppBadgeCount(hasUnread ? 1 : 0)
       } catch {
         // Platform badge support is still useful when fallback storage is unavailable.
       }
 
-      if (badgeCount > 0 && typeof navigator.setAppBadge === 'function') {
-        await navigator.setAppBadge(badgeCount)
+      if (hasUnread && typeof navigator.setAppBadge === 'function') {
+        await navigator.setAppBadge()
         return
       }
 
-      if (badgeCount === 0 && typeof navigator.clearAppBadge === 'function') {
+      if (!hasUnread && typeof navigator.clearAppBadge === 'function') {
         await navigator.clearAppBadge()
       }
     })
@@ -1091,6 +1090,7 @@ async function closePortalChatNotifications() {
         typeof notification.tag === 'string' ? notification.tag : null
 
       if (
+        tag?.startsWith('portal-chat-unread-') ||
         tag?.startsWith('portal-chat-thread-') ||
         tag?.startsWith('portal-chat-message-')
       ) {
@@ -1237,24 +1237,56 @@ function openPortalOfflineDatabase() {
 }
 
 function buildNotificationCopy(payload) {
+  const unreadLabel = formatUnreadMessageCount(payload.threadUnreadCount)
+
   if (payload.threadTitle && payload.threadType === 'group') {
     return {
-      body: 'Новое сообщение в групповом чате',
+      body: unreadLabel
+        ? `${unreadLabel} в группе`
+        : 'Новое сообщение в групповом чате',
       title: payload.threadTitle,
     }
   }
 
   if (payload.threadTitle && payload.threadType === 'private') {
     return {
-      body: 'Новое сообщение в личном чате',
+      body: unreadLabel
+        ? `${unreadLabel} в личном чате`
+        : 'Новое сообщение в личном чате',
       title: payload.threadTitle,
     }
   }
 
   return {
-    body: 'Откройте портал, чтобы посмотреть чат.',
+    body: unreadLabel
+      ? `${unreadLabel} в чате`
+      : 'Откройте портал, чтобы посмотреть чат.',
     title: 'Новое сообщение',
   }
+}
+
+function formatUnreadMessageCount(count) {
+  if (!Number.isSafeInteger(count) || count <= 0) {
+    return null
+  }
+
+  const absoluteCount = Math.abs(count)
+  const lastTwoDigits = absoluteCount % 100
+  const lastDigit = absoluteCount % 10
+
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return `${count} новых сообщений`
+  }
+
+  if (lastDigit === 1) {
+    return `${count} новое сообщение`
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} новых сообщения`
+  }
+
+  return `${count} новых сообщений`
 }
 
 function isReadyPortalClient(client) {

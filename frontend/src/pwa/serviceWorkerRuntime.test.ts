@@ -454,6 +454,31 @@ describe('serviceWorkerRuntime', () => {
     })
   })
 
+  it('sets a flag app icon badge instead of a numeric count', async () => {
+    const controller = new MockServiceWorker('activated')
+    const registration = new MockServiceWorkerRegistration()
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: controller as unknown as ServiceWorker,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+    const setAppBadge = vi.fn(async () => undefined)
+    Object.defineProperty(globalThis.navigator, 'setAppBadge', {
+      configurable: true,
+      value: setAppBadge,
+    })
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(runtime.setAppIconBadgeCount(4)).resolves.toBe(true)
+    expect(setAppBadge).toHaveBeenCalledWith()
+    expect(controller.postMessage).toHaveBeenCalledWith({
+      count: 4,
+      type: 'PORTAL_APP_BADGE_SET',
+    })
+  })
+
   it('resets the service worker badge count through the active worker when the page has no controller yet', async () => {
     const activeWorker = new MockServiceWorker('activated')
     const registration = new MockServiceWorkerRegistration()
