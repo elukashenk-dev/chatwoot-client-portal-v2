@@ -1006,7 +1006,9 @@ async function handlePushEvent(event) {
   }
 
   if (payload.notificationTag) {
+    notificationOptions.renotify = true
     notificationOptions.tag = payload.notificationTag
+    notificationOptions.timestamp = Date.now()
   }
 
   await self.registration.showNotification(
@@ -1052,15 +1054,52 @@ async function setExactAppIconBadge(count) {
 }
 
 async function resetAppIconBadge() {
-  // The foreground window clears the platform badge. The worker resets only
-  // its persisted fallback count so controlled pages can keep SW messaging on.
+  // Clear both the platform badge and the persisted fallback count. Some mobile
+  // launchers keep the badge set by service worker push until the worker clears it.
   await runAppBadgeMutation(async () => {
     try {
       await writePersistedAppBadgeCount(0)
     } catch {
       // IndexedDB can be unavailable in some browser/service-worker states.
     }
+
+    try {
+      if (
+        typeof navigator !== 'undefined' &&
+        typeof navigator.clearAppBadge === 'function'
+      ) {
+        await navigator.clearAppBadge()
+      }
+    } catch {
+      // App badge support and permission behavior differs by browser/platform.
+    }
+
+    await closePortalChatNotifications()
   })
+}
+
+async function closePortalChatNotifications() {
+  if (typeof self.registration.getNotifications !== 'function') {
+    return
+  }
+
+  try {
+    const notifications = await self.registration.getNotifications()
+
+    for (const notification of notifications) {
+      const tag =
+        typeof notification.tag === 'string' ? notification.tag : null
+
+      if (
+        tag?.startsWith('portal-chat-thread-') ||
+        tag?.startsWith('portal-chat-message-')
+      ) {
+        notification.close()
+      }
+    }
+  } catch {
+    // Notification cleanup should not block clearing the app badge fallback.
+  }
 }
 
 function runAppBadgeMutation(operation) {

@@ -355,7 +355,7 @@ describe('ChatPage unread indicators', () => {
     )
   })
 
-  it('consumes stored push stale markers by refreshing known threads after chat startup', async () => {
+  it('keeps stored push stale markers for unopened threads after chat startup', async () => {
     const groupSnapshot = createReadySnapshot({
       activeThread: groupThread,
       messages: [
@@ -370,6 +370,13 @@ describe('ChatPage unread indicators', () => {
     })
 
     await clearOfflineDatabaseForTests()
+    await offlineStore.savePushStaleMarker({
+      chatwootMessageId: 9100,
+      createdAt: '2026-05-27T09:59:00.000Z',
+      tenantSlug: 'buhfirma',
+      threadId: 'private:me',
+      userId: 7,
+    })
     await offlineStore.savePushStaleMarker({
       chatwootMessageId: 9101,
       createdAt: '2026-05-27T10:00:00.000Z',
@@ -416,15 +423,24 @@ describe('ChatPage unread indicators', () => {
     )
 
     await waitFor(async () => {
-      await expect(
-        offlineStore.readMessageSnapshot('buhfirma', 7, 'group:154'),
-      ).resolves.toMatchObject({
-        snapshot: groupSnapshot,
-      })
+      const markers = await offlineStore.listPushStaleMarkers('buhfirma', 7)
+
+      expect(markers).toEqual([
+        expect.objectContaining({
+          chatwootMessageId: 9101,
+          threadId: 'group:154',
+        }),
+      ])
     })
+
+    expect(
+      fetchMock.mock.calls.some(
+        ([input]) => String(input) === '/api/chat/messages?threadId=group%3A154',
+      ),
+    ).toBe(false)
     await expect(
-      offlineStore.listPushStaleMarkers('buhfirma', 7),
-    ).resolves.toEqual([])
+      offlineStore.readMessageSnapshot('buhfirma', 7, 'group:154'),
+    ).resolves.toBeNull()
   })
 
   it('shows and clears server unread indicators for another chat push', async () => {

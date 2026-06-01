@@ -97,6 +97,7 @@ function loadServiceWorker({
   clientsList = [],
   fetch = vi.fn() as unknown as typeof globalThis.fetch,
   indexedDB = globalThis.indexedDB,
+  notifications = [],
 }: {
   appBadge?: {
     clearAppBadge?: () => Promise<void>
@@ -112,6 +113,10 @@ function loadServiceWorker({
   }>
   fetch?: typeof globalThis.fetch
   indexedDB?: unknown
+  notifications?: Array<{
+    close: () => void
+    tag?: string
+  }>
 } = {}) {
   const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
   const listeners = new Map<string, Listener[]>()
@@ -124,6 +129,7 @@ function loadServiceWorker({
       origin: 'https://lk.provgroup.ru',
     },
     registration: {
+      getNotifications: vi.fn(async () => notifications),
       showNotification,
     },
   }
@@ -258,20 +264,20 @@ describe('service worker push notifications', () => {
     await clearAppBadgeDatabase()
   })
 
-  it('uses payload notification tags so pending notifications do not collapse new messages', async () => {
+  it('renotifies per-thread tagged notifications so repeated messages alert again', async () => {
     const { listeners, showNotification } = loadServiceWorker()
     const pushListener = listeners.get('push')?.[0]
 
     expect(pushListener).toBeDefined()
 
     await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-message-default-9001',
+      notificationTag: 'portal-chat-thread-default-private-me',
       tenantSlug: 'default',
       type: 'chat_message',
       url: '/',
     })
     await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-message-default-9002',
+      notificationTag: 'portal-chat-thread-default-private-me',
       tenantSlug: 'default',
       type: 'chat_message',
       url: '/',
@@ -281,14 +287,18 @@ describe('service worker push notifications', () => {
       1,
       'Новое сообщение',
       expect.objectContaining({
-        tag: 'portal-chat-message-default-9001',
+        renotify: true,
+        tag: 'portal-chat-thread-default-private-me',
+        timestamp: expect.any(Number),
       }),
     )
     expect(showNotification).toHaveBeenNthCalledWith(
       2,
       'Новое сообщение',
       expect.objectContaining({
-        tag: 'portal-chat-message-default-9002',
+        renotify: true,
+        tag: 'portal-chat-thread-default-private-me',
+        timestamp: expect.any(Number),
       }),
     )
   })
@@ -379,9 +389,11 @@ describe('service worker push notifications', () => {
   })
 
   it('resets the local app icon badge count after a clear message', async () => {
+    const clearAppBadge = vi.fn(async () => undefined)
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
+        clearAppBadge,
         setAppBadge,
       },
     })
@@ -416,6 +428,39 @@ describe('service worker push notifications', () => {
 
     expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
     expect(setAppBadge).toHaveBeenNthCalledWith(2, 1)
+    expect(clearAppBadge).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes pending portal chat notifications after a clear message', async () => {
+    const chatNotification = {
+      close: vi.fn(),
+      tag: 'portal-chat-thread-default-private-me',
+    }
+    const unrelatedNotification = {
+      close: vi.fn(),
+      tag: 'external-notification',
+    }
+    const { listeners } = loadServiceWorker({
+      notifications: [chatNotification, unrelatedNotification],
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pendingPromises: Promise<unknown>[] = []
+
+    expect(messageListener).toBeDefined()
+
+    messageListener!({
+      data: {
+        type: 'PORTAL_APP_BADGE_CLEAR',
+      },
+      waitUntil: (promise) => {
+        pendingPromises.push(promise)
+      },
+    })
+
+    await Promise.all(pendingPromises)
+
+    expect(chatNotification.close).toHaveBeenCalledTimes(1)
+    expect(unrelatedNotification.close).not.toHaveBeenCalled()
   })
 
   it('shows a system notification when the push-ready portal client is hidden', async () => {

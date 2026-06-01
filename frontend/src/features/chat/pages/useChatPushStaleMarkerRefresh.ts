@@ -35,12 +35,20 @@ export function useChatPushStaleMarkerRefresh({
       return
     }
 
+    const selectedThread = pageState.threads.find(
+      (thread) => thread.id === pageState.selectedThreadId,
+    )
+
+    if (!selectedThread) {
+      return
+    }
+
     let isCurrent = true
 
     consumePushStaleMarkersForKnownThreads({
       refreshThread: (threadId) => getChatMessages({ threadId }),
       tenantSlug,
-      threads: pageState.threads,
+      threads: [selectedThread],
       userId,
     })
       .then((refreshedThreads) => {
