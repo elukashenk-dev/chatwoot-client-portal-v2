@@ -198,6 +198,10 @@ export function useChatThreadSelection({
           threadsResponse.threads,
           requestedThreadIdRef.current,
         ) ??
+        findAvailableThreadId(
+          threadsResponse.threads,
+          selectedThreadIdRef.current,
+        ) ??
         threadsResponse.activeThreadId ??
         getFallbackThreadId(threadsResponse.threads)
 
