@@ -32,6 +32,9 @@ describe('push transport', () => {
           },
         },
         '{"type":"chat_message"}',
+        {
+          topic: 'chat-thread-default-group-154',
+        },
       ),
     ).resolves.toEqual({
       status: 'sent',
@@ -54,6 +57,7 @@ describe('push transport', () => {
       {
         TTL: 86_400,
         timeout: 5_000,
+        topic: 'chat-thread-default-group-154',
         urgency: 'high',
       },
     )

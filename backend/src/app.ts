@@ -234,6 +234,7 @@ export function buildApp({
     const tenant = requireTenantContext(request)
 
     return createChatNotificationPushDeliveryService({
+      chatThreadsService: createChatThreadsServiceForRequest(request),
       recipientResolver:
         createChatNotificationRecipientResolverForRequest(request),
       repository: createChatNotificationsRepository(database.db, {

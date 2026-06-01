@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+
+import type { ChatThreadsService } from '../chat-threads/service.js'
 import { defaultUserNotificationSettings } from './settings.js'
 import { resolveEffectiveChatNotificationSettings } from './settings.js'
 import type { ChatNotificationRecipientResolver } from './recipientResolver.js'
@@ -34,6 +37,7 @@ type DeliverMessageCreatedInput = {
 }
 
 type CreateChatNotificationPushDeliveryServiceOptions = {
+  chatThreadsService: Pick<ChatThreadsService, 'listCurrentUserThreads'>
   now?: () => Date
   recipientResolver: ChatNotificationRecipientResolver
   repository: PushDeliveryRepository
@@ -53,33 +57,79 @@ function emptySummary(): PushDeliverySummary {
 
 function buildPayload({
   chatwootMessageId,
+  notificationTag,
   portalUserId,
   tenantSlug,
   threadId,
+  threadUnreadCount,
   threadTitle,
   threadType,
+  totalUnreadCount,
 }: {
   chatwootMessageId: number
+  notificationTag: string
   portalUserId: number
   tenantSlug: string
   threadId: string
+  threadUnreadCount: number
   threadTitle: string | null
   threadType: 'group' | 'private' | null
+  totalUnreadCount: number
 }) {
   return JSON.stringify({
     chatwootMessageId,
-    notificationTag: `portal-chat-message-${tenantSlug}-${chatwootMessageId}`,
+    notificationTag,
     portalUserId,
     tenantSlug,
     threadId,
+    threadUnreadCount,
     threadTitle,
     threadType,
+    totalUnreadCount,
     type: 'chat_message',
     url: '/',
   })
 }
 
+function toNotificationTagPart(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'unknown'
+  )
+}
+
+function buildNotificationTag({
+  tenantSlug,
+  threadId,
+}: {
+  tenantSlug: string
+  threadId: string
+}) {
+  return `portal-chat-thread-${toNotificationTagPart(
+    tenantSlug,
+  )}-${toNotificationTagPart(threadId)}`
+}
+
+function buildPushTopic({
+  tenantSlug,
+  threadId,
+}: {
+  tenantSlug: string
+  threadId: string
+}) {
+  const hash = createHash('sha256')
+    .update(`tenant:${tenantSlug}:thread:${threadId}`)
+    .digest('base64url')
+    .slice(0, 24)
+
+  return `chat-${hash}`
+}
+
 export function createChatNotificationPushDeliveryService({
+  chatThreadsService,
   now = () => new Date(),
   recipientResolver,
   repository,
@@ -119,17 +169,49 @@ export function createChatNotificationPushDeliveryService({
           continue
         }
 
+        let visibleThreads: Awaited<
+          ReturnType<ChatThreadsService['listCurrentUserThreads']>
+        >
+
+        try {
+          visibleThreads = await chatThreadsService.listCurrentUserThreads({
+            userId: recipient.portalUserId,
+          })
+        } catch {
+          summary.skipped += 1
+          continue
+        }
+
+        const visibleThread = visibleThreads.threads.find(
+          (thread) => thread.id === recipient.threadId,
+        )
+
+        if (!visibleThread) {
+          summary.skipped += 1
+          continue
+        }
+
         const subscriptions = await repository.listActivePushSubscriptions(
           recipient.portalUserId,
         )
         summary.subscriptions += subscriptions.length
         const payload = buildPayload({
           chatwootMessageId: input.chatwootMessageId,
+          notificationTag: buildNotificationTag({
+            tenantSlug: input.tenantSlug,
+            threadId: recipient.threadId,
+          }),
           portalUserId: recipient.portalUserId,
           tenantSlug: input.tenantSlug,
           threadId: recipient.threadId,
+          threadUnreadCount: visibleThread.unreadCount,
           threadTitle: recipient.threadTitle,
           threadType: recipient.threadType,
+          totalUnreadCount: visibleThreads.totalUnreadCount,
+        })
+        const topic = buildPushTopic({
+          tenantSlug: input.tenantSlug,
+          threadId: recipient.threadId,
         })
 
         for (const subscription of subscriptions) {
@@ -157,6 +239,7 @@ export function createChatNotificationPushDeliveryService({
               },
             },
             payload,
+            { topic },
           )
 
           if (result.status === 'sent') {
