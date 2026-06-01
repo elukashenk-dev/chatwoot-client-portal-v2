@@ -1,5 +1,6 @@
 import type { ChatwootClient } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
+import type { ChatUnreadService } from '../chat-unread/service.js'
 import {
   assertPortalGroupContactEnabled,
   assertPortalPersonContactEnabled,
@@ -20,6 +21,7 @@ import {
   buildGroupThread,
   buildPrivateThread,
   type CurrentUserChatThreads,
+  type PublicChatThreadListSummary,
   type PublicChatThreadSummary,
 } from './types.js'
 
@@ -54,6 +56,7 @@ type ChatThreadsChatwootClient = Pick<
 >
 
 type CreateChatThreadsServiceOptions = {
+  chatUnreadService?: Pick<ChatUnreadService, 'countUnreadByThread'>
   contactRepository: ChatThreadsContactRepository
   chatThreadsRepository: ChatThreadsPersistenceRepository
   chatwootClient: ChatThreadsChatwootClient
@@ -77,6 +80,7 @@ function isSkippableGroupListConfigurationError(error: unknown) {
 }
 
 export function createChatThreadsService({
+  chatUnreadService,
   contactRepository,
   chatThreadsRepository,
   chatwootClient,
@@ -136,6 +140,43 @@ export function createChatThreadsService({
     portalInboxId,
     readPersonAttributes: assertPortalPersonContactEnabled,
   })
+
+  async function addUnreadCounts({
+    threads,
+    userId,
+  }: {
+    threads: PublicChatThreadSummary[]
+    userId: number
+  }) {
+    if (threads.length === 0) {
+      return {
+        threads: [] as PublicChatThreadListSummary[],
+        totalUnreadCount: 0,
+      }
+    }
+
+    const unreadCounts = chatUnreadService
+      ? await chatUnreadService.countUnreadByThread({
+          portalUserId: userId,
+          threadIds: threads.map((thread) => thread.id),
+        })
+      : new Map<string, number>()
+    let totalUnreadCount = 0
+    const threadsWithUnreadCounts = threads.map((thread) => {
+      const unreadCount = unreadCounts.get(thread.id) ?? 0
+      totalUnreadCount += unreadCount
+
+      return {
+        ...thread,
+        unreadCount,
+      }
+    })
+
+    return {
+      threads: threadsWithUnreadCounts,
+      totalUnreadCount,
+    }
+  }
 
   async function listSafeGroupParticipants({
     currentUserId,
@@ -299,9 +340,15 @@ export function createChatThreadsService({
         threads.push(buildGroupThread(groupContact))
       }
 
+      const unread = await addUnreadCounts({
+        threads,
+        userId,
+      })
+
       return {
         activeThreadId: PRIVATE_CHAT_THREAD_ID,
-        threads,
+        threads: unread.threads,
+        totalUnreadCount: unread.totalUnreadCount,
       }
     },
   }

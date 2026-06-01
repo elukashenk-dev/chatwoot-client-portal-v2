@@ -5,6 +5,9 @@ import type { ChatThreadContactRepository } from './contactRepository.js'
 import { createChatThreadsService } from './service.js'
 
 type ChatThreadsServiceOptions = Parameters<typeof createChatThreadsService>[0]
+type CountUnreadByThread = NonNullable<
+  ChatThreadsServiceOptions['chatUnreadService']
+>['countUnreadByThread']
 
 type ChatwootClientStub = ChatThreadsServiceOptions['chatwootClient'] & {
   createContactInbox: ReturnType<typeof vi.fn>
@@ -167,12 +170,14 @@ function createChatThreadsPersistenceRepositoryStub({
 }
 
 function createService({
+  chatUnreadService,
   chatThreadsRepository = createChatThreadsPersistenceRepositoryStub(),
   chatwootClient = createChatwootClientStub(),
   now = () => new Date('2026-05-15T10:00:00.000Z'),
   portalInboxId = 9,
   repository = createRepositoryStub(),
 }: {
+  chatUnreadService?: ChatThreadsServiceOptions['chatUnreadService']
   chatThreadsRepository?: unknown
   chatwootClient?: ReturnType<typeof createChatwootClientStub>
   now?: () => Date
@@ -180,6 +185,7 @@ function createService({
   repository?: ReturnType<typeof createRepositoryStub>
 } = {}) {
   return createChatThreadsService({
+    ...(chatUnreadService ? { chatUnreadService } : {}),
     contactRepository: repository,
     chatThreadsRepository:
       chatThreadsRepository as ChatThreadsServiceOptions['chatThreadsRepository'],
@@ -652,6 +658,7 @@ describe('createChatThreadsService', () => {
           subtitle: 'Вы и поддержка',
           title: 'Личный чат',
           type: 'private',
+          unreadCount: 0,
         },
         {
           avatarUrl: null,
@@ -659,8 +666,49 @@ describe('createChatThreadsService', () => {
           subtitle: 'Групповой чат',
           title: 'ООО "Ромашка"',
           type: 'group',
+          unreadCount: 0,
         },
       ],
+      totalUnreadCount: 0,
+    })
+  })
+
+  it('adds unread counts and totals only for visible threads while listing threads', async () => {
+    const countUnreadByThread = vi.fn<CountUnreadByThread>().mockResolvedValue(
+      new Map([
+        ['private:me', 2],
+        ['group:154', 3],
+        ['group:203', 99],
+      ]),
+    )
+    const service = createService({
+      chatUnreadService: {
+        countUnreadByThread,
+      },
+      chatwootClient: createChatwootClientStub({
+        groupContactIds: '154,203',
+      }),
+    })
+
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        expect.objectContaining({
+          id: 'private:me',
+          unreadCount: 2,
+        }),
+        expect.objectContaining({
+          id: 'group:154',
+          unreadCount: 3,
+        }),
+      ],
+      totalUnreadCount: 5,
+    })
+    expect(countUnreadByThread).toHaveBeenCalledWith({
+      portalUserId: 7,
+      threadIds: ['private:me', 'group:154'],
     })
   })
 
@@ -682,6 +730,7 @@ describe('createChatThreadsService', () => {
           id: 'group:154',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatwootClient.findContactById).toHaveBeenCalledTimes(2)
     expect(chatwootClient.findContactById).toHaveBeenNthCalledWith(1, 44)
@@ -749,6 +798,7 @@ describe('createChatThreadsService', () => {
           id: 'group:154',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatThreadsRepository.upsertGroupThread).toHaveBeenCalledTimes(1)
     expect(chatThreadsRepository.upsertGroupThread).toHaveBeenCalledWith({
@@ -792,6 +842,7 @@ describe('createChatThreadsService', () => {
           id: 'private:me',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
@@ -817,6 +868,7 @@ describe('createChatThreadsService', () => {
           id: 'private:me',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
@@ -842,6 +894,7 @@ describe('createChatThreadsService', () => {
           id: 'private:me',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
@@ -864,6 +917,7 @@ describe('createChatThreadsService', () => {
           id: 'private:me',
         }),
       ],
+      totalUnreadCount: 0,
     })
     expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
@@ -978,8 +1032,10 @@ describe('createChatThreadsService', () => {
           subtitle: 'Вы и поддержка',
           title: 'Личный чат',
           type: 'private',
+          unreadCount: 0,
         },
       ],
+      totalUnreadCount: 0,
     })
   })
 
@@ -992,27 +1048,30 @@ describe('createChatThreadsService', () => {
       }),
     })
 
-    await expect(service.listCurrentUserThreads({ userId: 7 })).resolves.toEqual(
-      {
-        activeThreadId: 'private:me',
-        threads: [
-          {
-            avatarUrl: '/api/tenant/icons/icon-192.png',
-            id: 'private:me',
-            subtitle: 'Вы и поддержка',
-            title: 'Личный чат',
-            type: 'private',
-          },
-          {
-            avatarUrl: '/api/chat/threads/group%3A154/avatar',
-            id: 'group:154',
-            subtitle: 'Групповой чат',
-            title: 'ООО "Ромашка"',
-            type: 'group',
-          },
-        ],
-      },
-    )
+    await expect(
+      service.listCurrentUserThreads({ userId: 7 }),
+    ).resolves.toEqual({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+          unreadCount: 0,
+        },
+        {
+          avatarUrl: '/api/chat/threads/group%3A154/avatar',
+          id: 'group:154',
+          subtitle: 'Групповой чат',
+          title: 'ООО "Ромашка"',
+          type: 'group',
+          unreadCount: 0,
+        },
+      ],
+      totalUnreadCount: 0,
+    })
   })
 
   it('uses email lookup and persists a contact link when a portal link does not exist yet', async () => {

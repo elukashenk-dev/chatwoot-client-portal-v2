@@ -52,6 +52,7 @@ async function buildThreadsRoutesTestApp({
   listCurrentUserThreads = vi.fn<ListCurrentUserThreads>().mockResolvedValue({
     activeThreadId: 'private:me',
     threads: [],
+    totalUnreadCount: 0,
   }),
 }: {
   getCurrentUserThreadInfo?: MockedFunction<GetCurrentUserThreadInfo>
@@ -149,6 +150,7 @@ describe('registerChatThreadsRoutes', () => {
             subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
+            unreadCount: 2,
           },
           {
             avatarUrl: null,
@@ -156,8 +158,10 @@ describe('registerChatThreadsRoutes', () => {
             subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',
             type: 'group',
+            unreadCount: 3,
           },
         ],
+        totalUnreadCount: 5,
       }),
     })
 
@@ -180,6 +184,7 @@ describe('registerChatThreadsRoutes', () => {
             subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
+            unreadCount: 2,
           },
           {
             avatarUrl: null,
@@ -187,8 +192,10 @@ describe('registerChatThreadsRoutes', () => {
             subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',
             type: 'group',
+            unreadCount: 3,
           },
         ],
+        totalUnreadCount: 5,
       })
       expect(listCurrentUserThreads).toHaveBeenCalledWith({
         userId: 7,

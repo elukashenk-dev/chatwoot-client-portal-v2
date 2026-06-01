@@ -147,10 +147,37 @@ export function buildApp({
   })
   const createChatwootClientForRequest = (request: FastifyRequest) =>
     chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
+  const createChatNotificationRecipientResolverForRequest = (
+    request: FastifyRequest,
+  ) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatNotificationRecipientResolver({
+      chatThreadsRepository: createChatThreadsRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      chatwootClient: createChatwootClientForRequest(request),
+      contactRepository: createChatThreadContactRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+    })
+  }
+  const createChatUnreadServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createChatUnreadService({
+      recipientResolver:
+        createChatNotificationRecipientResolverForRequest(request),
+      repository: createChatUnreadRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+    })
+  }
   const createChatThreadsServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
     return createChatThreadsService({
+      chatUnreadService: createChatUnreadServiceForRequest(request),
       contactRepository: createChatThreadContactRepository(database.db, {
         tenantId: tenant.id,
       }),
@@ -202,21 +229,6 @@ export function buildApp({
       }),
       vapidConfig,
     })
-  const createChatNotificationRecipientResolverForRequest = (
-    request: FastifyRequest,
-  ) => {
-    const tenant = requireTenantContext(request)
-
-    return createChatNotificationRecipientResolver({
-      chatThreadsRepository: createChatThreadsRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatwootClient: createChatwootClientForRequest(request),
-      contactRepository: createChatThreadContactRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-    })
-  }
   const createPushDeliveryServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -227,17 +239,6 @@ export function buildApp({
         tenantId: tenant.id,
       }),
       transport: pushTransport,
-    })
-  }
-  const createChatUnreadServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
-
-    return createChatUnreadService({
-      recipientResolver:
-        createChatNotificationRecipientResolverForRequest(request),
-      repository: createChatUnreadRepository(database.db, {
-        tenantId: tenant.id,
-      }),
     })
   }
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>

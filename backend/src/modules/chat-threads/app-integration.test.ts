@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { buildApp } from '../../app.js'
 import type { DatabaseClient } from '../../db/client.js'
 import {
+  portalChatUnreadMessages,
   portalChatThreads,
   portalUserContactLinks,
   portalUsers,
@@ -120,6 +121,7 @@ describe('chat threads app wiring', () => {
       })
       const persistedThreads = await database.db
         .select({
+          id: portalChatThreads.id,
           chatwootContactId: portalChatThreads.chatwootContactId,
           chatwootConversationId: portalChatThreads.chatwootConversationId,
           chatwootInboxId: portalChatThreads.chatwootInboxId,
@@ -140,6 +142,7 @@ describe('chat threads app wiring', () => {
             subtitle: 'Вы и поддержка',
             title: 'Личный чат',
             type: 'private',
+            unreadCount: 0,
           },
           {
             avatarUrl: null,
@@ -147,10 +150,21 @@ describe('chat threads app wiring', () => {
             subtitle: 'Групповой чат',
             title: 'ООО "Ромашка"',
             type: 'group',
+            unreadCount: 0,
           },
         ],
+        totalUnreadCount: 0,
       })
-      expect(persistedThreads).toEqual([
+      expect(
+        persistedThreads.map((thread) => ({
+          chatwootContactId: thread.chatwootContactId,
+          chatwootConversationId: thread.chatwootConversationId,
+          chatwootInboxId: thread.chatwootInboxId,
+          portalUserId: thread.portalUserId,
+          tenantId: thread.tenantId,
+          threadType: thread.threadType,
+        })),
+      ).toEqual([
         {
           chatwootContactId: 44,
           chatwootConversationId: null,
@@ -168,6 +182,64 @@ describe('chat threads app wiring', () => {
           threadType: 'group',
         },
       ])
+
+      const privateThread = persistedThreads.find(
+        (thread) => thread.threadType === 'private',
+      )
+      const groupThread = persistedThreads.find(
+        (thread) => thread.threadType === 'group',
+      )
+
+      if (!privateThread || !groupThread) {
+        throw new Error('Expected persisted private and group threads.')
+      }
+
+      await database.db.insert(portalChatUnreadMessages).values([
+        {
+          chatwootMessageId: 501,
+          portalChatThreadId: privateThread.id,
+          portalUserId: portalUser.id,
+          tenantId,
+          threadId: 'private:me',
+        },
+        {
+          chatwootMessageId: 601,
+          portalChatThreadId: groupThread.id,
+          portalUserId: portalUser.id,
+          tenantId,
+          threadId: 'group:154',
+        },
+        {
+          chatwootMessageId: 602,
+          portalChatThreadId: groupThread.id,
+          portalUserId: portalUser.id,
+          tenantId,
+          threadId: 'group:154',
+        },
+      ])
+
+      const countedResponse = await app.inject({
+        headers: {
+          cookie: cookieHeader,
+        },
+        method: 'GET',
+        url: '/api/chat/threads',
+      })
+
+      expect(countedResponse.statusCode).toBe(200)
+      expect(countedResponse.json()).toMatchObject({
+        threads: [
+          {
+            id: 'private:me',
+            unreadCount: 1,
+          },
+          {
+            id: 'group:154',
+            unreadCount: 2,
+          },
+        ],
+        totalUnreadCount: 3,
+      })
     } finally {
       if (app) {
         await app.close()

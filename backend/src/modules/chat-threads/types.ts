@@ -17,9 +17,14 @@ export type PublicChatThreadSummary =
       type: 'group'
     }
 
+export type PublicChatThreadListSummary = PublicChatThreadSummary & {
+  unreadCount: number
+}
+
 export type CurrentUserChatThreads = {
   activeThreadId: typeof PRIVATE_CHAT_THREAD_ID
-  threads: PublicChatThreadSummary[]
+  threads: PublicChatThreadListSummary[]
+  totalUnreadCount: number
 }
 
 export type ChatThreadRuntimeReason =
