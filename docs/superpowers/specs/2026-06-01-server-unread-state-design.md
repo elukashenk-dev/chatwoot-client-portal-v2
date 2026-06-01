@@ -278,6 +278,19 @@ Push payload должен содержать server counts:
 Push delivery не должен отправлять app badge total, посчитанный по всем unread
 rows user без проверки текущей доступности threads.
 
+Push delivery policy:
+
+- `TTL`: `86400` seconds / 24 hours.
+- `Urgency`: `high`.
+- Web Push `Topic`: per-thread. Semantic key:
+  `tenant:<slug>:thread:<threadId>`. The actual transport header must satisfy
+  the Web Push library constraints, so derive a stable URL-safe <=32 character
+  topic from that semantic key instead of sending the literal string with `:`.
+- Notification `tag`: per-thread, not per-message. Example:
+  `portal-chat-thread-default-group-154`. This lets the browser/OS replace the
+  shown notification for the same chat instead of stacking one notification per
+  message.
+
 Service worker не должен увеличивать badge на `+1` локально. Он должен:
 
 - если `totalUnreadCount` есть, вызвать `setAppBadge(totalUnreadCount)`;
@@ -427,6 +440,8 @@ Service worker:
 - `totalUnreadCount=0` clears badge;
 - two shown notifications with the same `totalUnreadCount=5` keep setting badge
   to `5`, not `10`;
+- repeated pushes for the same thread use the same notification `tag`, so the
+  notification center can replace the prior shown notification for that thread;
 - active client suppression does not increment badge locally;
 - legacy increment behavior is removed.
 
@@ -438,6 +453,8 @@ Service worker:
 - Pending/shown browser notifications do not change unread counts by being left
   open, dismissed, clicked, or accumulated; click may clear only through the
   normal backend snapshot flow after portal opens.
+- Push delivery keeps `TTL=86400`, `Urgency=high`, per-thread Web Push `Topic`,
+  and per-thread notification `tag`.
 - Opened portal shows menu unread indicators from `/api/chat/threads` even when
   push is disabled.
 - Chat menu button shows a red dot when another thread has unread.

@@ -30,6 +30,7 @@
 - This is a new product without real users; do not implement backward compatibility or migrations for legacy offline/startup chat cache records. Tests and fixtures must be updated to the new `unreadCount` shape.
 - Treat `/api/chat/threads` as the visible unread source of truth. Every user-facing `totalUnreadCount` must equal the sum of `unreadCount` for threads the current user can currently see; do not count stale unread rows for inaccessible groups in app badge or push totals.
 - Treat shown/pending browser notifications as presentation only. Leaving notifications open, dismissing them, clicking them, or accumulating multiple system notifications must not increment, decrement, clear, or otherwise derive unread state by notification lifecycle alone. A notification click may clear unread only if it opens the portal and the normal backend snapshot clear flow succeeds.
+- Keep chat push delivery policy explicit: `TTL=86400` seconds, `urgency=high`, Web Push `topic` is per-thread, and notification `tag` is per-thread.
 - Foreground unread refresh must not depend on push permission, active subscription, or `pushEnabled`. An opened portal refreshes `/api/chat/threads` on initial load, tab visibility resume, and a modest foreground interval while backend is reachable.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
@@ -52,6 +53,8 @@ Backend files to modify:
 - `backend/src/modules/chatwoot-webhooks/service.test.ts` - ordering and event coverage.
 - `backend/src/modules/chat-notifications/pushDeliveryService.ts` - include exact visible-thread unread counts in push payload.
 - `backend/src/modules/chat-notifications/pushDeliveryService.test.ts` - payload count assertions.
+- `backend/src/modules/chat-notifications/pushTransport.ts` - preserve `TTL=86400` and `urgency=high`, and add per-thread Web Push topic support.
+- `backend/src/modules/chat-notifications/pushTransport.test.ts` - transport option assertions for TTL, urgency, and topic.
 - `backend/src/modules/chat-threads/types.ts` - add `unreadCount` to thread summaries and `totalUnreadCount` to thread list response.
 - `backend/src/modules/chat-threads/service.ts` - attach unread counts to visible threads.
 - `backend/src/modules/chat-threads/service.test.ts` - private plus multiple group counts.
@@ -1542,6 +1545,8 @@ git commit -m "feat: expose chat unread counts"
 
 - Modify: `backend/src/modules/chat-notifications/pushDeliveryService.ts`
 - Modify: `backend/src/modules/chat-notifications/pushDeliveryService.test.ts`
+- Modify: `backend/src/modules/chat-notifications/pushTransport.ts`
+- Modify: `backend/src/modules/chat-notifications/pushTransport.test.ts`
 - Modify: `backend/src/app.ts`
 
 - [ ] **Step 1: Add failing push payload tests**
@@ -1588,7 +1593,7 @@ expect(transport.sendNotification).toHaveBeenCalledWith(
   expect.any(Object),
   JSON.stringify({
     chatwootMessageId: 9001,
-    notificationTag: 'portal-chat-message-default-9001',
+    notificationTag: 'portal-chat-thread-default-private-me',
     portalUserId: 7,
     tenantSlug: 'default',
     threadId: 'private:me',
@@ -1599,6 +1604,9 @@ expect(transport.sendNotification).toHaveBeenCalledWith(
     type: 'chat_message',
     url: '/',
   }),
+  {
+    topic: expect.stringMatching(/^[A-Za-z0-9_-]{32}$/),
+  },
 )
 ```
 
@@ -1658,6 +1666,59 @@ it('skips delivery when the recipient no longer sees the pushed thread', async (
 })
 ```
 
+Add a per-thread coalescing test:
+
+```ts
+it('uses stable per-thread push topic and notification tag', async () => {
+  const transport = createTransport()
+  const service = createChatNotificationPushDeliveryService({
+    chatThreadsService: createChatThreadsService(),
+    recipientResolver: {
+      resolveRecipients: vi.fn(async () => [
+        {
+          portalChatThreadId: 22,
+          portalUserId: 7,
+          threadId: 'group:154',
+          threadTitle: 'ООО Ромашка',
+          threadType: 'group' as const,
+        },
+      ]),
+    },
+    repository: createRepository(),
+    transport,
+  })
+
+  await service.deliverMessageCreated({
+    chatwootMessageId: 9001,
+    tenantSlug: 'default',
+    threadMapping,
+  })
+  await service.deliverMessageCreated({
+    chatwootMessageId: 9002,
+    tenantSlug: 'default',
+    threadMapping,
+  })
+
+  const firstPayload = JSON.parse(
+    transport.sendNotification.mock.calls[0]?.[1] ?? '{}',
+  )
+  const secondPayload = JSON.parse(
+    transport.sendNotification.mock.calls[1]?.[1] ?? '{}',
+  )
+  const firstOptions = transport.sendNotification.mock.calls[0]?.[2]
+  const secondOptions = transport.sendNotification.mock.calls[1]?.[2]
+
+  expect(firstPayload.notificationTag).toBe(
+    'portal-chat-thread-default-group-154',
+  )
+  expect(secondPayload.notificationTag).toBe(
+    'portal-chat-thread-default-group-154',
+  )
+  expect(firstOptions?.topic).toMatch(/^[A-Za-z0-9_-]{32}$/)
+  expect(secondOptions?.topic).toBe(firstOptions?.topic)
+})
+```
+
 - [ ] **Step 2: Run push tests and verify they fail**
 
 Run:
@@ -1678,6 +1739,50 @@ chatThreadsService: Pick<ChatThreadsService, 'listCurrentUserThreads'>
 
 The implementation must reuse the same visible-thread source of truth as `/api/chat/threads`. Do not add or call a raw `countTotalUnreadForUser` method for push payloads.
 
+Add helpers in `backend/src/modules/chat-notifications/pushDeliveryService.ts`:
+
+```ts
+import { createHash } from 'node:crypto'
+
+const WEB_PUSH_TOPIC_LENGTH = 32
+
+function toPushIdentifierSegment(value: string) {
+  return value.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+function buildThreadNotificationTag({
+  tenantSlug,
+  threadId,
+}: {
+  tenantSlug: string
+  threadId: string
+}) {
+  return `portal-chat-thread-${toPushIdentifierSegment(
+    tenantSlug,
+  )}-${toPushIdentifierSegment(threadId)}`
+}
+
+export function buildChatPushTopic({
+  tenantSlug,
+  threadId,
+}: {
+  tenantSlug: string
+  threadId: string
+}) {
+  const semanticTopic = `tenant:${tenantSlug}:thread:${threadId}`
+
+  return createHash('sha256')
+    .update(semanticTopic)
+    .digest('base64url')
+    .slice(0, WEB_PUSH_TOPIC_LENGTH)
+}
+```
+
+The semantic topic is `tenant:<slug>:thread:<threadId>`, but the actual Web Push
+`Topic` header must be URL-safe and <=32 characters. Do not pass the literal
+semantic string with `:` to `web-push`; derive the stable header value with
+`buildChatPushTopic`.
+
 - [ ] **Step 4: Build payload with exact counts**
 
 Change `buildPayload` input:
@@ -1685,6 +1790,12 @@ Change `buildPayload` input:
 ```ts
 threadUnreadCount: number
 totalUnreadCount: number
+```
+
+Use the per-thread notification tag:
+
+```ts
+notificationTag: buildThreadNotificationTag({ tenantSlug, threadId })
 ```
 
 Before calling `buildPayload`, after effective settings allow push and after active subscriptions exist:
@@ -1713,11 +1824,89 @@ if (!pushedThread) {
 
 const threadUnreadCount = pushedThread.unreadCount
 const totalUnreadCount = currentThreads.totalUnreadCount
+const pushTopic = buildChatPushTopic({
+  tenantSlug: input.tenantSlug,
+  threadId: recipient.threadId,
+})
 ```
 
 Then include both counts in the JSON payload. This makes push `totalUnreadCount` match the menu-visible total instead of counting stale unread rows for inaccessible groups.
 
-- [ ] **Step 5: Wire thread-list service in app**
+Pass `pushTopic` to the transport:
+
+```ts
+const result = await transport.sendNotification(
+  {
+    endpoint: subscription.endpoint,
+    keys: {
+      auth: subscription.auth,
+      p256dh: subscription.p256dh,
+    },
+  },
+  payload,
+  { topic: pushTopic },
+)
+```
+
+- [ ] **Step 5: Extend push transport options for per-thread Topic**
+
+In `backend/src/modules/chat-notifications/pushTransport.ts`, extend the
+transport contract:
+
+```ts
+export type PushTransportSendOptions = {
+  topic?: string
+}
+
+export type PushTransport = {
+  sendNotification: (
+    subscription: PushTransportSubscription,
+    payload: string,
+    options?: PushTransportSendOptions,
+  ) => Promise<PushTransportResult>
+}
+```
+
+Preserve the existing policy and pass topic through:
+
+```ts
+await webPush.sendNotification(subscription, payload, {
+  TTL: CHAT_PUSH_TTL_SECONDS,
+  timeout: CHAT_PUSH_SOCKET_TIMEOUT_MS,
+  topic: options?.topic,
+  urgency: 'high',
+})
+```
+
+In `backend/src/modules/chat-notifications/pushTransport.test.ts`, keep the
+existing assertions for `TTL: 86_400` and `urgency: 'high'`, and add a topic
+case:
+
+```ts
+await transport.sendNotification(
+  {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
+    keys: {
+      auth: 'auth-secret',
+      p256dh: 'p256dh-key',
+    },
+  },
+  '{"type":"chat_message"}',
+  { topic: 'Abc_123-safe-topic' },
+)
+
+expect(webPushMock.sendNotification).toHaveBeenCalledWith(
+  expect.any(Object),
+  '{"type":"chat_message"}',
+  expect.objectContaining({
+    TTL: 86_400,
+    topic: 'Abc_123-safe-topic',
+    urgency: 'high',
+  }),
+)
+```
+
+- [ ] **Step 6: Wire thread-list service in app**
 
 Pass the request-scoped thread-list service into `createChatNotificationPushDeliveryService`:
 
@@ -1727,30 +1916,30 @@ chatThreadsService: createChatThreadsServiceForRequest(request),
 
 This keeps notification preferences/push delivery bookkeeping separated from unread persistence and keeps one visible-count rule for `/api/chat/threads`, message clear summaries, and push payloads.
 
-- [ ] **Step 6: Run push tests**
+- [ ] **Step 7: Run push tests**
 
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chat-notifications/pushDeliveryService.test.ts
+pnpm --dir backend test -- src/modules/chat-notifications/pushDeliveryService.test.ts src/modules/chat-notifications/pushTransport.test.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Run combined webhook + push tests**
+- [ ] **Step 8: Run combined webhook + push tests**
 
 Run:
 
 ```bash
-pnpm --dir backend test -- src/modules/chatwoot-webhooks/service.test.ts src/modules/chat-notifications/pushDeliveryService.test.ts
+pnpm --dir backend test -- src/modules/chatwoot-webhooks/service.test.ts src/modules/chat-notifications/pushDeliveryService.test.ts src/modules/chat-notifications/pushTransport.test.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add backend/src/app.ts backend/src/modules/chat-notifications/pushDeliveryService.ts backend/src/modules/chat-notifications/pushDeliveryService.test.ts
+git add backend/src/app.ts backend/src/modules/chat-notifications/pushDeliveryService.ts backend/src/modules/chat-notifications/pushDeliveryService.test.ts backend/src/modules/chat-notifications/pushTransport.ts backend/src/modules/chat-notifications/pushTransport.test.ts
 git commit -m "feat: include chat unread counts in push"
 ```
 
@@ -2670,7 +2859,7 @@ it('sets the app icon badge to the server total unread count', async () => {
   const pushListener = listeners.get('push')?.[0]
 
   await dispatchPush(pushListener!, {
-    notificationTag: 'portal-chat-message-default-9010',
+    notificationTag: 'portal-chat-thread-default-group-154',
     tenantSlug: 'default',
     totalUnreadCount: 9,
     type: 'chat_message',
@@ -2688,7 +2877,7 @@ it('clears the app icon badge when server total unread count is zero', async () 
   const pushListener = listeners.get('push')?.[0]
 
   await dispatchPush(pushListener!, {
-    notificationTag: 'portal-chat-message-default-9011',
+    notificationTag: 'portal-chat-thread-default-group-154',
     tenantSlug: 'default',
     totalUnreadCount: 0,
     type: 'chat_message',
@@ -2706,14 +2895,14 @@ it('does not derive the app icon badge count from accumulated shown notification
   const pushListener = listeners.get('push')?.[0]
 
   await dispatchPush(pushListener!, {
-    notificationTag: 'portal-chat-message-default-9012',
+    notificationTag: 'portal-chat-thread-default-group-154',
     tenantSlug: 'default',
     totalUnreadCount: 5,
     type: 'chat_message',
     url: '/',
   })
   await dispatchPush(pushListener!, {
-    notificationTag: 'portal-chat-message-default-9013',
+    notificationTag: 'portal-chat-thread-default-group-154',
     tenantSlug: 'default',
     totalUnreadCount: 5,
     type: 'chat_message',
@@ -2723,6 +2912,44 @@ it('does not derive the app icon badge count from accumulated shown notification
   expect(showNotification).toHaveBeenCalledTimes(2)
   expect(setAppBadge).toHaveBeenNthCalledWith(1, 5)
   expect(setAppBadge).toHaveBeenNthCalledWith(2, 5)
+})
+```
+
+Also replace the existing notification tag test so same-thread notifications use
+the same tag:
+
+```ts
+it('uses per-thread notification tags so same-thread notifications replace each other', async () => {
+  const { listeners, showNotification } = loadServiceWorker()
+  const pushListener = listeners.get('push')?.[0]
+
+  await dispatchPush(pushListener!, {
+    notificationTag: 'portal-chat-thread-default-group-154',
+    tenantSlug: 'default',
+    type: 'chat_message',
+    url: '/',
+  })
+  await dispatchPush(pushListener!, {
+    notificationTag: 'portal-chat-thread-default-group-154',
+    tenantSlug: 'default',
+    type: 'chat_message',
+    url: '/',
+  })
+
+  expect(showNotification).toHaveBeenNthCalledWith(
+    1,
+    'Новое сообщение',
+    expect.objectContaining({
+      tag: 'portal-chat-thread-default-group-154',
+    }),
+  )
+  expect(showNotification).toHaveBeenNthCalledWith(
+    2,
+    'Новое сообщение',
+    expect.objectContaining({
+      tag: 'portal-chat-thread-default-group-154',
+    }),
+  )
 })
 ```
 
@@ -3063,6 +3290,9 @@ Duplicate webhooks are safe because unread insert is idempotent.
 Thread list total sums only visible thread counts.
 Message clear summary total sums only visible thread counts after clear.
 Push payload total sums only visible thread counts and skips access-drifted threads.
+Push transport keeps TTL=86400 and urgency=high.
+Push transport uses a stable per-thread Topic derived from tenant:<slug>:thread:<threadId>.
+Push payload notificationTag is per-thread, not per-message.
 Opening group:154 clears group:154 only.
 Chat menu button red dot appears when another visible thread has unread and hides when no other visible thread has unread.
 Older pagination does not clear unread.
@@ -3109,6 +3339,8 @@ Skip this commit if `work-log.md` was not changed.
 - [ ] Failed, denied, unavailable, older-page, and cached/offline reads do not clear unread.
 - [ ] Push payload includes `threadUnreadCount` and `totalUnreadCount`.
 - [ ] Push `totalUnreadCount` uses the same visible-thread total as `/api/chat/threads`.
+- [ ] Push transport keeps `TTL=86400`, `urgency=high`, and a per-thread `topic`.
+- [ ] Push payload uses a per-thread notification `tag`, not a per-message tag.
 - [ ] Opened portal refreshes unread menu indicators from `/api/chat/threads` even when push is disabled.
 - [ ] Service worker sets/clears badge from server total, not push-event increments.
 - [ ] Accumulated, dismissed, clicked, or left-open system notifications do not change unread counts by notification lifecycle alone and do not derive badge totals.
