@@ -162,6 +162,9 @@
   threads, открытие snapshot чата сбрасывает unread этого thread, а frontend
   показывает red dot на кнопке меню чатов, числовые badges внутри меню и
   обновляет app badge точным backend count независимо от push-настроек.
+- Production deploy backend-owned chat unread state выполнен на
+  `lk.provgroup.ru` из clean commit `5b18e8d`; production migration применена,
+  stack healthy и public health/tenant/PWA manifest smoke проходят.
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
@@ -218,6 +221,5 @@
 
 ## Recommended Next Step
 
-- Deploy backend-owned chat unread state to production and run a real-device
-  PWA smoke for personal/group unread badges with push both enabled and
-  disabled.
+- Run real-device PWA smoke for personal/group unread badges with push both
+  enabled and disabled.
