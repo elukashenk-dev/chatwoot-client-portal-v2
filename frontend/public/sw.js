@@ -1006,7 +1006,6 @@ async function handlePushEvent(event) {
   }
 
   if (payload.notificationTag) {
-    notificationOptions.renotify = true
     notificationOptions.tag = payload.notificationTag
     notificationOptions.timestamp = Date.now()
   }

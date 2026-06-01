@@ -120,7 +120,12 @@ function loadServiceWorker({
 } = {}) {
   const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
   const listeners = new Map<string, Listener[]>()
-  const showNotification = vi.fn(async () => undefined)
+  const showNotification = vi.fn(
+    async (title: string, options?: NotificationOptions) => {
+      void title
+      void options
+    },
+  )
   const serviceWorkerScope = {
     addEventListener: vi.fn((eventName: string, listener: Listener) => {
       listeners.set(eventName, [...(listeners.get(eventName) ?? []), listener])
@@ -264,7 +269,7 @@ describe('service worker push notifications', () => {
     await clearAppBadgeDatabase()
   })
 
-  it('renotifies duplicate per-message tagged notifications', async () => {
+  it('does not renotify per-message tagged notifications', async () => {
     const { listeners, showNotification } = loadServiceWorker()
     const pushListener = listeners.get('push')?.[0]
 
@@ -287,7 +292,6 @@ describe('service worker push notifications', () => {
       1,
       'Новое сообщение',
       expect.objectContaining({
-        renotify: true,
         tag: 'portal-chat-message-default-9001',
         timestamp: expect.any(Number),
       }),
@@ -296,11 +300,12 @@ describe('service worker push notifications', () => {
       2,
       'Новое сообщение',
       expect.objectContaining({
-        renotify: true,
         tag: 'portal-chat-message-default-9001',
         timestamp: expect.any(Number),
       }),
     )
+    expect(showNotification.mock.calls[0]?.[1]).not.toHaveProperty('renotify')
+    expect(showNotification.mock.calls[1]?.[1]).not.toHaveProperty('renotify')
   })
 
   it('sets an exact app icon badge count when a system notification is shown', async () => {

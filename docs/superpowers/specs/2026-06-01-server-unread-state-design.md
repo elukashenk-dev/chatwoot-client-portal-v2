@@ -288,6 +288,9 @@ Push delivery policy:
 - Notification `tag`: per-message. Example:
   `portal-chat-message-default-9001`. This lets the browser/OS keep separate
   system notifications for separate messages when the portal is backgrounded.
+- Notification `renotify`: omitted for per-message chat notifications. Duplicate
+  delivery of the same message may replace the same notification tag, but it
+  must not ask the OS to play an extra alert sound.
 
 Service worker не должен увеличивать badge на `+1` локально. Он должен:
 
@@ -451,8 +454,8 @@ Service worker:
 - Pending/shown browser notifications do not change unread counts by being left
   open, dismissed, clicked, or accumulated; click may clear only through the
   normal backend snapshot flow after portal opens.
-- Push delivery keeps `TTL=86400`, `Urgency=high`, no Web Push `Topic`, and a
-  per-message notification `tag`.
+- Push delivery keeps `TTL=86400`, `Urgency=high`, no Web Push `Topic`, a
+  per-message notification `tag`, and no notification `renotify`.
 - Opened portal shows menu unread indicators from `/api/chat/threads` even when
   push is disabled.
 - Chat menu button shows a red dot when another thread has unread.
