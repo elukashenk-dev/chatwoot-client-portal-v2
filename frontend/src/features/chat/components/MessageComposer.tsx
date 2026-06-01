@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
 import {
@@ -312,6 +312,18 @@ export function MessageComposer({
     await submitText()
   }
 
+  function preserveTextareaFocusOnPointerDown(
+    event: PointerEvent<HTMLButtonElement>,
+  ) {
+    const textarea = textareaRef.current
+
+    if (!textarea || document.activeElement !== textarea) {
+      return
+    }
+
+    event.preventDefault()
+  }
+
   function selectAttachment(file: File | null) {
     if (!file) {
       setSelectedAttachment(null)
@@ -459,6 +471,7 @@ export function MessageComposer({
             onClick={() => {
               void submitCurrentDraft()
             }}
+            onPointerDown={preserveTextareaFocusOnPointerDown}
             title="Отправить"
             type="button"
           >

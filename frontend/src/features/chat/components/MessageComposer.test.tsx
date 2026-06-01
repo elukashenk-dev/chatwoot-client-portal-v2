@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -274,6 +280,25 @@ describe('MessageComposer', () => {
     await waitFor(() => {
       expect(textarea).toHaveValue('')
     })
+  })
+
+  it('prevents the send button pointer press from stealing textarea focus', async () => {
+    const user = userEvent.setup()
+
+    renderComposer()
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const sendButton = screen.getByRole('button', { name: 'Отправить' })
+
+    await user.type(textarea, 'Не закрывай клавиатуру')
+    expect(textarea).toHaveFocus()
+
+    const wasNotCancelled = fireEvent.pointerDown(sendButton, {
+      pointerType: 'touch',
+    })
+
+    expect(wasNotCancelled).toBe(false)
+    expect(textarea).toHaveFocus()
   })
 
   it('does not submit an already selected attachment after attachment send is disabled', async () => {
