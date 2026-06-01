@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -274,6 +280,64 @@ describe('MessageComposer', () => {
     await waitFor(() => {
       expect(textarea).toHaveValue('')
     })
+  })
+
+  it('prevents the send button pointer press from stealing textarea focus', async () => {
+    const user = userEvent.setup()
+
+    renderComposer()
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const sendButton = screen.getByRole('button', { name: 'Отправить' })
+
+    await user.type(textarea, 'Не закрывай клавиатуру')
+    expect(textarea).toHaveFocus()
+
+    const wasNotCancelled = fireEvent.pointerDown(sendButton, {
+      pointerType: 'touch',
+    })
+
+    expect(wasNotCancelled).toBe(false)
+    expect(textarea).toHaveFocus()
+  })
+
+  it('submits from guarded touch end when mobile Safari suppresses click', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn(async () => true)
+
+    render(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={onSend}
+        onSendAttachment={vi.fn(async () => true)}
+        replyTarget={null}
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const sendButton = screen.getByRole('button', { name: 'Отправить' })
+
+    await user.type(textarea, 'iPhone keyboard')
+    expect(textarea).toHaveFocus()
+
+    const touchStartWasNotCancelled = fireEvent(
+      sendButton,
+      new Event('touchstart', { bubbles: true, cancelable: true }),
+    )
+    const touchEndWasNotCancelled = fireEvent(
+      sendButton,
+      new Event('touchend', { bubbles: true, cancelable: true }),
+    )
+
+    expect(touchStartWasNotCancelled).toBe(false)
+    expect(touchEndWasNotCancelled).toBe(false)
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledTimes(1)
+    })
+    expect(textarea).toHaveFocus()
   })
 
   it('does not submit an already selected attachment after attachment send is disabled', async () => {

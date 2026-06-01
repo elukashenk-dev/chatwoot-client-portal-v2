@@ -17,6 +17,7 @@ import type {
   SendMessageInput,
 } from './message-composer/types'
 import { useComposerTextarea } from './message-composer/useComposerTextarea'
+import { useSendButtonFocusGuard } from './message-composer/useSendButtonFocusGuard'
 import { useVisualViewportKeyboardOpen } from './message-composer/useVisualViewportKeyboardOpen'
 import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
 import {
@@ -66,6 +67,7 @@ export function MessageComposer({
   const pendingContentRef = useRef<string | null>(null)
   const pendingReplyToMessageIdRef = useRef<number | null>(null)
   const replyToMessageIdRef = useRef<number | null>(null)
+  const sendButtonRef = useRef<HTMLButtonElement | null>(null)
   const shouldRestoreFocusRef = useRef(false)
   const normalizedDraft = draft.trim()
   const replyToMessageId = replyTarget?.id ?? null
@@ -312,6 +314,15 @@ export function MessageComposer({
     await submitText()
   }
 
+  const { preserveTextareaFocusOnPointerDown, shouldSkipClickAfterTouchSend } =
+    useSendButtonFocusGuard({
+      onGuardedTouchSend: () => {
+        void submitCurrentDraft()
+      },
+      sendButtonRef,
+      textareaRef,
+    })
+
   function selectAttachment(file: File | null) {
     if (!file) {
       setSelectedAttachment(null)
@@ -457,8 +468,12 @@ export function MessageComposer({
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
             disabled={!canSend || isVoiceRecorderBusy}
             onClick={() => {
-              void submitCurrentDraft()
+              if (!shouldSkipClickAfterTouchSend()) {
+                void submitCurrentDraft()
+              }
             }}
+            onPointerDown={preserveTextareaFocusOnPointerDown}
+            ref={sendButtonRef}
             title="Отправить"
             type="button"
           >
