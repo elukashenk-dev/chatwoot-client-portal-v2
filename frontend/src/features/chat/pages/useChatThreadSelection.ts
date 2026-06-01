@@ -9,7 +9,10 @@ import {
 import { getChatMessages, getChatThreads } from '../api/chatClient'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
-import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
+import {
+  clearChatThreadNotifications,
+  setAppIconBadgeCount,
+} from '../../../pwa/serviceWorkerRuntime'
 import {
   BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_REQUEST_TIMEOUT_MS,
@@ -36,6 +39,7 @@ type UseChatThreadSelectionInput = {
   markBrowserOnline: () => void
   navigatorHintIsOnline: boolean
   pageState: ChatPageState
+  requestedThreadId: string | null
   setChatReachability: Dispatch<SetStateAction<ChatReachability>>
   setHistoryErrorMessage: Dispatch<SetStateAction<string | null>>
   setPageState: Dispatch<SetStateAction<ChatPageState>>
@@ -49,6 +53,15 @@ function getFallbackThreadId(threads: { id: string }[]) {
   return threads[0]?.id ?? PRIVATE_CHAT_THREAD_ID
 }
 
+function findAvailableThreadId(
+  threads: { id: string }[],
+  threadId: string | null,
+) {
+  return threadId && threads.some((thread) => thread.id === threadId)
+    ? threadId
+    : null
+}
+
 export function useChatThreadSelection({
   handleConnectionUnavailableError,
   handleUnauthorizedChatError,
@@ -57,6 +70,7 @@ export function useChatThreadSelection({
   markBrowserOnline,
   navigatorHintIsOnline,
   pageState,
+  requestedThreadId,
   setChatReachability,
   setHistoryErrorMessage,
   setPageState,
@@ -67,8 +81,10 @@ export function useChatThreadSelection({
 }: UseChatThreadSelectionInput) {
   const loadRequestIdRef = useRef(0)
   const pageStateRef = useRef(pageState)
+  const requestedThreadIdRef = useRef(requestedThreadId)
   const selectedThreadIdRef = useRef(pageState.selectedThreadId)
   pageStateRef.current = pageState
+  requestedThreadIdRef.current = requestedThreadId
   selectedThreadIdRef.current = pageState.selectedThreadId
 
   const openCachedChatFallback = useCallback(
@@ -178,6 +194,10 @@ export function useChatThreadSelection({
         signal: requestTimeout.signal,
       })
       const selectedThreadId =
+        findAvailableThreadId(
+          threadsResponse.threads,
+          requestedThreadIdRef.current,
+        ) ??
         threadsResponse.activeThreadId ??
         getFallbackThreadId(threadsResponse.threads)
 
@@ -212,6 +232,9 @@ export function useChatThreadSelection({
       void setAppIconBadgeCount(
         snapshot.unread?.totalUnreadCount ?? threadsResponse.totalUnreadCount,
       )
+      if (snapshot.unread) {
+        void clearChatThreadNotifications(snapshot.unread.clearedThreadId)
+      }
       setPageState({
         ...ONLINE_CHAT_PAGE_CACHE_STATE,
         selectedThreadId,
@@ -336,6 +359,9 @@ export function useChatThreadSelection({
               0,
             ),
         )
+        if (snapshot.unread) {
+          void clearChatThreadNotifications(snapshot.unread.clearedThreadId)
+        }
         setPageState((currentState) => ({
           ...ONLINE_CHAT_PAGE_CACHE_STATE,
           selectedThreadId: threadId,

@@ -7,6 +7,10 @@ const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 
 type Listener = (event: {
   data?: unknown
+  notification?: {
+    close: () => void
+    data?: unknown
+  }
   request?: Request
   respondWith?: (response: Promise<Response> | Response) => void
   source?: { id?: string }
@@ -98,6 +102,7 @@ function loadServiceWorker({
   fetch = vi.fn() as unknown as typeof globalThis.fetch,
   indexedDB = globalThis.indexedDB,
   notifications = [],
+  openWindow,
 }: {
   appBadge?: {
     clearAppBadge?: () => Promise<void>
@@ -106,7 +111,9 @@ function loadServiceWorker({
   cacheStorage?: Pick<CacheStorage, 'open'>
   clientsList?: Array<{
     focused?: boolean
+    focus?: () => Promise<unknown>
     id: string
+    navigate?: (url: string) => Promise<unknown>
     postMessage?: (message: unknown, transfer?: Transferable[]) => void
     url: string
     visibilityState?: string
@@ -115,8 +122,10 @@ function loadServiceWorker({
   indexedDB?: unknown
   notifications?: Array<{
     close: () => void
+    data?: unknown
     tag?: string
   }>
+  openWindow?: (url: string) => Promise<unknown>
 } = {}) {
   const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
   const listeners = new Map<string, Listener[]>()
@@ -140,6 +149,7 @@ function loadServiceWorker({
   }
   const clientsScope = {
     matchAll: vi.fn(async () => clientsList),
+    openWindow: openWindow ?? vi.fn(async () => null),
   }
 
   new Function(
@@ -444,6 +454,57 @@ describe('service worker push notifications', () => {
     expect(unrelatedNotification.close).not.toHaveBeenCalled()
   })
 
+  it('closes only pending portal chat notifications for the opened thread', async () => {
+    const openedThreadNotification = {
+      close: vi.fn(),
+      data: {
+        threadId: 'group:155',
+      },
+      tag: 'portal-chat-message-default-9001',
+    }
+    const otherThreadNotification = {
+      close: vi.fn(),
+      data: {
+        threadId: 'private:me',
+      },
+      tag: 'portal-chat-message-default-9002',
+    }
+    const unrelatedNotification = {
+      close: vi.fn(),
+      data: {
+        threadId: 'group:155',
+      },
+      tag: 'external-notification',
+    }
+    const { listeners } = loadServiceWorker({
+      notifications: [
+        openedThreadNotification,
+        otherThreadNotification,
+        unrelatedNotification,
+      ],
+    })
+    const messageListener = listeners.get('message')?.[0]
+    const pendingPromises: Promise<unknown>[] = []
+
+    expect(messageListener).toBeDefined()
+
+    messageListener!({
+      data: {
+        threadId: 'group:155',
+        type: 'PORTAL_CHAT_THREAD_NOTIFICATIONS_CLEAR',
+      },
+      waitUntil: (promise) => {
+        pendingPromises.push(promise)
+      },
+    })
+
+    await Promise.all(pendingPromises)
+
+    expect(openedThreadNotification.close).toHaveBeenCalledTimes(1)
+    expect(otherThreadNotification.close).not.toHaveBeenCalled()
+    expect(unrelatedNotification.close).not.toHaveBeenCalled()
+  })
+
   it('shows a system notification when the push-ready portal client is hidden', async () => {
     const postMessage = vi.fn()
     const { listeners, showNotification } = loadServiceWorker({
@@ -656,6 +717,77 @@ describe('service worker push notifications', () => {
         tag: 'portal-chat-message-default-9005',
       }),
     )
+  })
+
+  it('stores the thread id in system notification data', async () => {
+    const { listeners, showNotification } = loadServiceWorker()
+    const pushListener = listeners.get('push')?.[0]
+
+    expect(pushListener).toBeDefined()
+
+    await dispatchPush(pushListener!, {
+      chatwootMessageId: 9010,
+      notificationTag: 'portal-chat-message-default-9010',
+      tenantSlug: 'default',
+      threadId: 'group:155',
+      threadTitle: 'ООО Уточки',
+      threadType: 'group',
+      type: 'chat_message',
+      url: '/app/chat?threadId=group%3A155',
+    })
+
+    expect(showNotification).toHaveBeenCalledWith(
+      'ООО Уточки',
+      expect.objectContaining({
+        data: {
+          threadId: 'group:155',
+          url: '/app/chat?threadId=group%3A155',
+        },
+      }),
+    )
+  })
+
+  it('navigates an existing portal client to the notification chat url before focusing it', async () => {
+    const focus = vi.fn(async () => null)
+    const navigate = vi.fn(async () => ({
+      focus,
+    }))
+    const { listeners } = loadServiceWorker({
+      clientsList: [
+        {
+          focus: vi.fn(async () => null),
+          id: 'client-1',
+          navigate,
+          url: 'https://lk.provgroup.ru/app/settings',
+          visibilityState: 'hidden',
+        },
+      ],
+    })
+    const notificationClickListener = listeners.get('notificationclick')?.[0]
+    const pendingPromises: Promise<unknown>[] = []
+    const close = vi.fn()
+
+    expect(notificationClickListener).toBeDefined()
+
+    notificationClickListener!({
+      notification: {
+        close,
+        data: {
+          url: '/app/chat?threadId=group%3A155',
+        },
+      },
+      waitUntil: (promise) => {
+        pendingPromises.push(promise)
+      },
+    })
+
+    await Promise.all(pendingPromises)
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(navigate).toHaveBeenCalledWith(
+      'https://lk.provgroup.ru/app/chat?threadId=group%3A155',
+    )
+    expect(focus).toHaveBeenCalledTimes(1)
   })
 
   it('does not let a visible portal client suppress a push for another active chat', async () => {

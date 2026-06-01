@@ -102,12 +102,12 @@ function createReadySnapshot(
   }
 }
 
-function renderChatRoute() {
+function renderChatRoute(initialEntry = '/app/chat') {
   renderWithRouter(
     <AuthSessionProvider>
       <AppRoutes />
     </AuthSessionProvider>,
-    { initialEntries: ['/app/chat'] },
+    { initialEntries: [initialEntry] },
   )
 }
 
@@ -159,6 +159,57 @@ describe('ChatPage thread selection', () => {
         credentials: 'include',
         method: 'GET',
       }),
+    )
+  })
+
+  it('opens the thread requested by the chat route query parameter', async () => {
+    const groupSnapshot = createReadySnapshot({
+      activeThread: groupThread,
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Иван Петров',
+          authorRole: 'group_member',
+          content: 'Сообщение из общего чата',
+          contentType: 'text',
+          createdAt: '2026-05-13T08:00:00.000Z',
+          direction: 'incoming',
+          id: 714,
+          status: 'sent',
+        },
+      ],
+    })
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=group%3A154') {
+        return createJsonResponse(groupSnapshot)
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute('/app/chat?threadId=group%3A154')
+
+    expect(
+      await screen.findByText(
+        'Сообщение из общего чата',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/chat/messages?threadId=private%3Ame',
+      expect.anything(),
     )
   })
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { ChatApiClientError } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
@@ -13,6 +14,10 @@ import {
 } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
+import {
+  buildChatThreadPath,
+  readChatThreadIdFromSearch,
+} from '../lib/chatThreadRoute'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { readStartupChatFallback } from '../../offline/startupCache'
@@ -46,15 +51,18 @@ import { useOptimisticTextSend } from './useOptimisticTextSend'
 
 export function ChatPage() {
   const isMountedRef = useRef(false)
+  const location = useLocation()
+  const navigate = useNavigate()
   const { tenant } = useTenantIdentity()
   const { refreshSession, sessionSource, user } = useAuthSession()
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
+  const requestedThreadId = readChatThreadIdFromSearch(location.search)
   const [startupChatFallback] = useState(() =>
     tenantSlug && userId !== null
       ? readStartupChatFallback({
           host: window.location.host,
-          preferredThreadId: null,
+          preferredThreadId: requestedThreadId,
           tenantSlug,
           userId,
         })
@@ -182,6 +190,7 @@ export function ChatPage() {
     markBrowserOnline: markChatOnline,
     navigatorHintIsOnline,
     pageState,
+    requestedThreadId,
     setChatReachability,
     setHistoryErrorMessage,
     setPageState,
@@ -408,6 +417,29 @@ export function ChatPage() {
   const transcriptHighlightedMessageId =
     historyFragment?.targetMessageId ?? highlightedMessageId
 
+  useEffect(() => {
+    if (
+      !requestedThreadId ||
+      pageState.status !== 'ready' ||
+      pageState.selectedThreadId === requestedThreadId ||
+      !pageState.threads.some((thread) => thread.id === requestedThreadId)
+    ) {
+      return
+    }
+
+    clearHighlightedMessage()
+    clearHistoryFragment()
+    void handleSelectThread(requestedThreadId)
+  }, [
+    clearHighlightedMessage,
+    clearHistoryFragment,
+    handleSelectThread,
+    pageState.selectedThreadId,
+    pageState.status,
+    pageState.threads,
+    requestedThreadId,
+  ])
+
   return (
     <>
       <ChatHeader
@@ -429,7 +461,7 @@ export function ChatPage() {
         onSelectThread={(threadId) => {
           clearHighlightedMessage()
           clearHistoryFragment()
-          void handleSelectThread(threadId)
+          navigate(buildChatThreadPath(threadId), { replace: true })
         }}
         selectedThreadId={pageState.selectedThreadId}
         supportAvailability={supportAvailability.state.availability}

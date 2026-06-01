@@ -8,7 +8,10 @@ import {
 import { getChatMessages } from '../api/chatClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
-import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
+import {
+  clearChatThreadNotifications,
+  setAppIconBadgeCount,
+} from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   clearThreadUnreadCount,
@@ -47,6 +50,7 @@ export function useChatSnapshotRefresh({
       markBrowserOnline()
       if (latestSnapshot.unread) {
         void setAppIconBadgeCount(latestSnapshot.unread.totalUnreadCount)
+        void clearChatThreadNotifications(latestSnapshot.unread.clearedThreadId)
       }
       setPageState((currentState) => {
         if (currentState.selectedThreadId !== threadId) {

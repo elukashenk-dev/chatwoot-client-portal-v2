@@ -23,6 +23,7 @@ type RegisterPortalPushMessageListener = (
 ) => () => void
 
 const serviceWorkerRuntimeMock = vi.hoisted(() => ({
+  clearChatThreadNotifications: vi.fn(async () => false),
   registerPortalPushMessageListener: vi.fn<RegisterPortalPushMessageListener>(
     () => vi.fn(),
   ),
@@ -35,6 +36,8 @@ vi.mock('../../../pwa/serviceWorkerRuntime', async (importOriginal) => {
 
   return {
     ...actual,
+    clearChatThreadNotifications:
+      serviceWorkerRuntimeMock.clearChatThreadNotifications,
     registerPortalPushMessageListener:
       serviceWorkerRuntimeMock.registerPortalPushMessageListener,
     setAppIconBadgeCount: serviceWorkerRuntimeMock.setAppIconBadgeCount,
@@ -302,6 +305,7 @@ describe('ChatPage unread indicators', () => {
   const scrollIntoView = vi.fn()
 
   beforeEach(() => {
+    serviceWorkerRuntimeMock.clearChatThreadNotifications.mockClear()
     serviceWorkerRuntimeMock.registerPortalPushMessageListener.mockClear()
     serviceWorkerRuntimeMock.setAppIconBadgeCount.mockClear()
     vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
@@ -535,6 +539,9 @@ describe('ChatPage unread indicators', () => {
       screen.queryByTestId('thread-unread-badge-group:154'),
     ).not.toBeInTheDocument()
     expect(screen.queryByTestId('chat-menu-unread-dot')).not.toBeInTheDocument()
+    expect(
+      serviceWorkerRuntimeMock.clearChatThreadNotifications,
+    ).toHaveBeenCalledWith('group:154')
   })
 
   it('keeps the unread dot when the marked chat fails to open', async () => {

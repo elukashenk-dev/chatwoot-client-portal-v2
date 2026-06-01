@@ -53,6 +53,10 @@ function emptySummary(): PushDeliverySummary {
   }
 }
 
+function buildChatThreadUrl(threadId: string) {
+  return `/app/chat?threadId=${encodeURIComponent(threadId)}`
+}
+
 function buildPayload({
   chatwootMessageId,
   notificationTag,
@@ -88,7 +92,7 @@ function buildPayload({
     threadType,
     totalUnreadCount,
     type: 'chat_message',
-    url: '/',
+    url: buildChatThreadUrl(threadId),
   })
 }
 
