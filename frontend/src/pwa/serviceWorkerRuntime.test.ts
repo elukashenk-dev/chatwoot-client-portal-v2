@@ -454,7 +454,7 @@ describe('serviceWorkerRuntime', () => {
     })
   })
 
-  it('sets a flag app icon badge instead of a numeric count', async () => {
+  it('sets a numeric app icon badge count when the browser supports badging', async () => {
     const controller = new MockServiceWorker('activated')
     const registration = new MockServiceWorkerRegistration()
     setServiceWorkerContainer(
@@ -472,7 +472,7 @@ describe('serviceWorkerRuntime', () => {
     const runtime = await import('./serviceWorkerRuntime')
 
     await expect(runtime.setAppIconBadgeCount(4)).resolves.toBe(true)
-    expect(setAppBadge).toHaveBeenCalledWith()
+    expect(setAppBadge).toHaveBeenCalledWith(4)
     expect(controller.postMessage).toHaveBeenCalledWith({
       count: 4,
       type: 'PORTAL_APP_BADGE_SET',

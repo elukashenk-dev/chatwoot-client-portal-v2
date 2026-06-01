@@ -4,6 +4,7 @@ const PUSH_CLIENT_RESPONSE_TIMEOUT_MS = 700
 const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 const APP_BADGE_STORE_NAME = 'state'
 const APP_BADGE_COUNT_KEY = 'chat_push_count'
+const APP_BADGE_MAX_COUNT = 9999
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
 const PORTAL_OFFLINE_DATABASE_VERSION = 2
 const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
@@ -89,7 +90,7 @@ self.addEventListener('message', (event) => {
     const badgeCount = Number.isSafeInteger(event.data.count)
       ? event.data.count
       : 0
-    const setPromise = setAppIconUnreadMarker(badgeCount)
+    const setPromise = setExactAppIconBadge(badgeCount)
     event.waitUntil?.(setPromise)
     return
   }
@@ -1014,11 +1015,11 @@ async function handlePushEvent(event) {
     notificationCopy.title,
     notificationOptions,
   )
-  await setAppIconUnreadMarker(payload.totalUnreadCount)
+  await setExactAppIconBadge(payload.totalUnreadCount)
   await staleMarkerPersistence
 }
 
-async function setAppIconUnreadMarker(count) {
+async function setExactAppIconBadge(count) {
   if (
     typeof count !== 'number' ||
     !Number.isFinite(count) ||
@@ -1030,20 +1031,20 @@ async function setAppIconUnreadMarker(count) {
 
   try {
     await runAppBadgeMutation(async () => {
-      const hasUnread = Math.floor(count) > 0
+      const badgeCount = Math.min(Math.floor(count), APP_BADGE_MAX_COUNT)
 
       try {
-        await writePersistedAppBadgeCount(hasUnread ? 1 : 0)
+        await writePersistedAppBadgeCount(badgeCount)
       } catch {
         // Platform badge support is still useful when fallback storage is unavailable.
       }
 
-      if (hasUnread && typeof navigator.setAppBadge === 'function') {
-        await navigator.setAppBadge()
+      if (badgeCount > 0 && typeof navigator.setAppBadge === 'function') {
+        await navigator.setAppBadge(badgeCount)
         return
       }
 
-      if (!hasUnread && typeof navigator.clearAppBadge === 'function') {
+      if (badgeCount === 0 && typeof navigator.clearAppBadge === 'function') {
         await navigator.clearAppBadge()
       }
     })
