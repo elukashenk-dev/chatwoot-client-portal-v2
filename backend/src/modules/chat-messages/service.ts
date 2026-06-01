@@ -14,6 +14,7 @@ import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import type { ChatThreadsRepository } from '../chat-threads/repository.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
+import type { ChatUnreadService } from '../chat-unread/service.js'
 import {
   createAttachmentProxyFetcher,
   createAttachmentProxyUnavailableError,
@@ -100,7 +101,9 @@ type CreateChatMessagesServiceOptions = {
     | 'ensureCurrentUserWritableThreadContext'
     | 'getCurrentUserThreadContext'
     | 'recoverCurrentUserWritableThreadContext'
-  >
+  > &
+    Partial<Pick<ChatThreadsService, 'listCurrentUserThreads'>>
+  chatUnreadService?: Pick<ChatUnreadService, 'clearOpenedThreadUnread'>
   chatMessagesRepository?: ChatMessagesRepository | null
   chatwootClient: Pick<
     ChatwootClient,
@@ -413,6 +416,7 @@ export function createChatMessagesService({
   attachmentRequestTimeoutMs: inputAttachmentRequestTimeoutMs,
   chatThreadsRepository,
   chatThreadsService,
+  chatUnreadService,
   chatMessagesRepository = null,
   chatwootClient,
   now = () => new Date(),
@@ -428,6 +432,56 @@ export function createChatMessagesService({
     chatwootClient,
     fetchAllowedAttachment,
   })
+
+  async function attachUnreadClearSummary({
+    beforeMessageId,
+    snapshot,
+    threadId,
+    userId,
+  }: {
+    beforeMessageId: number | null
+    snapshot: ChatMessagesSnapshot
+    threadId: string
+    userId: number
+  }): Promise<ChatMessagesSnapshot> {
+    if (
+      beforeMessageId !== null ||
+      !chatUnreadService ||
+      snapshot.result !== 'ready' ||
+      snapshot.activeThread?.id !== threadId
+    ) {
+      return snapshot
+    }
+
+    if (!chatThreadsService.listCurrentUserThreads) {
+      throw new Error(
+        'Chat messages unread clear requires listCurrentUserThreads.',
+      )
+    }
+
+    const visibleThreads = await chatThreadsService.listCurrentUserThreads({
+      userId,
+    })
+    const visibleThreadIds = visibleThreads.threads.map((thread) => thread.id)
+
+    if (!visibleThreadIds.includes(threadId)) {
+      return snapshot
+    }
+
+    const unreadClear = await chatUnreadService.clearOpenedThreadUnread({
+      portalUserId: userId,
+      threadId,
+      visibleThreadIds,
+    })
+
+    return {
+      ...snapshot,
+      unread: {
+        clearedThreadId: unreadClear.clearedThreadId,
+        totalUnreadCount: unreadClear.totalUnreadCount,
+      },
+    }
+  }
 
   async function findLedgerAuthorsForMessages({
     context,
@@ -825,7 +879,7 @@ export function createChatMessagesService({
           userId,
         })
 
-        return buildMessagesSnapshot(context, {
+        const snapshot = buildMessagesSnapshot(context, {
           hasMoreOlder: page.hasMoreOlder,
           messages: page.messages
             .map((message) => mapPortalMessage(message, messageMapperContext))
@@ -833,6 +887,13 @@ export function createChatMessagesService({
               (message): message is PortalChatMessage => message !== null,
             ),
           nextOlderCursor: page.nextOlderCursor,
+        })
+
+        return attachUnreadClearSummary({
+          beforeMessageId,
+          snapshot,
+          threadId,
+          userId,
         })
       } catch (error) {
         if (error instanceof ChatwootInvalidHistoryCursorError) {

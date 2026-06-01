@@ -203,6 +203,7 @@ export function buildApp({
         tenantId: tenant.id,
       }),
       chatThreadsService: createChatThreadsServiceForRequest(request),
+      chatUnreadService: createChatUnreadServiceForRequest(request),
       chatMessagesRepository: createChatMessagesRepository(database.db, {
         tenantId: tenant.id,
       }),

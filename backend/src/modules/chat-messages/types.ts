@@ -90,6 +90,12 @@ export type ChatMessagesSnapshot = {
   nextOlderCursor: number | null
   reason: ChatThreadRuntimeReason
   result: 'not_ready' | 'ready' | 'unavailable'
+  unread?: ChatUnreadSummary
+}
+
+export type ChatUnreadSummary = {
+  clearedThreadId: string
+  totalUnreadCount: number
 }
 
 export type ChatThreadMediaResponse = {

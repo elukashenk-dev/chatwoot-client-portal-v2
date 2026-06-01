@@ -4,6 +4,13 @@ import { ChatwootInvalidHistoryCursorError } from '../../integrations/chatwoot/c
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import { createChatMessagesService } from './service.js'
 
+type ChatMessagesServiceOptions = Parameters<
+  typeof createChatMessagesService
+>[0]
+type ClearOpenedThreadUnread = NonNullable<
+  ChatMessagesServiceOptions['chatUnreadService']
+>['clearOpenedThreadUnread']
+
 const readyContext = {
   activeThread: {
     id: 'private:me',
@@ -116,6 +123,20 @@ function createChatThreadsServiceStub({
       .fn()
       .mockResolvedValue(writableContext),
     getCurrentUserThreadContext: vi.fn().mockResolvedValue(context),
+    listCurrentUserThreads: vi.fn().mockResolvedValue({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          avatarUrl: '/api/tenant/icons/icon-192.png',
+          id: 'private:me',
+          subtitle: 'Вы и поддержка',
+          title: 'Личный чат',
+          type: 'private',
+          unreadCount: 3,
+        },
+      ],
+      totalUnreadCount: 3,
+    }),
     recoverCurrentUserWritableThreadContext: vi
       .fn()
       .mockResolvedValue(writableContext),
@@ -361,6 +382,143 @@ describe('createChatMessagesService', () => {
       reason: 'none',
       result: 'ready',
     })
+  })
+
+  it('clears unread after a successful latest snapshot', async () => {
+    const chatThreadsService = createChatThreadsServiceStub()
+    const clearOpenedThreadUnread = vi
+      .fn<ClearOpenedThreadUnread>()
+      .mockResolvedValue({
+        clearedThreadId: 'private:me',
+        totalUnreadCount: 3,
+      })
+    const service = createChatMessagesService({
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService,
+      chatUnreadService: {
+        clearOpenedThreadUnread,
+      },
+      chatwootClient: createChatwootClientStub({
+        listConversationMessages: vi.fn().mockResolvedValue({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        }),
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatMessages({
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      unread: {
+        clearedThreadId: 'private:me',
+        totalUnreadCount: 3,
+      },
+    })
+    expect(clearOpenedThreadUnread).toHaveBeenCalledWith({
+      portalUserId: 7,
+      threadId: 'private:me',
+      visibleThreadIds: ['private:me'],
+    })
+    expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
+      userId: 7,
+    })
+    const listThreadsCallOrder =
+      chatThreadsService.listCurrentUserThreads.mock.invocationCallOrder[0]
+    const clearUnreadCallOrder =
+      clearOpenedThreadUnread.mock.invocationCallOrder[0]
+
+    expect(listThreadsCallOrder).toBeDefined()
+    expect(clearUnreadCallOrder).toBeDefined()
+    expect(listThreadsCallOrder!).toBeLessThan(clearUnreadCallOrder!)
+  })
+
+  it('does not clear unread for older message pagination', async () => {
+    const clearOpenedThreadUnread = vi.fn<ClearOpenedThreadUnread>()
+    const service = createChatMessagesService({
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
+      chatUnreadService: {
+        clearOpenedThreadUnread,
+      },
+      chatwootClient: createChatwootClientStub({
+        listConversationMessages: vi.fn().mockResolvedValue({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        }),
+      }),
+    })
+
+    await service.getCurrentUserChatMessages({
+      beforeMessageId: 205,
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    expect(clearOpenedThreadUnread).not.toHaveBeenCalled()
+  })
+
+  it('does not clear unread when the snapshot is not ready', async () => {
+    const clearOpenedThreadUnread = vi.fn<ClearOpenedThreadUnread>()
+    const service = createChatMessagesService({
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub({
+        context: {
+          activeThread: null,
+          chatwootConversation: null,
+          currentUserEmail: null,
+          currentUserName: null,
+          linkedContactId: null,
+          portalChatThreadId: null,
+          reason: 'thread_access_denied',
+          result: 'not_ready',
+          targetChatwootContactId: null,
+          threadType: null,
+        },
+      }),
+      chatUnreadService: {
+        clearOpenedThreadUnread,
+      },
+      chatwootClient: createChatwootClientStub(),
+    })
+
+    await service.getCurrentUserChatMessages({
+      threadId: 'group:154',
+      userId: 7,
+    })
+
+    expect(clearOpenedThreadUnread).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when unread clear fails after a successful snapshot', async () => {
+    const clearOpenedThreadUnread = vi
+      .fn<ClearOpenedThreadUnread>()
+      .mockRejectedValue(new Error('clear failed'))
+    const service = createChatMessagesService({
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService: createChatThreadsServiceStub(),
+      chatUnreadService: {
+        clearOpenedThreadUnread,
+      },
+      chatwootClient: createChatwootClientStub({
+        listConversationMessages: vi.fn().mockResolvedValue({
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        }),
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatMessages({
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).rejects.toThrow('clear failed')
   })
 
   it('fetches a missing reply target and exposes a safe reply preview', async () => {
