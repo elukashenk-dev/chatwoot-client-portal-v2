@@ -480,6 +480,27 @@ describe('serviceWorkerRuntime', () => {
     })
   })
 
+  it('requests thread notification cleanup through the active worker', async () => {
+    const controller = new MockServiceWorker('activated')
+    const registration = new MockServiceWorkerRegistration()
+    setServiceWorkerContainer(
+      new MockServiceWorkerContainer({
+        controller: controller as unknown as ServiceWorker,
+        registration: registration as unknown as ServiceWorkerRegistration,
+      }),
+    )
+
+    const runtime = await import('./serviceWorkerRuntime')
+
+    await expect(
+      runtime.clearChatThreadNotifications('group:154'),
+    ).resolves.toBe(true)
+    expect(controller.postMessage).toHaveBeenCalledWith({
+      threadId: 'group:154',
+      type: 'PORTAL_CHAT_THREAD_NOTIFICATIONS_CLEAR',
+    })
+  })
+
   it('resets the service worker badge count through the active worker when the page has no controller yet', async () => {
     const activeWorker = new MockServiceWorker('activated')
     const registration = new MockServiceWorkerRegistration()

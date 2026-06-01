@@ -191,7 +191,7 @@ describe('chat notification push delivery service', () => {
         threadType: 'private',
         totalUnreadCount: 9,
         type: 'chat_message',
-        url: '/',
+        url: '/app/chat?threadId=private%3Ame',
       }),
     )
     expect(transport.sendNotification.mock.calls[0]).toHaveLength(2)
@@ -268,7 +268,7 @@ describe('chat notification push delivery service', () => {
       threadType: null,
       totalUnreadCount: 4,
       type: 'chat_message',
-      url: '/',
+      url: '/app/chat?threadId=group%3A155',
     })
     expect(parsedPayload).not.toHaveProperty('content')
     expect(parsedPayload).not.toHaveProperty('text')

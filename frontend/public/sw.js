@@ -95,6 +95,21 @@ self.addEventListener('message', (event) => {
     return
   }
 
+  if (event.data?.type === 'PORTAL_CHAT_THREAD_NOTIFICATIONS_CLEAR') {
+    const threadId =
+      typeof event.data.threadId === 'string' && event.data.threadId.length > 0
+        ? event.data.threadId
+        : null
+
+    if (!threadId) {
+      return
+    }
+
+    const clearPromise = closePortalChatNotificationsForThread(threadId)
+    event.waitUntil?.(clearPromise)
+    return
+  }
+
   const sourceClientId = event.source?.id
 
   if (!sourceClientId) {
@@ -1000,6 +1015,7 @@ async function handlePushEvent(event) {
   const notificationOptions = {
     body: notificationCopy.body,
     data: {
+      threadId: payload.threadId,
       url: normalizeNotificationUrl(payload.url),
     },
     icon: '/pwa-icons/icon-192.png',
@@ -1090,16 +1106,40 @@ async function closePortalChatNotifications() {
     const notifications = await self.registration.getNotifications()
 
     for (const notification of notifications) {
-      const tag =
-        typeof notification.tag === 'string' ? notification.tag : null
-
-      if (tag?.startsWith('portal-chat-message-')) {
+      if (isPortalChatMessageNotification(notification)) {
         notification.close()
       }
     }
   } catch {
     // Notification cleanup should not block clearing the app badge fallback.
   }
+}
+
+async function closePortalChatNotificationsForThread(threadId) {
+  if (typeof self.registration.getNotifications !== 'function') {
+    return
+  }
+
+  try {
+    const notifications = await self.registration.getNotifications()
+
+    for (const notification of notifications) {
+      if (
+        isPortalChatMessageNotification(notification) &&
+        notification.data?.threadId === threadId
+      ) {
+        notification.close()
+      }
+    }
+  } catch {
+    // Thread notification cleanup should not block the foreground read state.
+  }
+}
+
+function isPortalChatMessageNotification(notification) {
+  const tag = typeof notification.tag === 'string' ? notification.tag : null
+
+  return Boolean(tag?.startsWith('portal-chat-message-'))
 }
 
 function runAppBadgeMutation(operation) {
@@ -1449,6 +1489,7 @@ function readPushPayload(data) {
 
 async function handleNotificationClick(data) {
   const url = normalizeNotificationUrl(data?.url)
+  const targetUrl = new URL(url, self.location.origin).href
   const clientsList = await clients.matchAll({
     includeUncontrolled: true,
     type: 'window',
@@ -1458,11 +1499,28 @@ async function handleNotificationClick(data) {
   )
 
   if (existingClient) {
-    await existingClient.focus()
+    if (
+      existingClient.url !== targetUrl &&
+      typeof existingClient.navigate === 'function'
+    ) {
+      const navigatedClient = await existingClient
+        .navigate(targetUrl)
+        .catch(() => null)
+      await focusPortalClient(navigatedClient ?? existingClient)
+      return
+    }
+
+    await focusPortalClient(existingClient)
     return
   }
 
-  await clients.openWindow(url)
+  await clients.openWindow(targetUrl)
+}
+
+async function focusPortalClient(client) {
+  if (client && typeof client.focus === 'function') {
+    await client.focus()
+  }
 }
 
 function normalizeNotificationUrl(value) {

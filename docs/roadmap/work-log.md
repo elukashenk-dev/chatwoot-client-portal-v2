@@ -171,6 +171,10 @@
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
+- Production deploy notification thread routing follow-up выполнен на
+  `lk.provgroup.ru` из clean commit `ee1c0d2`; push tap открывает конкретный
+  chat thread, а открытие thread закрывает только его pending system
+  notifications.
 - Offline-first PWA MVP Slice 08 реализован: production service worker получает
   Vite manifest assets в app shell, отдает revision/status для runtime checks,
   не перехватывает `/api/*`, а push stale markers сохраняются и потребляются
@@ -224,5 +228,5 @@
 
 ## Recommended Next Step
 
-- Run real-device smoke for simplified notification settings: global/chat
-  notification toggles, sound-off silent push, and device push connect/disconnect.
+- Close `F-CHAT-004`: restore the last opened chat on online app boot when the
+  thread is still available.

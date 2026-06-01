@@ -3,7 +3,10 @@ import { useEffect } from 'react'
 
 import { openChatRealtime } from '../api/chatRealtimeClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
-import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
+import {
+  clearChatThreadNotifications,
+  setAppIconBadgeCount,
+} from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   clearThreadUnreadCount,
@@ -44,6 +47,9 @@ export function useChatRealtimeConnection({
         markBrowserOnline()
         if (realtimeSnapshot.unread) {
           void setAppIconBadgeCount(realtimeSnapshot.unread.totalUnreadCount)
+          void clearChatThreadNotifications(
+            realtimeSnapshot.unread.clearedThreadId,
+          )
         }
         setPageState((currentState) => {
           if (
@@ -83,6 +89,9 @@ export function useChatRealtimeConnection({
         markBrowserOnline()
         if (realtimeSnapshot.unread) {
           void setAppIconBadgeCount(realtimeSnapshot.unread.totalUnreadCount)
+          void clearChatThreadNotifications(
+            realtimeSnapshot.unread.clearedThreadId,
+          )
         }
         setPageState((currentState) => {
           if (

@@ -342,20 +342,33 @@ export async function setAppIconBadgeCount(count: number) {
   return didSetBrowserBadge || didRequestWorkerSet
 }
 
+export async function clearChatThreadNotifications(threadId: string) {
+  const normalizedThreadId = threadId.trim()
+
+  if (!normalizedThreadId) {
+    return false
+  }
+
+  return postServiceWorkerMessage({
+    threadId: normalizedThreadId,
+    type: 'PORTAL_CHAT_THREAD_NOTIFICATIONS_CLEAR',
+  })
+}
+
 async function postClearAppBadgeMessage() {
-  return postAppBadgeMessage({
+  return postServiceWorkerMessage({
     type: 'PORTAL_APP_BADGE_CLEAR',
   })
 }
 
 async function postSetAppBadgeMessage(count: number) {
-  return postAppBadgeMessage({
+  return postServiceWorkerMessage({
     count,
     type: 'PORTAL_APP_BADGE_SET',
   })
 }
 
-async function postAppBadgeMessage(message: Record<string, unknown>) {
+async function postServiceWorkerMessage(message: Record<string, unknown>) {
   if (!('serviceWorker' in navigator)) {
     return false
   }

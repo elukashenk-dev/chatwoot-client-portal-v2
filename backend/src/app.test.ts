@@ -25,6 +25,10 @@ async function waitForBackgroundTasks() {
   await Promise.resolve()
 }
 
+async function unavailableChatwootFetch(): Promise<Response> {
+  throw new Error('Chatwoot is intentionally unavailable in this test.')
+}
+
 function minutesFromNow(minutes: number) {
   return new Date(Date.now() + minutes * 60_000)
 }
@@ -38,6 +42,7 @@ describe('buildApp', () => {
     database = await createTestDatabase()
     tenantId = await seedDefaultTenant(database)
     app = buildApp({
+      chatwootFetchFn: unavailableChatwootFetch,
       database,
       env: testEnv,
     })

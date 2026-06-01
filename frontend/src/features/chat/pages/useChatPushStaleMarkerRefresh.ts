@@ -1,7 +1,10 @@
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
 import { getChatMessages } from '../api/chatClient'
-import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
+import {
+  clearChatThreadNotifications,
+  setAppIconBadgeCount,
+} from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   clearThreadUnreadCount,
@@ -67,6 +70,9 @@ export function useChatPushStaleMarkerRefresh({
         if (selectedRefresh.snapshot.unread) {
           void setAppIconBadgeCount(
             selectedRefresh.snapshot.unread.totalUnreadCount,
+          )
+          void clearChatThreadNotifications(
+            selectedRefresh.snapshot.unread.clearedThreadId,
           )
         }
 
