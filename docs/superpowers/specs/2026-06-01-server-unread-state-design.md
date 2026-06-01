@@ -282,14 +282,12 @@ Push delivery policy:
 
 - `TTL`: `86400` seconds / 24 hours.
 - `Urgency`: `high`.
-- Web Push `Topic`: per-thread. Semantic key:
-  `tenant:<slug>:thread:<threadId>`. The actual transport header must satisfy
-  the Web Push library constraints, so derive a stable URL-safe <=32 character
-  topic from that semantic key instead of sending the literal string with `:`.
-- Notification `tag`: per-thread, not per-message. Example:
-  `portal-chat-thread-default-group-154`. This lets the browser/OS replace the
-  shown notification for the same chat instead of stacking one notification per
-  message.
+- Web Push `Topic`: omitted for chat message delivery. A stable per-thread
+  Topic can collapse pending push messages while the device is sleeping; chat
+  message pushes must be delivered independently.
+- Notification `tag`: per-message. Example:
+  `portal-chat-message-default-9001`. This lets the browser/OS keep separate
+  system notifications for separate messages when the portal is backgrounded.
 
 Service worker не должен увеличивать badge на `+1` локально. Он должен:
 
@@ -453,8 +451,8 @@ Service worker:
 - Pending/shown browser notifications do not change unread counts by being left
   open, dismissed, clicked, or accumulated; click may clear only through the
   normal backend snapshot flow after portal opens.
-- Push delivery keeps `TTL=86400`, `Urgency=high`, per-thread Web Push `Topic`,
-  and per-thread notification `tag`.
+- Push delivery keeps `TTL=86400`, `Urgency=high`, no Web Push `Topic`, and a
+  per-message notification `tag`.
 - Opened portal shows menu unread indicators from `/api/chat/threads` even when
   push is disabled.
 - Chat menu button shows a red dot when another thread has unread.

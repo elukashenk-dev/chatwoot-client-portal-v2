@@ -19,12 +19,7 @@ export type PushTransport = {
   sendNotification: (
     subscription: PushTransportSubscription,
     payload: string,
-    options?: PushTransportSendOptions,
   ) => Promise<PushTransportResult>
-}
-
-export type PushTransportSendOptions = {
-  topic?: string
 }
 
 function readStatusCode(error: unknown) {
@@ -64,12 +59,11 @@ export function createWebPushTransport(
   )
 
   return {
-    async sendNotification(subscription, payload, options = {}) {
+    async sendNotification(subscription, payload) {
       try {
         await webPush.sendNotification(subscription, payload, {
           TTL: CHAT_PUSH_TTL_SECONDS,
           timeout: CHAT_PUSH_SOCKET_TIMEOUT_MS,
-          ...(options.topic ? { topic: options.topic } : {}),
           urgency: 'high',
         })
 

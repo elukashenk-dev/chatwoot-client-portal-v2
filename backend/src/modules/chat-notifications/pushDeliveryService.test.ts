@@ -193,13 +193,8 @@ describe('chat notification push delivery service', () => {
         type: 'chat_message',
         url: '/',
       }),
-      {
-        topic: expect.stringMatching(/^chat-[A-Za-z0-9_-]+$/),
-      },
     )
-    expect(
-      String(transport.sendNotification.mock.calls[0]?.[2]?.topic).length,
-    ).toBeLessThanOrEqual(32)
+    expect(transport.sendNotification.mock.calls[0]).toHaveLength(2)
     expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
       userId: 7,
     })

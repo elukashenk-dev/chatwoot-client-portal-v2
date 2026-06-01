@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import { defaultUserNotificationSettings } from './settings.js'
 import { resolveEffectiveChatNotificationSettings } from './settings.js'
@@ -113,21 +111,6 @@ function buildNotificationTag({
   )}-${chatwootMessageId}`
 }
 
-function buildPushTopic({
-  tenantSlug,
-  threadId,
-}: {
-  tenantSlug: string
-  threadId: string
-}) {
-  const hash = createHash('sha256')
-    .update(`tenant:${tenantSlug}:thread:${threadId}`)
-    .digest('base64url')
-    .slice(0, 24)
-
-  return `chat-${hash}`
-}
-
 export function createChatNotificationPushDeliveryService({
   chatThreadsService,
   now = () => new Date(),
@@ -209,11 +192,6 @@ export function createChatNotificationPushDeliveryService({
           threadType: recipient.threadType,
           totalUnreadCount: visibleThreads.totalUnreadCount,
         })
-        const topic = buildPushTopic({
-          tenantSlug: input.tenantSlug,
-          threadId: recipient.threadId,
-        })
-
         for (const subscription of subscriptions) {
           const deliveryId = await repository.recordPushDeliveryAttempt({
             chatwootMessageId: input.chatwootMessageId,
@@ -239,7 +217,6 @@ export function createChatNotificationPushDeliveryService({
               },
             },
             payload,
-            { topic },
           )
 
           if (result.status === 'sent') {
