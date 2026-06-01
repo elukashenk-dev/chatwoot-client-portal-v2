@@ -72,6 +72,24 @@ describe('chat notification settings', () => {
     })
   })
 
+  it('treats global sound off as a hard off', () => {
+    expect(
+      resolveEffectiveChatNotificationSettings({
+        global: {
+          newMessagesEnabled: true,
+          soundEnabled: false,
+        },
+        overrides: {
+          newMessagesEnabled: null,
+          soundEnabled: true,
+        },
+      }),
+    ).toEqual({
+      newMessagesEnabled: true,
+      soundEnabled: false,
+    })
+  })
+
   it('returns default global settings when no row exists', async () => {
     const service = createChatNotificationsService({
       chatThreadsService: createReadyThreadService(),

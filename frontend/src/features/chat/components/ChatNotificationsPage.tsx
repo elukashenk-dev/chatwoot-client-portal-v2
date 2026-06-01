@@ -56,6 +56,7 @@ export function ChatNotificationsPage({
   const globalMessagesDisabled = Boolean(
     settings && !settings.global.newMessagesEnabled,
   )
+  const globalSoundDisabled = Boolean(settings && !settings.global.soundEnabled)
 
   return (
     <ChatFullScreenPanel
@@ -98,12 +99,16 @@ export function ChatNotificationsPage({
             <NotificationSwitch
               checked={settings.effective.soundEnabled}
               description={
-                settings.effective.newMessagesEnabled
-                  ? null
-                  : 'Недоступно, пока новые сообщения отключены'
+                globalSoundDisabled
+                  ? 'Отключено в общих настройках'
+                  : settings.effective.newMessagesEnabled
+                    ? null
+                    : 'Недоступно, пока новые сообщения отключены'
               }
               disabled={
-                state.isUpdating || !settings.effective.newMessagesEnabled
+                state.isUpdating ||
+                globalSoundDisabled ||
+                !settings.effective.newMessagesEnabled
               }
               label="Звук"
               onChange={(checked) => {

@@ -336,7 +336,9 @@
   portal IDs в user-visible copy. User-facing settings используют
   Telegram-like модель: новые сообщения вкл/выкл и звук вкл/выкл на глобальном
   и chat-level уровне. Web Push - это per-device connection state, а не
-  отдельный user/chat behavior toggle.
+  отдельный user/chat behavior toggle. Global выключатели новых сообщений и
+  звука являются hard-off: chat-level override не может включить delivery или
+  звук обратно, если соответствующий global setting выключен.
 - граница:
   notification center, email/digest notifications и tenant-admin notification
   policy screen остаются отдельными future scopes.

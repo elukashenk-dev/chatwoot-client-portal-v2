@@ -26,6 +26,8 @@ export function resolveEffectiveChatNotificationSettings({
   return {
     newMessagesEnabled,
     soundEnabled:
-      newMessagesEnabled && (overrides.soundEnabled ?? global.soundEnabled),
+      newMessagesEnabled &&
+      global.soundEnabled &&
+      (overrides.soundEnabled ?? true),
   }
 }

@@ -114,6 +114,32 @@ describe('ChatNotificationsPage', () => {
     })
   })
 
+  it('keeps chat sound disabled when global sound is off', () => {
+    renderPage({
+      settings: {
+        ...readyState.settings,
+        effective: {
+          newMessagesEnabled: true,
+          soundEnabled: false,
+        },
+        global: {
+          newMessagesEnabled: true,
+          soundEnabled: false,
+        },
+        overrides: {
+          newMessagesEnabled: null,
+          soundEnabled: true,
+        },
+      },
+    })
+
+    const soundSwitch = screen.getByRole('switch', { name: /Звук/ })
+
+    expect(soundSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(soundSwitch).toBeDisabled()
+    expect(screen.getByText('Отключено в общих настройках')).toBeInTheDocument()
+  })
+
   it('shows reset action only when a chat override exists', async () => {
     const user = userEvent.setup()
     const onResetThreadOverrides = vi.fn()
