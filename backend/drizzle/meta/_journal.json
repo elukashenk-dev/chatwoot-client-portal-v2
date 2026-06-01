@@ -29,6 +29,13 @@
       "when": 1779488190337,
       "tag": "0003_unusual_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780273356870,
+      "tag": "0004_unusual_firelord",
+      "breakpoints": true
     }
   ]
 }

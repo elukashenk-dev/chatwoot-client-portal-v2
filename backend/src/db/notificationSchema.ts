@@ -201,3 +201,49 @@ export const portalPushDeliveries = pgTable(
     ),
   ],
 )
+
+export const portalChatUnreadMessages = pgTable(
+  'portal_chat_unread_messages',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
+    portalUserId: integer('portal_user_id')
+      .notNull()
+      .references(() => portalUsers.id, {
+        onDelete: 'cascade',
+      }),
+    portalChatThreadId: integer('portal_chat_thread_id').references(
+      () => portalChatThreads.id,
+      {
+        onDelete: 'set null',
+      },
+    ),
+    threadId: text('thread_id').notNull(),
+    chatwootMessageId: integer('chatwoot_message_id').notNull(),
+    createdAt: timestamp('created_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_chat_unread_messages_message_unique').on(
+      table.tenantId,
+      table.portalUserId,
+      table.threadId,
+      table.chatwootMessageId,
+    ),
+    index('portal_chat_unread_messages_tenant_user_thread_idx').on(
+      table.tenantId,
+      table.portalUserId,
+      table.threadId,
+    ),
+    index('portal_chat_unread_messages_tenant_user_created_at_idx').on(
+      table.tenantId,
+      table.portalUserId,
+      table.createdAt,
+    ),
+  ],
+)
