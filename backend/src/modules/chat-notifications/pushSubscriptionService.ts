@@ -10,6 +10,7 @@ type CreatePushSubscriptionServiceOptions = {
   now?: () => Date
   repository: Pick<
     ChatNotificationsRepository,
+    | 'disableOtherPushSubscriptionsForDevice'
     | 'disableOtherPushSubscriptionsForEndpoint'
     | 'disablePushSubscription'
     | 'upsertPushSubscription'
@@ -54,8 +55,15 @@ export function createPushSubscriptionService({
       }
       const currentTime = now()
 
+      await repository.disableOtherPushSubscriptionsForDevice({
+        deviceId: subscription.deviceId,
+        endpoint: subscription.endpoint,
+        now: currentTime,
+        portalUserId,
+      })
       await repository.upsertPushSubscription({
         auth: subscription.keys.auth,
+        deviceId: subscription.deviceId,
         endpoint: subscription.endpoint,
         now: currentTime,
         p256dh: subscription.keys.p256dh,

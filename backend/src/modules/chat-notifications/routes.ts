@@ -142,6 +142,12 @@ function createPushEndpointSchema(allowedOrigins: Set<string>) {
 function createPushSubscriptionBodySchema(allowedOrigins: Set<string>) {
   return z
     .object({
+      deviceId: z
+        .string()
+        .trim()
+        .min(1)
+        .max(128)
+        .regex(/^[A-Za-z0-9._:-]+$/),
       endpoint: createPushEndpointSchema(allowedOrigins),
       keys: z
         .object({
@@ -314,6 +320,7 @@ export function registerChatNotificationRoutes(
     await createPushSubscriptionService(request).saveSubscription({
       portalUserId: user.id,
       subscription: {
+        deviceId: body.deviceId,
         endpoint: body.endpoint,
         keys: body.keys,
         userAgent: typeof userAgentHeader === 'string' ? userAgentHeader : null,

@@ -220,6 +220,7 @@ describe('cleanupPortalMaintenanceData', () => {
       .insert(portalPushSubscriptions)
       .values({
         auth: 'old-auth',
+        deviceId: 'portal-device-old',
         endpoint: 'https://fcm.googleapis.com/fcm/send/old',
         lastErrorAt: daysAgo(now, 45),
         p256dh: 'old-p256dh',
@@ -235,6 +236,7 @@ describe('cleanupPortalMaintenanceData', () => {
       .insert(portalPushSubscriptions)
       .values({
         auth: 'recent-auth',
+        deviceId: 'portal-device-recent',
         endpoint: 'https://fcm.googleapis.com/fcm/send/recent',
         p256dh: 'recent-p256dh',
         portalUserId: userId,

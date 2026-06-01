@@ -106,6 +106,7 @@ export const portalPushSubscriptions = pgTable(
       .references(() => portalUsers.id, {
         onDelete: 'cascade',
       }),
+    deviceId: text('device_id').notNull(),
     endpoint: text('endpoint').notNull(),
     p256dh: text('p256dh').notNull(),
     auth: text('auth').notNull(),
@@ -128,6 +129,9 @@ export const portalPushSubscriptions = pgTable(
       table.portalUserId,
       table.endpoint,
     ),
+    uniqueIndex('portal_push_subscriptions_active_device_unique')
+      .on(table.tenantId, table.portalUserId, table.deviceId)
+      .where(sql`${table.status} = 'active'`),
     index('portal_push_subscriptions_tenant_user_status_idx').on(
       table.tenantId,
       table.portalUserId,

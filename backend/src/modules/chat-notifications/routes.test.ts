@@ -286,6 +286,7 @@ describe('registerChatNotificationRoutes', () => {
         },
         method: 'POST',
         payload: {
+          deviceId: 'portal-device-test-device-1',
           endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
           keys: {
             auth: 'auth-secret',
@@ -299,6 +300,7 @@ describe('registerChatNotificationRoutes', () => {
       expect(subscriptionService.saveSubscription).toHaveBeenCalledWith({
         portalUserId: 7,
         subscription: {
+          deviceId: 'portal-device-test-device-1',
           endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-1',
           keys: {
             auth: 'auth-secret',

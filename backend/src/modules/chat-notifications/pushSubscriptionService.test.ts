@@ -12,6 +12,7 @@ const vapidConfig = createVapidConfig({
 
 function createRepository() {
   return {
+    disableOtherPushSubscriptionsForDevice: vi.fn(async () => undefined),
     disableOtherPushSubscriptionsForEndpoint: vi.fn(async () => undefined),
     disablePushSubscription: vi.fn(async () => undefined),
     upsertPushSubscription: vi.fn(async () => undefined),
@@ -55,6 +56,7 @@ describe('push subscription service', () => {
       service.saveSubscription({
         portalUserId: 7,
         subscription: {
+          deviceId: 'portal-device-test-device-1',
           endpoint: 'https://push.example.test/subscription/1',
           keys: {
             auth: 'auth-secret',
@@ -81,6 +83,7 @@ describe('push subscription service', () => {
       portalUserId: 7,
       subscription: {
         endpoint: 'https://push.example.test/subscription/1',
+        deviceId: 'portal-device-test-device-1',
         keys: {
           auth: 'auth-secret',
           p256dh: 'p256dh-key',
@@ -91,6 +94,7 @@ describe('push subscription service', () => {
 
     expect(repository.upsertPushSubscription).toHaveBeenCalledWith({
       auth: 'auth-secret',
+      deviceId: 'portal-device-test-device-1',
       endpoint: 'https://push.example.test/subscription/1',
       now: new Date('2026-05-23T00:00:00.000Z'),
       p256dh: 'p256dh-key',
@@ -99,6 +103,14 @@ describe('push subscription service', () => {
       vapidKeyId: 'sha256-43a46f1d081d2701',
       vapidPublicKeyFingerprint:
         'sha256-43a46f1d081d270130e2210a1de59f9715de033307d068edc65a335b27e95d3d',
+    })
+    expect(
+      repository.disableOtherPushSubscriptionsForDevice,
+    ).toHaveBeenCalledWith({
+      deviceId: 'portal-device-test-device-1',
+      endpoint: 'https://push.example.test/subscription/1',
+      now: new Date('2026-05-23T00:00:00.000Z'),
+      portalUserId: 7,
     })
     expect(
       repository.disableOtherPushSubscriptionsForEndpoint,

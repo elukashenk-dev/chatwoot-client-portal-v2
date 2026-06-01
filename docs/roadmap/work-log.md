@@ -157,7 +157,8 @@
   красная точка для чатов с новыми сообщениями вне текущего активного чата,
   плюс PWA app-icon badge count по backend unread total на поддерживаемых
   платформах; chat message push использует per-message notification tag без Web
-  Push `Topic`, чтобы pending push не схлопывались во время сна устройства.
+  Push `Topic`, чтобы pending push не схлопывались во время сна устройства, и
+  backend держит одну активную push-подписку на tenant/user/device.
 - Непрочитанные сообщения чата переведены на backend-owned state:
   `/api/chat/threads` возвращает per-thread и total unread только по доступным
   threads, открытие snapshot чата сбрасывает unread этого thread, а frontend

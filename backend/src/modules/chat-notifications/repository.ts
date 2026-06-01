@@ -75,6 +75,34 @@ export function createChatNotificationsRepository(
   { tenantId }: TenantRepositoryScope,
 ) {
   return {
+    async disableOtherPushSubscriptionsForDevice({
+      deviceId,
+      endpoint,
+      now,
+      portalUserId,
+    }: {
+      deviceId: string
+      endpoint: string
+      now: Date
+      portalUserId: number
+    }) {
+      await db
+        .update(portalPushSubscriptions)
+        .set({
+          status: 'disabled',
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(portalPushSubscriptions.tenantId, tenantId),
+            eq(portalPushSubscriptions.portalUserId, portalUserId),
+            eq(portalPushSubscriptions.deviceId, deviceId),
+            eq(portalPushSubscriptions.status, 'active'),
+            ne(portalPushSubscriptions.endpoint, endpoint),
+          ),
+        )
+    },
+
     async disableOtherPushSubscriptionsForEndpoint({
       endpoint,
       now,
@@ -265,6 +293,7 @@ export function createChatNotificationsRepository(
 
     async upsertPushSubscription({
       auth,
+      deviceId,
       endpoint,
       now,
       p256dh,
@@ -274,6 +303,7 @@ export function createChatNotificationsRepository(
       vapidPublicKeyFingerprint,
     }: {
       auth: string
+      deviceId: string
       endpoint: string
       now: Date
       p256dh: string
@@ -286,6 +316,7 @@ export function createChatNotificationsRepository(
         .insert(portalPushSubscriptions)
         .values({
           auth,
+          deviceId,
           endpoint,
           p256dh,
           portalUserId,
@@ -299,6 +330,7 @@ export function createChatNotificationsRepository(
         .onConflictDoUpdate({
           set: {
             auth,
+            deviceId,
             p256dh,
             status: 'active',
             updatedAt: now,

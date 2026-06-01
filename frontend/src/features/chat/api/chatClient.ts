@@ -229,9 +229,16 @@ export async function getPushPublicKey() {
   return request<PushPublicKeyResponse>('/notifications/push/public-key')
 }
 
-export async function savePushSubscription(subscription: PushSubscriptionJSON) {
+export async function savePushSubscription({
+  deviceId,
+  subscription,
+}: {
+  deviceId: string
+  subscription: PushSubscriptionJSON
+}) {
   await request<void>('/notifications/push/subscriptions', {
     body: {
+      deviceId,
       endpoint: subscription.endpoint,
       keys: {
         auth: subscription.keys?.auth,

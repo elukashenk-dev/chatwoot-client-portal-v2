@@ -22,6 +22,7 @@ export type PushSubscriptionStatus = 'active' | 'disabled' | 'expired'
 export type PushDeliveryStatus = 'expired' | 'failed' | 'sent' | 'skipped'
 
 export type BrowserPushSubscriptionInput = {
+  deviceId: string
   endpoint: string
   keys: {
     auth: string

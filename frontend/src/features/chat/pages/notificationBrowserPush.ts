@@ -13,6 +13,9 @@ import {
   type BrowserPushSupportState,
 } from '../../../pwa/serviceWorkerRuntime'
 
+const PUSH_DEVICE_ID_STORAGE_KEY = 'provgroup-portal-push-device-id'
+const PUSH_DEVICE_ID_PREFIX = 'portal-device-'
+
 export type BrowserPushSnapshot = {
   configured: boolean
   permission: NotificationPermission | 'unsupported'
@@ -20,6 +23,41 @@ export type BrowserPushSnapshot = {
   subscribed: boolean
   subscriptionEndpoint: string | null
   support: BrowserPushSupportState
+}
+
+function isValidBrowserPushDeviceId(value: string | null): value is string {
+  return (
+    value !== null &&
+    value.startsWith(PUSH_DEVICE_ID_PREFIX) &&
+    value.length <= 128 &&
+    /^[A-Za-z0-9._:-]+$/.test(value)
+  )
+}
+
+function createBrowserPushDeviceId() {
+  const randomUUID =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
+  return `${PUSH_DEVICE_ID_PREFIX}${randomUUID}`
+}
+
+export function getOrCreateBrowserPushDeviceId() {
+  try {
+    const existingDeviceId = localStorage.getItem(PUSH_DEVICE_ID_STORAGE_KEY)
+
+    if (isValidBrowserPushDeviceId(existingDeviceId)) {
+      return existingDeviceId
+    }
+
+    const deviceId = createBrowserPushDeviceId()
+    localStorage.setItem(PUSH_DEVICE_ID_STORAGE_KEY, deviceId)
+
+    return deviceId
+  } catch {
+    return createBrowserPushDeviceId()
+  }
 }
 
 export function readNotificationPermission(
@@ -56,6 +94,13 @@ export async function loadBrowserPushSnapshot(): Promise<BrowserPushSnapshot> {
         publicKey.publicKey,
       )
     : false
+
+  if (publicKey.available && isCurrentSubscription && existingSubscription) {
+    await savePushSubscription({
+      deviceId: getOrCreateBrowserPushDeviceId(),
+      subscription: existingSubscription.toJSON(),
+    })
+  }
 
   return {
     configured: publicKey.available,
@@ -108,7 +153,10 @@ export async function ensureBrowserPushSubscription({
     browserPush.publicKey.publicKey,
   )
 
-  await savePushSubscription(subscription)
+  await savePushSubscription({
+    deviceId: getOrCreateBrowserPushDeviceId(),
+    subscription,
+  })
 
   return {
     browserPush: {

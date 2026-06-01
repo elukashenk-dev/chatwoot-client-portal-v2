@@ -291,6 +291,10 @@ Push delivery policy:
 - Notification `renotify`: omitted for per-message chat notifications. Duplicate
   delivery of the same message may replace the same notification tag, but it
   must not ask the OS to play an extra alert sound.
+- Push subscriptions are device-bound. The browser sends a stable portal
+  `deviceId` with each subscription save; backend keeps only one active push
+  subscription per tenant/user/device and disables stale active endpoints for
+  that device.
 
 Service worker не должен увеличивать badge на `+1` локально. Он должен:
 
@@ -455,7 +459,8 @@ Service worker:
   open, dismissed, clicked, or accumulated; click may clear only through the
   normal backend snapshot flow after portal opens.
 - Push delivery keeps `TTL=86400`, `Urgency=high`, no Web Push `Topic`, a
-  per-message notification `tag`, and no notification `renotify`.
+  per-message notification `tag`, no notification `renotify`, and one active
+  push subscription per tenant/user/device.
 - Opened portal shows menu unread indicators from `/api/chat/threads` even when
   push is disabled.
 - Chat menu button shows a red dot when another thread has unread.

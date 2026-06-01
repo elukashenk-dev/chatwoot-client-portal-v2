@@ -142,11 +142,14 @@ describe('chat notification API client', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await savePushSubscription({
-      endpoint: 'https://push.example.test/subscription',
-      expirationTime: null,
-      keys: {
-        auth: 'auth-secret',
-        p256dh: 'p256dh-key',
+      deviceId: 'portal-device-test-device-1',
+      subscription: {
+        endpoint: 'https://push.example.test/subscription',
+        expirationTime: null,
+        keys: {
+          auth: 'auth-secret',
+          p256dh: 'p256dh-key',
+        },
       },
     })
     await deletePushSubscription('https://push.example.test/subscription')
@@ -156,6 +159,7 @@ describe('chat notification API client', () => {
       '/api/notifications/push/subscriptions',
       expect.objectContaining({
         body: JSON.stringify({
+          deviceId: 'portal-device-test-device-1',
           endpoint: 'https://push.example.test/subscription',
           keys: {
             auth: 'auth-secret',
