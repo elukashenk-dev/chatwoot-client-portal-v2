@@ -34,7 +34,6 @@ export const portalUserNotificationPreferences = pgTable(
       }),
     newMessagesEnabled: boolean('new_messages_enabled').notNull().default(true),
     soundEnabled: boolean('sound_enabled').notNull().default(true),
-    pushEnabled: boolean('push_enabled').notNull().default(false),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
       .defaultNow(),
@@ -71,7 +70,6 @@ export const portalChatNotificationPreferences = pgTable(
     threadId: text('thread_id').notNull(),
     newMessagesEnabledOverride: boolean('new_messages_enabled_override'),
     soundEnabledOverride: boolean('sound_enabled_override'),
-    pushEnabledOverride: boolean('push_enabled_override'),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
       .defaultNow(),

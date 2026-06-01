@@ -31,7 +31,7 @@
 - Treat `/api/chat/threads` as the visible unread source of truth. Every user-facing `totalUnreadCount` must equal the sum of `unreadCount` for threads the current user can currently see; do not count stale unread rows for inaccessible groups in app badge or push totals.
 - Treat shown/pending browser notifications as presentation only. Leaving notifications open, dismissing them, clicking them, or accumulating multiple system notifications must not increment, decrement, clear, or otherwise derive unread state by notification lifecycle alone. A notification click may clear unread only if it opens the portal and the normal backend snapshot clear flow succeeds.
 - Keep chat push delivery policy explicit: `TTL=86400` seconds, `urgency=high`, Web Push `topic` is per-thread, and notification `tag` is per-thread.
-- Foreground unread refresh must not depend on push permission, active subscription, or `pushEnabled`. An opened portal refreshes `/api/chat/threads` on initial load, tab visibility resume, and a modest foreground interval while backend is reachable.
+- Foreground unread refresh must not depend on push permission or active subscription. An opened portal refreshes `/api/chat/threads` on initial load, tab visibility resume, and a modest foreground interval while backend is reachable.
 - After implementation, run targeted tests first, then required broader checks. Update `docs/roadmap/work-log.md` only after the slice is implemented, reviewed, and verified as a new baseline.
 
 ## File Structure
@@ -2657,7 +2657,7 @@ useChatForegroundUnreadRefresh({
 })
 ```
 
-Do not read `selectedThreadNotificationSettings`, browser push permission, service worker status, or `pushEnabled` in this hook. It is a foreground portal refresh, not a push feature. It must never clear unread; it only refreshes `/api/chat/threads`, updates visible thread counts, and sets exact app badge total from the thread-list response.
+Do not read `selectedThreadNotificationSettings`, browser push permission, or service worker status in this hook. It is a foreground portal refresh, not a push feature. It must never clear unread; it only refreshes `/api/chat/threads`, updates visible thread counts, and sets exact app badge total from the thread-list response.
 
 If the refreshed thread list no longer contains the selected thread, the hook
 must not keep the old snapshot on screen. It should call
@@ -3298,7 +3298,7 @@ Chat menu button red dot appears when another visible thread has unread and hide
 Older pagination does not clear unread.
 Cached/offline chat path does not clear unread.
 Push disabled does not disable unread writes.
-Foreground unread refresh updates `/api/chat/threads` without checking push permission, push subscription, or pushEnabled.
+Foreground unread refresh updates `/api/chat/threads` without checking push permission or push subscription.
 Service worker sets badge from totalUnreadCount and does not increment locally.
 Accumulated shown browser notifications do not change unread counts or derive a larger badge count.
 Old React Set unread marker implementation is deleted.

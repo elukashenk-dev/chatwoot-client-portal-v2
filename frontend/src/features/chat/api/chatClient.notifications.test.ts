@@ -28,7 +28,6 @@ describe('chat notification API client', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       }),
     )
@@ -36,7 +35,6 @@ describe('chat notification API client', () => {
 
     await expect(getUserNotificationSettings()).resolves.toEqual({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     })
     expect(fetchMock).toHaveBeenCalledWith(
@@ -52,7 +50,6 @@ describe('chat notification API client', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: false,
       }),
     )
@@ -78,17 +75,14 @@ describe('chat notification API client', () => {
       jsonResponse({
         effective: {
           newMessagesEnabled: true,
-          pushEnabled: false,
           soundEnabled: true,
         },
         global: {
           newMessagesEnabled: true,
-          pushEnabled: false,
           soundEnabled: true,
         },
         overrides: {
           newMessagesEnabled: null,
-          pushEnabled: null,
           soundEnabled: null,
         },
         threadId: 'group:155',
@@ -98,7 +92,6 @@ describe('chat notification API client', () => {
 
     await getChatNotificationSettings('group:155')
     await updateChatNotificationSettings('group:155', {
-      pushEnabled: null,
       soundEnabled: false,
     })
 
@@ -114,7 +107,6 @@ describe('chat notification API client', () => {
       '/api/chat/threads/group%3A155/notification-settings',
       expect.objectContaining({
         body: JSON.stringify({
-          pushEnabled: null,
           soundEnabled: false,
         }),
         method: 'PATCH',

@@ -150,15 +150,16 @@
   portal backend отдает tenant-scoped Chatwoot agent availability и working
   hours, frontend показывает `На связи` / `Ответим позже` / `Вне графика`, а
   страница `Информация о чате` содержит read-only блок `Часы работы`.
-- Реализован slice `Уведомления`: глобальная страница настроек, chat-level
-  overrides, in-portal sound, Web Push/VAPID subscription lifecycle,
-  tenant-scoped push delivery из Chatwoot `message_created` webhooks, safe
-  chat-title context в PWA push payload без текста сообщения и локальная
-  красная точка для чатов с новыми сообщениями вне текущего активного чата,
-  плюс PWA app-icon badge count по backend unread total на поддерживаемых
-  платформах; chat message push использует per-message notification tag без Web
-  Push `Topic`, чтобы pending push не схлопывались во время сна устройства, и
-  backend держит одну активную push-подписку на tenant/user/device.
+- Реализован slice `Уведомления`: Telegram-like глобальные настройки и
+  chat-level overrides для новых сообщений и звука, in-portal sound,
+  Web Push/VAPID как подключение конкретного устройства, tenant-scoped push
+  delivery из Chatwoot `message_created` webhooks, safe chat-title context в PWA
+  push payload без текста сообщения и локальная красная точка для чатов с
+  новыми сообщениями вне текущего активного чата, плюс PWA app-icon badge count
+  по backend unread total на поддерживаемых платформах; chat message push
+  использует per-message notification tag без Web Push `Topic`, чтобы pending
+  push не схлопывались во время сна устройства, и backend держит одну активную
+  push-подписку на tenant/user/device.
 - Непрочитанные сообщения чата переведены на backend-owned state:
   `/api/chat/threads` возвращает per-thread и total unread только по доступным
   threads, открытие snapshot чата сбрасывает unread этого thread, а frontend
@@ -223,5 +224,5 @@
 
 ## Recommended Next Step
 
-- Run real-device PWA smoke for personal/group unread badges with push both
-  enabled and disabled.
+- Run real-device smoke for simplified notification settings: global/chat
+  notification toggles, sound-off silent push, and device push connect/disconnect.

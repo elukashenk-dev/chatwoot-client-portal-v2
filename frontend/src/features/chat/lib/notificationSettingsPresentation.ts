@@ -46,7 +46,6 @@ export function hasChatNotificationOverrides(
 ) {
   return (
     overrides.newMessagesEnabled !== null ||
-    overrides.pushEnabled !== null ||
     overrides.soundEnabled !== null
   )
 }
@@ -59,17 +58,10 @@ export function getChatNotificationsStatus(
   }
 
   if (!settings.effective.newMessagesEnabled) {
-    return 'Отключены'
+    return 'Выключены'
   }
 
-  const soundLabel = settings.effective.soundEnabled
-    ? 'звук включен'
-    : 'звук выключен'
-  const pushLabel = settings.effective.pushEnabled
-    ? 'push включен'
-    : 'push выключен'
-
-  return `${soundLabel} · ${pushLabel}`
+  return settings.effective.soundEnabled ? 'Включены' : 'Без звука'
 }
 
 export function getInheritanceStatus(settings: ChatNotificationSettings) {
@@ -87,7 +79,6 @@ export function getGlobalEffectiveSettings(settings: UserNotificationSettings) {
 
   return {
     newMessagesEnabled,
-    pushEnabled: newMessagesEnabled && settings.pushEnabled,
     soundEnabled: newMessagesEnabled && settings.soundEnabled,
   }
 }

@@ -46,13 +46,11 @@ export type ChatSupportAvailabilityResponse = {
 
 export type UserNotificationSettings = {
   newMessagesEnabled: boolean
-  pushEnabled: boolean
   soundEnabled: boolean
 }
 
 export type ChatNotificationOverrides = {
   newMessagesEnabled: boolean | null
-  pushEnabled: boolean | null
   soundEnabled: boolean | null
 }
 

@@ -371,6 +371,7 @@ describe('serviceWorkerRuntime', () => {
     expect(handler).toHaveBeenCalledWith({
       chatwootMessageId: 9004,
       portalUserId: 7,
+      soundEnabled: true,
       tenantSlug: 'buhfirma',
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',

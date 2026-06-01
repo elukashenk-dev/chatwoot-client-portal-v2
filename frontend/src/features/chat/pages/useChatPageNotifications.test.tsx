@@ -61,6 +61,7 @@ describe('useChatPageNotifications', () => {
       handler?.({
         chatwootMessageId: 9001,
         portalUserId: 7,
+        soundEnabled: true,
         tenantSlug: 'buhfirma',
         threadId: 'private:me',
         threadTitle: 'Личный чат',
@@ -84,6 +85,7 @@ describe('useChatPageNotifications', () => {
       handler?.({
         chatwootMessageId: 9002,
         portalUserId: 7,
+        soundEnabled: true,
         tenantSlug: 'buhfirma',
         threadId: 'group:155',
         threadTitle: 'ООО Уточки',

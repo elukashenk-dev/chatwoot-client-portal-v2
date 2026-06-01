@@ -20,26 +20,22 @@ type TenantRepositoryScope = {
 
 type UserNotificationPreferenceRow = {
   newMessagesEnabled: boolean
-  pushEnabled: boolean
   soundEnabled: boolean
 }
 
 type ChatNotificationPreferenceRow = {
   newMessagesEnabled: boolean | null
-  pushEnabled: boolean | null
   soundEnabled: boolean | null
 }
 
 const userNotificationPreferenceSelection = {
   newMessagesEnabled: portalUserNotificationPreferences.newMessagesEnabled,
-  pushEnabled: portalUserNotificationPreferences.pushEnabled,
   soundEnabled: portalUserNotificationPreferences.soundEnabled,
 }
 
 const chatNotificationPreferenceSelection = {
   newMessagesEnabled:
     portalChatNotificationPreferences.newMessagesEnabledOverride,
-  pushEnabled: portalChatNotificationPreferences.pushEnabledOverride,
   soundEnabled: portalChatNotificationPreferences.soundEnabledOverride,
 }
 
@@ -55,7 +51,6 @@ function mapUserSettings(
 ): UserNotificationSettings {
   return {
     newMessagesEnabled: row.newMessagesEnabled,
-    pushEnabled: row.pushEnabled,
     soundEnabled: row.soundEnabled,
   }
 }
@@ -65,7 +60,6 @@ function mapChatOverrides(
 ): ChatNotificationOverrides {
   return {
     newMessagesEnabled: row.newMessagesEnabled,
-    pushEnabled: row.pushEnabled,
     soundEnabled: row.soundEnabled,
   }
 }
@@ -389,7 +383,6 @@ export function createChatNotificationsRepository(
         .values({
           newMessagesEnabled: nextSettings.newMessagesEnabled,
           portalUserId,
-          pushEnabled: nextSettings.pushEnabled,
           soundEnabled: nextSettings.soundEnabled,
           tenantId,
           updatedAt: now,
@@ -397,7 +390,6 @@ export function createChatNotificationsRepository(
         .onConflictDoUpdate({
           set: {
             newMessagesEnabled: nextSettings.newMessagesEnabled,
-            pushEnabled: nextSettings.pushEnabled,
             soundEnabled: nextSettings.soundEnabled,
             updatedAt: now,
           },
@@ -431,7 +423,6 @@ export function createChatNotificationsRepository(
         .values({
           newMessagesEnabledOverride: overrides.newMessagesEnabled,
           portalUserId,
-          pushEnabledOverride: overrides.pushEnabled,
           soundEnabledOverride: overrides.soundEnabled,
           tenantId,
           threadId,
@@ -440,7 +431,6 @@ export function createChatNotificationsRepository(
         .onConflictDoUpdate({
           set: {
             newMessagesEnabledOverride: overrides.newMessagesEnabled,
-            pushEnabledOverride: overrides.pushEnabled,
             soundEnabledOverride: overrides.soundEnabled,
             updatedAt: now,
           },

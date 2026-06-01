@@ -49,46 +49,38 @@ async function buildNotificationsRoutesTestApp({
   const notificationsService = {
     getGlobalSettings: vi.fn(async () => ({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     })),
     getSettings: vi.fn(async () => ({
       effective: {
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       },
       global: {
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       },
       overrides: {
         newMessagesEnabled: null,
-        pushEnabled: null,
         soundEnabled: null,
       },
       threadId: 'private:me',
     })),
     updateGlobalSettings: vi.fn(async ({ patch }) => ({
       newMessagesEnabled: patch.newMessagesEnabled ?? true,
-      pushEnabled: patch.pushEnabled ?? false,
       soundEnabled: patch.soundEnabled ?? true,
     })),
     updateSettings: vi.fn(async ({ patch, threadId }) => ({
       effective: {
         newMessagesEnabled: patch.newMessagesEnabled ?? true,
-        pushEnabled: patch.pushEnabled ?? false,
         soundEnabled: patch.soundEnabled ?? true,
       },
       global: {
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       },
       overrides: {
         newMessagesEnabled: patch.newMessagesEnabled ?? null,
-        pushEnabled: patch.pushEnabled ?? null,
         soundEnabled: patch.soundEnabled ?? null,
       },
       threadId,
@@ -145,7 +137,6 @@ describe('registerChatNotificationRoutes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.json()).toEqual({
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       })
       expect(notificationsService.getGlobalSettings).toHaveBeenCalledWith({
@@ -168,16 +159,40 @@ describe('registerChatNotificationRoutes', () => {
         },
         method: 'PATCH',
         payload: {
-          pushEnabled: true,
+          soundEnabled: false,
         },
         url: '/api/notifications/settings',
       })
 
       expect(response.statusCode).toBe(200)
       expect(notificationsService.updateGlobalSettings).toHaveBeenCalledWith({
-        patch: { pushEnabled: true },
+        patch: { soundEnabled: false },
         portalUserId: 7,
       })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects retired global push setting patches', async () => {
+    const { app, notificationsService } =
+      await buildNotificationsRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'PATCH',
+        payload: {
+          pushEnabled: true,
+        },
+        url: '/api/notifications/settings',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(notificationsService.updateGlobalSettings).not.toHaveBeenCalled()
     } finally {
       await app.close()
     }
@@ -219,7 +234,6 @@ describe('registerChatNotificationRoutes', () => {
         method: 'PATCH',
         payload: {
           newMessagesEnabled: null,
-          pushEnabled: true,
           soundEnabled: null,
         },
         url: '/api/chat/threads/group%3A155/notification-settings',
@@ -229,12 +243,35 @@ describe('registerChatNotificationRoutes', () => {
       expect(notificationsService.updateSettings).toHaveBeenCalledWith({
         patch: {
           newMessagesEnabled: null,
-          pushEnabled: true,
           soundEnabled: null,
         },
         portalUserId: 7,
         threadId: 'group:155',
       })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects retired chat push override patches', async () => {
+    const { app, notificationsService } =
+      await buildNotificationsRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'PATCH',
+        payload: {
+          pushEnabled: false,
+        },
+        url: '/api/chat/threads/group%3A155/notification-settings',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(notificationsService.updateSettings).not.toHaveBeenCalled()
     } finally {
       await app.close()
     }

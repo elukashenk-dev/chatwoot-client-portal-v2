@@ -94,17 +94,14 @@ function createNotificationSettingsResponse() {
   return createJsonResponse({
     effective: {
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     },
     global: {
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     },
     overrides: {
       newMessagesEnabled: null,
-      pushEnabled: null,
       soundEnabled: null,
     },
     threadId: privateThread.id,

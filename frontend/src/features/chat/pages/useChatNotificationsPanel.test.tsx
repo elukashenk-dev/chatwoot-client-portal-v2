@@ -24,17 +24,14 @@ const getChatNotificationSettingsMock = vi.mocked(getChatNotificationSettings)
 const chatNotificationSettings = {
   effective: {
     newMessagesEnabled: true,
-    pushEnabled: false,
     soundEnabled: false,
   },
   global: {
     newMessagesEnabled: true,
-    pushEnabled: false,
     soundEnabled: false,
   },
   overrides: {
     newMessagesEnabled: null,
-    pushEnabled: null,
     soundEnabled: false,
   },
   threadId: 'group:155',

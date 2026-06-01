@@ -4,6 +4,7 @@ import { routePaths } from '../../../app/routePaths'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { ChatFullScreenPanel } from '../../chat/components/ChatFullScreenPanel'
 import {
+  NotificationActionRow,
   NotificationCard,
   NotificationSwitch,
 } from '../../chat/components/NotificationSettingsControls'
@@ -17,8 +18,8 @@ import { useUserNotificationsSettings } from './useUserNotificationsSettings'
 export function UserNotificationsPage() {
   const navigate = useNavigate()
   const {
+    connectDevicePush,
     disableDevicePush,
-    enablePushDefault,
     loadSettings,
     state,
     updateSettings,
@@ -28,14 +29,18 @@ export function UserNotificationsPage() {
     ? getGlobalEffectiveSettings(settings)
     : null
   const pushStatus = getBrowserPushStatusLabel(state.browserPush)
-  const canTogglePush =
-    Boolean(effectiveSettings?.newMessagesEnabled) &&
-    canEnableBrowserPush(state.browserPush)
-  const shouldShowDeviceConnect =
-    Boolean(effectiveSettings?.pushEnabled) &&
-    Boolean(state.browserPush) &&
-    !state.browserPush?.subscribed &&
-    canEnableBrowserPush(state.browserPush)
+  const canChangeDevicePush = canEnableBrowserPush(state.browserPush)
+  const devicePushAction = state.browserPush?.subscribed
+    ? {
+        label: 'Отключить',
+        onAction: disableDevicePush,
+      }
+    : canChangeDevicePush
+      ? {
+          label: 'Подключить',
+          onAction: connectDevicePush,
+        }
+      : null
 
   return (
     <ChatFullScreenPanel
@@ -59,7 +64,7 @@ export function UserNotificationsPage() {
             <NotificationSwitch
               checked={settings.newMessagesEnabled}
               disabled={state.isUpdating}
-              label="Новые сообщения"
+              label="Уведомления о новых сообщениях"
               onChange={(checked) => {
                 void updateSettings({ newMessagesEnabled: checked })
               }}
@@ -77,47 +82,21 @@ export function UserNotificationsPage() {
                 void updateSettings({ soundEnabled: checked })
               }}
             />
-            <NotificationSwitch
-              checked={effectiveSettings.pushEnabled}
-              description={pushStatus}
-              disabled={state.isUpdating || !canTogglePush}
-              label="Push-уведомления"
-              onChange={(checked) => {
-                if (checked) {
-                  void enablePushDefault()
-                  return
-                }
-
-                void updateSettings({ pushEnabled: false })
-              }}
-            />
           </NotificationCard>
 
-          {shouldShowDeviceConnect ? (
-            <button
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={state.isUpdating}
-              onClick={() => {
-                void enablePushDefault()
-              }}
-              type="button"
-            >
-              Подключить push на этом устройстве
-            </button>
-          ) : null}
-
-          {state.browserPush?.subscribed ? (
-            <button
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={state.isUpdating}
-              onClick={() => {
-                void disableDevicePush()
-              }}
-              type="button"
-            >
-              Отключить push на этом устройстве
-            </button>
-          ) : null}
+          <div className="mt-4">
+            <NotificationCard>
+              <NotificationActionRow
+                actionLabel={devicePushAction?.label}
+                description={pushStatus}
+                disabled={state.isUpdating}
+                label="Push на этом устройстве"
+                onAction={() => {
+                  void devicePushAction?.onAction()
+                }}
+              />
+            </NotificationCard>
+          </div>
         </div>
       ) : null}
     </ChatFullScreenPanel>

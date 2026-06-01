@@ -43,6 +43,13 @@
       "when": 1780315242453,
       "tag": "0005_dark_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780320233512,
+      "tag": "0006_remove_push_enabled_notification_preferences",
+      "breakpoints": true
     }
   ]
 }

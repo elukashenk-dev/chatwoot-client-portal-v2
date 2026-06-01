@@ -36,7 +36,6 @@ const threadParamsSchema = z
 const userNotificationSettingsPatchSchema = z
   .object({
     newMessagesEnabled: z.boolean().optional(),
-    pushEnabled: z.boolean().optional(),
     soundEnabled: z.boolean().optional(),
   })
   .strict()
@@ -44,7 +43,6 @@ const userNotificationSettingsPatchSchema = z
 const chatNotificationSettingsPatchSchema = z
   .object({
     newMessagesEnabled: z.boolean().nullable().optional(),
-    pushEnabled: z.boolean().nullable().optional(),
     soundEnabled: z.boolean().nullable().optional(),
   })
   .strict()
@@ -176,10 +174,6 @@ function toUserSettingsPatch(
     patch.newMessagesEnabled = input.newMessagesEnabled
   }
 
-  if (input.pushEnabled !== undefined) {
-    patch.pushEnabled = input.pushEnabled
-  }
-
   if (input.soundEnabled !== undefined) {
     patch.soundEnabled = input.soundEnabled
   }
@@ -194,10 +188,6 @@ function toChatOverridesPatch(
 
   if (input.newMessagesEnabled !== undefined) {
     patch.newMessagesEnabled = input.newMessagesEnabled
-  }
-
-  if (input.pushEnabled !== undefined) {
-    patch.pushEnabled = input.pushEnabled
   }
 
   if (input.soundEnabled !== undefined) {

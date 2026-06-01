@@ -26,17 +26,14 @@ const readyState = {
   settings: {
     effective: {
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     },
     global: {
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     },
     overrides: {
       newMessagesEnabled: null,
-      pushEnabled: null,
       soundEnabled: null,
     },
     threadId: 'group:155',
@@ -50,13 +47,12 @@ function renderPage(
     onResetThreadOverrides: () => void
     onUpdateSetting: (patch: {
       newMessagesEnabled?: boolean | null
-      pushEnabled?: boolean | null
       soundEnabled?: boolean | null
     }) => void
   }> = {},
 ) {
   const onResetThreadOverrides = callbacks.onResetThreadOverrides ?? vi.fn()
-  const onEnablePushForThread = vi.fn()
+  const onConnectDevicePush = vi.fn()
   const onUpdateSetting = callbacks.onUpdateSetting ?? vi.fn()
 
   render(
@@ -68,8 +64,8 @@ function renderPage(
         type: 'group',
       }}
       onBack={vi.fn()}
+      onConnectDevicePush={onConnectDevicePush}
       onDisableDevicePush={vi.fn()}
-      onEnablePushForThread={onEnablePushForThread}
       onResetThreadOverrides={onResetThreadOverrides}
       onRetry={vi.fn()}
       onUpdateSetting={onUpdateSetting}
@@ -81,7 +77,7 @@ function renderPage(
   )
 
   return {
-    onEnablePushForThread,
+    onConnectDevicePush,
     onResetThreadOverrides,
     onUpdateSetting,
   }
@@ -98,8 +94,12 @@ describe('ChatNotificationsPage', () => {
     expect(screen.getByText('Групповой чат')).toBeInTheDocument()
     expect(screen.getByText('Используются общие настройки')).toBeInTheDocument()
     expect(
-      screen.getByRole('switch', { name: /Новые сообщения/ }),
+      screen.getByRole('switch', { name: /Уведомления в этом чате/ }),
     ).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Push на этом устройстве')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('switch', { name: /Push-уведомления/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('patches only the changed chat setting', async () => {
@@ -124,7 +124,6 @@ describe('ChatNotificationsPage', () => {
           ...readyState.settings,
           overrides: {
             newMessagesEnabled: null,
-            pushEnabled: null,
             soundEnabled: false,
           },
         },
@@ -139,9 +138,9 @@ describe('ChatNotificationsPage', () => {
     expect(onResetThreadOverrides).toHaveBeenCalled()
   })
 
-  it('offers to connect this device when chat push is enabled elsewhere', async () => {
+  it('offers to connect this device when chat notifications are enabled', async () => {
     const user = userEvent.setup()
-    const { onEnablePushForThread } = renderPage({
+    const { onConnectDevicePush } = renderPage({
       browserPush: {
         configured: true,
         permission: 'granted',
@@ -162,21 +161,19 @@ describe('ChatNotificationsPage', () => {
         ...readyState.settings,
         effective: {
           ...readyState.settings.effective,
-          pushEnabled: true,
         },
         global: {
           ...readyState.settings.global,
-          pushEnabled: true,
         },
       },
     })
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Подключить push на этом устройстве',
+        name: 'Подключить',
       }),
     )
 
-    expect(onEnablePushForThread).toHaveBeenCalled()
+    expect(onConnectDevicePush).toHaveBeenCalled()
   })
 })

@@ -84,13 +84,11 @@ describe('UserNotificationsPage', () => {
 
     getUserNotificationSettingsMock.mockResolvedValueOnce({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     })
     loadBrowserPushSnapshotMock.mockResolvedValueOnce(browserPushSnapshot)
     updateUserNotificationSettingsMock.mockResolvedValueOnce({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: false,
     })
 
@@ -99,6 +97,10 @@ describe('UserNotificationsPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Уведомления' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Push на этом устройстве')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('switch', { name: /Push-уведомления/ }),
+    ).not.toBeInTheDocument()
     await user.click(screen.getByRole('switch', { name: /Звук/ }))
 
     await waitFor(() => {
@@ -108,12 +110,11 @@ describe('UserNotificationsPage', () => {
     })
   })
 
-  it('subscribes before enabling global push default', async () => {
+  it('connects push on this device without changing notification settings', async () => {
     const user = userEvent.setup()
 
     getUserNotificationSettingsMock.mockResolvedValueOnce({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     })
     loadBrowserPushSnapshotMock.mockResolvedValueOnce(browserPushSnapshot)
@@ -125,26 +126,19 @@ describe('UserNotificationsPage', () => {
       },
       result: 'subscribed',
     })
-    updateUserNotificationSettingsMock.mockResolvedValueOnce({
-      newMessagesEnabled: true,
-      pushEnabled: true,
-      soundEnabled: true,
-    })
-
     renderPage()
 
-    await screen.findByRole('switch', { name: /Push-уведомления/ })
-    await user.click(screen.getByRole('switch', { name: /Push-уведомления/ }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Подключить' }),
+    )
 
     await waitFor(() => {
       expect(ensureBrowserPushSubscriptionMock).toHaveBeenCalled()
-      expect(updateUserNotificationSettingsMock).toHaveBeenCalledWith({
-        pushEnabled: true,
-      })
     })
+    expect(updateUserNotificationSettingsMock).not.toHaveBeenCalled()
   })
 
-  it('disconnects push on this device without changing global push default', async () => {
+  it('disconnects push on this device without changing notification settings', async () => {
     const user = userEvent.setup()
     const subscribedBrowserPush = {
       ...browserPushSnapshot,
@@ -154,7 +148,6 @@ describe('UserNotificationsPage', () => {
 
     getUserNotificationSettingsMock.mockResolvedValueOnce({
       newMessagesEnabled: true,
-      pushEnabled: true,
       soundEnabled: true,
     })
     loadBrowserPushSnapshotMock.mockResolvedValueOnce(subscribedBrowserPush)
@@ -167,9 +160,7 @@ describe('UserNotificationsPage', () => {
     renderPage()
 
     await user.click(
-      await screen.findByRole('button', {
-        name: 'Отключить push на этом устройстве',
-      }),
+      await screen.findByRole('button', { name: 'Отключить' }),
     )
 
     await waitFor(() => {
@@ -178,13 +169,12 @@ describe('UserNotificationsPage', () => {
     expect(updateUserNotificationSettingsMock).not.toHaveBeenCalled()
   })
 
-  it('connects this device when global push is already enabled elsewhere', async () => {
+  it('keeps device push visible when notification sound is off', async () => {
     const user = userEvent.setup()
 
     getUserNotificationSettingsMock.mockResolvedValueOnce({
       newMessagesEnabled: true,
-      pushEnabled: true,
-      soundEnabled: true,
+      soundEnabled: false,
     })
     loadBrowserPushSnapshotMock.mockResolvedValueOnce(browserPushSnapshot)
     ensureBrowserPushSubscriptionMock.mockResolvedValueOnce({
@@ -199,9 +189,7 @@ describe('UserNotificationsPage', () => {
     renderPage()
 
     await user.click(
-      await screen.findByRole('button', {
-        name: 'Подключить push на этом устройстве',
-      }),
+      await screen.findByRole('button', { name: 'Подключить' }),
     )
 
     await waitFor(() => {

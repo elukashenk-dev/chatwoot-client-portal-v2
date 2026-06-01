@@ -55,6 +55,47 @@ export function NotificationSwitch({
   )
 }
 
+type NotificationActionRowProps = {
+  actionLabel?: string
+  description?: ReactNode
+  disabled?: boolean
+  label: string
+  onAction?: () => void
+}
+
+export function NotificationActionRow({
+  actionLabel,
+  description,
+  disabled = false,
+  label,
+  onAction,
+}: NotificationActionRowProps) {
+  return (
+    <div className="flex min-h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 last:border-b-0">
+      <span className="min-w-0">
+        <span className="block text-[14px] font-medium leading-5 text-slate-900">
+          {label}
+        </span>
+        {description ? (
+          <span className="mt-1 block text-[12px] leading-4 text-slate-500">
+            {description}
+          </span>
+        ) : null}
+      </span>
+      {actionLabel && onAction ? (
+        <button
+          className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+          onClick={onAction}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function NotificationCard({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white">

@@ -17,7 +17,6 @@ function createRepository() {
     findChatOverrides: vi.fn(async () => null),
     findUserSettings: vi.fn(async () => ({
       newMessagesEnabled: true,
-      pushEnabled: true,
       soundEnabled: true,
     })),
     listActivePushSubscriptions: vi.fn(async () => [
@@ -184,6 +183,7 @@ describe('chat notification push delivery service', () => {
         chatwootMessageId: 9001,
         notificationTag: 'portal-chat-message-default-9001',
         portalUserId: 7,
+        soundEnabled: true,
         tenantSlug: 'default',
         threadId: 'private:me',
         threadUnreadCount: 6,
@@ -281,7 +281,6 @@ describe('chat notification push delivery service', () => {
     const repository = createRepository()
     repository.findUserSettings.mockResolvedValueOnce({
       newMessagesEnabled: false,
-      pushEnabled: true,
       soundEnabled: true,
     })
     const transport = createTransport()
@@ -303,6 +302,35 @@ describe('chat notification push delivery service', () => {
       skipped: 1,
     })
     expect(transport.sendNotification).not.toHaveBeenCalled()
+  })
+
+  it('includes disabled sound state in the push payload', async () => {
+    const repository = createRepository()
+    repository.findUserSettings.mockResolvedValueOnce({
+      newMessagesEnabled: true,
+      soundEnabled: false,
+    })
+    const transport = createTransport()
+    const service = createChatNotificationPushDeliveryService({
+      chatThreadsService: createChatThreadsService(),
+      recipientResolver: createRecipientResolver(),
+      repository,
+      transport,
+    })
+
+    await expect(
+      service.deliverMessageCreated({
+        chatwootMessageId: 9001,
+        tenantSlug: 'default',
+        threadMapping,
+      }),
+    ).resolves.toMatchObject({
+      sent: 1,
+    })
+
+    expect(parseFirstNotificationPayload(transport)).toMatchObject({
+      soundEnabled: false,
+    })
   })
 
   it('skips delivery when the recipient no longer sees the thread', async () => {

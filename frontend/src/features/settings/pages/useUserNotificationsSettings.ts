@@ -107,7 +107,7 @@ export function useUserNotificationsSettings() {
     }
   }
 
-  async function enablePushDefault() {
+  async function connectDevicePush() {
     if (!state.browserPush) {
       return
     }
@@ -136,30 +136,11 @@ export function useUserNotificationsSettings() {
         return
       }
 
-      if (state.settings?.pushEnabled) {
-        setState((currentState) => ({
-          ...currentState,
-          browserPush: subscriptionResult.browserPush,
-          errorMessage: null,
-          isUpdating: false,
-        }))
-        return
-      }
-
-      const settings = await updateUserNotificationSettings({
-        pushEnabled: true,
-      })
-
-      if (!isMountedRef.current) {
-        return
-      }
-
       setState((currentState) => ({
         ...currentState,
         browserPush: subscriptionResult.browserPush,
         errorMessage: null,
         isUpdating: false,
-        settings,
       }))
     } catch (error) {
       if (!isMountedRef.current) {
@@ -223,8 +204,8 @@ export function useUserNotificationsSettings() {
   }, [])
 
   return {
+    connectDevicePush,
     disableDevicePush,
-    enablePushDefault,
     loadSettings,
     state,
     updateSettings,

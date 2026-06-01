@@ -35,10 +35,6 @@ function mergeChatOverrides({
       patch.newMessagesEnabled === undefined
         ? previous.newMessagesEnabled
         : patch.newMessagesEnabled,
-    pushEnabled:
-      patch.pushEnabled === undefined
-        ? previous.pushEnabled
-        : patch.pushEnabled,
     soundEnabled:
       patch.soundEnabled === undefined
         ? previous.soundEnabled

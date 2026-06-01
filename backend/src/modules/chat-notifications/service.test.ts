@@ -41,18 +41,15 @@ describe('chat notification settings', () => {
       resolveEffectiveChatNotificationSettings({
         global: {
           newMessagesEnabled: true,
-          pushEnabled: true,
           soundEnabled: true,
         },
         overrides: {
           newMessagesEnabled: null,
-          pushEnabled: null,
           soundEnabled: false,
         },
       }),
     ).toEqual({
       newMessagesEnabled: true,
-      pushEnabled: true,
       soundEnabled: false,
     })
   })
@@ -62,18 +59,15 @@ describe('chat notification settings', () => {
       resolveEffectiveChatNotificationSettings({
         global: {
           newMessagesEnabled: false,
-          pushEnabled: true,
           soundEnabled: true,
         },
         overrides: {
           newMessagesEnabled: true,
-          pushEnabled: true,
           soundEnabled: true,
         },
       }),
     ).toEqual({
       newMessagesEnabled: false,
-      pushEnabled: false,
       soundEnabled: false,
     })
   })
@@ -88,7 +82,6 @@ describe('chat notification settings', () => {
       service.getGlobalSettings({ portalUserId: 7 }),
     ).resolves.toEqual({
       newMessagesEnabled: true,
-      pushEnabled: false,
       soundEnabled: true,
     })
   })
@@ -97,7 +90,6 @@ describe('chat notification settings', () => {
     const repository = createRepository({
       findUserSettings: vi.fn(async () => ({
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       })),
     })
@@ -109,21 +101,19 @@ describe('chat notification settings', () => {
 
     await expect(
       service.updateGlobalSettings({
-        patch: { pushEnabled: true },
+        patch: { soundEnabled: false },
         portalUserId: 7,
       }),
     ).resolves.toEqual({
       newMessagesEnabled: true,
-      pushEnabled: true,
-      soundEnabled: true,
+      soundEnabled: false,
     })
     expect(repository.upsertUserSettings).toHaveBeenCalledWith({
       now: new Date('2026-05-23T00:00:00.000Z'),
-      patch: { pushEnabled: true },
+      patch: { soundEnabled: false },
       portalUserId: 7,
       previous: {
         newMessagesEnabled: true,
-        pushEnabled: false,
         soundEnabled: true,
       },
     })
@@ -135,7 +125,6 @@ describe('chat notification settings', () => {
       repository: createRepository({
         findUserSettings: vi.fn(async () => ({
           newMessagesEnabled: true,
-          pushEnabled: true,
           soundEnabled: false,
         })),
       }),
@@ -149,17 +138,14 @@ describe('chat notification settings', () => {
     ).resolves.toEqual({
       effective: {
         newMessagesEnabled: true,
-        pushEnabled: true,
         soundEnabled: false,
       },
       global: {
         newMessagesEnabled: true,
-        pushEnabled: true,
         soundEnabled: false,
       },
       overrides: {
         newMessagesEnabled: null,
-        pushEnabled: null,
         soundEnabled: null,
       },
       threadId: 'private:me',
@@ -170,12 +156,10 @@ describe('chat notification settings', () => {
     const repository = createRepository({
       findChatOverrides: vi.fn(async () => ({
         newMessagesEnabled: false,
-        pushEnabled: true,
         soundEnabled: false,
       })),
       findUserSettings: vi.fn(async () => ({
         newMessagesEnabled: true,
-        pushEnabled: true,
         soundEnabled: true,
       })),
     })
@@ -188,7 +172,6 @@ describe('chat notification settings', () => {
       service.updateSettings({
         patch: {
           newMessagesEnabled: null,
-          pushEnabled: null,
           soundEnabled: null,
         },
         portalUserId: 7,
@@ -197,12 +180,10 @@ describe('chat notification settings', () => {
     ).resolves.toMatchObject({
       effective: {
         newMessagesEnabled: true,
-        pushEnabled: true,
         soundEnabled: true,
       },
       overrides: {
         newMessagesEnabled: null,
-        pushEnabled: null,
         soundEnabled: null,
       },
     })

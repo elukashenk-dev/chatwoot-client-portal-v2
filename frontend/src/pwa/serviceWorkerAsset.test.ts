@@ -269,45 +269,6 @@ describe('service worker push notifications', () => {
     await clearAppBadgeDatabase()
   })
 
-  it('does not renotify per-message tagged notifications', async () => {
-    const { listeners, showNotification } = loadServiceWorker()
-    const pushListener = listeners.get('push')?.[0]
-
-    expect(pushListener).toBeDefined()
-
-    await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-message-default-9001',
-      tenantSlug: 'default',
-      type: 'chat_message',
-      url: '/',
-    })
-    await dispatchPush(pushListener!, {
-      notificationTag: 'portal-chat-message-default-9001',
-      tenantSlug: 'default',
-      type: 'chat_message',
-      url: '/',
-    })
-
-    expect(showNotification).toHaveBeenNthCalledWith(
-      1,
-      'Новое сообщение',
-      expect.objectContaining({
-        tag: 'portal-chat-message-default-9001',
-        timestamp: expect.any(Number),
-      }),
-    )
-    expect(showNotification).toHaveBeenNthCalledWith(
-      2,
-      'Новое сообщение',
-      expect.objectContaining({
-        tag: 'portal-chat-message-default-9001',
-        timestamp: expect.any(Number),
-      }),
-    )
-    expect(showNotification.mock.calls[0]?.[1]).not.toHaveProperty('renotify')
-    expect(showNotification.mock.calls[1]?.[1]).not.toHaveProperty('renotify')
-  })
-
   it('sets an exact app icon badge count when a system notification is shown', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners, showNotification } = loadServiceWorker({
@@ -556,6 +517,7 @@ describe('service worker push notifications', () => {
       notificationTag: 'portal-chat-message-default-9004',
       chatwootMessageId: 9004,
       portalUserId: 7,
+      soundEnabled: false,
       tenantSlug: 'default',
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',
@@ -570,6 +532,7 @@ describe('service worker push notifications', () => {
           chatwootMessageId: 9004,
           notificationTag: 'portal-chat-message-default-9004',
           portalUserId: 7,
+          soundEnabled: false,
           tenantSlug: 'default',
           threadId: 'group:155',
           threadTitle: 'ООО Уточки',

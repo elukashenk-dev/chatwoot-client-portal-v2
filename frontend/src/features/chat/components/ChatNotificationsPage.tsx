@@ -7,6 +7,7 @@ import {
 } from '../lib/notificationSettingsPresentation'
 import type { ChatThreadSummary } from '../types'
 import {
+  NotificationActionRow,
   NotificationCard,
   NotificationSwitch,
 } from './NotificationSettingsControls'
@@ -16,13 +17,12 @@ import type { ChatNotificationsPanelState } from '../pages/useChatNotificationsP
 type ChatNotificationsPageProps = {
   activeThread: ChatThreadSummary | null
   onBack: () => void
+  onConnectDevicePush: () => void
   onDisableDevicePush: () => void
-  onEnablePushForThread: () => void
   onRetry: () => void
   onResetThreadOverrides: () => void
   onUpdateSetting: (patch: {
     newMessagesEnabled?: boolean | null
-    pushEnabled?: boolean | null
     soundEnabled?: boolean | null
   }) => void
   state: ChatNotificationsPanelState
@@ -31,8 +31,8 @@ type ChatNotificationsPageProps = {
 export function ChatNotificationsPage({
   activeThread,
   onBack,
+  onConnectDevicePush,
   onDisableDevicePush,
-  onEnablePushForThread,
   onRetry,
   onResetThreadOverrides,
   onUpdateSetting,
@@ -41,14 +41,18 @@ export function ChatNotificationsPage({
   const settings = state.settings
   const isUnavailable = !settings
   const pushStatus = getBrowserPushStatusLabel(state.browserPush)
-  const canTogglePush =
-    Boolean(settings?.effective.newMessagesEnabled) &&
-    canEnableBrowserPush(state.browserPush)
-  const shouldShowDeviceConnect =
-    Boolean(settings?.effective.pushEnabled) &&
-    Boolean(state.browserPush) &&
-    !state.browserPush?.subscribed &&
-    canEnableBrowserPush(state.browserPush)
+  const canChangeDevicePush = canEnableBrowserPush(state.browserPush)
+  const devicePushAction = state.browserPush?.subscribed
+    ? {
+        label: 'Отключить',
+        onAction: onDisableDevicePush,
+      }
+    : canChangeDevicePush
+      ? {
+          label: 'Подключить',
+          onAction: onConnectDevicePush,
+        }
+      : null
   const globalMessagesDisabled = Boolean(
     settings && !settings.global.newMessagesEnabled,
   )
@@ -86,7 +90,7 @@ export function ChatNotificationsPage({
                 globalMessagesDisabled ? 'Отключено в общих настройках' : null
               }
               disabled={state.isUpdating || globalMessagesDisabled}
-              label="Новые сообщения"
+              label="Уведомления в этом чате"
               onChange={(checked) => {
                 onUpdateSetting({ newMessagesEnabled: checked })
               }}
@@ -106,21 +110,21 @@ export function ChatNotificationsPage({
                 onUpdateSetting({ soundEnabled: checked })
               }}
             />
-            <NotificationSwitch
-              checked={settings.effective.pushEnabled}
-              description={pushStatus}
-              disabled={state.isUpdating || !canTogglePush}
-              label="Push-уведомления"
-              onChange={(checked) => {
-                if (checked) {
-                  onEnablePushForThread()
-                  return
-                }
-
-                onUpdateSetting({ pushEnabled: false })
-              }}
-            />
           </NotificationCard>
+
+          <div className="mt-4">
+            <NotificationCard>
+              <NotificationActionRow
+                actionLabel={devicePushAction?.label}
+                description={pushStatus}
+                disabled={state.isUpdating}
+                label="Push на этом устройстве"
+                onAction={() => {
+                  devicePushAction?.onAction()
+                }}
+              />
+            </NotificationCard>
+          </div>
 
           {hasChatNotificationOverrides(settings.overrides) ? (
             <button
@@ -130,28 +134,6 @@ export function ChatNotificationsPage({
               type="button"
             >
               Сбросить к общим настройкам
-            </button>
-          ) : null}
-
-          {shouldShowDeviceConnect ? (
-            <button
-              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={state.isUpdating}
-              onClick={onEnablePushForThread}
-              type="button"
-            >
-              Подключить push на этом устройстве
-            </button>
-          ) : null}
-
-          {state.browserPush?.subscribed ? (
-            <button
-              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={state.isUpdating}
-              onClick={onDisableDevicePush}
-              type="button"
-            >
-              Отключить push на этом устройстве
             </button>
           ) : null}
         </div>

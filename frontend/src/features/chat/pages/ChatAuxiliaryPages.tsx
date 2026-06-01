@@ -57,11 +57,11 @@ export function ChatAuxiliaryPages({
         <ChatNotificationsPage
           activeThread={activeThread}
           onBack={chatNotificationsPanel.closeChatNotifications}
+          onConnectDevicePush={() => {
+            void chatNotificationsPanel.connectDevicePush()
+          }}
           onDisableDevicePush={() => {
             void chatNotificationsPanel.disableDevicePush()
-          }}
-          onEnablePushForThread={() => {
-            void chatNotificationsPanel.enablePushForThread()
           }}
           onResetThreadOverrides={() => {
             void chatNotificationsPanel.resetThreadOverrides()

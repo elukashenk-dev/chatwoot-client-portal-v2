@@ -57,6 +57,7 @@ function buildPayload({
   chatwootMessageId,
   notificationTag,
   portalUserId,
+  soundEnabled,
   tenantSlug,
   threadId,
   threadUnreadCount,
@@ -67,6 +68,7 @@ function buildPayload({
   chatwootMessageId: number
   notificationTag: string
   portalUserId: number
+  soundEnabled: boolean
   tenantSlug: string
   threadId: string
   threadUnreadCount: number
@@ -78,6 +80,7 @@ function buildPayload({
     chatwootMessageId,
     notificationTag,
     portalUserId,
+    soundEnabled,
     tenantSlug,
     threadId,
     threadUnreadCount,
@@ -147,7 +150,7 @@ export function createChatNotificationPushDeliveryService({
           overrides,
         })
 
-        if (!effective.newMessagesEnabled || !effective.pushEnabled) {
+        if (!effective.newMessagesEnabled) {
           summary.skipped += 1
           continue
         }
@@ -185,6 +188,7 @@ export function createChatNotificationPushDeliveryService({
             tenantSlug: input.tenantSlug,
           }),
           portalUserId: recipient.portalUserId,
+          soundEnabled: effective.soundEnabled,
           tenantSlug: input.tenantSlug,
           threadId: recipient.threadId,
           threadUnreadCount: visibleThread.unreadCount,

@@ -160,17 +160,14 @@ function createNotificationSettings(
   return {
     effective: {
       newMessagesEnabled: true,
-      pushEnabled: true,
       soundEnabled: true,
     },
     global: {
       newMessagesEnabled: true,
-      pushEnabled: true,
       soundEnabled: true,
     },
     overrides: {
       newMessagesEnabled: null,
-      pushEnabled: null,
       soundEnabled: null,
     },
     threadId,
@@ -181,6 +178,7 @@ function createOtherThreadPush(): PortalPushMessagePayload {
   return {
     chatwootMessageId: 9001,
     portalUserId: 7,
+    soundEnabled: true,
     tenantSlug: 'buhfirma',
     threadId: 'group:154',
     threadTitle: 'ООО "Ромашка"',
@@ -196,6 +194,7 @@ function createCurrentThreadPush(): PortalPushMessagePayload {
   return {
     chatwootMessageId: 9002,
     portalUserId: 7,
+    soundEnabled: true,
     tenantSlug: 'buhfirma',
     threadId: privateThread.id,
     threadTitle: privateThread.title,

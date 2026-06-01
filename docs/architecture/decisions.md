@@ -333,7 +333,10 @@
   Chatwoot `message_created` webhooks проходит через portal backend. Публичный
   push payload содержит безопасный chat-title context и routing metadata, но не
   содержит текст сообщения, автора, attachment names, Chatwoot IDs или internal
-  portal IDs в user-visible copy.
+  portal IDs в user-visible copy. User-facing settings используют
+  Telegram-like модель: новые сообщения вкл/выкл и звук вкл/выкл на глобальном
+  и chat-level уровне. Web Push - это per-device connection state, а не
+  отдельный user/chat behavior toggle.
 - граница:
   notification center, email/digest notifications и tenant-admin notification
   policy screen остаются отдельными future scopes.

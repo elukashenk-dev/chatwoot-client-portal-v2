@@ -277,10 +277,8 @@ export function useChatNotificationsPanel({
     }
   }
 
-  async function enablePushForThread() {
-    const threadId = selectedThreadId
-
-    if (!state.browserPush || !threadId) {
+  async function connectDevicePush() {
+    if (!state.browserPush) {
       return
     }
 
@@ -296,7 +294,7 @@ export function useChatNotificationsPanel({
         browserPush: state.browserPush,
       })
 
-      if (!isMountedRef.current || selectedThreadIdRef.current !== threadId) {
+      if (!isMountedRef.current) {
         return
       }
 
@@ -309,38 +307,14 @@ export function useChatNotificationsPanel({
         return
       }
 
-      if (
-        state.settingsThreadId === threadId &&
-        state.settings?.effective.pushEnabled
-      ) {
-        setState((currentState) => ({
-          ...currentState,
-          browserPush: subscriptionResult.browserPush,
-          errorMessage: null,
-          isUpdating: false,
-        }))
-        return
-      }
-
-      const settings = await updateChatNotificationSettings(threadId, {
-        pushEnabled: true,
-      })
-
-      if (!isMountedRef.current || selectedThreadIdRef.current !== threadId) {
-        return
-      }
-
-      markBrowserOnline()
       setState((currentState) => ({
         ...currentState,
         browserPush: subscriptionResult.browserPush,
         errorMessage: null,
         isUpdating: false,
-        settings,
-        settingsThreadId: threadId,
       }))
     } catch (error) {
-      if (!isMountedRef.current || selectedThreadIdRef.current !== threadId) {
+      if (!isMountedRef.current) {
         return
       }
 
@@ -400,13 +374,12 @@ export function useChatNotificationsPanel({
       }))
     },
     disableDevicePush,
-    enablePushForThread,
+    connectDevicePush,
     loadChatNotificationSettings,
     loadChatNotifications,
     resetThreadOverrides: () =>
       updateSettings({
         newMessagesEnabled: null,
-        pushEnabled: null,
         soundEnabled: null,
       }),
     retryChatNotifications: loadChatNotifications,

@@ -5,13 +5,11 @@ import type {
 
 export const defaultUserNotificationSettings: UserNotificationSettings = {
   newMessagesEnabled: true,
-  pushEnabled: false,
   soundEnabled: true,
 }
 
 export const emptyChatNotificationOverrides: ChatNotificationOverrides = {
   newMessagesEnabled: null,
-  pushEnabled: null,
   soundEnabled: null,
 }
 
@@ -27,8 +25,6 @@ export function resolveEffectiveChatNotificationSettings({
 
   return {
     newMessagesEnabled,
-    pushEnabled:
-      newMessagesEnabled && (overrides.pushEnabled ?? global.pushEnabled),
     soundEnabled:
       newMessagesEnabled && (overrides.soundEnabled ?? global.soundEnabled),
   }

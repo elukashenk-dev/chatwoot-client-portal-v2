@@ -1,6 +1,7 @@
 export type PortalPushMessagePayload = {
   chatwootMessageId: number | null
   portalUserId: number | null
+  soundEnabled: boolean
   tenantSlug: string | null
   threadId: string | null
   threadUnreadCount: number | null
@@ -48,6 +49,10 @@ export function registerPortalPushMessageListener(
       portalUserId: Number.isSafeInteger(event.data.payload?.portalUserId)
         ? event.data.payload.portalUserId
         : null,
+      soundEnabled:
+        typeof event.data.payload?.soundEnabled === 'boolean'
+          ? event.data.payload.soundEnabled
+          : true,
       tenantSlug:
         typeof event.data.payload?.tenantSlug === 'string'
           ? event.data.payload.tenantSlug

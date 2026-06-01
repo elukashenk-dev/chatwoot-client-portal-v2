@@ -1010,6 +1010,10 @@ async function handlePushEvent(event) {
     notificationOptions.timestamp = Date.now()
   }
 
+  if (payload.soundEnabled === false) {
+    notificationOptions.silent = true
+  }
+
   await self.registration.showNotification(
     notificationCopy.title,
     notificationOptions,
@@ -1366,6 +1370,7 @@ function readPushPayload(data) {
       chatwootMessageId: null,
       notificationTag: null,
       portalUserId: null,
+      soundEnabled: true,
       tenantSlug: null,
       threadId: null,
       threadUnreadCount: null,
@@ -1396,6 +1401,8 @@ function readPushPayload(data) {
       portalUserId: Number.isSafeInteger(payload.portalUserId)
         ? payload.portalUserId
         : null,
+      soundEnabled:
+        typeof payload.soundEnabled === 'boolean' ? payload.soundEnabled : true,
       tenantSlug:
         typeof payload.tenantSlug === 'string' ? payload.tenantSlug : null,
       threadId:
@@ -1427,6 +1434,7 @@ function readPushPayload(data) {
       chatwootMessageId: null,
       notificationTag: null,
       portalUserId: null,
+      soundEnabled: true,
       tenantSlug: null,
       threadId: null,
       threadUnreadCount: null,
