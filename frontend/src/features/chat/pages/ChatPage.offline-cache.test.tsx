@@ -12,7 +12,7 @@ import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { ChatPage } from './ChatPage'
-import type { ChatMessagesSnapshot } from '../types'
+import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -43,6 +43,16 @@ const cachedGroupThread = {
   title: 'Отключенная группа',
   type: 'group',
 } satisfies NonNullable<ChatMessagesSnapshot['activeThread']>
+
+const privateThreadList = {
+  ...privateThread,
+  unreadCount: 0,
+}
+
+const cachedGroupThreadList = {
+  ...cachedGroupThread,
+  unreadCount: 0,
+}
 
 const cachedAuthUser = {
   email: 'name@company.ru',
@@ -75,7 +85,8 @@ function createAuthenticatedUserResponse() {
 function createThreadsResponse() {
   return {
     activeThreadId: privateThread.id,
-    threads: [privateThread],
+    threads: [privateThreadList],
+    totalUnreadCount: 0,
   }
 }
 
@@ -145,12 +156,12 @@ function saveStartupChatFallback({
   savedAt = '2026-05-27T10:00:00.000Z',
   selectedThreadId = privateThread.id,
   snapshot = createReadySnapshot(),
-  threads = [privateThread],
+  threads = [privateThreadList],
 }: {
   savedAt?: string
   selectedThreadId?: string
   snapshot?: ChatMessagesSnapshot
-  threads?: NonNullable<ChatMessagesSnapshot['activeThread']>[]
+  threads?: ChatThreadListSummary[]
 } = {}) {
   window.localStorage.setItem(
     `portal.startup.chat:${window.location.host}:buhfirma:7`,
@@ -256,7 +267,7 @@ describe('ChatPage offline cache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     await offlineStore.saveMessageSnapshot({
@@ -306,7 +317,7 @@ describe('ChatPage offline cache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     await offlineStore.saveMessageSnapshot({
@@ -398,7 +409,7 @@ describe('ChatPage offline cache', () => {
           },
         ],
       }),
-      threads: [privateThread, cachedGroupThread],
+      threads: [privateThreadList, cachedGroupThreadList],
     })
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)
@@ -527,7 +538,7 @@ describe('ChatPage offline cache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     const staleIndexedDbSnapshot = createReadySnapshot({
@@ -656,7 +667,7 @@ describe('ChatPage offline cache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     await offlineStore.saveMessageSnapshot({
@@ -684,7 +695,13 @@ describe('ChatPage offline cache', () => {
 
         return createJsonResponse({
           activeThreadId: onlineThread.id,
-          threads: [onlineThread],
+          threads: [
+            {
+              ...onlineThread,
+              unreadCount: 0,
+            },
+          ],
+          totalUnreadCount: 0,
         })
       }
 
@@ -790,7 +807,7 @@ describe('ChatPage offline cache', () => {
         offlineStore.readThreadList('buhfirma', 7),
       ).resolves.toMatchObject({
         activeThreadId: privateThread.id,
-        threads: [privateThread],
+        threads: [privateThreadList],
       })
     })
     await waitFor(async () => {
@@ -844,7 +861,7 @@ describe('ChatPage offline cache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     vi.spyOn(offlineStore, 'readMessageSnapshot').mockReturnValueOnce(

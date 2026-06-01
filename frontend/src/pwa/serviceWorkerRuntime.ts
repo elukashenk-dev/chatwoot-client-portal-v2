@@ -26,6 +26,7 @@ export type BrowserPushSupportState =
 type UpdateListener = (snapshot: ServiceWorkerUpdateSnapshot) => void
 type AppBadgingNavigator = Navigator & {
   clearAppBadge?: () => Promise<void>
+  setAppBadge?: (contents?: number) => Promise<void>
 }
 
 export type { PortalPushMessagePayload } from './serviceWorkerPushMessages'
@@ -314,17 +315,53 @@ export async function clearAppIconBadge() {
   return didClearBrowserBadge || didRequestWorkerClear
 }
 
+export async function setAppIconBadgeCount(count: number) {
+  if (count <= 0) {
+    return clearAppIconBadge()
+  }
+
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const badgeCount = Math.max(1, Math.floor(count))
+  let didSetBrowserBadge = false
+  const setAppBadge = (navigator as AppBadgingNavigator).setAppBadge
+
+  if (typeof setAppBadge === 'function') {
+    try {
+      await setAppBadge.call(navigator, badgeCount)
+      didSetBrowserBadge = true
+    } catch {
+      didSetBrowserBadge = false
+    }
+  }
+
+  const didRequestWorkerSet = await postSetAppBadgeMessage(badgeCount)
+
+  return didSetBrowserBadge || didRequestWorkerSet
+}
+
 async function postClearAppBadgeMessage() {
+  return postAppBadgeMessage({
+    type: 'PORTAL_APP_BADGE_CLEAR',
+  })
+}
+
+async function postSetAppBadgeMessage(count: number) {
+  return postAppBadgeMessage({
+    count,
+    type: 'PORTAL_APP_BADGE_SET',
+  })
+}
+
+async function postAppBadgeMessage(message: Record<string, unknown>) {
   if (!('serviceWorker' in navigator)) {
     return false
   }
 
-  const clearMessage = {
-    type: 'PORTAL_APP_BADGE_CLEAR',
-  }
-
   if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage(clearMessage)
+    navigator.serviceWorker.controller.postMessage(message)
 
     return true
   }
@@ -333,9 +370,7 @@ async function postClearAppBadgeMessage() {
     const registration = await Promise.race([
       navigator.serviceWorker.ready,
       new Promise<null>((resolve) => {
-        window.setTimeout(() => {
-          resolve(null)
-        }, SERVICE_WORKER_READY_TIMEOUT_MS)
+        window.setTimeout(() => resolve(null), SERVICE_WORKER_READY_TIMEOUT_MS)
       }),
     ])
 
@@ -343,7 +378,7 @@ async function postClearAppBadgeMessage() {
       return false
     }
 
-    registration.active.postMessage(clearMessage)
+    registration.active.postMessage(message)
 
     return true
   } catch {

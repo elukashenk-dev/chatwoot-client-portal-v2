@@ -157,6 +157,11 @@
   красная точка для чатов с новыми сообщениями вне текущего активного чата,
   плюс минимальный локальный PWA app-icon badge count по показанным системным
   push на поддерживаемых платформах.
+- Непрочитанные сообщения чата переведены на backend-owned state:
+  `/api/chat/threads` возвращает per-thread и total unread только по доступным
+  threads, открытие snapshot чата сбрасывает unread этого thread, а frontend
+  показывает red dot на кнопке меню чатов, числовые badges внутри меню и
+  обновляет app badge точным backend count независимо от push-настроек.
 - Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
   runtime env подключен, settings UI и push subscription lifecycle доступны на
   реальном tenant.
@@ -213,6 +218,6 @@
 
 ## Recommended Next Step
 
-- Open `MT-9` with the `F-MT-004` Chatwoot permissions spike and define the
-  separate encrypted per-tenant admin-verification token boundary before adding
-  tenant admin or branding writes.
+- Deploy backend-owned chat unread state to production and run a real-device
+  PWA smoke for personal/group unread badges with push both enabled and
+  disabled.

@@ -62,7 +62,17 @@ function createAuthenticatedUserResponse() {
 function createThreadsResponse() {
   return {
     activeThreadId: privateThread.id,
-    threads: [privateThread, groupThread],
+    threads: [
+      {
+        ...privateThread,
+        unreadCount: 0,
+      },
+      {
+        ...groupThread,
+        unreadCount: 0,
+      },
+    ],
+    totalUnreadCount: 0,
   }
 }
 

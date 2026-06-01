@@ -1,4 +1,4 @@
-import type { ChatMessagesSnapshot, ChatThreadSummary } from '../types'
+import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../types'
 
 export type ChatReachability = 'connecting' | 'offline' | 'online'
 
@@ -14,7 +14,7 @@ export const ONLINE_CHAT_PAGE_CACHE_STATE = {
 
 type ChatPageThreadState = ChatPageCacheState & {
   selectedThreadId: string | null
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
 }
 
 export type ChatPageState =
@@ -47,4 +47,39 @@ export function readChatPageCacheState(
     cachedSavedAt: state.cachedSavedAt,
     isUsingCachedData: state.isUsingCachedData,
   }
+}
+
+export function clearThreadUnreadCount(
+  threads: ChatThreadListSummary[],
+  clearedThreadId: string,
+) {
+  return threads.map((thread) =>
+    thread.id === clearedThreadId ? { ...thread, unreadCount: 0 } : thread,
+  )
+}
+
+export function applyPushUnreadCounts(
+  threads: ChatThreadListSummary[],
+  payload: {
+    threadId: string | null
+    threadUnreadCount: number | null
+    totalUnreadCount: number | null
+  },
+) {
+  if (
+    !payload.threadId ||
+    payload.threadUnreadCount === null ||
+    payload.totalUnreadCount === null
+  ) {
+    return threads
+  }
+
+  return threads.map((thread) =>
+    thread.id === payload.threadId
+      ? {
+          ...thread,
+          unreadCount: payload.threadUnreadCount ?? thread.unreadCount,
+        }
+      : thread,
+  )
 }

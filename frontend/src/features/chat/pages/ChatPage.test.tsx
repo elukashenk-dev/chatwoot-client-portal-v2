@@ -24,7 +24,8 @@ const privateThread = {
 function createThreadsResponse(overrides: Record<string, unknown> = {}) {
   return {
     activeThreadId: privateThread.id,
-    threads: [privateThread],
+    threads: [{ ...privateThread, unreadCount: 0 }],
+    totalUnreadCount: 0,
     ...overrides,
   }
 }

@@ -14,7 +14,6 @@ import {
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
-import { clearAppIconBadge } from '../../../pwa/serviceWorkerRuntime'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { readStartupChatFallback } from '../../offline/startupCache'
 import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
@@ -27,6 +26,7 @@ import {
   type ChatReachability,
 } from './chatPageState'
 import { useChatAttachmentSend } from './useChatAttachmentSend'
+import { useChatForegroundUnreadRefresh } from './useChatForegroundUnreadRefresh'
 import { useChatOutboxDrainIntegration } from './useChatOutboxDrainIntegration'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
 import { useChatInfoPanel } from './useChatInfoPanel'
@@ -41,7 +41,6 @@ import { useChatSearchResultContext } from './useChatSearchResultContext'
 import { useChatSnapshotRefresh } from './useChatSnapshotRefresh'
 import { useChatSupportAvailability } from './useChatSupportAvailability'
 import { useChatThreadSelection } from './useChatThreadSelection'
-import { useChatUnreadThreadMarkers } from './useChatUnreadThreadMarkers'
 import { useOfflineChatCachePersistence } from './useOfflineChatCachePersistence'
 import { useOptimisticTextSend } from './useOptimisticTextSend'
 
@@ -89,12 +88,12 @@ export function ChatPage() {
     markOnline: markBrowserOnline,
     navigatorHintIsOnline,
   } = useBrowserConnectionState()
-  const [chatReachability, setChatReachability] =
-    useState<ChatReachability>(() =>
+  const [chatReachability, setChatReachability] = useState<ChatReachability>(
+    () =>
       typeof navigator === 'undefined' || navigator.onLine
         ? 'connecting'
         : 'offline',
-    )
+  )
   const isRealtimeSupported = typeof EventSource !== 'undefined'
   const canUseOfflineTextQueue = useOfflineTextQueueAvailability({
     sessionSource,
@@ -248,22 +247,12 @@ export function ChatPage() {
 
   useEffect(() => {
     isMountedRef.current = true
-    void clearAppIconBadge()
     const bootstrapTimerId = window.setTimeout(() => {
       void loadInitialChatRef.current()
     }, 0)
 
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible') {
-        void clearAppIconBadge()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
     return () => {
       window.clearTimeout(bootstrapTimerId)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
       isMountedRef.current = false
     }
   }, [])
@@ -294,6 +283,14 @@ export function ChatPage() {
     setPageState,
     tenantSlug,
     userId,
+  })
+  const { handleOtherThreadPush } = useChatForegroundUnreadRefresh({
+    handleConnectionUnavailableError,
+    handleUnauthorizedChatError,
+    isBrowserOnline: canUseBackend,
+    isMountedRef,
+    markBrowserOnline: markChatOnline,
+    setPageState,
   })
 
   const snapshot = pageState.snapshot
@@ -376,15 +373,15 @@ export function ChatPage() {
     pageState.status === 'ready' &&
     pageState.snapshot.result === 'ready' &&
     pageState.snapshot.activeThread?.id === pageState.selectedThreadId
-  const { markUnreadThread, unreadThreadIds } =
-    useChatUnreadThreadMarkers(pageState)
   const selectedThreadNotificationSettings = useChatPageNotifications({
     canLoadNotificationSettings:
-      canUseBackend && pageState.status === 'ready' && !pageState.isUsingCachedData,
+      canUseBackend &&
+      pageState.status === 'ready' &&
+      !pageState.isUsingCachedData,
     canSuppressActiveThreadPush,
     chatNotificationsPanel,
     messages: visibleMessages,
-    onOtherThreadPush: markUnreadThread,
+    onOtherThreadPush: handleOtherThreadPush,
     refreshChatSnapshot,
     selectedThreadId: pageState.selectedThreadId,
   })
@@ -438,7 +435,6 @@ export function ChatPage() {
         supportAvailability={supportAvailability.state.availability}
         threadNotificationSettings={selectedThreadNotificationSettings}
         threads={pageState.threads}
-        unreadThreadIds={unreadThreadIds}
       />
       <ChatRuntimeAlerts
         isChatAvailable={shouldRenderTranscript}

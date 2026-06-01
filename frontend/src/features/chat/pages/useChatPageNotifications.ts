@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import { registerPortalPushMessageListener } from '../../../pwa/serviceWorkerRuntime'
 import type { ChatMessage, ChatNotificationSettings } from '../types'
+import type { PortalPushMessagePayload } from '../../../pwa/serviceWorkerRuntime'
 import { useChatNotificationSound } from './useChatNotificationSound'
 import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 
@@ -10,7 +11,7 @@ type UseChatPageNotificationsOptions = {
   canLoadNotificationSettings: boolean
   chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   messages: ChatMessage[]
-  onOtherThreadPush: (threadId: string) => void
+  onOtherThreadPush: (payload: PortalPushMessagePayload) => void
   refreshChatSnapshot: () => Promise<void>
   selectedThreadId: string | null
 }
@@ -41,7 +42,7 @@ export function useChatPageNotifications({
           }
 
           if (payload.threadId !== selectedThreadId) {
-            onOtherThreadPush(payload.threadId)
+            onOtherThreadPush(payload)
             return false
           }
 

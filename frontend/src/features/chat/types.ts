@@ -92,9 +92,14 @@ export type ChatThreadSummary =
       type: 'group'
     }
 
+export type ChatThreadListSummary = ChatThreadSummary & {
+  unreadCount: number
+}
+
 export type ChatThreadsResponse = {
   activeThreadId: typeof PRIVATE_CHAT_THREAD_ID
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
+  totalUnreadCount: number
 }
 
 export type ChatThreadInfoParticipant = {
@@ -159,6 +164,12 @@ export type ChatMessagesSnapshot = {
   nextOlderCursor: number | null
   reason: ChatThreadReason
   result: ChatThreadResult
+  unread?: ChatUnreadSummary
+}
+
+export type ChatUnreadSummary = {
+  clearedThreadId: string
+  totalUnreadCount: number
 }
 
 export type ChatMediaItem = {

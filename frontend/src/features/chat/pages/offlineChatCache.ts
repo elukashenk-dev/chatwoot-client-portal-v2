@@ -4,7 +4,7 @@ import {
   type OfflineChatThreadListRecord,
 } from '../../offline/types'
 import { isFirstConversationBootstrapReady } from '../lib/chatSnapshot'
-import type { ChatMessagesSnapshot, ChatThreadSummary } from '../types'
+import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../types'
 
 type OfflineChatScope = {
   tenantSlug: string
@@ -14,7 +14,7 @@ type OfflineChatScope = {
 type SaveOfflineThreadListInput = OfflineChatScope & {
   activeThreadId: string
   savedAt?: string
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
 }
 
 type SaveOfflineMessageSnapshotInput = OfflineChatScope & {
@@ -34,14 +34,14 @@ type ReadOfflineOlderMessagePageInput = OfflineChatScope & {
 
 type ConsumePushStaleMarkersInput = OfflineChatScope & {
   refreshThread: (threadId: string) => Promise<ChatMessagesSnapshot>
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
 }
 
 export type OfflineChatFallback = {
   cachedSavedAt: string
   selectedThreadId: string
   snapshot: ChatMessagesSnapshot
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
 }
 
 export type PushStaleThreadRefresh = {

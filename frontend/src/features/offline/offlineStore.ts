@@ -134,7 +134,19 @@ function isThreadListRecord(
     isString(value.savedAt) &&
     isString(value.tenantSlug) &&
     Array.isArray(value.threads) &&
+    value.threads.every(isChatThreadListSummary) &&
     isNumber(value.userId)
+  )
+}
+
+function isChatThreadListSummary(value: unknown) {
+  return (
+    isObject(value) &&
+    isString(value.id) &&
+    isString(value.subtitle) &&
+    isString(value.title) &&
+    (value.type === 'private' || value.type === 'group') &&
+    isNumber(value.unreadCount)
   )
 }
 

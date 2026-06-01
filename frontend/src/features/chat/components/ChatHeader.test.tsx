@@ -10,7 +10,7 @@ import { renderWithRouter } from '../../../test/renderWithRouter'
 import type {
   ChatNotificationSettings,
   ChatSupportAvailabilityResponse,
-  ChatThreadSummary,
+  ChatThreadListSummary,
 } from '../types'
 import { ChatHeader } from './ChatHeader'
 
@@ -20,7 +20,8 @@ const privateThread = {
   subtitle: 'Вы и поддержка',
   title: 'Личный чат',
   type: 'private',
-} satisfies ChatThreadSummary
+  unreadCount: 0,
+} satisfies ChatThreadListSummary
 
 const notificationSettings: ChatNotificationSettings = {
   effective: {

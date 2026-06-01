@@ -3,8 +3,10 @@ import { useEffect } from 'react'
 
 import { openChatRealtime } from '../api/chatRealtimeClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
+import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
+  clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
 
@@ -32,7 +34,17 @@ export function useChatRealtimeConnection({
           return
         }
 
+        if (
+          realtimeSnapshot.activeThread !== null &&
+          realtimeSnapshot.activeThread.id !== threadId
+        ) {
+          return
+        }
+
         markBrowserOnline()
+        if (realtimeSnapshot.unread) {
+          void setAppIconBadgeCount(realtimeSnapshot.unread.totalUnreadCount)
+        }
         setPageState((currentState) => {
           if (
             currentState.selectedThreadId !== threadId ||
@@ -47,7 +59,12 @@ export function useChatRealtimeConnection({
             snapshot: realtimeSnapshot,
             selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
-            threads: currentState.threads,
+            threads: realtimeSnapshot.unread
+              ? clearThreadUnreadCount(
+                  currentState.threads,
+                  realtimeSnapshot.unread.clearedThreadId,
+                )
+              : currentState.threads,
           }
         })
       },
@@ -56,7 +73,17 @@ export function useChatRealtimeConnection({
           return
         }
 
+        if (
+          realtimeSnapshot.activeThread !== null &&
+          realtimeSnapshot.activeThread.id !== threadId
+        ) {
+          return
+        }
+
         markBrowserOnline()
+        if (realtimeSnapshot.unread) {
+          void setAppIconBadgeCount(realtimeSnapshot.unread.totalUnreadCount)
+        }
         setPageState((currentState) => {
           if (
             currentState.status !== 'ready' ||
@@ -75,7 +102,12 @@ export function useChatRealtimeConnection({
             }),
             selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
-            threads: currentState.threads,
+            threads: realtimeSnapshot.unread
+              ? clearThreadUnreadCount(
+                  currentState.threads,
+                  realtimeSnapshot.unread.clearedThreadId,
+                )
+              : currentState.threads,
           }
         })
       },

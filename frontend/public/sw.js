@@ -40,7 +40,6 @@ const APP_SHELL_URLS = [
 ]
 const PUSH_READY_CLIENT_IDS = new Set()
 const PUSH_READY_CLIENT_THREAD_IDS = new Map()
-let fallbackAppBadgeCount = 0
 let appBadgeMutationQueue = Promise.resolve()
 
 self.addEventListener('install', (event) => {
@@ -84,6 +83,15 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'PORTAL_APP_BADGE_CLEAR') {
     const resetPromise = resetAppIconBadge()
     event.waitUntil?.(resetPromise)
+    return
+  }
+
+  if (event.data?.type === 'PORTAL_APP_BADGE_SET') {
+    const badgeCount = Number.isSafeInteger(event.data.count)
+      ? event.data.count
+      : 0
+    const setPromise = setExactAppIconBadge(badgeCount)
+    event.waitUntil?.(setPromise)
     return
   }
 
@@ -200,7 +208,8 @@ function isTenantDynamicMetadataRequest(pathname) {
 
 async function handleNavigationRequest(request) {
   const cache = await caches.open(STATIC_CACHE)
-  const cachedResponse = (await cache.match(request)) || (await cache.match('/'))
+  const cachedResponse =
+    (await cache.match(request)) || (await cache.match('/'))
 
   if (cachedResponse) {
     void refreshNavigationCache(request, cache)
@@ -1004,23 +1013,38 @@ async function handlePushEvent(event) {
     notificationCopy.title,
     notificationOptions,
   )
-  await setAppIconBadge()
+  await setExactAppIconBadge(payload.totalUnreadCount)
   await staleMarkerPersistence
 }
 
-async function setAppIconBadge() {
+async function setExactAppIconBadge(count) {
   if (
-    typeof navigator === 'undefined' ||
-    typeof navigator.setAppBadge !== 'function'
+    typeof count !== 'number' ||
+    !Number.isFinite(count) ||
+    count < 0 ||
+    typeof navigator === 'undefined'
   ) {
     return
   }
 
   try {
     await runAppBadgeMutation(async () => {
-      const badgeCount = await incrementAppBadgeCount()
+      const badgeCount = Math.min(Math.floor(count), APP_BADGE_MAX_COUNT)
 
-      await navigator.setAppBadge(badgeCount)
+      try {
+        await writePersistedAppBadgeCount(badgeCount)
+      } catch {
+        // Platform badge support is still useful when fallback storage is unavailable.
+      }
+
+      if (badgeCount > 0 && typeof navigator.setAppBadge === 'function') {
+        await navigator.setAppBadge(badgeCount)
+        return
+      }
+
+      if (badgeCount === 0 && typeof navigator.clearAppBadge === 'function') {
+        await navigator.clearAppBadge()
+      }
     })
   } catch {
     // App badge support and permission behavior differs by browser/platform.
@@ -1031,8 +1055,6 @@ async function resetAppIconBadge() {
   // The foreground window clears the platform badge. The worker resets only
   // its persisted fallback count so controlled pages can keep SW messaging on.
   await runAppBadgeMutation(async () => {
-    fallbackAppBadgeCount = 0
-
     try {
       await writePersistedAppBadgeCount(0)
     } catch {
@@ -1046,29 +1068,6 @@ function runAppBadgeMutation(operation) {
   appBadgeMutationQueue = queuedMutation.catch(() => {})
 
   return queuedMutation
-}
-
-async function incrementAppBadgeCount() {
-  const currentCount = await readAppBadgeCount()
-  const nextCount = Math.min(currentCount + 1, APP_BADGE_MAX_COUNT)
-
-  fallbackAppBadgeCount = nextCount
-
-  try {
-    await writePersistedAppBadgeCount(nextCount)
-  } catch {
-    // Keep the in-memory count when persistent storage is unavailable.
-  }
-
-  return nextCount
-}
-
-async function readAppBadgeCount() {
-  try {
-    return await readPersistedAppBadgeCount()
-  } catch {
-    return fallbackAppBadgeCount
-  }
 }
 
 function openAppBadgeDatabase() {
@@ -1091,32 +1090,6 @@ function openAppBadgeDatabase() {
     }
     request.onerror = () => {
       reject(request.error ?? new Error('Failed to open app badge database.'))
-    }
-  })
-}
-
-async function readPersistedAppBadgeCount() {
-  const database = await openAppBadgeDatabase()
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(APP_BADGE_STORE_NAME, 'readonly')
-    const request = transaction
-      .objectStore(APP_BADGE_STORE_NAME)
-      .get(APP_BADGE_COUNT_KEY)
-
-    request.onsuccess = () => {
-      const value = request.result
-
-      resolve(Number.isSafeInteger(value) && value > 0 ? value : 0)
-    }
-    request.onerror = () => {
-      reject(request.error ?? new Error('Failed to read app badge count.'))
-    }
-    transaction.oncomplete = () => {
-      database.close()
-    }
-    transaction.onabort = () => {
-      database.close()
     }
   })
 }
@@ -1328,8 +1301,10 @@ function readPushPayload(data) {
       portalUserId: null,
       tenantSlug: null,
       threadId: null,
+      threadUnreadCount: null,
       threadTitle: null,
       threadType: null,
+      totalUnreadCount: null,
       type: 'chat_message',
       url: '/',
     }
@@ -1360,6 +1335,9 @@ function readPushPayload(data) {
         typeof payload.threadId === 'string' && payload.threadId.length > 0
           ? payload.threadId
           : null,
+      threadUnreadCount: Number.isSafeInteger(payload.threadUnreadCount)
+        ? payload.threadUnreadCount
+        : null,
       threadTitle:
         typeof payload.threadTitle === 'string' &&
         payload.threadTitle.trim().length > 0
@@ -1369,6 +1347,9 @@ function readPushPayload(data) {
         payload.threadType === 'private' || payload.threadType === 'group'
           ? payload.threadType
           : null,
+      totalUnreadCount: Number.isSafeInteger(payload.totalUnreadCount)
+        ? payload.totalUnreadCount
+        : null,
       type: payload.type === 'chat_message' ? 'chat_message' : 'chat_message',
       url: normalizeNotificationUrl(
         typeof payload.url === 'string' ? payload.url : '/',
@@ -1381,8 +1362,10 @@ function readPushPayload(data) {
       portalUserId: null,
       tenantSlug: null,
       threadId: null,
+      threadUnreadCount: null,
       threadTitle: null,
       threadType: null,
+      totalUnreadCount: null,
       type: 'chat_message',
       url: '/',
     }

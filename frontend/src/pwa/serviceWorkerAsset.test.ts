@@ -293,7 +293,7 @@ describe('service worker push notifications', () => {
     )
   })
 
-  it('sets an app icon badge when a system notification is shown', async () => {
+  it('sets an exact app icon badge count when a system notification is shown', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners, showNotification } = loadServiceWorker({
       appBadge: {
@@ -307,6 +307,7 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9010',
       tenantSlug: 'default',
+      totalUnreadCount: 1,
       type: 'chat_message',
       url: '/',
     })
@@ -315,7 +316,7 @@ describe('service worker push notifications', () => {
     expect(setAppBadge).toHaveBeenCalledWith(1)
   })
 
-  it('increments the local app icon badge count for each shown system notification', async () => {
+  it('uses the exact unread count from each shown system notification', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
@@ -329,12 +330,14 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9010',
       tenantSlug: 'default',
+      totalUnreadCount: 1,
       type: 'chat_message',
       url: '/',
     })
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9011',
       tenantSlug: 'default',
+      totalUnreadCount: 2,
       type: 'chat_message',
       url: '/',
     })
@@ -343,7 +346,7 @@ describe('service worker push notifications', () => {
     expect(setAppBadge).toHaveBeenNthCalledWith(2, 2)
   })
 
-  it('serializes concurrent app icon badge count increments', async () => {
+  it('serializes concurrent exact app icon badge count writes', async () => {
     const setAppBadge = vi.fn(async () => undefined)
     const { listeners } = loadServiceWorker({
       appBadge: {
@@ -358,12 +361,14 @@ describe('service worker push notifications', () => {
       dispatchPush(pushListener!, {
         notificationTag: 'portal-chat-message-default-9014',
         tenantSlug: 'default',
+        totalUnreadCount: 1,
         type: 'chat_message',
         url: '/',
       }),
       dispatchPush(pushListener!, {
         notificationTag: 'portal-chat-message-default-9015',
         tenantSlug: 'default',
+        totalUnreadCount: 2,
         type: 'chat_message',
         url: '/',
       }),
@@ -389,6 +394,7 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9012',
       tenantSlug: 'default',
+      totalUnreadCount: 1,
       type: 'chat_message',
       url: '/',
     })
@@ -403,6 +409,7 @@ describe('service worker push notifications', () => {
     await dispatchPush(pushListener!, {
       notificationTag: 'portal-chat-message-default-9013',
       tenantSlug: 'default',
+      totalUnreadCount: 1,
       type: 'chat_message',
       url: '/',
     })
@@ -502,6 +509,8 @@ describe('service worker push notifications', () => {
           threadId: 'group:155',
           threadTitle: 'ООО Уточки',
           threadType: 'group',
+          threadUnreadCount: null,
+          totalUnreadCount: null,
           type: 'chat_message',
           url: '/',
         },

@@ -1,6 +1,6 @@
 import type { AuthenticatedPortalUser } from '../auth/types'
 import { isFirstConversationBootstrapReady } from '../chat/lib/chatSnapshot'
-import type { ChatMessagesSnapshot, ChatThreadSummary } from '../chat/types'
+import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../chat/types'
 import type { PublicTenantContext } from '../tenant/api/tenantClient'
 import type {
   OfflineAuthSnapshotRecord,
@@ -37,14 +37,11 @@ type StartupChatRecord = {
   selectedThreadId: string
   snapshot: ChatMessagesSnapshot
   tenantSlug: string
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
   userId: number
 }
 
-type SaveStartupChatFallbackInput = Omit<
-  StartupChatRecord,
-  'cachedSavedAt'
-> & {
+type SaveStartupChatFallbackInput = Omit<StartupChatRecord, 'cachedSavedAt'> & {
   cachedSavedAt?: string
 }
 
@@ -52,7 +49,7 @@ export type StartupChatFallback = {
   cachedSavedAt: string
   selectedThreadId: string
   snapshot: ChatMessagesSnapshot
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -130,19 +127,23 @@ function isStartupAuthRecord(value: unknown): value is StartupAuthRecord {
   )
 }
 
-function isChatThreadSummary(value: unknown): value is ChatThreadSummary {
+function isChatThreadListSummary(
+  value: unknown,
+): value is ChatThreadListSummary {
   return (
     isObject(value) &&
     isString(value.id) &&
+    isString(value.subtitle) &&
     isString(value.title) &&
-    isString(value.type)
+    (value.type === 'private' || value.type === 'group') &&
+    isNumber(value.unreadCount)
   )
 }
 
-function isChatMessagesSnapshot(
-  value: unknown,
-): value is ChatMessagesSnapshot {
-  return isObject(value) && isString(value.result) && Array.isArray(value.messages)
+function isChatMessagesSnapshot(value: unknown): value is ChatMessagesSnapshot {
+  return (
+    isObject(value) && isString(value.result) && Array.isArray(value.messages)
+  )
 }
 
 function isStartupChatRecord(value: unknown): value is StartupChatRecord {
@@ -154,7 +155,7 @@ function isStartupChatRecord(value: unknown): value is StartupChatRecord {
     isChatMessagesSnapshot(value.snapshot) &&
     isString(value.tenantSlug) &&
     Array.isArray(value.threads) &&
-    value.threads.every(isChatThreadSummary) &&
+    value.threads.every(isChatThreadListSummary) &&
     isNumber(value.userId)
   )
 }

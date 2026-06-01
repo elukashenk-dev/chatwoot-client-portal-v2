@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { ChatMessagesSnapshot, ChatThreadSummary } from '../chat/types'
+import type {
+  ChatMessagesSnapshot,
+  ChatThreadListSummary,
+  ChatThreadSummary,
+} from '../chat/types'
 import {
   clearOfflineDatabaseForTests,
   openOfflineDatabase,
@@ -125,20 +129,10 @@ describe('offline store database', () => {
     await offlineStore.saveMessagePage(record)
 
     await expect(
-      offlineStore.readMessagePage(
-        'buhfirma',
-        7,
-        'private:me',
-        'before:101',
-      ),
+      offlineStore.readMessagePage('buhfirma', 7, 'private:me', 'before:101'),
     ).resolves.toEqual(record)
     await expect(
-      offlineStore.readMessagePage(
-        'buhfirma',
-        8,
-        'private:me',
-        'before:101',
-      ),
+      offlineStore.readMessagePage('buhfirma', 8, 'private:me', 'before:101'),
     ).resolves.toBeNull()
   })
 
@@ -386,7 +380,12 @@ describe('offline store database', () => {
       activeThreadId: 'private:me',
       savedAt: '2026-05-27T10:01:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [activeThread],
+      threads: [
+        {
+          ...activeThread,
+          unreadCount: 0,
+        } satisfies ChatThreadListSummary,
+      ],
       userId: 7,
     })
     await offlineStore.saveMessageSnapshot({

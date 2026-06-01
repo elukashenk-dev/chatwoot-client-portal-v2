@@ -1,4 +1,4 @@
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -10,9 +10,15 @@ import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { getChatNotificationsStatus } from '../lib/notificationSettingsPresentation'
 import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
+import {
+  formatUnreadCount,
+  hasUnreadOutsideSelectedThread,
+  readThreadUnreadCount,
+} from '../lib/chatUnreadPresentation'
 import type {
   ChatNotificationSettings,
   ChatSupportAvailabilityResponse,
+  ChatThreadListSummary,
   ChatThreadSummary,
 } from '../types'
 import {
@@ -20,6 +26,7 @@ import {
   type ChatHeaderPresenceTone,
 } from './ChatHeaderPresence'
 import { ChatAvatar } from './ChatAvatar'
+import { ChatMenuItem } from './ChatMenuItem'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   BellIcon,
@@ -45,11 +52,8 @@ type ChatHeaderProps = {
   selectedThreadId: string | null
   supportAvailability: ChatSupportAvailabilityResponse | null
   threadNotificationSettings: ChatNotificationSettings | null
-  threads: ChatThreadSummary[]
-  unreadThreadIds?: ReadonlySet<string>
+  threads: ChatThreadListSummary[]
 }
-
-const EMPTY_UNREAD_THREAD_IDS = new Set<string>()
 
 function focusElement(element: HTMLElement | null) {
   if (element && document.contains(element)) {
@@ -69,7 +73,6 @@ export function ChatHeader({
   supportAvailability,
   threadNotificationSettings,
   threads,
-  unreadThreadIds = EMPTY_UNREAD_THREAD_IDS,
 }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
@@ -226,6 +229,10 @@ export function ChatHeader({
   const threadSubtitle = activeThread?.subtitle ?? supportTeamName
   const availableThreads =
     threads.length > 0 ? threads : activeThread ? [activeThread] : []
+  const hasOtherThreadUnread = hasUnreadOutsideSelectedThread(
+    availableThreads,
+    selectedThreadId,
+  )
   const tenantMonogram = tenant
     ? createTenantMonogram(tenant.displayName)
     : 'ЛК'
@@ -253,6 +260,13 @@ export function ChatHeader({
             type="button"
           >
             <MenuIcon className="h-6 w-6" />
+            {hasOtherThreadUnread ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_2px_rgb(239_68_68_/_0.18)]"
+                data-testid="chat-menu-unread-dot"
+              />
+            ) : null}
           </button>
 
           {isNavMenuOpen ? (
@@ -268,7 +282,8 @@ export function ChatHeader({
               </div>
               {availableThreads.map((thread) => {
                 const isSelected = thread.id === selectedThreadId
-                const hasUnread = unreadThreadIds.has(thread.id)
+                const unreadCount = readThreadUnreadCount(thread)
+                const hasUnread = unreadCount > 0
 
                 return (
                   <button
@@ -293,17 +308,16 @@ export function ChatHeader({
                     ) : (
                       <span className="h-4 w-4 shrink-0" />
                     )}
-                    <span className="flex min-w-0 flex-1 items-start gap-1.5">
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
                       <span className="min-w-0 truncate">{thread.title}</span>
                       {hasUnread ? (
                         <span
-                          aria-hidden="true"
-                          className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_0_2px_rgb(239_68_68_/_0.14)]"
-                          data-testid={`thread-unread-dot-${thread.id}`}
-                        />
-                      ) : null}
-                      {hasUnread ? (
-                        <span className="sr-only">, есть новое сообщение</span>
+                          aria-label={`${thread.title}, ${unreadCount} непрочитанных`}
+                          className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
+                          data-testid={`thread-unread-badge-${thread.id}`}
+                        >
+                          {formatUnreadCount(unreadCount)}
+                        </span>
                       ) : null}
                     </span>
                   </button>
@@ -442,51 +456,5 @@ export function ChatHeader({
         </div>
       ) : null}
     </header>
-  )
-}
-
-function ChatMenuItem({
-  destructive = false,
-  disabled = false,
-  icon,
-  label,
-  onSelect,
-  secondaryLabel,
-}: {
-  destructive?: boolean
-  disabled?: boolean
-  icon: ReactNode
-  label: string
-  onSelect?: () => void
-  secondaryLabel?: string
-}) {
-  const isDisabled = disabled || !onSelect
-
-  return (
-    <button
-      aria-disabled={isDisabled ? true : undefined}
-      className={[
-        'flex min-h-10 w-full items-center gap-3 whitespace-nowrap border-b border-slate-200/80 px-1 py-2 text-left text-[15px] leading-5 transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60',
-        destructive
-          ? 'text-red-600 hover:text-red-700'
-          : 'text-slate-700 hover:text-brand-800',
-      ].join(' ')}
-      disabled={isDisabled}
-      onClick={onSelect}
-      role="menuitem"
-      type="button"
-    >
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block">{label}</span>
-        {secondaryLabel ? (
-          <span className="mt-0.5 block truncate text-[11px] leading-4 text-slate-400">
-            {secondaryLabel}
-          </span>
-        ) : null}
-      </span>
-    </button>
   )
 }

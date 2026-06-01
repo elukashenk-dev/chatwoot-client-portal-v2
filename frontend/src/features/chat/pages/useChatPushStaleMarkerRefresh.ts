@@ -1,8 +1,10 @@
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 
 import { getChatMessages } from '../api/chatClient'
+import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
+  clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
 import { consumePushStaleMarkersForKnownThreads } from './offlineChatCache'
@@ -46,16 +48,26 @@ export function useChatPushStaleMarkerRefresh({
           return
         }
 
+        const selectedRefresh = refreshedThreads.find(
+          (refresh) => refresh.threadId === pageState.selectedThreadId,
+        )
+
+        if (!selectedRefresh) {
+          return
+        }
+
+        if (selectedRefresh.snapshot.unread) {
+          void setAppIconBadgeCount(
+            selectedRefresh.snapshot.unread.totalUnreadCount,
+          )
+        }
+
         setPageState((currentState) => {
           if (currentState.status !== 'ready') {
             return currentState
           }
 
-          const selectedRefresh = refreshedThreads.find(
-            (refresh) => refresh.threadId === currentState.selectedThreadId,
-          )
-
-          if (!selectedRefresh) {
+          if (selectedRefresh.threadId !== currentState.selectedThreadId) {
             return currentState
           }
 
@@ -64,7 +76,12 @@ export function useChatPushStaleMarkerRefresh({
             selectedThreadId: currentState.selectedThreadId,
             snapshot: selectedRefresh.snapshot,
             status: 'ready',
-            threads: currentState.threads,
+            threads: selectedRefresh.snapshot.unread
+              ? clearThreadUnreadCount(
+                  currentState.threads,
+                  selectedRefresh.snapshot.unread.clearedThreadId,
+                )
+              : currentState.threads,
           }
         })
       })

@@ -8,8 +8,10 @@ import {
 import { getChatMessages } from '../api/chatClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
+import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
+  clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
 
@@ -43,6 +45,9 @@ export function useChatSnapshotRefresh({
       }
 
       markBrowserOnline()
+      if (latestSnapshot.unread) {
+        void setAppIconBadgeCount(latestSnapshot.unread.totalUnreadCount)
+      }
       setPageState((currentState) => {
         if (currentState.selectedThreadId !== threadId) {
           return currentState
@@ -61,7 +66,12 @@ export function useChatSnapshotRefresh({
             }),
             selectedThreadId: currentState.selectedThreadId,
             status: 'ready',
-            threads: currentState.threads,
+            threads: latestSnapshot.unread
+              ? clearThreadUnreadCount(
+                  currentState.threads,
+                  latestSnapshot.unread.clearedThreadId,
+                )
+              : currentState.threads,
           }
         }
 
@@ -70,7 +80,12 @@ export function useChatSnapshotRefresh({
           snapshot: latestSnapshot,
           selectedThreadId: currentState.selectedThreadId,
           status: 'ready',
-          threads: currentState.threads,
+          threads: latestSnapshot.unread
+            ? clearThreadUnreadCount(
+                currentState.threads,
+                latestSnapshot.unread.clearedThreadId,
+              )
+            : currentState.threads,
         }
       })
     } catch (error) {

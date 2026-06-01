@@ -23,10 +23,10 @@ type RegisterPortalPushMessageListener = (
 ) => () => void
 
 const serviceWorkerRuntimeMock = vi.hoisted(() => ({
-  clearAppIconBadge: vi.fn(async () => false),
   registerPortalPushMessageListener: vi.fn<RegisterPortalPushMessageListener>(
     () => vi.fn(),
   ),
+  setAppIconBadgeCount: vi.fn(async () => false),
 }))
 
 vi.mock('../../../pwa/serviceWorkerRuntime', async (importOriginal) => {
@@ -35,9 +35,9 @@ vi.mock('../../../pwa/serviceWorkerRuntime', async (importOriginal) => {
 
   return {
     ...actual,
-    clearAppIconBadge: serviceWorkerRuntimeMock.clearAppIconBadge,
     registerPortalPushMessageListener:
       serviceWorkerRuntimeMock.registerPortalPushMessageListener,
+    setAppIconBadgeCount: serviceWorkerRuntimeMock.setAppIconBadgeCount,
   }
 })
 
@@ -96,7 +96,17 @@ function createAuthenticatedUserResponse() {
 function createThreadsResponse() {
   return {
     activeThreadId: privateThread.id,
-    threads: [privateThread, groupThread],
+    threads: [
+      {
+        ...privateThread,
+        unreadCount: 0,
+      },
+      {
+        ...groupThread,
+        unreadCount: 0,
+      },
+    ],
+    totalUnreadCount: 0,
   }
 }
 
@@ -175,6 +185,8 @@ function createOtherThreadPush(): PortalPushMessagePayload {
     threadId: 'group:154',
     threadTitle: 'ООО "Ромашка"',
     threadType: 'group',
+    threadUnreadCount: 1,
+    totalUnreadCount: 1,
     type: 'chat_message',
     url: '/',
   }
@@ -188,6 +200,8 @@ function createCurrentThreadPush(): PortalPushMessagePayload {
     threadId: privateThread.id,
     threadTitle: privateThread.title,
     threadType: privateThread.type,
+    threadUnreadCount: 1,
+    totalUnreadCount: 1,
     type: 'chat_message',
     url: '/',
   }
@@ -289,8 +303,8 @@ describe('ChatPage unread indicators', () => {
   const scrollIntoView = vi.fn()
 
   beforeEach(() => {
-    serviceWorkerRuntimeMock.clearAppIconBadge.mockClear()
     serviceWorkerRuntimeMock.registerPortalPushMessageListener.mockClear()
+    serviceWorkerRuntimeMock.setAppIconBadgeCount.mockClear()
     vi.spyOn(globalThis, 'fetch').mockImplementation(fetchMock)
     Element.prototype.scrollIntoView = scrollIntoView
   })
@@ -301,7 +315,7 @@ describe('ChatPage unread indicators', () => {
     scrollIntoView.mockReset()
   })
 
-  it('clears the app icon badge when the chat page opens and resumes', async () => {
+  it('sets the app icon badge from the server unread total when the chat page opens', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)
 
@@ -336,16 +350,9 @@ describe('ChatPage unread indicators', () => {
       CHAT_PAGE_LOAD_TIMEOUT,
     )
 
-    expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
-
-    serviceWorkerRuntimeMock.clearAppIconBadge.mockClear()
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      value: 'visible',
-    })
-    document.dispatchEvent(new Event('visibilitychange'))
-
-    expect(serviceWorkerRuntimeMock.clearAppIconBadge).toHaveBeenCalledTimes(1)
+    expect(serviceWorkerRuntimeMock.setAppIconBadgeCount).toHaveBeenCalledWith(
+      0,
+    )
   })
 
   it('consumes stored push stale markers by refreshing known threads after chat startup', async () => {
@@ -420,7 +427,7 @@ describe('ChatPage unread indicators', () => {
     ).resolves.toEqual([])
   })
 
-  it('shows and clears a local unread dot for another chat push', async () => {
+  it('shows and clears server unread indicators for another chat push', async () => {
     const groupSnapshot = createReadySnapshot({
       activeThread: groupThread,
       messages: [
@@ -432,6 +439,10 @@ describe('ChatPage unread indicators', () => {
           id: 714,
         }),
       ],
+      unread: {
+        clearedThreadId: 'group:154',
+        totalUnreadCount: 0,
+      },
     })
 
     fetchMock.mockImplementation(async (input) => {
@@ -486,11 +497,12 @@ describe('ChatPage unread indicators', () => {
 
     expect(
       screen.getByRole('menuitem', {
-        name: /ООО "Ромашка".*есть новое сообщение/i,
+        name: /ООО "Ромашка".*1 непрочитанных/i,
       }),
     ).toBeInTheDocument()
+    expect(screen.getByTestId('chat-menu-unread-dot')).toBeInTheDocument()
     expect(
-      screen.getByTestId('thread-unread-dot-group:154'),
+      screen.getByTestId('thread-unread-badge-group:154'),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('menuitem', { name: /ООО "Ромашка"/i }))
@@ -505,8 +517,9 @@ describe('ChatPage unread indicators', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
     expect(
-      screen.queryByTestId('thread-unread-dot-group:154'),
+      screen.queryByTestId('thread-unread-badge-group:154'),
     ).not.toBeInTheDocument()
+    expect(screen.queryByTestId('chat-menu-unread-dot')).not.toBeInTheDocument()
   })
 
   it('keeps the unread dot when the marked chat fails to open', async () => {
@@ -568,7 +581,7 @@ describe('ChatPage unread indicators', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
     expect(
-      screen.getByTestId('thread-unread-dot-group:154'),
+      screen.getByTestId('thread-unread-badge-group:154'),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('menuitem', { name: /ООО "Ромашка"/i }))
@@ -583,7 +596,7 @@ describe('ChatPage unread indicators', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
     expect(
-      screen.getByTestId('thread-unread-dot-group:154'),
+      screen.getByTestId('thread-unread-badge-group:154'),
     ).toBeInTheDocument()
   })
 

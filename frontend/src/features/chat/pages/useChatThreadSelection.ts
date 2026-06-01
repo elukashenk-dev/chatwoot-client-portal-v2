@@ -9,6 +9,7 @@ import {
 import { getChatMessages, getChatThreads } from '../api/chatClient'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
+import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import {
   BOOT_LOCAL_CACHE_READ_DEADLINE_MS,
   BOOT_REQUEST_TIMEOUT_MS,
@@ -17,6 +18,7 @@ import {
 } from '../../offline/bootCoordinator'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
+  clearThreadUnreadCount,
   readChatPageCacheState,
   type ChatPageState,
   type ChatReachability,
@@ -192,6 +194,12 @@ export function useChatThreadSelection({
         signal: requestTimeout.signal,
         threadId: selectedThreadId,
       })
+      const threads = snapshot.unread
+        ? clearThreadUnreadCount(
+            threadsResponse.threads,
+            snapshot.unread.clearedThreadId,
+          )
+        : threadsResponse.threads
       cacheFallbackAllowed = false
       requestTimeout.cancel()
 
@@ -201,12 +209,15 @@ export function useChatThreadSelection({
 
       markBrowserOnline()
       setChatReachability('online')
+      void setAppIconBadgeCount(
+        snapshot.unread?.totalUnreadCount ?? threadsResponse.totalUnreadCount,
+      )
       setPageState({
         ...ONLINE_CHAT_PAGE_CACHE_STATE,
         selectedThreadId,
         snapshot,
         status: 'ready',
-        threads: threadsResponse.threads,
+        threads,
       })
     } catch (error) {
       requestTimeout.cancel()
@@ -318,12 +329,24 @@ export function useChatThreadSelection({
 
         markBrowserOnline()
         setChatReachability('online')
+        void setAppIconBadgeCount(
+          snapshot.unread?.totalUnreadCount ??
+            pageStateRef.current.threads.reduce(
+              (total, thread) => total + thread.unreadCount,
+              0,
+            ),
+        )
         setPageState((currentState) => ({
           ...ONLINE_CHAT_PAGE_CACHE_STATE,
           selectedThreadId: threadId,
           snapshot,
           status: 'ready',
-          threads: currentState.threads,
+          threads: snapshot.unread
+            ? clearThreadUnreadCount(
+                currentState.threads,
+                snapshot.unread.clearedThreadId,
+              )
+            : currentState.threads,
         }))
       } catch (error) {
         requestTimeout.cancel()

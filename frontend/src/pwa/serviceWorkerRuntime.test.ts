@@ -375,6 +375,8 @@ describe('serviceWorkerRuntime', () => {
       threadId: 'group:155',
       threadTitle: 'ООО Уточки',
       threadType: 'group',
+      threadUnreadCount: null,
+      totalUnreadCount: null,
       type: 'chat_message',
       url: '/',
     })

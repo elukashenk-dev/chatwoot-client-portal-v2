@@ -1,7 +1,7 @@
 import type {
   ChatMessageReplyPreview,
   ChatMessagesSnapshot,
-  ChatThreadSummary,
+  ChatThreadListSummary,
 } from '../chat/types'
 import type { AuthenticatedPortalUser } from '../auth/types'
 import type { PublicTenantContext } from '../tenant/api/tenantClient'
@@ -48,7 +48,7 @@ export type OfflineChatThreadListRecord = {
   activeThreadId: string
   savedAt: string
   tenantSlug: string
-  threads: ChatThreadSummary[]
+  threads: ChatThreadListSummary[]
   userId: number
 }
 

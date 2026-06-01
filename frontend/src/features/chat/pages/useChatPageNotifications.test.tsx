@@ -65,11 +65,19 @@ describe('useChatPageNotifications', () => {
         threadId: 'private:me',
         threadTitle: 'Личный чат',
         threadType: 'private',
+        threadUnreadCount: 1,
+        totalUnreadCount: 1,
         type: 'chat_message',
         url: '/',
       }),
     ).toBe(false)
-    expect(onOtherThreadPush).toHaveBeenCalledWith('private:me')
+    expect(onOtherThreadPush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: 'private:me',
+        threadUnreadCount: 1,
+        totalUnreadCount: 1,
+      }),
+    )
     expect(refreshChatSnapshot).not.toHaveBeenCalled()
 
     expect(
@@ -80,6 +88,8 @@ describe('useChatPageNotifications', () => {
         threadId: 'group:155',
         threadTitle: 'ООО Уточки',
         threadType: 'group',
+        threadUnreadCount: 1,
+        totalUnreadCount: 1,
         type: 'chat_message',
         url: '/',
       }),

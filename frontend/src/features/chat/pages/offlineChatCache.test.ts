@@ -28,6 +28,16 @@ const groupThread = {
   type: 'group',
 } as const
 
+const privateThreadList = {
+  ...privateThread,
+  unreadCount: 0,
+}
+
+const groupThreadList = {
+  ...groupThread,
+  unreadCount: 0,
+}
+
 function createReadySnapshot(
   overrides: Partial<ChatMessagesSnapshot> = {},
 ): ChatMessagesSnapshot {
@@ -68,7 +78,7 @@ describe('offlineChatCache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread, groupThread],
+      threads: [privateThreadList, groupThreadList],
       userId: 7,
     }
 
@@ -93,7 +103,7 @@ describe('offlineChatCache', () => {
           activeThreadId: 'group:999',
           savedAt: '2026-05-27T10:00:00.000Z',
           tenantSlug: 'buhfirma',
-          threads: [privateThread],
+          threads: [privateThreadList],
           userId: 7,
         },
         preferredThreadId: null,
@@ -163,7 +173,7 @@ describe('offlineChatCache', () => {
       activeThreadId: privateThread.id,
       savedAt: '2026-05-27T10:00:00.000Z',
       tenantSlug: 'buhfirma',
-      threads: [privateThread],
+      threads: [privateThreadList],
       userId: 7,
     })
     await offlineStore.saveMessageSnapshot({
@@ -306,7 +316,7 @@ describe('offlineChatCache', () => {
       consumePushStaleMarkersForKnownThreads({
         refreshThread,
         tenantSlug: 'buhfirma',
-        threads: [privateThread],
+        threads: [privateThreadList],
         userId: 7,
       }),
     ).resolves.toEqual([
@@ -347,7 +357,7 @@ describe('offlineChatCache', () => {
       consumePushStaleMarkersForKnownThreads({
         refreshThread,
         tenantSlug: 'buhfirma',
-        threads: [privateThread],
+        threads: [privateThreadList],
         userId: 7,
       }),
     ).rejects.toThrow('network unavailable')
@@ -375,7 +385,7 @@ describe('offlineChatCache', () => {
       consumePushStaleMarkersForKnownThreads({
         refreshThread,
         tenantSlug: 'buhfirma',
-        threads: [privateThread],
+        threads: [privateThreadList],
         userId: 7,
       }),
     ).resolves.toEqual([])

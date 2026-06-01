@@ -3,8 +3,10 @@ export type PortalPushMessagePayload = {
   portalUserId: number | null
   tenantSlug: string | null
   threadId: string | null
+  threadUnreadCount: number | null
   threadTitle: string | null
   threadType: 'group' | 'private' | null
+  totalUnreadCount: number | null
   type: 'chat_message'
   url: string
 }
@@ -55,6 +57,11 @@ export function registerPortalPushMessageListener(
         event.data.payload.threadId.length > 0
           ? event.data.payload.threadId
           : null,
+      threadUnreadCount: Number.isSafeInteger(
+        event.data.payload?.threadUnreadCount,
+      )
+        ? event.data.payload.threadUnreadCount
+        : null,
       threadTitle:
         typeof event.data.payload?.threadTitle === 'string' &&
         event.data.payload.threadTitle.trim().length > 0
@@ -65,6 +72,11 @@ export function registerPortalPushMessageListener(
         event.data.payload?.threadType === 'group'
           ? event.data.payload.threadType
           : null,
+      totalUnreadCount: Number.isSafeInteger(
+        event.data.payload?.totalUnreadCount,
+      )
+        ? event.data.payload.totalUnreadCount
+        : null,
       type: 'chat_message',
       url:
         typeof event.data.payload?.url === 'string'
