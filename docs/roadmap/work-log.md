@@ -214,6 +214,9 @@
 - Offline chat cache расширен до older message pages в `portal-offline`
   schema v2, чтобы сохраненная история могла открываться глубже без сети в
   текущем tenant/user/thread scope.
+- Root code-health gate восстановлен без роста allowlist: oversized chat,
+  offline и PWA модули разнесены на smaller helpers/test-support files, поэтому
+  root `pnpm lint` снова проходит code-health и package eslint.
 
 ## Current Baseline
 

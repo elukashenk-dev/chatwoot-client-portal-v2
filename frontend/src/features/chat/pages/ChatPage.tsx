@@ -8,23 +8,20 @@ import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
-import {
-  isFirstConversationBootstrapReady,
-  toComposerReplyTarget,
-} from '../lib/chatSnapshot'
+import { toComposerReplyTarget } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import {
   buildChatThreadPath,
   readChatThreadIdFromSearch,
 } from '../lib/chatThreadRoute'
-import { mergeOptimisticTextMessages } from '../lib/optimisticTextMessages'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { readStartupChatFallback } from '../../offline/startupCache'
 import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import { ChatComposerDock } from './ChatComposerDock'
+import { createChatHistoryFragmentControls } from './chatHistoryFragmentControls'
 import {
   INITIAL_CHAT_PAGE_STATE,
   type ChatPageState,
@@ -38,7 +35,10 @@ import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatNotificationsPanel } from './useChatNotificationsPanel'
 import { useChatOlderMessages } from './useChatOlderMessages'
-import { useChatPageNotifications } from './useChatPageNotifications'
+import {
+  getChatPageRealtimeThreadId,
+  useChatPageViewState,
+} from './useChatPageViewState'
 import { useChatPushStaleMarkerRefresh } from './useChatPushStaleMarkerRefresh'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
@@ -84,12 +84,10 @@ export function ChatPage() {
     (value: number) => value + 1,
     0,
   )
-  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(
-    null,
-  )
+  const [historyErrorMessage, setHistoryErrorMessage] =
+    useState<string | null>(null)
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
-  const [replyTarget, setReplyTarget] =
-    useState<MessageComposerReplyTarget | null>(null)
+  const [replyTarget, setReplyTarget] = useState<MessageComposerReplyTarget | null>(null)
   const {
     isOnline: isBrowserOnline,
     markOffline: markBrowserOffline,
@@ -108,9 +106,7 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
-  const connectionStatus: ChatReachability = isBrowserOnline
-    ? chatReachability
-    : 'offline'
+  const connectionStatus: ChatReachability = isBrowserOnline ? chatReachability : 'offline'
   const canUseBackend = connectionStatus === 'online'
 
   const markChatOnline = useCallback(() => {
@@ -301,21 +297,7 @@ export function ChatPage() {
     markBrowserOnline: markChatOnline,
     setPageState,
   })
-
-  const snapshot = pageState.snapshot
-  const selectedThread =
-    pageState.threads.find(
-      (thread) => thread.id === pageState.selectedThreadId,
-    ) ?? null
-  const headerThread = snapshot?.activeThread ?? selectedThread
-  const realtimeThreadId =
-    pageState.status === 'ready' &&
-    !pageState.isUsingCachedData &&
-    pageState.snapshot.result === 'ready' &&
-    pageState.snapshot.activeThread &&
-    pageState.selectedThreadId
-      ? pageState.selectedThreadId
-      : null
+  const realtimeThreadId = getChatPageRealtimeThreadId(pageState)
 
   useChatRealtimeConnection({
     isMountedRef,
@@ -324,17 +306,6 @@ export function ChatPage() {
     threadId: realtimeThreadId,
   })
 
-  const isReady = snapshot?.result === 'ready' && Boolean(snapshot.activeThread)
-  const canSend =
-    tenantSlug !== null &&
-    userId !== null &&
-    pageState.status === 'ready' &&
-    Boolean(pageState.selectedThreadId) &&
-    (isReady || isFirstConversationBootstrapReady(pageState.snapshot))
-  const shouldRenderTranscript =
-    pageState.status === 'ready' &&
-    (pageState.snapshot.result === 'ready' ||
-      isFirstConversationBootstrapReady(pageState.snapshot))
   const {
     handleOutboxSendSucceeded,
     handleRetryTextMessage,
@@ -357,7 +328,6 @@ export function ChatPage() {
     threadId: pageState.selectedThreadId ?? PRIVATE_CHAT_THREAD_ID,
     userId,
   })
-
   useChatOutboxDrainIntegration({
     drainRequestSignal: outboxDrainRequestSignal,
     handleOutboxSendSucceeded,
@@ -369,34 +339,27 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
-  const visibleMessages =
-    pageState.status === 'ready' && pageState.selectedThreadId
-      ? mergeOptimisticTextMessages({
-          messages: pageState.snapshot.messages,
-          optimisticTextSends,
-          threadId: pageState.selectedThreadId,
-        })
-      : []
-  const canSuppressActiveThreadPush =
-    historyFragment === null &&
-    pageState.status === 'ready' &&
-    pageState.snapshot.result === 'ready' &&
-    pageState.snapshot.activeThread?.id === pageState.selectedThreadId
-  const selectedThreadNotificationSettings = useChatPageNotifications({
-    canLoadNotificationSettings:
-      canUseBackend &&
-      pageState.status === 'ready' &&
-      !pageState.isUsingCachedData,
-    canSuppressActiveThreadPush,
+  const {
+    canSend,
+    headerThread,
+    queuedSendCount,
+    selectedThreadNotificationSettings,
+    shouldRenderNotReadyState,
+    shouldRenderTranscript,
+    snapshot,
+    visibleMessages,
+  } = useChatPageViewState({
+    canUseBackend,
     chatNotificationsPanel,
-    messages: visibleMessages,
-    onOtherThreadPush: handleOtherThreadPush,
+    handleOtherThreadPush,
+    historyFragmentIsOpen: historyFragment !== null,
+    optimisticTextSends,
+    pageState,
     refreshChatSnapshot,
-    selectedThreadId: pageState.selectedThreadId,
+    tenantSlug,
+    userId,
   })
-  const transcriptMessages = historyFragment
-    ? historyFragment.messages
-    : visibleMessages
+  const transcriptMessages = historyFragment?.messages ?? visibleMessages
   const handleCloseChatSearch = useCallback(() => {
     clearSearchResultOpenError()
     chatSearchPanel.closeChatSearch()
@@ -416,6 +379,13 @@ export function ChatPage() {
   })
   const transcriptHighlightedMessageId =
     historyFragment?.targetMessageId ?? highlightedMessageId
+  const historyFragmentControls = createChatHistoryFragmentControls({
+    clearHighlightedMessage,
+    clearHistoryFragment,
+    historyFragment,
+    loadHistoryFragmentContext,
+    setForceScrollToBottomSignal,
+  })
 
   useEffect(() => {
     if (
@@ -472,13 +442,7 @@ export function ChatPage() {
         isChatAvailable={shouldRenderTranscript}
         connectionStatus={connectionStatus}
         isRealtimeSupported={isRealtimeSupported}
-        queuedSendCount={
-          optimisticTextSends.filter(
-            (send) =>
-              send.threadId === pageState.selectedThreadId &&
-              send.status !== 'failed',
-          ).length
-        }
+        queuedSendCount={queuedSendCount}
         resyncStatus={resyncStatus}
       />
 
@@ -493,15 +457,13 @@ export function ChatPage() {
           />
         ) : null}
 
-        {pageState.status === 'ready' &&
-        pageState.snapshot.result !== 'ready' &&
-        !isFirstConversationBootstrapReady(pageState.snapshot) ? (
+        {shouldRenderNotReadyState ? (
           <ChatNotReadyState
-            isUnavailable={pageState.snapshot.result === 'unavailable'}
+            isUnavailable={snapshot?.result === 'unavailable'}
             onRetry={() => {
               void loadInitialChat()
             }}
-            reason={pageState.snapshot.reason}
+            reason={snapshot?.reason ?? 'chatwoot_unavailable'}
           />
         ) : null}
 
@@ -509,31 +471,10 @@ export function ChatPage() {
           <ChatTranscript
             forceScrollToBottomSignal={forceScrollToBottomSignal}
             hasMoreOlder={
-              historyFragment ? false : pageState.snapshot.hasMoreOlder
+              historyFragment ? false : (snapshot?.hasMoreOlder ?? false)
             }
             highlightedMessageId={transcriptHighlightedMessageId}
-            historyFragmentControls={
-              historyFragment
-                ? {
-                    errorMessage: historyFragment.errorMessage,
-                    hasMoreEarlier: historyFragment.hasMoreEarlier,
-                    hasMoreLater: historyFragment.hasMoreLater,
-                    isLoadingEarlier: historyFragment.isLoadingEarlier,
-                    isLoadingLater: historyFragment.isLoadingLater,
-                    onLoadEarlier: () => {
-                      void loadHistoryFragmentContext('earlier')
-                    },
-                    onLoadLater: () => {
-                      void loadHistoryFragmentContext('later')
-                    },
-                    onReturnToLatest: () => {
-                      clearHistoryFragment()
-                      clearHighlightedMessage()
-                      setForceScrollToBottomSignal((signal) => signal + 1)
-                    },
-                  }
-                : null
-            }
+            historyFragmentControls={historyFragmentControls}
             historyErrorMessage={historyErrorMessage}
             isConnectionAvailable={canUseBackend}
             isLoadingOlder={isLoadingOlder}
