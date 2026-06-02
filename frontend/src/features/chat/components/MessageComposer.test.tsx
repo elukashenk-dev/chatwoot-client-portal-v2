@@ -212,6 +212,55 @@ describe('MessageComposer', () => {
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
   })
 
+  it('blocks too-long text sends and tells the user how much to shorten', () => {
+    const onSend = vi.fn(async () => true)
+    const tooLongMessage = 'а'.repeat(4005)
+
+    render(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={vi.fn()}
+        onSend={onSend}
+        onSendAttachment={vi.fn(async () => true)}
+        replyTarget={null}
+      />,
+    )
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const sendButton = screen.getByRole('button', { name: 'Отправить' })
+
+    fireEvent.change(textarea, { target: { value: tooLongMessage } })
+
+    expect(textarea).toHaveValue(tooLongMessage)
+    expect(textarea).toHaveAttribute('aria-invalid', 'true')
+    expect(sendButton).toBeDisabled()
+    expect(
+      screen.getByText(
+        'Сообщение слишком длинное: 4005 из 4000. Сократите на 5 символов или отправьте частями.',
+      ),
+    ).toBeInTheDocument()
+
+    fireEvent.click(sendButton)
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('shows a character counter near the text message limit without blocking valid text', () => {
+    const nearLimitMessage = 'а'.repeat(3800)
+
+    renderComposer()
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    fireEvent.change(textarea, { target: { value: nearLimitMessage } })
+
+    expect(screen.getByText('3800/4000')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
+    expect(textarea).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
   it('keeps draft and reply target when text outbox write fails', async () => {
     const user = userEvent.setup()
     const onSend = vi.fn(async () => false)
@@ -236,7 +285,10 @@ describe('MessageComposer', () => {
       />,
     )
 
-    await user.type(screen.getByRole('textbox', { name: 'Сообщение' }), 'Offline')
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Offline',
+    )
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
 
     expect(screen.getByRole('textbox', { name: 'Сообщение' })).toHaveValue(
@@ -426,7 +478,9 @@ describe('MessageComposer', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Отправить голосовое' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Отправить голосовое' }),
+    )
 
     expect(onSendAttachment).not.toHaveBeenCalled()
     expect(screen.getByText('Голосом нельзя без сети')).toBeInTheDocument()

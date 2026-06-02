@@ -1,8 +1,10 @@
 import type { RefObject } from 'react'
 
 type ComposerTextareaProps = {
+  ariaDescribedBy?: string
   disabled: boolean
   draft: string
+  isInvalid?: boolean
   onDraftChange: (value: string) => void
   onSubmit: () => void
   placeholder: string
@@ -10,8 +12,10 @@ type ComposerTextareaProps = {
 }
 
 export function ComposerTextarea({
+  ariaDescribedBy,
   disabled,
   draft,
+  isInvalid = false,
   onDraftChange,
   onSubmit,
   placeholder,
@@ -19,6 +23,8 @@ export function ComposerTextarea({
 }: ComposerTextareaProps) {
   return (
     <textarea
+      aria-describedby={ariaDescribedBy}
+      aria-invalid={isInvalid ? 'true' : undefined}
       aria-label="Сообщение"
       className="max-h-32 min-h-10 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-800 shadow-none outline-none placeholder:text-slate-400 focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-slate-400"
       disabled={disabled}
