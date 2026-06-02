@@ -79,6 +79,12 @@ feature-scope, а не расширяет reliability plan до read receipts.
 - `sent`, `delivered`, `read`, `failed` - разные message statuses;
 - Website Widget и API Channel поддерживают message statuses;
 - unsupported channels не дают одинаковую гарантию read/delivered.
+- `sent` означает, что Chatwoot передал сообщение upstream/channel provider,
+  но это не означает доставку до устройства;
+- `delivered` означает provider/device delivery confirmation and is not the
+  same as `read`;
+- `read` depends on channel support and client settings, so it cannot be used
+  as a universal business promise without checking the source.
 
 Источник:
 
@@ -123,6 +129,15 @@ Implication:
   получит event, поэтому для user-visible `Прочитано поддержкой` нужен
   bounded refresh/polling of receipt metadata.
 
+Important ID detail:
+
+- Chatwoot public docs call the path segment `conversation_id`, but the local
+  Chatwoot CE controllers resolve conversations by `display_id`;
+- Chatwoot account conversation JSON exposes `id` as `conversation.display_id`;
+- current portal `chatwootConversation.id` is therefore the public/display
+  conversation id used in Chatwoot account/public API paths, not a browser
+  authority and not a value accepted from the frontend.
+
 ## Current Portal Baseline
 
 Текущий portal уже имеет часть нужного фундамента:
@@ -135,6 +150,10 @@ Implication:
 - `/api/chat/threads` остается source of truth для visible thread list and
   unread totals.
 - frontend показывает successful outgoing state как `Отправлено`.
+- `findConversationMessageById` уже проверяет конкретный message id внутри
+  текущей Chatwoot conversation and can be reused by receipt refresh;
+- foreground unread refresh, push stale markers and notification app badges are
+  already separate from push delivery.
 
 Текущие gaps:
 
@@ -146,6 +165,8 @@ Implication:
   current client мапит `webhookSecret/webhookUrl`, но не мапит
   `inbox_identifier`;
 - для group chats нет per-user read marker;
+- нет `receipt-state` endpoint, который обновляет только receipts без очистки
+  unread и без движения read marker;
 - standard Chatwoot dashboard не умеет показывать per portal user group read
   без Chatwoot customization.
 
@@ -455,15 +476,34 @@ diagnostics need it.
 
 ### Receipt Refresh
 
-Because agent `last_seen` may not produce webhook, add one of these:
+Because agent `last_seen` may not produce webhook, use a dedicated receipt
+refresh endpoint:
 
-Recommended MVP:
+Chosen MVP:
 
 ```text
-GET /api/chat/threads/:threadId/receipt-state
+POST /api/chat/threads/:threadId/receipt-state
 ```
 
-Returns minimal state:
+Request body:
+
+```ts
+{
+  messageIds: number[]
+}
+```
+
+Rules:
+
+- `messageIds` must be positive integer Chatwoot message ids already visible in
+  the selected thread UI;
+- backend must still verify every id through current tenant/session/thread
+  access and Chatwoot conversation lookup;
+- endpoint must not move portal read marker;
+- endpoint must not clear unread;
+- endpoint must not return new message content.
+
+Response:
 
 ```ts
 {
@@ -479,19 +519,6 @@ Returns minimal state:
 
 Use it only for currently visible selected thread and only when there are
 current-user messages where support receipt could change.
-
-Alternative:
-
-- refresh full `GET /api/chat/messages` snapshot on a bounded interval.
-
-Tradeoff:
-
-- full snapshot is simpler but heavier;
-- receipt-state endpoint is cleaner and avoids reloading message content.
-
-Recommendation: start with full snapshot refresh if implementation needs to be
-small, then split to `receipt-state` if real-device tests show waste. The spec
-allows either, but implementation plan must choose one.
 
 ## Backend Receipt Computation
 
@@ -805,8 +832,12 @@ Tests:
 
 Backend:
 
-- either expose `receipt-state` endpoint or rely on full selected snapshot
-  refresh.
+- expose `POST /api/chat/threads/:threadId/receipt-state`;
+- accept visible current-user message ids in the request body;
+- verify ids through current tenant/session/thread context and Chatwoot
+  conversation lookup;
+- return receipt metadata only;
+- do not clear unread, move read marker or call Chatwoot `update_last_seen`.
 
 Frontend:
 
