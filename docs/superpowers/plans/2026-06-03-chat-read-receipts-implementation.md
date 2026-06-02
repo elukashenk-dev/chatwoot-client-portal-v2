@@ -14,6 +14,21 @@ Playwright/MCP smoke where browser behavior matters.
 
 ---
 
+## Source Spec
+
+This plan implements:
+
+```text
+docs/superpowers/specs/2026-06-02-chat-read-receipts-design.md
+```
+
+Read receipts stay separate from the reliability plan:
+
+```text
+docs/superpowers/specs/2026-06-02-chat-message-reliability-design.md
+docs/superpowers/plans/2026-06-02-chat-message-reliability.md
+```
+
 ## File Structure
 
 - Create: `backend/src/modules/chat-read-receipts/repository.ts`
