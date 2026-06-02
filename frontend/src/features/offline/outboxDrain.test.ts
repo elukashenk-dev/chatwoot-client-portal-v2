@@ -506,6 +506,8 @@ it.each([
   { code: 'forbidden', statusCode: 403 },
   { code: 'thread_access_denied', statusCode: 400 },
   { code: 'client_message_key_conflict', statusCode: 409 },
+  { code: 'message_content_too_long', statusCode: 422 },
+  { code: 'reply_target_unavailable', statusCode: 409 },
 ])(
   'marks permanent send error $code/$statusCode as failed',
   async ({ code, statusCode }) => {
@@ -534,6 +536,33 @@ it.each([
     })
   },
 )
+
+it('defaults unknown backend rejections to failed instead of retrying forever', async () => {
+  const record = createQueuedOutboxRecord()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+  sendChatMessageMock.mockRejectedValueOnce(
+    createChatApiError({
+      code: 'unexpected_backend_rejection',
+      statusCode: 409,
+    }),
+  )
+
+  await drainOfflineTextOutbox({
+    now: () => new Date('2026-05-27T10:00:01.000Z'),
+    sendChatMessage: sendChatMessageMock,
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord(record),
+  ).resolves.toMatchObject({
+    errorCode: 'unexpected_backend_rejection',
+    errorMessage: 'Send failed.',
+    status: 'failed',
+  })
+})
 
 it.each([
   {

@@ -13,6 +13,24 @@ const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
 const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
 const TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS = 5_000
 const TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE = 'Не удалось отправить сообщение.'
+const PERMANENT_TEXT_OUTBOX_SEND_ERROR_CODES = new Set([
+  'INVALID_REQUEST',
+  'chat_thread_unsupported',
+  'client_message_key_conflict',
+  'client_message_key_required',
+  'client_message_key_too_long',
+  'message_content_required',
+  'message_content_too_long',
+  'reply_target_invalid',
+  'reply_target_unavailable',
+  'thread_access_denied',
+])
+const TEMPORARY_TEXT_OUTBOX_SEND_ERROR_CODES = new Set([
+  'CHAT_SEND_RATE_LIMITED',
+  'chat_send_in_progress',
+  'chat_send_ledger_unavailable',
+  'chat_send_unavailable',
+])
 const PORTAL_OFFLINE_STORES = [
   'tenant_contexts',
   'last_active_identities',
@@ -408,10 +426,7 @@ async function drainTextOutboxForIdentity(identity) {
         return
       }
 
-      if (
-        apiError.statusCode === 403 ||
-        apiError.code === 'thread_access_denied'
-      ) {
+      if (isPermanentTextOutboxSendError(apiError)) {
         await markTextOutboxFailed(
           sendingRecord,
           apiError.code,
@@ -421,28 +436,16 @@ async function drainTextOutboxForIdentity(identity) {
         continue
       }
 
-      if (apiError.statusCode === 409) {
-        if (apiError.code === 'chat_send_in_progress') {
-          await markTextOutboxQueued(
-            sendingRecord,
-            new Date(
-              Date.now() + TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS,
-            ).toISOString(),
-            apiError.message,
-            new Date(),
-          )
-          continue
-        }
-
-        if (apiError.code === 'client_message_key_conflict') {
-          await markTextOutboxFailed(
-            sendingRecord,
-            apiError.code,
-            apiError.message,
-            new Date(),
-          )
-          continue
-        }
+      if (apiError.code === 'chat_send_in_progress') {
+        await markTextOutboxQueued(
+          sendingRecord,
+          new Date(
+            Date.now() + TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS,
+          ).toISOString(),
+          apiError.message,
+          new Date(),
+        )
+        continue
       }
 
       if (apiError.statusCode === 429) {
@@ -464,6 +467,46 @@ async function drainTextOutboxForIdentity(identity) {
       )
     }
   }
+}
+
+function classifyTextOutboxSendError(error) {
+  if (error.statusCode === 401) {
+    return 'auth'
+  }
+
+  if (
+    error.code !== null &&
+    PERMANENT_TEXT_OUTBOX_SEND_ERROR_CODES.has(error.code)
+  ) {
+    return 'permanent'
+  }
+
+  if (error.statusCode === 400 || error.statusCode === 403) {
+    return 'permanent'
+  }
+
+  if (
+    error.code !== null &&
+    TEMPORARY_TEXT_OUTBOX_SEND_ERROR_CODES.has(error.code)
+  ) {
+    return 'temporary'
+  }
+
+  if (
+    error.statusCode === null ||
+    error.statusCode === 0 ||
+    error.statusCode === 408 ||
+    error.statusCode === 429 ||
+    error.statusCode >= 500
+  ) {
+    return 'temporary'
+  }
+
+  return 'permanent'
+}
+
+function isPermanentTextOutboxSendError(error) {
+  return classifyTextOutboxSendError(error) === 'permanent'
 }
 
 async function sendBackgroundTextMessage(record) {

@@ -8,6 +8,7 @@ import {
   releaseOutboxDrainLease,
   tryAcquireOutboxDrainLease,
 } from './offlineOutboxStore'
+import { classifyTextOutboxSendError } from './outboxErrorClassification'
 import type { OfflineTextOutboxRecord } from './types'
 
 const SEND_LEASE_MS = 30_000
@@ -36,6 +37,7 @@ export type DrainOutcomeCategory =
   | 'auth_rejected'
   | 'conflict'
   | 'network_retry'
+  | 'permanent_failure'
   | 'rate_limited'
   | 'sent'
 
@@ -131,6 +133,20 @@ function isSendResultForOutboxRecord(
   )
 }
 
+function getPermanentSendOutcomeCategory(
+  apiError: ChatSendErrorDetails,
+): DrainOutcomeCategory {
+  if (apiError.statusCode === 403 || apiError.code === 'thread_access_denied') {
+    return 'access_denied'
+  }
+
+  if (apiError.code === 'client_message_key_conflict') {
+    return 'conflict'
+  }
+
+  return 'permanent_failure'
+}
+
 export async function drainOfflineTextOutbox({
   now = () => new Date(),
   onDrainOutcome,
@@ -205,8 +221,9 @@ export async function drainOfflineTextOutbox({
       })
     } catch (error) {
       const apiError = getSendErrorDetails(error)
+      const errorClassification = classifyTextOutboxSendError(apiError)
 
-      if (apiError.statusCode === 401) {
+      if (errorClassification === 'auth') {
         await offlineOutboxStore.markOutboxQueued(
           sendingRecord,
           null,
@@ -225,10 +242,7 @@ export async function drainOfflineTextOutbox({
         return 'auth_rejected'
       }
 
-      if (
-        apiError.statusCode === 403 ||
-        apiError.code === 'thread_access_denied'
-      ) {
+      if (errorClassification === 'permanent') {
         await offlineOutboxStore.markOutboxFailed(
           sendingRecord,
           apiError.code,
@@ -236,7 +250,7 @@ export async function drainOfflineTextOutbox({
           now(),
         )
         await emitDrainOutcome(onDrainOutcome, {
-          category: 'access_denied',
+          category: getPermanentSendOutcomeCategory(apiError),
           clientMessageKey: sendingRecord.clientMessageKey,
           errorCode: apiError.code,
           statusCode: apiError.statusCode,
@@ -247,48 +261,27 @@ export async function drainOfflineTextOutbox({
         continue
       }
 
-      if (apiError.statusCode === 409) {
-        if (apiError.code === 'chat_send_in_progress') {
-          const retryAt = new Date(
-            now().getTime() + SEND_IN_PROGRESS_RETRY_MS,
-          ).toISOString()
+      if (apiError.code === 'chat_send_in_progress') {
+        const retryAt = new Date(
+          now().getTime() + SEND_IN_PROGRESS_RETRY_MS,
+        ).toISOString()
 
-          await offlineOutboxStore.markOutboxQueued(
-            sendingRecord,
-            retryAt,
-            apiError.message,
-            now(),
-          )
-          await emitDrainOutcome(onDrainOutcome, {
-            category: 'network_retry',
-            clientMessageKey: sendingRecord.clientMessageKey,
-            errorCode: apiError.code,
-            statusCode: apiError.statusCode,
-            tenantSlug,
-            threadId: sendingRecord.threadId,
-            userId,
-          })
-          continue
-        }
-
-        if (apiError.code === 'client_message_key_conflict') {
-          await offlineOutboxStore.markOutboxFailed(
-            sendingRecord,
-            apiError.code,
-            apiError.message,
-            now(),
-          )
-          await emitDrainOutcome(onDrainOutcome, {
-            category: 'conflict',
-            clientMessageKey: sendingRecord.clientMessageKey,
-            errorCode: apiError.code,
-            statusCode: apiError.statusCode,
-            tenantSlug,
-            threadId: sendingRecord.threadId,
-            userId,
-          })
-          continue
-        }
+        await offlineOutboxStore.markOutboxQueued(
+          sendingRecord,
+          retryAt,
+          apiError.message,
+          now(),
+        )
+        await emitDrainOutcome(onDrainOutcome, {
+          category: 'network_retry',
+          clientMessageKey: sendingRecord.clientMessageKey,
+          errorCode: apiError.code,
+          statusCode: apiError.statusCode,
+          tenantSlug,
+          threadId: sendingRecord.threadId,
+          userId,
+        })
+        continue
       }
 
       if (apiError.statusCode === 429) {

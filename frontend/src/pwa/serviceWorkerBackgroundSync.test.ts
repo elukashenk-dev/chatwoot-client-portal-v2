@@ -24,6 +24,27 @@ type Listener = (event: {
   waitUntil?: (promise: Promise<unknown>) => void
 }) => void
 
+type TextOutboxRecordForTests = {
+  attemptCount: number
+  clientMessageKey: string
+  content: string
+  createdAt: string
+  errorCode: string | null
+  errorMessage: string | null
+  lastAttemptAt: string | null
+  nextAttemptAt: string | null
+  replyTo: null
+  replyToMessageId: number | null
+  sendOwnerId: string | null
+  sendingLeaseExpiresAt: string | null
+  sendingStartedAt: string | null
+  status: 'queued'
+  tenantSlug: string
+  threadId: string
+  updatedAt: string
+  userId: number
+}
+
 let testIndexedDB: IDBFactory
 
 function loadServiceWorker({
@@ -174,6 +195,55 @@ async function dispatchSync(listener: Listener, tag: string) {
   await Promise.all(promises)
 }
 
+function createQueuedTextOutboxRecord(
+  overrides: Partial<TextOutboxRecordForTests> = {},
+): TextOutboxRecordForTests {
+  return {
+    attemptCount: 0,
+    clientMessageKey: 'portal-send:bg-sync',
+    content: 'Фоновая отправка',
+    createdAt: '2026-05-29T12:00:01.000Z',
+    errorCode: null,
+    errorMessage: null,
+    lastAttemptAt: null,
+    nextAttemptAt: null,
+    replyTo: null,
+    replyToMessageId: null,
+    sendOwnerId: null,
+    sendingLeaseExpiresAt: null,
+    sendingStartedAt: null,
+    status: 'queued',
+    tenantSlug: 'provgroup',
+    threadId: 'private:me',
+    updatedAt: '2026-05-29T12:00:01.000Z',
+    userId: 7,
+    ...overrides,
+  }
+}
+
+async function saveLastActiveIdentity() {
+  await putPortalOfflineRecord('last_active_identities', 'lk.provgroup.ru', {
+    host: 'lk.provgroup.ru',
+    savedAt: '2026-05-29T12:00:00.000Z',
+    tenantSlug: 'provgroup',
+    userId: 7,
+  })
+}
+
+async function saveQueuedTextOutboxRecord(
+  overrides: Partial<TextOutboxRecordForTests> = {},
+) {
+  const record = createQueuedTextOutboxRecord(overrides)
+
+  await putPortalOfflineRecord(
+    'chat_text_outbox',
+    `provgroup:7:private:me:${record.clientMessageKey}`,
+    record,
+  )
+
+  return record
+}
+
 describe('service worker background outbox sync', () => {
   beforeEach(() => {
     testIndexedDB = new IDBFactory()
@@ -209,36 +279,8 @@ describe('service worker background outbox sync', () => {
 
     expect(syncListener).toBeDefined()
 
-    await putPortalOfflineRecord('last_active_identities', 'lk.provgroup.ru', {
-      host: 'lk.provgroup.ru',
-      savedAt: '2026-05-29T12:00:00.000Z',
-      tenantSlug: 'provgroup',
-      userId: 7,
-    })
-    await putPortalOfflineRecord(
-      'chat_text_outbox',
-      'provgroup:7:private:me:portal-send:bg-sync',
-      {
-        attemptCount: 0,
-        clientMessageKey: 'portal-send:bg-sync',
-        content: 'Фоновая отправка',
-        createdAt: '2026-05-29T12:00:01.000Z',
-        errorCode: null,
-        errorMessage: null,
-        lastAttemptAt: null,
-        nextAttemptAt: null,
-        replyTo: null,
-        replyToMessageId: null,
-        sendOwnerId: null,
-        sendingLeaseExpiresAt: null,
-        sendingStartedAt: null,
-        status: 'queued',
-        tenantSlug: 'provgroup',
-        threadId: 'private:me',
-        updatedAt: '2026-05-29T12:00:01.000Z',
-        userId: 7,
-      },
-    )
+    await saveLastActiveIdentity()
+    await saveQueuedTextOutboxRecord()
 
     await dispatchSync(syncListener!, 'portal-text-outbox-drain')
 
@@ -282,6 +324,82 @@ describe('service worker background outbox sync', () => {
       tenantSlug: 'provgroup',
       threadId: 'private:me',
       userId: 7,
+    })
+  })
+
+  it.each([
+    { code: 'message_content_too_long', statusCode: 422 },
+    { code: 'reply_target_unavailable', statusCode: 409 },
+  ])(
+    'marks permanent background send error $code/$statusCode as failed',
+    async ({ code, statusCode }) => {
+      const fetch = vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              code,
+              message: 'Background send failed.',
+            },
+          },
+          { status: statusCode },
+        ),
+      )
+      const { listeners } = loadServiceWorker({ fetch })
+      const syncListener = listeners.get('sync')?.[0]
+
+      expect(syncListener).toBeDefined()
+
+      const record = await saveQueuedTextOutboxRecord({
+        clientMessageKey: `portal-send:${code}`,
+      })
+      await saveLastActiveIdentity()
+
+      await dispatchSync(syncListener!, 'portal-text-outbox-drain')
+
+      await expect(
+        readPortalOfflineRecord(
+          'chat_text_outbox',
+          `provgroup:7:private:me:${record.clientMessageKey}`,
+        ),
+      ).resolves.toMatchObject({
+        errorCode: code,
+        errorMessage: 'Background send failed.',
+        status: 'failed',
+      })
+    },
+  )
+
+  it('defaults unknown background backend rejections to failed instead of retrying forever', async () => {
+    const fetch = vi.fn(async () =>
+      Response.json(
+        {
+          error: {
+            code: 'unexpected_backend_rejection',
+            message: 'Background send failed.',
+          },
+        },
+        { status: 409 },
+      ),
+    )
+    const { listeners } = loadServiceWorker({ fetch })
+    const syncListener = listeners.get('sync')?.[0]
+
+    expect(syncListener).toBeDefined()
+
+    await saveQueuedTextOutboxRecord()
+    await saveLastActiveIdentity()
+
+    await dispatchSync(syncListener!, 'portal-text-outbox-drain')
+
+    await expect(
+      readPortalOfflineRecord(
+        'chat_text_outbox',
+        'provgroup:7:private:me:portal-send:bg-sync',
+      ),
+    ).resolves.toMatchObject({
+      errorCode: 'unexpected_backend_rejection',
+      errorMessage: 'Background send failed.',
+      status: 'failed',
     })
   })
 })
