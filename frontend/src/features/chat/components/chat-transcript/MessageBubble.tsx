@@ -113,7 +113,7 @@ function MessageStatusIcon({ message }: { message: ChatMessage }) {
   }
 
   return (
-    <span aria-label="Доставлено" data-message-status-icon="sent">
+    <span aria-label="Отправлено" data-message-status-icon="sent">
       <CheckIcon className="h-3 w-3 shrink-0" />
     </span>
   )

@@ -131,7 +131,7 @@ describe('ChatTranscript', () => {
 
     expect(screen.queryByText(/AM|PM|Apr/)).not.toBeInTheDocument()
     expect(screen.queryByText('Вы')).not.toBeInTheDocument()
-    expect(screen.queryByText('Доставлено')).not.toBeInTheDocument()
+    expect(screen.queryByText('Отправлено')).not.toBeInTheDocument()
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
@@ -176,7 +176,7 @@ describe('ChatTranscript', () => {
     expect(firstMeta).toHaveClass('float-right')
     expect(firstMeta).not.toHaveClass('absolute')
     expect(firstStatusIcon).toHaveAttribute('data-message-status-icon', 'sent')
-    expect(firstMeta?.querySelector('[aria-label="Доставлено"]')).not.toBeNull()
+    expect(firstMeta?.querySelector('[aria-label="Отправлено"]')).not.toBeNull()
     expect(getBubble(container, 1)).toContainElement(firstMeta)
     expect(getBubble(container, 1)).toHaveClass('flow-root')
     expect(getBubble(container, 1)).not.toHaveClass('pr-[4.75rem]')
