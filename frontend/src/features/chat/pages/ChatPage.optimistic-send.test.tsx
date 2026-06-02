@@ -843,12 +843,12 @@ describe('ChatPage optimistic text send', () => {
       .mockResolvedValueOnce(
         createJsonResponse(
           {
-            error: {
-              code: 'thread_access_denied',
-              message: 'Доступ к чату запрещен.',
-            },
+            activeThread: null,
+            reason: 'thread_access_denied',
+            result: 'not_ready',
+            sentMessage: null,
           },
-          403,
+          200,
         ),
       )
 
@@ -862,6 +862,7 @@ describe('ChatPage optimistic text send', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Не отправлено')).toBeInTheDocument()
     })
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled()
     await expect(
       offlineOutboxStore.readOutboxRecord({
         clientMessageKey: 'portal-send:drain-denied',

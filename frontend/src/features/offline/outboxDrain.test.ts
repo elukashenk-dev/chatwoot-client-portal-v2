@@ -102,6 +102,15 @@ function createSendResult({
   }
 }
 
+function createThreadAccessDeniedSendResult(): ChatSendResult {
+  return {
+    activeThread: null,
+    reason: 'thread_access_denied',
+    result: 'not_ready',
+    sentMessage: null,
+  }
+}
+
 function createChatApiError({
   code = 'network_error',
   retryAfterSeconds = null,
@@ -402,6 +411,46 @@ it('keeps a record queued when a nominally successful ack belongs to another cli
     clientMessageKey: 'portal-send:abc',
     tenantSlug: 'buhfirma',
     threadId: 'private:me',
+    userId: 7,
+  })
+})
+
+it('marks controlled thread access denial send results as failed', async () => {
+  const record = createQueuedOutboxRecord({
+    threadId: 'group:256',
+  })
+  const onDrainOutcome = vi.fn()
+  const onSendSucceeded = vi.fn()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+  sendChatMessageMock.mockResolvedValueOnce(
+    createThreadAccessDeniedSendResult(),
+  )
+
+  await drainOfflineTextOutbox({
+    now: () => new Date('2026-05-27T10:00:01.000Z'),
+    onDrainOutcome,
+    onSendSucceeded,
+    sendChatMessage: sendChatMessageMock,
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(
+    offlineOutboxStore.readOutboxRecord(record),
+  ).resolves.toMatchObject({
+    errorCode: 'thread_access_denied',
+    errorMessage: 'Доступ к чату запрещен.',
+    status: 'failed',
+  })
+  expect(onSendSucceeded).not.toHaveBeenCalled()
+  expect(onDrainOutcome).toHaveBeenCalledWith({
+    category: 'access_denied',
+    clientMessageKey: 'portal-send:abc',
+    errorCode: 'thread_access_denied',
+    statusCode: 403,
+    tenantSlug: 'buhfirma',
+    threadId: 'group:256',
     userId: 7,
   })
 })

@@ -96,6 +96,25 @@ function getSendErrorDetails(error: unknown): ChatSendErrorDetails {
   }
 }
 
+function getControlledSendResultErrorDetails(
+  result: ChatSendResult,
+): ChatSendErrorDetails | null {
+  if (result.result === 'ready') {
+    return null
+  }
+
+  if (result.reason === 'thread_access_denied') {
+    return {
+      code: 'thread_access_denied',
+      message: 'Доступ к чату запрещен.',
+      retryAfterSeconds: null,
+      statusCode: 403,
+    }
+  }
+
+  return null
+}
+
 async function emitSendSucceeded(
   onSendSucceeded:
     | ((event: DrainSendSucceededEvent) => void | Promise<void>)
@@ -185,6 +204,26 @@ export async function drainOfflineTextOutbox({
         replyToMessageId: record.replyToMessageId,
         threadId: record.threadId,
       })
+      const controlledResultError = getControlledSendResultErrorDetails(result)
+
+      if (controlledResultError) {
+        await offlineOutboxStore.markOutboxFailed(
+          sendingRecord,
+          controlledResultError.code,
+          controlledResultError.message,
+          now(),
+        )
+        await emitDrainOutcome(onDrainOutcome, {
+          category: getPermanentSendOutcomeCategory(controlledResultError),
+          clientMessageKey: sendingRecord.clientMessageKey,
+          errorCode: controlledResultError.code,
+          statusCode: controlledResultError.statusCode,
+          tenantSlug,
+          threadId: sendingRecord.threadId,
+          userId,
+        })
+        continue
+      }
 
       if (isSendResultForOutboxRecord(result, sendingRecord)) {
         try {
