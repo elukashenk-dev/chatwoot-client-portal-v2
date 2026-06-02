@@ -150,6 +150,7 @@ export type ChatMessage = {
   contentType: string
   createdAt: string
   direction: 'incoming' | 'outgoing'
+  errorCode?: string | null
   id: number
   replyTo?: ChatMessageReplyPreview | null
   status: string

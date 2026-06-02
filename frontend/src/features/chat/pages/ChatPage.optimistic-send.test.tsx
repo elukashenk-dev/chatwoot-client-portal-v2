@@ -495,6 +495,40 @@ describe('ChatPage optimistic text send', () => {
     ).resolves.toBeNull()
   })
 
+  it('hides retry for a failed text record that cannot be resent unchanged', async () => {
+    await offlineOutboxStore.saveOutboxRecord(
+      createOutboxRecord({
+        clientMessageKey: 'portal-send:too-long',
+        content: 'Too long to resend unchanged',
+        errorCode: 'message_content_too_long',
+        errorMessage: 'Сообщение слишком длинное.',
+        status: 'failed',
+      }),
+    )
+
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
+      .mockResolvedValueOnce(createJsonResponse(createReadySnapshot()))
+      .mockResolvedValueOnce(createNotificationSettingsResponse())
+      .mockResolvedValueOnce(createSupportAvailabilityResponse())
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText('Too long to resend unchanged'),
+    ).toBeInTheDocument()
+    await waitForInitialChatRequests()
+
+    expect(screen.getByLabelText('Не отправлено')).toBeInTheDocument()
+    expect(
+      screen.getByText('Сообщение нельзя отправить повторно. Напишите новое.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Повторить' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('queues text while offline and keeps the original client message key for later drain', async () => {
     const user = userEvent.setup()
     const registerBackgroundSync = vi.fn(async () => undefined)

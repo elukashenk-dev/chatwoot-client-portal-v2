@@ -70,6 +70,7 @@ function toOptimisticTextSendFromOutboxRecord(
     clientMessageKey: record.clientMessageKey,
     content: record.content,
     createdAt: record.createdAt,
+    errorCode: record.errorCode,
     errorMessage: record.errorMessage,
     id: -1_000_000 - index,
     replyTo: record.replyTo,
@@ -282,6 +283,7 @@ export function useOptimisticTextSend({
             send.threadId === threadId
               ? {
                   ...send,
+                  errorCode: null,
                   errorMessage: null,
                   status: 'sending',
                 }

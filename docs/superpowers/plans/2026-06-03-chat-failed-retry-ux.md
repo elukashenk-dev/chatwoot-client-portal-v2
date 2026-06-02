@@ -30,6 +30,7 @@
 ## Task 1: Failed Retry Helper
 
 **Files:**
+
 - Create: `frontend/src/features/chat/lib/failedTextRetry.test.ts`
 - Create: `frontend/src/features/chat/lib/failedTextRetry.ts`
 
@@ -113,6 +114,7 @@ Expected: PASS.
 ## Task 2: Preserve Failed Error Code In Local Messages
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/types.ts`
 - Modify: `frontend/src/features/chat/lib/optimisticTextMessages.ts`
 - Modify: `frontend/src/features/chat/pages/useOptimisticTextSend.ts`
@@ -152,7 +154,9 @@ it('hides retry for a failed text record that cannot be resent unchanged', async
   expect(
     screen.getByText('Сообщение нельзя отправить повторно. Напишите новое.'),
   ).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Повторить' }),
+  ).not.toBeInTheDocument()
 })
 ```
 
@@ -225,6 +229,7 @@ Expected: still FAIL until `MessageBubble` uses the helper.
 ## Task 3: Render Retry Only When Retryable
 
 **Files:**
+
 - Modify: `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx`
 - Test: `frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx`
 
@@ -273,6 +278,7 @@ Expected: PASS. This confirms `thread_access_denied` still shows `Повтори
 ## Task 4: Targeted Verification And Review
 
 **Files:**
+
 - All files modified in Tasks 1-3.
 
 - [ ] **Step 1: Run targeted tests**

@@ -1,7 +1,4 @@
-import type {
-  ChatMessage,
-  ChatMessageReplyPreview,
-} from '../types'
+import type { ChatMessage, ChatMessageReplyPreview } from '../types'
 import type { MessageComposerReplyTarget } from '../components/message-composer/types'
 
 export type OptimisticTextSendStatus = 'failed' | 'queued' | 'sending'
@@ -10,6 +7,7 @@ export type OptimisticTextSend = {
   clientMessageKey: string
   content: string
   createdAt: string
+  errorCode: string | null
   errorMessage: string | null
   id: number
   replyTo: ChatMessageReplyPreview | null
@@ -43,6 +41,7 @@ export function createOptimisticTextSend({
     clientMessageKey,
     content,
     createdAt: now.toISOString(),
+    errorCode: null,
     errorMessage: null,
     id,
     replyTo:
@@ -72,6 +71,7 @@ export function toOptimisticChatMessage(send: OptimisticTextSend): ChatMessage {
     contentType: 'text',
     createdAt: send.createdAt,
     direction: 'outgoing',
+    errorCode: send.errorCode,
     id: send.id,
     replyTo: send.replyTo,
     status: send.status,

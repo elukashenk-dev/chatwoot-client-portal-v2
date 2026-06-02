@@ -8,6 +8,7 @@ import {
   RefreshIcon,
   ReplyIcon,
 } from '../../../../shared/ui/icons'
+import { canRetryFailedTextSend } from '../../lib/failedTextRetry'
 import type { ChatMessage } from '../../types'
 import { ChatAvatar } from '../ChatAvatar'
 
@@ -151,6 +152,14 @@ function RetryTextSend({
     message.attachments.length > 0
   ) {
     return null
+  }
+
+  if (!canRetryFailedTextSend(message.errorCode)) {
+    return (
+      <p className="mt-1.5 max-w-64 text-right text-[11px] leading-snug text-rose-600">
+        Сообщение нельзя отправить повторно. Напишите новое.
+      </p>
+    )
   }
 
   return (
