@@ -58,7 +58,7 @@
 Read receipts are a separate feature scope documented in:
 
 ```text
-docs/superpowers/specs/2026-06-02-chat-read-receipts-design.md
+docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md
 ```
 
 This reliability slice must prepare the status model for read receipts, but
@@ -352,7 +352,7 @@ Recommended fallback interval:
 - Offline queue for files and voice.
 - Upload progress bars for attachments.
 - Read receipts implementation. It is covered by
-  `docs/superpowers/specs/2026-06-02-chat-read-receipts-design.md`.
+  `docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md`.
 - Delivered-to-agent/device receipts as a send-state replacement.
 - Message editing.
 - Manual `mark read` button.

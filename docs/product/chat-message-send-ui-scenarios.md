@@ -22,14 +22,14 @@
 Успешный backend-accepted статус называется `Отправлено`, а не `Доставлено`.
 
 После реализации
-`docs/superpowers/specs/2026-06-02-chat-read-receipts-design.md` read receipts
-должны добавляться отдельным receipt state, например `Прочитано поддержкой`, а
-не переопределять send status.
+`docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md`
+read receipts должны добавляться отдельным receipt state, например
+`Прочитано поддержкой`, а не переопределять send status.
 
 Ключевое правило будущей модели:
 
 - `Отправлено` - backend/Chatwoot приняли сообщение;
-- `Прочитано поддержкой` - Chatwoot `agent_last_seen_at` покрывает сообщение;
+- `Прочитано поддержкой` - Chatwoot прислал явный support-read webhook;
 - customer/group read marker - successful fresh snapshot открытого thread;
 - push, app badge и unread counters не являются read receipt source of truth.
 
@@ -55,15 +55,16 @@
 
 ## Planned Read Receipt Scenarios
 
-Эти строки не описывают текущий код. Это целевая карта для будущего read
-receipts slice без изменений Chatwoot core.
+Эти строки не описывают текущий код. Это целевая карта для будущего
+event-based read receipts slice с явным Chatwoot webhook
+`conversation_agent_read`.
 
 | #   | Сценарий                                                              | Что видно пользователю портала                                                                      | Что видит/получает агент в Chatwoot                                                                                            | Итоговое правило                                                                                     |
 | --- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | R1  | Пользователь открыл свежий latest snapshot личного чата               | Входящие agent messages просто видны; отдельное `Прочитано вами` в ленте не нужно                   | Chatwoot получает contact `update_last_seen` и может показать agent messages как read                                          | Read marker ставится только после successful fresh backend snapshot                                  |
 | R2  | Пользователь открыл чат из offline cache                              | Сохраненные сообщения видны без новых read receipts                                                 | Chatwoot не получает `update_last_seen`                                                                                        | Cached/offline snapshot не помечает сообщения прочитанными                                           |
-| R3  | Пользователь отправил сообщение, агент открыл conversation в Chatwoot | После bounded receipt refresh исходящее сообщение меняется с `Отправлено` на `Прочитано поддержкой` | Chatwoot обновляет `agent_last_seen_at`                                                                                        | Portal вычисляет support read через `message.createdAt <= agent_last_seen_at`                        |
-| R4  | Агент прочитал, но не ответил                                         | `Прочитано поддержкой` появляется после selected-thread receipt refresh, не обязательно мгновенно   | В Chatwoot новых message events может не быть                                                                                  | Нельзя полагаться только на webhook/SSE для agent read                                               |
+| R3  | Пользователь отправил сообщение, агент открыл conversation в Chatwoot | После `conversation_agent_read` исходящее сообщение меняется с `Отправлено` на `Прочитано поддержкой` | Chatwoot обновляет agent read state и отправляет custom webhook с read-until frontier                                           | Portal показывает support read только по durable webhook frontier                                    |
+| R4  | Агент прочитал, но не ответил                                         | `Прочитано поддержкой` появляется после webhook fanout/следующего snapshot, без polling Chatwoot     | В Chatwoot может не быть нового message event, но есть custom `conversation_agent_read`                                         | Нельзя полагаться на message events или `agent_last_seen_at` inference                               |
 | R5  | В группе один участник открыл чат                                     | У этого участника portal read marker обновлен; у других участников нет                              | Standard Chatwoot dashboard может получить только group-level read signal, если portal синхронизировал group contact last_seen | Без Chatwoot customization нельзя честно показать агенту per-user group read в стандартном dashboard |
 | R6  | Участник удален из группы                                             | Его старый read marker не участвует в текущих счетчиках/summary                                     | Chatwoot group conversation остается доступным только через current group contact rules                                        | Group read summary считает только текущих visible participants                                       |
 | R7  | Пришел push, пользователь не открыл приложение                        | Read receipt не меняется                                                                            | Chatwoot read не меняется                                                                                                      | Push notification не является чтением                                                                |

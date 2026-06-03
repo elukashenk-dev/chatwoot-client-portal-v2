@@ -411,9 +411,9 @@ Docs:
 - Update: `docs/product/chat-message-send-ui-scenarios.md`
 - Update: `docs/roadmap/work-log.md` only after implementation, smoke, review
   and deployment baseline are actually complete.
-- Delete `docs/findings/F-CHAT-RR-001-false-support-read-and-agent-unread.md`
-  only after this new event-based implementation is verified and that finding
-  is truly closed.
+- If `docs/findings/F-CHAT-RR-001-false-support-read-and-agent-unread.md` is
+  present on the implementation branch, delete it only after this new
+  event-based implementation is verified and that finding is truly closed.
 
 ## Pre-Implementation Reset
 
@@ -1365,7 +1365,7 @@ Checkpoint commit/merge only after this review.
 
 - Modify: `docs/product/chat-message-send-ui-scenarios.md`
 - Modify: `docs/roadmap/work-log.md`
-- Delete when closed:
+- Delete when closed if present:
   `docs/findings/F-CHAT-RR-001-false-support-read-and-agent-unread.md`
 
 - [ ] **Step 1: Update product scenarios**
@@ -1389,7 +1389,8 @@ rg "F-CHAT-RR-001|false-support-read|agent-unread|chat read receipts" docs
 ```
 
 Delete the finding only if this implementation has verified the acceptance
-criteria with the new event source.
+criteria with the new event source. If the file is absent, record nothing here;
+do not recreate it just to delete it.
 
 - [ ] **Step 3: Update work-log**
 

@@ -13,10 +13,10 @@
 ## Relationship To Read Receipts
 
 Read receipts are intentionally separate from this reliability plan and are
-specified in:
+specified in the event-based implementation plan:
 
 ```text
-docs/superpowers/specs/2026-06-02-chat-read-receipts-design.md
+docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md
 ```
 
 Implementation dependency:
@@ -34,7 +34,7 @@ Recommended sequencing:
 
 ```text
 1. Finish reliability baseline, especially honest sent status.
-2. Implement read receipts from the separate read receipts spec.
+2. Implement read receipts from the separate event-based read receipts plan.
 ```
 
 Rationale: read receipts rely on fresh snapshots and clear local send states.
