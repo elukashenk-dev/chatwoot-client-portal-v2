@@ -16,7 +16,9 @@ bootstrap tenants, dev servers и auto-checks.
 - Mailpit UI: `http://127.0.0.1:8025`;
 - Mailpit SMTP: `127.0.0.1:1025`.
 
-`v2` сам использует только свой isolated Postgres на `127.0.0.1:55433`.
+`v2` сам использует только свой isolated Postgres на `127.0.0.1:55433` в
+обычном локальном режиме; для WSL mirrored + Docker Desktop см.
+troubleshooting ниже.
 
 ## 1. Перейти В Проект
 
@@ -55,6 +57,211 @@ SMTP_FROM=noreply@example.com
 ```bash
 openssl rand -base64 32
 ```
+
+### WSL Mirrored + Docker Desktop: Postgres Не Отвечает На `127.0.0.1`
+
+Этот локальный workaround относится только к Windows/WSL development machine,
+где WSL запускается в mirrored networking mode, например из-за VPN, которому
+нужны настройки:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+dnsTunneling=true
+autoProxy=true
+firewall=true
+
+[experimental]
+ignoredPorts=55433
+```
+
+Не переносить это в production и не менять из-за этого `.env.example`.
+Production `DATABASE_URL` должен задаваться production окружением и указывать
+на production portal Postgres. Локальный `.env` игнорируется git и может иметь
+машинно-специфичный host.
+
+#### Симптом
+
+Портал открывается, но показывает экран:
+
+```text
+Нужно проверить сессию.
+Подключитесь к интернету, чтобы продолжить.
+```
+
+При этом Chatwoot admin может работать нормально, а frontend Vite может быть
+доступен на `5173`.
+
+Типичная диагностика:
+
+```bash
+pgrep -af 'pnpm dev:backend|tsx watch src/server.ts'
+ss -ltnp sport = :3301
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml ps
+pg_isready -h 127.0.0.1 -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+```
+
+Плохой pattern:
+
+- `pnpm dev:backend`/`tsx watch` process exists;
+- `ss -ltnp sport = :3301` не показывает listener;
+- Docker показывает Postgres container `healthy` и
+  `0.0.0.0:55433->5432/tcp`;
+- `pg_isready -h 127.0.0.1 -p 55433 ...` возвращает `no response`.
+
+Причина: backend запускает portal migrations перед `app.listen`. Если
+`DATABASE_URL` указывает на недоступный `127.0.0.1:55433`, backend process
+зависает до открытия `3301`, а frontend получает session-check failure.
+
+#### Root Cause
+
+Это не portal auth/session bug и не Chatwoot bug.
+
+В WSL mirrored mode Docker Desktop published ports могут вести себя иначе для
+loopback-доступа из WSL. Microsoft документирует known issue для Docker
+Desktop containers with published ports в WSL2 mirrored networking mode и
+указывает `ignoredPorts` как workaround:
+
+- https://learn.microsoft.com/en-us/windows/wsl/troubleshooting#docker-container-issues-in-wsl2-with-mirrored-networking-mode-enabled-when-running-under-the-default-networking-namespace
+- https://learn.microsoft.com/en-us/windows/wsl/wsl-config
+- https://learn.microsoft.com/en-us/windows/wsl/networking
+
+В наблюдавшемся локальном окружении:
+
+```bash
+wslinfo --networking-mode
+# mirrored
+
+pg_isready -h 127.0.0.1 -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+# 127.0.0.1:55433 - no response
+
+pg_isready -h 10.255.255.254 -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+# 10.255.255.254:55433 - accepting connections
+```
+
+`localhost` тоже может быть плохим fallback, потому что в таком WSL окружении
+он может резолвиться в `::1`, а Microsoft notes для mirrored mode explicitly
+support `127.0.0.1`, not IPv6 localhost `::1`.
+
+#### Fix Для Этой Машины
+
+Оставить WSL mirrored settings, потому что они нужны для VPN/internet, и в
+локальном `.env` заменить только host в `DATABASE_URL`:
+
+```bash
+DATABASE_URL=postgresql://portal_v2:portal_v2_local_dev_password@10.255.255.254:55433/chatwoot_client_portal_v2
+```
+
+После изменения перезапустить backend:
+
+```bash
+pkill -f 'pnpm dev:backend|tsx watch src/server.ts' || true
+set -a && source .env && set +a
+pnpm dev:backend
+```
+
+Контроль:
+
+```bash
+pg_isready -h 10.255.255.254 -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+ss -ltnp sport = :3301
+curl http://127.0.0.1:3301/api/health
+curl -i -H 'Host: buhfirma.127.0.0.1.nip.io:5173' \
+  http://127.0.0.1:5173/api/auth/me
+```
+
+Ожидание:
+
+- Postgres отвечает `accepting connections`;
+- backend слушает `0.0.0.0:3301`;
+- frontend proxy больше не timeout;
+- `/api/auth/me` возвращает `200` для живой browser-сессии или `401
+  Требуется вход` без timeout;
+- портал больше не показывает `Нужно проверить сессию` из-за недоступного
+  backend.
+
+Если `10.255.255.254` перестал подходить после WSL/Docker update, найти
+актуальный IPv4 candidate и проверить его явно:
+
+```bash
+hostname -I
+ip -o -4 addr show scope global
+pg_isready -h <candidate-ip> -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+```
+
+Использовать только host, который реально отвечает на `pg_isready`.
+
+#### Как Вернуть Старый Режим
+
+Использовать этот rollback, если VPN снова работает в старом протоколе без WSL
+mirrored networking settings и хочется вернуть обычный локальный loopback.
+
+1. В Windows `%UserProfile%\.wslconfig` убрать mirrored-only настройки или
+   вернуть NAT/default networking.
+
+   Минимальный вариант - удалить добавленный блок целиком, если других
+   WSL-настроек там нет:
+
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   dnsTunneling=true
+   autoProxy=true
+   firewall=true
+
+   [experimental]
+   ignoredPorts=55433
+   ```
+
+   Если файл нужен для других настроек, убрать только строки выше или заменить
+   networking mode на NAT:
+
+   ```ini
+   [wsl2]
+   networkingMode=nat
+   ```
+
+2. Из Windows PowerShell остановить WSL:
+
+   ```powershell
+   wsl --shutdown
+   ```
+
+   После этого заново открыть WSL terminal. Если Docker Desktop после смены
+   networking mode ведет себя странно, перезапустить Docker Desktop.
+
+3. В локальном `.env` вернуть default portal Postgres host:
+
+   ```bash
+   DATABASE_URL=postgresql://portal_v2:portal_v2_local_dev_password@127.0.0.1:55433/chatwoot_client_portal_v2
+   ```
+
+4. Пересоздать только container networking без удаления portal DB volume:
+
+   ```bash
+   docker --context default compose --env-file .env -f infra/postgres/compose.yaml up -d --force-recreate db
+   ```
+
+   Не использовать `down -v`, если локальные portal tenants/users/sessions
+   нужно сохранить.
+
+5. Проверить старый путь и перезапустить backend:
+
+   ```bash
+   pg_isready -h 127.0.0.1 -p 55433 -U portal_v2 -d chatwoot_client_portal_v2
+
+   pkill -f 'pnpm dev:backend|tsx watch src/server.ts' || true
+   set -a && source .env && set +a
+   pnpm dev:backend
+   ```
+
+Ожидание после rollback:
+
+- `wslinfo --networking-mode` больше не показывает `mirrored`;
+- `pg_isready -h 127.0.0.1 -p 55433 ...` отвечает `accepting connections`;
+- backend слушает `127.0.0.1:3301`/`0.0.0.0:3301`;
+- portal открывается через `*.127.0.0.1.nip.io:5173` без
+  session-check timeout.
 
 ## 3. Пересоздать Чистую Portal DB
 
