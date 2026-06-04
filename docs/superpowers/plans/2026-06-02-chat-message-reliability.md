@@ -10,35 +10,37 @@
 
 ---
 
-## Relationship To Read Receipts
+## Relationship To Customer Read And Typing
 
-Read receipts are intentionally separate from this reliability plan and are
-specified in the event-based implementation plan:
+Customer-read sync and typing are intentionally separate from this reliability
+plan and are specified in:
 
 ```text
-docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md
+docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md
 ```
 
 Implementation dependency:
 
-- Task 5 in this plan is a prerequisite for read receipts because it stops
-  showing backend accepted messages as `Доставлено`.
-- Read receipts must add separate receipt data such as `Прочитано поддержкой`.
+- Task 5 in this plan is a prerequisite because it stops showing backend
+  accepted messages as `Доставлено`.
+- Customer-read sync updates Chatwoot for the agent side; it must not add fake
+  two-check support-read state for portal user-sent messages.
 - This plan must not add `read`, `delivered`, `readByAgent`, or group read
   semantics to the same field that represents local send state.
-- If read receipts are implemented before the full reliability plan is closed,
-  Task 5 and any required public message model separation must be completed
-  first.
+- If customer-read/typing is implemented before the full reliability plan is
+  closed, Task 5 and any required public message model separation must be
+  completed first.
 
 Recommended sequencing:
 
 ```text
 1. Finish reliability baseline, especially honest sent status.
-2. Implement read receipts from the separate event-based read receipts plan.
+2. Implement customer-read sync and typing from the separate plan.
 ```
 
-Rationale: read receipts rely on fresh snapshots and clear local send states.
-Implementing them on top of `Доставлено` would preserve the current ambiguity.
+Rationale: customer-read sync relies on fresh snapshots, viewport state and clear
+local send states. Implementing it on top of `Доставлено` would preserve the
+current ambiguity.
 
 ---
 
@@ -809,8 +811,9 @@ to:
 ```
 
 Do not add read receipt labels in this task. `Отправлено` must remain a
-backend-accepted send state only. The later read receipts slice will add a
-separate receipt field/label such as `Прочитано поддержкой`.
+backend-accepted send state only. The later customer-read/typing slice updates
+Chatwoot agent-side read status and must not relabel portal user-sent messages
+as read by support.
 
 - [ ] **Step 3: Run affected frontend tests**
 
@@ -1154,7 +1157,7 @@ Spec coverage:
 - Text validation is covered by Task 1 and Task 2.
 - Permanent vs temporary outbox errors are covered by Task 3 and Task 4.
 - Honest sent status is covered by Task 5.
-- Compatibility with future read receipts is covered by the dedicated
+- Compatibility with future customer-read and typing is covered by the dedicated
   Relationship section and Task 5 guardrail.
 - Realtime fallback receive behavior is covered by Task 6.
 - Scenario documentation is covered by Task 7.
@@ -1184,5 +1187,5 @@ Risk review:
   media stays online-only and bounded by validation/errors.
 - `INVALID_REQUEST` on text send is treated as permanent. This is correct for
   current text route because malformed payloads do not become valid by waiting.
-- Read receipts are not implemented in this plan. The separate read receipts
-  spec depends on this plan's honest send-state cleanup.
+- Customer-read and typing are not implemented in this plan. The separate plan
+  depends on this plan's honest send-state cleanup.

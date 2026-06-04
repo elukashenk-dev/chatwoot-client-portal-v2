@@ -53,23 +53,26 @@
 - realtime health/fallback refresh для открытого thread;
 - расширенную сценарную таблицу отправки и получения.
 
-## Relationship To Read Receipts
+## Relationship To Customer Read And Typing
 
-Read receipts are a separate feature scope documented in:
+Customer-read sync and typing are separate feature scope documented in:
 
 ```text
-docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md
+docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md
 ```
 
-This reliability slice must prepare the status model for read receipts, but
-must not implement them.
+This reliability slice must prepare the status model for future receipts and
+presence, but must not implement them.
 
 Required compatibility rule:
 
 - `Отправлено` means only "portal backend accepted the message and Chatwoot
   returned the canonical message";
-- `Прочитано поддержкой` and customer/group read markers must be separate
-  receipt data, not a reinterpretation of the send state;
+- portal user-sent messages must not get a fake `Прочитано поддержкой` state
+  from `agent_last_seen_at`, typing events, push, app badges or unread counters;
+- customer-read sync means "portal customer read agent messages" and is sent to
+  Chatwoot through `update_last_seen`; it is not a two-check receipt for
+  user-sent messages in the portal;
 - local states `В очереди`, `Отправляется`, `Не отправлено` must never show read
   receipts;
 - push, app badge and unread counters are not receipt sources.
@@ -77,9 +80,10 @@ Required compatibility rule:
 Implementation order recommendation:
 
 - close at least the honest sent-status part of this reliability slice before
-  implementing read receipts;
-- ideally close the full reliability slice first, because read receipts depend
-  on stable snapshot refresh and correct offline/permanent-failure behavior.
+  implementing customer-read or typing;
+- ideally close the full reliability slice first, because customer-read sync
+  depends on stable snapshot refresh and correct offline/permanent-failure
+  behavior.
 
 ## External Baseline
 
@@ -188,8 +192,9 @@ UI labels:
 - `Отправлено` - backend accepted the message and returned canonical message.
 
 Do not use `Доставлено` because it sounds like recipient-device delivery or read
-receipt. This reliability slice does not implement that guarantee. Future read
-receipts must show a separate state such as `Прочитано поддержкой`.
+receipt. This reliability slice does not implement that guarantee. Future
+customer-read sync updates Chatwoot for agents; it must not rename portal
+user-sent message send state.
 
 ### Text Validation
 
@@ -351,8 +356,9 @@ Recommended fallback interval:
 
 - Offline queue for files and voice.
 - Upload progress bars for attachments.
-- Read receipts implementation. It is covered by
-  `docs/superpowers/plans/2026-06-04-chatwoot-agent-read-webhook-read-receipts.md`.
+- Customer-read and typing implementation. It is covered by
+  `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`.
+- Portal-visible two-check read receipts for user-sent messages.
 - Delivered-to-agent/device receipts as a send-state replacement.
 - Message editing.
 - Manual `mark read` button.
