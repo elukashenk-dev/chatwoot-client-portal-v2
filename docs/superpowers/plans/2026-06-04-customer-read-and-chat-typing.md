@@ -117,8 +117,8 @@ Viewport rule:
 
 ## Focused Review: F-CHAT-006 Realtime Health
 
-`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` is a
-prerequisite for this plan. Current portal code has:
+F-CHAT-006 realtime health was a prerequisite for this plan and is now closed by
+Task 0. Current portal code has:
 
 - `useChatRealtimeConnection` consuming SSE `messages` and `chat-state` events;
 - `useChatResumeResync` refreshing on browser `online` and foreground
@@ -253,11 +253,10 @@ Task 0 below must be completed before Task 4 read sync and Task 6 agent typing.
 - Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.test.tsx`
 
-This task closes `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md`
-after implementation and verification. Do not start Task 4 or Task 6 until this
-task is complete.
+Implementation status: completed in Task 0; F-CHAT-006 is closed after
+verification. Task 4 and Task 6 can now rely on this realtime health baseline.
 
-- [ ] **Step 1: Write failing health fallback tests**
+- [x] **Step 1: Write failing health fallback tests**
 
 Create `useChatRealtimeHealthFallback.test.tsx` with fake timers.
 
@@ -313,12 +312,12 @@ describe('useChatRealtimeHealthFallback', () => {
 })
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
 ```bash
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx \
   src/features/chat/pages/useChatRealtimeConnection.test.tsx \
   src/features/chat/pages/ChatPage.test.tsx
@@ -327,7 +326,7 @@ pnpm -C frontend vitest run \
 Expected: fail because the health fallback hook and realtime activity callback
 do not exist.
 
-- [ ] **Step 3: Add EventSource activity/error callbacks**
+- [x] **Step 3: Add EventSource activity/error callbacks**
 
 In `chatRealtimeClient.ts`, extend `OpenChatRealtimeInput`:
 
@@ -364,7 +363,7 @@ eventSource.addEventListener('error', () => {
 })
 ```
 
-- [ ] **Step 4: Report realtime activity from `useChatRealtimeConnection`**
+- [x] **Step 4: Report realtime activity from `useChatRealtimeConnection`**
 
 Extend `UseChatRealtimeConnectionInput`:
 
@@ -405,7 +404,7 @@ const realtimeConnection = openChatRealtime({
 `chatRealtimeClient` reports activity through `onActivity`, so the snapshot
 handlers above must not call `handleRealtimeActivity()` again.
 
-- [ ] **Step 5: Implement bounded fallback hook**
+- [x] **Step 5: Implement bounded fallback hook**
 
 Create `useChatRealtimeHealthFallback.ts`:
 
@@ -424,6 +423,10 @@ type UseChatRealtimeHealthFallbackInput = {
   snapshotExists: boolean
 }
 
+function documentIsVisible() {
+  return typeof document === 'undefined' || document.visibilityState === 'visible'
+}
+
 export function useChatRealtimeHealthFallback({
   canUseBackend,
   isRealtimeSupported,
@@ -433,7 +436,7 @@ export function useChatRealtimeHealthFallback({
 }: UseChatRealtimeHealthFallbackInput) {
   const fallbackInFlightRef = useRef(false)
   const lastFallbackAtRef = useRef(0)
-  const lastRealtimeActivityAtRef = useRef(Date.now())
+  const lastRealtimeActivityAtRef = useRef(0)
 
   const reportRealtimeActivity = useCallback(() => {
     lastRealtimeActivityAtRef.current = Date.now()
@@ -457,7 +460,7 @@ export function useChatRealtimeHealthFallback({
     }
 
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
+      if (!documentIsVisible()) {
         return
       }
 
@@ -476,9 +479,11 @@ export function useChatRealtimeHealthFallback({
       fallbackInFlightRef.current = true
       lastFallbackAtRef.current = now
 
-      void refreshChatSnapshot().finally(() => {
-        fallbackInFlightRef.current = false
-      })
+      void refreshChatSnapshot()
+        .catch(() => {})
+        .finally(() => {
+          fallbackInFlightRef.current = false
+        })
     }, REALTIME_HEALTH_CHECK_INTERVAL_MS)
 
     return () => {
@@ -500,7 +505,7 @@ Important: successful fallback refresh must not update
 `lastRealtimeActivityAtRef`. If SSE is still silent, the hook should keep using
 the capped fallback interval until a real SSE activity callback arrives.
 
-- [ ] **Step 6: Wire health fallback in `ChatPage`**
+- [x] **Step 6: Wire health fallback in `ChatPage`**
 
 Create the health hook after `realtimeThreadId` and before
 `useChatRealtimeConnection`:
@@ -511,16 +516,13 @@ const { reportRealtimeActivity } = useChatRealtimeHealthFallback({
   isRealtimeSupported,
   realtimeThreadId,
   refreshChatSnapshot,
-  snapshotExists: pageState.status === 'ready' && pageState.snapshot !== null,
+  snapshotExists: pageState.status === 'ready',
 })
 
 useChatRealtimeConnection({
   isMountedRef,
   markBrowserOnline: markChatOnline,
   onRealtimeActivity: reportRealtimeActivity,
-  onRealtimeError: () => {
-    // Do not mark offline on EventSource error alone; browser may reconnect.
-  },
   setPageState,
   threadId: realtimeThreadId,
 })
@@ -529,12 +531,13 @@ useChatRealtimeConnection({
 Do not call customer read sync from this hook. The fallback only refreshes data;
 Task 4 remains responsible for viewport-confirmed read sync after render.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
 ```bash
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
+  src/features/chat/api/chatRealtimeClient.test.ts \
   src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx \
   src/features/chat/pages/useChatRealtimeConnection.test.tsx \
   src/features/chat/pages/ChatPage.test.tsx
@@ -542,7 +545,7 @@ pnpm -C frontend vitest run \
 
 Expected: pass.
 
-- [ ] **Step 8: Focused smoke review checkpoint**
+- [x] **Step 8: Focused smoke review checkpoint**
 
 Review this point only:
 
@@ -555,8 +558,7 @@ Review this point only:
 - fallback does not affect unread/push except through the existing
   `useChatSnapshotRefresh` snapshot merge path.
 
-Close `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` only
-after these checks pass.
+F-CHAT-006 was closed after these checks passed.
 
 Commit:
 
@@ -1390,10 +1392,9 @@ git commit -m "feat: sync portal customer reads to chatwoot"
 
 ## Task 4: Add Viewport-Driven Frontend Read Sync
 
-Prerequisite: Task 0 must be complete and
-`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` must be closed,
-because read sync depends on messages being rendered from either healthy
-realtime or bounded fallback snapshots.
+Prerequisite satisfied: Task 0 is complete and F-CHAT-006 is closed. Read sync
+depends on messages being rendered from either healthy realtime or bounded
+fallback snapshots.
 
 **Files:**
 
@@ -1808,9 +1809,8 @@ git commit -m "feat: sync portal typing to chatwoot"
 
 ## Task 6: Chatwoot Agent Typing To Portal User
 
-Prerequisite: Task 0 must be complete and
-`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` must be closed,
-because agent typing reaches the portal through the same SSE health boundary.
+Prerequisite satisfied: Task 0 is complete and F-CHAT-006 is closed. Agent
+typing reaches the portal through the same SSE health boundary.
 
 **Files:**
 
@@ -2191,9 +2191,8 @@ https://lk.provgroup.ru/api/chatwoot/webhooks
 
 Spec coverage:
 
-- Realtime health fallback prerequisite is covered by Task 0 and must close
-  `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` before Task 4
-  or Task 6 starts.
+- Realtime health fallback prerequisite is covered by Task 0; F-CHAT-006 is
+  closed before Task 4 or Task 6 starts.
 - Customer read to agent is covered by Tasks 1-4 and runtime smoke.
 - Portal user typing to agent is covered by Task 5.
 - Agent typing to portal user is covered by Task 6.

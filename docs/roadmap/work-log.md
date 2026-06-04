@@ -217,6 +217,9 @@
 - Root code-health gate восстановлен без роста allowlist: oversized chat,
   offline и PWA модули разнесены на smaller helpers/test-support files, поэтому
   root `pnpm lint` снова проходит code-health и package eslint.
+- Chat realtime health fallback закрывает `F-CHAT-006`: видимый активный чат с
+  stale SSE теперь ограниченно обновляет latest snapshot через backend, не
+  помечая сообщения прочитанными и не меняя unread/push напрямую.
 
 ## Current Baseline
 
@@ -235,4 +238,5 @@
 
 ## Recommended Next Step
 
-- Close `F-MT-004` before starting `MT-9` tenant admin and branding rebuild.
+- Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
+  with Task 1: store Chatwoot public API identifiers.

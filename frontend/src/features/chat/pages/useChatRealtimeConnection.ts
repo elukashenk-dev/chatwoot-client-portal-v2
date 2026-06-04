@@ -16,6 +16,8 @@ import {
 type UseChatRealtimeConnectionInput = {
   isMountedRef: MutableRefObject<boolean>
   markBrowserOnline: () => void
+  onRealtimeActivity?: () => void
+  onRealtimeError?: () => void
   setPageState: Dispatch<SetStateAction<ChatPageState>>
   threadId: string | null
 }
@@ -23,6 +25,8 @@ type UseChatRealtimeConnectionInput = {
 export function useChatRealtimeConnection({
   isMountedRef,
   markBrowserOnline,
+  onRealtimeActivity,
+  onRealtimeError,
   setPageState,
   threadId,
 }: UseChatRealtimeConnectionInput) {
@@ -32,6 +36,7 @@ export function useChatRealtimeConnection({
     }
 
     const realtimeConnection = openChatRealtime({
+      onActivity: onRealtimeActivity,
       onChatState: (realtimeSnapshot) => {
         if (!isMountedRef.current) {
           return
@@ -74,6 +79,7 @@ export function useChatRealtimeConnection({
           }
         })
       },
+      onError: onRealtimeError,
       onMessages: (realtimeSnapshot) => {
         if (!isMountedRef.current) {
           return
@@ -133,5 +139,12 @@ export function useChatRealtimeConnection({
     return () => {
       realtimeConnection.close()
     }
-  }, [isMountedRef, markBrowserOnline, setPageState, threadId])
+  }, [
+    isMountedRef,
+    markBrowserOnline,
+    onRealtimeActivity,
+    onRealtimeError,
+    setPageState,
+    threadId,
+  ])
 }

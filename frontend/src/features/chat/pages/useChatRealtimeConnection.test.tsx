@@ -97,4 +97,31 @@ describe('useChatRealtimeConnection', () => {
       threads: [expect.objectContaining({ id: 'private:me', unreadCount: 0 })],
     })
   })
+
+  it('exposes realtime activity and error callbacks to the connection client', () => {
+    const onRealtimeActivity = vi.fn()
+    const onRealtimeError = vi.fn()
+
+    renderHook(() =>
+      useChatRealtimeConnection({
+        isMountedRef: { current: true },
+        markBrowserOnline: vi.fn(),
+        onRealtimeActivity,
+        onRealtimeError,
+        setPageState: vi.fn(),
+        threadId: 'private:me',
+      }),
+    )
+
+    const realtimeOptions = openChatRealtimeMock.mock.calls[0]?.[0]
+    expect(realtimeOptions).toBeDefined()
+    expect(realtimeOptions!.onActivity).toEqual(expect.any(Function))
+    expect(realtimeOptions!.onError).toEqual(expect.any(Function))
+
+    realtimeOptions!.onActivity!()
+    realtimeOptions!.onError!()
+
+    expect(onRealtimeActivity).toHaveBeenCalledTimes(1)
+    expect(onRealtimeError).toHaveBeenCalledTimes(1)
+  })
 })

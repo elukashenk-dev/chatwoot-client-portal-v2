@@ -40,6 +40,7 @@ import {
   useChatPageViewState,
 } from './useChatPageViewState'
 import { useChatPushStaleMarkerRefresh } from './useChatPushStaleMarkerRefresh'
+import { useChatRealtimeHealthFallback } from './useChatRealtimeHealthFallback'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
 import { useChatSearchResultContext } from './useChatSearchResultContext'
@@ -298,10 +299,18 @@ export function ChatPage() {
     setPageState,
   })
   const realtimeThreadId = getChatPageRealtimeThreadId(pageState)
+  const { reportRealtimeActivity } = useChatRealtimeHealthFallback({
+    canUseBackend,
+    isRealtimeSupported,
+    realtimeThreadId,
+    refreshChatSnapshot,
+    snapshotExists: pageState.status === 'ready',
+  })
 
   useChatRealtimeConnection({
     isMountedRef,
     markBrowserOnline: markChatOnline,
+    onRealtimeActivity: reportRealtimeActivity,
     setPageState,
     threadId: realtimeThreadId,
   })
