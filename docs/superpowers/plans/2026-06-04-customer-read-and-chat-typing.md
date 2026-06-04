@@ -113,8 +113,54 @@ Viewport rule:
   transcript auto-follow is active, the frontend calls mark-read after the new
   message renders.
 
+## Focused Review: F-CHAT-006 Realtime Health
+
+`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` is a
+prerequisite for this plan. Current portal code has:
+
+- `useChatRealtimeConnection` consuming SSE `messages` and `chat-state` events;
+- `useChatResumeResync` refreshing on browser `online` and foreground
+  `visibilitychange`;
+- `useChatSnapshotRefresh` fetching the latest active-thread snapshot and
+  merging it through `mergeRealtimeSnapshot`.
+
+The missing piece is a visible-tab health monitor for a silent or half-open
+`EventSource`. VPN/mobile network failures can keep `navigator.onLine === true`
+while no SSE events arrive. That matters for this feature because:
+
+- agent typing reaches portal only through SSE;
+- new agent messages reach portal through SSE or snapshot refresh;
+- customer read sync is intentionally viewport-driven and can only fire after
+  the message actually renders.
+
+Business rule:
+
+- Do not mark Chatwoot read merely because realtime is stale.
+- Do not mark the app offline merely because SSE is stale.
+- While the tab is visible, backend is usable and SSE has no activity for a
+  bounded stale window, refresh the active thread snapshot on a capped interval.
+- Stop fallback refresh when realtime activity resumes, when the tab is hidden,
+  when backend is unavailable, or when there is no ready active thread.
+- Use existing `mergeRealtimeSnapshot` so a fallback snapshot and later realtime
+  event cannot duplicate messages.
+
+Task 0 below must be completed before Task 4 read sync and Task 6 agent typing.
+
 ## File Structure
 
+- Modify: `frontend/src/features/chat/api/chatRealtimeClient.ts`
+  - Add `onError` and activity callbacks for EventSource open/message/error
+    bookkeeping.
+- Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.ts`
+  - Report realtime activity to the health monitor without changing snapshot
+    merge semantics.
+- Create: `frontend/src/features/chat/pages/useChatRealtimeHealthFallback.ts`
+  - Detect stale visible realtime connections and call bounded
+    `refreshChatSnapshot`.
+- Create: `frontend/src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx`
+  - Unit coverage for stale SSE, recovery, hidden tab and bounded fallback.
+- Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
+  - Wire realtime activity tracking before customer read/typing hooks.
 - Modify: `backend/src/db/schema.ts`
   - Add `portal_tenants.chatwoot_portal_inbox_identifier`.
   - Add `portal_chat_threads.chatwoot_contact_source_id`.
@@ -189,9 +235,333 @@ Viewport rule:
   - Small transcript-adjacent indicator.
 - Create or modify frontend tests under `frontend/src/features/chat/pages/`.
 - Create: `tests/e2e/chat-customer-read-and-typing.spec.ts`
-  - Runtime smoke for read sync and typing webhooks.
+  - Runtime smoke for realtime fallback, read sync and typing webhooks.
 - Modify: `docs/product/chat-message-send-ui-scenarios.md`
   - Replace risky read-receipt scenarios with customer-read and typing rules.
+
+## Task 0: Realtime Health Snapshot Fallback
+
+**Files:**
+
+- Modify: `frontend/src/features/chat/api/chatRealtimeClient.ts`
+- Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.ts`
+- Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.test.tsx`
+- Create: `frontend/src/features/chat/pages/useChatRealtimeHealthFallback.ts`
+- Create: `frontend/src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatPage.test.tsx`
+
+This task closes `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md`
+after implementation and verification. Do not start Task 4 or Task 6 until this
+task is complete.
+
+- [ ] **Step 1: Write failing health fallback tests**
+
+Create `useChatRealtimeHealthFallback.test.tsx` with fake timers.
+
+Cover:
+
+- stale visible realtime triggers `refreshChatSnapshot`;
+- normal realtime activity prevents fallback refresh;
+- fallback refresh is capped and does not run aggressively;
+- hidden document does not refresh;
+- unavailable backend does not loop aggressively and lets existing connection
+  error handling mark the chat offline;
+- changing `realtimeThreadId` resets activity timestamps;
+- duplicate merge safety stays delegated to `useChatSnapshotRefresh` and
+  `mergeRealtimeSnapshot`.
+
+Example test:
+
+```ts
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { useChatRealtimeHealthFallback } from './useChatRealtimeHealthFallback'
+
+describe('useChatRealtimeHealthFallback', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('refreshes the active snapshot when visible realtime is stale', async () => {
+    const refreshChatSnapshot = vi.fn().mockResolvedValue(undefined)
+
+    renderHook(() =>
+      useChatRealtimeHealthFallback({
+        canUseBackend: true,
+        isRealtimeSupported: true,
+        realtimeThreadId: 'private:me',
+        refreshChatSnapshot,
+        snapshotExists: true,
+      }),
+    )
+
+    await act(async () => {
+      vi.advanceTimersByTime(31_000)
+      await Promise.resolve()
+    })
+
+    expect(refreshChatSnapshot).toHaveBeenCalledTimes(1)
+  })
+})
+```
+
+- [ ] **Step 2: Run failing tests**
+
+Run:
+
+```bash
+pnpm -C frontend vitest run \
+  src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx \
+  src/features/chat/pages/useChatRealtimeConnection.test.tsx \
+  src/features/chat/pages/ChatPage.test.tsx
+```
+
+Expected: fail because the health fallback hook and realtime activity callback
+do not exist.
+
+- [ ] **Step 3: Add EventSource activity/error callbacks**
+
+In `chatRealtimeClient.ts`, extend `OpenChatRealtimeInput`:
+
+```ts
+type OpenChatRealtimeInput = {
+  onActivity?: () => void
+  onChatState: (snapshot: ChatMessagesSnapshot) => void
+  onError?: () => void
+  onOpen?: () => void
+  onMessages: (snapshot: ChatMessagesSnapshot) => void
+  threadId: string
+}
+```
+
+Call `onActivity` for `open`, `messages` and `chat-state`. Call `onError` for
+EventSource `error`, but do not close the EventSource there; browser retry
+behavior remains responsible for reconnecting.
+
+```ts
+eventSource.addEventListener('open', () => {
+  onActivity?.()
+  onOpen?.()
+})
+eventSource.addEventListener('messages', (event) => {
+  onActivity?.()
+  onMessages(readSnapshotEvent(event))
+})
+eventSource.addEventListener('chat-state', (event) => {
+  onActivity?.()
+  onChatState(readSnapshotEvent(event))
+})
+eventSource.addEventListener('error', () => {
+  onError?.()
+})
+```
+
+- [ ] **Step 4: Report realtime activity from `useChatRealtimeConnection`**
+
+Extend `UseChatRealtimeConnectionInput`:
+
+```ts
+type UseChatRealtimeConnectionInput = {
+  isMountedRef: MutableRefObject<boolean>
+  markBrowserOnline: () => void
+  onRealtimeActivity?: () => void
+  onRealtimeError?: () => void
+  setPageState: Dispatch<SetStateAction<ChatPageState>>
+  threadId: string | null
+}
+```
+
+Pass callbacks to `openChatRealtime`:
+
+```ts
+const handleRealtimeActivity = () => {
+  onRealtimeActivity?.()
+}
+
+const realtimeConnection = openChatRealtime({
+  onActivity: handleRealtimeActivity,
+  onError: onRealtimeError,
+  onChatState: (realtimeSnapshot) => {
+    // existing onChatState body stays unchanged
+  },
+  onMessages: (realtimeSnapshot) => {
+    // existing onMessages body stays unchanged
+  },
+  onOpen: () => {
+    // existing onOpen body stays unchanged
+  },
+  threadId,
+})
+```
+
+`chatRealtimeClient` reports activity through `onActivity`, so the snapshot
+handlers above must not call `handleRealtimeActivity()` again.
+
+- [ ] **Step 5: Implement bounded fallback hook**
+
+Create `useChatRealtimeHealthFallback.ts`:
+
+```ts
+import { useCallback, useEffect, useRef } from 'react'
+
+const REALTIME_STALE_AFTER_MS = 30_000
+const REALTIME_HEALTH_CHECK_INTERVAL_MS = 5_000
+const REALTIME_FALLBACK_MIN_INTERVAL_MS = 20_000
+
+type UseChatRealtimeHealthFallbackInput = {
+  canUseBackend: boolean
+  isRealtimeSupported: boolean
+  realtimeThreadId: string | null
+  refreshChatSnapshot: () => Promise<void>
+  snapshotExists: boolean
+}
+
+export function useChatRealtimeHealthFallback({
+  canUseBackend,
+  isRealtimeSupported,
+  realtimeThreadId,
+  refreshChatSnapshot,
+  snapshotExists,
+}: UseChatRealtimeHealthFallbackInput) {
+  const fallbackInFlightRef = useRef(false)
+  const lastFallbackAtRef = useRef(0)
+  const lastRealtimeActivityAtRef = useRef(Date.now())
+
+  const reportRealtimeActivity = useCallback(() => {
+    lastRealtimeActivityAtRef.current = Date.now()
+    fallbackInFlightRef.current = false
+  }, [])
+
+  useEffect(() => {
+    lastRealtimeActivityAtRef.current = Date.now()
+    lastFallbackAtRef.current = 0
+    fallbackInFlightRef.current = false
+  }, [realtimeThreadId])
+
+  useEffect(() => {
+    if (
+      !canUseBackend ||
+      !isRealtimeSupported ||
+      !realtimeThreadId ||
+      !snapshotExists
+    ) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      const now = Date.now()
+      const realtimeIsStale =
+        now - lastRealtimeActivityAtRef.current >= REALTIME_STALE_AFTER_MS
+
+      if (!realtimeIsStale || fallbackInFlightRef.current) {
+        return
+      }
+
+      if (now - lastFallbackAtRef.current < REALTIME_FALLBACK_MIN_INTERVAL_MS) {
+        return
+      }
+
+      fallbackInFlightRef.current = true
+      lastFallbackAtRef.current = now
+
+      void refreshChatSnapshot().finally(() => {
+        fallbackInFlightRef.current = false
+      })
+    }, REALTIME_HEALTH_CHECK_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [
+    canUseBackend,
+    isRealtimeSupported,
+    realtimeThreadId,
+    refreshChatSnapshot,
+    snapshotExists,
+  ])
+
+  return { reportRealtimeActivity }
+}
+```
+
+Important: successful fallback refresh must not update
+`lastRealtimeActivityAtRef`. If SSE is still silent, the hook should keep using
+the capped fallback interval until a real SSE activity callback arrives.
+
+- [ ] **Step 6: Wire health fallback in `ChatPage`**
+
+Create the health hook after `realtimeThreadId` and before
+`useChatRealtimeConnection`:
+
+```ts
+const { reportRealtimeActivity } = useChatRealtimeHealthFallback({
+  canUseBackend,
+  isRealtimeSupported,
+  realtimeThreadId,
+  refreshChatSnapshot,
+  snapshotExists: pageState.status === 'ready' && pageState.snapshot !== null,
+})
+
+useChatRealtimeConnection({
+  isMountedRef,
+  markBrowserOnline: markChatOnline,
+  onRealtimeActivity: reportRealtimeActivity,
+  onRealtimeError: () => {
+    // Do not mark offline on EventSource error alone; browser may reconnect.
+  },
+  setPageState,
+  threadId: realtimeThreadId,
+})
+```
+
+Do not call customer read sync from this hook. The fallback only refreshes data;
+Task 4 remains responsible for viewport-confirmed read sync after render.
+
+- [ ] **Step 7: Run focused tests**
+
+Run:
+
+```bash
+pnpm -C frontend vitest run \
+  src/features/chat/pages/useChatRealtimeHealthFallback.test.tsx \
+  src/features/chat/pages/useChatRealtimeConnection.test.tsx \
+  src/features/chat/pages/ChatPage.test.tsx
+```
+
+Expected: pass.
+
+- [ ] **Step 8: Focused smoke review checkpoint**
+
+Review this point only:
+
+- silent SSE while visible triggers capped snapshot refresh;
+- real SSE activity stops fallback refresh;
+- hidden tab does not refresh;
+- offline/backend-unavailable state does not poll;
+- fallback snapshot merge does not duplicate messages;
+- fallback does not mark messages read;
+- fallback does not affect unread/push except through the existing
+  `useChatSnapshotRefresh` snapshot merge path.
+
+Close `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` only
+after these checks pass.
+
+Commit:
+
+```bash
+git add frontend/src/features/chat
+git commit -m "feat: add chat realtime health fallback"
+```
 
 ## Task 1: Store Chatwoot Public API Identifiers
 
@@ -1018,6 +1388,11 @@ git commit -m "feat: sync portal customer reads to chatwoot"
 
 ## Task 4: Add Viewport-Driven Frontend Read Sync
 
+Prerequisite: Task 0 must be complete and
+`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` must be closed,
+because read sync depends on messages being rendered from either healthy
+realtime or bounded fallback snapshots.
+
 **Files:**
 
 - Modify: `frontend/src/features/chat/api/chatClient.ts`
@@ -1431,6 +1806,10 @@ git commit -m "feat: sync portal typing to chatwoot"
 
 ## Task 6: Chatwoot Agent Typing To Portal User
 
+Prerequisite: Task 0 must be complete and
+`docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` must be closed,
+because agent typing reaches the portal through the same SSE health boundary.
+
 **Files:**
 
 - Modify: `backend/src/modules/chat-realtime/hub.ts`
@@ -1667,7 +2046,20 @@ Create e2e that:
 5. asserts indicator disappears;
 6. asserts no extra message bubble appears.
 
-- [ ] **Step 2: Add mark-read e2e**
+- [ ] **Step 2: Add stale realtime fallback e2e**
+
+E2E should simulate or stub a silent realtime connection while backend message
+fetch still works:
+
+1. open portal chat with a ready latest snapshot;
+2. prevent new SSE `messages` events from reaching the page;
+3. make `/api/chat/messages` return one newer agent message;
+4. advance timers past the stale realtime window;
+5. assert the newer message appears through fallback refresh;
+6. assert it appears once even if a delayed realtime `messages` event later
+   contains the same message id.
+
+- [ ] **Step 3: Add mark-read e2e**
 
 E2E should stub/observe backend Chatwoot public call where possible. If full
 Chatwoot runtime is available, verify that opening latest private thread near
@@ -1683,7 +2075,7 @@ and does not call it when:
 - search/history fragment is active;
 - user is scrolled away from the bottom.
 
-- [ ] **Step 3: Add typing-to-agent e2e**
+- [ ] **Step 4: Add typing-to-agent e2e**
 
 With local Chatwoot running, type in portal composer and verify backend calls:
 
@@ -1693,7 +2085,7 @@ POST /public/api/v1/inboxes/:inbox_identifier/contacts/:source_id/conversations/
 
 for `on`, then `off`.
 
-- [ ] **Step 4: Update scenario docs**
+- [ ] **Step 5: Update scenario docs**
 
 In `docs/product/chat-message-send-ui-scenarios.md`, replace old
 `conversation_agent_read` scenarios with:
@@ -1701,9 +2093,10 @@ In `docs/product/chat-message-send-ui-scenarios.md`, replace old
 - customer read to agent;
 - portal user typing to agent;
 - agent typing to portal user;
+- stale realtime fallback before read/typing;
 - offline/history no-read guardrail.
 
-- [ ] **Step 5: Run targeted checks**
+- [ ] **Step 6: Run targeted checks**
 
 Run:
 
@@ -1721,7 +2114,7 @@ Expected: pass. If Playwright is blocked by local Chatwoot readiness, record
 the exact blocker and run backend/frontend unit coverage plus manual runtime
 smoke.
 
-- [ ] **Step 6: Runtime manual smoke**
+- [ ] **Step 7: Runtime manual smoke**
 
 Manual cases:
 
@@ -1730,13 +2123,15 @@ Manual cases:
 2. Agent sends a private message; portal user is reading old history above
    bottom; agent does not see read until user returns to bottom.
 3. Portal opens from offline cache; Chatwoot read state does not change.
-4. Portal user types in private chat; agent sees customer typing.
-5. Agent types in private chat; portal shows `Сотрудник печатает...`.
-6. Agent stops typing; portal indicator disappears.
-7. Group thread: customer-read is skipped; typing is generic and does not claim
+4. Simulated stale SSE while backend is reachable eventually refreshes the
+   latest active-thread snapshot without duplicate messages.
+5. Portal user types in private chat; agent sees customer typing.
+6. Agent types in private chat; portal shows `Сотрудник печатает...`.
+7. Agent stops typing; portal indicator disappears.
+8. Group thread: customer-read is skipped; typing is generic and does not claim
    per-user read.
 
-- [ ] **Step 7: Smoke review checkpoint**
+- [ ] **Step 8: Smoke review checkpoint**
 
 Review:
 
@@ -1746,6 +2141,7 @@ Review:
   - no unread/push mutation from read sync;
   - no auto-scroll caused by read/typing;
   - no group read lie.
+  - no customer read sync from stale realtime fallback before viewport render.
 
 Commit:
 
@@ -1779,6 +2175,9 @@ https://lk.provgroup.ru/api/chatwoot/webhooks
 
 Spec coverage:
 
+- Realtime health fallback prerequisite is covered by Task 0 and must close
+  `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md` before Task 4
+  or Task 6 starts.
 - Customer read to agent is covered by Tasks 1-4 and runtime smoke.
 - Portal user typing to agent is covered by Task 5.
 - Agent typing to portal user is covered by Task 6.
@@ -1809,7 +2208,11 @@ Risk review:
 - Typing is transient and not persisted as message/read state.
 - Missing public API identifiers fail closed and are fixed by tenant
   verify/configure scripts.
+- Realtime fallback refresh is data freshness only; it must not mark Chatwoot
+  read, mutate support-read state, trigger push or claim messages were viewed
+  before viewport confirmation.
 - Review finding closure:
+  - F-CHAT-006 realtime health snapshot fallback is covered by Task 0.
   - Public API timeout normalization is covered by Task 2.
   - Typing-to-agent fail-closed behavior is covered by Task 5.
   - Chatwoot typing `is_private` parsing is covered by Task 6.
