@@ -224,6 +224,9 @@
   Chatwoot API Channel public inbox identifier on tenant runtime state and
   Chatwoot contact source id on portal chat threads, without exposing these
   identifiers to browser APIs.
+- Chatwoot public conversation events client добавлен в backend integration
+  layer: customer last-seen and typing events can be posted through Chatwoot
+  Public API paths without sending the tenant API access token to those routes.
 
 ## Current Baseline
 
@@ -243,4 +246,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 2: add Chatwoot public conversation event client.
+  with Task 3: add customer read sync backend.

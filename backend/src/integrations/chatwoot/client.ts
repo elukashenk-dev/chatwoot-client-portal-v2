@@ -6,6 +6,7 @@ import {
 } from './errors.js'
 import { createChatwootMessageClient } from './messageClient.js'
 import { mapMessage } from './messagePayload.js'
+import { createPublicConversationEventsClient } from './publicConversationEvents.js'
 import {
   createChatwootFetch,
   normalizeChatwootRequestTimeoutMs,
@@ -570,6 +571,16 @@ export function createChatwootClient({
       baseUrl: config.baseUrl,
       portalInboxId: config.portalInboxId,
     }
+  }
+
+  function createPublicEventsClient() {
+    const resolvedConfig = assertConfigured()
+
+    return createPublicConversationEventsClient({
+      baseUrl: resolvedConfig.baseUrl,
+      fetchFn,
+      requestTimeoutMs,
+    })
   }
 
   async function requestJson(
@@ -1354,6 +1365,23 @@ export function createChatwootClient({
         lastActivityAt: readInteger(payload.last_activity_at),
         status: readString(payload.status) ?? 'open',
       }
+    },
+
+    updatePublicConversationLastSeen(input: {
+      contactIdentifier: string
+      conversationDisplayId: number
+      inboxIdentifier: string
+    }) {
+      return createPublicEventsClient().updateLastSeen(input)
+    },
+
+    togglePublicConversationTyping(input: {
+      contactIdentifier: string
+      conversationDisplayId: number
+      inboxIdentifier: string
+      typingStatus: 'off' | 'on'
+    }) {
+      return createPublicEventsClient().toggleTyping(input)
     },
 
     async findContactPortalInboxSourceId(contactId: number) {

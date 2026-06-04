@@ -820,7 +820,7 @@ git commit -m "feat: store chatwoot public api identifiers"
 - Modify: `backend/src/integrations/chatwoot/client.ts`
 - Modify: `backend/src/integrations/chatwoot/client.test.ts`
 
-- [ ] **Step 1: Write failing public client tests**
+- [x] **Step 1: Write failing public client tests**
 
 Create `backend/src/integrations/chatwoot/publicConversationEvents.test.ts`:
 
@@ -915,7 +915,7 @@ describe('createPublicConversationEventsClient', () => {
 })
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 Run:
 
@@ -925,7 +925,11 @@ pnpm -C backend vitest run src/integrations/chatwoot/publicConversationEvents.te
 
 Expected: fail because the file does not exist.
 
-- [ ] **Step 3: Implement public event client**
+Done in `feature/phase-chat-public-conversation-events`: RED failed because
+`publicConversationEvents.ts` did not exist and `createChatwootClient()` did not
+yet expose public last-seen/typing methods.
+
+- [x] **Step 3: Implement public event client**
 
 Create `backend/src/integrations/chatwoot/publicConversationEvents.ts`:
 
@@ -1064,7 +1068,7 @@ export function createPublicConversationEventsClient({
 }
 ```
 
-- [ ] **Step 4: Expose methods through tenant Chatwoot client**
+- [x] **Step 4: Expose methods through tenant Chatwoot client**
 
 In `backend/src/integrations/chatwoot/client.ts`, instantiate the public client
 after `resolvedConfig` is available and expose:
@@ -1102,7 +1106,7 @@ async togglePublicConversationTyping(input: {
 },
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run:
 
@@ -1114,7 +1118,7 @@ pnpm -C backend vitest run \
 
 Expected: pass.
 
-- [ ] **Step 6: Smoke review checkpoint**
+- [x] **Step 6: Smoke review checkpoint**
 
 Review:
 
@@ -1122,6 +1126,13 @@ Review:
 - browser still does not call Chatwoot directly;
 - failed public event calls are errors at backend service boundary;
 - no API token is sent to public API routes.
+
+Done in `feature/phase-chat-public-conversation-events`:
+
+- public API inbox/contact identifiers are URL-encoded in the new client tests;
+- only backend Chatwoot integration code calls the Chatwoot public event paths;
+- non-2xx public API responses throw `ChatwootClientRequestError`;
+- public event requests intentionally omit `api_access_token`.
 
 Commit:
 
