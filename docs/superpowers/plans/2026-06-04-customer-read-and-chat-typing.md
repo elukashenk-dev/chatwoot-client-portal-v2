@@ -2240,22 +2240,28 @@ git commit -m "feat: show chatwoot agent typing in portal"
 **Files:**
 
 - Create: `tests/e2e/chat-customer-read-and-typing.spec.ts`
-- Modify e2e test helpers to sign Chatwoot webhook payloads and expose the
-  currently mapped portal thread id.
+- Add Playwright runtime helpers for controlled portal API responses and
+  controlled SSE `typing`/`messages` events.
 - Modify: `docs/product/chat-message-send-ui-scenarios.md`
 
-- [ ] **Step 1: Add mocked-webhook e2e**
+- [x] **Step 1: Add agent-typing realtime e2e**
 
 Create e2e that:
 
 1. opens portal chat;
-2. posts signed `conversation_typing_on` webhook for the mapped conversation;
+2. emits a controlled portal realtime `typing` event that matches Chatwoot
+   webhook fanout output;
 3. asserts a textless animated three-dot typing indicator appears;
-4. posts signed `conversation_typing_off`;
+4. emits controlled typing `off`;
 5. asserts indicator disappears;
 6. asserts no extra message bubble appears.
 
-- [ ] **Step 2: Add stale realtime fallback e2e**
+Signed Chatwoot webhook payload, signature verification, duplicate delivery and
+conversation mapping remain covered by backend `chatwoot-webhooks` tests. The
+Playwright smoke owns the browser/runtime contract after the backend has already
+published a `typing` SSE event.
+
+- [x] **Step 2: Add stale realtime fallback e2e**
 
 E2E should simulate or stub a silent realtime connection while backend message
 fetch still works:
@@ -2268,25 +2274,36 @@ fetch still works:
 6. assert it appears once even if a delayed realtime `messages` event later
    contains the same message id.
 
-- [ ] **Step 3: Add mark-read e2e**
+- [x] **Step 3: Add mark-read e2e**
 
-E2E should stub/observe backend Chatwoot public call where possible. If full
-Chatwoot runtime is available, verify that opening latest private thread near
-bottom calls:
+E2E stubs/observes the portal backend route and verifies that opening latest
+private thread near bottom calls:
+
+```text
+POST /api/chat/threads/:threadId/read
+```
+
+Backend route/service tests verify that this route calls Chatwoot Public API:
 
 ```text
 POST /public/api/v1/inboxes/:inbox_identifier/contacts/:source_id/conversations/:display_id/update_last_seen
 ```
 
-and does not call it when:
+Unit coverage owns no-read guardrails for:
 
 - app opens offline cache;
 - search/history fragment is active;
 - user is scrolled away from the bottom.
 
-- [ ] **Step 4: Add typing-to-agent e2e**
+- [x] **Step 4: Add typing-to-agent e2e**
 
-With local Chatwoot running, type in portal composer and verify backend calls:
+E2E types in portal composer and verifies the browser calls the portal backend:
+
+```text
+POST /api/chat/threads/:threadId/typing
+```
+
+Backend route/service tests verify that this route calls Chatwoot Public API:
 
 ```text
 POST /public/api/v1/inboxes/:inbox_identifier/contacts/:source_id/conversations/:display_id/toggle_typing
@@ -2294,7 +2311,7 @@ POST /public/api/v1/inboxes/:inbox_identifier/contacts/:source_id/conversations/
 
 for `on`, then `off`.
 
-- [ ] **Step 5: Update scenario docs**
+- [x] **Step 5: Update scenario docs**
 
 In `docs/product/chat-message-send-ui-scenarios.md`, replace old
 `conversation_agent_read` scenarios with:
@@ -2305,7 +2322,7 @@ In `docs/product/chat-message-send-ui-scenarios.md`, replace old
 - stale realtime fallback before read/typing;
 - offline/history no-read guardrail.
 
-- [ ] **Step 6: Run targeted checks**
+- [x] **Step 6: Run targeted checks**
 
 Run:
 
@@ -2325,6 +2342,11 @@ smoke.
 
 - [ ] **Step 7: Runtime manual smoke**
 
+Manual runtime smoke remains a rollout step with local/production Chatwoot
+available. Automated Playwright smoke covers the portal runtime paths below;
+human smoke should still verify what the agent sees in the real Chatwoot
+dashboard.
+
 Manual cases:
 
 1. Agent sends a private message; portal user is at bottom; agent sees message
@@ -2341,7 +2363,7 @@ Manual cases:
 8. Group thread: customer-read is skipped; typing is generic and does not claim
    per-user read.
 
-- [ ] **Step 8: Smoke review checkpoint**
+- [x] **Step 8: Smoke review checkpoint**
 
 Review:
 
@@ -2356,7 +2378,12 @@ Review:
 Commit:
 
 ```bash
-git add tests docs/product
+git add tests/e2e/chat-customer-read-and-typing.spec.ts \
+  frontend/src/features/chat/pages/ChatPage.presence.testSupport.ts \
+  frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx \
+  frontend/src/features/chat/pages/ChatPage.runtime.test.tsx \
+  docs/product/chat-message-send-ui-scenarios.md \
+  docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md
 git commit -m "test: smoke customer read and typing"
 ```
 

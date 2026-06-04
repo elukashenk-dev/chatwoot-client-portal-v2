@@ -61,10 +61,9 @@ Customer-read и typing реализуются отдельным планом:
 | 16  | Chat snapshot открыт из cache без связи                            | Сохраненные сообщения видны, новые тексты можно ставить в очередь, если offline storage доступен                                | Плашка `Нет связи. Показываем сохраненные сообщения.` или плашка с количеством очереди                                                                 | Read-only история доступна из cache, text outbox работает локально                                 |
 | 17  | Чат недоступен или не готов к отправке                             | Composer disabled, placeholder `Чат временно недоступен`                                                                        | Может быть not-ready экран или offline/error notice                                                                                                    | Отправка сообщений не запускается                                                                  |
 
-## Planned Customer Read And Typing Scenarios
+## Customer Read And Typing Scenarios
 
-Эти строки не описывают текущий код. Это целевая карта для будущего
-customer-read and typing slice.
+Эти строки описывают целевое поведение customer-read and typing slice.
 
 | #   | Сценарий                                                  | Что видно пользователю портала                                    | Что видит/получает агент в Chatwoot                                      | Итоговое правило                                                            |
 | --- | --------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
@@ -74,6 +73,7 @@ customer-read and typing slice.
 | R4  | Пользователь внизу, приходит новое сообщение агента       | Лента auto-follow показывает новое сообщение                      | После render portal вызывает `update_last_seen`                          | Если latest реально видим, agent-side read обновляется быстро               |
 | R5  | Пользователь отправил сообщение агенту                    | Исходящее сообщение остается `Отправлено` с одной галкой          | Агент получает обычное incoming message                                  | Нет portal-visible двух галочек без настоящего agent-read event             |
 | R6  | Пользователь typing в private chat                        | В портале нет отдельной плашки про собственный typing             | Агент видит customer typing indicator                                    | Backend вызывает Chatwoot public `toggle_typing` через tenant authority     |
-| R7  | Агент typing в Chatwoot                                   | Появляется `Сотрудник печатает...`, затем исчезает по off/timeout | Агент работает в стандартной админке                                     | Typing event transient; не создает message, push, unread или read receipt   |
+| R7  | Агент typing в Chatwoot                                   | Появляются три анимированные точки без текста и имени, затем исчезают по off/timeout | Агент работает в стандартной админке                                     | Typing event transient; не создает message, push, unread или read receipt   |
 | R8  | В group thread один участник открыл чат                   | В портале нет group read marker                                   | Chatwoot group contact read не синхронизируется                          | Нельзя честно показать per-user group read в стандартном Chatwoot dashboard |
 | R9  | В group thread пользователь typing                        | В портале нет отдельной плашки про собственный typing             | Агент может видеть generic group/contact typing                          | Group typing не обещает индивидуального участника                           |
+| R10 | Realtime SSE молчит, backend доступен                     | Latest transcript обновляется через bounded fallback без дублей   | Chatwoot read sync идет только после render и visible-bottom проверки     | Fallback отвечает за свежесть данных, а не за read/typing side effects       |

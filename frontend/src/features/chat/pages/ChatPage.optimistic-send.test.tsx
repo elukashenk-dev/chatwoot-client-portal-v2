@@ -11,10 +11,9 @@ import type { OfflineTextOutboxRecord } from '../../offline/types'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type { ChatMessagesSnapshot } from '../types'
+import { fetchWithChatPresenceRoutes } from './ChatPage.presence.testSupport'
 
-const CHAT_PAGE_LOAD_TIMEOUT = {
-  timeout: 5000,
-}
+const CHAT_PAGE_LOAD_TIMEOUT = { timeout: 5000 }
 
 const privateThread = {
   id: 'private:me',
@@ -45,9 +44,7 @@ function createThreadsResponse() {
 
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     status,
   })
 }
@@ -58,10 +55,7 @@ function createDeferredResponse() {
     resolveResponse = resolve
   })
 
-  return {
-    promise,
-    resolve: resolveResponse,
-  }
+  return { promise, resolve: resolveResponse }
 }
 
 function createAuthenticatedUserResponse(userId = 7) {
@@ -83,10 +77,7 @@ function createDeferredValue<TValue>() {
     resolveValue = resolve
   })
 
-  return {
-    promise,
-    resolve: resolveValue,
-  }
+  return { promise, resolve: resolveValue }
 }
 
 function createOutboxRecord(
@@ -235,7 +226,7 @@ describe('ChatPage optimistic text send', () => {
     window.localStorage.clear()
     await clearOfflineDatabaseForTests()
     setNavigatorStorageEstimate()
-    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('fetch', fetchWithChatPresenceRoutes(fetchMock))
   })
 
   afterEach(() => {

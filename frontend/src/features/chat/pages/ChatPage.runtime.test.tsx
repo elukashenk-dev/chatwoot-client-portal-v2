@@ -8,6 +8,7 @@ import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import type { ChatMessagesSnapshot } from '../types'
+import { fetchWithChatPresenceRoutes } from './ChatPage.presence.testSupport'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -222,7 +223,7 @@ describe('ChatPage runtime hardening', () => {
     window.localStorage.clear()
     await clearOfflineDatabaseForTests()
     MockEventSource.instances = []
-    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('fetch', fetchWithChatPresenceRoutes(fetchMock))
     vi.stubGlobal('EventSource', MockEventSource)
     setNavigatorStorageEstimate()
     setNavigatorOnline(true)
