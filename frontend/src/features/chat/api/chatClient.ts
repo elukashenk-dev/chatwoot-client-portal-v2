@@ -204,6 +204,14 @@ export async function getChatThreadInfo(threadId: string) {
   )
 }
 
+export async function markChatThreadRead(threadId: string) {
+  await request<void>(`/chat/threads/${encodeURIComponent(threadId)}/read`, {
+    method: 'POST',
+    networkErrorMessage:
+      'Не удалось синхронизировать прочтение чата. Попробуйте еще раз.',
+  })
+}
+
 export async function getChatNotificationSettings(threadId: string) {
   return request<ChatNotificationSettings>(
     `/chat/threads/${encodeURIComponent(threadId)}/notification-settings`,

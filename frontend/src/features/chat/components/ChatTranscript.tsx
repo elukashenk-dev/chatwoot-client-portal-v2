@@ -16,8 +16,13 @@ import {
   getTranscriptScrollAction,
   isTranscriptNearBottom,
 } from './ChatTranscriptScroll'
-import { ChevronUpIcon } from '../../../shared/ui/icons'
 import { DayDivider } from './chat-transcript/DayDivider'
+import {
+  HistoryFragmentBottomControls,
+  HistoryFragmentTopControls,
+  LoadOlderMessagesControls,
+  type HistoryFragmentControls,
+} from './chat-transcript/HistoryControls'
 import { MessageBubble } from './chat-transcript/MessageBubble'
 import { MessageContextMenu } from './chat-transcript/MessageContextMenu'
 import {
@@ -33,20 +38,15 @@ import {
   shouldUseDesktopMessageContextMenu,
   type MessageContextMenuState,
 } from './chat-transcript/utils'
+import {
+  useLatestMessagesVisibleReporter,
+  type LatestMessagesVisibleBoundary,
+} from './useLatestMessagesVisibleReporter'
 import { useTranscriptMessageScroll } from './useTranscriptMessageScroll'
 
 type ChatTranscriptProps = {
   forceScrollToBottomSignal?: number
-  historyFragmentControls?: {
-    errorMessage: string | null
-    hasMoreEarlier: boolean
-    hasMoreLater: boolean
-    isLoadingEarlier: boolean
-    isLoadingLater: boolean
-    onLoadEarlier: () => void
-    onLoadLater: () => void
-    onReturnToLatest: () => void
-  } | null
+  historyFragmentControls?: HistoryFragmentControls | null
   hasMoreOlder: boolean
   highlightedMessageId?: number | null
   historyErrorMessage: string | null
@@ -54,6 +54,7 @@ type ChatTranscriptProps = {
   isLoadingOlder: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
+  onLatestMessagesVisible?: (boundary: LatestMessagesVisibleBoundary) => void
   onReplyToMessage: (message: ChatMessage) => void
   onRetryTextMessage: (clientMessageKey: string) => void
   scrollToMessageId?: number | null
@@ -76,6 +77,7 @@ export function ChatTranscript({
   isLoadingOlder,
   messages,
   onLoadOlder,
+  onLatestMessagesVisible,
   onReplyToMessage,
   onRetryTextMessage,
   scrollToMessageId = null,
@@ -95,6 +97,11 @@ export function ChatTranscript({
   const shouldAutoFollowNewMessagesRef = useRef(true)
   const lastForceScrollToBottomSignalRef = useRef(forceScrollToBottomSignal)
   const lastScrollToMessageSignalRef = useRef(scrollToMessageSignal)
+  const reportLatestMessagesVisible = useLatestMessagesVisibleReporter({
+    hasHistoryFragmentControls: historyFragmentControls !== null,
+    messages,
+    onLatestMessagesVisible,
+  })
 
   const closeContextMenu = useCallback(
     ({
@@ -166,6 +173,7 @@ export function ChatTranscript({
 
       previousScrollSnapshotRef.current = nextSnapshot
       shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+      reportLatestMessagesVisible(scrollElement)
     }
 
     const action = getTranscriptScrollAction({
@@ -187,7 +195,7 @@ export function ChatTranscript({
     return () => {
       cancelNextFrame(frameId)
     }
-  }, [messages])
+  }, [messages, reportLatestMessagesVisible])
 
   useLayoutEffect(() => {
     if (
@@ -215,6 +223,7 @@ export function ChatTranscript({
         messages,
       )
       shouldAutoFollowNewMessagesRef.current = true
+      reportLatestMessagesVisible(scrollElement)
     }
 
     scrollToBottomAndCapture()
@@ -223,7 +232,7 @@ export function ChatTranscript({
     return () => {
       cancelNextFrame(frameId)
     }
-  }, [forceScrollToBottomSignal, messages])
+  }, [forceScrollToBottomSignal, messages, reportLatestMessagesVisible])
 
   useTranscriptMessageScroll({
     lastScrollToMessageSignalRef,
@@ -264,6 +273,7 @@ export function ChatTranscript({
 
         previousScrollSnapshotRef.current = nextSnapshot
         shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+        reportLatestMessagesVisible(scrollElement)
       })
     })
 
@@ -273,7 +283,7 @@ export function ChatTranscript({
       cancelNextFrame(frameId)
       observer.disconnect()
     }
-  }, [messages])
+  }, [messages, reportLatestMessagesVisible])
 
   function handleTranscriptScroll() {
     const scrollElement = scrollElementRef.current
@@ -293,6 +303,7 @@ export function ChatTranscript({
       scrollElement,
       messages,
     )
+    reportLatestMessagesVisible(scrollElement)
   }
 
   function handleOpenContextMenu(message: ChatMessage, event: MouseEvent) {
@@ -365,53 +376,16 @@ export function ChatTranscript({
           ref={messageListRef}
         >
           {historyFragmentControls ? (
-            <div className="mb-3 grid gap-2 self-stretch">
-              <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[12px] leading-5 text-brand-900">
-                <strong className="block text-[13px]">
-                  Показан фрагмент истории
-                </strong>
-                Найденное сообщение открыто в контексте переписки.
-              </div>
-              {historyFragmentControls.hasMoreEarlier ? (
-                <button
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
-                  disabled={historyFragmentControls.isLoadingEarlier}
-                  onClick={historyFragmentControls.onLoadEarlier}
-                  type="button"
-                >
-                  {historyFragmentControls.isLoadingEarlier
-                    ? 'Загружаем...'
-                    : 'Показать более ранние'}
-                </button>
-              ) : null}
-              {historyFragmentControls.errorMessage ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800">
-                  {historyFragmentControls.errorMessage}
-                </div>
-              ) : null}
-            </div>
-          ) : hasMoreOlder ? (
-            <div className="flex flex-col items-center gap-2 self-center">
-              <button
-                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-600 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
-                disabled={isLoadingOlder || !isConnectionAvailable}
-                onClick={onLoadOlder}
-                type="button"
-              >
-                <ChevronUpIcon className="h-[15px] w-[15px]" />
-                {isLoadingOlder
-                  ? 'Загружаем...'
-                  : !isConnectionAvailable
-                    ? 'Нет сети'
-                    : 'Загрузить более ранние сообщения'}
-              </button>
-              {historyErrorMessage ? (
-                <div className="max-w-[340px] rounded-[0.8rem] border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[12px] leading-5 text-amber-800">
-                  {historyErrorMessage}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+            <HistoryFragmentTopControls controls={historyFragmentControls} />
+          ) : (
+            <LoadOlderMessagesControls
+              hasMoreOlder={hasMoreOlder}
+              historyErrorMessage={historyErrorMessage}
+              isConnectionAvailable={isConnectionAvailable}
+              isLoadingOlder={isLoadingOlder}
+              onLoadOlder={onLoadOlder}
+            />
+          )}
 
           {messages.length === 0 ? (
             <div className="rounded-[1rem] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center text-[14px] leading-6 text-slate-500">
@@ -457,27 +431,7 @@ export function ChatTranscript({
           })}
 
           {historyFragmentControls ? (
-            <div className="mt-4 grid gap-2 self-stretch">
-              {historyFragmentControls.hasMoreLater ? (
-                <button
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-wait disabled:text-slate-300"
-                  disabled={historyFragmentControls.isLoadingLater}
-                  onClick={historyFragmentControls.onLoadLater}
-                  type="button"
-                >
-                  {historyFragmentControls.isLoadingLater
-                    ? 'Загружаем...'
-                    : 'Показать более поздние'}
-                </button>
-              ) : null}
-              <button
-                className="inline-flex min-h-11 items-center justify-center rounded-lg bg-brand-900 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-                onClick={historyFragmentControls.onReturnToLatest}
-                type="button"
-              >
-                К последним сообщениям
-              </button>
-            </div>
+            <HistoryFragmentBottomControls controls={historyFragmentControls} />
           ) : null}
         </div>
       </section>

@@ -133,6 +133,14 @@ function createNotificationSettingsResponse() {
   })
 }
 
+function createReadSyncResponse() {
+  return new Response(null, { status: 204 })
+}
+
+function hasVisibleIncomingMessage(snapshot: ChatMessagesSnapshot) {
+  return snapshot.messages.some((message) => message.direction === 'incoming')
+}
+
 const originalNavigatorMediaDevices = globalThis.navigator.mediaDevices
 
 function stubMicrophoneAccess() {
@@ -171,6 +179,14 @@ describe('ChatPage', () => {
     )
   }
 
+  function getAttachmentPostCalls() {
+    return fetchMock.mock.calls.filter(
+      ([url, options]) =>
+        String(url) === '/api/chat/messages/attachment' &&
+        options?.method === 'POST',
+    )
+  }
+
   beforeEach(async () => {
     await setupOfflineChatTestEnvironment()
     vi.stubGlobal('fetch', fetchMock)
@@ -192,10 +208,16 @@ describe('ChatPage', () => {
   function mockInitialReadyChatResponses(
     snapshot: ChatMessagesSnapshot = createReadySnapshot(),
   ) {
-    return fetchMock
+    const mockedFetch = fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(snapshot))
+
+    if (hasVisibleIncomingMessage(snapshot)) {
+      mockedFetch.mockResolvedValueOnce(createReadSyncResponse())
+    }
+
+    return mockedFetch
       .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
   }
@@ -281,6 +303,10 @@ describe('ChatPage', () => {
         return createJsonResponse(createReadySnapshot())
       }
 
+      if (url === '/api/chat/threads/private%3Ame/read') {
+        return createReadSyncResponse()
+      }
+
       if (url === '/api/chat/support-availability') {
         return createSupportAvailabilityResponse('outside_hours')
       }
@@ -331,6 +357,10 @@ describe('ChatPage', () => {
 
       if (url === '/api/chat/messages?threadId=private%3Ame') {
         return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/read') {
+        return createReadSyncResponse()
       }
 
       if (url === '/api/chat/support-availability') {
@@ -469,186 +499,6 @@ describe('ChatPage', () => {
       expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     })
     expect(chatMenuButton).toHaveFocus()
-  })
-
-  it('loads older messages through the bounded history cursor', async () => {
-    const user = userEvent.setup()
-
-    mockInitialReadyChatResponses(
-      createReadySnapshot({
-        hasMoreOlder: true,
-        messages: [
-          {
-            attachments: [],
-            authorName: 'Ольга Support',
-            authorRole: 'agent',
-            content: 'Последнее сообщение.',
-            contentType: 'text',
-            createdAt: '2026-04-21T10:00:00.000Z',
-            direction: 'incoming',
-            id: 205,
-            status: 'sent',
-          },
-        ],
-        nextOlderCursor: 205,
-      }),
-    ).mockResolvedValueOnce(
-      createJsonResponse(
-        createReadySnapshot({
-          hasMoreOlder: false,
-          messages: [
-            {
-              attachments: [],
-              authorName: 'Вы',
-              authorRole: 'current_user',
-              content: 'Ранее отправленное сообщение.',
-              contentType: 'text',
-              createdAt: '2026-04-20T08:00:00.000Z',
-              direction: 'outgoing',
-              id: 120,
-              status: 'sent',
-            },
-          ],
-          nextOlderCursor: null,
-        }),
-      ),
-    )
-
-    renderChatRoute()
-
-    await user.click(
-      await screen.findByRole(
-        'button',
-        {
-          name: 'Загрузить более ранние сообщения',
-        },
-        CHAT_PAGE_LOAD_TIMEOUT,
-      ),
-    )
-
-    expect(
-      await screen.findByText('Ранее отправленное сообщение.'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Последнее сообщение.')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
-      '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205',
-      expect.objectContaining({
-        credentials: 'include',
-        method: 'GET',
-      }),
-    )
-  })
-
-  it('keeps the visible transcript when older history loading fails', async () => {
-    const user = userEvent.setup()
-
-    mockInitialReadyChatResponses(
-      createReadySnapshot({
-        hasMoreOlder: true,
-        messages: [
-          {
-            attachments: [],
-            authorName: 'Ольга Support',
-            authorRole: 'agent',
-            content: 'Текущее сообщение остается на экране.',
-            contentType: 'text',
-            createdAt: '2026-04-21T10:00:00.000Z',
-            direction: 'incoming',
-            id: 205,
-            status: 'sent',
-          },
-        ],
-        nextOlderCursor: 205,
-      }),
-    ).mockResolvedValueOnce(
-      createJsonResponse(
-        {
-          error: {
-            code: 'invalid_history_cursor',
-            message: 'History cursor is invalid.',
-          },
-        },
-        400,
-      ),
-    )
-
-    renderChatRoute()
-
-    await user.click(
-      await screen.findByRole(
-        'button',
-        {
-          name: 'Загрузить более ранние сообщения',
-        },
-        CHAT_PAGE_LOAD_TIMEOUT,
-      ),
-    )
-
-    expect(
-      await screen.findByText('Текущее сообщение остается на экране.'),
-    ).toBeInTheDocument()
-    expect(
-      await screen.findByText(
-        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it('does not merge a non-ready older history response into the ready transcript', async () => {
-    const user = userEvent.setup()
-
-    mockInitialReadyChatResponses(
-      createReadySnapshot({
-        hasMoreOlder: true,
-        messages: [
-          {
-            attachments: [],
-            authorName: 'Ольга Support',
-            authorRole: 'agent',
-            content: 'Готовая история остается видимой.',
-            contentType: 'text',
-            createdAt: '2026-04-21T10:00:00.000Z',
-            direction: 'incoming',
-            id: 205,
-            status: 'sent',
-          },
-        ],
-        nextOlderCursor: 205,
-      }),
-    ).mockResolvedValueOnce(
-      createJsonResponse(
-        createReadySnapshot({
-          hasMoreOlder: false,
-          messages: [],
-          nextOlderCursor: null,
-          activeThread: null,
-          reason: 'thread_invalid',
-          result: 'not_ready',
-        }),
-      ),
-    )
-
-    renderChatRoute()
-
-    await user.click(
-      await screen.findByRole(
-        'button',
-        {
-          name: 'Загрузить более ранние сообщения',
-        },
-        CHAT_PAGE_LOAD_TIMEOUT,
-      ),
-    )
-
-    expect(
-      await screen.findByText('Готовая история остается видимой.'),
-    ).toBeInTheDocument()
-    expect(
-      await screen.findByText(
-        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
-      ),
-    ).toBeInTheDocument()
   })
 
   it('sends a text reply to a selected message and clears reply state after success', async () => {
@@ -795,12 +645,11 @@ describe('ChatPage', () => {
       expect(textarea).toHaveFocus()
     })
 
-    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
+    const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -871,12 +720,11 @@ describe('ChatPage', () => {
     expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
     expect(stopTrack).toHaveBeenCalledTimes(1)
 
-    const [, requestOptions] = fetchMock.mock.calls[5] ?? []
+    const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
     const formData = requestOptions?.body as FormData
     const attachment = formData.get('attachment') as File
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/chat/messages/attachment',
       expect.objectContaining({
         credentials: 'include',
@@ -935,7 +783,13 @@ describe('ChatPage', () => {
     expect(
       screen.queryByText('Голосовая запись недоступна в этом браузере.'),
     ).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(6)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chat/messages',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
   })
 
   it('allows the first text send to bootstrap a conversation without a selected conversation id', async () => {

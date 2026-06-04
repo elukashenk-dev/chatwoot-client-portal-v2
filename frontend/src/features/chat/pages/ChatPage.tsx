@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { ChatApiClientError } from '../api/chatClient'
+import { ChatApiClientError, markChatThreadRead } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
@@ -31,6 +31,7 @@ import { useChatAttachmentSend } from './useChatAttachmentSend'
 import { useChatForegroundUnreadRefresh } from './useChatForegroundUnreadRefresh'
 import { useChatOutboxDrainIntegration } from './useChatOutboxDrainIntegration'
 import { useChatRealtimeConnection } from './useChatRealtimeConnection'
+import { useChatReadSync } from './useChatReadSync'
 import { useChatInfoPanel } from './useChatInfoPanel'
 import { useChatMediaPanel } from './useChatMediaPanel'
 import { useChatNotificationsPanel } from './useChatNotificationsPanel'
@@ -395,6 +396,12 @@ export function ChatPage() {
     loadHistoryFragmentContext,
     setForceScrollToBottomSignal,
   })
+  const handleLatestMessagesVisible = useChatReadSync({
+    canUseBackend,
+    historyFragmentIsOpen: historyFragment !== null,
+    markRead: markChatThreadRead,
+    selectedThreadId: pageState.selectedThreadId,
+  })
 
   useEffect(() => {
     if (
@@ -428,15 +435,11 @@ export function ChatPage() {
           clearSearchResultOpenError()
           chatSearchPanel.openChatSearch()
         }}
-        onOpenThreadMedia={() => {
-          void chatMediaPanel.loadChatMedia()
-        }}
-        onOpenThreadInfo={() => {
-          void chatInfoPanel.loadChatInfo()
-        }}
-        onOpenThreadNotifications={() => {
+        onOpenThreadMedia={() => void chatMediaPanel.loadChatMedia()}
+        onOpenThreadInfo={() => void chatInfoPanel.loadChatInfo()}
+        onOpenThreadNotifications={() =>
           void chatNotificationsPanel.loadChatNotifications()
-        }}
+        }
         onSelectThread={(threadId) => {
           clearHighlightedMessage()
           clearHistoryFragment()
@@ -459,9 +462,7 @@ export function ChatPage() {
         {pageState.status === 'error' ? (
           <ChatNotReadyState
             isUnavailable
-            onRetry={() => {
-              void loadInitialChat()
-            }}
+            onRetry={() => void loadInitialChat()}
             reason={snapshot?.reason ?? 'chatwoot_unavailable'}
           />
         ) : null}
@@ -469,9 +470,7 @@ export function ChatPage() {
         {shouldRenderNotReadyState ? (
           <ChatNotReadyState
             isUnavailable={snapshot?.result === 'unavailable'}
-            onRetry={() => {
-              void loadInitialChat()
-            }}
+            onRetry={() => void loadInitialChat()}
             reason={snapshot?.reason ?? 'chatwoot_unavailable'}
           />
         ) : null}
@@ -488,9 +487,8 @@ export function ChatPage() {
             isConnectionAvailable={canUseBackend}
             isLoadingOlder={isLoadingOlder}
             messages={transcriptMessages}
-            onLoadOlder={() => {
-              void handleLoadOlderMessages()
-            }}
+            onLatestMessagesVisible={handleLatestMessagesVisible}
+            onLoadOlder={() => void handleLoadOlderMessages()}
             onReplyToMessage={(message) => {
               setReplyTarget(toComposerReplyTarget(message))
             }}

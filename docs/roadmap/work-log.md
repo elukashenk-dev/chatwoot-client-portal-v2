@@ -231,6 +231,10 @@
   chat reads through Chatwoot Public API last-seen, skips group threads, fails
   closed on missing identifiers and throttles repeated read sync across
   request-scoped service instances.
+- Viewport-driven customer read sync добавлен во frontend: portal вызывает
+  backend read route только после отображения latest private transcript near
+  bottom, не срабатывает в history/search/offline контексте и не показывает
+  пользователю ошибку при fail-closed sync.
 
 ## Current Baseline
 
@@ -250,4 +254,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 4: add viewport-driven frontend read sync.
+  with Task 5: portal user typing to Chatwoot agent.

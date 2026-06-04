@@ -1448,10 +1448,16 @@ fallback snapshots.
 - Create: `frontend/src/features/chat/pages/useChatReadSync.ts`
 - Create: `frontend/src/features/chat/pages/useChatReadSync.test.tsx`
 - Modify: `frontend/src/features/chat/components/ChatTranscript.tsx`
+- Create: `frontend/src/features/chat/components/useLatestMessagesVisibleReporter.ts`
+- Create: `frontend/src/features/chat/components/useLatestMessagesVisibleReporter.test.tsx`
+- Create: `frontend/src/features/chat/components/chat-transcript/HistoryControls.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.test.tsx`
+- Create: `frontend/src/features/chat/pages/ChatPage.history.test.tsx`
+- Create: `frontend/src/features/chat/pages/ChatPage.read-sync.test.tsx`
+- Create: `frontend/src/features/chat/api/chatClient.read-sync.test.ts`
 
-- [ ] **Step 1: Add failing hook tests**
+- [x] **Step 1: Add failing hook tests**
 
 Cover:
 
@@ -1461,7 +1467,7 @@ Cover:
 - debounces repeated visible events;
 - calls again when a later agent message arrives while still near bottom.
 
-- [ ] **Step 2: Add API client method**
+- [x] **Step 2: Add API client method**
 
 In `chatClient.ts`:
 
@@ -1475,7 +1481,7 @@ export async function markChatThreadRead(threadId: string) {
 }
 ```
 
-- [ ] **Step 3: Implement hook**
+- [x] **Step 3: Implement hook**
 
 Create `useChatReadSync.ts`:
 
@@ -1526,7 +1532,7 @@ export function useChatReadSync({
 }
 ```
 
-- [ ] **Step 4: Make transcript report latest-visible events**
+- [x] **Step 4: Make transcript report latest-visible events**
 
 Add prop to `ChatTranscript`:
 
@@ -1555,7 +1561,7 @@ onLatestMessagesVisible?.({ latestVisibleAgentMessageId })
 Use existing `captureTranscriptScrollSnapshot` and
 `shouldAutoFollowNewMessagesRef` instead of introducing a second scroll model.
 
-- [ ] **Step 5: Wire in `ChatPage`**
+- [x] **Step 5: Wire in `ChatPage`**
 
 In `ChatPage.tsx`:
 
@@ -1570,19 +1576,22 @@ const handleLatestMessagesVisible = useChatReadSync({
 
 Pass `handleLatestMessagesVisible` to `ChatTranscript`.
 
-- [ ] **Step 6: Run frontend tests**
+- [x] **Step 6: Run frontend tests**
 
 Run:
 
 ```bash
 pnpm -C frontend vitest run \
   src/features/chat/pages/useChatReadSync.test.tsx \
-  src/features/chat/pages/ChatPage.test.tsx
+  src/features/chat/api/chatClient.read-sync.test.ts \
+  src/features/chat/components/ChatTranscript.test.tsx \
+  src/features/chat/pages/ChatPage.read-sync.test.tsx \
+  src/features/chat/pages/ChatPage.history.test.tsx
 ```
 
 Expected: pass.
 
-- [ ] **Step 7: Smoke review checkpoint**
+- [x] **Step 7: Smoke review checkpoint**
 
 Review:
 
@@ -1590,6 +1599,47 @@ Review:
 - search/history context does not call mark-read;
 - reading old history does not call mark-read for new messages;
 - read sync failure does not show a confusing user-visible error.
+
+Implementation status: completed on `feature/phase-chat-visible-read-sync`.
+Smoke review notes:
+
+- viewport sync is driven only after rendered transcript is near bottom;
+- history fragment controls suppress latest-visible reporting before the hook;
+- offline/backend-unavailable state suppresses read sync in the hook;
+- read sync failures are caught and do not surface a user-visible chat error;
+- smoke review finding closed: latest agent-message boundary is based on actual
+  transcript viewport visibility, not only message array order, so long outgoing
+  tails cannot mark a hidden agent message as read;
+- `ChatTranscript.tsx` stayed under the production code-health limit by
+  extracting visible-message reporting and history controls.
+
+Verification:
+
+```bash
+pnpm -C frontend vitest run \
+  src/features/chat/pages/useChatReadSync.test.tsx \
+  src/features/chat/api/chatClient.read-sync.test.ts \
+  src/features/chat/components/useLatestMessagesVisibleReporter.test.tsx \
+  src/features/chat/components/ChatTranscript.test.tsx \
+  src/features/chat/pages/ChatPage.read-sync.test.tsx \
+  src/features/chat/pages/ChatPage.history.test.tsx
+pnpm -C frontend vitest run \
+  src/features/chat/pages/ChatPage.test.tsx \
+  src/features/chat/pages/ChatPage.history.test.tsx \
+  src/features/chat/pages/ChatPage.search.test.tsx \
+  src/features/chat/pages/ChatPage.search-context-regression.test.tsx \
+  src/features/chat/pages/ChatPage.offline-cache.test.tsx \
+  src/features/chat/pages/ChatPage.realtime-fallback.test.tsx \
+  src/features/chat/pages/ChatPage.unread-indicators.test.tsx
+pnpm -C frontend typecheck
+pnpm -C frontend lint
+git diff --check
+```
+
+Known repo-level lint status: root `pnpm lint` remains blocked only by existing
+code-health baselines in `MessageComposer.tsx`,
+`ChatPage.optimistic-send.test.tsx` and `ChatPage.tsx`; Task 4 added no new
+root code-health blocker.
 
 Commit:
 
