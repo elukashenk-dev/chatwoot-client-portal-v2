@@ -151,4 +151,46 @@ describe('tenants repository', () => {
 
     await expect(repository.listTenants()).resolves.toHaveLength(0)
   })
+
+  it('stores a trimmed Chatwoot portal inbox public identifier', async () => {
+    const repository = createTenantsRepository(database.db)
+    const tenant = await repository.createTenant({
+      chatwootAccountId: 3,
+      chatwootApiAccessTokenCiphertext: 'v1:api-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru',
+      slug: 'buhfirma',
+    })
+
+    const updatedTenant =
+      await repository.updateChatwootPortalInboxIdentifier({
+        chatwootPortalInboxIdentifier: ' api-channel-public-identifier ',
+        tenantId: tenant.id,
+        updatedAt: new Date('2026-06-04T10:00:00.000Z'),
+      })
+
+    expect(updatedTenant.chatwootPortalInboxIdentifier).toBe(
+      'api-channel-public-identifier',
+    )
+    await expect(repository.findBySlug('buhfirma')).resolves.toMatchObject({
+      chatwootPortalInboxIdentifier: 'api-channel-public-identifier',
+    })
+  })
+
+  it('throws when updating a missing tenant Chatwoot portal inbox identifier', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    await expect(
+      repository.updateChatwootPortalInboxIdentifier({
+        chatwootPortalInboxIdentifier: 'api-channel-public-identifier',
+        tenantId: 404,
+      }),
+    ).rejects.toThrow(
+      'Failed to update tenant Chatwoot portal inbox identifier.',
+    )
+  })
 })

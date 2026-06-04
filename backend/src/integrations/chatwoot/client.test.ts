@@ -272,6 +272,7 @@ describe('createChatwootClient', () => {
     await expect(client.getPortalInboxDetails()).resolves.toEqual({
       channelType: 'Channel::Api',
       id: 9,
+      inboxIdentifier: null,
       lockToSingleConversation: true,
       outOfOfficeMessage: 'Ответим в рабочее время.',
       timezone: 'Europe/Samara',
@@ -583,12 +584,37 @@ describe('createChatwootClient', () => {
     ).resolves.toEqual({
       channelType: 'Channel::Api',
       id: 9,
+      inboxIdentifier: null,
       lockToSingleConversation: true,
       webhookSecret: null,
       webhookUrl: null,
       updated: false,
     })
     expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps the API channel public inbox identifier from portal inbox routing', async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      createJsonResponse({
+        channel_type: 'Channel::Api',
+        id: 9,
+        inbox_identifier: ' api-channel-public-identifier ',
+        lock_to_single_conversation: true,
+      }),
+    )
+    const client = createChatwootClient({
+      config: {
+        accountId: 3,
+        apiAccessToken: 'token',
+        baseUrl: 'http://127.0.0.1:3000',
+        portalInboxId: 9,
+      },
+      fetchFn,
+    })
+
+    await expect(client.verifyPortalInboxConnection()).resolves.toMatchObject({
+      inboxIdentifier: 'api-channel-public-identifier',
+    })
   })
 
   it('enables portal inbox routing when it was changed to create new conversations', async () => {
@@ -623,6 +649,7 @@ describe('createChatwootClient', () => {
     ).resolves.toEqual({
       channelType: 'Channel::Api',
       id: 9,
+      inboxIdentifier: null,
       lockToSingleConversation: true,
       webhookSecret: null,
       webhookUrl: null,

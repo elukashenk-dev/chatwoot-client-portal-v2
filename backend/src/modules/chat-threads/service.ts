@@ -41,6 +41,7 @@ type ChatThreadsPersistenceRepository = Pick<
   | 'findThreadById'
   | 'transactionWithThreadBootstrapLock'
   | 'updateThreadConversation'
+  | 'updateThreadContactSourceId'
   | 'upsertGroupThread'
   | 'upsertPrivateThread'
 >

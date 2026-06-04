@@ -10,6 +10,7 @@ import {
 
 export type TenantRequestContext = {
   chatwoot: ChatwootClientConfig & {
+    portalInboxIdentifier: string | null
     webhookSecret: string
   }
   displayName: string
@@ -90,6 +91,7 @@ function toTenantRequestContext({
         tenantSecretKey,
       ),
       baseUrl: tenant.chatwootBaseUrl,
+      portalInboxIdentifier: tenant.chatwootPortalInboxIdentifier,
       portalInboxId: tenant.chatwootPortalInboxId,
       webhookSecret: decryptTenantSecret(
         tenant.chatwootWebhookSecretCiphertext,

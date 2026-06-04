@@ -23,7 +23,10 @@ type TenantChatwootVerificationClientFactory = {
 type VerifyTenantChatwootConnectionOptions = {
   chatwootClientFactory: TenantChatwootVerificationClientFactory
   tenantSecretKey: string
-  tenantsRepository: Pick<TenantsRepository, 'findBySlug'>
+  tenantsRepository: Pick<
+    TenantsRepository,
+    'findBySlug' | 'updateChatwootPortalInboxIdentifier'
+  >
   tenantSlug: string
 }
 
@@ -72,6 +75,13 @@ export async function verifyTenantChatwootConnection({
     .forTenant(config)
     .ensurePortalInboxSingleConversationRouting()
 
+  if (inbox.inboxIdentifier) {
+    await tenantsRepository.updateChatwootPortalInboxIdentifier({
+      chatwootPortalInboxIdentifier: inbox.inboxIdentifier,
+      tenantId: tenant.id,
+    })
+  }
+
   return {
     result: 'verified' as const,
     tenant: {
@@ -84,6 +94,7 @@ export async function verifyTenantChatwootConnection({
     verifiedInbox: {
       channelType: inbox.channelType,
       id: inbox.id,
+      inboxIdentifier: inbox.inboxIdentifier,
       lockToSingleConversation: inbox.lockToSingleConversation,
       updated: inbox.updated,
     },

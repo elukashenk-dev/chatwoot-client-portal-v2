@@ -220,6 +220,10 @@
 - Chat realtime health fallback закрывает `F-CHAT-006`: видимый активный чат с
   stale SSE теперь ограниченно обновляет latest snapshot через backend, не
   помечая сообщения прочитанными и не меняя unread/push напрямую.
+- Customer read/typing prerequisites начали backend baseline: portal stores
+  Chatwoot API Channel public inbox identifier on tenant runtime state and
+  Chatwoot contact source id on portal chat threads, without exposing these
+  identifiers to browser APIs.
 
 ## Current Baseline
 
@@ -239,4 +243,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 1: store Chatwoot public API identifiers.
+  with Task 2: add Chatwoot public conversation event client.

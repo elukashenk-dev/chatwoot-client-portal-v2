@@ -60,6 +60,7 @@ describe('configureTenantChatwootWebhook', () => {
     const chatwootClient = {
       configurePortalInboxWebhook: vi.fn().mockResolvedValue({
         id: 9,
+        inboxIdentifier: 'api-channel-public-identifier',
         secret: 'new-webhook-secret',
         url: 'https://lk.buhfirma.test/api/chatwoot/webhooks',
       }),
@@ -106,6 +107,9 @@ describe('configureTenantChatwootWebhook', () => {
         key,
       ),
     ).toBe('new-webhook-secret')
+    expect(updatedTenant?.chatwootPortalInboxIdentifier).toBe(
+      'api-channel-public-identifier',
+    )
     expect(JSON.stringify(createSafeTenantWebhookReport(result))).not.toContain(
       'new-webhook-secret',
     )
@@ -116,6 +120,7 @@ describe('configureTenantChatwootWebhook', () => {
     const createChatwootClient = vi.fn().mockReturnValue({
       configurePortalInboxWebhook: vi.fn().mockResolvedValue({
         id: 9,
+        inboxIdentifier: 'api-channel-public-identifier',
         secret: null,
         url: 'https://lk.buhfirma.test/api/chatwoot/webhooks',
       }),

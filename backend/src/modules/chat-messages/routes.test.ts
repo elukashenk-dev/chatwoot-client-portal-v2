@@ -17,6 +17,7 @@ const tenant: TenantRequestContext = {
     accountId: 1,
     apiAccessToken: 'test-api-token',
     baseUrl: 'https://chatwoot.example.test',
+    portalInboxIdentifier: null,
     portalInboxId: 1,
     webhookSecret: 'test-webhook-secret',
   },

@@ -21,7 +21,9 @@ type ConfigureTenantWebhookOptions = {
   tenantSecretKey: string
   tenantsRepository: Pick<
     TenantsRepository,
-    'findBySlug' | 'updateChatwootWebhookSecretCiphertext'
+    | 'findBySlug'
+    | 'updateChatwootPortalInboxIdentifier'
+    | 'updateChatwootWebhookSecretCiphertext'
   >
   tenantSlug: string
 }
@@ -116,6 +118,13 @@ export async function configureTenantChatwootWebhook({
     chatwootWebhookSecretCiphertext: encryptTenantSecret(result.secret, key),
     tenantId: tenant.id,
   })
+
+  if (result.inboxIdentifier) {
+    await tenantsRepository.updateChatwootPortalInboxIdentifier({
+      chatwootPortalInboxIdentifier: result.inboxIdentifier,
+      tenantId: tenant.id,
+    })
+  }
 
   return {
     action: 'updated',

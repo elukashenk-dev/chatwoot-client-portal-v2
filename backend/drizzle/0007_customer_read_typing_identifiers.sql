@@ -1,0 +1,3 @@
+ALTER TABLE "portal_chat_threads" ADD COLUMN "chatwoot_contact_source_id" text;--> statement-breakpoint
+ALTER TABLE "portal_tenants" ADD COLUMN "chatwoot_portal_inbox_identifier" text;--> statement-breakpoint
+CREATE INDEX "portal_chat_threads_tenant_source_id_idx" ON "portal_chat_threads" USING btree ("tenant_id","chatwoot_contact_source_id") WHERE "portal_chat_threads"."chatwoot_contact_source_id" is not null;

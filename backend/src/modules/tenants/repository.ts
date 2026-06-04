@@ -41,6 +41,12 @@ type UpdateTenantWebhookSecretInput = {
   updatedAt?: Date
 }
 
+type UpdateTenantPortalInboxIdentifierInput = {
+  chatwootPortalInboxIdentifier: string
+  tenantId: number
+  updatedAt?: Date
+}
+
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const domainPattern =
   /^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)$/
@@ -251,6 +257,32 @@ export function createTenantsRepository(db: AppDatabase) {
 
       if (!tenant) {
         throw new Error('Failed to update tenant Chatwoot webhook secret.')
+      }
+
+      return tenant
+    },
+
+    async updateChatwootPortalInboxIdentifier({
+      chatwootPortalInboxIdentifier,
+      tenantId,
+      updatedAt = new Date(),
+    }: UpdateTenantPortalInboxIdentifierInput) {
+      const [tenant] = await db
+        .update(portalTenants)
+        .set({
+          chatwootPortalInboxIdentifier: normalizeNonEmptyString(
+            chatwootPortalInboxIdentifier,
+            'chatwootPortalInboxIdentifier',
+          ),
+          updatedAt,
+        })
+        .where(eq(portalTenants.id, tenantId))
+        .returning()
+
+      if (!tenant) {
+        throw new Error(
+          'Failed to update tenant Chatwoot portal inbox identifier.',
+        )
       }
 
       return tenant

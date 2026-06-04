@@ -82,6 +82,7 @@ export type ChatwootConversation = {
 export type ChatwootPortalInboxRouting = {
   channelType: string | null
   id: number
+  inboxIdentifier: string | null
   lockToSingleConversation: boolean
   webhookSecret: string | null
   webhookUrl: string | null
@@ -112,6 +113,7 @@ export type ChatwootPortalInboxMember = {
 
 export type ChatwootPortalInboxWebhook = {
   id: number
+  inboxIdentifier: string | null
   secret: string | null
   url: string | null
 }
@@ -284,6 +286,7 @@ function mapPortalInboxRouting(payload: unknown): ChatwootPortalInboxRouting {
   return {
     channelType,
     id,
+    inboxIdentifier: readTrimmedString(payload.inbox_identifier),
     lockToSingleConversation,
     webhookSecret: readTrimmedString(payload.secret),
     webhookUrl: readTrimmedString(payload.webhook_url),
@@ -1060,6 +1063,7 @@ export function createChatwootClient({
 
       return {
         id: updatedRouting.id,
+        inboxIdentifier: updatedRouting.inboxIdentifier,
         secret: updatedRouting.webhookSecret,
         url: updatedRouting.webhookUrl,
       }

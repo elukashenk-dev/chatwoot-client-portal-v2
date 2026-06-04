@@ -33,6 +33,7 @@ describe('verifyTenantChatwootConnection', () => {
       .mockResolvedValue({
         channelType: 'Channel::Api',
         id: 6,
+        inboxIdentifier: 'api-channel-public-identifier',
         lockToSingleConversation: true,
         updated: false,
       })
@@ -79,6 +80,7 @@ describe('verifyTenantChatwootConnection', () => {
       verifiedInbox: {
         channelType: 'Channel::Api',
         id: 6,
+        inboxIdentifier: 'api-channel-public-identifier',
         lockToSingleConversation: true,
         updated: false,
       },
@@ -90,6 +92,9 @@ describe('verifyTenantChatwootConnection', () => {
       portalInboxId: 6,
     })
     expect(ensurePortalInboxSingleConversationRouting).toHaveBeenCalledTimes(1)
+    await expect(repository.findBySlug('buhfirma')).resolves.toMatchObject({
+      chatwootPortalInboxIdentifier: 'api-channel-public-identifier',
+    })
   })
 
   it('repairs tenant portal inbox single-conversation routing during verification', async () => {
@@ -100,6 +105,7 @@ describe('verifyTenantChatwootConnection', () => {
       .mockResolvedValue({
         channelType: 'Channel::Api',
         id: 6,
+        inboxIdentifier: 'api-channel-public-identifier',
         lockToSingleConversation: true,
         updated: true,
       })

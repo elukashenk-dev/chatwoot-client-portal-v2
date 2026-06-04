@@ -28,6 +28,7 @@ export const portalTenants = pgTable(
     chatwootBaseUrl: text('chatwoot_base_url').notNull(),
     chatwootAccountId: integer('chatwoot_account_id').notNull(),
     chatwootPortalInboxId: integer('chatwoot_portal_inbox_id').notNull(),
+    chatwootPortalInboxIdentifier: text('chatwoot_portal_inbox_identifier'),
     chatwootApiAccessTokenCiphertext: text(
       'chatwoot_api_access_token_ciphertext',
     ).notNull(),
@@ -162,6 +163,7 @@ export const portalChatThreads = pgTable(
     }),
     chatwootContactId: integer('chatwoot_contact_id').notNull(),
     chatwootInboxId: integer('chatwoot_inbox_id').notNull(),
+    chatwootContactSourceId: text('chatwoot_contact_source_id'),
     chatwootConversationId: integer('chatwoot_conversation_id'),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
@@ -184,6 +186,9 @@ export const portalChatThreads = pgTable(
       table.tenantId,
       table.chatwootContactId,
     ),
+    index('portal_chat_threads_tenant_source_id_idx')
+      .on(table.tenantId, table.chatwootContactSourceId)
+      .where(sql`${table.chatwootContactSourceId} is not null`),
     check(
       'portal_chat_threads_type_check',
       sql`${table.threadType} in ('private', 'group')`,

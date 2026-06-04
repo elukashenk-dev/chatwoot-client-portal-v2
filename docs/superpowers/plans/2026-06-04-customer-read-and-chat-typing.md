@@ -579,7 +579,7 @@ git commit -m "feat: add chat realtime health fallback"
 - Modify: `backend/src/scripts/configure-tenant-chatwoot-webhook-core.ts`
 - Modify tests for these modules.
 
-- [ ] **Step 1: Write failing schema/repository tests**
+- [x] **Step 1: Write failing schema/repository tests**
 
 Add tests that prove tenant runtime exposes `portalInboxIdentifier` and thread
 records can store `chatwootContactSourceId`. Tenant repository tests must also
@@ -601,7 +601,7 @@ Example assertion in chat thread repository tests:
 expect(thread.chatwootContactSourceId).toBe('portal-contact:source')
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -616,7 +616,12 @@ pnpm -C backend vitest run \
 
 Expected: tests fail because fields are not implemented.
 
-- [ ] **Step 3: Add schema fields and generated migration**
+Done in `feature/phase-chat-public-api-identifiers`: focused backend tests
+failed RED before implementation because the tenant runtime identifier,
+Chatwoot inbox identifier parser, configure/verify persistence and thread source
+id storage did not exist yet.
+
+- [x] **Step 3: Add schema fields and generated migration**
 
 Update `backend/src/db/schema.ts` first:
 
@@ -658,7 +663,12 @@ The implementation commit must include the generated SQL file, the matching
 `backend/drizzle/meta/*_snapshot.json` file and the new
 `backend/drizzle/meta/_journal.json` entry. Do not ship a SQL-only migration.
 
-- [ ] **Step 4: Parse `inbox_identifier` from Chatwoot inbox lookup**
+Done in `feature/phase-chat-public-api-identifiers`: Drizzle generated
+`backend/drizzle/0007_customer_read_typing_identifiers.sql`,
+`backend/drizzle/meta/0007_snapshot.json` and the matching journal entry from
+the schema change.
+
+- [x] **Step 4: Parse `inbox_identifier` from Chatwoot inbox lookup**
 
 In `backend/src/integrations/chatwoot/client.ts`, extend
 `ChatwootPortalInboxRouting`:
@@ -682,7 +692,7 @@ const inboxIdentifier = readTrimmedString(payload.inbox_identifier)
 
 and return it.
 
-- [ ] **Step 5: Persist tenant identifier in verify/configure scripts**
+- [x] **Step 5: Persist tenant identifier in verify/configure scripts**
 
 Add repository method:
 
@@ -727,7 +737,7 @@ Call `updateChatwootPortalInboxIdentifier` after
 `verifyPortalInboxConnection()` or `configurePortalInboxWebhook()` returns a
 non-empty `inboxIdentifier`.
 
-- [ ] **Step 6: Persist thread source id**
+- [x] **Step 6: Persist thread source id**
 
 Extend `PortalChatThreadRecord`:
 
@@ -769,13 +779,13 @@ In `chat-threads/runtime.ts`, after
 `ensurePortalContactInboxSourceId(targetChatwootContactId)` returns a source id,
 persist it on the locked thread before creating/reusing the conversation.
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run the same command from Step 2.
 
 Expected: pass.
 
-- [ ] **Step 8: Smoke review checkpoint**
+- [x] **Step 8: Smoke review checkpoint**
 
 Review:
 
@@ -783,6 +793,16 @@ Review:
 - source id never goes to browser;
 - nullable existing rows fail closed until verify/bootstrap stores identifiers;
 - no Chatwoot core files are touched.
+
+Done in `feature/phase-chat-public-api-identifiers`:
+
+- `portalInboxIdentifier` is present only in backend runtime tenant context and
+  is not returned by `getPublicTenantContext`.
+- `chatwootContactSourceId` is stored on backend thread records and is not
+  referenced in frontend code.
+- Both new columns are nullable; later read/typing tasks must treat missing
+  values as `not_configured` instead of guessing.
+- The diff touches only this portal repository; Chatwoot core remains external.
 
 Commit:
 

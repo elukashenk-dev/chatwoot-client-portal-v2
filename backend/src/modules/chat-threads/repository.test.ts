@@ -205,6 +205,41 @@ describe('createChatThreadsRepository', () => {
     })
   })
 
+  it('stores a Chatwoot contact source id for the locked portal thread', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const user = await createUser({
+      database,
+      email: 'ivan@example.com',
+      tenantId: tenant.id,
+    })
+    const repository = createChatThreadsRepository(database.db, {
+      tenantId: tenant.id,
+    })
+    const thread = await repository.upsertPrivateThread({
+      chatwootContactId: 44,
+      chatwootInboxId: 9,
+      now: new Date('2026-05-14T12:00:00.000Z'),
+      userId: user.id,
+    })
+
+    expect(thread.chatwootContactSourceId).toBeNull()
+
+    const updatedThread = await repository.updateThreadContactSourceId({
+      chatwootContactSourceId: 'portal-contact:source',
+      id: thread.id,
+      now: new Date('2026-05-14T12:01:00.000Z'),
+    })
+
+    expect(updatedThread).toMatchObject({
+      chatwootContactSourceId: 'portal-contact:source',
+      id: thread.id,
+    })
+    await expect(repository.findThreadById(thread.id)).resolves.toMatchObject({
+      chatwootContactSourceId: 'portal-contact:source',
+      id: thread.id,
+    })
+  })
+
   it('looks up send ledger authors within one portal thread', async () => {
     const tenant = await seedTestTenant(database.db)
     const user = await createUser({

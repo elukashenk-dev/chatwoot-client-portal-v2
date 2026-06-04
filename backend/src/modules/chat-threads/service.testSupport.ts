@@ -110,6 +110,7 @@ export function createChatThreadsPersistenceRepositoryStub({
 } = {}) {
   let groupThread = {
     chatwootContactId: 154,
+    chatwootContactSourceId: null as string | null,
     chatwootConversationId: initialGroupConversationId,
     chatwootInboxId: 9,
     id: 2,
@@ -118,6 +119,7 @@ export function createChatThreadsPersistenceRepositoryStub({
   }
   let privateThread = {
     chatwootContactId: 44,
+    chatwootContactSourceId: null as string | null,
     chatwootConversationId: initialPrivateConversationId,
     chatwootInboxId: 9,
     id: 1,
@@ -157,6 +159,27 @@ export function createChatThreadsPersistenceRepositoryStub({
           ...groupThread,
           chatwootConversationId: input.chatwootConversationId,
           chatwootInboxId: input.chatwootInboxId,
+        }
+
+        return groupThread
+      }
+
+      return null
+    }),
+    updateThreadContactSourceId: vi.fn(async (input) => {
+      if (input.id === privateThread.id) {
+        privateThread = {
+          ...privateThread,
+          chatwootContactSourceId: input.chatwootContactSourceId,
+        }
+
+        return privateThread
+      }
+
+      if (input.id === groupThread.id) {
+        groupThread = {
+          ...groupThread,
+          chatwootContactSourceId: input.chatwootContactSourceId,
         }
 
         return groupThread

@@ -134,6 +134,7 @@ describe('createChatwootClient webhook APIs', () => {
       }),
     ).resolves.toEqual({
       id: 9,
+      inboxIdentifier: null,
       secret: 'api-channel-secret',
       url: callbackUrl,
     })

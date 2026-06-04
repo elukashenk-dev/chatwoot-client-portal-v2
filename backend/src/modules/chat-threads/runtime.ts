@@ -28,6 +28,7 @@ type ChatThreadRuntimeRepository = Pick<
   | 'findThreadById'
   | 'transactionWithThreadBootstrapLock'
   | 'updateThreadConversation'
+  | 'updateThreadContactSourceId'
   | 'upsertGroupThread'
   | 'upsertPrivateThread'
 >
@@ -300,6 +301,22 @@ export function createChatThreadRuntimeResolver({
 
         if (!sourceId) {
           return context
+        }
+
+        const sourceThread =
+          await chatThreadsRepository.updateThreadContactSourceId({
+            chatwootContactSourceId: sourceId,
+            id: lockedThread.id,
+            now: now(),
+          })
+
+        if (!sourceThread) {
+          return buildThreadContext({
+            ...context,
+            chatwootConversation: null,
+            reason: 'conversation_mapping_unavailable',
+            result: 'unavailable',
+          })
         }
 
         let conversation: ChatwootConversation

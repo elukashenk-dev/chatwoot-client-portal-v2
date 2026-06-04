@@ -13,6 +13,7 @@ type PortalChatThreadType = 'group' | 'private'
 
 export type PortalChatThreadRecord = {
   chatwootContactId: number
+  chatwootContactSourceId: string | null
   chatwootConversationId: number | null
   chatwootInboxId: number
   id: number
@@ -26,6 +27,7 @@ type SelectedThread = Omit<PortalChatThreadRecord, 'threadType'> & {
 
 const threadSelection = {
   chatwootContactId: portalChatThreads.chatwootContactId,
+  chatwootContactSourceId: portalChatThreads.chatwootContactSourceId,
   chatwootConversationId: portalChatThreads.chatwootConversationId,
   chatwootInboxId: portalChatThreads.chatwootInboxId,
   id: portalChatThreads.id,
@@ -42,6 +44,16 @@ function mapThread(row: SelectedThread): PortalChatThreadRecord {
     ...row,
     threadType: row.threadType,
   }
+}
+
+function normalizeThreadContactSourceId(value: string) {
+  const normalizedValue = value.trim()
+
+  if (!normalizedValue) {
+    throw new Error('Chatwoot contact source id is required.')
+  }
+
+  return normalizedValue
 }
 
 function createThreadBootstrapLockKey(
@@ -173,6 +185,33 @@ export function createChatThreadsRepository(
         .set({
           chatwootConversationId,
           chatwootInboxId,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(portalChatThreads.tenantId, tenantId),
+            eq(portalChatThreads.id, id),
+          ),
+        )
+        .returning(threadSelection)
+
+      return thread ? mapThread(thread) : null
+    },
+
+    async updateThreadContactSourceId({
+      chatwootContactSourceId,
+      id,
+      now,
+    }: {
+      chatwootContactSourceId: string
+      id: number
+      now: Date
+    }) {
+      const [thread] = await db
+        .update(portalChatThreads)
+        .set({
+          chatwootContactSourceId:
+            normalizeThreadContactSourceId(chatwootContactSourceId),
           updatedAt: now,
         })
         .where(

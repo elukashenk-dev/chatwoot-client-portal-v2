@@ -50,6 +50,13 @@
       "when": 1780320233512,
       "tag": "0006_remove_push_enabled_notification_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780566028870,
+      "tag": "0007_customer_read_typing_identifiers",
+      "breakpoints": true
     }
   ]
 }

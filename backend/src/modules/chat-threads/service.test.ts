@@ -83,6 +83,13 @@ describe('createChatThreadsService', () => {
       contactId: 154,
       sourceId: 'portal-contact:generated',
     })
+    expect(chatThreadsRepository.updateThreadContactSourceId).toHaveBeenCalledWith(
+      {
+        chatwootContactSourceId: 'portal-contact:generated',
+        id: 2,
+        now,
+      },
+    )
     expect(chatThreadsRepository.updateThreadConversation).toHaveBeenCalledWith(
       {
         chatwootConversationId: 301,
