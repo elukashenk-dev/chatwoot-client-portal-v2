@@ -47,6 +47,7 @@ export type ChatThreadRuntimeConversation = {
 
 export type CurrentUserChatThreadContext = {
   activeThread: PublicChatThreadSummary | null
+  chatwootContactSourceId: string | null
   chatwootConversation: ChatThreadRuntimeConversation | null
   currentUserEmail: string | null
   currentUserName: string | null

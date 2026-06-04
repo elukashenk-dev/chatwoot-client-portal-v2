@@ -18,6 +18,7 @@ export const readyContext = {
     title: 'Личный чат',
     type: 'private',
   },
+  chatwootContactSourceId: 'portal-contact:source',
   chatwootConversation: {
     assigneeName: 'Анна Смирнова',
     id: 101,

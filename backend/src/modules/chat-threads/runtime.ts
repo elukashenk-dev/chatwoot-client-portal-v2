@@ -263,6 +263,7 @@ export function createChatThreadRuntimeResolver({
           if (recoveredConversation) {
             return buildThreadContext({
               ...context,
+              chatwootContactSourceId: lockedThread.chatwootContactSourceId,
               chatwootConversation: recoveredConversation,
               portalChatThreadId: lockedThread.id,
               reason: 'none',
@@ -274,6 +275,7 @@ export function createChatThreadRuntimeResolver({
         if (lockedConversation && staleConversationId === null) {
           return buildThreadContext({
             ...context,
+            chatwootContactSourceId: lockedThread.chatwootContactSourceId,
             chatwootConversation: lockedConversation,
             reason: 'none',
             result: 'ready',
@@ -358,6 +360,7 @@ export function createChatThreadRuntimeResolver({
 
         return buildThreadContext({
           ...context,
+          chatwootContactSourceId: sourceThread.chatwootContactSourceId,
           chatwootConversation: mapChatwootConversation(conversation),
           portalChatThreadId: updatedThread.id,
           reason: 'none',

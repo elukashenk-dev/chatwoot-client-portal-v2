@@ -16,6 +16,11 @@ type ListConversationMessages = Parameters<
 function createReadyContext(
   overrides: Partial<CurrentUserChatThreadContext> = {},
 ): CurrentUserChatThreadContext {
+  const {
+    chatwootContactSourceId = 'portal-contact:source',
+    ...contextOverrides
+  } = overrides
+
   return {
     activeThread: {
       id: PRIVATE_CHAT_THREAD_ID,
@@ -23,6 +28,7 @@ function createReadyContext(
       title: 'Личный чат',
       type: 'private',
     },
+    chatwootContactSourceId,
     chatwootConversation: {
       assigneeName: 'Анна Смирнова',
       id: 1001,
@@ -38,7 +44,7 @@ function createReadyContext(
     result: 'ready',
     targetChatwootContactId: 44,
     threadType: 'private',
-    ...overrides,
+    ...contextOverrides,
   }
 }
 

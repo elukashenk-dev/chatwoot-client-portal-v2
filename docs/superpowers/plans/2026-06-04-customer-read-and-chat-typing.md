@@ -1153,7 +1153,7 @@ git commit -m "feat: add chatwoot public conversation events client"
 - Modify: `backend/src/modules/chat-threads/runtime.ts`
 - Modify: `backend/src/modules/chat-threads/types.ts`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Create tests for these cases:
 
@@ -1180,7 +1180,7 @@ type ChatCustomerReadSyncResult =
     }
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -1190,7 +1190,10 @@ pnpm -C backend vitest run src/modules/chat-presence/service.test.ts
 
 Expected: fail because service does not exist.
 
-- [ ] **Step 3: Implement service contract**
+Done in `feature/phase-chat-customer-read-sync`: RED failed because
+`chat-presence/service.ts` did not exist.
+
+- [x] **Step 3: Implement service contract**
 
 Create `backend/src/modules/chat-presence/service.ts`:
 
@@ -1368,7 +1371,7 @@ export function createChatPresenceService({
 During implementation, use the actual project `CurrentUserChatThreadContext`
 type instead of the structural test shape above.
 
-- [ ] **Step 4: Add authenticated route**
+- [x] **Step 4: Add authenticated route**
 
 Create route:
 
@@ -1387,11 +1390,11 @@ Route behavior:
 This route is not user-facing UI. If Chatwoot is temporarily unavailable, the
 next visible-bottom event can catch up.
 
-- [ ] **Step 5: Register route in `backend/src/app.ts`**
+- [x] **Step 5: Register route in `backend/src/app.ts`**
 
 Wire route construction with current tenant Chatwoot context and repositories.
 
-- [ ] **Step 6: Run backend tests**
+- [x] **Step 6: Run backend tests**
 
 Run:
 
@@ -1405,7 +1408,7 @@ pnpm -C backend vitest run \
 
 Expected: pass.
 
-- [ ] **Step 7: Smoke review checkpoint**
+- [x] **Step 7: Smoke review checkpoint**
 
 Review:
 
@@ -1413,6 +1416,18 @@ Review:
 - route is same-origin and authenticated;
 - read sync does not affect portal unread/push counters;
 - read sync does not run for media/search/older-history endpoints.
+
+Done in `feature/phase-chat-customer-read-sync`:
+
+- group thread read sync returns `skipped/group_thread`;
+- route is same-origin backend API and requires the existing authenticated
+  portal session;
+- read sync only posts Chatwoot public last-seen and does not touch unread or
+  notification services;
+- route is only `POST /api/chat/threads/:threadId/read`, so media, search and
+  older-history endpoints cannot trigger read sync.
+- throttle state is shared at app level, not request-service level, so repeated
+  visible-bottom events are throttled across requests.
 
 Commit:
 

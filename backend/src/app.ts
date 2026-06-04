@@ -29,6 +29,8 @@ import { createPushSubscriptionService } from './modules/chat-notifications/push
 import { createChatNotificationsService } from './modules/chat-notifications/service.js'
 import { createWebPushTransport } from './modules/chat-notifications/pushTransport.js'
 import { createVapidConfig } from './modules/chat-notifications/vapid.js'
+import { registerChatPresenceRoutes } from './modules/chat-presence/routes.js'
+import { createChatPresenceService } from './modules/chat-presence/service.js'
 import { createChatRealtimeHub } from './modules/chat-realtime/hub.js'
 import { registerChatRealtimeRoutes } from './modules/chat-realtime/routes.js'
 import { registerChatSupportRoutes } from './modules/chat-support/routes.js'
@@ -135,6 +137,7 @@ export function buildApp({
     env,
   })
   const chatRealtimeHub = createChatRealtimeHub()
+  const chatReadSyncThrottleStore = new Map<string, number>()
   const vapidConfig = createVapidConfig(env)
   const pushTransport = vapidConfig ? createWebPushTransport(vapidConfig) : null
   const chatSendRateLimiter = createChatSendRateLimiter({
@@ -208,6 +211,27 @@ export function buildApp({
         tenantId: tenant.id,
       }),
       chatwootClient: createChatwootClientForRequest(request),
+    })
+  }
+  const createChatPresenceServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+    const chatwootClient = createChatwootClientForRequest(request)
+
+    return createChatPresenceService({
+      chatThreadsRepository: createChatThreadsRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      chatThreadsService: createChatThreadsServiceForRequest(request),
+      chatwoot: {
+        findContactPortalInboxSourceId:
+          chatwootClient.findContactPortalInboxSourceId,
+        portalInboxIdentifier: tenant.chatwoot.portalInboxIdentifier,
+        updatePublicConversationLastSeen:
+          chatwootClient.updatePublicConversationLastSeen,
+      },
+      ...(now ? { now } : {}),
+      readSyncThrottleStore: chatReadSyncThrottleStore,
+      tenantId: tenant.id,
     })
   }
   const createChatSupportAvailabilityServiceForRequest = (
@@ -317,6 +341,11 @@ export function buildApp({
     authService,
     chatSendRateLimiter,
     createChatMessagesService: createChatMessagesServiceForRequest,
+    env,
+  })
+  registerChatPresenceRoutes(app, {
+    authService,
+    createChatPresenceService: createChatPresenceServiceForRequest,
     env,
   })
   registerChatRealtimeRoutes(app, {

@@ -11,6 +11,7 @@ const readyContext = {
     title: 'Бухгалтерия',
     type: 'group',
   },
+  chatwootContactSourceId: 'portal-contact:source',
   chatwootConversation: {
     assigneeName: 'Анна Смирнова',
     id: 101,

@@ -227,6 +227,10 @@
 - Chatwoot public conversation events client добавлен в backend integration
   layer: customer last-seen and typing events can be posted through Chatwoot
   Public API paths without sending the tenant API access token to those routes.
+- Customer read sync backend добавлен: authenticated portal route marks private
+  chat reads through Chatwoot Public API last-seen, skips group threads, fails
+  closed on missing identifiers and throttles repeated read sync across
+  request-scoped service instances.
 
 ## Current Baseline
 
@@ -246,4 +250,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 3: add customer read sync backend.
+  with Task 4: add viewport-driven frontend read sync.

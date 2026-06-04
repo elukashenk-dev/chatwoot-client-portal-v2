@@ -15,8 +15,16 @@ import type {
   PublicChatThreadSummary,
 } from './types.js'
 
+type BuildThreadContextInput = Omit<
+  CurrentUserChatThreadContext,
+  'chatwootContactSourceId'
+> & {
+  chatwootContactSourceId?: string | null
+}
+
 export function buildThreadContext({
   activeThread = null,
+  chatwootContactSourceId = null,
   chatwootConversation = null,
   currentUserEmail = null,
   currentUserName = null,
@@ -26,9 +34,10 @@ export function buildThreadContext({
   result,
   targetChatwootContactId = null,
   threadType = null,
-}: CurrentUserChatThreadContext): CurrentUserChatThreadContext {
+}: BuildThreadContextInput): CurrentUserChatThreadContext {
   return {
     activeThread,
+    chatwootContactSourceId,
     chatwootConversation,
     currentUserEmail,
     currentUserName,
@@ -148,6 +157,7 @@ export function buildContextFromThreadRecord({
 
   return buildThreadContext({
     activeThread,
+    chatwootContactSourceId: threadRecord.chatwootContactSourceId,
     chatwootConversation,
     currentUserEmail: userContact.email,
     currentUserName: userContact.name,

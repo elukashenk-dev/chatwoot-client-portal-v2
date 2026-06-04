@@ -24,6 +24,7 @@ describe('createChatMessagesService', () => {
       chatThreadsService: createChatThreadsServiceStub({
         context: {
           activeThread: null,
+          chatwootContactSourceId: null,
           chatwootConversation: null,
           currentUserEmail: null,
           currentUserName: null,
@@ -54,6 +55,7 @@ describe('createChatMessagesService', () => {
     const chatThreadsService = createChatThreadsServiceStub({
       context: {
         activeThread: null,
+        chatwootContactSourceId: null,
         chatwootConversation: null,
         currentUserEmail: 'user@example.test',
         currentUserName: 'Portal User',
@@ -278,6 +280,7 @@ describe('createChatMessagesService', () => {
       chatThreadsService: createChatThreadsServiceStub({
         context: {
           activeThread: null,
+          chatwootContactSourceId: null,
           chatwootConversation: null,
           currentUserEmail: null,
           currentUserName: null,

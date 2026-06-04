@@ -39,6 +39,7 @@ const readyContext: CurrentUserChatThreadContext = {
     title: 'Личный чат',
     type: 'private',
   },
+  chatwootContactSourceId: 'portal-contact:source',
   chatwootConversation: {
     assigneeName: null,
     id: 101,
@@ -63,6 +64,7 @@ const groupReadyContext: CurrentUserChatThreadContext = {
     title: 'ООО "Ромашка"',
     type: 'group',
   },
+  chatwootContactSourceId: 'portal-contact:group-source',
   chatwootConversation: {
     assigneeName: null,
     id: 301,
@@ -86,6 +88,7 @@ function createNotReadyContext(
 ): CurrentUserChatThreadContext {
   return {
     activeThread: null,
+    chatwootContactSourceId: null,
     chatwootConversation: null,
     currentUserEmail: 'user@example.test',
     currentUserName: 'Portal User',
