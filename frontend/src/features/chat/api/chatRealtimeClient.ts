@@ -2,12 +2,19 @@ import type { ChatMessagesSnapshot } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+export type ChatTypingEvent = {
+  actor: 'agent'
+  isTyping: boolean
+  threadId: string
+}
+
 type OpenChatRealtimeInput = {
   onActivity?: () => void
   onChatState: (snapshot: ChatMessagesSnapshot) => void
   onError?: () => void
   onOpen?: () => void
   onMessages: (snapshot: ChatMessagesSnapshot) => void
+  onTyping?: (event: ChatTypingEvent) => void
   threadId: string
 }
 
@@ -28,12 +35,17 @@ function readSnapshotEvent(event: Event) {
   ) as ChatMessagesSnapshot
 }
 
+function readTypingEvent(event: Event) {
+  return JSON.parse((event as MessageEvent<string>).data) as ChatTypingEvent
+}
+
 export function openChatRealtime({
   onActivity,
   onChatState,
   onError,
   onOpen,
   onMessages,
+  onTyping,
   threadId,
 }: OpenChatRealtimeInput) {
   if (typeof EventSource === 'undefined') {
@@ -57,6 +69,10 @@ export function openChatRealtime({
   eventSource.addEventListener('chat-state', (event) => {
     onActivity?.()
     onChatState(readSnapshotEvent(event))
+  })
+  eventSource.addEventListener('typing', (event) => {
+    onActivity?.()
+    onTyping?.(readTypingEvent(event))
   })
   eventSource.addEventListener('error', () => {
     onError?.()

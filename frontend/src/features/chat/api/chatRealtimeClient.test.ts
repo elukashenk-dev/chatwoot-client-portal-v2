@@ -74,6 +74,33 @@ describe('openChatRealtime', () => {
     expect(onActivity).toHaveBeenCalledTimes(3)
   })
 
+  it('passes typing events to the caller and reports realtime activity', () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+    const onActivity = vi.fn()
+    const onTyping = vi.fn()
+
+    openChatRealtime({
+      onActivity,
+      onChatState: vi.fn(),
+      onMessages: vi.fn(),
+      onTyping,
+      threadId: 'private:me',
+    })
+
+    MockEventSource.instances[0]?.emit('typing', {
+      actor: 'agent',
+      isTyping: true,
+      threadId: 'private:me',
+    })
+
+    expect(onTyping).toHaveBeenCalledWith({
+      actor: 'agent',
+      isTyping: true,
+      threadId: 'private:me',
+    })
+    expect(onActivity).toHaveBeenCalledTimes(1)
+  })
+
   it('reports EventSource errors without closing the browser retry loop', () => {
     vi.stubGlobal('EventSource', MockEventSource)
     const onError = vi.fn()

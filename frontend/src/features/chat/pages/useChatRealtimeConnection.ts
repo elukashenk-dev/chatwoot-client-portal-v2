@@ -1,7 +1,10 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { useEffect } from 'react'
 
-import { openChatRealtime } from '../api/chatRealtimeClient'
+import {
+  openChatRealtime,
+  type ChatTypingEvent,
+} from '../api/chatRealtimeClient'
 import { mergeRealtimeSnapshot } from '../lib/chatSnapshot'
 import {
   clearChatThreadNotifications,
@@ -12,10 +15,12 @@ import {
   clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
+import { useAgentTypingState } from './useAgentTypingState'
 
 type UseChatRealtimeConnectionInput = {
   isMountedRef: MutableRefObject<boolean>
   markBrowserOnline: () => void
+  onAgentTyping?: (event: ChatTypingEvent) => void
   onRealtimeActivity?: () => void
   onRealtimeError?: () => void
   setPageState: Dispatch<SetStateAction<ChatPageState>>
@@ -25,11 +30,20 @@ type UseChatRealtimeConnectionInput = {
 export function useChatRealtimeConnection({
   isMountedRef,
   markBrowserOnline,
+  onAgentTyping,
   onRealtimeActivity,
   onRealtimeError,
   setPageState,
   threadId,
 }: UseChatRealtimeConnectionInput) {
+  const {
+    handleAgentTyping,
+    isAgentTypingVisible,
+  } = useAgentTypingState({
+    realtimeThreadId: threadId,
+    selectedThreadId: threadId,
+  })
+
   useEffect(() => {
     if (!threadId) {
       return
@@ -133,6 +147,15 @@ export function useChatRealtimeConnection({
 
         markBrowserOnline()
       },
+      onTyping: (typingEvent) => {
+        if (!isMountedRef.current || typingEvent.threadId !== threadId) {
+          return
+        }
+
+        markBrowserOnline()
+        handleAgentTyping(typingEvent)
+        onAgentTyping?.(typingEvent)
+      },
       threadId,
     })
 
@@ -140,11 +163,15 @@ export function useChatRealtimeConnection({
       realtimeConnection.close()
     }
   }, [
+    handleAgentTyping,
     isMountedRef,
     markBrowserOnline,
+    onAgentTyping,
     onRealtimeActivity,
     onRealtimeError,
     setPageState,
     threadId,
   ])
+
+  return { isAgentTypingVisible }
 }

@@ -17,6 +17,10 @@ import {
   readHeader,
   verifyChatwootSignature,
 } from './signature.js'
+import {
+  handleChatwootTypingWebhook,
+  isChatwootTypingEvent,
+} from './typingEvents.js'
 
 const SUPPORTED_MESSAGE_EVENTS = new Set(['message_created', 'message_updated'])
 
@@ -275,7 +279,10 @@ export function createChatwootWebhookService({
         payloadSha256,
       })
 
-      if (!SUPPORTED_MESSAGE_EVENTS.has(eventName)) {
+      const isMessageEvent = SUPPORTED_MESSAGE_EVENTS.has(eventName)
+      const isTypingEvent = isChatwootTypingEvent(eventName)
+
+      if (!isMessageEvent && !isTypingEvent) {
         const isDuplicate = await recordDeliveryOrReturnDuplicate({
           chatwootConversationId,
           chatwootMessageId,
@@ -290,6 +297,21 @@ export function createChatwootWebhookService({
         return isDuplicate
           ? { result: 'duplicate' }
           : buildIgnoredResult('unsupported_event')
+      }
+
+      if (isTypingEvent) {
+        return handleChatwootTypingWebhook({
+          chatwootConversationId,
+          chatwootMessageId,
+          deliveryKey,
+          eventName,
+          now: currentTime,
+          payload,
+          payloadSha256,
+          realtimeHub,
+          tenantId,
+          webhookRepository,
+        })
       }
 
       if (readIsPrivate(payload)) {

@@ -1,9 +1,10 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessagesSnapshot } from '../types'
 import {
+  MockEventSource,
   renderChatRoute,
   setupOfflineChatTestEnvironment,
 } from '../../../test/chatPageTestHarness'
@@ -112,6 +113,7 @@ describe('ChatPage typing sync', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     fetchMock.mockReset()
+    MockEventSource.instances = []
   })
 
   it('posts typing status after the portal user starts composing a message', async () => {
@@ -167,6 +169,80 @@ describe('ChatPage typing sync', () => {
             String(options.body) === JSON.stringify({ typingStatus: 'on' }),
         ),
       ).toHaveLength(1)
+    })
+  })
+
+  it('shows only a textless agent typing indicator from realtime typing events', async () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (
+        url === '/api/chat/threads/private%3Ame/read' ||
+        url === '/api/chat/threads/private%3Ame/typing'
+      ) {
+        return new Response(null, { status: 204 })
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText('Пожалуйста, проверьте последние документы.'),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    act(() => {
+      MockEventSource.instances[0]?.emit('typing', {
+        actor: 'agent',
+        isTyping: true,
+        threadId: 'private:me',
+      })
+    })
+
+    expect(
+      screen.getByRole('status', { name: 'Идет набор сообщения' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/печатает/i)).not.toBeInTheDocument()
+
+    act(() => {
+      MockEventSource.instances[0]?.emit('typing', {
+        actor: 'agent',
+        isTyping: false,
+        threadId: 'private:me',
+      })
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('status', { name: 'Идет набор сообщения' }),
+      ).not.toBeInTheDocument()
     })
   })
 })

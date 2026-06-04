@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import { ChatApiClientError, markChatThreadRead } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
+import { AgentTypingIndicator } from '../components/AgentTypingIndicator'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
@@ -86,8 +87,7 @@ export function ChatPage() {
     (value: number) => value + 1,
     0,
   )
-  const [historyErrorMessage, setHistoryErrorMessage] =
-    useState<string | null>(null)
+  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null)
   const [forceScrollToBottomSignal, setForceScrollToBottomSignal] = useState(0)
   const [replyTarget, setReplyTarget] = useState<MessageComposerReplyTarget | null>(null)
   const {
@@ -307,8 +307,7 @@ export function ChatPage() {
     refreshChatSnapshot,
     snapshotExists: pageState.status === 'ready',
   })
-
-  useChatRealtimeConnection({
+  const { isAgentTypingVisible } = useChatRealtimeConnection({
     isMountedRef,
     markBrowserOnline: markChatOnline,
     onRealtimeActivity: reportRealtimeActivity,
@@ -497,6 +496,7 @@ export function ChatPage() {
             scrollToMessageSignal={highlightedMessageScrollSignal}
           />
         ) : null}
+        <AgentTypingIndicator isVisible={shouldRenderTranscript && isAgentTypingVisible} />
 
         <ChatComposerDock
           canSend={canSend}

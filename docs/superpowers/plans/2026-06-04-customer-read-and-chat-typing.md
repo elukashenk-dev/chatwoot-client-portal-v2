@@ -1970,16 +1970,23 @@ typing reaches the portal through the same SSE health boundary.
 **Files:**
 
 - Modify: `backend/src/modules/chat-realtime/hub.ts`
+- Modify: `backend/src/modules/chat-realtime/hub.test.ts`
 - Modify: `backend/src/modules/chat-realtime/routes.test.ts`
 - Modify: `backend/src/modules/chatwoot-webhooks/service.ts`
 - Modify: `backend/src/modules/chatwoot-webhooks/service.test.ts`
+- Create: `backend/src/modules/chatwoot-webhooks/service.typing.test.ts`
+- Create: `backend/src/modules/chatwoot-webhooks/typingEvents.ts`
 - Modify: `frontend/src/features/chat/api/chatRealtimeClient.ts`
+- Modify: `frontend/src/features/chat/api/chatRealtimeClient.test.ts`
 - Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.ts`
+- Modify: `frontend/src/features/chat/pages/useChatRealtimeConnection.test.tsx`
 - Create: `frontend/src/features/chat/components/AgentTypingIndicator.tsx`
+- Create: `frontend/src/features/chat/pages/useAgentTypingState.ts`
+- Create: `frontend/src/features/chat/pages/useAgentTypingState.test.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
-- Modify frontend tests.
+- Modify: `frontend/src/features/chat/pages/ChatPage.typing.test.tsx`
 
-- [ ] **Step 1: Write failing webhook tests**
+- [x] **Step 1: Write failing webhook tests**
 
 Add tests for:
 
@@ -1992,7 +1999,7 @@ Add tests for:
 - frontend ignores typing events for a stale/mismatched thread and clears typing
   state immediately on selected-thread changes.
 
-- [ ] **Step 2: Extend realtime event type**
+- [x] **Step 2: Extend realtime event type**
 
 In `chat-realtime/hub.ts`:
 
@@ -2043,7 +2050,7 @@ publishThreadTyping({
 }
 ```
 
-- [ ] **Step 3: Accept typing webhooks**
+- [x] **Step 3: Accept typing webhooks**
 
 In `chatwoot-webhooks/service.ts`:
 
@@ -2071,7 +2078,7 @@ function readIsPrivateTyping(payload: Record<string, unknown>) {
 }
 ```
 
-- [ ] **Step 4: Add frontend realtime typing handling**
+- [x] **Step 4: Add frontend realtime typing handling**
 
 In `chatRealtimeClient.ts`, add:
 
@@ -2091,7 +2098,7 @@ eventSource.addEventListener('typing', (event) => {
 })
 ```
 
-- [ ] **Step 5: Add indicator component**
+- [x] **Step 5: Add indicator component**
 
 Create `AgentTypingIndicator.tsx`:
 
@@ -2128,7 +2135,7 @@ Place it above the composer, not inside message bubbles. Do not create a fake
 agent message. Do not render visible typing text or agent names in the portal
 indicator.
 
-- [ ] **Step 6: Add typing timeout fallback and thread cleanup**
+- [x] **Step 6: Add typing timeout fallback and thread cleanup**
 
 In `useChatRealtimeConnection` or a small hook, clear agent typing after
 `4_000ms` if `conversation_typing_off` is not received. Store typing state with
@@ -2166,21 +2173,31 @@ useEffect(() => {
 }, [selectedThreadId, realtimeThreadId])
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run:
 
 ```bash
 pnpm --dir backend exec vitest run \
+  src/modules/chat-realtime/hub.test.ts \
   src/modules/chatwoot-webhooks/service.test.ts \
+  src/modules/chatwoot-webhooks/service.typing.test.ts \
   src/modules/chat-realtime/routes.test.ts
 pnpm --dir frontend exec vitest run \
-  src/features/chat/pages/ChatPage.test.tsx
+  src/features/chat/api/chatRealtimeClient.test.ts \
+  src/features/chat/pages/useChatRealtimeConnection.test.tsx \
+  src/features/chat/pages/useAgentTypingState.test.tsx \
+  src/features/chat/pages/ChatPage.typing.test.tsx
+pnpm --dir backend build
+pnpm --dir backend lint
+pnpm --dir frontend typecheck
+pnpm --dir frontend lint
+git diff --check
 ```
 
 Expected: pass.
 
-- [ ] **Step 8: Smoke review checkpoint**
+- [x] **Step 8: Smoke review checkpoint**
 
 Review:
 
@@ -2188,6 +2205,28 @@ Review:
 - typing does not modify unread;
 - typing does not refresh full snapshots;
 - private agent notes do not appear as typing for portal users.
+
+Implementation status: completed on `feature/phase-chat-agent-typing-indicator`.
+Smoke review notes:
+
+- Chatwoot `conversation_typing_on/off` webhooks are accepted only after normal
+  signature and tenant invariant checks;
+- typing webhooks use Chatwoot `is_private` and do not reuse the message
+  `private` guard;
+- mapped typing webhooks record accepted delivery and publish only a transient
+  `typing` SSE event;
+- typing webhooks do not call snapshot refresh, unread recording or push
+  delivery;
+- frontend ignores mismatched/stale typing events and invalidates old typing
+  state when the selected or realtime thread changes;
+- portal UI renders only an accessible three-dot indicator above the composer,
+  without visible typing words or agent names;
+- fallback auto-clear hides the indicator after `4_000ms` if Chatwoot does not
+  send `conversation_typing_off`.
+- duplicate typing webhook deliveries are recorded and do not publish a second
+  realtime typing event.
+- code-health review split typing webhook handling and typing tests into
+  focused files so Task 6 does not add new root line-count blockers.
 
 Commit:
 

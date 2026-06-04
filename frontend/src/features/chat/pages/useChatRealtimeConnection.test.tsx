@@ -124,4 +124,37 @@ describe('useChatRealtimeConnection', () => {
     expect(onRealtimeActivity).toHaveBeenCalledTimes(1)
     expect(onRealtimeError).toHaveBeenCalledTimes(1)
   })
+
+  it('passes agent typing events from the realtime client to the caller', () => {
+    const onAgentTyping = vi.fn()
+
+    renderHook(() =>
+      useChatRealtimeConnection({
+        isMountedRef: { current: true },
+        markBrowserOnline: vi.fn(),
+        onAgentTyping,
+        setPageState: vi.fn(),
+        threadId: 'private:me',
+      }),
+    )
+
+    const realtimeOptions = openChatRealtimeMock.mock.calls[0]?.[0]
+    expect(realtimeOptions).toBeDefined()
+    expect(realtimeOptions!.onTyping).toEqual(expect.any(Function))
+
+    const onTyping = realtimeOptions!.onTyping
+    expect(onTyping).toBeDefined()
+
+    onTyping!({
+      actor: 'agent',
+      isTyping: true,
+      threadId: 'private:me',
+    })
+
+    expect(onAgentTyping).toHaveBeenCalledWith({
+      actor: 'agent',
+      isTyping: true,
+      threadId: 'private:me',
+    })
+  })
 })

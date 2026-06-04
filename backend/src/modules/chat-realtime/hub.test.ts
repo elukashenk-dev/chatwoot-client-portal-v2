@@ -160,6 +160,43 @@ describe('createChatRealtimeHub', () => {
     expect(sendTenantB).not.toHaveBeenCalled()
   })
 
+  it('publishes agent typing events without building message snapshots', () => {
+    const hub = createChatRealtimeHub()
+    const sendTenantA = vi.fn()
+    const sendTenantB = vi.fn()
+
+    hub.subscribe({
+      send: sendTenantA,
+      tenantId: 1,
+      threadId: 'private:me',
+      userId: 7,
+    })
+    hub.subscribe({
+      send: sendTenantB,
+      tenantId: 2,
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    expect(
+      hub.publishThreadTyping({
+        isTyping: true,
+        tenantId: 1,
+        threadId: 'private:me',
+      }),
+    ).toBe(1)
+
+    expect(sendTenantA).toHaveBeenCalledWith({
+      data: {
+        actor: 'agent',
+        isTyping: true,
+        threadId: 'private:me',
+      },
+      type: 'typing',
+    })
+    expect(sendTenantB).not.toHaveBeenCalled()
+  })
+
   it('rejects subscriptions above the per user conversation limit and allows another after cleanup', () => {
     const hub = createChatRealtimeHub()
     const subscriptions: Array<() => void> = []

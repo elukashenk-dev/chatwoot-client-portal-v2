@@ -112,6 +112,7 @@ function createService(
     overrides.realtimeHub ??
     ({
       publishThreadMessages,
+      publishThreadTyping: vi.fn(),
       subscribe:
         vi.fn<
           CreateChatwootWebhookServiceOptions['realtimeHub']['subscribe']

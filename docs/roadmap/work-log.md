@@ -238,6 +238,9 @@
 - Portal user typing sync добавлен: composer отправляет transient typing
   on/off через backend authority route в Chatwoot Public API, fail-closed без
   user-facing ошибок и с throttle для повторных `typing_on`.
+- Chatwoot agent typing sync добавлен: подписанные `conversation_typing_on/off`
+  webhooks fan out as transient SSE typing events, а portal показывает только
+  безтекстовый three-dot indicator без unread/push/snapshot side effects.
 
 ## Current Baseline
 
@@ -257,4 +260,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 6: agent typing indicator in the portal.
+  with Task 7: runtime/e2e smoke for customer read and two-way typing.

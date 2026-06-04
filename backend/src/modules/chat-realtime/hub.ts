@@ -28,6 +28,16 @@ export type ChatRealtimeEvent =
       data: ChatMessagesSnapshot
       type: 'chat-state'
     }
+  | {
+      data: ChatTypingEvent
+      type: 'typing'
+    }
+
+export type ChatTypingEvent = {
+  actor: 'agent'
+  isTyping: boolean
+  threadId: string
+}
 
 function buildThreadKey({
   tenantId,
@@ -108,6 +118,40 @@ export function createChatRealtimeHub() {
         subscription.send({
           data: snapshot,
           type: 'messages',
+        })
+        delivered += 1
+      }
+
+      return delivered
+    },
+
+    publishThreadTyping({
+      isTyping,
+      tenantId,
+      threadId,
+    }: {
+      isTyping: boolean
+      tenantId: number
+      threadId: string
+    }) {
+      const subscriptions = subscriptionsByThreadKey.get(
+        buildThreadKey({ tenantId, threadId }),
+      )
+
+      if (!subscriptions) {
+        return 0
+      }
+
+      let delivered = 0
+
+      for (const subscription of subscriptions) {
+        subscription.send({
+          data: {
+            actor: 'agent',
+            isTyping,
+            threadId,
+          },
+          type: 'typing',
         })
         delivered += 1
       }
