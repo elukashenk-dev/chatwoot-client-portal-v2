@@ -6,14 +6,32 @@ type VisibleBoundary = {
   latestVisibleAgentMessageId: number | null
 }
 
+function isChatReadSyncPageForeground() {
+  if (typeof document === 'undefined') {
+    return true
+  }
+
+  if (document.visibilityState !== 'visible') {
+    return false
+  }
+
+  if (typeof document.hasFocus === 'function') {
+    return document.hasFocus()
+  }
+
+  return true
+}
+
 export function useChatReadSync({
   canUseBackend,
   historyFragmentIsOpen,
+  isPageForeground = isChatReadSyncPageForeground,
   markRead,
   selectedThreadId,
 }: {
   canUseBackend: boolean
   historyFragmentIsOpen: boolean
+  isPageForeground?: () => boolean
   markRead: (threadId: string) => Promise<void>
   selectedThreadId: string | null
 }) {
@@ -21,7 +39,12 @@ export function useChatReadSync({
 
   return useCallback(
     (boundary: VisibleBoundary) => {
-      if (!canUseBackend || historyFragmentIsOpen || !selectedThreadId) {
+      if (
+        !canUseBackend ||
+        historyFragmentIsOpen ||
+        !selectedThreadId ||
+        !isPageForeground()
+      ) {
         return
       }
 
@@ -45,6 +68,12 @@ export function useChatReadSync({
         lastSyncByBoundaryRef.current.delete(syncKey)
       })
     },
-    [canUseBackend, historyFragmentIsOpen, markRead, selectedThreadId],
+    [
+      canUseBackend,
+      historyFragmentIsOpen,
+      isPageForeground,
+      markRead,
+      selectedThreadId,
+    ],
   )
 }

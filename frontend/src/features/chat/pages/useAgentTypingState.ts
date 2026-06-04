@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ChatTypingEvent } from '../api/chatRealtimeClient'
 
-const AGENT_TYPING_AUTO_CLEAR_MS = 4_000
+// Chatwoot sends one agent typing_on at typing start, then keeps resetting
+// its own idle timer without sending keepalive webhooks while the agent types.
+// This fallback is only for missed typing_off events; normal typing_off clears
+// the indicator immediately.
+const AGENT_TYPING_AUTO_CLEAR_MS = 60_000
 
 type AgentTypingState = {
   isTyping: boolean

@@ -10,6 +10,13 @@ const privateThread = {
   type: 'private',
 } as const
 
+const groupThread = {
+  id: 'group:154',
+  subtitle: 'Групповой чат',
+  title: 'ООО "Уточки"',
+  type: 'group',
+} as const
+
 const tenant = {
   displayName: 'Бухфирма',
   primaryDomain: '127.0.0.1',
@@ -37,9 +44,10 @@ function createJsonResponse(body: unknown, status = 200) {
 
 function createReadySnapshot(
   messages: ChatMessagesSnapshot['messages'],
+  activeThread: ChatMessagesSnapshot['activeThread'] = privateThread,
 ): ChatMessagesSnapshot {
   return {
-    activeThread: privateThread,
+    activeThread,
     hasMoreOlder: false,
     messages,
     nextOlderCursor: null,
@@ -69,6 +77,18 @@ const fallbackAgentMessage = {
   createdAt: '2026-06-04T09:01:00.000Z',
   direction: 'incoming',
   id: 102,
+  status: 'sent',
+} satisfies ChatMessagesSnapshot['messages'][number]
+
+const groupAgentMessage = {
+  attachments: [],
+  authorName: 'Ольга Support',
+  authorRole: 'agent',
+  content: 'Групповое сообщение для проверки прочтения.',
+  contentType: 'text',
+  createdAt: '2026-06-04T09:02:00.000Z',
+  direction: 'incoming',
+  id: 201,
   status: 'sent',
 } satisfies ChatMessagesSnapshot['messages'][number]
 
@@ -168,9 +188,13 @@ async function routePortalRuntimeApi(
   {
     fallbackSnapshot = createReadySnapshot([oldAgentMessage]),
     initialSnapshot = createReadySnapshot([oldAgentMessage]),
+    threadSnapshots = new Map<string, ChatMessagesSnapshot>(),
+    threads = [privateThread],
   }: {
     fallbackSnapshot?: ChatMessagesSnapshot
     initialSnapshot?: ChatMessagesSnapshot
+    threadSnapshots?: Map<string, ChatMessagesSnapshot>
+    threads?: Array<typeof privateThread | typeof groupThread>
   } = {},
 ): Promise<PortalRuntimeApiState> {
   const state: PortalRuntimeApiState = {
@@ -179,6 +203,7 @@ async function routePortalRuntimeApi(
     typingRequests: [],
   }
   let isAuthenticated = false
+  const messageRequestCountByThread = new Map<string, number>()
 
   await page.route(/^https?:\/\/[^/]+\/api\/.*/, async (route) => {
     const request = route.request()
@@ -238,7 +263,7 @@ async function routePortalRuntimeApi(
       await route.fulfill(
         createJsonResponse({
           activeThreadId: privateThread.id,
-          threads: [{ ...privateThread, unreadCount: 0 }],
+          threads: threads.map((thread) => ({ ...thread, unreadCount: 0 })),
           totalUnreadCount: 0,
         }),
       )
@@ -246,12 +271,16 @@ async function routePortalRuntimeApi(
     }
 
     if (path === '/api/chat/messages') {
+      const threadId =
+        requestUrl.searchParams.get('threadId') ?? privateThread.id
+      const requestCount = (messageRequestCountByThread.get(threadId) ?? 0) + 1
+
+      messageRequestCountByThread.set(threadId, requestCount)
       state.getMessageRequests.push(`${path}${requestUrl.search}`)
       await route.fulfill(
         createJsonResponse(
-          state.getMessageRequests.length === 1
-            ? initialSnapshot
-            : fallbackSnapshot,
+          threadSnapshots.get(threadId) ??
+            (requestCount === 1 ? initialSnapshot : fallbackSnapshot),
         ),
       )
       return
@@ -275,7 +304,13 @@ async function routePortalRuntimeApi(
       return
     }
 
-    if (path === '/api/chat/threads/private%3Ame/notification-settings') {
+    if (
+      path.startsWith('/api/chat/threads/') &&
+      path.endsWith('/notification-settings')
+    ) {
+      const encodedThreadId = path
+        .replace('/api/chat/threads/', '')
+        .replace('/notification-settings', '')
       await route.fulfill(
         createJsonResponse({
           effective: {
@@ -293,19 +328,27 @@ async function routePortalRuntimeApi(
             pushEnabled: null,
             soundEnabled: null,
           },
-          threadId: privateThread.id,
+          threadId: decodeURIComponent(encodedThreadId),
         }),
       )
       return
     }
 
-    if (path === '/api/chat/threads/private%3Ame/read' && method === 'POST') {
+    if (
+      path.startsWith('/api/chat/threads/') &&
+      path.endsWith('/read') &&
+      method === 'POST'
+    ) {
       state.readRequests.push(path)
       await route.fulfill({ status: 204 })
       return
     }
 
-    if (path === '/api/chat/threads/private%3Ame/typing' && method === 'POST') {
+    if (
+      path.startsWith('/api/chat/threads/') &&
+      path.endsWith('/typing') &&
+      method === 'POST'
+    ) {
       state.typingRequests.push(
         (request.postDataJSON() ?? {}) as ChatTypingRequest,
       )
@@ -353,6 +396,26 @@ test('posts customer read only after the latest agent message is visible', async
   await loginPortalUser(page)
 
   await expect.poll(() => state.readRequests.length).toBe(1)
+})
+
+test('posts group customer read when the latest group agent message is visible', async ({
+  page,
+}) => {
+  const state = await routePortalRuntimeApi(page, {
+    threads: [privateThread, groupThread],
+    threadSnapshots: new Map([
+      [groupThread.id, createReadySnapshot([groupAgentMessage], groupThread)],
+    ]),
+  })
+
+  await loginPortalUser(page)
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByRole('menuitem', { name: /ООО "Уточки"/ }).click()
+
+  await expect(page.getByText(groupAgentMessage.content)).toBeVisible()
+  await expect
+    .poll(() => state.readRequests)
+    .toContain('/api/chat/threads/group%3A154/read')
 })
 
 test('syncs portal user typing through the backend typing route', async ({

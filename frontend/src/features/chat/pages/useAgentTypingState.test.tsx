@@ -12,7 +12,7 @@ describe('useAgentTypingState', () => {
     vi.useRealTimers()
   })
 
-  it('shows matching agent typing events and clears them after the fallback timeout', () => {
+  it('keeps matching agent typing events visible during long continuous agent composition and clears after the stale fallback timeout', () => {
     const { result } = renderHook(() =>
       useAgentTypingState({
         realtimeThreadId: 'private:me',
@@ -31,7 +31,13 @@ describe('useAgentTypingState', () => {
     expect(result.current.isAgentTypingVisible).toBe(true)
 
     act(() => {
-      vi.advanceTimersByTime(4_000)
+      vi.advanceTimersByTime(59_000)
+    })
+
+    expect(result.current.isAgentTypingVisible).toBe(true)
+
+    act(() => {
+      vi.advanceTimersByTime(1_000)
     })
 
     expect(result.current.isAgentTypingVisible).toBe(false)

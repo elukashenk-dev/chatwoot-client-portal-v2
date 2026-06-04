@@ -79,6 +79,12 @@ function createTypingPayload(
       id: 9,
     },
     is_private: false,
+    user: {
+      email: 'agent@example.test',
+      id: 2,
+      name: 'Agent',
+      type: 'user',
+    },
     ...overrides,
   }
 }
@@ -249,6 +255,39 @@ describe('createChatwootWebhookService typing events', () => {
         chatwootConversationId: 101,
         chatwootMessageId: null,
         status: 'ignored_private',
+      }),
+    )
+    expect(publishThreadTyping).not.toHaveBeenCalled()
+  })
+
+  it('ignores contact typing echo from portal users without publishing it back to portal realtime', async () => {
+    const { publishThreadTyping, recordDelivery, service } = createService()
+    const webhook = createSignedWebhook(
+      createTypingPayload('conversation_typing_on', {
+        user: {
+          account: {
+            id: 3,
+          },
+          custom_attributes: {
+            portal_contact_type: 'person',
+            portal_enabled: true,
+          },
+          email: 'customer@example.test',
+          id: 33,
+          name: 'Customer',
+        },
+      }),
+    )
+
+    await expect(service.handleWebhook(webhook)).resolves.toEqual({
+      reason: 'contact_typing',
+      result: 'ignored',
+    })
+    expect(recordDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatwootConversationId: 101,
+        chatwootMessageId: null,
+        status: 'ignored_contact',
       }),
     )
     expect(publishThreadTyping).not.toHaveBeenCalled()

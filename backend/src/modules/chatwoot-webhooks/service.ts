@@ -61,6 +61,7 @@ type HandleChatwootWebhookInput = {
 }
 
 type IgnoredWebhookReason =
+  | 'contact_typing'
   | 'missing_conversation'
   | 'private_message'
   | 'unmapped_conversation'

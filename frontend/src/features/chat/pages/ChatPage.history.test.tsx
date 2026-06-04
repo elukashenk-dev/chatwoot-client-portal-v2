@@ -111,10 +111,12 @@ describe('ChatPage history loading', () => {
 
   beforeEach(async () => {
     await setupOfflineChatTestEnvironment()
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     vi.stubGlobal('fetch', fetchMock)
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     fetchMock.mockReset()
     MockEventSource.instances = []

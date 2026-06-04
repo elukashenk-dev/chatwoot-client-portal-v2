@@ -34,10 +34,11 @@ Customer-read и typing реализуются отдельным планом:
 
 - `Отправлено` - backend/Chatwoot приняли сообщение;
 - portal user-sent messages не получают fake `Прочитано поддержкой`;
-- customer-read для агента - только private thread и только когда latest
-  transcript видим внизу после render;
-- group customer-read в Chatwoot dashboard не синхронизируется, потому что
-  Chatwoot видит один group contact, а не каждого участника;
+- customer-read для агента идет только когда latest transcript видим внизу
+  после render и окно портала в foreground;
+- group customer-read в Chatwoot dashboard синхронизируется по правилу
+  `any participant read`: если любой участник группы увидел latest agent
+  message, общий group contact считается прочитанным;
 - push, app badge, unread counters и typing events не являются read source of
   truth.
 
@@ -65,15 +66,15 @@ Customer-read и typing реализуются отдельным планом:
 
 Эти строки описывают целевое поведение customer-read and typing slice.
 
-| #   | Сценарий                                                  | Что видно пользователю портала                                    | Что видит/получает агент в Chatwoot                                      | Итоговое правило                                                            |
-| --- | --------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| R1  | Пользователь открыл private chat и находится внизу latest | Входящие agent messages видны; отдельного `Прочитано вами` нет    | Chatwoot получает contact `update_last_seen`; agent messages become read | Read sync идет только после visible-bottom latest transcript                |
-| R2  | Пользователь открыл чат из offline cache                  | Сохраненные сообщения видны без read sync                         | Chatwoot не получает `update_last_seen`                                  | Cached/offline snapshot не является чтением для Chatwoot                    |
-| R3  | Пользователь читает старую историю выше низа              | Новые agent messages не автоскроллят насильно                     | Chatwoot не получает `update_last_seen` до возврата вниз                 | Чтение истории не помечает новые сообщения агента прочитанными              |
-| R4  | Пользователь внизу, приходит новое сообщение агента       | Лента auto-follow показывает новое сообщение                      | После render portal вызывает `update_last_seen`                          | Если latest реально видим, agent-side read обновляется быстро               |
-| R5  | Пользователь отправил сообщение агенту                    | Исходящее сообщение остается `Отправлено` с одной галкой          | Агент получает обычное incoming message                                  | Нет portal-visible двух галочек без настоящего agent-read event             |
-| R6  | Пользователь typing в private chat                        | В портале нет отдельной плашки про собственный typing             | Агент видит customer typing indicator                                    | Backend вызывает Chatwoot public `toggle_typing` через tenant authority     |
-| R7  | Агент typing в Chatwoot                                   | Появляются три анимированные точки без текста и имени, затем исчезают по off/timeout | Агент работает в стандартной админке                                     | Typing event transient; не создает message, push, unread или read receipt   |
-| R8  | В group thread один участник открыл чат                   | В портале нет group read marker                                   | Chatwoot group contact read не синхронизируется                          | Нельзя честно показать per-user group read в стандартном Chatwoot dashboard |
-| R9  | В group thread пользователь typing                        | В портале нет отдельной плашки про собственный typing             | Агент может видеть generic group/contact typing                          | Group typing не обещает индивидуального участника                           |
-| R10 | Realtime SSE молчит, backend доступен                     | Latest transcript обновляется через bounded fallback без дублей   | Chatwoot read sync идет только после render и visible-bottom проверки     | Fallback отвечает за свежесть данных, а не за read/typing side effects       |
+| #   | Сценарий                                                  | Что видно пользователю портала                                                       | Что видит/получает агент в Chatwoot                                      | Итоговое правило                                                                                     |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| R1  | Пользователь открыл private chat и находится внизу latest | Входящие agent messages видны; отдельного `Прочитано вами` нет                       | Chatwoot получает contact `update_last_seen`; agent messages become read | Read sync идет только после visible-bottom latest transcript                                         |
+| R2  | Пользователь открыл чат из offline cache                  | Сохраненные сообщения видны без read sync                                            | Chatwoot не получает `update_last_seen`                                  | Cached/offline snapshot не является чтением для Chatwoot                                             |
+| R3  | Пользователь читает старую историю выше низа              | Новые agent messages не автоскроллят насильно                                        | Chatwoot не получает `update_last_seen` до возврата вниз                 | Чтение истории не помечает новые сообщения агента прочитанными                                       |
+| R4  | Пользователь внизу, приходит новое сообщение агента       | Лента auto-follow показывает новое сообщение                                         | После render portal вызывает `update_last_seen`                          | Если latest реально видим, agent-side read обновляется быстро                                        |
+| R5  | Пользователь отправил сообщение агенту                    | Исходящее сообщение остается `Отправлено` с одной галкой                             | Агент получает обычное incoming message                                  | Нет portal-visible двух галочек без настоящего agent-read event                                      |
+| R6  | Пользователь typing в private chat                        | В портале нет отдельной плашки про собственный typing                                | Агент видит customer typing indicator                                    | Backend вызывает Chatwoot public `toggle_typing` через tenant authority                              |
+| R7  | Агент typing в Chatwoot                                   | Появляются три анимированные точки без текста и имени, затем исчезают по off/timeout | Агент работает в стандартной админке                                     | Typing event transient; не создает message, push, unread или read receipt                            |
+| R8  | В group thread один участник открыл чат внизу latest      | В портале нет group read marker                                                      | Chatwoot получает contact `update_last_seen`; agent messages become read | Для групп действует `any participant read`: кто-то увидел, общий group contact считается прочитанным |
+| R9  | В group thread пользователь typing                        | В портале нет отдельной плашки про собственный typing                                | Агент может видеть generic group/contact typing                          | Group typing не обещает индивидуального участника                                                    |
+| R10 | Realtime SSE молчит, backend доступен                     | Latest transcript обновляется через bounded fallback без дублей                      | Chatwoot read sync идет только после render и visible-bottom проверки    | Fallback отвечает за свежесть данных, а не за read/typing side effects                               |

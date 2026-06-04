@@ -226,6 +226,7 @@ describe('ChatPage optimistic text send', () => {
     window.localStorage.clear()
     await clearOfflineDatabaseForTests()
     setNavigatorStorageEstimate()
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     vi.stubGlobal('fetch', fetchWithChatPresenceRoutes(fetchMock))
   })
 

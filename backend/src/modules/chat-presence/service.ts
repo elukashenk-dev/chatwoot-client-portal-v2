@@ -22,7 +22,7 @@ type ChatPresenceChatwootClient = Pick<
 
 export type ChatCustomerReadSyncResult =
   | { result: 'synced' }
-  | { reason: 'group_thread' | 'throttled'; result: 'skipped' }
+  | { reason: 'throttled'; result: 'skipped' }
   | {
       reason:
         | 'chatwoot_unavailable'
@@ -148,13 +148,6 @@ export function createChatPresenceService({
               ? 'thread_access_denied'
               : 'conversation_missing',
           result: 'unavailable',
-        }
-      }
-
-      if (context.threadType !== 'private') {
-        return {
-          reason: 'group_thread',
-          result: 'skipped',
         }
       }
 

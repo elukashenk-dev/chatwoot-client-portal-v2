@@ -18,6 +18,7 @@ type ChatwootWebhookMapping = NonNullable<
 >
 
 type IgnoredTypingWebhookReason =
+  | 'contact_typing'
   | 'missing_conversation'
   | 'private_message'
   | 'unmapped_conversation'
@@ -54,6 +55,22 @@ export function isChatwootTypingEvent(eventName: string) {
 
 function readIsPrivateTyping(payload: Record<string, unknown>) {
   return payload.is_private === true
+}
+
+function readObject(value: unknown) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function readString(value: unknown) {
+  return typeof value === 'string' ? value : null
+}
+
+function isAgentTypingPayload(payload: Record<string, unknown>) {
+  const user = readObject(payload.user)
+
+  return readString(user?.type)?.trim().toLowerCase() === 'user'
 }
 
 function buildIgnoredResult(
@@ -136,6 +153,23 @@ export async function handleChatwootTypingWebhook({
     return isDuplicate
       ? { result: 'duplicate' }
       : buildIgnoredResult('private_message')
+  }
+
+  if (!isAgentTypingPayload(payload)) {
+    const isDuplicate = await recordDeliveryOrReturnDuplicate({
+      chatwootConversationId,
+      chatwootMessageId,
+      deliveryKey,
+      eventName,
+      now,
+      payloadSha256,
+      status: 'ignored_contact',
+      webhookRepository,
+    })
+
+    return isDuplicate
+      ? { result: 'duplicate' }
+      : buildIgnoredResult('contact_typing')
   }
 
   if (!chatwootConversationId) {

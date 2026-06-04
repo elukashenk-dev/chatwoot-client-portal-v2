@@ -9,6 +9,7 @@ import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 
 export type ChatwootWebhookDeliveryStatus =
   | 'accepted'
+  | 'ignored_contact'
   | 'ignored_event'
   | 'ignored_private'
   | 'unroutable'

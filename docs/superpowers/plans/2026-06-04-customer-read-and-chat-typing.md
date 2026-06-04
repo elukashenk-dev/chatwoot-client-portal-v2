@@ -97,10 +97,13 @@ What this plan intentionally does not implement:
 Group rule:
 
 - Customer-read sync is exact for private threads.
-- Group customer-read sync is not enabled in this plan because standard
-  Chatwoot dashboard has one group contact conversation, not per portal member
-  visibility. Marking the group contact read when one member saw the message
-  would be a business lie for multi-user groups.
+- Group customer-read sync uses the same rule as private threads: when any
+  authorized portal participant opens the group thread at the latest bottom
+  edge and sees the latest agent message, the portal marks the shared Chatwoot
+  group-contact conversation read.
+- This is intentionally "any participant read", not per-member read. Standard
+  Chatwoot dashboard still has one group contact conversation and cannot show
+  which exact portal member read the message.
 - Typing is allowed in group threads as a generic group/contact typing signal.
   The agent may see the group contact typing, not the individual portal member.
 
@@ -108,12 +111,20 @@ Viewport rule:
 
 - Fresh backend snapshots alone do not mark Chatwoot read.
 - Portal marks read only when the latest thread transcript is visible at the
-  bottom after render.
+  bottom after render and the portal page is in the foreground.
+- Foreground means `document.visibilityState === 'visible'` and the browser
+  document has focus. Hidden tabs, minimized windows and an inactive browser
+  window do not call `update_last_seen`, even if DOM geometry still reports the
+  bottom transcript message as visible.
 - Offline cache, search result context, older-message history and "user scrolled
   up reading history" do not call `update_last_seen`.
 - If a new agent message arrives while the user is already at the bottom and
   transcript auto-follow is active, the frontend calls mark-read after the new
   message renders.
+- If a new agent message arrives while the portal is backgrounded, read sync is
+  deferred. When the page returns to foreground, the transcript rechecks the
+  latest visible agent message and marks read only if the user is still at the
+  latest bottom edge.
 
 ## Focused Review: F-CHAT-006 Realtime Health
 
@@ -424,7 +435,9 @@ type UseChatRealtimeHealthFallbackInput = {
 }
 
 function documentIsVisible() {
-  return typeof document === 'undefined' || document.visibilityState === 'visible'
+  return (
+    typeof document === 'undefined' || document.visibilityState === 'visible'
+  )
 }
 
 export function useChatRealtimeHealthFallback({
@@ -1158,7 +1171,7 @@ git commit -m "feat: add chatwoot public conversation events client"
 Create tests for these cases:
 
 - private ready thread calls Chatwoot `updatePublicConversationLastSeen`;
-- group thread returns `skipped_group_thread`;
+- group ready thread calls Chatwoot `updatePublicConversationLastSeen`;
 - missing `portalInboxIdentifier` returns `not_configured`;
 - missing source id resolves and stores it;
 - repeated calls inside throttle window are skipped;
@@ -1169,7 +1182,7 @@ Expected service result shape:
 ```ts
 type ChatCustomerReadSyncResult =
   | { result: 'synced' }
-  | { result: 'skipped'; reason: 'group_thread' | 'throttled' }
+  | { result: 'skipped'; reason: 'throttled' }
   | {
       reason:
         | 'chatwoot_unavailable'
@@ -1318,10 +1331,6 @@ export function createChatPresenceService({
         }
       }
 
-      if (context.threadType !== 'private') {
-        return { reason: 'group_thread', result: 'skipped' as const }
-      }
-
       if (!chatwoot.portalInboxIdentifier) {
         return { reason: 'not_configured', result: 'unavailable' as const }
       }
@@ -1412,14 +1421,15 @@ Expected: pass.
 
 Review:
 
-- group read is skipped, not silently treated as "read by everyone";
+- group read uses "any authorized portal participant read" semantics;
 - route is same-origin and authenticated;
 - read sync does not affect portal unread/push counters;
 - read sync does not run for media/search/older-history endpoints.
 
 Done in `feature/phase-chat-customer-read-sync`:
 
-- group thread read sync returns `skipped/group_thread`;
+- group thread read sync calls Chatwoot public `update_last_seen` for the
+  shared group contact conversation;
 - route is same-origin backend API and requires the existing authenticated
   portal session;
 - read sync only posts Chatwoot public last-seen and does not touch unread or
@@ -1507,28 +1517,34 @@ export function useChatReadSync({
 }) {
   const lastSyncByBoundaryRef = useRef(new Map<string, number>())
 
-  return useCallback((boundary: VisibleBoundary) => {
-    if (!canUseBackend || historyFragmentIsOpen || !selectedThreadId) {
-      return
-    }
+  return useCallback(
+    (boundary: VisibleBoundary) => {
+      if (!canUseBackend || historyFragmentIsOpen || !selectedThreadId) {
+        return
+      }
 
-    if (boundary.latestVisibleAgentMessageId === null) {
-      return
-    }
+      if (boundary.latestVisibleAgentMessageId === null) {
+        return
+      }
 
-    const syncKey = `${selectedThreadId}:${boundary.latestVisibleAgentMessageId}`
-    const now = Date.now()
-    const lastSyncAt = lastSyncByBoundaryRef.current.get(syncKey)
+      const syncKey = `${selectedThreadId}:${boundary.latestVisibleAgentMessageId}`
+      const now = Date.now()
+      const lastSyncAt = lastSyncByBoundaryRef.current.get(syncKey)
 
-    if (lastSyncAt !== undefined && now - lastSyncAt < READ_SYNC_DEBOUNCE_MS) {
-      return
-    }
+      if (
+        lastSyncAt !== undefined &&
+        now - lastSyncAt < READ_SYNC_DEBOUNCE_MS
+      ) {
+        return
+      }
 
-    lastSyncByBoundaryRef.current.set(syncKey, now)
-    void markRead(selectedThreadId).catch(() => {
-      lastSyncByBoundaryRef.current.delete(syncKey)
-    })
-  }, [canUseBackend, historyFragmentIsOpen, markRead, selectedThreadId])
+      lastSyncByBoundaryRef.current.set(syncKey, now)
+      void markRead(selectedThreadId).catch(() => {
+        lastSyncByBoundaryRef.current.delete(syncKey)
+      })
+    },
+    [canUseBackend, historyFragmentIsOpen, markRead, selectedThreadId],
+  )
 }
 ```
 
@@ -2360,8 +2376,9 @@ Manual cases:
 6. Agent types in private chat; portal shows the textless animated three-dot
    indicator.
 7. Agent stops typing; portal indicator disappears.
-8. Group thread: customer-read is skipped; typing is generic and does not claim
-   per-user read.
+8. Group thread: customer-read marks the shared group-contact conversation read
+   when any authorized portal participant sees the latest agent message at the
+   bottom; typing is generic and does not claim per-user identity.
 
 - [x] **Step 8: Smoke review checkpoint**
 
@@ -2372,7 +2389,7 @@ Review:
   - no `agent_last_seen_at` inference;
   - no unread/push mutation from read sync;
   - no auto-scroll caused by read/typing;
-  - no group read lie.
+  - group read semantics are explicit: any authorized participant read.
   - no customer read sync from stale realtime fallback before viewport render.
 
 Commit:
@@ -2440,7 +2457,9 @@ Risk review:
 
 - Contact-side `update_last_seen` has no Chatwoot-side throttle, so portal
   adds frontend and backend throttles.
-- Customer read sync is private-only to avoid false group read semantics.
+- Customer read sync covers private and group threads; group sync intentionally
+  means "any authorized portal participant read" for the shared Chatwoot
+  group-contact conversation.
 - Typing is transient and not persisted as message/read state.
 - Missing public API identifiers fail closed and are fixed by tenant
   verify/configure scripts.

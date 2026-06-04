@@ -1,18 +1,18 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
-import {
-  MicrophoneIcon,
-  PaperclipIcon,
-  SendIcon,
-} from '../../../shared/ui/icons'
+import { MicrophoneIcon, PaperclipIcon } from '../../../shared/ui/icons'
 import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
+import {
+  ComposerFeedback,
+  TEXT_LENGTH_FEEDBACK_ID,
+} from './message-composer/ComposerFeedback'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
+import { ComposerSendButton } from './message-composer/ComposerSendButton'
 import { ComposerSideControl } from './message-composer/ComposerSideControl'
 import { ComposerTextarea } from './message-composer/ComposerTextarea'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
 import {
-  CHAT_TEXT_MESSAGE_MAX_LENGTH,
   getTextMessageLengthErrorMessage,
   shouldShowTextMessageLengthCounter,
 } from '../lib/messageContentLimits'
@@ -25,6 +25,7 @@ import { useComposerTextarea } from './message-composer/useComposerTextarea'
 import { useSendButtonFocusGuard } from './message-composer/useSendButtonFocusGuard'
 import { useVisualViewportKeyboardOpen } from './message-composer/useVisualViewportKeyboardOpen'
 import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
+import { getComposerInteractionState } from './message-composer/interactionState'
 import {
   createAttachmentSignature,
   createClientMessageKey,
@@ -32,8 +33,6 @@ import {
 } from './message-composer/utils'
 
 export type { MessageComposerReplyTarget } from './message-composer/types'
-
-const TEXT_LENGTH_FEEDBACK_ID = 'chat-message-composer-length-feedback'
 
 type MessageComposerProps = {
   attachmentDisabled?: boolean
@@ -62,7 +61,9 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
   const [isTextSendPending, setIsTextSendPending] = useState(false)
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null)
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
+    null,
+  )
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { focusTextarea, resizeTextarea, textareaRef } = useComposerTextarea()
@@ -78,8 +79,9 @@ export function MessageComposer({
   const shouldRestoreFocusRef = useRef(false)
   const normalizedDraft = draft.trim()
   const normalizedDraftLength = normalizedDraft.length
-  const textLengthErrorMessage =
-    getTextMessageLengthErrorMessage(normalizedDraftLength)
+  const textLengthErrorMessage = getTextMessageLengthErrorMessage(
+    normalizedDraftLength,
+  )
   const isTextDraftTooLong = textLengthErrorMessage !== null
   const shouldShowTextLengthCounter =
     !isTextDraftTooLong &&
@@ -112,34 +114,24 @@ export function MessageComposer({
   })
 
   const isVoiceRecorderBusy = voiceRecorderStatus !== 'idle'
-  const canSendText =
-    normalizedDraft.length > 0 &&
-    !isTextDraftTooLong &&
-    !disabled &&
-    !isSending &&
-    !isTextSendPending &&
-    !isVoiceRecorderBusy
-  const canSendAttachment =
-    selectedAttachment !== null &&
-    !isTextDraftTooLong &&
-    !isAttachmentSendDisabled &&
-    !disabled &&
-    !isSending &&
-    !isVoiceRecorderBusy
-  const canSend = canSendAttachment || canSendText
-  const canStartVoiceRecording =
-    !isVoiceSendDisabled &&
-    !disabled &&
-    !isSending &&
-    !isVoiceRecorderBusy &&
-    selectedAttachment === null &&
-    !shouldPrioritizeTextDraft
-  const isAttachmentControlDisabled =
-    isAttachmentSendDisabled ||
-    disabled ||
-    isSending ||
-    isVoiceRecorderBusy ||
-    shouldPrioritizeTextDraft
+  const {
+    canSend,
+    canSendAttachment,
+    canSendText,
+    canStartVoiceRecording,
+    isAttachmentControlDisabled,
+  } = getComposerInteractionState({
+    disabled,
+    isAttachmentSendDisabled,
+    isSending,
+    isTextDraftTooLong,
+    isTextSendPending,
+    isVoiceRecorderBusy,
+    isVoiceSendDisabled,
+    normalizedDraftLength,
+    selectedAttachment,
+    shouldPrioritizeTextDraft,
+  })
   const composerErrorMessage =
     voiceErrorMessage ?? textLengthErrorMessage ?? errorMessage
   const recordingDuration = formatRecordingDuration(recordingElapsedMs)
@@ -481,52 +473,26 @@ export function MessageComposer({
               />
             </button>
           </ComposerSideControl>
-          <button
-            aria-label={
-              isSending
-                ? 'Отправляем'
-                : selectedAttachment
-                  ? 'Отправить файл'
-                  : 'Отправить'
-            }
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
-            disabled={!canSend || isVoiceRecorderBusy}
+          <ComposerSendButton
+            canSend={canSend && !isVoiceRecorderBusy}
+            isAttachmentSelected={selectedAttachment !== null}
+            isSending={isSending}
             onClick={() => {
               if (!shouldSkipClickAfterTouchSend()) {
                 void submitCurrentDraft()
               }
             }}
             onPointerDown={preserveTextareaFocusOnPointerDown}
-            ref={sendButtonRef}
-            title="Отправить"
-            type="button"
-          >
-            <SendIcon
-              className={
-                isSending
-                  ? 'h-[18px] w-[18px] animate-pulse'
-                  : 'h-[18px] w-[18px]'
-              }
-            />
-          </button>
+            sendButtonRef={sendButtonRef}
+          />
         </div>
 
-        {composerErrorMessage ? (
-          <div
-            className="mt-2 rounded-[0.8rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] leading-5 text-rose-700"
-            id={textLengthErrorMessage ? TEXT_LENGTH_FEEDBACK_ID : undefined}
-          >
-            {composerErrorMessage}
-          </div>
-        ) : null}
-        {shouldShowTextLengthCounter ? (
-          <div
-            className="mt-1 text-right text-[11px] leading-4 text-slate-500 tabular-nums"
-            id={TEXT_LENGTH_FEEDBACK_ID}
-          >
-            {normalizedDraftLength}/{CHAT_TEXT_MESSAGE_MAX_LENGTH}
-          </div>
-        ) : null}
+        <ComposerFeedback
+          errorMessage={composerErrorMessage}
+          normalizedDraftLength={normalizedDraftLength}
+          shouldShowTextLengthCounter={shouldShowTextLengthCounter}
+          textLengthErrorMessage={textLengthErrorMessage}
+        />
       </div>
     </footer>
   )

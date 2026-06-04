@@ -112,7 +112,7 @@ describe('createChatPresenceService', () => {
     })
   })
 
-  it('skips group thread read sync', async () => {
+  it('syncs ready group thread customer read to Chatwoot public API', async () => {
     const { chatwoot, service } = createPresenceService({
       context: createReadyGroupContext(),
     })
@@ -122,11 +122,12 @@ describe('createChatPresenceService', () => {
         threadId: 'group:154',
         userId: 7,
       }),
-    ).resolves.toEqual({
-      reason: 'group_thread',
-      result: 'skipped',
+    ).resolves.toEqual({ result: 'synced' })
+    expect(chatwoot.updatePublicConversationLastSeen).toHaveBeenCalledWith({
+      contactIdentifier: 'portal-contact:source',
+      conversationDisplayId: 12,
+      inboxIdentifier: 'api-inbox-token',
     })
-    expect(chatwoot.updatePublicConversationLastSeen).not.toHaveBeenCalled()
   })
 
   it('returns not_configured when the tenant public inbox identifier is missing', async () => {
@@ -160,13 +161,13 @@ describe('createChatPresenceService', () => {
       }),
     ).resolves.toEqual({ result: 'synced' })
     expect(chatwoot.findContactPortalInboxSourceId).toHaveBeenCalledWith(44)
-    expect(chatThreadsRepository.updateThreadContactSourceId).toHaveBeenCalledWith(
-      {
-        chatwootContactSourceId: 'portal-contact:resolved-source',
-        id: 2,
-        now: new Date('2026-06-04T10:00:00.000Z'),
-      },
-    )
+    expect(
+      chatThreadsRepository.updateThreadContactSourceId,
+    ).toHaveBeenCalledWith({
+      chatwootContactSourceId: 'portal-contact:resolved-source',
+      id: 2,
+      now: new Date('2026-06-04T10:00:00.000Z'),
+    })
     expect(chatwoot.updatePublicConversationLastSeen).toHaveBeenCalledWith({
       contactIdentifier: 'portal-contact:resolved-source',
       conversationDisplayId: 12,
@@ -198,9 +199,9 @@ describe('createChatPresenceService', () => {
       reason: 'throttled',
       result: 'skipped',
     })
-    expect(chatThreadsService.getCurrentUserThreadContext).toHaveBeenCalledTimes(
-      1,
-    )
+    expect(
+      chatThreadsService.getCurrentUserThreadContext,
+    ).toHaveBeenCalledTimes(1)
     expect(chatwoot.updatePublicConversationLastSeen).toHaveBeenCalledTimes(1)
   })
 
@@ -347,13 +348,13 @@ describe('createChatPresenceService', () => {
       }),
     ).resolves.toEqual({ result: 'synced' })
     expect(chatwoot.findContactPortalInboxSourceId).toHaveBeenCalledWith(44)
-    expect(chatThreadsRepository.updateThreadContactSourceId).toHaveBeenCalledWith(
-      {
-        chatwootContactSourceId: 'portal-contact:resolved-source',
-        id: 2,
-        now: new Date('2026-06-04T10:00:00.000Z'),
-      },
-    )
+    expect(
+      chatThreadsRepository.updateThreadContactSourceId,
+    ).toHaveBeenCalledWith({
+      chatwootContactSourceId: 'portal-contact:resolved-source',
+      id: 2,
+      now: new Date('2026-06-04T10:00:00.000Z'),
+    })
     expect(chatwoot.togglePublicConversationTyping).toHaveBeenCalledWith({
       contactIdentifier: 'portal-contact:resolved-source',
       conversationDisplayId: 12,
@@ -397,9 +398,9 @@ describe('createChatPresenceService', () => {
       }),
     ).resolves.toEqual({ result: 'synced' })
 
-    expect(chatThreadsService.getCurrentUserThreadContext).toHaveBeenCalledTimes(
-      2,
-    )
+    expect(
+      chatThreadsService.getCurrentUserThreadContext,
+    ).toHaveBeenCalledTimes(2)
     expect(chatwoot.togglePublicConversationTyping).toHaveBeenCalledTimes(2)
     expect(chatwoot.togglePublicConversationTyping).toHaveBeenLastCalledWith(
       expect.objectContaining({

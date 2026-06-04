@@ -141,10 +141,6 @@ function createTypingSyncResponse() {
   return new Response(null, { status: 204 })
 }
 
-function hasVisibleIncomingMessage(snapshot: ChatMessagesSnapshot) {
-  return snapshot.messages.some((message) => message.direction === 'incoming')
-}
-
 const originalNavigatorMediaDevices = globalThis.navigator.mediaDevices
 
 function stubMicrophoneAccess() {
@@ -193,12 +189,14 @@ describe('ChatPage', () => {
 
   beforeEach(async () => {
     await setupOfflineChatTestEnvironment()
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     vi.stubGlobal('fetch', fetchMock)
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
     Object.defineProperty(globalThis.navigator, 'mediaDevices', {
       configurable: true,
       value: originalNavigatorMediaDevices,
@@ -212,16 +210,10 @@ describe('ChatPage', () => {
   function mockInitialReadyChatResponses(
     snapshot: ChatMessagesSnapshot = createReadySnapshot(),
   ) {
-    const mockedFetch = fetchMock
+    return fetchMock
       .mockResolvedValueOnce(createAuthenticatedUserResponse())
       .mockResolvedValueOnce(createJsonResponse(createThreadsResponse()))
       .mockResolvedValueOnce(createJsonResponse(snapshot))
-
-    if (hasVisibleIncomingMessage(snapshot)) {
-      mockedFetch.mockResolvedValueOnce(createReadSyncResponse())
-    }
-
-    return mockedFetch
       .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
   }
@@ -599,31 +591,33 @@ describe('ChatPage', () => {
 
     mockInitialReadyChatResponses()
       .mockResolvedValueOnce(createTypingSyncResponse())
-      .mockResolvedValueOnce(createJsonResponse({
-        activeThread: privateThread,
-        reason: 'none',
-        result: 'ready',
-        sentMessage: {
-          attachments: [
-            {
-              fileSize: 1024,
-              fileType: 'file',
-              id: 77,
-              name: 'signed-act.pdf',
-              thumbUrl: '',
-              url: '/api/chat/threads/private%3Ame/attachments/601/77',
-            },
-          ],
-          authorName: 'Вы',
-          authorRole: 'current_user',
-          content: 'Черновик остается',
-          contentType: 'text',
-          createdAt: '2026-04-21T09:35:00.000Z',
-          direction: 'outgoing',
-          id: 601,
-          status: 'sent',
-        },
-      }))
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [
+              {
+                fileSize: 1024,
+                fileType: 'file',
+                id: 77,
+                name: 'signed-act.pdf',
+                thumbUrl: '',
+                url: '/api/chat/threads/private%3Ame/attachments/601/77',
+              },
+            ],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            content: 'Черновик остается',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:35:00.000Z',
+            direction: 'outgoing',
+            id: 601,
+            status: 'sent',
+          },
+        }),
+      )
 
     renderChatRoute()
 

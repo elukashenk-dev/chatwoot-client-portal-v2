@@ -6,6 +6,7 @@ import { useChatReadSync } from './useChatReadSync'
 type ReadSyncOptions = {
   canUseBackend: boolean
   historyFragmentIsOpen: boolean
+  isPageForeground: () => boolean
   markRead: (threadId: string) => Promise<void>
   selectedThreadId: string | null
 }
@@ -15,16 +16,14 @@ function renderReadSync(overrides: Partial<ReadSyncOptions> = {}) {
   const initialProps = {
     canUseBackend: true,
     historyFragmentIsOpen: false,
+    isPageForeground: () => true,
     markRead,
     selectedThreadId: 'private:me',
     ...overrides,
   }
-  const hook = renderHook(
-    (props: ReadSyncOptions) => useChatReadSync(props),
-    {
-      initialProps,
-    },
-  )
+  const hook = renderHook((props: ReadSyncOptions) => useChatReadSync(props), {
+    initialProps,
+  })
 
   return {
     markRead,
@@ -76,6 +75,26 @@ describe('useChatReadSync', () => {
     })
 
     expect(markRead).not.toHaveBeenCalled()
+  })
+
+  it('does not mark read while the page is not foreground and keeps the boundary retryable', () => {
+    const isPageForeground = vi
+      .fn<ReadSyncOptions['isPageForeground']>()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
+    const { markRead, result } = renderReadSync({ isPageForeground })
+
+    act(() => {
+      result.current({ latestVisibleAgentMessageId: 101 })
+    })
+
+    expect(markRead).not.toHaveBeenCalled()
+
+    act(() => {
+      result.current({ latestVisibleAgentMessageId: 101 })
+    })
+
+    expect(markRead).toHaveBeenCalledWith('private:me')
   })
 
   it('debounces repeated visible events for the same message boundary', () => {

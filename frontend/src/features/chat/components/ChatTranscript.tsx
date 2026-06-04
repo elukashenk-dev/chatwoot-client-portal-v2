@@ -14,7 +14,6 @@ import {
   captureTranscriptScrollSnapshot,
   createTranscriptMessageBoundary,
   getTranscriptScrollAction,
-  isTranscriptNearBottom,
 } from './ChatTranscriptScroll'
 import { DayDivider } from './chat-transcript/DayDivider'
 import {
@@ -54,6 +53,7 @@ type ChatTranscriptProps = {
   isLoadingOlder: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
+  onLatestEdgeChange?: (isAtLatestEdge: boolean) => void
   onLatestMessagesVisible?: (boundary: LatestMessagesVisibleBoundary) => void
   onReplyToMessage: (message: ChatMessage) => void
   onRetryTextMessage: (clientMessageKey: string) => void
@@ -77,6 +77,7 @@ export function ChatTranscript({
   isLoadingOlder,
   messages,
   onLoadOlder,
+  onLatestEdgeChange,
   onLatestMessagesVisible,
   onReplyToMessage,
   onRetryTextMessage,
@@ -173,6 +174,7 @@ export function ChatTranscript({
 
       previousScrollSnapshotRef.current = nextSnapshot
       shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+      onLatestEdgeChange?.(nextSnapshot.wasNearBottom)
       reportLatestMessagesVisible(scrollElement)
     }
 
@@ -195,7 +197,7 @@ export function ChatTranscript({
     return () => {
       cancelNextFrame(frameId)
     }
-  }, [messages, reportLatestMessagesVisible])
+  }, [messages, onLatestEdgeChange, reportLatestMessagesVisible])
 
   useLayoutEffect(() => {
     if (
@@ -222,6 +224,7 @@ export function ChatTranscript({
         scrollElement,
         messages,
       )
+      onLatestEdgeChange?.(previousScrollSnapshotRef.current.wasNearBottom)
       shouldAutoFollowNewMessagesRef.current = true
       reportLatestMessagesVisible(scrollElement)
     }
@@ -232,7 +235,12 @@ export function ChatTranscript({
     return () => {
       cancelNextFrame(frameId)
     }
-  }, [forceScrollToBottomSignal, messages, reportLatestMessagesVisible])
+  }, [
+    forceScrollToBottomSignal,
+    messages,
+    onLatestEdgeChange,
+    reportLatestMessagesVisible,
+  ])
 
   useTranscriptMessageScroll({
     lastScrollToMessageSignalRef,
@@ -243,6 +251,34 @@ export function ChatTranscript({
     scrollToMessageSignal,
     shouldAutoFollowNewMessagesRef,
   })
+
+  useEffect(() => {
+    function reportCurrentLatestMessagesVisible() {
+      const scrollElement = scrollElementRef.current
+
+      if (!scrollElement) {
+        return
+      }
+
+      reportLatestMessagesVisible(scrollElement)
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      reportCurrentLatestMessagesVisible()
+    }
+
+    window.addEventListener('focus', reportCurrentLatestMessagesVisible)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', reportCurrentLatestMessagesVisible)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [reportLatestMessagesVisible])
 
   useEffect(() => {
     const messageListElement = messageListRef.current
@@ -273,17 +309,19 @@ export function ChatTranscript({
 
         previousScrollSnapshotRef.current = nextSnapshot
         shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+        onLatestEdgeChange?.(nextSnapshot.wasNearBottom)
         reportLatestMessagesVisible(scrollElement)
       })
     })
 
     observer.observe(messageListElement)
+    observer.observe(scrollElement)
 
     return () => {
       cancelNextFrame(frameId)
       observer.disconnect()
     }
-  }, [messages, reportLatestMessagesVisible])
+  }, [messages, onLatestEdgeChange, reportLatestMessagesVisible])
 
   function handleTranscriptScroll() {
     const scrollElement = scrollElementRef.current
@@ -297,12 +335,13 @@ export function ChatTranscript({
     }
     setRevealedActionMessageId(null)
 
-    shouldAutoFollowNewMessagesRef.current =
-      isTranscriptNearBottom(scrollElement)
-    previousScrollSnapshotRef.current = captureTranscriptScrollSnapshot(
+    const nextSnapshot = captureTranscriptScrollSnapshot(
       scrollElement,
       messages,
     )
+    shouldAutoFollowNewMessagesRef.current = nextSnapshot.wasNearBottom
+    previousScrollSnapshotRef.current = nextSnapshot
+    onLatestEdgeChange?.(nextSnapshot.wasNearBottom)
     reportLatestMessagesVisible(scrollElement)
   }
 
