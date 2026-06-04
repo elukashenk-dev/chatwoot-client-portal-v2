@@ -302,6 +302,7 @@ export function createTenantsRepository(db: AppDatabase) {
               normalizedInput.chatwootApiAccessTokenCiphertext,
             chatwootBaseUrl: normalizedInput.chatwootBaseUrl,
             chatwootPortalInboxId: normalizedInput.chatwootPortalInboxId,
+            chatwootPortalInboxIdentifier: null,
             chatwootWebhookSecretCiphertext:
               normalizedInput.chatwootWebhookSecretCiphertext,
             displayName: normalizedInput.displayName,

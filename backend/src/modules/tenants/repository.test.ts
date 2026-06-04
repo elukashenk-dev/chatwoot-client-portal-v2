@@ -94,6 +94,46 @@ describe('tenants repository', () => {
     })
   })
 
+  it('clears the stored Chatwoot portal inbox public identifier during tenant upsert', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    const tenant = await repository.upsertTenantBySlug({
+      chatwootAccountId: 1,
+      chatwootApiAccessTokenCiphertext: 'v1:first-api-token',
+      chatwootBaseUrl: 'https://chatwoot.example.com',
+      chatwootPortalInboxId: 5,
+      chatwootWebhookSecretCiphertext: 'v1:first-webhook-secret',
+      displayName: 'Default Tenant',
+      primaryDomain: 'lk.example.com',
+      publicBaseUrl: 'https://lk.example.com',
+      slug: 'default',
+      status: 'active',
+    })
+
+    await repository.updateChatwootPortalInboxIdentifier({
+      chatwootPortalInboxIdentifier: 'api-channel-public-identifier',
+      tenantId: tenant.id,
+    })
+
+    const updatedTenant = await repository.upsertTenantBySlug({
+      chatwootAccountId: 2,
+      chatwootApiAccessTokenCiphertext: 'v1:second-api-token',
+      chatwootBaseUrl: 'https://chatwoot.other-example.com',
+      chatwootPortalInboxId: 9,
+      chatwootWebhookSecretCiphertext: 'v1:second-webhook-secret',
+      displayName: 'Default Tenant Updated',
+      primaryDomain: 'lk.example.com',
+      publicBaseUrl: 'https://lk.example.com',
+      slug: 'default',
+      status: 'active',
+    })
+
+    expect(updatedTenant.chatwootPortalInboxIdentifier).toBeNull()
+    await expect(repository.findBySlug('default')).resolves.toMatchObject({
+      chatwootPortalInboxIdentifier: null,
+    })
+  })
+
   it('rejects unsupported tenant identity values before insert', async () => {
     const repository = createTenantsRepository(database.db)
 
