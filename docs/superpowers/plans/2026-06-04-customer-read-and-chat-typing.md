@@ -120,6 +120,9 @@ Viewport rule:
   - Add `portal_chat_threads.chatwoot_contact_source_id`.
 - Create: `backend/drizzle/0007_customer_read_typing_identifiers.sql`
   - Adds the two nullable text columns.
+- Create/modify: `backend/drizzle/meta/*_snapshot.json`,
+  `backend/drizzle/meta/_journal.json`
+  - Drizzle-generated migration metadata for the same schema change.
 - Modify: `backend/src/modules/tenants/repository.ts`
   - Persist and read `chatwootPortalInboxIdentifier`.
 - Modify: `backend/src/modules/tenants/service.ts`
@@ -132,7 +135,8 @@ Viewport rule:
   - Parse API Channel `inbox_identifier`.
   - Expose public conversation event methods.
 - Create: `backend/src/integrations/chatwoot/publicConversationEvents.ts`
-  - Build and call Chatwoot public `update_last_seen` and `toggle_typing`.
+  - Build and call Chatwoot public `update_last_seen` and `toggle_typing`;
+    normalize request timeout with the existing Chatwoot request helper.
 - Create: `backend/src/integrations/chatwoot/publicConversationEvents.test.ts`
   - Unit coverage for public API URLs, methods, invalid inputs and 404s.
 - Modify: `backend/src/modules/chat-threads/repository.ts`
@@ -140,8 +144,8 @@ Viewport rule:
 - Modify: `backend/src/modules/chat-threads/runtime.ts`
   - Store source id when a contact inbox source id is resolved or created.
 - Modify: `backend/src/modules/chat-messages/service.ts`
-  - Include the source id in ready thread context if needed by read/typing
-    service dependencies.
+  - Keep snapshot/unread behavior unchanged; do not call read/typing services
+    from message fetching.
 - Create: `backend/src/modules/chat-presence/service.ts`
   - Customer read sync and customer typing sync service.
 - Create: `backend/src/modules/chat-presence/routes.ts`
@@ -157,6 +161,8 @@ Viewport rule:
 - Modify: `backend/src/modules/chatwoot-webhooks/service.ts`
   - Accept `conversation_typing_on/off`, route by conversation mapping and fan
     out agent typing.
+  - Parse typing private-note guard from Chatwoot's `is_private` field, not the
+    message payload `private` field.
 - Modify: `backend/src/modules/chatwoot-webhooks/repository.ts`
   - Existing delivery table is reused; no typing-specific persistence table.
 - Modify: `backend/src/app.ts`
@@ -202,7 +208,10 @@ Viewport rule:
 - [ ] **Step 1: Write failing schema/repository tests**
 
 Add tests that prove tenant runtime exposes `portalInboxIdentifier` and thread
-records can store `chatwootContactSourceId`.
+records can store `chatwootContactSourceId`. Tenant repository tests must also
+prove `updateChatwootPortalInboxIdentifier` trims non-empty identifiers and
+throws when the tenant row is missing, matching the existing webhook-secret
+update behavior.
 
 Example assertion in tenant service/repository tests:
 
@@ -233,9 +242,31 @@ pnpm -C backend vitest run \
 
 Expected: tests fail because fields are not implemented.
 
-- [ ] **Step 3: Add migration**
+- [ ] **Step 3: Add schema fields and generated migration**
 
-Create `backend/drizzle/0007_customer_read_typing_identifiers.sql`:
+Update `backend/src/db/schema.ts` first:
+
+```ts
+chatwootPortalInboxIdentifier: text('chatwoot_portal_inbox_identifier'),
+```
+
+in `portalTenants`, and:
+
+```ts
+chatwootContactSourceId: text('chatwoot_contact_source_id'),
+```
+
+in `portalChatThreads`.
+
+Then generate the migration from the schema:
+
+```bash
+pnpm -C backend db:generate -- --name customer_read_typing_identifiers
+```
+
+Expected generated SQL content in
+`backend/drizzle/0007_customer_read_typing_identifiers.sql` or the next
+available Drizzle migration number:
 
 ```sql
 ALTER TABLE "portal_tenants"
@@ -249,19 +280,9 @@ CREATE INDEX "portal_chat_threads_tenant_source_id_idx"
   WHERE "portal_chat_threads"."chatwoot_contact_source_id" is not null;
 ```
 
-Update `backend/src/db/schema.ts`:
-
-```ts
-chatwootPortalInboxIdentifier: text('chatwoot_portal_inbox_identifier'),
-```
-
-in `portalTenants`, and:
-
-```ts
-chatwootContactSourceId: text('chatwoot_contact_source_id'),
-```
-
-in `portalChatThreads`.
+The implementation commit must include the generated SQL file, the matching
+`backend/drizzle/meta/*_snapshot.json` file and the new
+`backend/drizzle/meta/_journal.json` entry. Do not ship a SQL-only migration.
 
 - [ ] **Step 4: Parse `inbox_identifier` from Chatwoot inbox lookup**
 
@@ -295,17 +316,29 @@ Add repository method:
 async updateChatwootPortalInboxIdentifier({
   chatwootPortalInboxIdentifier,
   tenantId,
+  updatedAt = new Date(),
 }: {
   chatwootPortalInboxIdentifier: string
   tenantId: number
+  updatedAt?: Date
 }) {
-  await db
+  const [tenant] = await db
     .update(portalTenants)
     .set({
-      chatwootPortalInboxIdentifier,
-      updatedAt: new Date(),
+      chatwootPortalInboxIdentifier: normalizeNonEmptyString(
+        chatwootPortalInboxIdentifier,
+        'chatwootPortalInboxIdentifier',
+      ),
+      updatedAt,
     })
     .where(eq(portalTenants.id, tenantId))
+    .returning()
+
+  if (!tenant) {
+    throw new Error('Failed to update tenant Chatwoot portal inbox identifier.')
+  }
+
+  return tenant
 }
 ```
 
@@ -469,6 +502,22 @@ describe('createPublicConversationEventsClient', () => {
       }),
     ).rejects.toBeInstanceOf(ChatwootClientRequestError)
   })
+
+  it('uses the default Chatwoot request timeout when no override is supplied', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(createJsonResponse())
+    const client = createPublicConversationEventsClient({
+      baseUrl: 'https://chatwoot.example.test',
+      fetchFn,
+    })
+
+    await client.updateLastSeen({
+      contactIdentifier: 'portal-contact:source',
+      conversationDisplayId: 12,
+      inboxIdentifier: 'api-inbox-token',
+    })
+
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
 })
 ```
 
@@ -488,7 +537,10 @@ Create `backend/src/integrations/chatwoot/publicConversationEvents.ts`:
 
 ```ts
 import { ChatwootClientRequestError } from './errors.js'
-import { createChatwootFetch } from './request.js'
+import {
+  createChatwootFetch,
+  normalizeChatwootRequestTimeoutMs,
+} from './request.js'
 
 type PublicConversationEventsClientOptions = {
   baseUrl: string
@@ -551,7 +603,12 @@ export function createPublicConversationEventsClient({
   fetchFn,
   requestTimeoutMs,
 }: PublicConversationEventsClientOptions) {
-  const fetchChatwoot = createChatwootFetch({ fetchFn, requestTimeoutMs })
+  const normalizedRequestTimeoutMs =
+    normalizeChatwootRequestTimeoutMs(requestTimeoutMs)
+  const fetchChatwoot = createChatwootFetch({
+    fetchFn,
+    requestTimeoutMs: normalizedRequestTimeoutMs,
+  })
 
   async function postPublicConversationEvent(
     input: PublicConversationInput & {
@@ -1003,6 +1060,10 @@ import { useCallback, useRef } from 'react'
 
 const READ_SYNC_DEBOUNCE_MS = 5_000
 
+type VisibleBoundary = {
+  latestVisibleAgentMessageId: number | null
+}
+
 export function useChatReadSync({
   canUseBackend,
   historyFragmentIsOpen,
@@ -1014,23 +1075,28 @@ export function useChatReadSync({
   markRead: (threadId: string) => Promise<void>
   selectedThreadId: string | null
 }) {
-  const lastSyncByThreadRef = useRef(new Map<string, number>())
+  const lastSyncByBoundaryRef = useRef(new Map<string, number>())
 
-  return useCallback(() => {
+  return useCallback((boundary: VisibleBoundary) => {
     if (!canUseBackend || historyFragmentIsOpen || !selectedThreadId) {
       return
     }
 
+    if (boundary.latestVisibleAgentMessageId === null) {
+      return
+    }
+
+    const syncKey = `${selectedThreadId}:${boundary.latestVisibleAgentMessageId}`
     const now = Date.now()
-    const lastSyncAt = lastSyncByThreadRef.current.get(selectedThreadId)
+    const lastSyncAt = lastSyncByBoundaryRef.current.get(syncKey)
 
     if (lastSyncAt !== undefined && now - lastSyncAt < READ_SYNC_DEBOUNCE_MS) {
       return
     }
 
-    lastSyncByThreadRef.current.set(selectedThreadId, now)
+    lastSyncByBoundaryRef.current.set(syncKey, now)
     void markRead(selectedThreadId).catch(() => {
-      lastSyncByThreadRef.current.delete(selectedThreadId)
+      lastSyncByBoundaryRef.current.delete(syncKey)
     })
   }, [canUseBackend, historyFragmentIsOpen, markRead, selectedThreadId])
 }
@@ -1041,7 +1107,9 @@ export function useChatReadSync({
 Add prop to `ChatTranscript`:
 
 ```ts
-onLatestMessagesVisible?: () => void
+onLatestMessagesVisible?: (boundary: {
+  latestVisibleAgentMessageId: number | null
+}) => void
 ```
 
 Call it only when:
@@ -1050,6 +1118,15 @@ Call it only when:
 - `messages` contains the latest transcript, not search/history context;
 - `isTranscriptNearBottom(scrollElement)` returns true after layout/resize;
 - the latest message boundary changed or scroll moved back to bottom.
+
+Compute the boundary from the latest visible portal-incoming message:
+
+```ts
+const latestVisibleAgentMessageId =
+  messages.findLast((message) => message.direction === 'incoming')?.id ?? null
+
+onLatestMessagesVisible?.({ latestVisibleAgentMessageId })
+```
 
 Use existing `captureTranscriptScrollSnapshot` and
 `shouldAutoFollowNewMessagesRef` instead of introducing a second scroll model.
@@ -1117,6 +1194,8 @@ Cover:
 
 - private and group ready threads call Chatwoot `togglePublicConversationTyping`;
 - missing identifiers return `204` with no user-facing error;
+- missing source id prerequisites return `204` with no user-facing error;
+- Chatwoot request failures return `204` with no user-facing error;
 - repeated `on` events are throttled;
 - `off` is sent after draft clears;
 - offline/backend unavailable frontend does not call route.
@@ -1146,6 +1225,8 @@ Route returns `204` for synced/skipped/unavailable, because typing is transient.
 In `chat-presence/service.ts`, add:
 
 ```ts
+import { ChatwootClientRequestError } from '../../integrations/chatwoot/errors.js'
+
 const TYPING_ON_THROTTLE_MS = 3_000
 
 async setCurrentUserThreadTyping({
@@ -1170,29 +1251,46 @@ async setCurrentUserThreadTyping({
     return { reason: 'not_configured', result: 'unavailable' as const }
   }
 
-  const sourceId =
-    context.chatwootContactSourceId ??
-    (await resolveSourceId({
-      contactId: context.targetChatwootContactId,
-      portalChatThreadId: context.portalChatThreadId,
-    }))
-
-  if (!sourceId) {
-    return { reason: 'not_configured', result: 'unavailable' as const }
+  if (
+    context.portalChatThreadId === null ||
+    context.targetChatwootContactId === null
+  ) {
+    return { reason: 'source_id_prerequisites_missing', result: 'unavailable' as const }
   }
 
-  await chatwoot.togglePublicConversationTyping({
-    contactIdentifier: sourceId,
-    conversationDisplayId: context.chatwootConversation.id,
-    inboxIdentifier: chatwoot.portalInboxIdentifier,
-    typingStatus,
-  })
+  try {
+    const sourceId =
+      context.chatwootContactSourceId ??
+      (await resolveSourceId({
+        contactId: context.targetChatwootContactId,
+        portalChatThreadId: context.portalChatThreadId,
+      }))
+
+    if (!sourceId) {
+      return { reason: 'source_id_missing', result: 'unavailable' as const }
+    }
+
+    await chatwoot.togglePublicConversationTyping({
+      contactIdentifier: sourceId,
+      conversationDisplayId: context.chatwootConversation.id,
+      inboxIdentifier: chatwoot.portalInboxIdentifier,
+      typingStatus,
+    })
+  } catch (error) {
+    if (error instanceof ChatwootClientRequestError) {
+      return { reason: 'chatwoot_unavailable', result: 'unavailable' as const }
+    }
+
+    throw error
+  }
 
   return { result: 'synced' as const }
 }
 ```
 
-Use the same real context null checks as Task 3.
+Use the same real context null checks as Task 3. The route still returns `204`
+for every `result: 'unavailable'` response because typing is transient and
+should fail closed.
 
 - [ ] **Step 4: Add frontend API method**
 
@@ -1352,9 +1450,11 @@ Add tests for:
 - signed `conversation_typing_on` for mapped conversation publishes realtime
   typing event;
 - signed `conversation_typing_off` clears it;
-- private typing events are ignored;
+- private typing events with `is_private: true` are ignored;
 - unsupported typing payload without conversation id is unroutable;
 - typing does not record unread and does not trigger push.
+- frontend ignores typing events for a stale/mismatched thread and clears typing
+  state immediately on selected-thread changes.
 
 - [ ] **Step 2: Extend realtime event type**
 
@@ -1422,9 +1522,18 @@ Typing flow:
 
 - validate signature and tenant invariants exactly like message webhooks;
 - record delivery with `accepted` after mapping is found;
-- skip `private` typing events;
+- skip typing events where Chatwoot payload has `is_private === true`;
 - do not call `chatMessagesService.getCurrentUserChatMessages`;
 - call `realtimeHub.publishThreadTyping`.
+
+Do not reuse the current message helper that checks `payload.private`; Chatwoot
+typing webhooks use `is_private`:
+
+```ts
+function readIsPrivateTyping(payload: Record<string, unknown>) {
+  return payload.is_private === true
+}
+```
 
 - [ ] **Step 4: Add frontend realtime typing handling**
 
@@ -1470,21 +1579,42 @@ export function AgentTypingIndicator({ isVisible }: { isVisible: boolean }) {
 Place it above the composer, not inside message bubbles. Do not create a fake
 agent message.
 
-- [ ] **Step 6: Add typing timeout fallback**
+- [ ] **Step 6: Add typing timeout fallback and thread cleanup**
 
 In `useChatRealtimeConnection` or a small hook, clear agent typing after
-`4_000ms` if `conversation_typing_off` is not received.
+`4_000ms` if `conversation_typing_off` is not received. Store typing state with
+the `threadId` that produced it, ignore mismatched events and clear immediately
+when `selectedThreadId` or the active realtime thread changes.
 
 Expected state logic:
 
 ```ts
+type AgentTypingState = {
+  isTyping: boolean
+  threadId: string | null
+}
+
+const [agentTyping, setAgentTyping] = useState<AgentTypingState>({
+  isTyping: false,
+  threadId: null,
+})
+
+if (event.threadId !== selectedThreadId) {
+  return
+}
+
 if (event.isTyping) {
-  setAgentTyping(true)
+  setAgentTyping({ isTyping: true, threadId: event.threadId })
   resetAutoClearTimer()
 } else {
-  setAgentTyping(false)
+  setAgentTyping({ isTyping: false, threadId: null })
   clearAutoClearTimer()
 }
+
+useEffect(() => {
+  setAgentTyping({ isTyping: false, threadId: null })
+  clearAutoClearTimer()
+}, [selectedThreadId, realtimeThreadId])
 ```
 
 - [ ] **Step 7: Run tests**
@@ -1522,7 +1652,8 @@ git commit -m "feat: show chatwoot agent typing in portal"
 **Files:**
 
 - Create: `tests/e2e/chat-customer-read-and-typing.spec.ts`
-- Modify e2e test helpers if needed.
+- Modify e2e test helpers to sign Chatwoot webhook payloads and expose the
+  currently mapped portal thread id.
 - Modify: `docs/product/chat-message-send-ui-scenarios.md`
 
 - [ ] **Step 1: Add mocked-webhook e2e**
@@ -1678,3 +1809,11 @@ Risk review:
 - Typing is transient and not persisted as message/read state.
 - Missing public API identifiers fail closed and are fixed by tenant
   verify/configure scripts.
+- Review finding closure:
+  - Public API timeout normalization is covered by Task 2.
+  - Typing-to-agent fail-closed behavior is covered by Task 5.
+  - Chatwoot typing `is_private` parsing is covered by Task 6.
+  - Read-sync debounce by latest visible agent-message boundary is covered by
+    Task 4.
+  - Agent typing thread cleanup is covered by Task 6.
+  - Drizzle SQL plus metadata migration workflow is covered by Task 1.
