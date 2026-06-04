@@ -606,7 +606,7 @@ expect(thread.chatwootContactSourceId).toBe('portal-contact:source')
 Run:
 
 ```bash
-pnpm -C backend vitest run \
+pnpm --dir backend exec vitest run \
   src/modules/tenants/repository.test.ts \
   src/modules/tenants/service.test.ts \
   src/modules/chat-threads/repository.test.ts \
@@ -640,7 +640,7 @@ in `portalChatThreads`.
 Then generate the migration from the schema:
 
 ```bash
-pnpm -C backend db:generate -- --name customer_read_typing_identifiers
+pnpm --dir backend db:generate -- --name customer_read_typing_identifiers
 ```
 
 Expected generated SQL content in
@@ -920,7 +920,7 @@ describe('createPublicConversationEventsClient', () => {
 Run:
 
 ```bash
-pnpm -C backend vitest run src/integrations/chatwoot/publicConversationEvents.test.ts
+pnpm --dir backend exec vitest run src/integrations/chatwoot/publicConversationEvents.test.ts
 ```
 
 Expected: fail because the file does not exist.
@@ -1111,7 +1111,7 @@ async togglePublicConversationTyping(input: {
 Run:
 
 ```bash
-pnpm -C backend vitest run \
+pnpm --dir backend exec vitest run \
   src/integrations/chatwoot/publicConversationEvents.test.ts \
   src/integrations/chatwoot/client.test.ts
 ```
@@ -1185,7 +1185,7 @@ type ChatCustomerReadSyncResult =
 Run:
 
 ```bash
-pnpm -C backend vitest run src/modules/chat-presence/service.test.ts
+pnpm --dir backend exec vitest run src/modules/chat-presence/service.test.ts
 ```
 
 Expected: fail because service does not exist.
@@ -1399,7 +1399,7 @@ Wire route construction with current tenant Chatwoot context and repositories.
 Run:
 
 ```bash
-pnpm -C backend vitest run \
+pnpm --dir backend exec vitest run \
   src/modules/chat-presence/service.test.ts \
   src/modules/chat-presence/routes.test.ts \
   src/modules/chat-threads/service.test.ts \
@@ -1581,7 +1581,7 @@ Pass `handleLatestMessagesVisible` to `ChatTranscript`.
 Run:
 
 ```bash
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/useChatReadSync.test.tsx \
   src/features/chat/api/chatClient.read-sync.test.ts \
   src/features/chat/components/ChatTranscript.test.tsx \
@@ -1616,14 +1616,14 @@ Smoke review notes:
 Verification:
 
 ```bash
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/useChatReadSync.test.tsx \
   src/features/chat/api/chatClient.read-sync.test.ts \
   src/features/chat/components/useLatestMessagesVisibleReporter.test.tsx \
   src/features/chat/components/ChatTranscript.test.tsx \
   src/features/chat/pages/ChatPage.read-sync.test.tsx \
   src/features/chat/pages/ChatPage.history.test.tsx
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/ChatPage.test.tsx \
   src/features/chat/pages/ChatPage.history.test.tsx \
   src/features/chat/pages/ChatPage.search.test.tsx \
@@ -1631,8 +1631,8 @@ pnpm -C frontend vitest run \
   src/features/chat/pages/ChatPage.offline-cache.test.tsx \
   src/features/chat/pages/ChatPage.realtime-fallback.test.tsx \
   src/features/chat/pages/ChatPage.unread-indicators.test.tsx
-pnpm -C frontend typecheck
-pnpm -C frontend lint
+pnpm --dir frontend typecheck
+pnpm --dir frontend lint
 git diff --check
 ```
 
@@ -1657,12 +1657,16 @@ git commit -m "feat: mark visible chat messages read"
 - Modify: `backend/src/modules/chat-presence/routes.ts`
 - Modify: `backend/src/modules/chat-presence/routes.test.ts`
 - Modify: `frontend/src/features/chat/api/chatClient.ts`
+- Create: `frontend/src/features/chat/api/chatClient.typing.test.ts`
 - Create: `frontend/src/features/chat/pages/useChatTypingSync.ts`
 - Create: `frontend/src/features/chat/pages/useChatTypingSync.test.tsx`
 - Modify: `frontend/src/features/chat/components/MessageComposer.tsx`
+- Modify: `frontend/src/features/chat/components/MessageComposer.test.tsx`
+- Modify: `frontend/src/features/chat/pages/ChatComposerDock.tsx`
 - Modify: `frontend/src/features/chat/pages/ChatPage.tsx`
+- Create: `frontend/src/features/chat/pages/ChatPage.typing.test.tsx`
 
-- [ ] **Step 1: Add backend typing tests**
+- [x] **Step 1: Add backend typing tests**
 
 Cover:
 
@@ -1674,7 +1678,7 @@ Cover:
 - `off` is sent after draft clears;
 - offline/backend unavailable frontend does not call route.
 
-- [ ] **Step 2: Add backend route**
+- [x] **Step 2: Add backend route**
 
 Route:
 
@@ -1694,7 +1698,7 @@ const typingRequestSchema = z
 
 Route returns `204` for synced/skipped/unavailable, because typing is transient.
 
-- [ ] **Step 3: Add service method**
+- [x] **Step 3: Add service method**
 
 In `chat-presence/service.ts`, add:
 
@@ -1766,7 +1770,7 @@ Use the same real context null checks as Task 3. The route still returns `204`
 for every `result: 'unavailable'` response because typing is transient and
 should fail closed.
 
-- [ ] **Step 4: Add frontend API method**
+- [x] **Step 4: Add frontend API method**
 
 In `chatClient.ts`:
 
@@ -1786,7 +1790,7 @@ export async function setChatThreadTyping({
 }
 ```
 
-- [ ] **Step 5: Implement typing hook**
+- [x] **Step 5: Implement typing hook**
 
 Create `useChatTypingSync.ts`:
 
@@ -1863,7 +1867,7 @@ export function useChatTypingSync({
 }
 ```
 
-- [ ] **Step 6: Wire composer**
+- [x] **Step 6: Wire composer**
 
 Add prop to `MessageComposer`:
 
@@ -1874,20 +1878,20 @@ onDraftTypingChange?: (draft: string) => void
 Call it from `updateDraft(nextDraft)` after state validation. Call
 `sendTypingOff` after successful send, cancel reply, thread change and unmount.
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 Run:
 
 ```bash
-pnpm -C backend vitest run src/modules/chat-presence
-pnpm -C frontend vitest run \
+pnpm --dir backend exec vitest run src/modules/chat-presence
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/useChatTypingSync.test.tsx \
   src/features/chat/pages/ChatPage.test.tsx
 ```
 
 Expected: pass.
 
-- [ ] **Step 8: Smoke review checkpoint**
+- [x] **Step 8: Smoke review checkpoint**
 
 Review:
 
@@ -1895,6 +1899,61 @@ Review:
 - typing is transient and never stored as read;
 - `off` is sent on idle/unmount/thread switch;
 - group typing is documented as generic group contact typing.
+
+Implementation status: completed on `feature/phase-chat-user-typing-sync`.
+Smoke review notes:
+
+- browser calls only portal backend `/api/chat/threads/:threadId/typing`;
+- backend posts Chatwoot Public API `toggle_typing` without exposing the tenant
+  API access token to browser code;
+- private and group ready threads sync typing through the current portal contact
+  source id;
+- missing inbox/source prerequisites and Chatwoot request errors fail closed with
+  `204` at the route boundary;
+- service-level `typing_on` throttle uses an app-level store, while `typing_off`
+  is not throttled;
+- frontend sends `typing_off` on idle, draft clear, thread change and unmount
+  when backend is available;
+- route shell wiring is covered by `ChatPage.typing.test.tsx`;
+- review fix applied: `canUseBackendRef` is kept fresh through a layout effect
+  in `useChatTypingSync` so cleanup does not use stale online/offline state
+  without writing refs during render.
+- extra Task 5 review fix applied: typing route authentication is covered
+  directly, and plan verification commands use `pnpm --dir ... exec vitest`
+  for Vitest binaries because local pnpm does not support `pnpm -C`.
+
+Verification:
+
+```bash
+pnpm --dir backend exec vitest run \
+  src/modules/chat-presence/service.test.ts \
+  src/modules/chat-presence/routes.test.ts
+pnpm --dir frontend exec vitest run \
+  src/features/chat/api/chatClient.typing.test.ts \
+  src/features/chat/pages/useChatTypingSync.test.tsx \
+  src/features/chat/components/MessageComposer.test.tsx \
+  src/features/chat/pages/ChatPage.typing.test.tsx
+pnpm --dir frontend exec vitest run \
+  src/features/chat/pages/ChatPage.test.tsx \
+  src/features/chat/pages/ChatPage.history.test.tsx \
+  src/features/chat/pages/ChatPage.search.test.tsx \
+  src/features/chat/pages/ChatPage.search-context-regression.test.tsx \
+  src/features/chat/pages/ChatPage.offline-cache.test.tsx \
+  src/features/chat/pages/ChatPage.realtime-fallback.test.tsx \
+  src/features/chat/pages/ChatPage.unread-indicators.test.tsx \
+  src/features/chat/pages/ChatPage.read-sync.test.tsx \
+  src/features/chat/pages/ChatPage.typing.test.tsx
+pnpm --dir backend build
+pnpm --dir backend lint
+pnpm --dir frontend typecheck
+pnpm --dir frontend lint
+git diff --check
+```
+
+Known repo-level lint status: root `pnpm lint` remains blocked only by existing
+code-health baselines in `MessageComposer.tsx`,
+`ChatPage.optimistic-send.test.tsx` and `ChatPage.tsx`; Task 5 did not increase
+the existing `MessageComposer.tsx` blocker.
 
 Commit:
 
@@ -2112,10 +2171,10 @@ useEffect(() => {
 Run:
 
 ```bash
-pnpm -C backend vitest run \
+pnpm --dir backend exec vitest run \
   src/modules/chatwoot-webhooks/service.test.ts \
   src/modules/chat-realtime/routes.test.ts
-pnpm -C frontend vitest run \
+pnpm --dir frontend exec vitest run \
   src/features/chat/pages/ChatPage.test.tsx
 ```
 
@@ -2212,9 +2271,9 @@ In `docs/product/chat-message-send-ui-scenarios.md`, replace old
 Run:
 
 ```bash
-pnpm -C backend test
-pnpm -C frontend test
-pnpm -C frontend typecheck
+pnpm --dir backend test
+pnpm --dir frontend test
+pnpm --dir frontend typecheck
 pnpm exec playwright test tests/e2e/chat-customer-read-and-typing.spec.ts
 pnpm lint
 pnpm build
@@ -2270,8 +2329,8 @@ git commit -m "test: smoke customer read and typing"
    `chatwoot_portal_inbox_identifier` is stored:
 
 ```bash
-pnpm -C backend tenant:chatwoot:verify -- --tenant provgroup
-pnpm -C backend tenant:chatwoot:webhook:configure -- --tenant provgroup
+pnpm --dir backend tenant:chatwoot:verify -- --tenant provgroup
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant provgroup
 ```
 
 4. Confirm Chatwoot API Channel webhook URL is canonical:

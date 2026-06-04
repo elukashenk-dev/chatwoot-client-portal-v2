@@ -504,11 +504,10 @@ export function ChatPage() {
           handleSendMessage={handleSendMessage}
           isBrowserOnline={canUseBackend}
           isSending={isSending}
-          onCancelReply={() => {
-            setReplyTarget(null)
-          }}
+          onCancelReply={() => setReplyTarget(null)}
           replyTarget={replyTarget}
           sendErrorMessage={sendErrorMessage}
+          selectedThreadId={pageState.selectedThreadId}
         />
       </div>
       <ChatAuxiliaryPages

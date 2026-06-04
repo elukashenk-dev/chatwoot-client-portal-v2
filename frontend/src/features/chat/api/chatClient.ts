@@ -212,6 +212,20 @@ export async function markChatThreadRead(threadId: string) {
   })
 }
 
+export async function setChatThreadTyping({
+  threadId,
+  typingStatus,
+}: {
+  threadId: string
+  typingStatus: 'off' | 'on'
+}) {
+  await request<void>(`/chat/threads/${encodeURIComponent(threadId)}/typing`, {
+    body: { typingStatus },
+    method: 'POST',
+    networkErrorMessage: 'Не удалось синхронизировать статус набора сообщения.',
+  })
+}
+
 export async function getChatNotificationSettings(threadId: string) {
   return request<ChatNotificationSettings>(
     `/chat/threads/${encodeURIComponent(threadId)}/notification-settings`,

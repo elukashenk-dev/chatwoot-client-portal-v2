@@ -235,6 +235,9 @@
   backend read route только после отображения latest private transcript near
   bottom, не срабатывает в history/search/offline контексте и не показывает
   пользователю ошибку при fail-closed sync.
+- Portal user typing sync добавлен: composer отправляет transient typing
+  on/off через backend authority route в Chatwoot Public API, fail-closed без
+  user-facing ошибок и с throttle для повторных `typing_on`.
 
 ## Current Baseline
 
@@ -254,4 +257,4 @@
 ## Recommended Next Step
 
 - Continue `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`
-  with Task 5: portal user typing to Chatwoot agent.
+  with Task 6: agent typing indicator in the portal.

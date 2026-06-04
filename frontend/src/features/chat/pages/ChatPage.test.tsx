@@ -137,6 +137,10 @@ function createReadSyncResponse() {
   return new Response(null, { status: 204 })
 }
 
+function createTypingSyncResponse() {
+  return new Response(null, { status: 204 })
+}
+
 function hasVisibleIncomingMessage(snapshot: ChatMessagesSnapshot) {
   return snapshot.messages.some((message) => message.direction === 'incoming')
 }
@@ -504,8 +508,9 @@ describe('ChatPage', () => {
   it('sends a text reply to a selected message and clears reply state after success', async () => {
     const user = userEvent.setup()
 
-    mockInitialReadyChatResponses().mockImplementationOnce(
-      async (_input, options) => {
+    mockInitialReadyChatResponses()
+      .mockResolvedValueOnce(createTypingSyncResponse())
+      .mockImplementationOnce(async (_input, options) => {
         const requestBody = JSON.parse(String(options?.body)) as {
           clientMessageKey: string
         }
@@ -534,8 +539,7 @@ describe('ChatPage', () => {
             status: 'sent',
           },
         })
-      },
-    )
+      })
     renderChatRoute()
 
     const sourceMessageText = await screen.findByText(
@@ -593,8 +597,9 @@ describe('ChatPage', () => {
   it('sends one attachment with a text caption through multipart', async () => {
     const user = userEvent.setup()
 
-    mockInitialReadyChatResponses().mockResolvedValueOnce(
-      createJsonResponse({
+    mockInitialReadyChatResponses()
+      .mockResolvedValueOnce(createTypingSyncResponse())
+      .mockResolvedValueOnce(createJsonResponse({
         activeThread: privateThread,
         reason: 'none',
         result: 'ready',
@@ -618,8 +623,7 @@ describe('ChatPage', () => {
           id: 601,
           status: 'sent',
         },
-      }),
-    )
+      }))
 
     renderChatRoute()
 
@@ -742,17 +746,50 @@ describe('ChatPage', () => {
   it('does not let a voice recording error mask the next failed text send state', async () => {
     const user = userEvent.setup()
 
-    mockInitialReadyChatResponses().mockResolvedValueOnce(
-      createJsonResponse(
-        {
-          error: {
-            code: 'thread_access_denied',
-            message: 'Нет доступа к этому чату.',
+    fetchMock.mockImplementation(async (input, options) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (
+        url === '/api/chat/threads/private%3Ame/read' ||
+        url === '/api/chat/threads/private%3Ame/typing'
+      ) {
+        return createTypingSyncResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/messages' && options?.method === 'POST') {
+        return createJsonResponse(
+          {
+            error: {
+              code: 'thread_access_denied',
+              message: 'Нет доступа к этому чату.',
+            },
           },
-        },
-        403,
-      ),
-    )
+          403,
+        )
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
 
     renderChatRoute()
 
@@ -802,29 +839,31 @@ describe('ChatPage', () => {
         reason: 'conversation_missing',
         result: 'not_ready',
       }),
-    ).mockImplementationOnce(async (_input, options) => {
-      const requestBody = JSON.parse(String(options?.body)) as {
-        clientMessageKey: string
-      }
+    )
+      .mockResolvedValueOnce(createTypingSyncResponse())
+      .mockImplementationOnce(async (_input, options) => {
+        const requestBody = JSON.parse(String(options?.body)) as {
+          clientMessageKey: string
+        }
 
-      return createJsonResponse({
-        activeThread: privateThread,
-        reason: 'none',
-        result: 'ready',
-        sentMessage: {
-          attachments: [],
-          authorName: 'Вы',
-          authorRole: 'current_user',
-          clientMessageKey: requestBody.clientMessageKey,
-          content: 'Первое сообщение',
-          contentType: 'text',
-          createdAt: '2026-04-21T09:32:00.000Z',
-          direction: 'outgoing',
-          id: 503,
-          status: 'sent',
-        },
+        return createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: 'Первое сообщение',
+            contentType: 'text',
+            createdAt: '2026-04-21T09:32:00.000Z',
+            direction: 'outgoing',
+            id: 503,
+            status: 'sent',
+          },
+        })
       })
-    })
 
     renderChatRoute()
 

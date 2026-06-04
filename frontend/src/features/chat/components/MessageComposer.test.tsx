@@ -48,7 +48,9 @@ vi.mock('./message-composer/useVoiceRecorder', () => ({
   ),
 }))
 
-function renderComposer() {
+function renderComposer(
+  overrides: Partial<Parameters<typeof MessageComposer>[0]> = {},
+) {
   return render(
     <MessageComposer
       disabled={false}
@@ -58,6 +60,7 @@ function renderComposer() {
       onSend={vi.fn(async () => true)}
       onSendAttachment={vi.fn(async () => true)}
       replyTarget={null}
+      {...overrides}
     />,
   )
 }
@@ -210,6 +213,32 @@ describe('MessageComposer', () => {
     expect(attachmentControl).toHaveClass('w-10', 'opacity-100')
     expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+  })
+
+  it('reports draft changes for typing sync', async () => {
+    const user = userEvent.setup()
+    const onDraftTypingChange = vi.fn()
+
+    renderComposer({ onDraftTypingChange })
+
+    await user.type(screen.getByRole('textbox', { name: 'Сообщение' }), 'Hi')
+
+    expect(onDraftTypingChange).toHaveBeenLastCalledWith('Hi')
+  })
+
+  it('reports an empty draft after an accepted text send', async () => {
+    const user = userEvent.setup()
+    const onDraftTypingChange = vi.fn()
+
+    renderComposer({ onDraftTypingChange })
+
+    await user.type(screen.getByRole('textbox', { name: 'Сообщение' }), 'Hi')
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'Сообщение' })).toHaveValue('')
+    })
+    expect(onDraftTypingChange).toHaveBeenLastCalledWith('')
   })
 
   it('blocks too-long text sends and tells the user how much to shorten', () => {

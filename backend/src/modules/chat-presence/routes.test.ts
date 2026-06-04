@@ -11,6 +11,8 @@ import type { ChatPresenceService } from './service.js'
 
 type MarkCurrentUserThreadRead =
   ChatPresenceService['markCurrentUserThreadRead']
+type SetCurrentUserThreadTyping =
+  ChatPresenceService['setCurrentUserThreadTyping']
 
 const tenant: TenantRequestContext = {
   chatwoot: {
@@ -38,8 +40,14 @@ async function buildPresenceRoutesTestApp({
   markCurrentUserThreadRead = vi
     .fn<MarkCurrentUserThreadRead>()
     .mockResolvedValue({ result: 'synced' }),
+  setCurrentUserThreadTyping = vi
+    .fn<SetCurrentUserThreadTyping>()
+    .mockResolvedValue({ result: 'synced' }),
 }: {
   markCurrentUserThreadRead?: ReturnType<typeof vi.fn<MarkCurrentUserThreadRead>>
+  setCurrentUserThreadTyping?: ReturnType<
+    typeof vi.fn<SetCurrentUserThreadTyping>
+  >
 } = {}) {
   const app = Fastify({ logger: false })
   const authService = {
@@ -63,6 +71,7 @@ async function buildPresenceRoutesTestApp({
     authService,
     createChatPresenceService: () => ({
       markCurrentUserThreadRead,
+      setCurrentUserThreadTyping,
     }),
     env: testEnv,
   })
@@ -71,6 +80,7 @@ async function buildPresenceRoutesTestApp({
   return {
     app,
     markCurrentUserThreadRead,
+    setCurrentUserThreadTyping,
   }
 }
 
@@ -135,6 +145,108 @@ describe('registerChatPresenceRoutes', () => {
 
       expect(response.statusCode).toBe(401)
       expect(markCurrentUserThreadRead).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('requires an authenticated portal session for typing sync', async () => {
+    const { app, setCurrentUserThreadTyping } =
+      await buildPresenceRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        payload: {
+          typingStatus: 'on',
+        },
+        url: '/api/chat/threads/private%3Ame/typing',
+      })
+
+      expect(response.statusCode).toBe(401)
+      expect(setCurrentUserThreadTyping).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('sets authenticated thread typing and returns no content', async () => {
+    const { app, setCurrentUserThreadTyping } =
+      await buildPresenceRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'POST',
+        payload: {
+          typingStatus: 'on',
+        },
+        url: '/api/chat/threads/private%3Ame/typing',
+      })
+
+      expect(response.statusCode).toBe(204)
+      expect(setCurrentUserThreadTyping).toHaveBeenCalledWith({
+        threadId: 'private:me',
+        typingStatus: 'on',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('returns no content when typing sync is unavailable', async () => {
+    const { app, setCurrentUserThreadTyping } =
+      await buildPresenceRoutesTestApp({
+        setCurrentUserThreadTyping: vi.fn().mockResolvedValue({
+          reason: 'chatwoot_unavailable',
+          result: 'unavailable',
+        }),
+      })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'POST',
+        payload: {
+          typingStatus: 'off',
+        },
+        url: '/api/chat/threads/private%3Ame/typing',
+      })
+
+      expect(response.statusCode).toBe(204)
+      expect(setCurrentUserThreadTyping).toHaveBeenCalledWith({
+        threadId: 'private:me',
+        typingStatus: 'off',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects invalid typing payloads', async () => {
+    const { app, setCurrentUserThreadTyping } =
+      await buildPresenceRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'POST',
+        payload: {
+          typingStatus: 'maybe',
+        },
+        url: '/api/chat/threads/private%3Ame/typing',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(setCurrentUserThreadTyping).not.toHaveBeenCalled()
     } finally {
       await app.close()
     }

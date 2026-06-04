@@ -138,6 +138,7 @@ export function buildApp({
   })
   const chatRealtimeHub = createChatRealtimeHub()
   const chatReadSyncThrottleStore = new Map<string, number>()
+  const chatTypingThrottleStore = new Map<string, number>()
   const vapidConfig = createVapidConfig(env)
   const pushTransport = vapidConfig ? createWebPushTransport(vapidConfig) : null
   const chatSendRateLimiter = createChatSendRateLimiter({
@@ -226,12 +227,15 @@ export function buildApp({
         findContactPortalInboxSourceId:
           chatwootClient.findContactPortalInboxSourceId,
         portalInboxIdentifier: tenant.chatwoot.portalInboxIdentifier,
+        togglePublicConversationTyping:
+          chatwootClient.togglePublicConversationTyping,
         updatePublicConversationLastSeen:
           chatwootClient.updatePublicConversationLastSeen,
       },
       ...(now ? { now } : {}),
       readSyncThrottleStore: chatReadSyncThrottleStore,
       tenantId: tenant.id,
+      typingThrottleStore: chatTypingThrottleStore,
     })
   }
   const createChatSupportAvailabilityServiceForRequest = (

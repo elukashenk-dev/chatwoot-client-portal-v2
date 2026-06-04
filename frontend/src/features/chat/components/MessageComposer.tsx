@@ -41,6 +41,7 @@ type MessageComposerProps = {
   errorMessage: string | null
   isSending: boolean
   onCancelReply: () => void
+  onDraftTypingChange?: (draft: string) => void
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
   replyTarget: MessageComposerReplyTarget | null
@@ -53,6 +54,7 @@ export function MessageComposer({
   errorMessage,
   isSending,
   onCancelReply,
+  onDraftTypingChange,
   onSend,
   onSendAttachment,
   replyTarget,
@@ -60,9 +62,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
   const [isTextSendPending, setIsTextSendPending] = useState(false)
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
-    null,
-  )
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null)
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { focusTextarea, resizeTextarea, textareaRef } = useComposerTextarea()
@@ -78,9 +78,8 @@ export function MessageComposer({
   const shouldRestoreFocusRef = useRef(false)
   const normalizedDraft = draft.trim()
   const normalizedDraftLength = normalizedDraft.length
-  const textLengthErrorMessage = getTextMessageLengthErrorMessage(
-    normalizedDraftLength,
-  )
+  const textLengthErrorMessage =
+    getTextMessageLengthErrorMessage(normalizedDraftLength)
   const isTextDraftTooLong = textLengthErrorMessage !== null
   const shouldShowTextLengthCounter =
     !isTextDraftTooLong &&
@@ -235,7 +234,7 @@ export function MessageComposer({
       pendingReplyToMessageIdRef.current = null
       shouldRestoreFocusRef.current = true
       onCancelReply()
-      setDraft('')
+      updateDraft('')
     } finally {
       setIsTextSendPending(false)
     }
@@ -303,7 +302,7 @@ export function MessageComposer({
       shouldRestoreFocusRef.current = true
       onCancelReply()
       setSelectedAttachment(null)
-      setDraft('')
+      updateDraft('')
 
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -368,6 +367,7 @@ export function MessageComposer({
     clearVoiceErrorMessage()
     resetPendingTextSendIfPayloadChanged(nextDraft, replyToMessageId)
     setDraft(nextDraft)
+    onDraftTypingChange?.(nextDraft)
   }
 
   return (
