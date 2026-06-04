@@ -78,7 +78,9 @@ What this plan implements:
 
 - Agents in Chatwoot can see that portal users read agent messages in the
   standard Chatwoot message status mechanism.
-- Portal users see `Сотрудник печатает...` when an agent types in Chatwoot.
+- Portal users see a textless animated three-dot typing indicator when an agent
+  types in Chatwoot. The visible UI does not show agent names or typing words;
+  accessibility text is allowed through `aria-label` only.
 - Agents see Chatwoot's existing customer typing indicator when a portal user
   types.
 - Portal does not show two checks for user-sent messages.
@@ -1946,17 +1948,30 @@ export function AgentTypingIndicator({ isVisible }: { isVisible: boolean }) {
 
   return (
     <div
+      aria-label="Идет набор сообщения"
       aria-live="polite"
-      className="px-4 pb-2 text-[12px] leading-4 text-slate-500 sm:px-6"
+      className="px-4 pb-2 sm:px-6"
+      role="status"
     >
-      Сотрудник печатает...
+      <div aria-hidden="true" className="flex h-6 items-center gap-1">
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+          style={{ animationDelay: '-0.2s' }}
+        />
+        <span
+          className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+          style={{ animationDelay: '-0.1s' }}
+        />
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce" />
+      </div>
     </div>
   )
 }
 ```
 
 Place it above the composer, not inside message bubbles. Do not create a fake
-agent message.
+agent message. Do not render visible typing text or agent names in the portal
+indicator.
 
 - [ ] **Step 6: Add typing timeout fallback and thread cleanup**
 
@@ -2041,7 +2056,7 @@ Create e2e that:
 
 1. opens portal chat;
 2. posts signed `conversation_typing_on` webhook for the mapped conversation;
-3. asserts `Сотрудник печатает...` appears;
+3. asserts a textless animated three-dot typing indicator appears;
 4. posts signed `conversation_typing_off`;
 5. asserts indicator disappears;
 6. asserts no extra message bubble appears.
@@ -2126,7 +2141,8 @@ Manual cases:
 4. Simulated stale SSE while backend is reachable eventually refreshes the
    latest active-thread snapshot without duplicate messages.
 5. Portal user types in private chat; agent sees customer typing.
-6. Agent types in private chat; portal shows `Сотрудник печатает...`.
+6. Agent types in private chat; portal shows the textless animated three-dot
+   indicator.
 7. Agent stops typing; portal indicator disappears.
 8. Group thread: customer-read is skipped; typing is generic and does not claim
    per-user read.
