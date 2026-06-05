@@ -68,10 +68,14 @@ Still active:
 
 - frontend validation for attachment file size, empty file, file name and type:
   `docs/findings/F-CHAT-005-frontend-attachment-validation.md`;
-- bounded realtime health and snapshot fallback when visible realtime becomes
-  stale: `docs/findings/F-CHAT-006-realtime-health-snapshot-fallback.md`;
 - attachment selected/offline UX remains online-only and should be reviewed
   together with attachment validation.
+
+Closed by the customer read/two-way typing prerequisite work:
+
+- bounded realtime health and snapshot fallback when visible realtime becomes
+  stale; see
+  `docs/superpowers/plans/2026-06-04-customer-read-and-chat-typing.md`.
 
 The current scenario matrix is:
 
