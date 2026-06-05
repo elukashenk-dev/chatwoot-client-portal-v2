@@ -186,6 +186,7 @@ function areMessagesInSameVisualBlock(
 
   return (
     currentMessage.direction === adjacentMessage.direction &&
+    currentMessage.authorRole === adjacentMessage.authorRole &&
     currentMessage.authorName === adjacentMessage.authorName &&
     formatMessageDayKey(currentMessage.createdAt) ===
       formatMessageDayKey(adjacentMessage.createdAt)

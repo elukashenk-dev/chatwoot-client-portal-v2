@@ -13,6 +13,7 @@ import type { ChatMessage } from '../../types'
 import { ChatAvatar } from '../ChatAvatar'
 
 import { AttachmentCard } from './AttachmentCard'
+import { MessageAuthorHeader } from './MessageAuthorHeader'
 import { ReplyQuote } from './ReplyQuote'
 import {
   formatMessageMetadataTimestamp,
@@ -47,6 +48,7 @@ type MessageBubbleProps = {
   onReplyToMessage: (message: ChatMessage) => void
   onRevealActionButton: (messageId: number) => void
   onRetryTextMessage: (clientMessageKey: string) => void
+  showSupportBadge?: boolean
 }
 
 const EMPTY_SWIPE_GESTURE: SwipeGesture = {
@@ -73,17 +75,6 @@ function isLocalTextSend(message: ChatMessage) {
     (message.status === 'queued' ||
       message.status === 'sending' ||
       message.status === 'failed')
-  )
-}
-
-function AgentNameHeader({ message }: { message: ChatMessage }) {
-  return (
-    <div
-      className="mb-1.5 flex items-center justify-start px-1 text-[12px] font-normal leading-none text-slate-500"
-      data-message-header
-    >
-      {message.authorName}
-    </div>
   )
 }
 
@@ -245,6 +236,7 @@ export function MessageBubble({
   onReplyToMessage,
   onRevealActionButton,
   onRetryTextMessage,
+  showSupportBadge = false,
 }: MessageBubbleProps) {
   const isOutgoing = message.authorRole === 'current_user'
   const hasIncomingAuthorAvatarSlot =
@@ -459,7 +451,10 @@ export function MessageBubble({
           }}
         >
           {!isOutgoing && shouldRenderAuthorName(blockPosition) ? (
-            <AgentNameHeader message={message} />
+            <MessageAuthorHeader
+              message={message}
+              showSupportBadge={showSupportBadge}
+            />
           ) : null}
           <div
             data-chat-bubble

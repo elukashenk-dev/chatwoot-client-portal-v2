@@ -452,6 +452,7 @@ export function ChatPage() {
 
         {shouldRenderTranscript ? (
           <ChatTranscript
+            activeThreadType={snapshot?.activeThread?.type ?? null}
             forceScrollToBottomSignal={forceScrollToBottomSignal}
             hasMoreOlder={
               historyFragment ? false : (snapshot?.hasMoreOlder ?? false)

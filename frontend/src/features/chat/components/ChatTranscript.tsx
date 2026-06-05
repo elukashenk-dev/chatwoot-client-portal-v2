@@ -7,7 +7,7 @@ import {
   type MouseEvent,
 } from 'react'
 
-import type { ChatMessage } from '../types'
+import type { ChatMessage, ChatThreadSummary } from '../types'
 import { cn } from '../../../shared/lib/cn'
 import type { TranscriptScrollSnapshot } from './ChatTranscriptScroll'
 import {
@@ -34,6 +34,7 @@ import {
   getMessageCopyText,
   requestNextFrame,
   shouldRenderDateDivider,
+  shouldRenderAuthorName,
   shouldUseDesktopMessageContextMenu,
   type MessageContextMenuState,
 } from './chat-transcript/utils'
@@ -44,6 +45,7 @@ import {
 import { useTranscriptMessageScroll } from './useTranscriptMessageScroll'
 
 type ChatTranscriptProps = {
+  activeThreadType?: ChatThreadSummary['type'] | null
   forceScrollToBottomSignal?: number
   historyFragmentControls?: HistoryFragmentControls | null
   hasMoreOlder: boolean
@@ -68,6 +70,7 @@ function restoreFocusToElement(element: HTMLElement | null | undefined) {
 }
 
 export function ChatTranscript({
+  activeThreadType = null,
   forceScrollToBottomSignal = 0,
   historyFragmentControls = null,
   hasMoreOlder,
@@ -436,6 +439,10 @@ export function ChatTranscript({
           {messages.map((message, index) => {
             const blockPosition = getMessageBlockPosition(messages, index)
             const hasDateDivider = shouldRenderDateDivider(messages, index)
+            const showSupportBadge =
+              activeThreadType === 'group' &&
+              message.authorRole === 'agent' &&
+              shouldRenderAuthorName(blockPosition)
 
             return (
               <div className="contents" key={message.id}>
@@ -464,6 +471,7 @@ export function ChatTranscript({
                   onReplyToMessage={onReplyToMessage}
                   onRevealActionButton={setRevealedActionMessageId}
                   onRetryTextMessage={onRetryTextMessage}
+                  showSupportBadge={showSupportBadge}
                 />
               </div>
             )
