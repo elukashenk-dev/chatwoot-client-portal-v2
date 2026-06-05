@@ -245,6 +245,11 @@
   синхронизируется для private и group threads, portal/contact typing echo
   отфильтрован на backend, agent typing отображается как компактный overlay
   без full-width layout strip и без scroll/read-sync side effects.
+- Customer read/two-way typing deployed на `lk.provgroup.ru` из clean code
+  commit `a81530d`: production tenant public inbox identifier verified,
+  agent-side double checks работают для private и group threads, two-way typing
+  проходит через Chatwoot conversation typing events, а burst read sync
+  закрыт trailing retry после throttle window.
 
 ## Current Baseline
 
@@ -263,5 +268,6 @@
 
 ## Recommended Next Step
 
-- Deploy the customer read/two-way typing checkpoint to production and run
-  real-device smoke before continuing the next product slice.
+- Close the customer read/two-way typing branch into `main`, preserving
+  `F-CHAT-008` as the next isolated unread-indicator investigation if it
+  reproduces.
