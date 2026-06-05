@@ -115,11 +115,42 @@ describe('useChatReadSync', () => {
     expect(markRead).toHaveBeenCalledTimes(2)
   })
 
-  it('syncs again immediately when a later agent message becomes visible', () => {
+  it('schedules a trailing sync for a later visible agent message inside the read window', () => {
     const { markRead, result } = renderReadSync()
 
     act(() => {
       result.current({ latestVisibleAgentMessageId: 101 })
+    })
+
+    expect(markRead).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      vi.advanceTimersByTime(1_000)
+      result.current({ latestVisibleAgentMessageId: 102 })
+    })
+
+    expect(markRead).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      vi.advanceTimersByTime(3_999)
+    })
+
+    expect(markRead).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+
+    expect(markRead).toHaveBeenCalledTimes(2)
+    expect(markRead).toHaveBeenLastCalledWith('private:me')
+  })
+
+  it('syncs a later visible agent message immediately after the read window expires', () => {
+    const { markRead, result } = renderReadSync()
+
+    act(() => {
+      result.current({ latestVisibleAgentMessageId: 101 })
+      vi.advanceTimersByTime(5_000)
       result.current({ latestVisibleAgentMessageId: 102 })
     })
 
