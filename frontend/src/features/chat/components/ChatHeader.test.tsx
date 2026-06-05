@@ -1,5 +1,7 @@
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { useLocation } from 'react-router-dom'
 
 import {
   AuthSessionContext,
@@ -68,6 +70,12 @@ const authSession: AuthSessionContextValue = {
   },
 }
 
+function CurrentPath() {
+  const location = useLocation()
+
+  return <output aria-label="current path">{location.pathname}</output>
+}
+
 function renderHeader({
   connectionStatus = 'online',
 }: {
@@ -101,6 +109,7 @@ function renderHeader({
           threadNotificationSettings={notificationSettings}
           threads={[privateThread]}
         />
+        <CurrentPath />
       </AuthSessionContext.Provider>
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
@@ -139,5 +148,22 @@ describe('ChatHeader', () => {
     renderHeader({ connectionStatus: 'online' })
 
     expect(screen.getByRole('status', { name: 'На связи' })).toBeInTheDocument()
+  })
+
+  it('groups the right chat menu and navigates to profile', async () => {
+    const user = userEvent.setup()
+
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+
+    expect(screen.getByText('Аккаунт')).toBeInTheDocument()
+    expect(screen.getByText('Чат')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('menuitem', { name: 'Профиль' }))
+
+    expect(screen.getByLabelText('current path')).toHaveTextContent(
+      '/app/profile',
+    )
   })
 })

@@ -68,6 +68,7 @@ function createChatwootClientStub({
           email: 'ivan@example.com',
           id: 44,
           name: 'Иван Петров',
+          phoneNumber: null,
         }
       }
 
@@ -80,6 +81,7 @@ function createChatwootClientStub({
           email: 'office@romashka.ru',
           id: 154,
           name: 'ООО "Ромашка"',
+          phoneNumber: null,
         }
       }
 
@@ -182,6 +184,7 @@ describe('chat thread info service', () => {
                 email: 'ivan@example.com',
                 id: 44,
                 name: 'Иван Петров',
+                phoneNumber: null,
               }
             : null,
         ),
@@ -236,6 +239,7 @@ describe('chat thread info service', () => {
           email: 'ivan@example.test',
           id: 44,
           name: 'Иван Петров',
+          phoneNumber: null,
         },
       ],
       [
@@ -249,6 +253,7 @@ describe('chat thread info service', () => {
           email: 'maria@example.test',
           id: 55,
           name: 'Мария Соколова',
+          phoneNumber: null,
         },
       ],
       [
@@ -262,6 +267,7 @@ describe('chat thread info service', () => {
           email: 'denied@example.test',
           id: 66,
           name: 'Нет доступа',
+          phoneNumber: null,
         },
       ],
       [
@@ -275,6 +281,7 @@ describe('chat thread info service', () => {
           email: 'office@romashka.test',
           id: 154,
           name: 'ООО "Ромашка"',
+          phoneNumber: null,
         },
       ],
     ])

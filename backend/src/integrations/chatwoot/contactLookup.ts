@@ -8,6 +8,7 @@ export type ChatwootContact = {
   email: string | null
   id: number
   name: string | null
+  phoneNumber: string | null
 }
 
 type ChatwootContactLookupConfig = {
@@ -89,6 +90,7 @@ function mapContact(payload: unknown, baseUrl: string): ChatwootContact {
     email: readString(payload.email),
     id,
     name: readString(payload.name),
+    phoneNumber: readString(payload.phone_number),
   }
 }
 

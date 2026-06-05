@@ -958,6 +958,50 @@ export function createChatwootClient({
     }
   }
 
+  async function requestContactAvatarUpdate(
+    contactId: number,
+    avatar: ChatwootAttachmentUpload,
+  ) {
+    const resolvedConfig = assertConfigured()
+    const requestUrl = new URL(
+      `/api/v1/accounts/${resolvedConfig.accountId}/contacts/${contactId}`,
+      resolvedConfig.baseUrl,
+    )
+    const formData = new FormData()
+
+    formData.append('avatar', createAttachmentBlob(avatar), avatar.fileName)
+
+    const request = await fetchChatwoot(
+      requestUrl,
+      'Chatwoot contact avatar update is unavailable.',
+      {
+        body: formData,
+        headers: {
+          Accept: 'application/json',
+          api_access_token: resolvedConfig.apiAccessToken,
+        },
+        method: 'PUT',
+      },
+    )
+    const { response } = request
+
+    try {
+      if (response.status === 404) {
+        return null
+      }
+
+      if (!response.ok) {
+        throw new ChatwootClientRequestError(
+          `Chatwoot contact avatar update failed with status ${response.status}.`,
+        )
+      }
+
+      return true
+    } finally {
+      request.clearTimeout()
+    }
+  }
+
   const messageClient = createChatwootMessageClient({
     assertConfigured,
     fetchChatwoot,
@@ -1504,6 +1548,43 @@ export function createChatwootClient({
         conversationId,
         replyToMessageId,
         sourceId: sourceId?.trim() || null,
+      })
+    },
+
+    async updateContactAvatar(
+      contactId: number,
+      avatar: ChatwootAttachmentUpload,
+    ) {
+      assertConfigured()
+
+      if (!Number.isInteger(contactId) || contactId <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact avatar update requires a valid contact id.',
+        )
+      }
+
+      if (!avatar.fileName.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact avatar update requires a file name.',
+        )
+      }
+
+      if (!avatar.mimeType.trim()) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact avatar update requires a file type.',
+        )
+      }
+
+      if (avatar.data.byteLength <= 0) {
+        throw new ChatwootClientRequestError(
+          'Chatwoot contact avatar update requires file data.',
+        )
+      }
+
+      return requestContactAvatarUpdate(contactId, {
+        data: avatar.data,
+        fileName: avatar.fileName.trim(),
+        mimeType: avatar.mimeType.trim().toLowerCase(),
       })
     },
 

@@ -250,6 +250,11 @@
   agent-side double checks работают для private и group threads, two-way typing
   проходит через Chatwoot conversation typing events, а burst read sync
   закрыт trailing retry после throttle window.
+- Профиль пользователя добавлен как отдельная app route из правого меню чата:
+  portal показывает read-only `Имя`, `Email`, `Телефон` из portal/contact
+  authority boundary, а загрузка/замена аватара идет через backend и
+  синхронизируется с linked Chatwoot contact без раскрытия Chatwoot authority
+  браузеру.
 
 ## Current Baseline
 
@@ -268,6 +273,5 @@
 
 ## Recommended Next Step
 
-- Close the customer read/two-way typing branch into `main`, preserving
-  `F-CHAT-008` as the next isolated unread-indicator investigation if it
-  reproduces.
+- Зафиксировать checkpoint commit для profile read-only/avatar slice, затем
+  выбрать следующий изолированный product slice.

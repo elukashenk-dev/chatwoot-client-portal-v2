@@ -11,6 +11,7 @@ import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
+import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import {
@@ -49,6 +50,8 @@ import { createPasswordResetRepository } from './modules/password-reset/reposito
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
 import { createPasswordResetService } from './modules/password-reset/service.js'
 import { createPortalUsersRepository } from './modules/portal-users/repository.js'
+import { registerProfileRoutes } from './modules/profile/routes.js'
+import { createProfileService } from './modules/profile/service.js'
 import { createRegistrationRepository } from './modules/registration/repository.js'
 import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
@@ -214,6 +217,25 @@ export function buildApp({
       chatwootClient: createChatwootClientForRequest(request),
     })
   }
+  const createProfileServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createProfileService({
+      chatwootClient: createChatwootClientForRequest(request),
+      contactRepository: createChatThreadContactRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      fetchAllowedAttachment: createAttachmentProxyFetcher({
+        allowedOrigins: getAttachmentProxyAllowedOrigins({
+          env,
+          tenantChatwootBaseUrl: tenant.chatwoot.baseUrl,
+        }),
+        allowPrivateNetwork: env.NODE_ENV !== 'production',
+        fetchFn: fetch,
+        requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
+      }),
+    })
+  }
   const createChatPresenceServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
     const chatwootClient = createChatwootClientForRequest(request)
@@ -316,6 +338,11 @@ export function buildApp({
   registerTenantRoutes(app, { tenantsService })
   registerAuthRoutes(app, {
     authService,
+    env,
+  })
+  registerProfileRoutes(app, {
+    authService,
+    createProfileService: createProfileServiceForRequest,
     env,
   })
   registerRegistrationRoutes(app, {

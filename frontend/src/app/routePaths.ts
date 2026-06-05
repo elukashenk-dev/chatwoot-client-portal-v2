@@ -2,6 +2,7 @@ export const routePaths = {
   root: '/',
   app: {
     chat: '/app/chat',
+    profile: '/app/profile',
     root: '/app',
     settings: '/app/settings',
     settingsNotifications: '/app/settings/notifications',

@@ -58,6 +58,11 @@ const UserNotificationsPage = lazyRouteComponent(() =>
     (module) => module.UserNotificationsPage,
   ),
 )
+const UserProfilePage = lazyRouteComponent(() =>
+  import('../features/profile/pages/UserProfilePage').then(
+    (module) => module.UserProfilePage,
+  ),
+)
 
 function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -136,9 +141,14 @@ export function AppRoutes() {
             index
             element={<Navigate replace to={routePaths.app.chat} />}
           />
+          <Route path="chat" element={<ChatPage />} />
           <Route
-            path="chat"
-            element={<ChatPage />}
+            path="profile"
+            element={
+              <LazyRoute>
+                <UserProfilePage />
+              </LazyRoute>
+            }
           />
           <Route
             path="settings"

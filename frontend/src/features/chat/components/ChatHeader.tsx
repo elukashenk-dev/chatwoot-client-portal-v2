@@ -39,6 +39,7 @@ import {
   MoreHorizontalIcon,
   SearchIcon,
   SettingsIcon,
+  UserIcon,
 } from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
@@ -386,6 +387,20 @@ export function ChatHeader({
               role="menu"
               tabIndex={-1}
             >
+              <div className="px-1 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
+                Аккаунт
+              </div>
+              <ChatMenuItem
+                icon={<UserIcon className="h-5 w-5" />}
+                label="Профиль"
+                onSelect={() => {
+                  closeMenus()
+                  navigate(routePaths.app.profile)
+                }}
+              />
+              <div className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
+                Чат
+              </div>
               <ChatMenuItem
                 disabled={!selectedThreadId}
                 icon={<SearchIcon className="h-5 w-5" />}

@@ -13,6 +13,7 @@ function personContact(id: number, groupContactIds: number[]) {
     email: `user-${id}@example.test`,
     id,
     name: `User ${id}`,
+    phoneNumber: null,
   } satisfies ChatwootContact
 }
 
@@ -25,6 +26,7 @@ function groupContact(id: number, name: string | null = `Group ${id}`) {
     email: null,
     id,
     name,
+    phoneNumber: null,
   } satisfies ChatwootContact
 }
 

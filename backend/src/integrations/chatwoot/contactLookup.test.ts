@@ -44,6 +44,7 @@ describe('findChatwootContactById', () => {
           email: 'ivan@example.com',
           id: 44,
           name: 'Иван Петров',
+          phone_number: '+79991234567',
         },
       }),
     )
@@ -58,6 +59,7 @@ describe('findChatwootContactById', () => {
       email: 'ivan@example.com',
       id: 44,
       name: 'Иван Петров',
+      phoneNumber: '+79991234567',
     })
 
     expect(fetchFn).toHaveBeenCalledWith(

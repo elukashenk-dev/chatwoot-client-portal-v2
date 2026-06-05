@@ -332,3 +332,7 @@ export function createAttachmentProxyFetcher({
     throw createAttachmentProxyUnavailableError()
   }
 }
+
+export type FetchAllowedAttachment = ReturnType<
+  typeof createAttachmentProxyFetcher
+>
