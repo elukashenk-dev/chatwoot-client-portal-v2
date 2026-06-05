@@ -2,6 +2,7 @@ import type {
   ChatwootClient,
   ChatwootMessage,
 } from '../../integrations/chatwoot/client.js'
+import { buildPortalGroupParticipantAvatarUrl } from '../chat-threads/types.js'
 import { parseGroupThreadContent } from './authorFormatting.js'
 import type {
   PortalChatMessage,
@@ -67,6 +68,21 @@ function getAgentAvatarUrl(message: ChatwootMessage, threadId: string) {
     : '/api/tenant/icons/icon-192.png'
 }
 
+function getGroupMemberAvatarUrl({
+  ledgerAuthor,
+  threadId,
+}: {
+  ledgerAuthor: SendLedgerAuthor | undefined
+  threadId: string
+}) {
+  return ledgerAuthor
+    ? buildPortalGroupParticipantAvatarUrl({
+        participantUserId: ledgerAuthor.userId,
+        threadId,
+      })
+    : null
+}
+
 function mapMessagePresentation(
   message: ChatwootMessage,
   {
@@ -118,7 +134,10 @@ function mapMessagePresentation(
   }
 
   return {
-    authorAvatarUrl: null,
+    authorAvatarUrl: getGroupMemberAvatarUrl({
+      ledgerAuthor,
+      threadId,
+    }),
     authorName:
       ledgerAuthor?.authorDisplayName?.trim() ||
       parsedGroupContent.authorName ||

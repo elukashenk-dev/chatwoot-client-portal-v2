@@ -4,6 +4,8 @@ import {
   ChatwootClientRequestError,
 } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
+import { assertPortalPersonContactEnabled } from '../chat-threads/contactAttributes.js'
+import type { ChatThreadContactRepository } from '../chat-threads/contactRepository.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import {
@@ -19,6 +21,10 @@ type ChatAvatarProxyDependencies = {
   chatThreadsService: Pick<ChatThreadsService, 'getCurrentUserThreadContext'>
   chatwootClient: Pick<ChatwootClient, 'findConversationMessageById'> &
     Partial<Pick<ChatwootClient, 'findContactById'>>
+  contactRepository?: Pick<
+    ChatThreadContactRepository,
+    'findActivePortalUserContactLinkByUserId'
+  >
   fetchAllowedAttachment: FetchAllowedAttachment
 }
 
@@ -192,6 +198,88 @@ export async function getCurrentUserThreadAvatarFromService({
   }
 }
 
+export async function getCurrentUserGroupParticipantAvatarFromService({
+  chatThreadsService,
+  chatwootClient,
+  contactRepository,
+  fetchAllowedAttachment,
+  participantUserId,
+  threadId,
+  userId,
+}: ChatAvatarProxyDependencies & {
+  participantUserId: number
+  threadId: string
+  userId: number
+}): Promise<ChatAttachmentProxyResponse> {
+  const context = await chatThreadsService.getCurrentUserThreadContext({
+    threadId,
+    userId,
+  })
+
+  if (context.result !== 'ready') {
+    throw createAvatarThreadContextError(context)
+  }
+
+  if (
+    context.threadType !== 'group' ||
+    context.targetChatwootContactId === null
+  ) {
+    throw createAvatarUnavailableError()
+  }
+
+  try {
+    if (!chatwootClient.findContactById || !contactRepository) {
+      throw createAvatarUnavailableError()
+    }
+
+    const link =
+      await contactRepository.findActivePortalUserContactLinkByUserId(
+        participantUserId,
+      )
+
+    if (!link) {
+      throw createAvatarUnavailableError()
+    }
+
+    const contact = await chatwootClient.findContactById(link.chatwootContactId)
+    const avatarUrl = contact?.avatarUrl?.trim() ?? ''
+
+    if (!contact || !avatarUrl) {
+      throw createAvatarUnavailableError()
+    }
+
+    let attributes: ReturnType<typeof assertPortalPersonContactEnabled>
+
+    try {
+      attributes = assertPortalPersonContactEnabled(contact)
+    } catch {
+      throw createAvatarUnavailableError()
+    }
+
+    if (!attributes.groupContactIds.includes(context.targetChatwootContactId)) {
+      throw createAvatarUnavailableError()
+    }
+
+    return fetchAllowedChatwootAvatar({
+      fetchAllowedAttachment,
+      initialUrl: avatarUrl,
+    })
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error
+    }
+
+    if (
+      error instanceof ChatwootClientConfigurationError ||
+      error instanceof ChatwootClientRequestError
+    ) {
+      throw createAvatarUnavailableError(503)
+    }
+
+    throw error
+  }
+}
+
 export function createChatAvatarProxyMethods(
   dependencies: ChatAvatarProxyDependencies,
 ) {
@@ -222,6 +310,23 @@ export function createChatAvatarProxyMethods(
     }) {
       return getCurrentUserThreadAvatarFromService({
         ...dependencies,
+        threadId,
+        userId,
+      })
+    },
+
+    getCurrentUserGroupParticipantAvatar({
+      participantUserId,
+      threadId,
+      userId,
+    }: {
+      participantUserId: number
+      threadId: string
+      userId: number
+    }) {
+      return getCurrentUserGroupParticipantAvatarFromService({
+        ...dependencies,
+        participantUserId,
         threadId,
         userId,
       })

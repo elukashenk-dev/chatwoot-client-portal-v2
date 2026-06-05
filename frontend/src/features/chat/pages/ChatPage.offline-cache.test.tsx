@@ -96,6 +96,75 @@ describe('ChatPage offline cache', () => {
     ).toBeDisabled()
   })
 
+  it('renders cached group member avatar images when chat bootstrap is offline', async () => {
+    await offlineStore.saveThreadList({
+      activeThreadId: cachedGroupThread.id,
+      savedAt: '2026-05-27T10:00:00.000Z',
+      tenantSlug: 'buhfirma',
+      threads: [cachedGroupThreadList],
+      userId: 7,
+    })
+    await offlineStore.saveMessageSnapshot({
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: createReadySnapshot({
+        activeThread: cachedGroupThread,
+        messages: [
+          {
+            attachments: [],
+            authorAvatarUrl:
+              '/api/chat/threads/group%3A254/participants/8/avatar',
+            authorName: 'Мария Соколова',
+            authorRole: 'group_member',
+            content: 'Кеш общего чата с аватаркой.',
+            contentType: 'text',
+            createdAt: '2026-05-27T10:00:00.000Z',
+            direction: 'incoming',
+            id: 25402,
+            status: 'sent',
+          },
+        ],
+      }),
+      tenantSlug: 'buhfirma',
+      threadId: cachedGroupThread.id,
+      userId: 7,
+    })
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (
+        url === '/api/chat/threads' ||
+        url === '/api/chat/threads/group%3A254/notification-settings' ||
+        url === '/api/chat/support-availability'
+      ) {
+        throw new TypeError('network down')
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Нет связи. Показываем сохраненные сообщения.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Кеш общего чата с аватаркой.')).toBeInTheDocument()
+    expect(screen.getByText('Мария Соколова')).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: 'Участник Мария Соколова' }),
+    ).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A254/participants/8/avatar',
+    )
+  })
+
   it('opens cached chat when VPN keeps startup chat requests hanging', async () => {
     await offlineStore.saveThreadList({
       activeThreadId: privateThread.id,

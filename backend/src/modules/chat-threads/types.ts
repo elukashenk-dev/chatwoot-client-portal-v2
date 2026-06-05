@@ -60,6 +60,7 @@ export type CurrentUserChatThreadContext = {
 }
 
 export type PublicChatThreadInfoParticipant = {
+  avatarUrl: string | null
   displayName: string
   id: `portal-user:${number}`
   isCurrentUser: boolean
@@ -90,6 +91,18 @@ export function buildPrivateThread(): PublicChatThreadSummary {
 
 export function buildPortalThreadAvatarUrl(threadId: string) {
   return `/api/chat/threads/${encodeURIComponent(threadId)}/avatar`
+}
+
+export function buildPortalGroupParticipantAvatarUrl({
+  participantUserId,
+  threadId,
+}: {
+  participantUserId: number
+  threadId: string
+}) {
+  return `/api/chat/threads/${encodeURIComponent(
+    threadId,
+  )}/participants/${participantUserId}/avatar`
 }
 
 export function buildGroupThread(

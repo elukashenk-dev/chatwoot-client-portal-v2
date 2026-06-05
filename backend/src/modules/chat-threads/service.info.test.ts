@@ -231,6 +231,7 @@ describe('chat thread info service', () => {
       [
         44,
         {
+          avatarUrl: 'https://chatwoot.test/rails/active_storage/ivan.png',
           customAttributes: {
             portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
@@ -245,6 +246,7 @@ describe('chat thread info service', () => {
       [
         55,
         {
+          avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
           customAttributes: {
             portal_client_group_contact_ids: '154',
             portal_contact_type: 'person',
@@ -267,6 +269,20 @@ describe('chat thread info service', () => {
           email: 'denied@example.test',
           id: 66,
           name: 'Нет доступа',
+          phoneNumber: null,
+        },
+      ],
+      [
+        77,
+        {
+          customAttributes: {
+            portal_client_group_contact_ids: '154',
+            portal_contact_type: 'person',
+            portal_enabled: true,
+          },
+          email: 'petr@example.test',
+          id: 77,
+          name: 'Петр Без Фото',
           phoneNumber: null,
         },
       ],
@@ -314,6 +330,12 @@ describe('chat thread info service', () => {
             fullName: 'Нет доступа',
             userId: 9,
           },
+          {
+            chatwootContactId: 77,
+            email: 'petr@example.test',
+            fullName: 'Петр Без Фото',
+            userId: 10,
+          },
         ]),
       }),
     })
@@ -327,13 +349,21 @@ describe('chat thread info service', () => {
       curatorName: 'Анна Маттина',
       participants: [
         {
+          avatarUrl: '/api/chat/threads/group%3A154/participants/7/avatar',
           displayName: 'Иван Петров',
           id: 'portal-user:7',
           isCurrentUser: true,
         },
         {
+          avatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
           displayName: 'Мария Соколова',
           id: 'portal-user:8',
+          isCurrentUser: false,
+        },
+        {
+          avatarUrl: null,
+          displayName: 'Петр Без Фото',
+          id: 'portal-user:10',
           isCurrentUser: false,
         },
       ],

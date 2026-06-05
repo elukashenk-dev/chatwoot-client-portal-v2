@@ -16,6 +16,10 @@ type EnsureCurrentUserWritableThreadContext =
   ChatThreadsServiceOptions['ensureCurrentUserWritableThreadContext']
 type RecoverCurrentUserWritableThreadContext =
   ChatThreadsServiceOptions['recoverCurrentUserWritableThreadContext']
+type LedgerAuthorsByMessageId = Map<
+  number,
+  { authorDisplayName: string | null; userId: number }
+>
 
 function createReadyContext(
   overrides: Partial<CurrentUserChatThreadContext> = {},
@@ -50,6 +54,22 @@ function createReadyContext(
     threadType: 'private',
     ...contextOverrides,
   }
+}
+
+function createGroupContext() {
+  return createReadyContext({
+    activeThread: {
+      id: 'group:154',
+      subtitle: 'Групповой чат',
+      title: 'ООО "Ромашка"',
+      type: 'group',
+    },
+    currentUserName: 'Иван Петров',
+    linkedContactId: 44,
+    portalChatThreadId: 1540,
+    targetChatwootContactId: 154,
+    threadType: 'group',
+  })
 }
 
 function createChatwootMessage({
@@ -89,6 +109,7 @@ function createService({
   findConversationMessageById = vi
     .fn()
     .mockResolvedValue(createChatwootMessage({ id: 190 })),
+  ledgerAuthorsByMessageId = new Map(),
   listConversationMessagesAfterError = null,
   listConversationMessagesError = null,
   recoverCurrentUserWritableThreadContext = vi.fn<RecoverCurrentUserWritableThreadContext>(),
@@ -105,6 +126,7 @@ function createService({
   }>
   context?: CurrentUserChatThreadContext
   findConversationMessageById?: ReturnType<typeof vi.fn>
+  ledgerAuthorsByMessageId?: LedgerAuthorsByMessageId
   listConversationMessagesAfterError?: Error | null
   listConversationMessagesError?: Error | null
   recoverCurrentUserWritableThreadContext?: RecoverCurrentUserWritableThreadContext
@@ -135,7 +157,9 @@ function createService({
 
   const service = createChatMessagesService({
     chatThreadsRepository: {
-      findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
+      findSendLedgerAuthorsByMessageIds: vi
+        .fn()
+        .mockResolvedValue(ledgerAuthorsByMessageId),
     },
     chatThreadsService: {
       ensureCurrentUserWritableThreadContext,
@@ -230,6 +254,67 @@ describe('chat message context service', () => {
     expect(listConversationMessagesAfter).toHaveBeenCalledWith(1001, {
       afterMessageId: 190,
     })
+  })
+
+  it('keeps group member avatar URLs in message context responses', async () => {
+    const targetMessage = createChatwootMessage({
+      content: '**Мария Соколова**\nНужен договор 123.',
+      id: 701,
+      messageType: 0,
+    })
+    const response = (await createService({
+      afterPages: [
+        {
+          hasMoreNewer: false,
+          messages: [],
+          nextNewerCursor: null,
+        },
+      ],
+      beforePages: [
+        {
+          hasMoreOlder: false,
+          messages: [],
+          nextOlderCursor: null,
+        },
+      ],
+      context: createGroupContext(),
+      findConversationMessageById: vi.fn().mockResolvedValue(targetMessage),
+      ledgerAuthorsByMessageId: new Map([
+        [
+          701,
+          {
+            authorDisplayName: 'Мария Соколова',
+            userId: 8,
+          },
+        ],
+      ]),
+    }).service.getCurrentUserChatMessageContext({
+      messageId: 701,
+      threadId: 'group:154',
+      userId: 7,
+    })) as {
+      messages: Array<{
+        authorAvatarUrl: string | null | undefined
+        authorRole: string
+        content: string | null
+        id: number
+      }>
+      reason: string
+      result: string
+    }
+
+    expect(response).toMatchObject({
+      reason: 'none',
+      result: 'ready',
+    })
+    expect(response.messages).toEqual([
+      expect.objectContaining({
+        authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+        authorRole: 'group_member',
+        content: 'Нужен договор 123.',
+        id: 701,
+      }),
+    ])
   })
 
   it('loads an earlier context page before the current fragment boundary', async () => {

@@ -8,6 +8,7 @@ import {
   ChatwootInvalidHistoryCursorError,
 } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
+import type { ChatThreadContactRepository } from '../chat-threads/contactRepository.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import type { ChatThreadsRepository } from '../chat-threads/repository.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
@@ -80,6 +81,10 @@ type CreateChatMessagesServiceOptions = {
   chatThreadsRepository: Pick<
     ChatThreadsRepository,
     'findSendLedgerAuthorsByMessageIds'
+  >
+  contactRepository?: Pick<
+    ChatThreadContactRepository,
+    'findActivePortalUserContactLinkByUserId'
   >
   chatThreadsService: Pick<
     ChatThreadsService,
@@ -315,6 +320,7 @@ export function createChatMessagesService({
   attachmentFetchFn = fetch,
   attachmentRequestTimeoutMs: inputAttachmentRequestTimeoutMs,
   chatThreadsRepository,
+  contactRepository,
   chatThreadsService,
   chatUnreadService,
   chatMessagesRepository = null,
@@ -331,6 +337,7 @@ export function createChatMessagesService({
     chatThreadsService,
     chatwootClient,
     fetchAllowedAttachment,
+    ...(contactRepository === undefined ? {} : { contactRepository }),
   })
 
   async function attachUnreadClearSummary({

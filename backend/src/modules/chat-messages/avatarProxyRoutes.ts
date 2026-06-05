@@ -22,6 +22,13 @@ const messageAvatarParamsSchema = z
   })
   .strict()
 
+const participantAvatarParamsSchema = z
+  .object({
+    participantUserId: z.coerce.number().int().positive(),
+    threadId: publicThreadIdSchema,
+  })
+  .strict()
+
 const threadParamsSchema = z.object({ threadId: publicThreadIdSchema }).strict()
 
 type RegisterChatAvatarProxyRoutesOptions = {
@@ -73,6 +80,28 @@ export function registerChatAvatarProxyRoutes(
         request,
       ).getCurrentUserChatMessageAvatar({
         messageId: params.messageId,
+        threadId: params.threadId,
+        userId: user.id,
+      })
+
+      return sendAvatarProxy({ avatar, reply })
+    },
+  )
+
+  app.get(
+    '/api/chat/threads/:threadId/participants/:participantUserId/avatar',
+    async (request, reply) => {
+      const user = await resolveAuthenticatedPortalUser({
+        authService,
+        env,
+        reply,
+        request,
+      })
+      const params = participantAvatarParamsSchema.parse(request.params)
+      const avatar = await createChatMessagesService(
+        request,
+      ).getCurrentUserGroupParticipantAvatar({
+        participantUserId: params.participantUserId,
         threadId: params.threadId,
         userId: user.id,
       })

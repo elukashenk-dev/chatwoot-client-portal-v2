@@ -181,24 +181,28 @@ function RetryTextSend({
   )
 }
 
-function AgentAvatar({
+function AuthorAvatar({
   authorName,
+  authorRole,
   avatarUrl,
   isVisible,
 }: {
   authorName: string
+  authorRole: ChatMessage['authorRole']
   avatarUrl?: string | null
   isVisible: boolean
 }) {
+  const labelPrefix = authorRole === 'agent' ? 'Агент' : 'Участник'
+
   return (
     <div className="mr-2 mt-0.5 flex w-8 shrink-0 justify-center sm:mr-2.5 sm:w-9">
       {isVisible ? (
         <ChatAvatar
-          aria-label={`Агент ${authorName}`}
-          alt={`Агент ${authorName}`}
+          aria-label={`${labelPrefix} ${authorName}`}
+          alt={`${labelPrefix} ${authorName}`}
           avatarUrl={avatarUrl}
           className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-[11px] font-medium leading-none text-slate-500 sm:h-9 sm:w-9 sm:text-[12px]"
-          data-agent-avatar
+          data-author-avatar
           title={authorName}
         >
           {getAuthorInitials(authorName)}
@@ -243,14 +247,15 @@ export function MessageBubble({
   onRetryTextMessage,
 }: MessageBubbleProps) {
   const isOutgoing = message.authorRole === 'current_user'
-  const hasAgentAvatarSlot = message.authorRole === 'agent'
+  const hasIncomingAuthorAvatarSlot =
+    message.authorRole === 'agent' || message.authorRole === 'group_member'
   const canReplyToMessage = !isLocalTextSend(message)
   const [isSwipeActive, setIsSwipeActive] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeGestureRef = useRef<SwipeGesture>(EMPTY_SWIPE_GESTURE)
   const swipeOffsetRef = useRef(0)
-  const shouldRenderAgentAvatar =
-    hasAgentAvatarSlot && shouldRenderAuthorName(blockPosition)
+  const shouldRenderAuthorAvatar =
+    hasIncomingAuthorAvatarSlot && shouldRenderAuthorName(blockPosition)
   const radiusClassName = getBubbleRadiusClass({
     blockPosition,
     isOutgoing,
@@ -379,11 +384,12 @@ export function MessageBubble({
       data-message-highlighted={isHighlighted ? 'true' : undefined}
       data-message-id={message.id}
     >
-      {hasAgentAvatarSlot ? (
-        <AgentAvatar
+      {hasIncomingAuthorAvatarSlot ? (
+        <AuthorAvatar
           authorName={message.authorName}
+          authorRole={message.authorRole}
           avatarUrl={message.authorAvatarUrl}
-          isVisible={shouldRenderAgentAvatar}
+          isVisible={shouldRenderAuthorAvatar}
         />
       ) : null}
       <div
@@ -391,7 +397,7 @@ export function MessageBubble({
           'relative min-w-0',
           isOutgoing
             ? 'max-w-[86%] sm:max-w-[78%]'
-            : hasAgentAvatarSlot
+            : hasIncomingAuthorAvatarSlot
               ? 'max-w-[calc(86%_-_2.5rem)] sm:max-w-[calc(78%_-_2.75rem)]'
               : 'max-w-[86%] sm:max-w-[78%]',
         )}

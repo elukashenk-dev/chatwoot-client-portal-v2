@@ -126,11 +126,13 @@ describe('ChatInfoPage', () => {
           accessLabel: 'Участники группы и поддержка',
           participants: [
             {
+              avatarUrl: '/api/chat/threads/group%3A154/participants/7/avatar',
               displayName: 'Иван Петров',
               id: 'portal-user:7',
               isCurrentUser: true,
             },
             {
+              avatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
               displayName: 'Мария Соколова',
               id: 'portal-user:8',
               isCurrentUser: false,
@@ -150,6 +152,16 @@ describe('ChatInfoPage', () => {
     expect(screen.getByText('Иван Петров')).toBeInTheDocument()
     expect(screen.getByText('Вы')).toBeInTheDocument()
     expect(screen.getByText('Мария Соколова')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Иван Петров' })).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A154/participants/7/avatar',
+    )
+    expect(
+      screen.getByRole('img', { name: 'Мария Соколова' }),
+    ).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A154/participants/8/avatar',
+    )
   })
 
   it('calls retry from unavailable state', async () => {

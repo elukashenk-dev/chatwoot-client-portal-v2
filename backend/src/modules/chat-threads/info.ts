@@ -6,6 +6,7 @@ import type {
 type ChatInfoThreadType = PublicChatThreadSummary['type']
 
 export type SafeChatInfoParticipantRow = {
+  avatarUrl: string | null
   displayName: string | null
   email: string
   isCurrentUser: boolean
@@ -55,6 +56,7 @@ export function normalizeChatInfoParticipantRows(
     }
 
     participantsById.set(row.userId, {
+      avatarUrl: row.avatarUrl,
       displayName: getParticipantDisplayName(row),
       id: `portal-user:${row.userId}`,
       isCurrentUser: row.isCurrentUser,

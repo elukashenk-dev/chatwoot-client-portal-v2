@@ -255,6 +255,10 @@
   authority boundary, а загрузка/замена аватара идет через backend и
   синхронизируется с linked Chatwoot contact без раскрытия Chatwoot authority
   браузеру.
+- Group chat member avatars added: group info participants and ledger-known
+  group member transcript messages now use backend-owned avatar proxy URLs,
+  while unknown group authors keep initials fallback and browser still receives
+  no direct Chatwoot asset URLs.
 
 ## Current Baseline
 
@@ -273,5 +277,5 @@
 
 ## Recommended Next Step
 
-- Зафиксировать checkpoint commit для profile read-only/avatar slice, затем
-  выбрать следующий изолированный product slice.
+- Смержить `feature/phase-chat-group-member-avatars` в `main` после приемки,
+  затем выбрать следующий изолированный product slice.

@@ -36,18 +36,21 @@ describe('chat thread info helpers', () => {
     expect(
       normalizeChatInfoParticipantRows([
         {
+          avatarUrl: null,
           displayName: 'Мария Соколова',
           email: 'maria@example.test',
           isCurrentUser: false,
           userId: 8,
         },
         {
+          avatarUrl: null,
           displayName: null,
           email: 'ivan@example.test',
           isCurrentUser: true,
           userId: 7,
         },
         {
+          avatarUrl: null,
           displayName: 'Мария Соколова',
           email: 'maria@example.test',
           isCurrentUser: false,
@@ -56,11 +59,41 @@ describe('chat thread info helpers', () => {
       ]),
     ).toEqual([
       {
+        avatarUrl: null,
         displayName: 'ivan@example.test',
         id: 'portal-user:7',
         isCurrentUser: true,
       },
       {
+        avatarUrl: null,
+        displayName: 'Мария Соколова',
+        id: 'portal-user:8',
+        isCurrentUser: false,
+      },
+    ])
+  })
+
+  it('keeps portal-owned participant avatar URLs while deduping users', () => {
+    const participants = normalizeChatInfoParticipantRows([
+      {
+        avatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+        displayName: 'Мария Соколова',
+        email: 'maria@example.test',
+        isCurrentUser: false,
+        userId: 8,
+      },
+      {
+        avatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+        displayName: 'Мария Соколова',
+        email: 'maria@example.test',
+        isCurrentUser: false,
+        userId: 8,
+      },
+    ])
+
+    expect(participants).toEqual([
+      {
+        avatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
         displayName: 'Мария Соколова',
         id: 'portal-user:8',
         isCurrentUser: false,

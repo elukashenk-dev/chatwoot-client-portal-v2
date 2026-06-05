@@ -19,6 +19,10 @@ type EnsureCurrentUserWritableThreadContext =
   ChatThreadsServiceOptions['ensureCurrentUserWritableThreadContext']
 type RecoverCurrentUserWritableThreadContext =
   ChatThreadsServiceOptions['recoverCurrentUserWritableThreadContext']
+type LedgerAuthorsByMessageId = Map<
+  number,
+  { authorDisplayName: string | null; userId: number }
+>
 
 function createReadyContext(
   overrides: Partial<CurrentUserChatThreadContext> = {},
@@ -104,12 +108,14 @@ function createChatwootMessage({
 function createService({
   context = createReadyContext(),
   ensureCurrentUserWritableThreadContext = vi.fn<EnsureCurrentUserWritableThreadContext>(),
+  ledgerAuthorsByMessageId = new Map(),
   listConversationMessagesError = null,
   pages = null,
   recoverCurrentUserWritableThreadContext = vi.fn<RecoverCurrentUserWritableThreadContext>(),
 }: {
   context?: CurrentUserChatThreadContext
   ensureCurrentUserWritableThreadContext?: EnsureCurrentUserWritableThreadContext
+  ledgerAuthorsByMessageId?: LedgerAuthorsByMessageId
   listConversationMessagesError?: Error | null
   pages?: Array<{
     hasMoreOlder: boolean
@@ -139,7 +145,9 @@ function createService({
 
   const service = createChatMessagesService({
     chatThreadsRepository: {
-      findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
+      findSendLedgerAuthorsByMessageIds: vi
+        .fn()
+        .mockResolvedValue(ledgerAuthorsByMessageId),
     },
     chatThreadsService: {
       ensureCurrentUserWritableThreadContext,
@@ -403,5 +411,54 @@ describe('chat search service', () => {
         userId: 7,
       },
     )
+  })
+
+  it('does not expose group member avatar URLs in search results', async () => {
+    const { service } = createService({
+      context: createGroupContext(),
+      ledgerAuthorsByMessageId: new Map([
+        [
+          701,
+          {
+            authorDisplayName: 'Мария Соколова',
+            userId: 8,
+          },
+        ],
+      ]),
+      pages: [
+        {
+          hasMoreOlder: false,
+          messages: [
+            createChatwootMessage({
+              content: '**Мария Соколова**\nНужен договор 123.',
+              id: 701,
+              messageType: 0,
+            }),
+          ],
+          nextOlderCursor: null,
+        },
+      ],
+    })
+
+    const response = await service.getCurrentUserChatSearch({
+      query: 'договор',
+      threadId: 'group:154',
+      userId: 7,
+    })
+
+    expect(response).toMatchObject({
+      items: [
+        expect.objectContaining({
+          authorName: 'Мария Соколова',
+          authorRole: 'group_member',
+          content: 'Нужен договор 123.',
+          messageId: 701,
+        }),
+      ],
+      reason: 'none',
+      result: 'ready',
+    })
+    expect(JSON.stringify(response.items)).not.toContain('participants/8/avatar')
+    expect(response.items[0]).not.toHaveProperty('authorAvatarUrl')
   })
 })

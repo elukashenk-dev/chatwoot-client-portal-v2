@@ -101,6 +101,7 @@ export type ChatThreadsResponse = {
 }
 
 export type ChatThreadInfoParticipant = {
+  avatarUrl: string | null
   displayName: string
   id: `portal-user:${number}`
   isCurrentUser: boolean

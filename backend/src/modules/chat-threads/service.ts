@@ -18,6 +18,7 @@ import { PRIVATE_CHAT_THREAD_ID } from './privateThread.js'
 import type { ChatThreadsRepository as PortalChatThreadsRepository } from './repository.js'
 import { createChatThreadRuntimeResolver } from './runtime.js'
 import {
+  buildPortalGroupParticipantAvatarUrl,
   buildGroupThread,
   buildPrivateThread,
   type CurrentUserChatThreads,
@@ -210,7 +211,16 @@ export function createChatThreadsService({
         continue
       }
 
+      const threadId = `group:${groupContactId}`
+      const avatarUrl = contact.avatarUrl?.trim()
+        ? buildPortalGroupParticipantAvatarUrl({
+            participantUserId: row.userId,
+            threadId,
+          })
+        : null
+
       participantRows.push({
+        avatarUrl,
         displayName: row.fullName,
         email: row.email,
         isCurrentUser: row.userId === currentUserId,

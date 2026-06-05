@@ -1,6 +1,6 @@
 # Chat Group Member Avatars Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Show portal user avatars in group chat participant lists and group message bubbles without exposing direct Chatwoot avatar URLs to the browser.
 
@@ -17,8 +17,8 @@
 - Current roadmap: `docs/roadmap/implementation-plan.md`
 - Profile avatar source slice: `docs/superpowers/specs/2026-06-05-profile-readonly-avatar-design.md`
 - Profile implementation plan: `docs/superpowers/plans/2026-06-05-profile-readonly-avatar.md`
-- Current branch for this plan: `docs/group-member-avatars-plan`
-- Required implementation branch after this docs-only plan: `feature/phase-chat-group-member-avatars`
+- Planning branch for this plan: `docs/group-member-avatars-plan`
+- Implementation branch for this plan: `feature/phase-chat-group-member-avatars`
 
 Profile avatar baseline was fast-forwarded into local `main` before this plan:
 
@@ -109,7 +109,7 @@ Docs:
 - Modify: `backend/src/modules/chat-threads/info.ts`
 - Test: `backend/src/modules/chat-threads/info.test.ts`
 
-- [ ] **Step 1: Write failing info normalization test**
+- [x] **Step 1: Write failing info normalization test**
 
 First update the existing `deduplicates and sorts safe participant rows with current user first` test so the new participant DTO contract is deterministic. Add `avatarUrl: null` to each input row and expected participant:
 
@@ -186,7 +186,7 @@ it('keeps portal-owned participant avatar URLs while deduping users', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -196,7 +196,7 @@ pnpm --dir backend test src/modules/chat-threads/info.test.ts
 
 Expected: fail because `SafeChatInfoParticipantRow` and `PublicChatThreadInfoParticipant` do not accept `avatarUrl`.
 
-- [ ] **Step 3: Add participant avatar type and helper**
+- [x] **Step 3: Add participant avatar type and helper**
 
 In `backend/src/modules/chat-threads/types.ts`, extend the participant type and add the helper next to `buildPortalThreadAvatarUrl`:
 
@@ -239,7 +239,7 @@ When setting the participant in `normalizeChatInfoParticipantRows`, include:
 avatarUrl: row.avatarUrl,
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -256,7 +256,7 @@ Expected: PASS.
 - Modify: `backend/src/modules/chat-threads/service.ts`
 - Test: `backend/src/modules/chat-threads/service.info.test.ts`
 
-- [ ] **Step 1: Write failing group info service test**
+- [x] **Step 1: Write failing group info service test**
 
 Update the test `returns group participants only for active portal users with current group access` in `backend/src/modules/chat-threads/service.info.test.ts` so contacts `44` and `55` include avatar state:
 
@@ -332,7 +332,7 @@ Then assert the third participant row has `avatarUrl: null`:
 },
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -342,7 +342,7 @@ pnpm --dir backend test src/modules/chat-threads/service.info.test.ts
 
 Expected: fail because `listSafeGroupParticipants` still pushes no participant avatar URL.
 
-- [ ] **Step 3: Build participant avatar URLs only from avatar presence**
+- [x] **Step 3: Build participant avatar URLs only from avatar presence**
 
 In `backend/src/modules/chat-threads/service.ts`, import:
 
@@ -376,7 +376,7 @@ participantRows.push({
 })
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -393,7 +393,7 @@ Expected: PASS.
 - Modify: `backend/src/modules/chat-threads/contactRepository.ts`
 - Test: `backend/src/modules/chat-threads/contactRepository.test.ts`
 
-- [ ] **Step 1: Write failing repository test**
+- [x] **Step 1: Write failing repository test**
 
 Add this test to `backend/src/modules/chat-threads/contactRepository.test.ts`:
 
@@ -460,7 +460,7 @@ it('finds an active participant contact link by portal user id in the scoped ten
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -470,7 +470,7 @@ pnpm --dir backend test src/modules/chat-threads/contactRepository.test.ts
 
 Expected: fail because `findActivePortalUserContactLinkByUserId` is missing.
 
-- [ ] **Step 3: Implement active participant lookup**
+- [x] **Step 3: Implement active participant lookup**
 
 In `backend/src/modules/chat-threads/contactRepository.ts`, add this method inside the returned repository object:
 
@@ -500,7 +500,7 @@ async findActivePortalUserContactLinkByUserId(userId: number) {
 },
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -522,7 +522,7 @@ Expected: PASS.
 - Test: `backend/src/modules/chat-messages/routes.attachment-proxy.test.ts`
 - Test support: helper inside `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`.
 
-- [ ] **Step 1: Write failing avatar proxy service tests**
+- [x] **Step 1: Write failing avatar proxy service tests**
 
 In `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`, add tests for the new service method.
 
@@ -747,7 +747,7 @@ await expect(
 ).rejects.toMatchObject({ statusCode: 404 })
 ```
 
-- [ ] **Step 2: Run the focused service test and verify RED**
+- [x] **Step 2: Run the focused service test and verify RED**
 
 Run:
 
@@ -757,7 +757,7 @@ pnpm --dir backend test src/modules/chat-messages/service.attachment-proxy.test.
 
 Expected: fail because `getCurrentUserGroupParticipantAvatar` does not exist.
 
-- [ ] **Step 3: Add service dependency**
+- [x] **Step 3: Add service dependency**
 
 In `backend/src/modules/chat-messages/avatarProxyService.ts`, import:
 
@@ -798,7 +798,7 @@ contactRepository: createChatThreadContactRepository(database.db, {
 
 to `createChatMessagesService`. Do not update unrelated `createChatMessagesService` tests just to satisfy the new option; optional DI keeps those tests scoped to their existing behavior.
 
-- [ ] **Step 4: Implement participant avatar proxy method**
+- [x] **Step 4: Implement participant avatar proxy method**
 
 In `backend/src/modules/chat-messages/avatarProxyService.ts`, add:
 
@@ -907,7 +907,7 @@ getCurrentUserGroupParticipantAvatar({
 },
 ```
 
-- [ ] **Step 5: Add route and route test**
+- [x] **Step 5: Add route and route test**
 
 In `backend/src/modules/chat-messages/avatarProxyRoutes.ts`, add params schema:
 
@@ -1005,7 +1005,7 @@ return {
 }
 ```
 
-- [ ] **Step 6: Run focused backend avatar proxy tests and verify GREEN**
+- [x] **Step 6: Run focused backend avatar proxy tests and verify GREEN**
 
 Run:
 
@@ -1022,7 +1022,7 @@ Expected: PASS.
 - Modify: `backend/src/modules/chat-messages/messageMapping.ts`
 - Test: `backend/src/modules/chat-messages/messageMapping.test.ts`
 
-- [ ] **Step 1: Write failing ledger-only avatar mapping tests**
+- [x] **Step 1: Write failing ledger-only avatar mapping tests**
 
 Add tests to `backend/src/modules/chat-messages/messageMapping.test.ts`:
 
@@ -1105,7 +1105,7 @@ it('does not infer group member avatars from parsed author names', () => {
 })
 ```
 
-- [ ] **Step 2: Run focused mapping test and verify RED**
+- [x] **Step 2: Run focused mapping test and verify RED**
 
 Run:
 
@@ -1115,7 +1115,7 @@ pnpm --dir backend test src/modules/chat-messages/messageMapping.test.ts
 
 Expected: fail because group members still get `authorAvatarUrl: null`.
 
-- [ ] **Step 3: Implement ledger-only group member avatar URL**
+- [x] **Step 3: Implement ledger-only group member avatar URL**
 
 In `backend/src/modules/chat-messages/messageMapping.ts`, import:
 
@@ -1165,7 +1165,7 @@ if (ledgerAuthor?.userId === currentUserId) {
 }
 ```
 
-- [ ] **Step 4: Run focused mapping test and verify GREEN**
+- [x] **Step 4: Run focused mapping test and verify GREEN**
 
 Run:
 
@@ -1183,7 +1183,7 @@ Expected: PASS.
 - Modify: `frontend/src/features/chat/components/ChatInfoPage.tsx`
 - Test: `frontend/src/features/chat/components/ChatInfoPage.test.tsx`
 
-- [ ] **Step 1: Write failing participant avatar UI test**
+- [x] **Step 1: Write failing participant avatar UI test**
 
 In `frontend/src/features/chat/components/ChatInfoPage.test.tsx`, update the group participants fixture:
 
@@ -1217,7 +1217,7 @@ expect(screen.getByRole('img', { name: 'Мария Соколова' })).toHaveA
 )
 ```
 
-- [ ] **Step 2: Run focused frontend test and verify RED**
+- [x] **Step 2: Run focused frontend test and verify RED**
 
 Run:
 
@@ -1227,7 +1227,7 @@ pnpm --dir frontend test src/features/chat/components/ChatInfoPage.test.tsx
 
 Expected: fail because participant rows still render initials-only spans.
 
-- [ ] **Step 3: Update frontend type and participant avatar component**
+- [x] **Step 3: Update frontend type and participant avatar component**
 
 In `frontend/src/features/chat/types.ts`, extend:
 
@@ -1272,7 +1272,7 @@ Update render call:
 />
 ```
 
-- [ ] **Step 4: Run focused frontend test and verify GREEN**
+- [x] **Step 4: Run focused frontend test and verify GREEN**
 
 Run:
 
@@ -1289,7 +1289,7 @@ Expected: PASS.
 - Modify: `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx`
 - Test: `frontend/src/features/chat/components/ChatTranscript.test.tsx`
 
-- [ ] **Step 1: Write failing transcript avatar tests**
+- [x] **Step 1: Write failing transcript avatar tests**
 
 In `frontend/src/features/chat/components/ChatTranscript.test.tsx`, migrate existing avatar selector assertions from agent-only to author-generic before adding the group member positive case.
 
@@ -1395,7 +1395,7 @@ it('keeps group member initials when no portal avatar URL is provided', () => {
 })
 ```
 
-- [ ] **Step 2: Run focused transcript test and verify RED**
+- [x] **Step 2: Run focused transcript test and verify RED**
 
 Run:
 
@@ -1405,7 +1405,7 @@ pnpm --dir frontend test src/features/chat/components/ChatTranscript.test.tsx
 
 Expected: fail because `MessageBubble` only renders avatar slots for `agent` and uses `data-agent-avatar`.
 
-- [ ] **Step 3: Generalize incoming avatar slot**
+- [x] **Step 3: Generalize incoming avatar slot**
 
 In `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx`, rename `AgentAvatar` to `AuthorAvatar` and use role-specific labels:
 
@@ -1461,7 +1461,7 @@ const shouldRenderAuthorAvatar =
 
 Replace render and max-width branches to use `hasIncomingAuthorAvatarSlot`.
 
-- [ ] **Step 4: Run focused transcript test and verify GREEN**
+- [x] **Step 4: Run focused transcript test and verify GREEN**
 
 Run:
 
@@ -1480,7 +1480,7 @@ Expected: PASS.
 - Test: `backend/src/modules/chat-messages/service.search.test.ts`
 - Test: `frontend/src/features/chat/pages/ChatPage.offline-cache.test.tsx`
 
-- [ ] **Step 1: Add service-level regression for group member avatar URL in snapshots**
+- [x] **Step 1: Add service-level regression for group member avatar URL in snapshots**
 
 In `backend/src/modules/chat-messages/service.thread-runtime.test.ts`, add a test where:
 
@@ -1499,7 +1499,7 @@ expect(snapshot.messages[0]).toMatchObject({
 })
 ```
 
-- [ ] **Step 2: Add context/search compatibility checks**
+- [x] **Step 2: Add context/search compatibility checks**
 
 For `backend/src/modules/chat-messages/service.context.test.ts` and `backend/src/modules/chat-messages/service.search.test.ts`, add narrow assertions that existing context/search mapping still succeeds with `authorAvatarUrl` present on `PortalChatMessage`, but search results remain unchanged because `PortalChatSearchResult` does not expose avatars.
 
@@ -1641,7 +1641,7 @@ Use this assertion for search responses:
 expect(JSON.stringify(response.items)).not.toContain('participants/8/avatar')
 ```
 
-- [ ] **Step 3: Add offline cache compatibility check**
+- [x] **Step 3: Add offline cache compatibility check**
 
 In `frontend/src/features/chat/pages/ChatPage.offline-cache.test.tsx`, add one cached group message with:
 
@@ -1660,7 +1660,7 @@ expect(
 ).toHaveAttribute('src', '/api/chat/threads/group%3A254/participants/8/avatar')
 ```
 
-- [ ] **Step 4: Run integration-focused tests**
+- [x] **Step 4: Run integration-focused tests**
 
 Run:
 
@@ -1678,7 +1678,7 @@ Expected: PASS.
 - Create or modify: `tests/e2e/chat-group-member-avatars.spec.ts`
 - Use existing helpers in `tests/e2e/support/`.
 
-- [ ] **Step 1: Check whether the local e2e harness can seed group member avatars**
+- [x] **Step 1: Check whether the local e2e harness can seed group member avatars**
 
 Inspect:
 
@@ -1689,7 +1689,7 @@ sed -n '1,260p' tests/e2e/profile-page.spec.ts
 
 If helpers can create/update portal users and linked Chatwoot contacts, proceed with the smoke. If they cannot reliably seed a second group participant with an avatar, do not invent a brittle Chatwoot setup path; record the e2e blocker in the final response and rely on backend/frontend automated coverage for this slice.
 
-- [ ] **Step 2: Add e2e smoke when seeding is supported**
+- [x] **Step 2: Add e2e smoke when seeding is supported**
 
 Create `tests/e2e/chat-group-member-avatars.spec.ts` with this flow:
 
@@ -1730,7 +1730,7 @@ await expect(
 ).toBeVisible()
 ```
 
-- [ ] **Step 3: Run the e2e smoke or record blocker**
+- [x] **Step 3: Run the e2e smoke or record blocker**
 
 Run when supported:
 
@@ -1752,7 +1752,7 @@ Playwright group avatar smoke was not added because the current e2e harness does
 
 - Modify: `docs/roadmap/work-log.md` only after implementation and verification are done.
 
-- [ ] **Step 1: Run targeted backend tests**
+- [x] **Step 1: Run targeted backend tests**
 
 Run:
 
@@ -1762,7 +1762,7 @@ pnpm --dir backend test src/modules/chat-threads/info.test.ts src/modules/chat-t
 
 Expected: PASS.
 
-- [ ] **Step 2: Run targeted frontend tests**
+- [x] **Step 2: Run targeted frontend tests**
 
 Run:
 
@@ -1772,7 +1772,7 @@ pnpm --dir frontend test src/features/chat/components/ChatInfoPage.test.tsx src/
 
 Expected: PASS.
 
-- [ ] **Step 3: Run type/build/lint checks**
+- [x] **Step 3: Run type/build/lint checks**
 
 Run:
 
@@ -1785,7 +1785,7 @@ git diff --check
 
 Expected: all commands PASS with no whitespace errors.
 
-- [ ] **Step 4: Run required browser check**
+- [x] **Step 4: Run required browser check**
 
 Run the new e2e smoke if added:
 
@@ -1797,7 +1797,7 @@ Expected: PASS.
 
 If the smoke is blocked by test harness readiness, keep the blocker text from Task 9 in the final response.
 
-- [ ] **Step 5: Code review the touched area**
+- [x] **Step 5: Code review the touched area**
 
 Review for these concrete failure modes:
 
@@ -1812,7 +1812,7 @@ Review for these concrete failure modes:
 - frontend ignores unsafe cached direct Chatwoot avatar URLs;
 - no `portal_chat_threads` or send ledger schema migration is added.
 
-- [ ] **Step 6: Update work log after closure**
+- [x] **Step 6: Update work log after closure**
 
 Append a short completed baseline entry to `docs/roadmap/work-log.md` and keep a single final `Recommended Next Step` block.
 
@@ -1825,7 +1825,7 @@ Use wording in this style:
   no direct Chatwoot asset URLs.
 ```
 
-- [ ] **Step 7: Check git status before checkpoint commit**
+- [x] **Step 7: Check git status before checkpoint commit**
 
 Run:
 
@@ -1839,7 +1839,7 @@ Expected:
 - only files from this slice are modified;
 - no `.env`, `node_modules`, `dist`, `playwright-report`, `test-results`, or runtime artifacts are present.
 
-- [ ] **Step 8: Create checkpoint commit**
+- [x] **Step 8: Create checkpoint commit**
 
 Commit after all checks and review findings are closed:
 
@@ -1859,6 +1859,7 @@ git add \
   backend/src/modules/chat-messages/messageMapping.test.ts \
   backend/src/modules/chat-messages/service.attachment-proxy.test.ts \
   backend/src/modules/chat-messages/routes.attachment-proxy.test.ts \
+  backend/src/modules/chat-messages/routes.test.ts \
   backend/src/modules/chat-messages/service.thread-runtime.test.ts \
   backend/src/modules/chat-messages/service.context.test.ts \
   backend/src/modules/chat-messages/service.search.test.ts \
@@ -1869,11 +1870,15 @@ git add \
   frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx \
   frontend/src/features/chat/components/ChatTranscript.test.tsx \
   frontend/src/features/chat/pages/ChatPage.offline-cache.test.tsx \
+  tests/e2e/chat-group-member-avatars.spec.ts \
+  docs/superpowers/plans/2026-06-05-chat-group-member-avatars.md \
   docs/roadmap/work-log.md
 git commit -m "feat(chat): show group member avatars"
 ```
 
-If `tests/e2e/chat-group-member-avatars.spec.ts` was created in Task 9, include that exact file in the `git add` command. If Task 9 recorded the Playwright harness blocker instead, do not add any `tests/e2e` path.
+If Task 9 recorded the Playwright harness blocker instead of creating
+`tests/e2e/chat-group-member-avatars.spec.ts`, do not add any `tests/e2e`
+path.
 
 Expected: commit created on `feature/phase-chat-group-member-avatars`.
 

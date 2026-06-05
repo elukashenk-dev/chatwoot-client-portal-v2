@@ -51,6 +51,11 @@ async function buildAttachmentProxyRoutesTestApp({
     }),
     status: 200,
   }),
+  getCurrentUserGroupParticipantAvatar = vi.fn().mockResolvedValue({
+    body: new Response('participant-avatar-bytes').body,
+    headers: new Headers({ 'content-type': 'image/png' }),
+    status: 200,
+  }),
   getCurrentUserThreadAvatar = vi.fn().mockResolvedValue({
     body: new Response('thread-avatar-bytes').body,
     headers: new Headers({
@@ -61,6 +66,7 @@ async function buildAttachmentProxyRoutesTestApp({
 }: {
   getCurrentUserChatAttachment?: ChatMessagesService['getCurrentUserChatAttachment']
   getCurrentUserChatMessageAvatar?: ChatMessagesService['getCurrentUserChatMessageAvatar']
+  getCurrentUserGroupParticipantAvatar?: ChatMessagesService['getCurrentUserGroupParticipantAvatar']
   getCurrentUserThreadAvatar?: ChatMessagesService['getCurrentUserThreadAvatar']
 } = {}) {
   const app = Fastify({ logger: false })
@@ -90,6 +96,7 @@ async function buildAttachmentProxyRoutesTestApp({
       ({
         getCurrentUserChatAttachment,
         getCurrentUserChatMessageAvatar,
+        getCurrentUserGroupParticipantAvatar,
         getCurrentUserThreadAvatar,
       }) as unknown as ChatMessagesService,
     env: testEnv,
@@ -100,6 +107,7 @@ async function buildAttachmentProxyRoutesTestApp({
     app,
     getCurrentUserChatAttachment,
     getCurrentUserChatMessageAvatar,
+    getCurrentUserGroupParticipantAvatar,
     getCurrentUserThreadAvatar,
   }
 }
@@ -186,6 +194,33 @@ describe('chat attachment proxy routes', () => {
       expect(response.headers['content-type']).toBe('image/png')
       expect(response.headers['cache-control']).toBe('private, no-store')
       expect(getCurrentUserThreadAvatar).toHaveBeenCalledWith({
+        threadId: 'group:154',
+        userId: 7,
+      })
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('streams group participant avatar content through the message service', async () => {
+    const { app, getCurrentUserGroupParticipantAvatar } =
+      await buildAttachmentProxyRoutesTestApp()
+
+    try {
+      const response = await app.inject({
+        headers: {
+          cookie: createAuthorizedCookie(app),
+        },
+        method: 'GET',
+        url: '/api/chat/threads/group%3A154/participants/8/avatar',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.payload).toBe('participant-avatar-bytes')
+      expect(response.headers['content-type']).toBe('image/png')
+      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(getCurrentUserGroupParticipantAvatar).toHaveBeenCalledWith({
+        participantUserId: 8,
         threadId: 'group:154',
         userId: 7,
       })

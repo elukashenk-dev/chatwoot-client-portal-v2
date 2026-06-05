@@ -53,6 +53,7 @@ async function buildMessagesRoutesTestApp({
   const chatMessagesService = {
     getCurrentUserChatAttachment: vi.fn(),
     getCurrentUserChatMessageAvatar: vi.fn(),
+    getCurrentUserGroupParticipantAvatar: vi.fn(),
     getCurrentUserChatMedia: vi.fn().mockResolvedValue({
       activeThread: null,
       hasMoreOlder: false,

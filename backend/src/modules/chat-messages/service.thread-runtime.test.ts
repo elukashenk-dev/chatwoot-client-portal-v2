@@ -252,6 +252,56 @@ describe('createChatMessagesService thread runtime integration', () => {
     })
   })
 
+  it('exposes group member avatar URLs for ledger-backed incoming history', async () => {
+    const service = createThreadBackedMessageService({
+      authors: new Map([
+        [
+          701,
+          {
+            authorDisplayName: 'Мария Соколова',
+            userId: 8,
+          },
+        ],
+      ]),
+      chatwootClient: createChatwootClientStub({
+        listConversationMessages: vi.fn().mockResolvedValue({
+          hasMoreOlder: false,
+          messages: [
+            {
+              ...sentChatwootMessage,
+              content: '**Мария Соколова**\nНужен договор 123.',
+              id: 701,
+              messageType: 0,
+              sender: {
+                id: 154,
+                name: 'ООО "Ромашка"',
+                type: 'contact',
+              },
+            },
+          ],
+          nextOlderCursor: null,
+        }),
+      }),
+    })
+
+    await expect(
+      service.getCurrentUserChatMessages({
+        threadId: 'group:154',
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      messages: [
+        {
+          authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+          authorName: 'Мария Соколова',
+          authorRole: 'group_member',
+          content: 'Нужен договор 123.',
+          direction: 'incoming',
+        },
+      ],
+    })
+  })
+
   it('does not read group history after membership is removed', async () => {
     const listConversationMessages = vi.fn()
     const service = createThreadBackedMessageService({

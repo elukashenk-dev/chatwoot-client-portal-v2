@@ -144,7 +144,7 @@ describe('ChatTranscript', () => {
       'gap-2.5',
     )
 
-    expect(container.querySelector('[data-agent-avatar]')).toBeNull()
+    expect(container.querySelector('[data-author-avatar]')).toBeNull()
     expect(getBubble(container, 1)).toHaveClass('rounded-[0.7rem]')
     expect(getBubble(container, 1)).not.toHaveClass('rounded-tr-[0.4rem]')
     expect(getBubble(container, 1)).not.toHaveClass('rounded-br-[0.3rem]')
@@ -230,7 +230,7 @@ describe('ChatTranscript', () => {
     expect(getBubble(container, 1)).toContainElement(
       getMessageMeta(container, 1),
     )
-    const avatars = container.querySelectorAll('[data-agent-avatar]')
+    const avatars = container.querySelectorAll('[data-author-avatar]')
     expect(avatars).toHaveLength(1)
     expect(avatars[0]).toHaveAttribute('aria-label', 'Агент Ольга Support')
     expect(avatars[0]).not.toHaveTextContent('ОS')
@@ -266,14 +266,51 @@ describe('ChatTranscript', () => {
       }),
     ])
 
-    const avatar = container.querySelector('[data-agent-avatar]')
+    const avatar = container.querySelector('[data-author-avatar]')
     expect(avatar).toHaveTextContent('ОS')
     expect(avatar?.querySelector('img')).toBeNull()
   })
 
-  it('renders a group member header without an agent avatar', () => {
+  it('renders a group member portal-proxy avatar image on the first incoming bubble', () => {
     const { container } = renderTranscript([
       createMessage({
+        authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+        authorName: 'Мария Соколова',
+        authorRole: 'group_member',
+        content: 'Сообщение из общего чата',
+        direction: 'incoming',
+        id: 1,
+      }),
+      createMessage({
+        authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+        authorName: 'Мария Соколова',
+        authorRole: 'group_member',
+        content: 'Следующее сообщение',
+        direction: 'incoming',
+        id: 2,
+      }),
+    ])
+
+    expect(getMessageHeader(container, 1)).toHaveTextContent('Мария Соколова')
+    expect(getMessageHeader(container, 2)).toBeNull()
+
+    const avatars = container.querySelectorAll('[data-author-avatar]')
+    expect(avatars).toHaveLength(1)
+    expect(avatars[0]).toHaveAttribute('aria-label', 'Участник Мария Соколова')
+    expect(avatars[0]?.querySelector('img')).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A154/participants/8/avatar',
+    )
+    expect(getBubble(container, 1)).toHaveClass(
+      'chat-incoming-surface',
+      'text-slate-700',
+    )
+  })
+
+  it('keeps group member initials when no portal avatar URL is provided', () => {
+    const { container } = renderTranscript([
+      createMessage({
+        authorAvatarUrl: null,
         authorName: 'Иван Петров',
         authorRole: 'group_member',
         content: 'Сообщение из общего чата',
@@ -282,12 +319,10 @@ describe('ChatTranscript', () => {
       }),
     ])
 
-    expect(getMessageHeader(container, 1)).toHaveTextContent('Иван Петров')
-    expect(container.querySelector('[data-agent-avatar]')).toBeNull()
-    expect(getBubble(container, 1)).toHaveClass(
-      'chat-incoming-surface',
-      'text-slate-700',
-    )
+    const avatar = container.querySelector('[data-author-avatar]')
+    expect(avatar).toHaveAttribute('aria-label', 'Участник Иван Петров')
+    expect(avatar).toHaveTextContent('ИП')
+    expect(avatar?.querySelector('img')).toBeNull()
   })
 
   it('renders reply previews inside bubbles without persistent reply buttons', () => {

@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { ChatwootMessage } from '../../integrations/chatwoot/client.js'
+import type {
+  ChatwootClient,
+  ChatwootMessage,
+} from '../../integrations/chatwoot/client.js'
+import type { ChatThreadContactRepository } from '../chat-threads/contactRepository.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import { createChatMessagesService } from './service.js'
+
+type ContactRepositoryStub = Pick<
+  ChatThreadContactRepository,
+  'findActivePortalUserContactLinkByUserId'
+>
+type FindContactById = ChatwootClient['findContactById']
 
 const readyContext = {
   activeThread: {
@@ -92,14 +102,28 @@ function createService({
     }),
   ),
   attachmentRequestTimeoutMs = undefined,
+  contactRepository = {
+    findActivePortalUserContactLinkByUserId: vi
+      .fn<ContactRepositoryStub['findActivePortalUserContactLinkByUserId']>()
+      .mockResolvedValue(null),
+  },
   context = readyContext,
+  findContactById = vi.fn<FindContactById>().mockResolvedValue({
+    avatarUrl: 'https://chatwoot.test/rails/active_storage/group-avatar.png',
+    email: 'office@example.test',
+    id: 154,
+    name: 'Бухгалтерия',
+    phoneNumber: null,
+  }),
   message = createChatwootMessage(),
 }: {
   attachmentAllowedOrigins?: string[]
   attachmentAllowPrivateNetwork?: boolean
   attachmentFetchFn?: typeof fetch
   attachmentRequestTimeoutMs?: number
+  contactRepository?: ContactRepositoryStub
   context?: CurrentUserChatThreadContext
+  findContactById?: ReturnType<typeof vi.fn<FindContactById>>
   message?: ChatwootMessage | null
 } = {}) {
   const chatThreadsService = {
@@ -108,16 +132,11 @@ function createService({
     recoverCurrentUserWritableThreadContext: vi.fn(),
   }
   const findConversationMessageById = vi.fn().mockResolvedValue(message)
-  const findContactById = vi.fn().mockResolvedValue({
-    avatarUrl: 'https://chatwoot.test/rails/active_storage/group-avatar.png',
-    email: 'office@example.test',
-    id: 154,
-    name: 'Бухгалтерия',
-  })
 
   return {
     attachmentFetchFn,
     chatThreadsService,
+    contactRepository,
     findContactById,
     findConversationMessageById,
     service: createChatMessagesService({
@@ -126,6 +145,7 @@ function createService({
       attachmentFetchFn,
       attachmentRequestTimeoutMs,
       chatMessagesRepository: null,
+      contactRepository,
       chatThreadsRepository: {
         findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
       },
@@ -234,6 +254,169 @@ describe('chat attachment proxy service', () => {
     expect(result.status).toBe(206)
     expect(result.headers.get('content-type')).toBe('image/png')
     await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
+  })
+
+  it('streams a group participant avatar through a backend-owned fetch', async () => {
+    const context = {
+      ...readyContext,
+      targetChatwootContactId: 154,
+      threadType: 'group',
+    } satisfies CurrentUserChatThreadContext
+    const contactRepository = {
+      findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+        chatwootContactId: 55,
+        userId: 8,
+      }),
+    }
+    const findContactById = vi.fn(async (contactId: number) => {
+      if (contactId === 55) {
+        return {
+          avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
+          customAttributes: {
+            portal_client_group_contact_ids: '154',
+            portal_contact_type: 'person',
+            portal_enabled: true,
+          },
+          email: 'maria@example.test',
+          id: 55,
+          name: 'Мария Соколова',
+          phoneNumber: null,
+        }
+      }
+
+      return null
+    })
+    const { attachmentFetchFn, service } = createService({
+      contactRepository,
+      context,
+      findContactById,
+    })
+
+    const result = await service.getCurrentUserGroupParticipantAvatar({
+      participantUserId: 8,
+      threadId: 'group:154',
+      userId: 7,
+    })
+
+    expect(
+      contactRepository.findActivePortalUserContactLinkByUserId,
+    ).toHaveBeenCalledWith(8)
+    expect(findContactById).toHaveBeenCalledWith(55)
+    expect(attachmentFetchFn).toHaveBeenCalledWith(
+      'https://chatwoot.test/rails/active_storage/maria.png',
+      expect.any(Object),
+    )
+    expect(result.status).toBe(206)
+    expect(result.headers.get('content-type')).toBe('image/png')
+    await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
+  })
+
+  it('rejects group participant avatars for private threads', async () => {
+    const contactRepository = {
+      findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+        chatwootContactId: 55,
+        userId: 8,
+      }),
+    }
+    const privateReadyContext = {
+      ...readyContext,
+      activeThread: {
+        id: 'private:me',
+        subtitle: 'Вы и поддержка',
+        title: 'Личный чат',
+        type: 'private',
+      },
+      linkedContactId: 44,
+      targetChatwootContactId: 44,
+      threadType: 'private',
+    } satisfies CurrentUserChatThreadContext
+    const { service } = createService({
+      contactRepository,
+      context: privateReadyContext,
+    })
+
+    await expect(
+      service.getCurrentUserGroupParticipantAvatar({
+        participantUserId: 8,
+        threadId: 'private:me',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('rejects group participant avatars without an active participant link', async () => {
+    const contactRepository = {
+      findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue(null),
+    }
+    const { service } = createService({ contactRepository })
+
+    await expect(
+      service.getCurrentUserGroupParticipantAvatar({
+        participantUserId: 8,
+        threadId: 'group:154',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('rejects group participant avatars when membership no longer includes the group', async () => {
+    const contactRepository = {
+      findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+        chatwootContactId: 55,
+        userId: 8,
+      }),
+    }
+    const { findContactById, service } = createService({ contactRepository })
+    findContactById.mockResolvedValueOnce({
+      avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
+      customAttributes: {
+        portal_client_group_contact_ids: '',
+        portal_contact_type: 'person',
+        portal_enabled: true,
+      },
+      email: 'maria@example.test',
+      id: 55,
+      name: 'Мария Соколова',
+      phoneNumber: null,
+    })
+
+    await expect(
+      service.getCurrentUserGroupParticipantAvatar({
+        participantUserId: 8,
+        threadId: 'group:154',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('rejects group participant avatars when the participant has no avatar', async () => {
+    const contactRepository = {
+      findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+        chatwootContactId: 55,
+        userId: 8,
+      }),
+    }
+    const { findContactById, service } = createService({ contactRepository })
+    findContactById.mockResolvedValueOnce({
+      avatarUrl: null,
+      customAttributes: {
+        portal_client_group_contact_ids: '154',
+        portal_contact_type: 'person',
+        portal_enabled: true,
+      },
+      email: 'maria@example.test',
+      id: 55,
+      name: 'Мария Соколова',
+      phoneNumber: null,
+    })
+
+    await expect(
+      service.getCurrentUserGroupParticipantAvatar({
+        participantUserId: 8,
+        threadId: 'group:154',
+        userId: 7,
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it('allows equivalent loopback attachment origins only when private-network proxying is enabled', async () => {

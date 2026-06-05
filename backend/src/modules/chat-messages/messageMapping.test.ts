@@ -146,4 +146,81 @@ describe('mapPortalMessage', () => {
       status: 'sent',
     })
   })
+
+  it('maps ledger-known group member avatars to portal participant avatar URLs', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: '**Мария Соколова**\nДобрый день',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 701,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 154,
+          name: 'ООО "Ромашка"',
+          type: 'contact',
+        },
+        sourceId: 'portal-send:member-key',
+        status: 'sent',
+      },
+      {
+        currentUserId: 7,
+        ledgerAuthorsByMessageId: new Map([
+          [
+            701,
+            {
+              authorDisplayName: 'Мария Соколова',
+              userId: 8,
+            },
+          ],
+        ]),
+        threadId: 'group:154',
+        threadType: 'group',
+      },
+    )
+
+    expect(message).toMatchObject({
+      authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+      authorName: 'Мария Соколова',
+      authorRole: 'group_member',
+      direction: 'incoming',
+    })
+  })
+
+  it('does not infer group member avatars from parsed author names', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: '**Мария Соколова**\nДобрый день',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 702,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 154,
+          name: 'ООО "Ромашка"',
+          type: 'contact',
+        },
+        sourceId: null,
+        status: 'sent',
+      },
+      {
+        currentUserId: 7,
+        ledgerAuthorsByMessageId: new Map(),
+        threadId: 'group:154',
+        threadType: 'group',
+      },
+    )
+
+    expect(message).toMatchObject({
+      authorAvatarUrl: null,
+      authorName: 'Мария Соколова',
+      authorRole: 'group_member',
+    })
+  })
 })

@@ -107,6 +107,67 @@ describe('createChatThreadContactRepository', () => {
         fullName: 'Иван Петров',
         userId: activeUser.id,
       },
+      ])
+  })
+
+  it('finds an active participant contact link by portal user id in the scoped tenant', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const otherTenant = await seedTestTenant(database.db, {
+      primaryDomain: 'other.localhost',
+      slug: 'other',
+    })
+    const activeUser = await createUser({
+      database,
+      email: 'ivan@example.test',
+      fullName: 'Иван Петров',
+      tenantId: tenant.id,
+    })
+    const inactiveUser = await createUser({
+      database,
+      email: 'inactive@example.test',
+      fullName: 'Отключенный пользователь',
+      isActive: false,
+      tenantId: tenant.id,
+    })
+    const otherTenantUser = await createUser({
+      database,
+      email: 'other@example.test',
+      fullName: 'Другой tenant',
+      tenantId: otherTenant.id,
+    })
+    const repository = createChatThreadContactRepository(database.db, {
+      tenantId: tenant.id,
+    })
+
+    await database.db.insert(portalUserContactLinks).values([
+      {
+        chatwootContactId: 44,
+        tenantId: tenant.id,
+        userId: activeUser.id,
+      },
+      {
+        chatwootContactId: 55,
+        tenantId: tenant.id,
+        userId: inactiveUser.id,
+      },
+      {
+        chatwootContactId: 66,
+        tenantId: otherTenant.id,
+        userId: otherTenantUser.id,
+      },
     ])
+
+    await expect(
+      repository.findActivePortalUserContactLinkByUserId(activeUser.id),
+    ).resolves.toEqual({
+      chatwootContactId: 44,
+      userId: activeUser.id,
+    })
+    await expect(
+      repository.findActivePortalUserContactLinkByUserId(inactiveUser.id),
+    ).resolves.toBeNull()
+    await expect(
+      repository.findActivePortalUserContactLinkByUserId(otherTenantUser.id),
+    ).resolves.toBeNull()
   })
 })
