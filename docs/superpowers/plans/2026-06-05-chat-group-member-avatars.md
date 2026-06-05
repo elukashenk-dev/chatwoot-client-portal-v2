@@ -35,7 +35,7 @@ Implement approach 2:
 - show avatars in the group `Участники портала` list on `Информация о чате`;
 - show avatars next to `group_member` message bubbles in the transcript;
 - show a group member avatar in messages only when the author is known through `portal_chat_message_sends`;
-- keep initials fallback when there is no avatar, the proxy fails, or the group member author is unknown;
+- keep initials fallback when there is no avatar, the proxy fails, or the group member author is unknown; for message bubbles, avatar absence is discovered by the participant-avatar proxy/image failure because message mapping intentionally does not call Chatwoot contacts;
 - never expose raw Chatwoot URLs, Chatwoot contact IDs, Chatwoot account IDs, or Chatwoot authority to the browser.
 
 Non-goals:
@@ -51,7 +51,7 @@ Non-goals:
 Backend:
 
 - Modify `backend/src/modules/chat-threads/types.ts`
-  - Add `avatarUrl` to `PublicChatThreadInfoParticipant`.
+  - Add required `avatarUrl: string | null` to `PublicChatThreadInfoParticipant`.
   - Add `buildPortalGroupParticipantAvatarUrl(threadId, participantUserId)`.
 - Modify `backend/src/modules/chat-threads/info.ts`
   - Carry participant `avatarUrl` through dedupe/sort normalization.
@@ -77,12 +77,12 @@ Backend:
   - `backend/src/modules/chat-messages/messageMapping.test.ts`
   - `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`
   - `backend/src/modules/chat-messages/routes.attachment-proxy.test.ts`
-  - existing chat message service test-support files that construct `createChatMessagesService`.
+  - `backend/src/modules/chat-messages/service.attachment-proxy.test.ts` helper only for the new optional proxy dependency.
 
 Frontend:
 
 - Modify `frontend/src/features/chat/types.ts`
-  - Add `avatarUrl?: string | null` to `ChatThreadInfoParticipant`.
+  - Add required `avatarUrl: string | null` to `ChatThreadInfoParticipant`.
 - Modify `frontend/src/features/chat/components/ChatInfoPage.tsx`
   - Render participant avatars with `ChatAvatar`.
 - Modify `frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx`
@@ -111,7 +111,50 @@ Docs:
 
 - [ ] **Step 1: Write failing info normalization test**
 
-Add a test case to `backend/src/modules/chat-threads/info.test.ts` near existing participant normalization tests:
+First update the existing `deduplicates and sorts safe participant rows with current user first` test so the new participant DTO contract is deterministic. Add `avatarUrl: null` to each input row and expected participant:
+
+```ts
+expect(
+  normalizeChatInfoParticipantRows([
+    {
+      avatarUrl: null,
+      displayName: 'Мария Соколова',
+      email: 'maria@example.test',
+      isCurrentUser: false,
+      userId: 8,
+    },
+    {
+      avatarUrl: null,
+      displayName: null,
+      email: 'ivan@example.test',
+      isCurrentUser: true,
+      userId: 7,
+    },
+    {
+      avatarUrl: null,
+      displayName: 'Мария Соколова',
+      email: 'maria@example.test',
+      isCurrentUser: false,
+      userId: 8,
+    },
+  ]),
+).toEqual([
+  {
+    avatarUrl: null,
+    displayName: 'ivan@example.test',
+    id: 'portal-user:7',
+    isCurrentUser: true,
+  },
+  {
+    avatarUrl: null,
+    displayName: 'Мария Соколова',
+    id: 'portal-user:8',
+    isCurrentUser: false,
+  },
+])
+```
+
+Then add a test case to `backend/src/modules/chat-threads/info.test.ts` near existing participant normalization tests:
 
 ```ts
 it('keeps portal-owned participant avatar URLs while deduping users', () => {
@@ -159,7 +202,7 @@ In `backend/src/modules/chat-threads/types.ts`, extend the participant type and 
 
 ```ts
 export type PublicChatThreadInfoParticipant = {
-  avatarUrl?: string | null
+  avatarUrl: string | null
   displayName: string
   id: `portal-user:${number}`
   isCurrentUser: boolean
@@ -248,7 +291,46 @@ participants: [
 ],
 ```
 
-Add one more participant contact with the same group membership but no `avatarUrl`, and assert its participant row has `avatarUrl: null`.
+Add one more active participant contact with the same group membership but no `avatarUrl`. In `contactsById`, add contact `77`:
+
+```ts
+[
+  77,
+  {
+    customAttributes: {
+      portal_client_group_contact_ids: '154',
+      portal_contact_type: 'person',
+      portal_enabled: true,
+    },
+    email: 'petr@example.test',
+    id: 77,
+    name: 'Петр Без Фото',
+    phoneNumber: null,
+  },
+],
+```
+
+Add its portal link to `listActivePortalUserContactLinks`:
+
+```ts
+{
+  chatwootContactId: 77,
+  email: 'petr@example.test',
+  fullName: 'Петр Без Фото',
+  userId: 10,
+},
+```
+
+Then assert the third participant row has `avatarUrl: null`:
+
+```ts
+{
+  avatarUrl: null,
+  displayName: 'Петр Без Фото',
+  id: 'portal-user:10',
+  isCurrentUser: false,
+},
+```
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
@@ -438,17 +520,66 @@ Expected: PASS.
 - Modify: `backend/src/app.ts`
 - Test: `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`
 - Test: `backend/src/modules/chat-messages/routes.attachment-proxy.test.ts`
-- Test support: `backend/src/modules/chat-messages/service.testSupport.ts` and any other service test file that constructs `createChatMessagesService`.
+- Test support: helper inside `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`.
 
 - [ ] **Step 1: Write failing avatar proxy service tests**
 
 In `backend/src/modules/chat-messages/service.attachment-proxy.test.ts`, add tests for the new service method.
 
+First extend the local `createService` helper so only this focused file needs the new dependency during tests. Existing `createChatMessagesService` call sites should not need mass updates because the service dependency added in Step 3 is optional:
+
+Add this destructured option next to `attachmentRequestTimeoutMs`:
+
+```ts
+contactRepository = {
+  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue(null),
+},
+```
+
+Add this option type next to `attachmentRequestTimeoutMs?: number`:
+
+```ts
+contactRepository?: {
+  findActivePortalUserContactLinkByUserId: ReturnType<typeof vi.fn>
+}
+```
+
+Move the existing local `findContactById` stub into the helper options so participant-avatar tests can override the returned Chatwoot contact. Add this destructured option next to `context = readyContext`:
+
+```ts
+findContactById = vi.fn().mockResolvedValue({
+  avatarUrl: 'https://chatwoot.test/rails/active_storage/group-avatar.png',
+  email: 'office@example.test',
+  id: 154,
+  name: 'Бухгалтерия',
+}),
+```
+
+Add this option type:
+
+```ts
+findContactById?: ReturnType<typeof vi.fn>
+```
+
+Then remove the old local `const findContactById = vi.fn().mockResolvedValue(...)` declaration from inside the helper body; the existing `chatwootClient` object should keep using the `findContactById` variable.
+
+The helper call to `createChatMessagesService` must include:
+
+```ts
+contactRepository,
+```
+
+The helper return object must include the stub so tests can assert calls; add this property next to `chatThreadsService`:
+
+```ts
+contactRepository,
+```
+
 The happy-path test should arrange:
 
 ```ts
 const context = {
-  ...readyGroupContext,
+  ...readyContext,
   targetChatwootContactId: 154,
   threadType: 'group',
 }
@@ -481,6 +612,12 @@ const findContactById = vi.fn(async (contactId: number) => {
 Then assert:
 
 ```ts
+const { attachmentFetchFn, service } = createService({
+  contactRepository,
+  context,
+  findContactById,
+})
+
 const result = await service.getCurrentUserGroupParticipantAvatar({
   participantUserId: 8,
   threadId: 'group:154',
@@ -503,6 +640,29 @@ await expect(new Response(result.body).text()).resolves.toBe('proxy-body')
 Add failure tests:
 
 ```ts
+const contactRepository = {
+  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+    chatwootContactId: 55,
+    userId: 8,
+  }),
+}
+const privateReadyContext = {
+  ...readyContext,
+  activeThread: {
+    id: 'private:me',
+    subtitle: 'Вы и поддержка',
+    title: 'Личный чат',
+    type: 'private',
+  },
+  linkedContactId: 44,
+  targetChatwootContactId: 44,
+  threadType: 'private',
+} satisfies CurrentUserChatThreadContext
+const { service } = createService({
+  contactRepository,
+  context: privateReadyContext,
+})
+
 await expect(
   service.getCurrentUserGroupParticipantAvatar({
     participantUserId: 8,
@@ -513,9 +673,10 @@ await expect(
 ```
 
 ```ts
-contactRepository.findActivePortalUserContactLinkByUserId.mockResolvedValueOnce(
-  null,
-)
+const contactRepository = {
+  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue(null),
+}
+const { service } = createService({ contactRepository })
 
 await expect(
   service.getCurrentUserGroupParticipantAvatar({
@@ -527,6 +688,13 @@ await expect(
 ```
 
 ```ts
+const contactRepository = {
+  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+    chatwootContactId: 55,
+    userId: 8,
+  }),
+}
+const { findContactById, service } = createService({ contactRepository })
 findContactById.mockResolvedValueOnce({
   avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
   customAttributes: {
@@ -550,6 +718,13 @@ await expect(
 ```
 
 ```ts
+const contactRepository = {
+  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue({
+    chatwootContactId: 55,
+    userId: 8,
+  }),
+}
+const { findContactById, service } = createService({ contactRepository })
 findContactById.mockResolvedValueOnce({
   avatarUrl: null,
   customAttributes: {
@@ -580,7 +755,7 @@ Run:
 pnpm --dir backend test src/modules/chat-messages/service.attachment-proxy.test.ts
 ```
 
-Expected: fail because `getCurrentUserGroupParticipantAvatar` and the contact repository dependency do not exist.
+Expected: fail because `getCurrentUserGroupParticipantAvatar` does not exist.
 
 - [ ] **Step 3: Add service dependency**
 
@@ -594,7 +769,7 @@ import type { ChatThreadContactRepository } from '../chat-threads/contactReposit
 Extend `ChatAvatarProxyDependencies`:
 
 ```ts
-contactRepository: Pick<
+contactRepository?: Pick<
   ChatThreadContactRepository,
   'findActivePortalUserContactLinkByUserId'
 >
@@ -603,7 +778,7 @@ contactRepository: Pick<
 In `backend/src/modules/chat-messages/service.ts`, extend `CreateChatMessagesServiceOptions` with:
 
 ```ts
-contactRepository: Pick<
+contactRepository?: Pick<
   ChatThreadContactRepository,
   'findActivePortalUserContactLinkByUserId'
 >
@@ -621,15 +796,7 @@ contactRepository: createChatThreadContactRepository(database.db, {
 }),
 ```
 
-to `createChatMessagesService`.
-
-Update all `createChatMessagesService` test stubs with:
-
-```ts
-contactRepository: {
-  findActivePortalUserContactLinkByUserId: vi.fn().mockResolvedValue(null),
-},
-```
+to `createChatMessagesService`. Do not update unrelated `createChatMessagesService` tests just to satisfy the new option; optional DI keeps those tests scoped to their existing behavior.
 
 - [ ] **Step 4: Implement participant avatar proxy method**
 
@@ -666,7 +833,7 @@ export async function getCurrentUserGroupParticipantAvatarFromService({
   }
 
   try {
-    if (!chatwootClient.findContactById) {
+    if (!chatwootClient.findContactById || !contactRepository) {
       throw createAvatarUnavailableError()
     }
 
@@ -818,6 +985,24 @@ getCurrentUserGroupParticipantAvatar: vi.fn().mockResolvedValue({
   headers: new Headers({ 'content-type': 'image/png' }),
   status: 200,
 }),
+```
+
+Also add `getCurrentUserGroupParticipantAvatar` to the helper parameter type:
+
+```ts
+getCurrentUserGroupParticipantAvatar?: ChatMessagesService['getCurrentUserGroupParticipantAvatar']
+```
+
+And return it from `buildAttachmentProxyRoutesTestApp` next to the other service stubs:
+
+```ts
+return {
+  app,
+  getCurrentUserChatAttachment,
+  getCurrentUserChatMessageAvatar,
+  getCurrentUserGroupParticipantAvatar,
+  getCurrentUserThreadAvatar,
+}
 ```
 
 - [ ] **Step 6: Run focused backend avatar proxy tests and verify GREEN**
@@ -1048,7 +1233,7 @@ In `frontend/src/features/chat/types.ts`, extend:
 
 ```ts
 export type ChatThreadInfoParticipant = {
-  avatarUrl?: string | null
+  avatarUrl: string | null
   displayName: string
   id: `portal-user:${number}`
   isCurrentUser: boolean
@@ -1106,7 +1291,45 @@ Expected: PASS.
 
 - [ ] **Step 1: Write failing transcript avatar tests**
 
-In `frontend/src/features/chat/components/ChatTranscript.test.tsx`, replace the existing group member avatar expectation with a positive case:
+In `frontend/src/features/chat/components/ChatTranscript.test.tsx`, migrate existing avatar selector assertions from agent-only to author-generic before adding the group member positive case.
+
+In the outgoing-bubbles test, replace:
+
+```ts
+expect(container.querySelector('[data-agent-avatar]')).toBeNull()
+```
+
+with:
+
+```ts
+expect(container.querySelector('[data-author-avatar]')).toBeNull()
+```
+
+In the existing agent avatar test, replace:
+
+```ts
+const avatars = container.querySelectorAll('[data-agent-avatar]')
+```
+
+with:
+
+```ts
+const avatars = container.querySelectorAll('[data-author-avatar]')
+```
+
+In the unsafe URL regression, replace:
+
+```ts
+const avatar = container.querySelector('[data-agent-avatar]')
+```
+
+with:
+
+```ts
+const avatar = container.querySelector('[data-author-avatar]')
+```
+
+Then replace the existing test named `renders a group member header without an agent avatar` with this positive case; do not keep its old `data-agent-avatar` assertion:
 
 ```ts
 it('renders a group member portal-proxy avatar image on the first incoming bubble', () => {
@@ -1279,6 +1502,125 @@ expect(snapshot.messages[0]).toMatchObject({
 - [ ] **Step 2: Add context/search compatibility checks**
 
 For `backend/src/modules/chat-messages/service.context.test.ts` and `backend/src/modules/chat-messages/service.search.test.ts`, add narrow assertions that existing context/search mapping still succeeds with `authorAvatarUrl` present on `PortalChatMessage`, but search results remain unchanged because `PortalChatSearchResult` does not expose avatars.
+
+In both files, add this type near the existing helper types:
+
+```ts
+type LedgerAuthorsByMessageId = Map<
+  number,
+  { authorDisplayName: string | null; userId: number }
+>
+```
+
+In each local `createService` helper, add a defaulted option:
+
+```ts
+ledgerAuthorsByMessageId = new Map(),
+```
+
+Add the matching option type:
+
+```ts
+ledgerAuthorsByMessageId?: LedgerAuthorsByMessageId
+```
+
+Then replace the hardcoded empty send-ledger repository stub:
+
+```ts
+chatThreadsRepository: {
+  findSendLedgerAuthorsByMessageIds: vi.fn().mockResolvedValue(new Map()),
+},
+```
+
+with:
+
+```ts
+chatThreadsRepository: {
+  findSendLedgerAuthorsByMessageIds: vi
+    .fn()
+    .mockResolvedValue(ledgerAuthorsByMessageId),
+},
+```
+
+For both compatibility checks, arrange a real group context and a ledger-known message:
+
+```ts
+const groupContext = createReadyContext({
+  activeThread: {
+    id: 'group:154',
+    subtitle: 'Групповой чат',
+    title: 'ООО "Ромашка"',
+    type: 'group',
+  },
+  currentUserName: 'Иван Петров',
+  linkedContactId: 44,
+  portalChatThreadId: 1540,
+  targetChatwootContactId: 154,
+  threadType: 'group',
+})
+const ledgerAuthorsByMessageId = new Map([
+  [
+    701,
+    {
+      authorDisplayName: 'Мария Соколова',
+      userId: 8,
+    },
+  ],
+])
+const groupMemberMessage = createChatwootMessage({
+  content: '**Мария Соколова**\nНужен договор 123.',
+  id: 701,
+  messageType: 0,
+})
+```
+
+For the context test, create the service with:
+
+```ts
+const { service } = createService({
+  beforePages: [
+    {
+      hasMoreOlder: false,
+      messages: [],
+      nextOlderCursor: null,
+    },
+  ],
+  context: groupContext,
+  findConversationMessageById: vi.fn().mockResolvedValue(groupMemberMessage),
+  ledgerAuthorsByMessageId,
+})
+```
+
+For the search test, create the service with:
+
+```ts
+const { service } = createService({
+  context: groupContext,
+  ledgerAuthorsByMessageId,
+  pages: [
+    {
+      hasMoreOlder: false,
+      messages: [groupMemberMessage],
+      nextOlderCursor: null,
+    },
+  ],
+})
+```
+
+If the target context test currently uses `await expect(...).resolves`, first store the response so the avatar assertion can inspect `messages`:
+
+```ts
+const response = await service.getCurrentUserChatMessageContext({
+  messageId: 701,
+  threadId: 'group:154',
+  userId: 7,
+})
+
+expect(response).toMatchObject({
+  reason: 'none',
+  result: 'ready',
+})
+```
 
 Use this assertion for context responses:
 
@@ -1502,9 +1844,36 @@ Expected:
 Commit after all checks and review findings are closed:
 
 ```bash
-git add backend/src frontend/src tests/e2e docs/roadmap/work-log.md
+git add \
+  backend/src/modules/chat-threads/types.ts \
+  backend/src/modules/chat-threads/info.ts \
+  backend/src/modules/chat-threads/service.ts \
+  backend/src/modules/chat-threads/contactRepository.ts \
+  backend/src/modules/chat-threads/info.test.ts \
+  backend/src/modules/chat-threads/service.info.test.ts \
+  backend/src/modules/chat-threads/contactRepository.test.ts \
+  backend/src/modules/chat-messages/messageMapping.ts \
+  backend/src/modules/chat-messages/avatarProxyService.ts \
+  backend/src/modules/chat-messages/avatarProxyRoutes.ts \
+  backend/src/modules/chat-messages/service.ts \
+  backend/src/modules/chat-messages/messageMapping.test.ts \
+  backend/src/modules/chat-messages/service.attachment-proxy.test.ts \
+  backend/src/modules/chat-messages/routes.attachment-proxy.test.ts \
+  backend/src/modules/chat-messages/service.thread-runtime.test.ts \
+  backend/src/modules/chat-messages/service.context.test.ts \
+  backend/src/modules/chat-messages/service.search.test.ts \
+  backend/src/app.ts \
+  frontend/src/features/chat/types.ts \
+  frontend/src/features/chat/components/ChatInfoPage.tsx \
+  frontend/src/features/chat/components/ChatInfoPage.test.tsx \
+  frontend/src/features/chat/components/chat-transcript/MessageBubble.tsx \
+  frontend/src/features/chat/components/ChatTranscript.test.tsx \
+  frontend/src/features/chat/pages/ChatPage.offline-cache.test.tsx \
+  docs/roadmap/work-log.md
 git commit -m "feat(chat): show group member avatars"
 ```
+
+If `tests/e2e/chat-group-member-avatars.spec.ts` was created in Task 9, include that exact file in the `git add` command. If Task 9 recorded the Playwright harness blocker instead, do not add any `tests/e2e` path.
 
 Expected: commit created on `feature/phase-chat-group-member-avatars`.
 
@@ -1512,5 +1881,6 @@ Expected: commit created on `feature/phase-chat-group-member-avatars`.
 
 - Spec coverage: approach 2 is covered by Tasks 1-2 for group info participants, Tasks 4-5 for backend proxy/message mapping, Tasks 6-8 for frontend and integration surfaces, and Task 9 for browser/runtime smoke.
 - Placeholder scan: no deferred implementation placeholders are required for code tasks. The only conditional path is the explicit Playwright harness readiness decision in Task 9.
-- Type consistency: participant avatar URLs use `avatarUrl` in backend and frontend participant DTOs; message bubbles continue using `authorAvatarUrl`; proxy route uses `participantUserId`.
+- Type consistency: participant avatar URLs use required `avatarUrl: string | null` in backend and frontend participant DTOs; message bubbles continue using `authorAvatarUrl`; proxy route uses `participantUserId`; transcript tests migrate from `data-agent-avatar` to `data-author-avatar`.
+- Dependency boundary: the participant-avatar proxy uses optional `contactRepository` DI in `createChatMessagesService` to avoid unrelated test churn, while `backend/src/app.ts` must pass the real tenant-scoped repository in production.
 - Scope check: one feature slice, no schema migration, no Chatwoot core changes, no direct browser Chatwoot access.
