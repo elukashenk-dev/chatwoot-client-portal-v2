@@ -346,3 +346,35 @@
   системные уведомления полезны для чата, но они легко раскрывают sensitive
   данные на lock screen или в notification tray. Tenant scope и минимальный
   payload сохраняют privacy и multi-tenant isolation.
+
+## D-024. Customer profile is portal-mediated and contact-linked
+
+- дата: `2026-06-05`
+- решение:
+  customer profile is a protected portal route, not a Chatwoot browser surface.
+  The page exposes read-only `Имя`, `Email` and `Телефон` from portal user plus
+  linked Chatwoot contact data. Avatar upload goes through portal backend,
+  validates image type and size, updates only the current linked Chatwoot
+  contact, and returns a portal-owned `/api/profile/avatar` URL. Browser never
+  receives Chatwoot tokens or direct Chatwoot avatar URLs.
+- причина:
+  profile is a customer-facing product area, but Chatwoot contact remains the
+  system of record for contact-side phone/avatar data. Portal backend must keep
+  the same authority boundary as chat: session, tenant and contact link are
+  checked before reading or updating anything in Chatwoot.
+
+## D-025. Visible chat identity uses portal-owned URLs and role labels
+
+- дата: `2026-06-06`
+- решение:
+  chat transcript, thread list and group info may show tenant/contact avatars,
+  but all visible avatar URLs must be portal-owned `/api/.../avatar` routes.
+  Group member avatars are shown only when backend can map the participant or
+  ledger-known author to a current contact; unknown group authors keep initials
+  fallback. In group transcripts, `agent` messages are marked with compact
+  `Поддержка` badges only on the first message of each support block.
+- причина:
+  group chat identity must be clearer for end users without leaking direct
+  Chatwoot asset URLs or turning display names into authority. Role-aware visual
+  grouping prevents support and group member messages with the same display name
+  from merging into one visual block.

@@ -50,9 +50,15 @@ Tenant владеет:
 - пользователь может открыть установленный PWA при плохой связи после
   предыдущего online входа, видеть сохраненный чат и ставить текстовые
   сообщения в локальную durable outbox;
+- пользователь может открыть full-screen страницы чата: информация, медиа и
+  файлы, поиск, настройки уведомлений;
 - пользователь может управлять chat notifications: включение новых сообщений,
   звук, подключение Web Push на конкретном устройстве и overrides на уровне
   конкретного чата;
+- пользователь может открыть `Профиль`, увидеть read-only `Имя`, `Email`,
+  `Телефон` и загрузить/заменить свой аватар;
+- групповые чаты показывают аватары участников через portal proxy URLs, а
+  сообщения поддержки в группе отмечаются компактным badge `Поддержка`;
 - PWA manifest, icons и iOS Home Screen metadata резолвятся tenant-aware.
 
 Проект не является модификацией Chatwoot core. Chatwoot остается внешней системой по отношению к этому репозиторию.
@@ -80,10 +86,12 @@ Portal backend отвечает за:
 - auth и sessions;
 - registration и password reset;
 - access control;
+- profile read and avatar update boundary;
 - chat thread/access resolution;
 - send authority;
-- attachment upload validation;
+- attachment/avatar upload validation and proxying;
 - realtime fanout;
+- unread/read/typing/notification sync;
 - Chatwoot webhook validation.
 
 ### Chatwoot - System Of Record Для Chat Domain
@@ -230,6 +238,11 @@ Tenant со статусом не `active` не допускается до publ
 - group thread messages, отправленные из portal в Chatwoot, получают
   Chatwoot-visible Markdown author prefix; portal transcript показывает автора
   по structured metadata и не заставляет клиента видеть technical prefix.
+- agent/group member avatars в transcript, thread list and chat info are
+  exposed only as portal-owned `/api/.../avatar` URLs;
+- unknown group authors keep initials fallback instead of inferred avatar URLs;
+- group transcript visually labels `agent` messages with `Поддержка` only at
+  the first visible message of each support block.
 
 ### Realtime И Webhooks
 
@@ -255,6 +268,15 @@ Chatwoot signed webhook -> portal backend -> tenant-scoped SSE fanout -> browser
 - перед доставкой group-thread event конкретному subscriber backend повторно
   валидирует актуальный доступ пользователя к thread;
 - browser не подписывается напрямую на Chatwoot events.
+
+Presence/read/typing rules:
+
+- portal user read sync goes through backend and Chatwoot Public API only after
+  latest incoming messages are visible near the transcript bottom;
+- group read sync uses Chatwoot's shared group contact semantics and is
+  intentionally `any participant read`;
+- portal typing sync and agent typing display are transient: no messages,
+  unread rows, push notifications or read receipts are created by typing events.
 
 Callback route:
 
@@ -300,7 +322,8 @@ Tenant-aware PWA endpoints:
 - `portal_user_notification_preferences`;
 - `portal_chat_notification_preferences`;
 - `portal_push_subscriptions`;
-- `portal_push_deliveries`.
+- `portal_push_deliveries`;
+- `portal_chat_unread_messages`.
 
 Принципиальные правила:
 
@@ -341,13 +364,23 @@ API `v2` остается простым и явным:
 - `/api/auth/password-reset/request`;
 - `/api/auth/password-reset/verify`;
 - `/api/auth/password-reset/set-password`;
+- `/api/profile`;
+- `/api/profile/avatar`;
 - `/api/chat/threads`;
+- `/api/chat/threads/:threadId/info`;
 - `/api/chat/messages`;
 - `/api/chat/messages/attachment`;
 - `/api/chat/threads/:threadId/attachments/:messageId/:attachmentId`;
+- `/api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb`;
+- `/api/chat/threads/:threadId/avatar`;
+- `/api/chat/threads/:threadId/messages/:messageId/avatar`;
+- `/api/chat/threads/:threadId/participants/:participantUserId/avatar`;
 - `/api/chat/threads/:threadId/media`;
 - `/api/chat/threads/:threadId/search`;
+- `/api/chat/threads/:threadId/messages/context`;
 - `/api/chat/support-availability`;
+- `/api/chat/threads/:threadId/read`;
+- `/api/chat/threads/:threadId/typing`;
 - `/api/notifications/settings`;
 - `/api/chat/threads/:threadId/notification-settings`;
 - `/api/notifications/push/public-key`;
@@ -387,11 +420,14 @@ chatwoot-client-portal-v2/
 - `auth` - login, logout, current user and session handling;
 - `registration` - eligibility, verification request/confirm and password setup completion;
 - `password-reset` - reset request, verification and password update;
+- `profile` - read-only current user profile, avatar upload and current-avatar proxy;
 - `portal-users` - portal user persistence helpers;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send, attachment proxy, media, search and send ledger;
 - `chat-support` - tenant-scoped support availability and working-hours state;
 - `chat-notifications` - tenant/user/thread scoped notification preferences, Web Push subscriptions and push delivery;
+- `chat-presence` - customer read sync and portal typing sync through backend authority;
+- `chat-unread` - backend-owned unread rows and counts for visible threads;
 - `chat-realtime` - SSE admission, stream lifecycle and backend fanout;
 - `chatwoot-webhooks` - signed webhook validation, delivery bookkeeping and scoped fanout;
 - `maintenance` - portal-only retention cleanup for service traces;
@@ -403,6 +439,7 @@ chatwoot-client-portal-v2/
 - `tenant` - public tenant context and tenant identity metadata;
 - `auth` - registration, password reset, login/logout/me UI;
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
+- `profile` - protected read-only profile page and avatar upload flow;
 - `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
 - `settings` - user-level notification settings;
 - `pwa` - service worker registration and PWA runtime support;
@@ -439,7 +476,7 @@ auth/chat runtime:
 - documents;
 - tasks;
 - service requests;
-- profile.
+- profile expansion beyond the current read-only/avatar slice.
 
 Chatwoot остается system of record только для chat-domain данных, пока не
 появится отдельная внешняя authoritative система.

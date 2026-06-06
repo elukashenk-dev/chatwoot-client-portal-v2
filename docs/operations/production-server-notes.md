@@ -3,9 +3,10 @@
 Этот файл хранит только устойчивые факты о production VM и ограничения для
 безопасного развертывания `chatwoot-client-portal-v2`.
 
-Актуальный executable runbook:
+Актуальные executable runbooks:
 
 ```text
+docs/operations/production-deployment.md
 docs/operations/production-clean-reinstall.md
 ```
 
@@ -132,9 +133,11 @@ Allowed `MT-10` Chatwoot-side change is limited to tenant API Channel setup:
 
 ## План Развертывания
 
-Production rollout должен идти по `MT-10 Production Clean Reinstall Runbook`.
+Обычный feature deploy идет через `scripts/deploy-production-archive.sh` из
+clean reviewed commit. Clean reinstall нужен только для пересоздания или
+глубокой reconfigure portal-owned production stack.
 
-Коротко:
+Clean reinstall коротко:
 
 1. Проверить, что Chatwoot работает на `chat.provgroup.ru`.
 2. Подготовить clean portal-owned runtime path.

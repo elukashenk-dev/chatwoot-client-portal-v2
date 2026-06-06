@@ -1,281 +1,101 @@
 # Work Log
 
 Короткая карта крупных завершенных этапов в `chatwoot-client-portal-v2`.
-Мелкие fixes, refactoring slices, docs-only changes, временные findings и
-детальные проверки здесь не перечисляются.
+Мелкие fixes, transient regressions, подробные test runs, deploy logs и
+execution-plan детали здесь не хранятся.
 
 ## Core Product
 
 - `v2` закреплен как самостоятельный tenant-aware клиентский portal поверх
   Chatwoot.
-- Собран рабочий portal baseline: auth/session, registration, password reset,
-  protected app shell, chat read/send, attachments, realtime и PWA foundation.
-- Offline-first PWA MVP Slices 01-07 реализовали backend session metadata,
-  isolated `idb` offline stores, cached tenant startup, bounded cached auth
-  session с `offlineAccessUntil`, local-device data removal и display-only
-  cached chat read model с thread/message snapshots, а также durable text
-  outbox core с foreground drain, retry/backoff, fallback lease и
-  privacy-safe outcome diagnostics; composer/chat UI пишет text sends только в
-  durable frontend-domain outbox, показывает queued/sending/failed состояния и
-  оставляет attachments/voice online-only; backend остается session, send и
-  freshness authority.
+- Собран рабочий customer portal baseline: auth/session, registration,
+  password reset, protected app shell, chat read/send, attachments, realtime,
+  notifications, profile и PWA foundation.
 - Browser не получает Chatwoot authority; portal backend остается единственной
-  authority-зоной для auth, session, send, realtime и Chatwoot access.
+  authority-зоной для auth, session, profile, send, realtime, webhooks,
+  notifications, read/typing sync и Chatwoot access.
 - Chatwoot остается system of record для contacts, conversations, messages и
-  attachments; portal database хранит только portal-owned данные.
+  attachments; portal database хранит только portal-owned данные и runtime
+  links.
 
-## Multi-Tenant Foundation
+## Tenant And Runtime Baseline
 
-- Принята единая multi-tenant архитектура: shared SaaS обслуживает много tenants,
-  dedicated install работает как один tenant в той же модели.
-- `MT-0`-`MT-8` завершены: tenant определяется по Host/domain, runtime Chatwoot
-  config принадлежит tenant, persistence/auth/chat/webhooks/frontend/PWA стали
-  tenant-aware.
-- `MT-8R Codebase Audit And Refactoring Readiness` завершен; открытых
-  `must-fix-before-MT-9` code findings не осталось.
-- Для `MT-9` приняты ключевые решения: separate encrypted per-tenant Chatwoot
-  admin-verification token и branding assets через portal DB metadata plus
-  S3-compatible object storage.
+- `MT-0`-`MT-8` завершены: tenant определяется по Host/domain, runtime
+  Chatwoot config принадлежит tenant, persistence/auth/chat/webhooks/frontend
+  metadata/PWA identity стали tenant-aware.
+- Dedicated install работает как тот же multi-tenant runtime с одним tenant;
+  shared SaaS остается целевой моделью для многих tenants.
+- Single-tenant `CHATWOOT_*` runtime compatibility удалена; bootstrap идет
+  через tenant-owned `DEFAULT_TENANT_CHATWOOT_*`.
+- Clean schema baseline принят: `portal_chat_threads` является единственной
+  portal chat mapping schema, migration history сжата, старые portal users и
+  старые chat mappings не сохраняются.
+- Portal maintenance cleanup добавлен для service traces: send ledger,
+  webhook deliveries, expired rate-limit buckets, sessions and verification
+  records; Chatwoot-owned data and `portal_chat_threads` не удаляются.
 
-## UI/UX Baseline
+## Chat And PWA Baseline
 
-- `MT-8.5` product UI/UX baseline создан: brandable matrix, text limits,
-  fallback logic, content ownership, visual hierarchy, branding intensity и
-  implementation checklist.
-- Auth/customer-facing screens приведены к общей структуре для login,
-  registration, password reset, OTP и set-password flows.
-- Chat UI перешел к customer-support baseline: компактный header, tenant mark,
-  support center entry point, action menu, composer alignment и более компактный
-  transcript.
-- Chat composer footer упрощен до чистого input-row без лишней внутренней
-  bordered surface; attachment/voice icon controls остаются без постоянной
-  внешней декорации, а send остается primary action.
-- Offline/PWA chat connection state показывает один unified notice под header:
-  composer больше не дублирует offline warning, а header при потере связи
-  показывает `Нет связи` вместо support availability `Проверяем`.
-- Composer attachment/voice controls используют существующий chat accent color
-  вместо слабого neutral gray; hover и disabled states сохранены.
-- Mobile chat transcript скрывает визуальный scrollbar, сохраняя scroll
-  behavior; desktop scrollbar остается доступным.
-- Default auth branding assets добавлены в `frontend/public/default-branding/`.
+- Portal-owned `threadId` runtime реализован: `private:me` и групповые
+  `group:<id>` threads валидируются backend через tenant/session/contact
+  boundary, а Chatwoot conversation IDs не являются browser authority.
+- Group send добавляет Chatwoot-visible Markdown author prefix; portal transcript
+  показывает authors через structured metadata.
+- Chat info, media/files, search, bounded history context, support availability
+  and working hours работают как chat-adjacent full-screen pages/flows через
+  backend authority.
+- Attachment, thread, message and participant avatars are exposed only through
+  portal-owned proxy URLs; browser does not receive direct Chatwoot asset URLs.
+- Group member avatars render in group info and transcript when backend can map
+  a participant/contact; unknown group authors keep initials fallback.
+- Support messages in group transcripts are visually marked with compact
+  `Поддержка` badges only on the first message of each support block.
+- Customer read sync and two-way typing are implemented through backend
+  Chatwoot Public API/webhook boundaries; portal user-sent messages still show
+  `Отправлено`, not fake support-read receipts.
+- Chat notifications are tenant/user/thread scoped: global settings,
+  chat-level overrides, sound, Web Push subscription lifecycle, safe push
+  routing metadata, backend-owned unread counts and app badge updates.
+- Offline-first PWA MVP is implemented: app shell cache, scoped IndexedDB
+  tenant/auth/chat snapshots, durable text outbox, foreground drain,
+  Background Sync progressive enhancement and unified startup/connection UX.
 
-## Production Runtime
+## Profile Baseline
 
-- Chatwoot `v4.13.0` compatibility закрыт для API Channel webhook signing:
-  tenant webhook sync использует `Channel::Api` webhook URL и `channel_api.secret`.
-- Local Chatwoot `v4.13.0` integration проверена на tenants `buhfirma`,
-  `stroyfirma` и `zubi`.
-- Production Chatwoot CE обновлен до `v4.13.0`; portal `v2` clean reinstall
-  выполнен на `lk.provgroup.ru` как tenant-aware one-tenant deployment для
-  `provgroup`.
-- Production SMTP для portal `v2` переключен на Yandex 360
-  `cbr@provgroup.ru`; пользователь подтвердил successful registration code flow.
-- Production hardening review завершен без high/critical findings; активные
-  follow-ups ведутся через `docs/findings/`.
-- Production deploy source tracking синхронизирован: `origin/main` и
-  `DEPLOY_SOURCE.txt` отражают clean `main` baseline.
+- `Профиль` is available from the grouped right chat menu as a protected
+  full-screen app route.
+- Profile fields are read-only: `Имя`, `Email`, `Телефон`.
+- Profile data uses portal user plus linked Chatwoot contact boundary; missing
+  contact fails closed without exposing Chatwoot authority.
+- Avatar upload/replace goes through portal backend, validates JPEG/PNG/GIF up
+  to `15 MB`, updates only the current linked Chatwoot contact and returns a
+  portal-owned `/api/profile/avatar` URL.
 
-## Chat Thread Planning
+## Production Baseline
 
-- Принят и реализован production-grade portal-owned `threadId` runtime: личный
-  чат `private:me` и групповые чаты через Chatwoot contact attributes, без
-  выдачи Chatwoot authority в browser.
-- `GET /api/chat/threads`, messages, attachment send, realtime и webhook fanout
-  работают через `tenant + threadId`; group send добавляет безопасный
-  Chatwoot-visible Markdown author prefix, а portal transcript показывает автора
-  через structured metadata.
-- Все chat thread security gates закрыты: malformed/forged thread ids,
-  person/group contact validation, group membership removal, author
-  formatting, realtime fanout и webhook routing проверяются fail-closed.
-- `MT-8.6` расширен до destructive clean-schema cleanup по решению владельца
-  проекта: старые portal users не сохраняются, migration history сжата в один
-  clean baseline, старый context endpoint удален, chat mapping живет только в
-  `portal_chat_threads`, send ledger scope живет только через
-  `portal_chat_thread_id`.
-- Локальная portal DB destructive reset-нута и мигрирована заново под clean
-  thread-only schema; production portal clean reinstall выполнен на
-  `lk.provgroup.ru` без изменений Chatwoot core.
-- Chat thread deleted-conversation recovery добавлен: если Chatwoot conversation
-  удален после mapping в portal DB, следующий send восстанавливает thread под
-  lock, создает replacement conversation через contact inbox source, повторяет отправку
-  и нормализует confirmed portal-send messages в `sent`, даже если Chatwoot
-  помечает API-channel delivery status как `failed`.
-- Portal maintenance retention добавлен: cleanup module/script с dry-run,
-  tenant scope, default TTL для send ledger, webhook deliveries, expired
-  rate-limit buckets, sessions и verification records; `portal_chat_threads` и
-  Chatwoot-owned data не удаляются.
-- Production maintenance cleanup автоматизирован: installer ставит daily
-  systemd timer, перед включением выполняет dry-run, timer persistent и
-  запускает cleanup внутри `portal-backend` container.
-- Strict group contact rename выполнен: portal chat thread model больше не
-  поддерживает legacy `company`, публичный `threadId` использует `group:<id>`,
-  Chatwoot attribute list переименован в `portal_client_group_contact_ids`, а
-  `portal_contact_type` принимает только `person` и `group`.
-- Production portal clean reinstall выполнен после strict group rename:
-  `lk.provgroup.ru` поднят из clean `main` source, portal DB пересоздана,
-  Chatwoot core не трогался.
-- Страница `Информация о чате` реализована как full-screen chat-adjacent page:
-  backend endpoint отдает tenant/session/thread-scoped details без browser
-  Chatwoot authority, frontend открывает страницу из chat menu через reusable
-  `ChatFullScreenPanel`.
-- Chat info details покрывают тип чата, support label, доступ, `curator_name`,
-  дату начала/последней активности и безопасный список участников группового
-  чата через active portal users + Chatwoot contact attribute membership.
-- Local service governance обновлен: агент может запускать/перезапускать
-  локальные portal-сервисы для разработки и проверок; Chatwoot остается внешним
-  сервисом и без отдельной необходимости не трогается.
-- `ChatFullScreenPanel` приведен к portal shell layout: chat-adjacent pages
-  больше не выходят за `max-w-[500px]` основного portal UI.
-- Реализован read-only full-screen slice `Медиа и файлы`: backend media
-  endpoint, portal attachment proxy для transcript/media URLs, frontend
-  `C. Mixed View` page, chat menu wiring и stale-response handling.
-- Attachment proxy для чата и медиа работает через portal authority: allowlist
-  tenant Chatwoot/object-storage origins, SSRF guards, timeout/body timeout,
-  content-length guard, portal-owned cache policy и local dev loopback handling.
-- Страница `Медиа и файлы` merge-ит свежие вложения из текущего transcript
-  snapshot, пока Chatwoot media history догоняет.
-- Production deploy media slice выполнен на `lk.provgroup.ru`; пользователь
-  подтвердил работу `Медиа и файлы` на production tenant.
-- Реализован read-only full-screen slice `Поиск по чату`: backend endpoint
-  ищет только client-visible text messages в текущем `threadId`, frontend
-  показывает вариант `C. Search page + context preview` с author filters,
-  context snippets, fresh transcript snapshot merge, pagination по истории и
-  jump-back highlight для уже загруженных сообщений.
-- Search UX поддерживает устойчивый input focus, стабильный thread header,
-  trailing spaces в поле ввода и punctuation-insensitive phrase matching.
-- Search jump для найденных сообщений вне текущей ленты открывает bounded
-  history fragment прямо в чате с ручным расширением контекста раньше/позже и
-  возвратом к последним сообщениям.
-- Chat header больше не трактует connection readiness как статус поддержки:
-  portal backend отдает tenant-scoped Chatwoot agent availability и working
-  hours, frontend показывает `На связи` / `Ответим позже` / `Вне графика`, а
-  страница `Информация о чате` содержит read-only блок `Часы работы`.
-- Реализован slice `Уведомления`: Telegram-like глобальные настройки и
-  chat-level overrides для новых сообщений и звука, in-portal sound,
-  Web Push/VAPID как подключение конкретного устройства, tenant-scoped push
-  delivery из Chatwoot `message_created` webhooks, safe chat-title context в PWA
-  push payload без текста сообщения и локальная красная точка для чатов с
-  новыми сообщениями вне текущего активного чата, плюс PWA app-icon badge count
-  по backend unread total на поддерживаемых платформах; chat message push
-  использует per-message notification tag без Web Push `Topic`, чтобы pending
-  push не схлопывались во время сна устройства, и backend держит одну активную
-  push-подписку на tenant/user/device.
-- Непрочитанные сообщения чата переведены на backend-owned state:
-  `/api/chat/threads` возвращает per-thread и total unread только по доступным
-  threads, открытие snapshot чата сбрасывает unread этого thread, а frontend
-  показывает red dot на кнопке меню чатов, числовые badges внутри меню и
-  обновляет app badge точным backend count независимо от push-настроек.
-- Production deploy backend-owned chat unread state выполнен на
-  `lk.provgroup.ru` из clean commit `5b18e8d`; production migration применена,
-  stack healthy и public health/tenant/PWA manifest smoke проходят.
-- Production deploy notifications slice выполнен на `lk.provgroup.ru`; VAPID
-  runtime env подключен, settings UI и push subscription lifecycle доступны на
-  реальном tenant.
-- Production deploy notification thread routing follow-up выполнен на
-  `lk.provgroup.ru` из clean commit `ee1c0d2`; push tap открывает конкретный
-  chat thread, а открытие thread закрывает только его pending system
-  notifications.
-- Chat boot восстанавливает последний открытый thread из startup/cache, если он
-  все еще доступен в server-visible thread list; deep-link thread остается выше
-  по приоритету, а недоступный thread безопасно падает обратно на backend
-  default.
-- Offline-first PWA MVP Slice 08 реализован: production service worker получает
-  Vite manifest assets в app shell, отдает revision/status для runtime checks,
-  не перехватывает `/api/*`, а push stale markers сохраняются и потребляются
-  только в tenant/user/thread/message scope.
-- Offline-first PWA MVP реализован: установленный portal открывает сохраненные
-  tenant/auth/chat данные при плохой связи после предыдущего online входа,
-  текстовые сообщения ставятся в локальную durable outbox и доставляются после
-  восстановления соединения; backend остается единственной authority-зоной.
-- No-legacy cleanup gate удалил single-tenant `CHATWOOT_*` runtime/env
-  compatibility из backend env и Chatwoot client construction; tenant bootstrap
-  остается только через `DEFAULT_TENANT_CHATWOOT_*`, а e2e harness использует
-  отдельные `E2E_CHATWOOT_*` values.
-- Chatwoot webhook callback surface сужен до одного canonical route
-  `/api/chatwoot/webhooks`; совместимый
-  `/api/integrations/chatwoot/webhooks/account` больше не обслуживается.
-- Production deploy Unified Connection Notice выполнен на `lk.provgroup.ru` из
-  clean commit `bfeae36`; automated production-origin PWA smoke подтвердил
-  stamped service worker, offline launch с сохраненным чатом и один unified
-  notice для offline/outbox state.
-- Background Outbox Drain follow-up реализован, deployed на `lk.provgroup.ru`
-  из clean commit `e91636b` и подтвержден real-device smoke: durable text
-  outbox регистрирует one-off Background Sync как progressive enhancement,
-  service worker opportunistically drains due text records через тот же
-  tenant/user/thread `portal-offline` scope, foreground drain остается primary
-  path, а iOS продолжает полагаться на send-on-next-open/online/visibility
-  behavior.
-- Telegram-like instant cached chat boot заменил web startup surfaces:
-  после native PWA splash синхронный startup mirror открывает сохраненные
-  tenant/auth/chat данные сразу, сеть проверяется и обновляет snapshot в фоне,
-  hanging VPN/network не блокирует cached shell, а web fallback/loading экраны
-  `AppStartupScreen`, `ChatLoadingState`, pre-root splash и startup coordinator
-  удалены.
-- Offline chat cache расширен до older message pages в `portal-offline`
-  schema v2, чтобы сохраненная история могла открываться глубже без сети в
-  текущем tenant/user/thread scope.
-- Root code-health gate восстановлен без роста allowlist: oversized chat,
-  offline и PWA модули разнесены на smaller helpers/test-support files, поэтому
-  root `pnpm lint` снова проходит code-health и package eslint.
-- Chat realtime health fallback закрывает `F-CHAT-006`: видимый активный чат с
-  stale SSE теперь ограниченно обновляет latest snapshot через backend, не
-  помечая сообщения прочитанными и не меняя unread/push напрямую.
-- Customer read/typing prerequisites начали backend baseline: portal stores
-  Chatwoot API Channel public inbox identifier on tenant runtime state and
-  Chatwoot contact source id on portal chat threads, without exposing these
-  identifiers to browser APIs.
-- Chatwoot public conversation events client добавлен в backend integration
-  layer: customer last-seen and typing events can be posted through Chatwoot
-  Public API paths without sending the tenant API access token to those routes.
-- Customer read sync backend добавлен: authenticated portal route marks private
-  chat reads through Chatwoot Public API last-seen, skips group threads, fails
-  closed on missing identifiers and throttles repeated read sync across
-  request-scoped service instances.
-- Viewport-driven customer read sync добавлен во frontend: portal вызывает
-  backend read route только после отображения latest private transcript near
-  bottom, не срабатывает в history/search/offline контексте и не показывает
-  пользователю ошибку при fail-closed sync.
-- Portal user typing sync добавлен: composer отправляет transient typing
-  on/off через backend authority route в Chatwoot Public API, fail-closed без
-  user-facing ошибок и с throttle для повторных `typing_on`.
-- Chatwoot agent typing sync добавлен: подписанные `conversation_typing_on/off`
-  webhooks fan out as transient SSE typing events, а portal показывает только
-  безтекстовый three-dot indicator без unread/push/snapshot side effects.
-- Customer read/two-way typing runtime smoke закрыт локально: customer read
-  синхронизируется для private и group threads, portal/contact typing echo
-  отфильтрован на backend, agent typing отображается как компактный overlay
-  без full-width layout strip и без scroll/read-sync side effects.
-- Customer read/two-way typing deployed на `lk.provgroup.ru` из clean code
-  commit `a81530d`: production tenant public inbox identifier verified,
-  agent-side double checks работают для private и group threads, two-way typing
-  проходит через Chatwoot conversation typing events, а burst read sync
-  закрыт trailing retry после throttle window.
-- Профиль пользователя добавлен как отдельная app route из правого меню чата:
-  portal показывает read-only `Имя`, `Email`, `Телефон` из portal/contact
-  authority boundary, а загрузка/замена аватара идет через backend и
-  синхронизируется с linked Chatwoot contact без раскрытия Chatwoot authority
-  браузеру.
-- Group chat member avatars added: group info participants and ledger-known
-  group member transcript messages now use backend-owned avatar proxy URLs,
-  while unknown group authors keep initials fallback and browser still receives
-  no direct Chatwoot asset URLs.
+- Production Chatwoot CE is `v4.13.0`; portal webhook signing uses the tenant
+  API Channel `channel_api.secret`.
+- Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
+  one-tenant install for `provgroup`.
+- Production deploy source tracking is explicit: clean deploys come from
+  reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
+  branch, commit and dirty status.
+- Current production source is `main` commit `43f52e9` with profile avatar,
+  group member avatars and group support badge slices deployed.
 
 ## Current Baseline
 
-- Текущий runtime baseline поддерживает shared SaaS модель и dedicated модель как
-  один tenant.
-- Локальная portal DB сейчас clean-reset baseline: default tenant и fresh test
-  users созданы заново после destructive reset.
-- Production portal доступен на `lk.provgroup.ru` для тестирования текущего
-  post-reinstall baseline.
-- Основные source-of-truth документы живут в `docs/architecture/`,
-  `docs/roadmap/` и `docs/design/`.
-- Stable docs cleanup выполнен: удален завершенный clean-schema execution plan,
-  stable docs приведены к текущему post-reinstall baseline.
-- Открытый архитектурный gate перед admin/branding: `F-MT-004` остается deferred
-  до реализации `MT-9`, стратегия уже выбрана.
+- Main source-of-truth docs are `docs/architecture/overview.md`,
+  `docs/architecture/decisions.md`, `docs/roadmap/implementation-plan.md`,
+  `docs/roadmap/work-log.md`, `docs/design/portal-ui-ux-baseline.md` and
+  `docs/findings/`.
+- `docs/superpowers/` execution artifacts are not stable source of truth after
+  implementation; completed or inactive plans/specs were removed during the
+  current docs cleanup.
+- Open risks and deferred follow-ups remain in `docs/findings/`.
+- Open architecture gate before tenant admin/branding: `F-MT-004`.
 
 ## Recommended Next Step
 
-- Смержить `feature/phase-chat-group-member-avatars` в `main` после приемки,
-  затем выбрать следующий изолированный product slice.
+- Start `MT-9` with the `F-MT-004` Chatwoot permissions spike and separate
+  tenant admin-verification token boundary.

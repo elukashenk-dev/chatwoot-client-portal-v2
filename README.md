@@ -34,9 +34,15 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - tenant-aware frontend/PWA metadata, manifest and icons;
 - `MT-8.5` customer-facing UI/UX baseline;
 - portal-owned `threadId` runtime для личного чата и групповых чатов;
+- chat info, media/files, search, notification settings, unread, customer
+  read sync and two-way typing;
+- Offline-first PWA: cached tenant/auth/chat startup and durable text outbox;
+- read-only `Профиль` with avatar upload synced to the linked Chatwoot contact;
+- group member avatars through portal proxy URLs and `Поддержка` badge for
+  support blocks in group transcript;
 - destructive clean-schema reset: old portal users и old chat mappings не
   сохраняются;
-- production clean reinstall на `lk.provgroup.ru`.
+- production clean deploy on `lk.provgroup.ru` from `main`.
 
 Следующий активный scope:
 

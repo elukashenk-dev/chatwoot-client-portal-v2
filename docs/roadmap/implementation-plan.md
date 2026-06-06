@@ -1,7 +1,7 @@
 # План Реализации
 
-Этот файл хранит актуальный roadmap: что уже закрыто крупными блоками, что
-делаем следующим и какие future slices пока не открываем.
+Этот файл хранит только актуальный roadmap: что уже закрыто крупными блоками,
+что делаем следующим и какие future slices пока не открываем.
 
 Что сюда не дублируем:
 
@@ -9,399 +9,158 @@
 - устойчивые решения - см. `docs/architecture/decisions.md`;
 - подробный multi-tenant design - см.
   `docs/architecture/multi-tenant-reference.md`;
-- короткую карту крупных завершенных этапов - см. `docs/roadmap/work-log.md`;
-- временные review risks - см. `docs/findings/`;
+- короткую карту завершенного baseline - см. `docs/roadmap/work-log.md`;
+- активные review risks - см. `docs/findings/`;
 - правила closure flow, git и работы агента - см. `AGENTS.md`.
 
 ## Принцип
 
-Движение идет фазами. Новую фазу или крупный slice начинаем только после
-закрытия текущего scope по closure flow из `AGENTS.md`.
+Новый крупный scope начинается только после closure flow из `AGENTS.md`:
+implementation/review/fixes/targeted checks/required automated tests или
+documented blocker.
 
-Исторические single-tenant фазы больше не являются активным roadmap. Они уже
-дали рабочий baseline и теперь superseded multi-tenant программой.
+Исторические single-tenant фазы и уже исполненные execution plans больше не
+являются активным roadmap. Реальное состояние проекта определяется кодом и
+stable docs.
 
 ## Current Status
 
 Завершено:
 
 - рабочий portal baseline поверх Chatwoot: auth, registration, password reset,
-  protected app shell, chat read/send/attachments/realtime и PWA foundation;
-- production deployment baseline;
+  protected app shell, chat read/send/attachments/realtime, notifications,
+  profile and PWA foundation;
+- production deployment baseline на `lk.provgroup.ru`;
 - `MT-0`-`MT-8` multi-tenant program;
-- post-MT runtime review fixes для tenant URL/domain, portal inbox routing и
-  webhook payload validation;
 - `MT-8R Codebase Audit And Refactoring Readiness`;
 - `MT-8.5 Portal UI/UX Baseline Review`;
-- chat thread runtime follow-up: portal-owned `threadId`, личный чат и
-  групповые чаты через Chatwoot contact attributes;
-- notifications slice: global settings, chat-level overrides, in-portal sound,
-  Web Push subscription lifecycle and safe tenant-scoped push delivery;
+- portal-owned chat thread runtime: `private:me`, group threads, tenant-scoped
+  access validation, send ledger, webhook/realtime routing;
+- chat-adjacent pages: info, media/files, search/context, notifications;
+- backend-owned unread state, safe Web Push, app badge, customer read sync and
+  two-way typing;
 - Offline-first PWA MVP and follow-ups: app shell cache, scoped IndexedDB
   snapshots, durable text outbox, foreground drain, Background Sync progressive
-  enhancement and unified startup/connection UX.
+  enhancement and unified startup/connection UX;
+- read-only `Профиль` with avatar upload synced to the linked Chatwoot contact;
+- group member avatars and group support `Поддержка` badge in portal transcript.
 
 Текущий baseline:
 
 - один portal deploy может обслуживать несколько tenants;
 - dedicated install остается тем же runtime с одним tenant;
 - tenant определяется по `Host`/domain;
-- runtime Chatwoot config берется из tenant; глобальные `CHATWOOT_*` env values
-  не являются backend runtime authority;
-- customer auth, persistence, chat runtime, webhooks, frontend metadata и PWA
-  identity уже tenant-aware;
-- browser работает с `threadId`, а backend мапит threads на Chatwoot
-  conversations через `portal_chat_threads`;
-- installed PWA can reopen cached tenant/auth/chat state after a previous online
-  login and queue text while offline without browser Chatwoot authority;
-- migration history сжата в clean baseline; старая portal chat mapping schema
-  и старые portal users не сохраняются.
-
-Следующий активный scope:
-
-```text
-MT-9 Tenant Admin And Branding Rebuild
-```
-
-Первый gate перед реализацией `MT-9`: закрыть `F-MT-004` через Chatwoot
-permissions spike и отдельную admin-verification token boundary.
+- runtime Chatwoot config берется из tenant; global `CHATWOOT_*` env values are
+  not backend runtime authority;
+- browser работает с portal-owned APIs and `threadId`, not Chatwoot authority;
+- Chatwoot remains system of record for contacts/conversations/messages/files;
+- portal backend owns auth/session/profile/proxy/send/realtime/read/typing and
+  notification boundaries;
+- clean production source is tracked through `origin/main` and
+  `DEPLOY_SOURCE.txt`.
 
 ## Active Roadmap
-
-### MT-8R. Codebase Audit And Refactoring Readiness
-
-Status:
-
-- completed on `2026-05-06`;
-- `F-AUTH-002` was closed by `MT-8R-5A`;
-- no open `must-fix-before-MT-9` code finding remains.
-
-Цель:
-
-После большого `MT-1`-`MT-8` multi-tenant pass проверить состояние кода и
-подготовить controlled refactoring plan перед `MT-8.5` UI/UX review и `MT-9`
-admin/branding. Задача этапа - не "улучшить все", а понять риски, выбрать
-ограниченные refactoring slices и защитить baseline проверками.
-
-Non-goals:
-
-- не начинать `MT-9` tenant admin/branding implementation;
-- не менять UI/UX baseline в рамках audit без отдельного UI polish slice;
-- не переписывать модули "потому что можно красивее";
-- не смешивать refactoring, new feature work, schema/runtime changes и dead
-  code removal в один большой commit;
-- не подменять audit сравнением с внешними клиентскими portal-проектами.
-
-Шаги:
-
-1. Code audit:
-   - составить карту backend/frontend/shared/scripts/tests areas;
-   - проверить tenant boundaries: resolution, auth/session, persistence, chat,
-     realtime, webhooks, Chatwoot client, PWA metadata;
-   - отметить зоны с высоким change risk перед `MT-9`.
-2. Technical debt analysis:
-   - найти крупные файлы, слабые тестовые зоны, запутанные зависимости,
-     дублирование tenant/runtime logic, fragile local/provisioning paths;
-   - не чинить найденное сразу, сначала классифицировать.
-3. Code smells review:
-   - фиксировать только конкретные actionable issues;
-   - для реальных рисков создавать отдельные files в `docs/findings/`;
-   - не превращать subjective style preferences в обязательный refactor.
-4. Refactoring assessment:
-   - разложить candidates по категориям:
-     `must-fix-before-MT-9`, `safe-pre-MT-9-cleanup`, `defer`,
-     `do-not-touch`;
-   - для каждого candidate указать affected area, expected behavior impact,
-     risk, required tests and rollback strategy.
-5. Refactoring slices:
-   - выполнять только выбранные bounded slices;
-   - один slice = один понятный scope, одна ветка/commit checkpoint;
-   - без behavior changes, если они явно не согласованы;
-   - после каждого slice выполнять targeted tests and review.
-6. Dead code removal:
-   - удалять только после evidence: `rg`, typecheck/build/test или явная
-     устаревшая doc/runtime ссылка;
-   - не удалять public/runtime entrypoints без отдельного подтверждения.
-7. Повторное code review:
-   - проверить, что refactoring не ослабил tenant isolation, auth/session,
-     webhook/realtime boundaries и PWA tenant identity.
-
-Deliverables:
-
-- audit summary, technical debt map, findings index, refactoring candidates and
-  выбранный next slice plan в стабильных project docs;
-- finding files в `docs/findings/` для actionable risks;
-- отдельные small commits для approved refactoring/dead-code slices, если они
-  будут выполняться в рамках `MT-8R`.
-
-Required checks:
-
-- baseline checks перед refactoring: backend tests/build/lint, frontend
-  typecheck/tests/build, root lint/code-health или documented blocker;
-- для каждого refactoring slice: targeted tests for affected area, build/lint,
-  Prettier и `git diff --check`;
-- для browser/runtime-sensitive changes: Playwright или documented blocker;
-- final повторное code review после выбранных slices.
-
-Exit criteria:
-
-- общее состояние проекта понятно и задокументировано;
-- каждый найденный риск либо закрыт, либо записан как finding/deferred;
-- approved refactoring slices выполнены маленькими контролируемыми steps;
-- нет открытых `must-fix-before-MT-9` findings;
-- baseline checks после refactoring зеленые или blocker явно зафиксирован;
-- можно переходить к `MT-8.5` UI/UX baseline review без ощущения, что мы
-  строим branding поверх непонятного кода.
-
-### MT-8.5. Portal UI/UX Baseline Review
-
-Status:
-
-- completed on `2026-05-15`.
-
-Цель:
-
-Провести полный UI/UX-аудит и продуктовую переработку customer-facing PWA-чата
-до начала `MT-9` branding/admin. Branding должен настраивать уже принятый
-брендируемый продуктовый интерфейс, а не строиться поверх рабочего, но еще
-неоформленного shell.
-
-Scope:
-
-- провести review всех customer-facing portal states: login, registration,
-  email-code verification, password reset, отказ/ошибка доступа, loading/error
-  states, app shell, chat empty state, chat with messages, attachments, voice и
-  realtime states;
-- переписать customer-facing copy так, чтобы дефолты были нейтральными,
-  понятными и пригодными для разных B2B tenants;
-- проверить mobile/PWA и desktop поведение для нескольких tenants;
-- решить, какие элементы являются baseline layout и не должны меняться через
-  branding;
-- решить, какие элементы станут tenant-brandable в `MT-9`: display name, logo,
-  PWA icon, splash/loading/welcome identity, colors, support copy,
-  auth/chat header accents;
-- определить системные ограничения для branding: contrast, text length,
-  editable copy slots, locked security/validation states and layout boundaries;
-- определить набор preview screens для `MT-9` branding admin: login,
-  registration/forms, OTP, password reset, chat, splash и PWA/app identity
-  preview;
-- зафиксировать findings или UI polish slices до `MT-9`, если текущий shell не
-  подходит как branding baseline.
-
-Required checks:
-
-- manual UI/UX walkthrough на локальных tenants;
-- browser screenshots или Playwright screenshots для ключевых mobile/desktop
-  states;
-- frontend review affected areas без code changes, если review only;
-- если будут UI fixes: targeted frontend tests, Playwright или documented
-  blocker, frontend typecheck/build, Prettier/lint/code-health и
-  `git diff --check`.
-
-Exit criteria:
-
-- portal UI shell принят как baseline для branding;
-- список brandable vs non-brandable элементов согласован;
-- дефолтные тексты и tenant-editable text slots определены;
-- splash/loading/welcome behavior принят как часть PWA baseline;
-- preview screens для `MT-9` определены и должны использовать реальные portal
-  components, а не отдельную нарисованную копию;
-- blocker/finding список перед `MT-9` пуст или явно deferred отдельным решением.
-
-### Post-MT-8.5. Chat Thread Runtime
-
-Status:
-
-- completed on `2026-05-15`;
-- implemented as the approved portal-owned chat thread runtime model.
-
-Цель:
-
-Закрепить portal-owned `threadId`, чтобы один portal user мог иметь личный чат
-и групповые чаты без выдачи Chatwoot authority в browser.
-
-Scope:
-
-- `GET /api/chat/threads` возвращает доступные threads;
-- messages, attachment sends и realtime принимают selected `threadId`;
-- `portal_chat_threads` хранит authoritative backend mapping на Chatwoot
-  conversation;
-- group thread access строится из Chatwoot contact attributes;
-- group send добавляет Chatwoot-visible Markdown author prefix;
-- webhook/realtime fanout работает через `tenant + threadId` и повторно
-  валидирует group access before delivery.
-
-Exit criteria:
-
-- browser sends `threadId`, not Chatwoot conversation id;
-- empty thread view does not create Chatwoot conversation;
-- first send lazily creates/reuses correct Chatwoot conversation under lock;
-- group history/send/realtime validates current Chatwoot attributes;
-- backend/frontend/e2e checks pass before checkpoint commit.
-
-### MT-8.6. Post-Thread Runtime Audit And Cleanup
-
-Status:
-
-- completed on `2026-05-16`;
-- audit findings were folded into the stable project docs and superseded by the
-  clean-schema decision;
-- первоначальный read-only audit был расширен решением владельца проекта до
-  destructive clean-schema cleanup;
-- migration history сжата в один clean baseline;
-- `portal_chat_threads` является единственной portal chat mapping schema;
-- удален старый context endpoint;
-- локальная portal DB destructive reset-нута и мигрирована заново;
-- no proven chat/runtime `must-fix-before-MT-9` blocker remains;
-- local Playwright e2e, backend/frontend tests/build/lint и local group-thread
-  send validation прошли на чистой portal DB;
-- GitHub source-of-truth sync, production clean reinstall и production deploy
-  provenance через `DEPLOY_SOURCE.txt` закрыты;
-- `F-MT-004` remains the first `MT-9` implementation gate.
-
-Цель:
-
-После большого chat-thread runtime rewrite провести production smoke,
-read-only audit, findings classification, regression safety assessment,
-controlled refactoring assessment и dead-code removal plan до начала `MT-9`.
-
-Scope:
-
-- проверить production smoke или записать blocker;
-- составить audit map backend/frontend/tests/docs после thread runtime rewrite;
-- зафиксировать реальные risks в `docs/findings/`;
-- классифицировать candidates как `must-fix-before-MT-9`,
-  `safe-pre-MT-9-cleanup`, `dead-code-candidate`, `defer` или
-  `do-not-touch`;
-- добавлять regression tests до refactoring, если audit нашел слабое покрытие
-  critical boundary;
-- выбирать bounded cleanup/refactoring/dead-code slices только после read-only
-  audit evidence и выполнять их отдельными checkpoint commits.
-
-Exit criteria:
-
-- no open `must-fix-before-MT-9` finding remains;
-- dead-code removals have evidence;
-- cleanup/refactoring did not weaken tenant/auth/session/chat/realtime/webhook
-  boundaries;
-- final backend/frontend/e2e/build/lint checks pass or blocker is recorded;
-- `F-MT-004` is explicitly carried into `MT-9` as the first permissions-spike
-  and admin-token-boundary task, not closed by `MT-8.6`;
-- `MT-9` start is gated by any audit evidence blockers until they are resolved
-  or explicitly accepted.
 
 ### MT-9. Tenant Admin And Branding Rebuild
 
 Цель:
 
 Вернуть admin/branding только как tenant-owned feature поверх готовой
-multi-tenant foundation и утвержденного `MT-8.5` UI/UX baseline.
+multi-tenant foundation и утвержденного customer-facing UI baseline.
+
+Required first gate:
+
+- close `F-MT-004` with a Chatwoot permissions spike;
+- keep runtime Chatwoot token and admin-verification token as separate security
+  boundaries;
+- store admin-verification token as an encrypted per-tenant secret.
 
 Scope:
 
-- провести Chatwoot permissions spike для выбранной separate per-tenant
-  admin-verification token strategy;
-- добавить encrypted tenant admin-verification token storage, например
-  `chatwoot_admin_verification_token_ciphertext`;
-- реализовать tenant-scoped admin login через Chatwoot administrator role внутри
+- tenant-scoped admin login through Chatwoot administrator verification inside
   current tenant Chatwoot account;
-- реализовать tenant-owned branding settings;
-- реализовать production-grade tenant branding assets: DB metadata plus
-  S3-compatible object storage, локально через MinIO/compatible service без
-  local-files fallback;
-- подключить tenant-scoped audit events для admin/branding действий;
-- archived branch `feature/phase-10-portal-branding-admin` можно использовать
-  только как архив идей, не мержить ее как есть.
+- tenant-owned branding settings;
+- branding asset metadata in portal DB and binary content in S3-compatible
+  object storage, local development through the same MinIO/compatible pattern;
+- tenant-scoped audit events for admin/branding actions;
+- preview screens using real portal components;
+- archived branch `feature/phase-10-portal-branding-admin` may be used only as
+  an idea archive, not merged as-is.
 
 Required checks:
 
-- backend tests для admin verification token boundary;
-- backend tests для cross-tenant admin login rejection;
-- tests или documented blocker для insufficient Chatwoot token permissions;
-- frontend tests для tenant admin/branding state;
-- Playwright или documented blocker для browser admin/branding flow;
-- code review затронутых backend/frontend областей;
-- Prettier, lint/code-health и `git diff --check`.
+- backend tests for admin-verification token boundary;
+- backend tests for cross-tenant admin login rejection;
+- tests or documented blocker for insufficient Chatwoot token permissions;
+- frontend tests for tenant admin/branding state;
+- Playwright or documented blocker for browser admin/branding flow;
+- code review of touched backend/frontend areas;
+- Prettier, lint/code-health and `git diff --check`.
 
 Exit criteria:
 
-- admin tenant A не может войти или менять branding tenant B;
-- branding хранится и читается только в tenant scope;
-- branding assets не могут прочитаться или перезаписаться из другого tenant;
-- browser не получает Chatwoot authority;
-- runtime Chatwoot token не используется как implicit admin authority;
-- `F-MT-004` закрыт реализацией и проверками.
+- admin tenant A cannot log in to or change branding for tenant B;
+- branding settings and assets are tenant-scoped;
+- browser does not receive Chatwoot authority;
+- runtime Chatwoot token is not implicit admin authority;
+- `F-MT-004` is closed by implementation and verification.
 
 ### MT-10. Deployment And Runbook Update
 
 Status:
 
-- dedicated one-tenant clean reinstall flow prepared for production review;
+- dedicated one-tenant clean reinstall flow exists and has been used;
+- routine clean archive deploy flow exists for already bootstrapped production;
 - shared SaaS rollout docs remain future expansion of the same tenant-aware
   runtime model.
 
 Цель:
 
-Описать repeatable production operations для shared SaaS и dedicated installs.
+Make production operations repeatable for dedicated installs and future shared
+SaaS rollout without mixing portal deploys with Chatwoot core maintenance.
 
 Scope:
 
-- deployment docs для shared SaaS;
-- deployment docs для dedicated one-tenant install;
+- shared SaaS deployment docs;
+- dedicated one-tenant install/deploy docs;
 - tenant provisioning runbook;
 - tenant Chatwoot connection verification runbook;
 - domain and `lk.<client-domain>` runbook;
 - tenant secret rotation notes;
-- backup/restore notes для portal DB и tenant config;
+- backup/restore notes for portal DB and tenant config;
 - production acceptance checklist.
 
 Required checks:
 
-- docs review;
-- local command review against actual scripts;
-- Prettier по измененным docs;
+- docs review against actual scripts;
+- Prettier for changed docs;
 - `git diff --check`.
 
 Exit criteria:
 
-- shared SaaS install можно повторяемо объяснить и поднять;
-- dedicated install можно повторяемо объяснить и поднять как one-tenant portal;
-- tenant provisioning, webhook setup и secret rotation имеют понятные команды.
+- shared SaaS install can be explained and repeated;
+- dedicated install can be explained and repeated as one-tenant portal;
+- tenant provisioning, webhook setup and secret rotation have clear commands.
 
 ## Deferred Backlog
 
-Эти slices не являются текущим roadmap и не начинаются до закрытия `MT-9`/`MT-10`
-или отдельного явного решения.
+These slices are not current roadmap and should not start without explicit new
+feature intake.
 
 ### Notification Center And Advanced Notifications
 
-Status:
+Status: deferred.
 
-- deferred.
-
-Reason:
-
-- базовые chat notifications уже реализованы; оставшийся scope шире, чем
-  текущий chat/PWA baseline, и требует отдельного продукта, UX и privacy review.
-
-Minimum future scope:
-
-- notification inbox/center со списком событий;
-- cross-device unread counters beyond the current local indicators;
-- email/digest notifications, если этот канал явно откроем;
-- tenant-admin notification policy screen;
-- retention/cleanup policy для новых notification event records.
+Reason: base chat notifications already exist; notification center, digest/email
+notifications and tenant-admin notification policy require separate product,
+UX and privacy review.
 
 ### Multi-Domain / Custom Domains
 
-Status:
+Status: deferred.
 
-- deferred.
-
-Reason:
-
-- current production convention uses one canonical domain:
-  `lk.<client-domain>`.
+Reason: current production convention uses one canonical domain:
+`lk.<client-domain>`.
 
 Minimum future scope:
 
@@ -410,11 +169,18 @@ Minimum future scope:
 - secondary/custom domain routing;
 - deployment and certificate runbook updates.
 
+### SMS Fallback Gateway
+
+Status: not active.
+
+Reason: old SMS fallback design/implementation notes were not implemented and
+are not part of current roadmap. If reopened, start with a new feature intake
+against the current offline/PWA/chat runtime, do not reuse the removed execution
+plan as implementation authority.
+
 ### Broader Portal Product Domains
 
-Status:
-
-- deferred.
+Status: deferred.
 
 Examples:
 
@@ -422,21 +188,24 @@ Examples:
 - tasks;
 - service requests;
 - tariff/billing views;
-- notifications center;
-- profile expansion.
+- notification center;
+- profile expansion beyond the current read-only/avatar slice.
 
 Rule:
 
-- each domain must enter as a separate feature/module slice with tenant scope,
-  tests and explicit backend/frontend boundaries.
+- each domain enters as a separate feature/module slice with tenant scope,
+  backend/frontend boundaries, tests and explicit runtime validation.
 
 ## Removed From Active Plan
 
-Убрано из этого файла как неактуальное или дублирующее другие docs:
+Убрано из этого файла как неактуальное или дублирующее stable docs:
 
-- подробные historical Phase 0-11 descriptions;
+- historical Phase 0-11 descriptions;
 - already-built single-tenant roadmap;
-- bootstrap/git/workflow decisions;
-- long checklists for completed auth/chat/PWA phases;
-- duplicated architecture rules now covered by `docs/architecture/overview.md`
-  and `docs/architecture/decisions.md`.
+- completed `MT-8R`, `MT-8.5`, chat-thread runtime and post-thread cleanup
+  checklists;
+- detailed testing/deploy command lists for completed phases;
+- completed `docs/superpowers/` execution plans/specs;
+- bootstrap/git/workflow decisions now covered by `AGENTS.md`;
+- architecture rules now covered by `docs/architecture/overview.md` and
+  `docs/architecture/decisions.md`.

@@ -2,7 +2,17 @@
 
 ## Status
 
-Production deploys use the tenant-aware clean reinstall runbook:
+Routine feature deploys use the archive helper from a clean reviewed commit:
+
+```bash
+scripts/deploy-production-archive.sh \
+  --host=ubuntu@93.77.166.238 \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --activate
+```
+
+Use the tenant-aware clean reinstall runbook only when the portal-owned
+production stack must be recreated or reconfigured:
 
 ```text
 docs/operations/production-clean-reinstall.md
@@ -39,10 +49,37 @@ Production runtime uses:
 - explicit deploy source gate: clean production deploys come from a reviewed
   commit, while WIP device-preview deploys must use `--allow-dirty-preview` and
   `--preview-label`.
+- `DEPLOY_SOURCE.txt` in `/opt/chatwoot-client-portal-v2` must record the
+  deployed branch, commit and dirty status.
 
 For the current production rollout, the supported business mode is dedicated
 one-tenant install. Shared SaaS rollout can reuse the same runtime model, but
 needs a separate multi-tenant provisioning runbook.
+
+## Routine Deploy Checklist
+
+Before archive deploy:
+
+- current branch is `main`;
+- `git status --short` is empty;
+- `origin/main` contains the reviewed commit;
+- targeted checks for the current slice passed;
+- `pnpm build`, `pnpm lint` and `git diff --check` pass or a blocker is
+  explicitly recorded.
+
+After archive deploy:
+
+- `docker compose --env-file .env.production -f infra/production/compose.yaml ps`
+  shows `portal-db` and `portal-backend` healthy and `portal-web` running;
+- `cat DEPLOY_SOURCE.txt` matches the intended clean commit;
+- `curl -fsS https://lk.provgroup.ru/api/health` returns `status: ok`;
+- `curl -fsS https://lk.provgroup.ru/api/tenant` returns `provgroup`;
+- tenant Chatwoot connection verification passes:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=provgroup
+```
 
 ## Maintenance Cleanup
 

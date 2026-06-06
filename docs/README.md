@@ -22,5 +22,10 @@
 - [operations/chatwoot-4-13-upgrade-notes.md](operations/chatwoot-4-13-upgrade-notes.md) - Chatwoot 4.13 notes.
 - [operations/installed-pwa-smoke.md](operations/installed-pwa-smoke.md) - smoke для установленного Offline-first PWA.
 - [operations/production-mcp-playwright-test-cycle.md](operations/production-mcp-playwright-test-cycle.md) - сценарии production-like QA через MCP Playwright.
-- [operations/mcp-playwright-latest-results.md](operations/mcp-playwright-latest-results.md) - перезаписываемый результат последнего MCP Playwright прогона.
 - [findings/](findings/) - открытые review findings.
+
+## Execution Artifacts
+
+`docs/superpowers/` используется только для временных specs/plans во время
+активной feature work. После реализации source of truth переносится в stable
+docs выше, а завершенные execution artifacts удаляются.

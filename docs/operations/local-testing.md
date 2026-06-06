@@ -175,8 +175,8 @@ curl -i -H 'Host: buhfirma.127.0.0.1.nip.io:5173' \
 - Postgres отвечает `accepting connections`;
 - backend слушает `0.0.0.0:3301`;
 - frontend proxy больше не timeout;
-- `/api/auth/me` возвращает `200` для живой browser-сессии или `401
-  Требуется вход` без timeout;
+- `/api/auth/me` возвращает `200` для живой browser-сессии или `401` с
+  сообщением `Требуется вход` без timeout;
 - портал больше не показывает `Нужно проверить сессию` из-за недоступного
   backend.
 
@@ -485,10 +485,6 @@ production-like окружений:
 обязательных `portal_*` custom attributes и Mailpit registration flow описана
 отдельно:
 `docs/operations/local-cross-tenant-test-data.md`.
-
-Последний результат MCP Playwright прогона записывать сюда, перезаписывая файл
-целиком:
-`docs/operations/mcp-playwright-latest-results.md`.
 
 Коды registration/password reset смотреть в Mailpit:
 
