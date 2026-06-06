@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import type { ChatMessagesSnapshot } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
@@ -103,12 +102,7 @@ function createReadySnapshot(
 }
 
 function renderChatRoute(initialEntry = '/app/chat') {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries: [initialEntry] },
-  )
+  renderWithRouter(<AppRoutes />, { initialEntries: [initialEntry] })
 }
 
 describe('ChatPage thread selection', () => {

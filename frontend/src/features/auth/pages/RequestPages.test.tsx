@@ -14,7 +14,6 @@ import {
   savePasswordResetVerification,
 } from '../lib/passwordResetFlow'
 import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AuthSessionProvider } from '../lib/AuthSessionProvider'
 
 function createJsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -38,12 +37,7 @@ function createUnauthorizedSessionResponse() {
 }
 
 function renderAuthRoutes(initialEntries: string[]) {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries },
-  )
+  renderWithRouter(<AppRoutes />, { initialEntries })
 }
 
 describe('Auth flow pages', () => {

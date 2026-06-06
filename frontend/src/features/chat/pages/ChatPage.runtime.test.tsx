@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import type { ChatMessagesSnapshot } from '../types'
@@ -182,9 +181,7 @@ function createNotificationSettingsResponse() {
 function renderChatRoute() {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>
-        <AppRoutes />
-      </AuthSessionProvider>
+      <AppRoutes />
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )

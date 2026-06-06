@@ -101,9 +101,12 @@ execution-plan детали здесь не хранятся.
 - `MT-9B` is closed: tenant admin auth backend foundation has tenant-scoped
   login challenges, separate admin sessions/cookie, email code verification,
   logout and tenant-scoped audit events without Chatwoot authority in browser.
+- `MT-9C` is closed: React admin login/session UI uses the separate admin
+  auth boundary, `/admin/branding` is a protected read-only console shell, and
+  browser admin runtime stores no Chatwoot tokens or offline admin session data.
 
 ## Recommended Next Step
 
-- Continue `MT-9C` with admin login UI/session wiring over the completed
-  `MT-9B` backend foundation, or start branding settings foundation if UI is
-  intentionally deferred.
+- Start the next `MT-9` branding settings foundation: tenant-owned settings
+  persistence/API contracts, asset metadata/object storage shape, audit events
+  and real-component preview boundaries.

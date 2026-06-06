@@ -20,6 +20,7 @@ type OtpVerificationFormLayoutProps = {
   infoMessage?: string | null
   isResending: boolean
   isSubmitting: boolean
+  onChangeEmail?: () => void
   onCodeChange: (value: string) => void
   onResend: () => void
   onSubmit: FormEventHandler<HTMLFormElement>
@@ -47,6 +48,7 @@ export function OtpVerificationFormLayout({
   infoMessage,
   isResending,
   isSubmitting,
+  onChangeEmail,
   onCodeChange,
   onResend,
   onSubmit,
@@ -103,9 +105,19 @@ export function OtpVerificationFormLayout({
       </PrimaryButton>
 
       <div className="flex flex-col items-center gap-2 text-center text-sm sm:flex-row sm:justify-between sm:text-[15px]">
-        <Link className={authSecondaryLinkClassName} to={changeEmailTo}>
-          {changeEmailLabel}
-        </Link>
+        {onChangeEmail ? (
+          <button
+            className={authSecondaryLinkClassName}
+            onClick={onChangeEmail}
+            type="button"
+          >
+            {changeEmailLabel}
+          </button>
+        ) : (
+          <Link className={authSecondaryLinkClassName} to={changeEmailTo}>
+            {changeEmailLabel}
+          </Link>
+        )}
 
         <button
           className={`${authPrimaryLinkClassName} disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline`}

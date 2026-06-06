@@ -79,10 +79,12 @@ Completed gates:
 - `MT-9B` backend foundation is closed: tenant-scoped admin login challenges,
   email code verification, separate admin session cookie, logout and audit
   events are implemented without browser Chatwoot authority.
+- `MT-9C` frontend foundation is closed: separate React admin login/session UI,
+  protected read-only `/admin/branding` shell and admin/customer route-session
+  separation are implemented without browser Chatwoot authority.
 
 Remaining scope:
 
-- React admin login/session UI over `MT-9B`;
 - tenant-owned branding settings;
 - branding asset metadata in portal DB and binary content in S3-compatible
   object storage, local development through the same MinIO/compatible pattern;

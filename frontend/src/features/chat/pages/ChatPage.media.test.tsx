@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import type { ChatMessagesSnapshot, ChatThreadMediaResponse } from '../types'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
@@ -99,12 +98,7 @@ function createMediaResponse(): ChatThreadMediaResponse {
 }
 
 function renderChatRoute() {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries: ['/app/chat'] },
-  )
+  renderWithRouter(<AppRoutes />, { initialEntries: ['/app/chat'] })
 }
 
 describe('ChatPage media panel', () => {

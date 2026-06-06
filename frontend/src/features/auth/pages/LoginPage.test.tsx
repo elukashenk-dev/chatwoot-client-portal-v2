@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import { disableCurrentBrowserPushBestEffort } from '../../chat/pages/notificationBrowserPush'
-import { AuthSessionProvider } from '../lib/AuthSessionProvider'
 
 vi.mock('../../chat/pages/notificationBrowserPush', async () => {
   const actual = await vi.importActual<
@@ -118,12 +117,7 @@ function createSupportAvailabilityResponse() {
 }
 
 function renderAuthRoutes(initialEntries: string[]) {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries },
-  )
+  renderWithRouter(<AppRoutes />, { initialEntries })
 }
 
 describe('LoginPage', () => {

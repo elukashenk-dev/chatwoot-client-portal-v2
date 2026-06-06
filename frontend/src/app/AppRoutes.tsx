@@ -1,7 +1,11 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import { AdminProtectedRoute } from './layouts/AdminProtectedRoute'
+import { AdminPublicRoute } from './layouts/AdminPublicRoute'
+import { AdminSessionBoundary } from './layouts/AdminSessionBoundary'
 import { AppShellLayout } from './layouts/AppShellLayout'
+import { CustomerAuthBoundary } from './layouts/CustomerAuthBoundary'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
@@ -63,6 +67,16 @@ const UserProfilePage = lazyRouteComponent(() =>
     (module) => module.UserProfilePage,
   ),
 )
+const AdminLoginPage = lazyRouteComponent(() =>
+  import('../features/admin-auth/pages/AdminLoginPage').then(
+    (module) => module.AdminLoginPage,
+  ),
+)
+const AdminBrandingPage = lazyRouteComponent(() =>
+  import('../features/admin-shell/pages/AdminBrandingPage').then(
+    (module) => module.AdminBrandingPage,
+  ),
+)
 
 function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -76,93 +90,123 @@ export function AppRoutes() {
         element={<Navigate replace to={routePaths.auth.login} />}
       />
 
-      <Route path="/auth" element={<PublicAuthRoute />}>
-        <Route
-          path="login"
-          element={
-            <LazyRoute>
-              <LoginPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="register"
-          element={
-            <LazyRoute>
-              <RegisterRequestPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="register/verify"
-          element={
-            <LazyRoute>
-              <RegisterVerifyPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="register/set-password"
-          element={
-            <LazyRoute>
-              <RegisterSetPasswordPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="password-reset/request"
-          element={
-            <LazyRoute>
-              <PasswordResetRequestPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="password-reset/verify"
-          element={
-            <LazyRoute>
-              <PasswordResetVerifyPage />
-            </LazyRoute>
-          }
-        />
-        <Route
-          path="password-reset/set-password"
-          element={
-            <LazyRoute>
-              <PasswordResetSetPasswordPage />
-            </LazyRoute>
-          }
-        />
+      <Route element={<CustomerAuthBoundary />}>
+        <Route path="/auth" element={<PublicAuthRoute />}>
+          <Route
+            path="login"
+            element={
+              <LazyRoute>
+                <LoginPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="register"
+            element={
+              <LazyRoute>
+                <RegisterRequestPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="register/verify"
+            element={
+              <LazyRoute>
+                <RegisterVerifyPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="register/set-password"
+            element={
+              <LazyRoute>
+                <RegisterSetPasswordPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="password-reset/request"
+            element={
+              <LazyRoute>
+                <PasswordResetRequestPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="password-reset/verify"
+            element={
+              <LazyRoute>
+                <PasswordResetVerifyPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="password-reset/set-password"
+            element={
+              <LazyRoute>
+                <PasswordResetSetPasswordPage />
+              </LazyRoute>
+            }
+          />
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route path="/app" element={<AppShellLayout />}>
+            <Route
+              index
+              element={<Navigate replace to={routePaths.app.chat} />}
+            />
+            <Route path="chat" element={<ChatPage />} />
+            <Route
+              path="profile"
+              element={
+                <LazyRoute>
+                  <UserProfilePage />
+                </LazyRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <LazyRoute>
+                  <SettingsPage />
+                </LazyRoute>
+              }
+            />
+            <Route
+              path="settings/notifications"
+              element={
+                <LazyRoute>
+                  <UserNotificationsPage />
+                </LazyRoute>
+              }
+            />
+          </Route>
+        </Route>
       </Route>
 
-      <Route element={<ProtectedRoute />}>
-        <Route path="/app" element={<AppShellLayout />}>
+      <Route element={<AdminSessionBoundary />}>
+        <Route element={<AdminPublicRoute />}>
           <Route
-            index
-            element={<Navigate replace to={routePaths.app.chat} />}
-          />
-          <Route path="chat" element={<ChatPage />} />
-          <Route
-            path="profile"
+            path={routePaths.admin.login}
             element={
               <LazyRoute>
-                <UserProfilePage />
+                <AdminLoginPage />
               </LazyRoute>
             }
           />
+        </Route>
+
+        <Route element={<AdminProtectedRoute />}>
           <Route
-            path="settings"
-            element={
-              <LazyRoute>
-                <SettingsPage />
-              </LazyRoute>
-            }
+            path={routePaths.admin.root}
+            element={<Navigate replace to={routePaths.admin.branding} />}
           />
           <Route
-            path="settings/notifications"
+            path={routePaths.admin.branding}
             element={
               <LazyRoute>
-                <UserNotificationsPage />
+                <AdminBrandingPage />
               </LazyRoute>
             }
           />

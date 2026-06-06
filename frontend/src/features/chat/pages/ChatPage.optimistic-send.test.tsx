@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineOutboxStore } from '../../offline/offlineOutboxStore'
 import { offlineStore } from '../../offline/offlineStore'
@@ -168,9 +167,7 @@ function createSupportAvailabilityResponse() {
 function renderChatRoute() {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>
-        <AppRoutes />
-      </AuthSessionProvider>
+      <AppRoutes />
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )

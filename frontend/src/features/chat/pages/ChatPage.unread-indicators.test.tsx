@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type { PortalPushMessagePayload } from '../../../pwa/serviceWorkerRuntime'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
 import { offlineStore } from '../../offline/offlineStore'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
@@ -269,20 +268,13 @@ function createContextResponse(): ChatMessageContextResponse {
 }
 
 function renderChatRoute() {
-  renderWithRouter(
-    <AuthSessionProvider>
-      <AppRoutes />
-    </AuthSessionProvider>,
-    { initialEntries: ['/app/chat'] },
-  )
+  renderWithRouter(<AppRoutes />, { initialEntries: ['/app/chat'] })
 }
 
 function renderChatRouteWithTenant() {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>
-        <AppRoutes />
-      </AuthSessionProvider>
+      <AppRoutes />
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )
@@ -438,7 +430,8 @@ describe('ChatPage unread indicators', () => {
 
     expect(
       fetchMock.mock.calls.some(
-        ([input]) => String(input) === '/api/chat/messages?threadId=group%3A154',
+        ([input]) =>
+          String(input) === '/api/chat/messages?threadId=group%3A154',
       ),
     ).toBe(false)
     await expect(

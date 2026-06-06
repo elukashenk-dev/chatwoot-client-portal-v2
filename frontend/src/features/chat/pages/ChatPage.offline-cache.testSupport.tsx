@@ -6,7 +6,6 @@ import {
   AuthSessionContext,
   type AuthSessionContextValue,
 } from '../../auth/lib/authSessionContext'
-import { AuthSessionProvider } from '../../auth/lib/AuthSessionProvider'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { ChatPage } from './ChatPage'
 import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../types'
@@ -177,9 +176,7 @@ export function saveStartupChatFallback({
 export function renderChatRoute() {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>
-        <AppRoutes />
-      </AuthSessionProvider>
+      <AppRoutes />
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )

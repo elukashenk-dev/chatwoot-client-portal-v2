@@ -1,0 +1,172 @@
+import { screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { AppRoutes } from './AppRoutes'
+import { renderWithRouter } from '../test/renderWithRouter'
+
+function createJsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    status,
+  })
+}
+
+function createAdminUnauthorizedResponse() {
+  return createJsonResponse(
+    {
+      error: {
+        code: 'TENANT_ADMIN_UNAUTHORIZED',
+        message: 'Требуется вход администратора.',
+      },
+    },
+    401,
+  )
+}
+
+function createAdminSessionResponse() {
+  return createJsonResponse({
+    admin: {
+      chatwootAgentId: 11,
+      email: 'admin@example.test',
+      role: 'administrator',
+    },
+    session: {
+      expiresAt: '2026-06-07T00:00:00.000Z',
+    },
+  })
+}
+
+function createCustomerUnauthorizedResponse() {
+  return createJsonResponse(
+    {
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Требуется вход.',
+      },
+    },
+    401,
+  )
+}
+
+function renderRoute(initialEntry: string) {
+  renderWithRouter(<AppRoutes />, { initialEntries: [initialEntry] })
+}
+
+describe('AppRoutes admin route separation', () => {
+  const fetchMock = vi.fn<typeof fetch>()
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    fetchMock.mockReset()
+  })
+
+  it('redirects unauthenticated admin root visits to admin login', async () => {
+    fetchMock.mockResolvedValueOnce(createAdminUnauthorizedResponse())
+
+    renderRoute('/admin')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Вход в админ-консоль' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/auth/me',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+  })
+
+  it('renders branding for an authenticated admin session', async () => {
+    fetchMock.mockResolvedValueOnce(createAdminSessionResponse())
+
+    renderRoute('/admin/branding')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Брендинг' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Фоны и изображения' }),
+    ).toBeInTheDocument()
+  })
+
+  it('redirects authenticated admin login visits to branding', async () => {
+    fetchMock.mockResolvedValueOnce(createAdminSessionResponse())
+
+    renderRoute('/admin/login')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Брендинг' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Вход в админ-консоль' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not call the customer session endpoint for admin routes', async () => {
+    fetchMock.mockResolvedValueOnce(createAdminUnauthorizedResponse())
+
+    renderRoute('/admin')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Вход в админ-консоль' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.anything(),
+    )
+  })
+
+  it('does not let admin session open customer app routes', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminSessionResponse()
+      }
+
+      if (url === '/api/auth/me') {
+        return createCustomerUnauthorizedResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderRoute('/app/chat')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Центр поддержки' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/admin/auth/me',
+      expect.anything(),
+    )
+  })
+
+  it('keeps public customer auth routes on the customer session boundary', async () => {
+    fetchMock.mockResolvedValueOnce(createCustomerUnauthorizedResponse())
+
+    renderRoute('/auth/login')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Центр поддержки' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/admin/auth/me',
+      expect.anything(),
+    )
+  })
+})

@@ -438,6 +438,8 @@ chatwoot-client-portal-v2/
 
 - `tenant` - public tenant context and tenant identity metadata;
 - `auth` - registration, password reset, login/logout/me UI;
+- `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
+- `admin-shell` - protected read-only admin console shell for future branding;
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
 - `profile` - protected read-only profile page and avatar upload flow;
 - `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
@@ -449,7 +451,7 @@ chatwoot-client-portal-v2/
 
 ### MT-9 Tenant Admin And Branding
 
-Следующая крупная зона - tenant-owned admin и branding поверх уже готового
+Текущая крупная зона - tenant-owned admin и branding поверх уже готового
 tenant-aware runtime.
 
 Зафиксированное направление:
@@ -465,6 +467,8 @@ tenant-aware runtime.
 - `MT-9B` добавил backend-only tenant admin auth foundation: login challenges,
   email code verification, отдельный signed admin session cookie, logout и
   tenant-scoped audit events;
+- `MT-9C` добавил отдельный React admin login/session UI, защищенный read-only
+  `/admin/branding` shell и разделение customer/admin route-session boundaries;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

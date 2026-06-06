@@ -1,5 +1,10 @@
 export const routePaths = {
   root: '/',
+  admin: {
+    branding: '/admin/branding',
+    login: '/admin/login',
+    root: '/admin',
+  },
   app: {
     chat: '/app/chat',
     profile: '/app/profile',

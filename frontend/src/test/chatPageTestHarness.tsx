@@ -3,7 +3,6 @@ import type { ReactElement } from 'react'
 import { vi } from 'vitest'
 
 import { AppRoutes } from '../app/AppRoutes'
-import { AuthSessionProvider } from '../features/auth/lib/AuthSessionProvider'
 import { clearOfflineDatabaseForTests } from '../features/offline/offlineDatabase'
 import { TenantIdentityContext } from '../features/tenant/lib/tenantIdentityContext'
 import { renderWithRouter } from './renderWithRouter'
@@ -114,7 +113,7 @@ export async function setupOfflineChatTestEnvironment() {
 export function renderChatRoute(ui: ReactElement = <AppRoutes />) {
   renderWithRouter(
     <TenantIdentityContext.Provider value={tenantContextValue}>
-      <AuthSessionProvider>{ui}</AuthSessionProvider>
+      {ui}
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
   )
