@@ -60,6 +60,7 @@ Create:
 - `frontend/src/app/layouts/AdminPublicRoute.tsx` - redirects authenticated admin away from login.
 - `frontend/src/app/layouts/AdminProtectedRoute.tsx` - protects `/admin/*`.
 - `frontend/src/app/AppRoutes.admin.test.tsx` - route/session separation tests.
+- `playwright.admin-ui.config.ts` - route-mocked admin UI Playwright config without backend global setup.
 - `tests/e2e/admin-login-ui.spec.ts` - route-mocked browser login/logout flow.
 
 Modify:
@@ -69,6 +70,12 @@ Modify:
 - `frontend/src/app/App.tsx` - remove global `AuthSessionProvider`.
 - `frontend/src/app/AppRoutes.tsx` - add admin routes and wrap customer routes with `CustomerAuthBoundary`.
 - `frontend/src/app/routePaths.ts` - add admin paths.
+- `frontend/src/app/AppRoutes.profile.test.tsx` - update customer route test after moving customer auth boundary into routes.
+- `frontend/src/features/auth/pages/LoginPage.test.tsx` - remove external `AuthSessionProvider` around `AppRoutes`.
+- `frontend/src/features/auth/pages/RequestPages.test.tsx` - remove external `AuthSessionProvider` around `AppRoutes`.
+- `frontend/src/test/chatPageTestHarness.tsx` - remove external `AuthSessionProvider` around `AppRoutes`.
+- Chat route tests that directly wrap `AppRoutes` with `AuthSessionProvider`, found by `rg -n "<AuthSessionProvider>|AuthSessionContext.Provider|<AppRoutes" frontend/src -S`.
+- `docs/roadmap/work-log.md` - update after implementation and verification because `MT-9C` changes stable product/runtime baseline.
 
 Do not modify:
 
@@ -781,6 +788,7 @@ Cover:
 - switches to `Подтвердите вход`;
 - fills six OTP cells and calls `/api/admin/auth/verify`;
 - redirects to `/admin/branding`;
+- enables resend after `resendAvailableInSeconds` and sends another request;
 - handles `existing_pending` as code step with info;
 - handles `TENANT_ADMIN_DELIVERY_IN_PROGRESS` without switching to code step.
 
@@ -793,7 +801,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
 
 import { renderWithRouter } from '../../../test/renderWithRouter'
-import { AdminSessionProvider } from '../lib/AdminSessionProvider'
+import {
+  AdminSessionContext,
+  type AdminSessionContextValue,
+} from '../lib/adminSessionContext'
 import { AdminLoginPage } from './AdminLoginPage'
 
 function createJsonResponse(body: unknown, status = 200) {
@@ -831,15 +842,26 @@ function createAdminSessionResponse() {
 }
 
 function renderAdminLoginRoute() {
+  const adminSession = {
+    admin: null,
+    errorMessage: null,
+    refreshSession: vi.fn(),
+    setVerifiedSession: vi.fn(),
+    signOut: vi.fn(),
+    status: 'unauthenticated',
+  } satisfies AdminSessionContextValue
+
   renderWithRouter(
-    <AdminSessionProvider>
+    <AdminSessionContext.Provider value={adminSession}>
       <Routes>
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/branding" element={<h1>Брендинг</h1>} />
       </Routes>
-    </AdminSessionProvider>,
+    </AdminSessionContext.Provider>,
     { initialEntries: ['/admin/login'] },
   )
+
+  return adminSession
 }
 ```
 
@@ -857,6 +879,33 @@ async function fillOtpCode(
     await user.type(screen.getByLabelText(label), digit)
   }
 }
+```
+
+For the resend test, use fake timers so the cooldown requirement is explicit:
+
+```ts
+vi.useFakeTimers()
+const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+// request response has resendAvailableInSeconds: 60
+expect(screen.getByRole('button', { name: /Повторить через/ })).toBeDisabled()
+
+await vi.advanceTimersByTimeAsync(60_000)
+
+expect(
+  screen.getByRole('button', { name: 'Отправить код повторно' }),
+).not.toBeDisabled()
+
+await user.click(screen.getByRole('button', { name: 'Отправить код повторно' }))
+
+expect(fetchMock).toHaveBeenCalledWith(
+  '/api/admin/auth/request',
+  expect.objectContaining({
+    body: JSON.stringify({ email: 'admin@example.test' }),
+    credentials: 'include',
+    method: 'POST',
+  }),
+)
 ```
 
 - [ ] **Step 2: Run failing login page test**
@@ -947,6 +996,8 @@ Behavior:
 - call `requestAdminLoginCode({ email })`;
 - if response is `sent`, show code step with info `Код отправлен на ${email}.`;
 - if response is `existing_pending`, show code step with info `Код уже отправлен. Проверьте почту или дождитесь повторной отправки.`;
+- store `resendAvailableInSeconds` in local state and decrement it once per second while it is above zero;
+- `onResend` calls `requestAdminLoginCode({ email })` again, updates info message and resets cooldown from the response;
 - call `verifyAdminLoginCode({ email, code })`;
 - call `setVerifiedSession(response)`;
 - navigate to `location.state?.from.pathname` only when it starts with `/admin` and is not `/admin/login`;
@@ -965,7 +1016,8 @@ function getSafeAdminReturnPath(state: unknown) {
     typeof state.from === 'object' &&
     'pathname' in state.from &&
     typeof state.from.pathname === 'string' &&
-    state.from.pathname.startsWith('/admin') &&
+    (state.from.pathname === '/admin' ||
+      state.from.pathname.startsWith('/admin/')) &&
     state.from.pathname !== '/admin/login'
   ) {
     return state.from.pathname
@@ -1015,7 +1067,16 @@ Render with `AdminSessionContext.Provider` and assert:
   - `Страницы портала`;
 - preview pane `Предпросмотр`;
 - desktop-required narrow state text `Админ-консоль доступна с широкого экрана`;
+- minimum disabled future controls:
+  - `Название портала`;
+  - `Загрузить логотип`;
+  - `Основной цвет`;
+  - `Фон auth-экранов`;
+  - `Фон чата`;
+  - `Label поддержки`;
+  - `Страница информации о чате`;
 - logout button calls `signOut`.
+- logout failure shows visible `InlineAlert`, keeps the user on the page, and allows retry.
 
 - [ ] **Step 2: Run failing shell test**
 
@@ -1042,9 +1103,12 @@ Content requirements:
 - all future setting controls disabled;
 - no fake save success;
 - logout button calls `useAdminSession().signOut()`;
+- logout errors are caught locally and displayed through `InlineAlert` without navigating away;
 - narrow state available in markup with copy:
   - `Админ-консоль доступна с широкого экрана`;
   - `Настройки и предпросмотр требуют desktop ширину.`;
+- narrow state wrapper uses `lg:hidden`;
+- desktop console wrapper uses `hidden lg:grid` or equivalent `lg` breakpoint styles;
 - desktop shell uses left nav, center work area, right preview pane;
 - preview pane copy states that real portal component preview comes in next branding slice.
 
@@ -1079,6 +1143,22 @@ const brandingGroups = [
   },
 ]
 ```
+
+Minimum disabled controls:
+
+```tsx
+const disabledControls = [
+  'Название портала',
+  'Загрузить логотип',
+  'Основной цвет',
+  'Фон auth-экранов',
+  'Фон чата',
+  'Label поддержки',
+  'Страница информации о чате',
+]
+```
+
+Render these as disabled `button`, `input`, `textarea` or `select` controls so tests can assert `toBeDisabled()`. Use `aria-describedby` only when helper text is present; do not add working save buttons in `MT-9C`.
 
 - [ ] **Step 4: Run shell page tests**
 
@@ -1376,18 +1456,69 @@ Add admin routes before wildcard:
 </Route>
 ```
 
-- [ ] **Step 10: Run route tests**
+- [ ] **Step 10: Update existing tests after customer auth boundary relocation**
+
+Find affected tests:
+
+```bash
+rg -n "<AuthSessionProvider>|AuthSessionContext.Provider|<AppRoutes" frontend/src -S
+```
+
+Apply these rules:
+
+- If a test renders `<AppRoutes />`, do not wrap it in an external `AuthSessionProvider`; `AppRoutes` now creates the customer boundary.
+- If a test used `AuthSessionContext.Provider` to bypass auth around `<AppRoutes />`, replace it with fetch mocks for `/api/auth/me`.
+- Tests that render components without `<AppRoutes />` can keep direct `AuthSessionProvider` or `AuthSessionContext.Provider`.
+- Update fetch mock order so the first customer route request is `/api/auth/me`.
+- Keep admin route tests asserting that `/admin` does not call `/api/auth/me`.
+
+Minimum files to inspect and update:
+
+```text
+frontend/src/app/AppRoutes.profile.test.tsx
+frontend/src/features/auth/pages/LoginPage.test.tsx
+frontend/src/features/auth/pages/RequestPages.test.tsx
+frontend/src/test/chatPageTestHarness.tsx
+frontend/src/features/chat/pages/ChatPage.thread-selection.test.tsx
+frontend/src/features/chat/pages/ChatPage.unread-indicators.test.tsx
+frontend/src/features/chat/pages/ChatPage.media.test.tsx
+frontend/src/features/chat/pages/ChatPage.runtime.test.tsx
+frontend/src/features/chat/pages/ChatPage.optimistic-send.test.tsx
+frontend/src/features/chat/pages/ChatPage.search.test.tsx
+frontend/src/features/chat/pages/ChatPage.offline-cache.testSupport.tsx
+```
+
+After updating, this command should not show `AppRoutes` manually wrapped by `AuthSessionProvider` or `AuthSessionContext.Provider`:
+
+```bash
+rg -n "<AuthSessionProvider>\\s*\\n\\s*<AppRoutes|<AuthSessionContext\\.Provider[\\s\\S]*<AppRoutes" frontend/src -S
+```
+
+Expected: no matches.
+
+- [ ] **Step 11: Run route tests**
 
 Run:
 
 ```bash
-pnpm --dir frontend exec vitest run src/app/AppRoutes.admin.test.tsx src/app/AppRoutes.profile.test.tsx src/features/auth/pages/LoginPage.test.tsx --reporter verbose
+pnpm --dir frontend exec vitest run \
+  src/app/AppRoutes.admin.test.tsx \
+  src/app/AppRoutes.profile.test.tsx \
+  src/features/auth/pages/LoginPage.test.tsx \
+  src/features/auth/pages/RequestPages.test.tsx \
+  src/features/chat/pages/ChatPage.thread-selection.test.tsx \
+  src/features/chat/pages/ChatPage.unread-indicators.test.tsx \
+  src/features/chat/pages/ChatPage.media.test.tsx \
+  src/features/chat/pages/ChatPage.runtime.test.tsx \
+  src/features/chat/pages/ChatPage.optimistic-send.test.tsx \
+  src/features/chat/pages/ChatPage.search.test.tsx \
+  --reporter verbose
 ```
 
 Expected:
 
 ```text
-Test Files  3 passed
+Test Files  10 passed
 ```
 
 ---
@@ -1396,20 +1527,53 @@ Test Files  3 passed
 
 **Files:**
 
+- Create: `playwright.admin-ui.config.ts`
 - Create: `tests/e2e/admin-login-ui.spec.ts`
 
-- [ ] **Step 1: Add route-mocked e2e test**
+- [ ] **Step 1: Add route-mocked Playwright config without global setup**
+
+Create `playwright.admin-ui.config.ts`:
+
+```ts
+import { defineConfig, devices } from '@playwright/test'
+
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:5173'
+
+export default defineConfig({
+  expect: {
+    timeout: 5000,
+  },
+  fullyParallel: false,
+  forbidOnly: Boolean(process.env.CI),
+  reporter: [['list'], ['html', { open: 'never' }]],
+  retries: process.env.CI ? 2 : 0,
+  testDir: './tests/e2e',
+  timeout: 30_000,
+  use: {
+    baseURL,
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+})
+```
+
+This config intentionally has no `globalSetup`, because this route-mocked UI smoke must not require local Postgres, backend migrations, Chatwoot or Mailpit.
+
+- [ ] **Step 2: Add route-mocked e2e test**
 
 Create `tests/e2e/admin-login-ui.spec.ts`.
 
 Use route mocks so the test proves browser UI/routing without depending on real Mailpit admin email:
 
 ```ts
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
-test('logs into admin console through email code UI and logs out', async ({
-  page,
-}) => {
+async function mockAdminUiRoutes(page: Page) {
   let isAdminAuthenticated = false
 
   await page.route('**/api/tenant', async (route) => {
@@ -1508,6 +1672,12 @@ test('logs into admin console through email code UI and logs out', async ({
     isAdminAuthenticated = false
     await route.fulfill({ status: 204 })
   })
+}
+
+test('logs into admin console through email code UI and logs out', async ({
+  page,
+}) => {
+  await mockAdminUiRoutes(page)
 
   await page.goto('/admin/login')
   await expect(
@@ -1538,29 +1708,66 @@ test('logs into admin console through email code UI and logs out', async ({
   await page.getByRole('button', { name: 'Выйти' }).click()
   await expect(page).toHaveURL(/\/admin\/login$/)
 })
+
+test('shows controlled mobile state for admin branding shell', async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 })
+  await mockAdminUiRoutes(page)
+  await page.goto('/admin/login')
+  await page.getByLabel('Email администратора').fill('admin@example.test')
+  await page.getByRole('button', { name: 'Получить код' }).click()
+
+  for (const [index, digit] of Array.from('123456').entries()) {
+    const label =
+      index === 0 ? 'Код из письма' : `Код из письма, цифра ${index + 1}`
+
+    await page.getByLabel(label, { exact: true }).fill(digit)
+  }
+
+  await page.getByRole('button', { name: 'Войти в админ-консоль' }).click()
+
+  await expect(page).toHaveURL(/\/admin\/branding$/)
+  await expect(
+    page.getByRole('heading', {
+      name: 'Админ-консоль доступна с широкого экрана',
+    }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Настройки и предпросмотр требуют desktop ширину.'),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible()
+  await expect(page.getByText('Фоны и изображения')).not.toBeVisible()
+})
 ```
 
-- [ ] **Step 2: Run focused Playwright test**
+- [ ] **Step 3: Run focused Playwright test**
 
-Make sure frontend dev server is running. If it is not running:
+Make sure frontend dev server is running in a separate terminal/session. If it is not running, start it and keep it open:
 
 ```bash
 pnpm --dir frontend dev -- --host 0.0.0.0
 ```
 
+Readiness URL:
+
+```text
+http://127.0.0.1:5173/admin/login
+```
+
 Then run:
 
 ```bash
-PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 pnpm test:e2e -- tests/e2e/admin-login-ui.spec.ts
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 pnpm exec playwright test --config playwright.admin-ui.config.ts tests/e2e/admin-login-ui.spec.ts
 ```
 
 Expected:
 
 ```text
-1 passed
+2 passed
 ```
 
-If global setup cannot run because local Postgres/backend env is unavailable, record the blocker in the final implementation response and run the Vitest/browser route tests instead. Do not silently skip browser validation.
+If the dev server cannot start or the browser cannot run, record the blocker in the final implementation response and run the Vitest/browser route tests instead. Do not silently skip browser validation.
 
 ---
 
@@ -1585,13 +1792,19 @@ pnpm --dir frontend exec vitest run \
   src/app/AppRoutes.profile.test.tsx \
   src/features/auth/pages/LoginPage.test.tsx \
   src/features/auth/pages/RequestPages.test.tsx \
+  src/features/chat/pages/ChatPage.thread-selection.test.tsx \
+  src/features/chat/pages/ChatPage.unread-indicators.test.tsx \
+  src/features/chat/pages/ChatPage.media.test.tsx \
+  src/features/chat/pages/ChatPage.runtime.test.tsx \
+  src/features/chat/pages/ChatPage.optimistic-send.test.tsx \
+  src/features/chat/pages/ChatPage.search.test.tsx \
   --reporter verbose
 ```
 
 Expected:
 
 ```text
-Test Files  8 passed
+Test Files  14 passed
 ```
 
 - [ ] **Step 2: Run frontend lint**
@@ -1627,16 +1840,28 @@ tsc -b && vite build ... completed with exit code 0
 Run:
 
 ```bash
-PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 pnpm test:e2e -- tests/e2e/admin-login-ui.spec.ts
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 pnpm exec playwright test --config playwright.admin-ui.config.ts tests/e2e/admin-login-ui.spec.ts
 ```
 
 Expected:
 
 ```text
-1 passed
+2 passed
 ```
 
-- [ ] **Step 5: Run whitespace check**
+- [ ] **Step 5: Update work-log after successful closure**
+
+After implementation, review and checks pass, update
+`docs/roadmap/work-log.md`:
+
+- add one concise current-baseline bullet for completed `MT-9C` admin login UI
+  and route/session boundary;
+- keep it as a stable baseline map, without test command details;
+- replace the single `Recommended Next Step` block with the next active branding
+  settings foundation step;
+- keep exactly one `Recommended Next Step` block at the end of the file.
+
+- [ ] **Step 6: Run whitespace check**
 
 Run:
 
@@ -1646,7 +1871,7 @@ git diff --check
 
 Expected: no output.
 
-- [ ] **Step 6: Manual code review checklist**
+- [ ] **Step 7: Manual code review checklist**
 
 Review these invariants before final response:
 
@@ -1660,7 +1885,7 @@ Review these invariants before final response:
 - login and admin copy are Russian.
 - future branding groups include backgrounds and portal pages.
 
-- [ ] **Step 7: Commit checkpoint after closure flow**
+- [ ] **Step 8: Commit checkpoint after closure flow**
 
 Only after review and checks pass:
 
@@ -1678,7 +1903,9 @@ git add frontend/src/shared/ui/OtpInputGroup.tsx \
   frontend/src/app/layouts/AdminPublicRoute.tsx \
   frontend/src/app/layouts/AdminProtectedRoute.tsx \
   frontend/src/app/AppRoutes.admin.test.tsx \
-  tests/e2e/admin-login-ui.spec.ts
+  playwright.admin-ui.config.ts \
+  tests/e2e/admin-login-ui.spec.ts \
+  docs/roadmap/work-log.md
 git diff --cached --check
 git commit -m "feat: add mt-9c admin login ui"
 ```
