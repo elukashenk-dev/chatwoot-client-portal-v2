@@ -1,17 +1,18 @@
-# MT-9 Tenant Admin And Branding Preparation
+# MT-9 Подготовка Tenant Admin и Брендинга
 
-## Status
+## Статус
 
-Status: preparation/spec draft for `MT-9 Tenant Admin And Branding Rebuild`.
+Статус: подготовительный черновик спецификации для
+`MT-9 Tenant Admin And Branding Rebuild`.
 
-This file records the first pass of research and architecture framing. It is not
-an implementation plan yet. The immediate goal is to close the `F-MT-004`
-security gate with a precise Chatwoot permissions spike and a tenant-scoped
-admin-verification token boundary before any branding UI is implemented.
+Этот файл фиксирует первый проход исследования и архитектурной рамки. Это еще
+не план реализации. Ближайшая цель - закрыть проверку безопасности `F-MT-004`: сделать
+точное исследование прав Chatwoot и зафиксировать tenant-scoped границу для
+admin-verification token до реализации любого UI брендинга.
 
-## Sources Checked
+## Проверенные Источники
 
-Project source of truth:
+Источник истины проекта:
 
 - `AGENTS.md`
 - `docs/roadmap/work-log.md`
@@ -22,7 +23,7 @@ Project source of truth:
 - `docs/design/portal-ui-ux-baseline.md`
 - `docs/findings/F-MT-004-admin-chatwoot-token-boundary.md`
 
-Current code:
+Текущий код:
 
 - `backend/src/db/schema.ts`
 - `backend/src/modules/tenants/secrets.ts`
@@ -36,47 +37,48 @@ Current code:
 - `frontend/src/app/AppRoutes.tsx`
 - `frontend/src/app/routePaths.ts`
 
-External Chatwoot source of truth:
+Внешний источник истины по Chatwoot:
 
-- Official docs:
+- официальная документация:
   `https://developers.chatwoot.com/api-reference/introduction`
-- Official Agents endpoint page:
+- официальная страница Agents endpoint:
   `https://developers.chatwoot.com/api-reference/agents/list-agents-in-account`
-- Official OpenAPI source referenced by the docs:
+- официальный OpenAPI-источник, на который ссылается документация:
   `https://raw.githubusercontent.com/chatwoot/chatwoot/develop/swagger/tag_groups/application_swagger.json`
-- Local Chatwoot CE source:
+- локальный source Chatwoot CE:
   - `../chatwoot-ce-stable/app/controllers/api/v1/accounts/agents_controller.rb`
   - `../chatwoot-ce-stable/app/controllers/api/v1/accounts/base_controller.rb`
   - `../chatwoot-ce-stable/app/controllers/concerns/access_token_auth_helper.rb`
   - `../chatwoot-ce-stable/app/controllers/concerns/ensure_current_account_helper.rb`
   - `../chatwoot-ce-stable/app/policies/user_policy.rb`
 
-Archived idea source:
+Архивный источник идей:
 
-- branch `feature/phase-10-portal-branding-admin`
+- ветка `feature/phase-10-portal-branding-admin`
 
-## Roadmap Fit
+## Связь С Дорожной Картой
 
-`MT-9` is the next active roadmap scope.
+`MT-9` - следующая активная область дорожной карты.
 
-The roadmap requires:
+Дорожная карта требует:
 
-- close `F-MT-004` with a Chatwoot permissions spike;
-- keep runtime Chatwoot token and admin-verification token as separate security
-  boundaries;
-- store the admin-verification token as an encrypted per-tenant secret;
-- build tenant-scoped admin login, branding settings, object-storage backed
-  branding assets, audit events and previews only after the first gate is clear.
+- закрыть `F-MT-004` через исследование прав Chatwoot;
+- держать runtime Chatwoot token и admin-verification token как разные границы
+  безопасности;
+- хранить admin-verification token как зашифрованный per-tenant secret;
+- начинать tenant-scoped admin login, branding settings, branding assets в
+  object storage, audit events и предпросмотры только после закрытия первой
+  проверки.
 
-Visual comparison is not required for the first slice because the first slice is
-backend/security focused. Visual preview becomes required before branding admin
-UI decisions.
+Визуальное сравнение для первого среза не требуется, потому что первый срез
+сосредоточен на backend/security. Перед решениями по admin UI брендинга
+визуальный предпросмотр снова становится обязательным.
 
-## Current Architecture Baseline
+## Текущий Архитектурный Базис
 
-Tenant resolution is already host-based and happens before auth/chat runtime.
+Tenant resolution уже host-based и выполняется до auth/chat runtime.
 
-Current `portal_tenants` contains:
+Текущий `portal_tenants` содержит:
 
 - `slug`;
 - `display_name`;
@@ -90,61 +92,63 @@ Current `portal_tenants` contains:
 - `chatwoot_api_access_token_ciphertext`;
 - `chatwoot_webhook_secret_ciphertext`.
 
-Tenant secrets are encrypted with `AES-256-GCM` through
-`backend/src/modules/tenants/secrets.ts` and `PORTAL_TENANT_SECRET_KEY`.
+Tenant secrets шифруются через `AES-256-GCM` в
+`backend/src/modules/tenants/secrets.ts` с ключом `PORTAL_TENANT_SECRET_KEY`.
 
-The current tenant request context decrypts the runtime Chatwoot API token and
-webhook secret for normal portal runtime. This context is consumed by chat,
-profile, notification, webhook and tenant public-context flows.
+Текущий tenant request context расшифровывает runtime Chatwoot API token и
+webhook secret для обычного portal runtime. Этот context используют chat,
+profile, notifications, webhooks и tenant public-context flows.
 
-MT-9 must not simply add the admin-verification token to the general
-`tenant.chatwoot` runtime context. That would make the broader token available
-to modules that should never need admin authority. The admin token should be
-decrypted only inside the tenant admin verification path.
+В `MT-9` нельзя просто добавить admin-verification token в общий
+`tenant.chatwoot` runtime context. Так более широкий token окажется доступен
+модулям, которым admin authority не нужна. Admin token должен расшифровываться
+только внутри пути tenant admin verification.
 
-## Chatwoot Agents API Baseline
+## Базис Chatwoot Agents API
 
-Official Chatwoot docs classify Application APIs as account-level/agent-facing
-APIs authenticated with a user `access_token`.
+Официальная документация Chatwoot относит Application APIs к account-level /
+agent-facing API и указывает, что они аутентифицируются через user
+`access_token`.
 
-The official Agents endpoint is:
+Официальный Agents endpoint:
 
 ```text
 GET /api/v1/accounts/{account_id}/agents
 ```
 
-The official OpenAPI metadata says:
+Официальные OpenAPI-метаданные фиксируют:
 
-- security: `userApiKey`;
-- `200`: array of active agents;
+- безопасность: `userApiKey`;
+- `200`: массив active agents;
 - `403`: access denied;
-- agent fields include `id`, `account_id`, `email`, `role`, `confirmed`,
+- agent fields включают `id`, `account_id`, `email`, `role`, `confirmed`,
   `availability_status`, `name`, `available_name`, `thumbnail`,
   `custom_role_id`;
-- role enum includes `agent` and `administrator`.
+- enum роли включает `agent` и `administrator`.
 
-Local Chatwoot CE `v4.13` source adds important details:
+Локальный source Chatwoot CE `v4.13` добавляет важные детали:
 
-- `Api::V1::Accounts::AgentsController#index` returns
+- `Api::V1::Accounts::AgentsController#index` возвращает
   `Current.account.users.order_by_full_name.includes(...)`;
-- `UserPolicy#index?` returns `true`;
-- `EnsureCurrentAccountHelper` sets `Current.account_user` from
-  `account.account_users.find_by(user_id: current_user.id)` and rejects the
-  request if the access-token owner is not a user in the requested account;
-- `AccessTokenAuthHelper` accepts user access tokens for normal Application API
-  requests, while bot tokens are restricted to a small allowlist.
+- `UserPolicy#index?` возвращает `true`;
+- `EnsureCurrentAccountHelper` выставляет `Current.account_user` через
+  `account.account_users.find_by(user_id: current_user.id)` и отклоняет запрос,
+  если владелец access token не является пользователем в запрошенном account;
+- `AccessTokenAuthHelper` принимает user access tokens для обычных Application
+  API requests, а bot tokens ограничены небольшим allowlist.
 
-Implication:
+Вывод:
 
-The spike must verify actual self-hosted production behavior for several token
-owners. The local source suggests that listing agents may not be
-administrator-only, but the portal still must require the target login email to
-match an agent row with `role === "administrator"`, `confirmed === true`, and
+Исследование должно проверить реальное поведение self-hosted production для
+нескольких типов владельцев token. Локальный source показывает, что listing
+agents может быть не administrator-only, но portal все равно должен требовать,
+чтобы email для tenant admin login совпал с agent row, где
+`role === "administrator"`, `confirmed === true` и
 `account_id === current tenant.chatwoot_account_id`.
 
-## F-MT-004 Boundary Decision
+## Решение По Границе F-MT-004
 
-The runtime Chatwoot token is for customer portal runtime:
+Runtime Chatwoot token нужен для customer portal runtime:
 
 - contact lookup;
 - thread/contact access;
@@ -152,193 +156,199 @@ The runtime Chatwoot token is for customer portal runtime:
 - profile avatar update;
 - webhook/provisioning verification helpers.
 
-Tenant admin verification is separate:
+Tenant admin verification - отдельная зона:
 
-- it checks whether an email belongs to a confirmed Chatwoot administrator
-  inside the current tenant's Chatwoot account;
-- it should work even if runtime token is intentionally narrow;
-- if its token is broader, it must not participate in customer chat/profile
-  runtime;
-- it must not be exposed to browser, logs, audit payloads or public tenant
+- проверяет, принадлежит ли email confirmed Chatwoot administrator внутри
+  Chatwoot account текущего tenant;
+- должна работать даже если runtime token намеренно узкий;
+- если token для проверки админа шире, он не должен участвовать в customer
+  chat/profile runtime;
+- token нельзя отдавать в browser, logs, audit payloads или public tenant
   context.
 
-Required persistence addition:
+Обязательное добавление в persistence:
 
 ```text
 portal_tenants.chatwoot_admin_verification_token_ciphertext
 ```
 
-The field should be nullable at migration time so existing tenants can stay
-bootable. Admin login must fail closed with a controlled error when the value is
-missing or invalid.
+Поле должно быть nullable на migration step, чтобы существующие tenants
+оставались bootable. Admin login должен fail closed с controlled error, если
+значение отсутствует или ciphertext невалиден.
 
-Recommended access pattern:
+Рекомендуемый паттерн доступа:
 
-- add repository/service method dedicated to admin verification token retrieval;
-- decrypt only in `admin-auth` service/factory;
-- keep the generic `TenantRequestContext.chatwoot` shape limited to runtime
-  token and webhook secret;
-- avoid passing the admin token through shared Chatwoot runtime objects used by
-  chat/profile modules.
+- добавить repository/service method, выделенный под получение admin
+  verification token;
+- расшифровывать token только в `admin-auth` service/factory;
+- оставить generic `TenantRequestContext.chatwoot` ограниченным runtime token и
+  webhook secret;
+- не прокидывать admin token через shared Chatwoot runtime objects, которые
+  используют chat/profile modules.
 
-## Archived Branch Audit
+## Аудит Архивной Ветки
 
-The archived branch `feature/phase-10-portal-branding-admin` is useful only as
-an idea archive.
+Архивная ветка `feature/phase-10-portal-branding-admin` полезна только как архив
+идей.
 
-Reusable ideas:
+Идеи, которые можно переиспользовать:
 
-- separate admin auth module;
-- separate admin session cookie;
-- email-code verification instead of Chatwoot cookie sharing;
-- generic response for non-eligible emails;
-- re-check role before creating an admin session;
-- form model with defaults, overrides and final snapshot;
-- preview using portal components.
+- отдельный admin auth module;
+- отдельная admin session cookie;
+- email-code verification вместо чтения Chatwoot cookies;
+- generic response для email, которые не имеют доступа;
+- повторная проверка роли перед созданием admin session;
+- form model с defaults, overrides и final snapshot;
+- предпросмотр на portal components.
 
-Do not reuse as-is:
+Не переносить как есть:
 
-- schema is keyed by `chatwoot_account_id` / `chatwoot_inbox_id`, not
+- schema keyed by `chatwoot_account_id` / `chatwoot_inbox_id`, а не
   `tenant_id`;
-- admin sessions and challenges are not tenant-scoped;
-- service code uses global `CHATWOOT_ACCOUNT_ID` and `CHATWOOT_PORTAL_INBOX_ID`;
-- branding storage is DB/string based and does not implement object-storage
-  backed tenant assets;
-- route structure predates the current protected app shell, profile route,
-  tenant identity cache and PWA baseline;
-- docs paths and work-log naming predate the current docs layout.
+- admin sessions and challenges не tenant-scoped;
+- service code использует global `CHATWOOT_ACCOUNT_ID` и
+  `CHATWOOT_PORTAL_INBOX_ID`;
+- branding storage DB/string based и не реализует object-storage backed tenant
+  assets;
+- route structure старше текущего protected app shell, profile route, tenant
+  identity cache и PWA baseline;
+- docs paths и work-log naming старше текущего docs layout.
 
-Conclusion:
+Вывод:
 
-The branch can inform UX and service shape, but every MT-9 implementation task
-must be rewritten tenant-first.
+Ветка может подсказать UX и форму services, но все задачи реализации MT-9 нужно
+переписать tenant-first.
 
-## Recommended MT-9 Decomposition
+## Рекомендуемая Декомпозиция MT-9
 
-### MT-9A. Chatwoot Admin Verification Gate
+### MT-9A. Проверка Chatwoot-Админа
 
-Goal:
+Цель:
 
-- prove exact Chatwoot Agents API behavior for token owners and target users;
-- add a precise design for separate encrypted admin-verification token;
-- close or update `F-MT-004` only after implementation verifies the boundary.
+- доказать точное поведение Chatwoot Agents API для владельцев token и целевых
+  пользователей;
+- добавить точный design для отдельного зашифрованного admin-verification token;
+- закрыть или обновить `F-MT-004` только после реализации, которая проверит
+  boundary.
 
-Minimum output:
+Минимальный результат:
 
-- spike document:
+- документ исследования:
   `docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md`;
-- implementation plan for admin token storage and verification boundary;
-- backend tests proving missing/invalid/insufficient token fails safely;
-- backend tests proving tenant A admin verification cannot authenticate tenant
-  B unless that email is also administrator in tenant B;
-- no branding UI yet.
+- план реализации для admin token storage и verification boundary;
+- backend tests, доказывающие, что missing/invalid/insufficient token fails
+  safely;
+- backend tests, доказывающие, что tenant A admin verification не может
+  authenticate tenant B, если этот email не является administrator в tenant B;
+- без UI брендинга.
 
-### MT-9B. Tenant Admin Auth Foundation
+### MT-9B. Базис Авторизации Tenant Admin
 
-Goal:
+Цель:
 
-- add tenant-scoped admin challenges, admin sessions and audit events;
-- use same-origin `/admin/...` routes on the current tenant host;
-- verify admin email through the separate Chatwoot admin-verification token;
-- send tenant-scoped email code;
-- create httpOnly admin session cookie separate from customer session cookie.
+- добавить tenant-scoped admin challenges, admin sessions и audit events;
+- использовать same-origin routes `/admin/...` на текущем tenant host;
+- проверять admin email через отдельный Chatwoot admin-verification token;
+- отправлять tenant-scoped email code;
+- создать httpOnly admin session cookie, отдельную от customer session cookie.
 
-Required invariants:
+Обязательные инварианты:
 
-- admin auth never reads Chatwoot browser cookies;
-- admin auth never uses customer `portal_users` or `portal_sessions`;
-- challenge/session rows include `tenant_id`;
-- email enumeration remains controlled;
-- role is re-checked before session creation;
-- logout clears only the admin session.
+- admin auth никогда не читает Chatwoot browser cookies;
+- admin auth никогда не использует customer `portal_users` или
+  `portal_sessions`;
+- строки challenge/session содержат `tenant_id`;
+- email enumeration остается controlled;
+- role повторно проверяется перед созданием session;
+- logout очищает только admin session.
 
-### MT-9C. Branding Settings Foundation
+### MT-9C. Базис Настроек Брендинга
 
-Goal:
+Цель:
 
-- add tenant-scoped branding settings and controlled brand tokens;
-- expose public read model through tenant-owned backend route;
-- keep system/security copy locked;
-- apply safe tokens to existing auth/chat/PWA components.
+- добавить tenant-scoped branding settings и controlled brand tokens;
+- открыть public read model через tenant-owned backend route;
+- оставить system/security copy locked;
+- применить safe tokens к существующим auth/chat/PWA components.
 
-This slice can reuse field ideas from the archived branch, but the persistence
-scope must be `tenant_id`, not Chatwoot IDs.
+Этот срез может использовать идеи полей из архивной ветки, но persistence scope
+должен быть `tenant_id`, а не Chatwoot IDs.
 
-### MT-9D. Branding Assets And PWA Identity
+### MT-9D. Брендинговые Assets и PWA-Идентичность
 
-Goal:
+Цель:
 
-- add S3-compatible object storage for branding assets;
-- store object metadata in portal DB;
-- serve assets only after tenant-scoped DB lookup;
-- keep PWA manifest/icons tenant-aware and cache-safe;
-- use MinIO or compatible local object storage for development.
+- добавить S3-compatible object storage для branding assets;
+- хранить object metadata в portal DB;
+- отдавать assets только после tenant-scoped DB lookup;
+- сохранить PWA manifest/icons tenant-aware and cache-safe;
+- использовать MinIO или совместимый local object storage для разработки.
 
-### MT-9E. Admin Branding UI And Preview
+### MT-9E. Admin UI Брендинга и Предпросмотр
 
-Goal:
+Цель:
 
-- add admin screens only after the backend boundary is verified;
-- use real portal components in preview;
-- include visual comparison before final UI decisions;
-- keep admin UI separate from customer app shell.
+- добавить admin screens только после проверки backend boundary;
+- использовать реальные portal components в предпросмотре;
+- включить визуальное сравнение перед финальными UI decisions;
+- держать admin UI отдельно от customer app shell.
 
-## First Slice Target
+## Цель Первого Среза
 
-Recommended first implementation branch:
+Рекомендуемая первая ветка реализации:
 
 ```text
 feature/phase-9-admin-token-spike
 ```
 
-Recommended first plan file:
+Рекомендуемый первый файл плана:
 
 ```text
 docs/superpowers/plans/2026-06-06-mt-9-admin-token-spike.md
 ```
 
-Recommended first spike file:
+Рекомендуемый первый файл исследования:
 
 ```text
 docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md
 ```
 
-First slice should not add branding fields, asset uploads or admin UI. It should
-only establish the token boundary and verify Chatwoot permissions.
+Первый срез не должен добавлять branding fields, asset uploads или admin UI. Он
+должен только установить token boundary и проверить права Chatwoot.
 
-## Proposed Spike Matrix
+## Предложенная Матрица Исследования
 
-Run against local Chatwoot `v4.13` and, if safe, production-like Chatwoot with
-non-destructive read-only requests:
+Проверить на локальном Chatwoot `v4.13` и, если безопасно, на production-like
+Chatwoot через non-destructive read-only requests:
 
-| Token owner                          | Expected result to verify                                      |
-| ------------------------------------ | -------------------------------------------------------------- |
-| confirmed administrator in account A | can call account A agents endpoint; returns admin and agents   |
-| confirmed agent in account A         | verify whether endpoint is allowed; target login still denied  |
-| user from another account            | account A endpoint returns unauthorized/access denied          |
-| agent bot token                      | agents endpoint denied by bot endpoint allowlist               |
-| invalid token                        | controlled unauthorized/access denied                          |
-| runtime token candidate              | record whether it can list agents; do not rely on it for admin |
-| separate admin-verification token    | preferred token after spike                                    |
+| Владелец token                       | Что нужно проверить                                                |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| confirmed administrator in account A | может вызвать account A agents endpoint; возвращает admins/agents  |
+| confirmed agent in account A         | проверить доступность endpoint; target login все равно denied      |
+| user from another account            | account A endpoint возвращает unauthorized/access denied           |
+| agent bot token                      | agents endpoint denied из-за bot endpoint allowlist                |
+| invalid token                        | controlled unauthorized/access denied                              |
+| runtime token candidate              | записать, может ли он list agents; не полагаться на него для admin |
+| separate admin-verification token    | preferred token после исследования                                 |
 
-The spike result must record:
+Результат исследования должен зафиксировать:
 
-- exact HTTP status and response shape;
-- whether `confirmed`, `role`, `email`, `account_id` are always present;
-- whether response contains inactive/deleted users;
-- whether a narrow runtime token can list agents;
-- whether a non-admin user token can list agents;
-- selected operational token policy.
+- exact HTTP status и response shape;
+- всегда ли присутствуют `confirmed`, `role`, `email`, `account_id`;
+- содержит ли response inactive/deleted users;
+- может ли narrow runtime token list agents;
+- может ли non-admin user token list agents;
+- выбранную operational token policy.
 
-## Backend Design Notes For The Plan
+## Backend-Заметки Для Плана
 
-Admin token persistence:
+Persistence для admin token:
 
 ```text
 portal_tenants.chatwoot_admin_verification_token_ciphertext text null
 ```
 
-Admin auth tables:
+Таблицы admin auth:
 
 ```text
 portal_admin_login_challenges
@@ -346,9 +356,9 @@ portal_admin_sessions
 portal_admin_audit_events
 ```
 
-Every admin table must include `tenant_id`.
+Каждая admin table должна включать `tenant_id`.
 
-Suggested challenge fields:
+Предлагаемые поля challenge:
 
 - `tenant_id`;
 - `email`;
@@ -364,7 +374,7 @@ Suggested challenge fields:
 - `verified_at`;
 - timestamps.
 
-Suggested session fields:
+Предлагаемые поля session:
 
 - `tenant_id`;
 - `email`;
@@ -375,7 +385,7 @@ Suggested session fields:
 - `last_seen_at`;
 - timestamps.
 
-Suggested audit event fields:
+Предлагаемые поля audit event:
 
 - `tenant_id`;
 - `admin_email`;
@@ -387,18 +397,18 @@ Suggested audit event fields:
 - `metadata_json`;
 - timestamp.
 
-Admin session cookie:
+Cookie admin session:
 
-- separate name, for example `portal_admin_session`;
+- отдельное имя, например `portal_admin_session`;
 - httpOnly;
 - SameSite Lax;
-- Secure in production;
-- same tenant host boundary as customer cookie;
-- no offline/PWA cache for admin auth.
+- Secure в production;
+- same tenant host boundary как у customer cookie;
+- без offline/PWA cache для admin auth.
 
-## Frontend Design Notes For Later
+## Frontend-Заметки Для Будущих Срезов
 
-Admin routes should be separate from customer routes:
+Admin routes должны быть отделены от customer routes:
 
 ```text
 /admin/login
@@ -406,97 +416,103 @@ Admin routes should be separate from customer routes:
 /admin/branding
 ```
 
-Admin UI should not live inside current customer `AppShellLayout`.
+Admin UI не должен жить внутри текущего customer `AppShellLayout`.
 
-Branding preview must use real components and current design baseline:
+Предпросмотр брендинга должен использовать реальные components и текущий design
+baseline:
 
 - auth frame;
 - app brand mark;
 - chat header;
 - outgoing message bubble color;
-- PWA name/icon preview.
+- предпросмотр названия и иконки PWA.
 
-The first UI planning pass must include visual comparison because branding UI is
-a user-facing feature.
+Первый проход планирования UI должен включать визуальное сравнение, потому что
+UI брендинга - пользовательская feature.
 
-## Required Tests
+## Обязательные Тесты
 
-For MT-9A:
+Для MT-9A:
 
-- tenant repository stores optional admin-verification ciphertext without
-  exposing plaintext;
+- tenant repository хранит optional admin-verification ciphertext без exposing
+  plaintext;
 - tenant admin token decryption rejects missing/invalid ciphertext safely;
-- Chatwoot Agents response parser accepts official fields and rejects unsafe
+- Chatwoot Agents response parser принимает official fields и отклоняет unsafe
   shapes;
-- admin verification filters by email, `account_id`, `role === "administrator"`
-  and `confirmed === true`;
-- runtime token and admin-verification token are not the same dependency in the
-  service factory;
-- cross-tenant verification attempts are rejected;
-- insufficient Chatwoot permission returns controlled error and does not create
-  a challenge/session.
+- admin verification фильтрует по email, `account_id`,
+  `role === "administrator"` и `confirmed === true`;
+- runtime token и admin-verification token не являются одной и той же dependency
+  в service factory;
+- cross-tenant verification attempts rejected;
+- insufficient Chatwoot permission возвращает controlled error и не создает
+  challenge/session.
 
-For MT-9B:
+Для MT-9B:
 
-- request login returns generic response for unknown/non-admin email;
-- eligible admin receives one challenge email;
-- resend cooldown is tenant/email scoped;
-- wrong/expired/reused code is rejected;
+- request login возвращает generic response для unknown/non-admin email;
+- eligible admin получает один challenge email;
+- resend cooldown tenant/email scoped;
+- wrong/expired/reused code rejected;
 - role downgrade between request and verify blocks session;
 - logout clears admin cookie;
 - tenant A admin session cannot access tenant B admin route.
 
-For MT-9C and later:
+Для MT-9C и дальше:
 
-- branding settings are `tenant_id` scoped;
-- public branding response contains no secrets or object keys;
+- branding settings `tenant_id` scoped;
+- public branding response не содержит secrets или object keys;
 - tenant A cannot read/write tenant B branding;
 - asset reads require tenant DB lookup before object storage fetch;
-- PWA manifest and icon URLs are versioned/cache-safe.
+- PWA manifest and icon URLs versioned/cache-safe.
 
-## Open Questions To Resolve Before Full MT-9 Plan
+## Открытые Вопросы Перед Полным Планом MT-9
 
-1. Should admin login use email code only, or email code plus magic link?
+1. Admin login должен использовать только email code или email code plus magic
+   link?
 
-   Recommendation for first slice: email code only, matching existing
-   registration/password-reset operational model and avoiding link URL
-   complexity.
+   Рекомендация для первого среза: только email code, как в текущей operational
+   model registration/password-reset, без усложнения link URL.
 
-2. Should the first branding settings slice include asset uploads?
+2. Должен ли первый срез branding settings включать asset uploads?
 
-   Recommendation: no. Start with text/color settings and fallback/logo URL only
-   if needed for preview; add object-storage asset upload in a later slice.
+   Рекомендация: нет. Начать с text/color settings и fallback/logo URL только
+   если нужно для предпросмотра; object-storage asset upload добавить отдельным
+   срезом.
 
-3. Which object storage target should local development use?
+3. Какой object storage target использовать для local development?
 
-   Recommendation: MinIO in `infra/` if object-storage slice is opened.
+   Рекомендация: MinIO в `infra/`, когда откроем срез object storage.
 
-4. Should admin routes be available while tenant status is not `active`?
+4. Должны ли admin routes быть доступны, если tenant status не `active`?
 
-   Recommendation: no for first slice. Reuse active tenant runtime gate unless a
-   later operations requirement needs a separate admin recovery path.
+   Рекомендация: нет для первого среза. Использовать active tenant runtime gate,
+   если позже не появится operations requirement для отдельного admin recovery
+   path.
 
-5. Should Chatwoot agent role changes invalidate existing portal admin sessions
-   immediately?
+5. Должны ли изменения Chatwoot agent role сразу инвалидировать существующие
+   portal admin sessions?
 
-   Recommendation: re-check role before sensitive writes and on session refresh
-   intervals; do not call Chatwoot on every admin page render until the first
-   auth foundation is measured.
+   Рекомендация: re-check role перед sensitive writes и на session refresh
+   intervals; не дергать Chatwoot на каждый render admin page, пока первый
+   auth-базис не измерен.
 
-## Non-Goals For The First Slice
+## Не-Цели Первого Среза
 
-- No Chatwoot core changes.
-- No browser-direct Chatwoot API.
-- No platform/provisioning token for tenant admin login.
-- No object storage implementation in the permission spike.
-- No branding admin UI in the permission spike.
-- No customer profile/admin merge.
-- No reuse of archived branch code without rewriting tenant boundaries.
+- Без изменений Chatwoot core.
+- Без browser-direct Chatwoot API.
+- Без platform/provisioning token для tenant admin login.
+- Без реализации object storage в исследовании прав.
+- Без branding admin UI в исследовании прав.
+- Без customer profile/admin merge.
+- Без переиспользования archived branch code без переписывания tenant
+  boundaries.
 
-## Acceptance For This Preparation Document
+## Критерии Приемки Этого Документа
 
-- It maps MT-9 to current stable docs and `F-MT-004`.
-- It identifies the first required gate before UI work.
-- It records official Chatwoot docs, OpenAPI and local Chatwoot source findings.
-- It documents why the archived branch is idea-only.
-- It provides enough detail to write a focused implementation plan for MT-9A.
+- Документ мапит MT-9 на текущие стабильные docs и `F-MT-004`.
+- Документ выделяет первую обязательную проверку перед UI work.
+- Документ фиксирует findings из официальных docs Chatwoot, OpenAPI и local
+  Chatwoot source.
+- Документ объясняет, почему archived branch годится только как архив идей.
+- Документ дает достаточно деталей, чтобы написать сфокусированный план реализации
+  для MT-9A.
