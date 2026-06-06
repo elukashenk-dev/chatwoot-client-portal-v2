@@ -26,6 +26,7 @@
 
 ## Execution Artifacts
 
-`docs/superpowers/` используется только для временных specs/plans во время
-активной feature work. После реализации source of truth переносится в stable
-docs выше, а завершенные execution artifacts удаляются.
+`docs/superpowers/` используется для временных specs/plans во время активной
+feature work и для сохраненных нереализованных или частично реализованных
+follow-up artifacts. После полной реализации source of truth переносится в
+stable docs выше, а завершенные execution artifacts удаляются.

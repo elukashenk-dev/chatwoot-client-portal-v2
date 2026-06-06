@@ -90,9 +90,11 @@ execution-plan детали здесь не хранятся.
   `docs/roadmap/work-log.md`, `docs/design/portal-ui-ux-baseline.md` and
   `docs/findings/`.
 - `docs/superpowers/` execution artifacts are not stable source of truth after
-  implementation; completed or inactive plans/specs were removed during the
-  current docs cleanup.
-- Open risks and deferred follow-ups remain in `docs/findings/`.
+  implementation; completed artifacts were removed during the current docs
+  cleanup, while still-relevant deferred/partial artifacts remain there with
+  explicit status headers.
+- Open risks and deferred follow-ups remain in `docs/findings/` or, for
+  preserved execution context, in `docs/superpowers/`.
 - Open architecture gate before tenant admin/branding: `F-MT-004`.
 
 ## Recommended Next Step

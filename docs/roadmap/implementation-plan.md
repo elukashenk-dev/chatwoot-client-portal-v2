@@ -171,12 +171,13 @@ Minimum future scope:
 
 ### SMS Fallback Gateway
 
-Status: not active.
+Status: deferred, not active.
 
-Reason: old SMS fallback design/implementation notes were not implemented and
-are not part of current roadmap. If reopened, start with a new feature intake
-against the current offline/PWA/chat runtime, do not reuse the removed execution
-plan as implementation authority.
+Reason: SMS fallback design/implementation artifacts were not implemented and
+are not part of current active roadmap. They are preserved under
+`docs/superpowers/` as deferred research and task context. If reopened, start
+with a new feature intake against the current offline/PWA/chat runtime and
+refresh those artifacts before implementation.
 
 ### Broader Portal Product Domains
 
