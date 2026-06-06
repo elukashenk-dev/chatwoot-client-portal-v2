@@ -128,6 +128,10 @@ const envSchema = z
     PORTAL_TRUST_PROXY: booleanFromStringWithDefaultFalse,
     APP_ORIGIN: z.string().url().default('http://127.0.0.1:5173'),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    ADMIN_SESSION_COOKIE_NAME: z
+      .string()
+      .min(1)
+      .default('portal_admin_session'),
     SESSION_COOKIE_NAME: z.string().min(1).default('portal_session'),
     SESSION_SECRET: z
       .string()

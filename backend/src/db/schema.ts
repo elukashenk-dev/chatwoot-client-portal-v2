@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   serial,
   text,
@@ -387,6 +388,115 @@ export const verificationRecords = pgTable(
     index('verification_records_tenant_portal_user_id_idx').on(
       table.tenantId,
       table.portalUserId,
+    ),
+  ],
+)
+
+export const portalAdminLoginChallenges = pgTable(
+  'portal_admin_login_challenges',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
+    email: text('email').notNull(),
+    chatwootAgentId: integer('chatwoot_agent_id').notNull(),
+    role: text('role').notNull(),
+    codeHash: text('code_hash').notNull(),
+    status: text('status').notNull().default('pending'),
+    attemptsCount: integer('attempts_count').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(5),
+    resendCount: integer('resend_count').notNull().default(0),
+    resendNotBefore: timestamp(
+      'resend_not_before',
+      timestampWithTimezone,
+    ).notNull(),
+    expiresAt: timestamp('expires_at', timestampWithTimezone).notNull(),
+    lastSentAt: timestamp('last_sent_at', timestampWithTimezone).notNull(),
+    verifiedAt: timestamp('verified_at', timestampWithTimezone),
+    createdAt: timestamp('created_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('portal_admin_login_challenges_tenant_email_status_idx').on(
+      table.tenantId,
+      table.email,
+      table.status,
+    ),
+    index('portal_admin_login_challenges_expires_at_idx').on(table.expiresAt),
+  ],
+)
+
+export const portalAdminSessions = pgTable(
+  'portal_admin_sessions',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
+    tokenHash: text('token_hash').notNull(),
+    email: text('email').notNull(),
+    chatwootAgentId: integer('chatwoot_agent_id').notNull(),
+    role: text('role').notNull(),
+    expiresAt: timestamp('expires_at', timestampWithTimezone).notNull(),
+    lastSeenAt: timestamp('last_seen_at', timestampWithTimezone).notNull(),
+    createdAt: timestamp('created_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('portal_admin_sessions_token_hash_unique').on(table.tokenHash),
+    index('portal_admin_sessions_tenant_email_idx').on(
+      table.tenantId,
+      table.email,
+    ),
+    index('portal_admin_sessions_expires_at_idx').on(table.expiresAt),
+  ],
+)
+
+export const portalAdminAuditEvents = pgTable(
+  'portal_admin_audit_events',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, {
+        onDelete: 'restrict',
+      }),
+    actorEmail: text('actor_email'),
+    actorChatwootAgentId: integer('actor_chatwoot_agent_id'),
+    action: text('action').notNull(),
+    outcome: text('outcome').notNull(),
+    subjectEmail: text('subject_email'),
+    requestIp: text('request_ip'),
+    userAgent: text('user_agent'),
+    metadata: jsonb('metadata')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('portal_admin_audit_events_tenant_created_at_idx').on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    index('portal_admin_audit_events_tenant_action_idx').on(
+      table.tenantId,
+      table.action,
     ),
   ],
 )

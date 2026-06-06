@@ -17,6 +17,7 @@ const testEnv: AppEnv = {
   PORT: 3301,
   AUTH_RATE_LIMIT_MAX: 5,
   AUTH_RATE_LIMIT_WINDOW_MS: 60_000,
+  ADMIN_SESSION_COOKIE_NAME: 'portal_admin_session',
   PORTAL_TRUST_PROXY: false,
   PORTAL_TENANT_SECRET_KEY: Buffer.alloc(32, 8).toString('base64'),
   SESSION_COOKIE_NAME: 'portal_session',

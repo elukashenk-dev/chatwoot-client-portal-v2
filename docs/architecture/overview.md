@@ -462,6 +462,11 @@ tenant-aware runtime.
 - tenant admin login отдельный от customer login;
 - для admin verification добавлен отдельный encrypted per-tenant Chatwoot
   admin-verification token boundary;
+- `MT-9B` добавил backend-only tenant admin auth foundation: login challenges,
+  email code verification, отдельный signed admin session cookie, logout и
+  tenant-scoped audit events;
+- admin code хранится через slow password-hash boundary, admin session token
+  хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;
 - runtime Chatwoot token и admin-verification authority - разные security
   boundaries.

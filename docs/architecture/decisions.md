@@ -199,6 +199,20 @@
   tenant-scoped DB lookup, tenant-prefixed object key, content hash/version и
   backend-controlled read endpoints.
 
+## D-014B. Tenant admin auth имеет отдельную session boundary
+
+- дата: `2026-06-06`
+- решение:
+  tenant admin auth в `MT-9B` использует отдельные tenant-scoped login
+  challenges, отдельную signed httpOnly cookie `portal_admin_session`,
+  отдельную таблицу admin sessions и tenant-scoped audit events. Customer
+  session cookie не считается admin session, а admin cookie не считается
+  customer session.
+- причина:
+  admin authority не должна смешиваться с customer auth/session runtime.
+  Browser получает только portal admin session cookie, но не Chatwoot token или
+  admin-verification token.
+
 ## D-015. Feature boundaries не смешиваем в `shared`
 
 - дата: `2026-04-23`

@@ -298,7 +298,7 @@ secret in this slice.
 - Create: `backend/src/modules/tenant-admin/adminAuthRepository.ts`
 - Create: `backend/src/modules/tenant-admin/adminAuthRepository.test.ts`
 
-- [ ] **Step 1: Write failing repository tests**
+- [x] **Step 1: Write failing repository tests**
 
 Create `backend/src/modules/tenant-admin/adminAuthRepository.test.ts`.
 
@@ -391,7 +391,7 @@ it('writes audit events without secret-bearing metadata', async () => {
 })
 ```
 
-- [ ] **Step 2: Run repository tests and verify RED**
+- [x] **Step 2: Run repository tests and verify RED**
 
 Run:
 
@@ -401,7 +401,7 @@ pnpm --dir backend exec vitest run src/modules/tenant-admin/adminAuthRepository.
 
 Expected: FAIL because schema/repository do not exist.
 
-- [ ] **Step 3: Implement schema and generate migration**
+- [x] **Step 3: Implement schema and generate migration**
 
 Add the three tables to `backend/src/db/schema.ts`. Import `jsonb` and `desc`
 helpers only where needed. Use `timestampWithTimezone` for all timestamps.
@@ -415,7 +415,7 @@ pnpm --dir backend db:generate
 Expected generated SQL includes the three `CREATE TABLE` statements and the
 indexes listed in this plan.
 
-- [ ] **Step 4: Implement repository**
+- [x] **Step 4: Implement repository**
 
 Create `backend/src/modules/tenant-admin/adminAuthRepository.ts` with:
 
@@ -458,7 +458,7 @@ Repository rules:
   `code`, `codeHash`, `sessionToken`, `token`, `tokenHash`, `apiAccessToken`,
   `adminVerificationToken`, `runtimeToken`.
 
-- [ ] **Step 5: Run repository tests and verify GREEN**
+- [x] **Step 5: Run repository tests and verify GREEN**
 
 Run:
 
@@ -475,7 +475,7 @@ Expected: PASS.
 - Create: `backend/src/modules/tenant-admin/adminAuthService.ts`
 - Create: `backend/src/modules/tenant-admin/adminAuthService.test.ts`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Create `backend/src/modules/tenant-admin/adminAuthService.test.ts`.
 
@@ -589,7 +589,7 @@ it('rejects cross-tenant verification by using the repository tenant scope', asy
 })
 ```
 
-- [ ] **Step 2: Run service tests and verify RED**
+- [x] **Step 2: Run service tests and verify RED**
 
 Run:
 
@@ -599,7 +599,7 @@ pnpm --dir backend exec vitest run src/modules/tenant-admin/adminAuthService.tes
 
 Expected: FAIL because service does not exist.
 
-- [ ] **Step 3: Implement service**
+- [x] **Step 3: Implement service**
 
 Create `backend/src/modules/tenant-admin/adminAuthService.ts`.
 
@@ -640,7 +640,8 @@ Implementation rules:
   `503 TENANT_ADMIN_DELIVERY_UNAVAILABLE`;
 - failed delivery restores previous pending challenge or deletes the new one,
   matching registration/password-reset cleanup patterns;
-- challenge code is 6 digits and hash is `sha256`;
+- challenge code is 6 digits and is stored with the same slow password-hash
+  boundary used by registration/password-reset codes;
 - max invalid attempts is 5;
 - `verifyAdminLoginCode` creates a 32-byte base64url session token and stores
   only `sha256` token hash;
@@ -648,7 +649,7 @@ Implementation rules:
 - `logout` deletes by tenant-scoped token hash;
 - every request/verify/logout path writes an audit event with safe metadata.
 
-- [ ] **Step 4: Run service tests and verify GREEN**
+- [x] **Step 4: Run service tests and verify GREEN**
 
 Run:
 
@@ -672,7 +673,7 @@ Expected: PASS.
 - Modify: `backend/src/app.ts`
 - Modify: `backend/src/test/appTestHelpers.ts`
 
-- [ ] **Step 1: Write failing route integration tests**
+- [x] **Step 1: Write failing route integration tests**
 
 Create `backend/src/app-admin-auth.integration.test.ts`.
 
@@ -768,7 +769,7 @@ it('does not resolve tenant A admin cookie on tenant B host', async () => {
 })
 ```
 
-- [ ] **Step 2: Run app integration tests and verify RED**
+- [x] **Step 2: Run app integration tests and verify RED**
 
 Run:
 
@@ -778,7 +779,7 @@ pnpm --dir backend exec vitest run src/app-admin-auth.integration.test.ts --no-f
 
 Expected: FAIL because routes/env/schema are missing.
 
-- [ ] **Step 3: Add admin session cookie helper**
+- [x] **Step 3: Add admin session cookie helper**
 
 Create `backend/src/modules/tenant-admin/adminSessionCookie.ts`:
 
@@ -808,7 +809,7 @@ export function clearAdminSessionCookie(reply: FastifyReply, env: AppEnv) {
 
 Also export `getAdminSessionToken(request, env)`.
 
-- [ ] **Step 4: Add env and examples**
+- [x] **Step 4: Add env and examples**
 
 Modify `backend/src/config/env.ts`:
 
@@ -828,7 +829,7 @@ Update `backend/src/test/appTestHelpers.ts` test env with:
 ADMIN_SESSION_COOKIE_NAME: 'portal_admin_session'
 ```
 
-- [ ] **Step 5: Add rate-limit groups**
+- [x] **Step 5: Add rate-limit groups**
 
 Modify `backend/src/modules/auth/rateLimit.ts`:
 
@@ -841,7 +842,7 @@ Modify `backend/src/modules/auth/rateLimit.ts`:
 Do not add shared Redis/store in this slice. `F-AUTH-001` remains deferred for
 multi-instance deployment.
 
-- [ ] **Step 6: Add routes**
+- [x] **Step 6: Add routes**
 
 Create `backend/src/modules/tenant-admin/adminAuthRoutes.ts`.
 
@@ -859,7 +860,7 @@ Route rules:
   - unavailable: `Админ-вход сейчас недоступен. Попробуйте позже.`;
   - delivery unavailable: `Мы не смогли отправить код входа. Попробуйте чуть позже.`
 
-- [ ] **Step 7: Wire routes in app**
+- [x] **Step 7: Wire routes in app**
 
 Modify `backend/src/app.ts`:
 
@@ -906,7 +907,7 @@ registerTenantAdminAuthRoutes(app, {
 })
 ```
 
-- [ ] **Step 8: Run app integration tests and verify GREEN**
+- [x] **Step 8: Run app integration tests and verify GREEN**
 
 Run:
 
@@ -926,7 +927,7 @@ Expected: PASS.
 - Optional modify: `docs/architecture/multi-tenant-reference.md` only if the
   implemented contract differs from this reference.
 
-- [ ] **Step 1: Update stable docs**
+- [x] **Step 1: Update stable docs**
 
 After implementation and tests pass, update docs:
 
@@ -937,7 +938,7 @@ After implementation and tests pass, update docs:
 - `overview.md`: mention separate tenant admin sessions and audit events;
 - keep `docs/superpowers/` plan as execution artifact.
 
-- [ ] **Step 2: Run targeted backend checks**
+- [x] **Step 2: Run targeted backend checks**
 
 Run:
 
@@ -954,7 +955,7 @@ pnpm --dir backend build
 
 Expected: all pass.
 
-- [ ] **Step 3: Run changed-file formatting and diff checks**
+- [x] **Step 3: Run changed-file formatting and diff checks**
 
 Run:
 
@@ -969,7 +970,7 @@ Expected: all pass.
 Diagnostic note: full `pnpm exec prettier --check .` currently reports
 pre-existing unrelated baseline formatting warnings outside MT-9B scope.
 
-- [ ] **Step 4: Review**
+- [x] **Step 4: Review**
 
 Review checklist:
 
@@ -983,7 +984,7 @@ Review checklist:
 - all challenge/session repository operations include `tenant_id`;
 - audit events are tenant-scoped.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 After implementation, review fixes and checks:
 

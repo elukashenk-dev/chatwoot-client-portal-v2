@@ -68,7 +68,7 @@ stable docs.
 Вернуть admin/branding только как tenant-owned feature поверх готовой
 multi-tenant foundation и утвержденного customer-facing UI baseline.
 
-Completed first gate:
+Completed gates:
 
 - `F-MT-004` is closed by `MT-9A`;
 - Chatwoot permissions/source spike is documented in
@@ -76,15 +76,17 @@ Completed first gate:
 - runtime Chatwoot token and admin-verification token are separate security
   boundaries;
 - admin-verification token is stored as a nullable encrypted per-tenant secret.
+- `MT-9B` backend foundation is closed: tenant-scoped admin login challenges,
+  email code verification, separate admin session cookie, logout and audit
+  events are implemented without browser Chatwoot authority.
 
-Scope:
+Remaining scope:
 
-- tenant-scoped admin login through Chatwoot administrator verification inside
-  current tenant Chatwoot account;
+- React admin login/session UI over `MT-9B`;
 - tenant-owned branding settings;
 - branding asset metadata in portal DB and binary content in S3-compatible
   object storage, local development through the same MinIO/compatible pattern;
-- tenant-scoped audit events for admin/branding actions;
+- tenant-scoped audit events for branding actions;
 - preview screens using real portal components;
 - archived branch `feature/phase-10-portal-branding-admin` may be used only as
   an idea archive, not merged as-is.
@@ -93,6 +95,7 @@ Required checks:
 
 - backend tests for admin-verification token boundary;
 - backend tests for cross-tenant admin login rejection;
+- backend tests for admin/customer cookie separation and audit secret boundary;
 - tests or documented blocker for insufficient Chatwoot token permissions;
 - frontend tests for tenant admin/branding state;
 - Playwright or documented blocker for browser admin/branding flow;

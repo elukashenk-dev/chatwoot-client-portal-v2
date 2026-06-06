@@ -15,6 +15,9 @@ type AuthRateLimitBucket = {
 }
 
 const authRateLimitGroups = new Map<string, string>([
+  ['POST /api/admin/auth/logout', 'tenant-admin-logout'],
+  ['POST /api/admin/auth/request', 'tenant-admin-login-request'],
+  ['POST /api/admin/auth/verify', 'tenant-admin-login-verify'],
   ['POST /api/auth/login', 'auth-login'],
   ['POST /api/auth/register/request', 'auth-registration-request'],
   ['POST /api/auth/register/verify', 'auth-registration-verify'],

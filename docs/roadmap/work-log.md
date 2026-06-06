@@ -98,8 +98,12 @@ execution-plan детали здесь не хранятся.
 - `F-MT-004` is closed: tenant admin verification has a separate nullable
   encrypted per-tenant Chatwoot admin-verification token, dedicated backend
   lookup/decryption boundary and fail-closed Agents API parser/service.
+- `MT-9B` is closed: tenant admin auth backend foundation has tenant-scoped
+  login challenges, separate admin sessions/cookie, email code verification,
+  logout and tenant-scoped audit events without Chatwoot authority in browser.
 
 ## Recommended Next Step
 
-- Continue `MT-9B` with tenant-scoped admin auth foundation: login challenges,
-  admin sessions, email code verification and audit event baseline.
+- Continue `MT-9C` with admin login UI/session wiring over the completed
+  `MT-9B` backend foundation, or start branding settings foundation if UI is
+  intentionally deferred.

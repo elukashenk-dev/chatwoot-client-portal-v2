@@ -5,8 +5,12 @@ import type { FastifyRequest } from 'fastify'
 
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
+import { createChatwootAdminAgentsClient } from './integrations/chatwoot/adminAgents.js'
 import { createChatwootClientFactory } from './integrations/chatwoot/client.js'
-import { createSmtpEmailDelivery } from './integrations/email/smtp.js'
+import {
+  createSmtpEmailDelivery,
+  type SmtpEmailDelivery,
+} from './integrations/email/smtp.js'
 import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
@@ -55,6 +59,10 @@ import { createProfileService } from './modules/profile/service.js'
 import { createRegistrationRepository } from './modules/registration/repository.js'
 import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
+import { createTenantAdminAuthRepository } from './modules/tenant-admin/adminAuthRepository.js'
+import { registerTenantAdminAuthRoutes } from './modules/tenant-admin/adminAuthRoutes.js'
+import { createTenantAdminAuthService } from './modules/tenant-admin/adminAuthService.js'
+import { createTenantAdminVerificationService } from './modules/tenant-admin/adminVerification.js'
 import { createTenantsRepository } from './modules/tenants/repository.js'
 import {
   requireTenantContext,
@@ -66,6 +74,7 @@ import { createTenantsService } from './modules/tenants/service.js'
 type BuildAppOptions = {
   chatwootFetchFn?: typeof fetch
   database: DatabaseClient
+  emailDelivery?: Pick<SmtpEmailDelivery, 'send'>
   env: AppEnv
   now?: () => Date
 }
@@ -98,6 +107,7 @@ export function createRuntimeChatwootClientFactory({
 export function buildApp({
   chatwootFetchFn,
   database,
+  emailDelivery,
   env,
   now,
 }: BuildAppOptions) {
@@ -152,6 +162,8 @@ export function buildApp({
     tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
     tenantsRepository: createTenantsRepository(database.db),
   })
+  const createEmailDelivery = () =>
+    emailDelivery ?? createSmtpEmailDelivery({ env })
   const createChatwootClientForRequest = (request: FastifyRequest) =>
     chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
   const createChatNotificationRecipientResolverForRequest = (
@@ -299,7 +311,7 @@ export function buildApp({
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
       chatwootClient: createChatwootClientForRequest(request),
-      emailDelivery: createSmtpEmailDelivery({ env }),
+      emailDelivery: createEmailDelivery(),
       portalUsersRepository: createPortalUsersRepository(database.db),
       registrationRepository: createRegistrationRepository(database.db, {
         tenantId: requireTenantContext(request).id,
@@ -308,11 +320,35 @@ export function buildApp({
     })
   const createPasswordResetServiceForRequest = (request: FastifyRequest) =>
     createPasswordResetService({
-      emailDelivery: createSmtpEmailDelivery({ env }),
+      emailDelivery: createEmailDelivery(),
       passwordResetRepository: createPasswordResetRepository(database.db, {
         tenantId: requireTenantContext(request).id,
       }),
     })
+  const createTenantAdminAuthServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+
+    return createTenantAdminAuthService({
+      emailDelivery: createEmailDelivery(),
+      repository: createTenantAdminAuthRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      tenantAdminVerificationService: createTenantAdminVerificationService({
+        chatwootAdminAgentsClientFactory: {
+          forTenant: (config) =>
+            createChatwootAdminAgentsClient({
+              config,
+              fetchFn: chatwootFetchFn ?? fetch,
+              requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
+            }),
+        },
+        tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY ?? '',
+        tenantsRepository: createTenantsRepository(database.db),
+      }),
+      tenantId: tenant.id,
+      ...(now ? { now } : {}),
+    })
+  }
   const createChatwootWebhookServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -353,6 +389,10 @@ export function buildApp({
   })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,
+  })
+  registerTenantAdminAuthRoutes(app, {
+    createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
+    env,
   })
   registerChatThreadsRoutes(app, {
     authService,
