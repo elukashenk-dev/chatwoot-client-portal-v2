@@ -210,6 +210,10 @@ export function AppRoutes() {
               </LazyRoute>
             }
           />
+          <Route
+            path="/admin/*"
+            element={<Navigate replace to={routePaths.admin.branding} />}
+          />
         </Route>
       </Route>
 

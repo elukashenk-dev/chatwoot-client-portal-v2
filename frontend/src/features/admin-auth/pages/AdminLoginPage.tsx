@@ -35,10 +35,11 @@ function getSafeAdminReturnPath(state: unknown) {
     'pathname' in state.from &&
     typeof state.from.pathname === 'string' &&
     (state.from.pathname === routePaths.admin.root ||
-      state.from.pathname.startsWith(`${routePaths.admin.root}/`)) &&
-    state.from.pathname !== routePaths.admin.login
+      state.from.pathname === routePaths.admin.branding)
   ) {
-    return state.from.pathname
+    return state.from.pathname === routePaths.admin.root
+      ? routePaths.admin.branding
+      : state.from.pathname
   }
 
   return routePaths.admin.branding

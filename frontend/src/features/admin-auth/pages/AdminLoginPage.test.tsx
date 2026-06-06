@@ -1,7 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, type InitialEntry } from 'react-router-dom'
 
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import {
@@ -48,7 +48,11 @@ function createAdminSessionResponse() {
   })
 }
 
-function renderAdminLoginRoute() {
+function renderAdminLoginRoute({
+  initialEntries = ['/admin/login'],
+}: {
+  initialEntries?: InitialEntry[]
+} = {}) {
   const adminSession = {
     admin: null,
     errorMessage: null,
@@ -63,9 +67,10 @@ function renderAdminLoginRoute() {
       <Routes>
         <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin/branding" element={<h1>Брендинг</h1>} />
+        <Route path="/admin/unknown" element={<Navigate replace to="/" />} />
       </Routes>
     </AdminSessionContext.Provider>,
-    { initialEntries: ['/admin/login'] },
+    { initialEntries },
   )
 
   return adminSession
@@ -253,6 +258,42 @@ describe('AdminLoginPage', () => {
     expect(screen.getByLabelText('Email администратора')).toHaveValue(
       'admin@example.test',
     )
+  })
+
+  it('sanitizes unknown admin return paths to branding after verification', async () => {
+    const user = userEvent.setup()
+    const adminSession = renderAdminLoginRoute({
+      initialEntries: [
+        {
+          pathname: '/admin/login',
+          state: {
+            from: {
+              pathname: '/admin/unknown',
+            },
+          },
+        },
+      ],
+    })
+
+    fetchMock
+      .mockResolvedValueOnce(createAdminLoginRequestResponse())
+      .mockResolvedValueOnce(createAdminSessionResponse())
+
+    await user.type(
+      screen.getByLabelText('Email администратора'),
+      'admin@example.test',
+    )
+    await user.click(screen.getByRole('button', { name: 'Получить код' }))
+    await screen.findByRole('heading', { name: 'Подтвердите вход' })
+    await fillOtpCode(user)
+    await user.click(
+      screen.getByRole('button', { name: 'Войти в админ-консоль' }),
+    )
+
+    expect(adminSession.setVerifiedSession).toHaveBeenCalled()
+    expect(
+      await screen.findByRole('heading', { name: 'Брендинг' }),
+    ).toBeInTheDocument()
   })
 
   it('keeps the email step for delivery-in-progress errors', async () => {

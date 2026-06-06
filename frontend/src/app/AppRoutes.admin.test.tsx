@@ -123,6 +123,65 @@ describe('AppRoutes admin route separation', () => {
     )
   })
 
+  it('keeps unknown admin paths on the admin session boundary when unauthenticated', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminUnauthorizedResponse()
+      }
+
+      if (url === '/api/auth/me') {
+        return createCustomerUnauthorizedResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderRoute('/admin/unknown')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Вход в админ-консоль' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/auth/me',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.anything(),
+    )
+  })
+
+  it('redirects unknown authenticated admin paths to branding without customer auth', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminSessionResponse()
+      }
+
+      if (url === '/api/auth/me') {
+        return createCustomerUnauthorizedResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderRoute('/admin/unknown')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Брендинг' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.anything(),
+    )
+  })
+
   it('does not let admin session open customer app routes', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)

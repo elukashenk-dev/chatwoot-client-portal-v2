@@ -8,32 +8,38 @@ const brandingGroups = [
   {
     controls: ['Название портала', 'Загрузить логотип'],
     description: 'Название портала, логотип и PWA identity.',
+    id: 'main',
     title: 'Основное',
   },
   {
     controls: ['Основной цвет'],
     description: 'Основной цвет, кнопки, focus states и исходящие сообщения.',
+    id: 'colors',
     title: 'Цвета',
   },
   {
     controls: ['Фон auth-экранов', 'Фон чата'],
     description: 'Auth-фоны, фон чата, фон шапки чата и controlled overlays.',
+    id: 'backgrounds',
     title: 'Фоны и изображения',
   },
   {
     controls: ['Label поддержки'],
     description: 'Auth заголовки, help/welcome copy и label поддержки.',
+    id: 'texts',
     title: 'Тексты',
   },
   {
     controls: ['Пустое состояние чата'],
     description:
       'Шапка, пустое состояние, недоступность и читаемость сообщений.',
+    id: 'chat',
     title: 'Чат',
   },
   {
     controls: ['Страница информации о чате'],
     description: 'Информация о чате, профиль, настройки и уведомления.',
+    id: 'portal-pages',
     title: 'Страницы портала',
   },
 ]
@@ -102,7 +108,7 @@ export function AdminBrandingPage() {
             {brandingGroups.map((group) => (
               <a
                 className="block rounded-[0.6rem] px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
-                href={`#${group.title}`}
+                href={`#${group.id}`}
                 key={group.title}
               >
                 {group.title}
@@ -146,7 +152,7 @@ export function AdminBrandingPage() {
               {brandingGroups.map((group) => (
                 <section
                   className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
-                  id={group.title}
+                  id={group.id}
                   key={group.title}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -157,7 +163,7 @@ export function AdminBrandingPage() {
                       </p>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-                      read-only
+                      только просмотр
                     </span>
                   </div>
 

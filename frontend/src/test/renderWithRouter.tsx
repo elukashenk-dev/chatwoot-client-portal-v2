@@ -1,10 +1,11 @@
 import type { ReactElement } from 'react'
+import type { InitialEntry } from 'react-router-dom'
 
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 type RenderWithRouterOptions = {
-  initialEntries?: string[]
+  initialEntries?: InitialEntry[]
 }
 
 export function renderWithRouter(
@@ -12,8 +13,6 @@ export function renderWithRouter(
   { initialEntries = ['/auth/login'] }: RenderWithRouterOptions = {},
 ) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
-      {ui}
-    </MemoryRouter>,
+    <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>,
   )
 }

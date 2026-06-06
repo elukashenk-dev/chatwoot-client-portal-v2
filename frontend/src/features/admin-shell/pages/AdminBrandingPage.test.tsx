@@ -50,11 +50,20 @@ describe('AdminBrandingPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Фоны и изображения' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Фоны и изображения' }),
+    ).toHaveAttribute('href', '#backgrounds')
+    expect(
+      screen
+        .getByRole('heading', { name: 'Фоны и изображения' })
+        .closest('section'),
+    ).toHaveAttribute('id', 'backgrounds')
     expect(screen.getByRole('heading', { name: 'Тексты' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Чат' })).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Страницы портала' }),
     ).toBeInTheDocument()
+    expect(screen.getAllByText('только просмотр')).toHaveLength(6)
     expect(screen.getByText('Предпросмотр')).toBeInTheDocument()
     expect(
       screen.getByText('Админ-консоль доступна с широкого экрана'),
