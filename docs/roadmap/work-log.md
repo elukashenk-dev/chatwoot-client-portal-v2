@@ -95,9 +95,11 @@ execution-plan детали здесь не хранятся.
   explicit status headers.
 - Open risks and deferred follow-ups remain in `docs/findings/` or, for
   preserved execution context, in `docs/superpowers/`.
-- Open architecture gate before tenant admin/branding: `F-MT-004`.
+- `F-MT-004` is closed: tenant admin verification has a separate nullable
+  encrypted per-tenant Chatwoot admin-verification token, dedicated backend
+  lookup/decryption boundary and fail-closed Agents API parser/service.
 
 ## Recommended Next Step
 
-- Start `MT-9` with the `F-MT-004` Chatwoot permissions spike and separate
-  tenant admin-verification token boundary.
+- Continue `MT-9B` with tenant-scoped admin auth foundation: login challenges,
+  admin sessions, email code verification and audit event baseline.

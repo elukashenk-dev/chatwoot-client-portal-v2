@@ -20,6 +20,7 @@ export class DefaultTenantBootstrapConfigError extends Error {
 type DefaultTenantBootstrapEnv = Pick<
   AppEnv,
   | 'DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID'
+  | 'DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN'
   | 'DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN'
   | 'DEFAULT_TENANT_CHATWOOT_BASE_URL'
   | 'DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID'
@@ -77,9 +78,19 @@ export async function bootstrapDefaultTenant({
   const tenantSecretKey = decodeTenantSecretKey(
     requireString(env, 'PORTAL_TENANT_SECRET_KEY'),
   )
+  const adminVerificationTokenPatch =
+    env.DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN === undefined
+      ? {}
+      : {
+          chatwootAdminVerificationTokenCiphertext: encryptTenantSecret(
+            env.DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN,
+            tenantSecretKey,
+          ),
+        }
 
   const tenant = await repository.upsertTenantBySlug({
     chatwootAccountId: requireNumber(env, 'DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID'),
+    ...adminVerificationTokenPatch,
     chatwootApiAccessTokenCiphertext: encryptTenantSecret(
       requireString(env, 'DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN'),
       tenantSecretKey,
@@ -119,6 +130,9 @@ export function createSafeDefaultTenantBootstrapReport({
       displayName: tenant.displayName,
       hasChatwootApiAccessTokenCiphertext: Boolean(
         tenant.chatwootApiAccessTokenCiphertext,
+      ),
+      hasChatwootAdminVerificationTokenCiphertext: Boolean(
+        tenant.chatwootAdminVerificationTokenCiphertext,
       ),
       hasChatwootWebhookSecretCiphertext: Boolean(
         tenant.chatwootWebhookSecretCiphertext,

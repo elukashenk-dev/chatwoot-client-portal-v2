@@ -24,6 +24,7 @@ export class TenantValidationError extends Error {
 
 type TenantInput = {
   chatwootAccountId: number
+  chatwootAdminVerificationTokenCiphertext?: string | null
   chatwootApiAccessTokenCiphertext: string
   chatwootBaseUrl: string
   chatwootPortalInboxId: number
@@ -145,6 +146,21 @@ function normalizeNonEmptyString(value: string, fieldName: string) {
   return normalizedValue
 }
 
+function normalizeOptionalNonEmptyString(
+  value: string | null | undefined,
+  fieldName: string,
+) {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (value === null) {
+    return null
+  }
+
+  return normalizeNonEmptyString(value, fieldName)
+}
+
 function normalizeTenantStatus(status: TenantStatus | undefined) {
   const normalizedStatus = status ?? 'active'
 
@@ -168,6 +184,10 @@ function normalizeTenantInput(input: TenantInput) {
     chatwootAccountId: normalizePositiveInteger(
       input.chatwootAccountId,
       'chatwootAccountId',
+    ),
+    chatwootAdminVerificationTokenCiphertext: normalizeOptionalNonEmptyString(
+      input.chatwootAdminVerificationTokenCiphertext,
+      'chatwootAdminVerificationTokenCiphertext',
     ),
     chatwootApiAccessTokenCiphertext: normalizeNonEmptyString(
       input.chatwootApiAccessTokenCiphertext,
@@ -238,6 +258,23 @@ export function createTenantsRepository(db: AppDatabase) {
         .orderBy(sql`${portalTenants.slug} asc`)
     },
 
+    async findAdminVerificationConfigByTenantId(tenantId: number) {
+      const [tenant] = await db
+        .select({
+          chatwootAccountId: portalTenants.chatwootAccountId,
+          chatwootAdminVerificationTokenCiphertext:
+            portalTenants.chatwootAdminVerificationTokenCiphertext,
+          chatwootBaseUrl: portalTenants.chatwootBaseUrl,
+          id: portalTenants.id,
+          status: portalTenants.status,
+        })
+        .from(portalTenants)
+        .where(eq(portalTenants.id, tenantId))
+        .limit(1)
+
+      return tenant ?? null
+    },
+
     async updateChatwootWebhookSecretCiphertext({
       chatwootWebhookSecretCiphertext,
       tenantId,
@@ -291,6 +328,13 @@ export function createTenantsRepository(db: AppDatabase) {
     async upsertTenantBySlug(input: TenantInput) {
       const normalizedInput = normalizeTenantInput(input)
       const now = new Date()
+      const adminVerificationTokenPatch =
+        normalizedInput.chatwootAdminVerificationTokenCiphertext === undefined
+          ? {}
+          : {
+              chatwootAdminVerificationTokenCiphertext:
+                normalizedInput.chatwootAdminVerificationTokenCiphertext,
+            }
 
       const [tenant] = await db
         .insert(portalTenants)
@@ -298,6 +342,7 @@ export function createTenantsRepository(db: AppDatabase) {
         .onConflictDoUpdate({
           set: {
             chatwootAccountId: normalizedInput.chatwootAccountId,
+            ...adminVerificationTokenPatch,
             chatwootApiAccessTokenCiphertext:
               normalizedInput.chatwootApiAccessTokenCiphertext,
             chatwootBaseUrl: normalizedInput.chatwootBaseUrl,

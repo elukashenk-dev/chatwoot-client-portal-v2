@@ -1,0 +1,1 @@
+ALTER TABLE "portal_tenants" ADD COLUMN "chatwoot_admin_verification_token_ciphertext" text;

@@ -460,9 +460,9 @@ tenant-aware runtime.
 - локальная разработка использует тот же object-storage подход через
   MinIO/compatible service;
 - tenant admin login отдельный от customer login;
-- для admin verification нужен отдельный encrypted per-tenant Chatwoot
-  admin-verification token;
-- перед реализацией нужен Chatwoot permissions spike по `F-MT-004`;
+- для admin verification добавлен отдельный encrypted per-tenant Chatwoot
+  admin-verification token boundary;
+- Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;
 - runtime Chatwoot token и admin-verification authority - разные security
   boundaries.
 

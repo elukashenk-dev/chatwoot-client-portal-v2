@@ -57,6 +57,13 @@
       "when": 1780566028870,
       "tag": "0007_customer_read_typing_identifiers",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780748870927,
+      "tag": "0008_common_wonder_man",
+      "breakpoints": true
     }
   ]
 }

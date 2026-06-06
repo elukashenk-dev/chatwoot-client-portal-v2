@@ -68,12 +68,14 @@ stable docs.
 Вернуть admin/branding только как tenant-owned feature поверх готовой
 multi-tenant foundation и утвержденного customer-facing UI baseline.
 
-Required first gate:
+Completed first gate:
 
-- close `F-MT-004` with a Chatwoot permissions spike;
-- keep runtime Chatwoot token and admin-verification token as separate security
+- `F-MT-004` is closed by `MT-9A`;
+- Chatwoot permissions/source spike is documented in
+  `docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md`;
+- runtime Chatwoot token and admin-verification token are separate security
   boundaries;
-- store admin-verification token as an encrypted per-tenant secret.
+- admin-verification token is stored as a nullable encrypted per-tenant secret.
 
 Scope:
 
@@ -102,8 +104,7 @@ Exit criteria:
 - admin tenant A cannot log in to or change branding for tenant B;
 - branding settings and assets are tenant-scoped;
 - browser does not receive Chatwoot authority;
-- runtime Chatwoot token is not implicit admin authority;
-- `F-MT-004` is closed by implementation and verification.
+- runtime Chatwoot token is not implicit admin authority.
 
 ### MT-10. Deployment And Runbook Update
 

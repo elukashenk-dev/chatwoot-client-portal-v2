@@ -32,6 +32,9 @@ export const portalTenants = pgTable(
     chatwootApiAccessTokenCiphertext: text(
       'chatwoot_api_access_token_ciphertext',
     ).notNull(),
+    chatwootAdminVerificationTokenCiphertext: text(
+      'chatwoot_admin_verification_token_ciphertext',
+    ),
     chatwootWebhookSecretCiphertext: text(
       'chatwoot_webhook_secret_ciphertext',
     ).notNull(),

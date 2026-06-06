@@ -229,7 +229,7 @@ Runtime token:
 
 Tenant admin verification token:
 
-- separate encrypted per-tenant token added in `MT-9`;
+- separate encrypted per-tenant token added in `MT-9A`;
 - example field:
   `chatwoot_admin_verification_token_ciphertext`;
 - used only backend-side to verify tenant admin eligibility through Chatwoot
@@ -243,7 +243,7 @@ Forbidden:
 - browser-visible Chatwoot tokens;
 - platform/provisioning token as tenant admin login authority.
 
-Before implementing `MT-9`, run a focused permissions spike:
+`MT-9A` completed the focused permissions spike:
 
 - confirm the exact Chatwoot endpoint for listing account agents/users;
 - confirm required token owner permissions;

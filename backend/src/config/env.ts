@@ -146,6 +146,7 @@ const envSchema = z
     DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID: optionalPositiveInt,
     DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID: optionalPositiveInt,
     DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN: optionalNonEmptyString,
+    DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN: optionalNonEmptyString,
     DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET: optionalNonEmptyString,
     SMTP_HOST: optionalNonEmptyString,
     SMTP_PORT: optionalPositiveInt.default(1025),

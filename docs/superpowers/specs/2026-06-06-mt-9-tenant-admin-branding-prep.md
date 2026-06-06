@@ -5,10 +5,14 @@
 Статус: подготовительный черновик спецификации для
 `MT-9 Tenant Admin And Branding Rebuild`.
 
+Текущий статус: `MT-9A` реализовал и закрыл `F-MT-004`. Актуальная closure-дока:
+`docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md`.
+
 Этот файл фиксирует первый проход исследования и архитектурной рамки. Это еще
-не план реализации. Ближайшая цель - закрыть проверку безопасности `F-MT-004`: сделать
-точное исследование прав Chatwoot и зафиксировать tenant-scoped границу для
-admin-verification token до реализации любого UI брендинга.
+не план реализации. Его ближайшая цель была закрыть проверку безопасности
+`F-MT-004`: сделать точное исследование прав Chatwoot и зафиксировать
+tenant-scoped границу для admin-verification token до реализации любого UI
+брендинга. Эта цель закрыта в `MT-9A`.
 
 Актуальная сверка с официальной документацией Chatwoot и локальным source
 Chatwoot CE `v4.13.0-1-g38c6b79b4` выполнена 2026-06-06.
@@ -24,7 +28,7 @@ Chatwoot CE `v4.13.0-1-g38c6b79b4` выполнена 2026-06-06.
 - `docs/architecture/decisions.md`
 - `docs/architecture/multi-tenant-reference.md`
 - `docs/design/portal-ui-ux-baseline.md`
-- `docs/findings/F-MT-004-admin-chatwoot-token-boundary.md`
+- `docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md`
 
 Текущий код:
 
@@ -68,17 +72,18 @@ Chatwoot CE `v4.13.0-1-g38c6b79b4` выполнена 2026-06-06.
 
 ## Связь С Дорожной Картой
 
-`MT-9` - следующая активная область дорожной карты.
+`MT-9` - активная область дорожной карты.
 
-Дорожная карта требует:
+Первый gate `MT-9A` уже закрыл:
 
 - закрыть `F-MT-004` через исследование прав Chatwoot;
 - держать runtime Chatwoot token и admin-verification token как разные границы
   безопасности;
 - хранить admin-verification token как зашифрованный per-tenant secret;
-- начинать tenant-scoped admin login, branding settings, branding assets в
-  object storage, audit events и предпросмотры только после закрытия первой
-  проверки.
+
+Следующие срезы могут начинать tenant-scoped admin login, branding settings,
+branding assets в object storage, audit events и предпросмотры поверх закрытой
+первой проверки.
 
 Визуальное сравнение для первого среза не требуется, потому что первый срез
 сосредоточен на backend/security. Перед решениями по admin UI брендинга

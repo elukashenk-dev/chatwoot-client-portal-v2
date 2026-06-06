@@ -94,6 +94,62 @@ describe('tenants repository', () => {
     })
   })
 
+  it('stores optional Chatwoot admin verification token ciphertext separately from runtime token', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    const tenant = await repository.createTenant({
+      chatwootAccountId: 3,
+      chatwootAdminVerificationTokenCiphertext: ' v1:admin-token-ciphertext ',
+      chatwootApiAccessTokenCiphertext: 'v1:runtime-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com/',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru/',
+      slug: 'buhfirma',
+    })
+
+    expect(tenant).toMatchObject({
+      chatwootAdminVerificationTokenCiphertext: 'v1:admin-token-ciphertext',
+      chatwootApiAccessTokenCiphertext: 'v1:runtime-token-ciphertext',
+    })
+
+    await expect(
+      repository.findAdminVerificationConfigByTenantId(tenant.id),
+    ).resolves.toEqual({
+      chatwootAccountId: 3,
+      chatwootAdminVerificationTokenCiphertext: 'v1:admin-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      id: tenant.id,
+      status: 'active',
+    })
+  })
+
+  it('keeps Chatwoot admin verification token nullable for existing tenants', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    const tenant = await repository.createTenant({
+      chatwootAccountId: 3,
+      chatwootApiAccessTokenCiphertext: 'v1:runtime-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com/',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru/',
+      slug: 'buhfirma',
+    })
+
+    expect(tenant.chatwootAdminVerificationTokenCiphertext).toBeNull()
+    await expect(
+      repository.findAdminVerificationConfigByTenantId(tenant.id),
+    ).resolves.toMatchObject({
+      chatwootAdminVerificationTokenCiphertext: null,
+      id: tenant.id,
+    })
+  })
+
   it('clears the stored Chatwoot portal inbox public identifier during tenant upsert', async () => {
     const repository = createTenantsRepository(database.db)
 
@@ -206,12 +262,11 @@ describe('tenants repository', () => {
       slug: 'buhfirma',
     })
 
-    const updatedTenant =
-      await repository.updateChatwootPortalInboxIdentifier({
-        chatwootPortalInboxIdentifier: ' api-channel-public-identifier ',
-        tenantId: tenant.id,
-        updatedAt: new Date('2026-06-04T10:00:00.000Z'),
-      })
+    const updatedTenant = await repository.updateChatwootPortalInboxIdentifier({
+      chatwootPortalInboxIdentifier: ' api-channel-public-identifier ',
+      tenantId: tenant.id,
+      updatedAt: new Date('2026-06-04T10:00:00.000Z'),
+    })
 
     expect(updatedTenant.chatwootPortalInboxIdentifier).toBe(
       'api-channel-public-identifier',
