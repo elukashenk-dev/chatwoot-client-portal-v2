@@ -13,7 +13,7 @@ export const brandingAssetKinds = [
 export type BrandingAssetKind = (typeof brandingAssetKinds)[number]
 
 export type PublicBrandingAsset = {
-  contentHash: string
+  assetVersion: string
   contentType: string
   height: number | null
   id: number
@@ -27,37 +27,39 @@ export type PublicBrandingAssetMap = Partial<
 >
 
 export function createPublicBrandingAssetUrl({
-  contentHash,
+  assetVersion,
   id,
 }: {
-  contentHash: string
+  assetVersion: string
   id: number
 }) {
-  return `/api/branding/assets/${id}?v=${encodeURIComponent(contentHash)}`
+  return `/api/branding/assets/${id}?v=${encodeURIComponent(assetVersion)}`
 }
 
 export function createBrandingObjectKey({
   contentHash,
   filename,
+  instanceId,
   kind,
   tenantId,
 }: {
   contentHash: string
   filename: string
+  instanceId: string
   kind: BrandingAssetKind
   tenantId: number
 }) {
-  return `tenants/${tenantId}/branding/${kind}/${contentHash}/${filename}`
+  return `tenants/${tenantId}/branding/${kind}/${contentHash}/${instanceId}/${filename}`
 }
 
 export function createTenantPwaIconVersion({
-  contentHash,
+  assetId,
   tenantSlug,
 }: {
-  contentHash: string
+  assetId: number
   tenantSlug: string
 }) {
-  return encodeURIComponent(`${tenantSlug}-${contentHash}`)
+  return encodeURIComponent(`${tenantSlug}-asset-${assetId}`)
 }
 
 export function parseBrandingAssetKind(input: string): BrandingAssetKind {

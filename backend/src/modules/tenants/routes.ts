@@ -7,7 +7,7 @@ import { createTenantPwaIconVersion } from '../branding/brandingAssets.js'
 import type { TenantRequestContext, TenantsService } from './service.js'
 
 type RegisterTenantContextOptions = {
-  tenantsService: TenantsService
+  tenantsService: Pick<TenantsService, 'resolveTenantByHost'>
 }
 
 type RegisterTenantRoutesOptions = {
@@ -17,12 +17,15 @@ type RegisterTenantRoutesOptions = {
 
 export type TenantPwaIconReader = {
   getActivePwaIconMetadata(request: FastifyRequest): Promise<{
-    contentHash: string
+    assetId: number
     contentType: string
   } | null>
-  getActivePwaIconObject(request: FastifyRequest): Promise<{
+  getActivePwaIconObject(
+    request: FastifyRequest,
+    expectedAssetId: number,
+  ): Promise<{
+    assetId: number
     body: Readable | null
-    contentHash: string
     contentLength: number | null
     contentType: string
   } | null>
@@ -46,6 +49,14 @@ function getRequestPathname(request: FastifyRequest) {
   }
 }
 
+function getRequestQueryValue(request: FastifyRequest, key: string) {
+  try {
+    return new URL(request.url, 'http://portal.local').searchParams.get(key)
+  } catch {
+    throw new ApiError(400, 'REQUEST_URL_INVALID', 'Некорректный URL запроса.')
+  }
+}
+
 function requiresTenantResolution(pathname: string) {
   return pathname.startsWith('/api/') && !tenantOptionalPaths.has(pathname)
 }
@@ -61,11 +72,11 @@ function getTenantPwaRootUrl(tenant: TenantRequestContext) {
 
 function getTenantPwaIconVersion(
   tenant: TenantRequestContext,
-  pwaIconMetadata?: { contentHash: string } | null,
+  pwaIconMetadata?: { assetId: number } | null,
 ) {
   if (pwaIconMetadata) {
     return createTenantPwaIconVersion({
-      contentHash: pwaIconMetadata.contentHash,
+      assetId: pwaIconMetadata.assetId,
       tenantSlug: tenant.slug,
     })
   }
@@ -75,7 +86,7 @@ function getTenantPwaIconVersion(
 
 function getTenantPwaManifest(
   tenant: TenantRequestContext,
-  pwaIconMetadata?: { contentHash: string; contentType: string } | null,
+  pwaIconMetadata?: { assetId: number; contentType: string } | null,
 ) {
   const iconVersion = getTenantPwaIconVersion(tenant, pwaIconMetadata)
   const iconType = pwaIconMetadata?.contentType ?? 'image/png'
@@ -117,16 +128,61 @@ function getTenantPwaManifest(
 async function sendActiveTenantPwaIconIfPresent({
   pwaIconReader,
   reply,
+  requireMatchingVersion,
   request,
 }: {
   pwaIconReader: TenantPwaIconReader | undefined
   reply: FastifyReply
+  requireMatchingVersion: boolean
   request: FastifyRequest
 }) {
-  const icon = await pwaIconReader?.getActivePwaIconObject(request)
+  if (!pwaIconReader) {
+    return false
+  }
+
+  const tenant = requireTenantContext(request)
+  const metadata = await pwaIconReader.getActivePwaIconMetadata(request)
+
+  if (!metadata) {
+    return false
+  }
+
+  const activeVersion = getTenantPwaIconVersion(tenant, metadata)
+  const requestedVersion = getRequestQueryValue(request, 'v')
+
+  if (requireMatchingVersion && requestedVersion !== activeVersion) {
+    setTenantPwaHeaders(reply)
+
+    await reply.status(404).send({
+      error: {
+        code: 'TENANT_PWA_ICON_NOT_FOUND',
+        message: 'Иконка приложения не найдена.',
+      },
+    })
+
+    return true
+  }
+
+  const icon = await pwaIconReader.getActivePwaIconObject(
+    request,
+    metadata.assetId,
+  )
 
   if (!icon) {
     return false
+  }
+
+  if (icon.assetId !== metadata.assetId) {
+    setTenantPwaHeaders(reply)
+
+    await reply.status(404).send({
+      error: {
+        code: 'TENANT_PWA_ICON_NOT_FOUND',
+        message: 'Иконка приложения не найдена.',
+      },
+    })
+
+    return true
   }
 
   if (!icon.body) {
@@ -137,8 +193,14 @@ async function sendActiveTenantPwaIconIfPresent({
     )
   }
 
-  reply.header('Cache-Control', 'public, max-age=31536000, immutable')
-  reply.header('Vary', 'Host')
+  if (requestedVersion === activeVersion) {
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+    reply.header('Vary', 'Host')
+  } else {
+    setTenantPwaHeaders(reply)
+  }
+
+  reply.header('X-Content-Type-Options', 'nosniff')
   reply.type(icon.contentType)
 
   if (icon.contentLength !== null) {
@@ -218,6 +280,7 @@ export function registerTenantRoutes(
       await sendActiveTenantPwaIconIfPresent({
         pwaIconReader,
         reply,
+        requireMatchingVersion: false,
         request,
       })
     ) {
@@ -249,6 +312,7 @@ export function registerTenantRoutes(
       await sendActiveTenantPwaIconIfPresent({
         pwaIconReader,
         reply,
+        requireMatchingVersion: true,
         request,
       })
     ) {

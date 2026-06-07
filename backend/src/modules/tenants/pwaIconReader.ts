@@ -26,17 +26,17 @@ export function createTenantPwaIconReader({
       }
 
       return {
-        contentHash: asset.contentHash,
+        assetId: asset.id,
         contentType: asset.contentType,
       }
     },
-    async getActivePwaIconObject(request) {
+    async getActivePwaIconObject(request, expectedAssetId) {
       const tenant = requireTenantContext(request)
       const asset = await createBrandingRepository(db, {
         tenantId: tenant.id,
       }).findActivePwaIcon()
 
-      if (!asset) {
+      if (!asset || asset.id !== expectedAssetId) {
         return null
       }
 
@@ -46,7 +46,7 @@ export function createTenantPwaIconReader({
 
       return {
         ...object,
-        contentHash: asset.contentHash,
+        assetId: asset.id,
         contentType: object.contentType ?? asset.contentType,
       }
     },

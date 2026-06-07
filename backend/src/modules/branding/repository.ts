@@ -293,19 +293,20 @@ export function createBrandingRepository(
 
       return assets.reduce<PublicBrandingAssetMap>((assetMap, asset) => {
         const kind = asset.kind as BrandingAssetKind
+        const assetVersion = String(asset.id)
 
         if (activeAssetIdByKind.get(kind) !== asset.id) {
           return assetMap
         }
 
         assetMap[kind] = {
-          contentHash: asset.contentHash,
+          assetVersion,
           contentType: asset.contentType,
           height: asset.height,
           id: asset.id,
           kind,
           publicUrl: createPublicBrandingAssetUrl({
-            contentHash: asset.contentHash,
+            assetVersion,
             id: asset.id,
           }),
           width: asset.width,

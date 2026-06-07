@@ -10,10 +10,10 @@ describe('branding asset helpers', () => {
   it('creates a tenant-scoped pwa icon version', () => {
     expect(
       createTenantPwaIconVersion({
-        contentHash: 'hash/value',
+        assetId: 42,
         tenantSlug: 'buhfirma',
       }),
-    ).toBe('buhfirma-hash%2Fvalue')
+    ).toBe('buhfirma-asset-42')
   })
 
   it('parses supported branding asset kinds', () => {

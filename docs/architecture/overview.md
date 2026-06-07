@@ -298,6 +298,9 @@ Tenant-aware PWA endpoints:
 - iOS Home Screen icon тоже tenant-aware;
 - tenant PWA icon routes могут использовать активный tenant-owned `pwa_icon`
   asset из branding storage, а при его отсутствии сохраняют fallback redirects;
+- versioned tenant PWA icon routes отдают immutable cache только при совпадении
+  requested asset version с active asset version и проверяют asset id перед
+  streaming; unversioned Apple icon route остается `no-store`;
 - tenant dynamic metadata отдается с `no-store`;
 - service worker не кэширует tenant dynamic metadata;
 - production service worker кэширует только app shell/assets, не перехватывает
@@ -489,8 +492,9 @@ tenant-aware runtime.
   branding APIs, admin audit events and first admin UI data wiring without
   binary asset upload;
 - `MT-9E` добавил S3-compatible branding asset storage, backend-owned
-  upload/read/delete routes, tenant-scoped public asset reads and custom tenant
-  PWA icon routing without exposing object keys to browser;
+  upload/read/delete routes, tenant-scoped public asset reads, image signature
+  validation, opaque public asset versions and custom tenant PWA icon routing
+  without exposing object keys/checksums to browser;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

@@ -109,8 +109,9 @@ execution-plan детали здесь не хранятся.
   wiring are implemented without binary asset upload or browser object keys.
 - `MT-9E` is closed: branding asset binary upload/read/delete is backed by
   S3-compatible object storage through backend-owned routes, public/admin
-  responses expose portal URLs and safe metadata only, and tenant PWA icon
-  routes can use an active tenant-owned `pwa_icon` asset with fallback icons
+  responses expose portal URLs and safe opaque asset versions only, uploads
+  validate image signatures, and tenant PWA icon routes can use an active
+  tenant-owned `pwa_icon` asset with fallback icons and cache-version guards
   preserved.
 
 ## Recommended Next Step

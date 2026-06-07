@@ -88,7 +88,8 @@ Completed gates:
   browser object keys.
 - `MT-9E` branding asset storage backend is closed: S3-compatible object
   storage, admin upload/delete routes, tenant-scoped public asset reads and
-  custom PWA icon routing are implemented without browser object keys.
+  custom PWA icon routing are implemented with image signature validation,
+  opaque public asset versions and no browser object keys/checksums.
 
 Branding slice map:
 
@@ -99,7 +100,7 @@ Branding slice map:
   settings form and live preview. Closed.
 - `MT-9E` - branding asset storage backend: S3-compatible object storage,
   admin upload/delete routes, tenant-scoped public asset reads and custom PWA
-  icon routing. Closed.
+  icon routing with image signature validation and cache-version guards. Closed.
 - `MT-9F` - admin asset controls: upload/replace/delete UI for logo, PWA icon
   and configured auth/chat image slots, wired to the storage-backed backend
   routes. Current next slice.

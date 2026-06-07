@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import type { BrandingObjectStorage } from '../../integrations/object-storage/brandingStorage.js'
 import { ApiError } from '../../lib/errors.js'
@@ -67,14 +67,16 @@ const settingsPatchByKind = {
 >
 
 function toPublicAsset(asset: BrandingAssetRow) {
+  const assetVersion = String(asset.id)
+
   return {
-    contentHash: asset.contentHash,
+    assetVersion,
     contentType: asset.contentType,
     height: asset.height,
     id: asset.id,
     kind: asset.kind as BrandingAssetKind,
     publicUrl: createPublicBrandingAssetUrl({
-      contentHash: asset.contentHash,
+      assetVersion,
       id: asset.id,
     }),
     width: asset.width,
@@ -126,6 +128,7 @@ export function createBrandingAssetService({
       const objectKey = createBrandingObjectKey({
         contentHash,
         filename: asset.fileName,
+        instanceId: randomUUID(),
         kind: asset.kind,
         tenantId,
       })
@@ -160,11 +163,10 @@ export function createBrandingAssetService({
       )
 
       if (previousAsset) {
-        await repository.deleteAssetMetadata(previousAsset.id)
-
         try {
           await storage.deleteObject({ key: previousAsset.objectKey })
-        } catch (error) {
+          await repository.deleteAssetMetadata(previousAsset.id)
+        } catch {
           await audit({
             action: 'branding_asset_cleanup_failed',
             actor: admin,
@@ -176,12 +178,6 @@ export function createBrandingAssetService({
             requestIp,
             subjectEmail: admin.email,
             userAgent,
-          })
-
-          throw createStorageError({
-            code: 'BRANDING_ASSET_DELETE_FAILED',
-            error,
-            message: 'Не удалось удалить старый файл брендинга.',
           })
         }
       }
@@ -220,7 +216,6 @@ export function createBrandingAssetService({
       }
 
       await repository.deactivateAssetKind(kind)
-      await repository.deleteAssetMetadata(activeAsset.id)
 
       try {
         await storage.deleteObject({ key: activeAsset.objectKey })
@@ -231,6 +226,8 @@ export function createBrandingAssetService({
           message: 'Не удалось удалить файл брендинга.',
         })
       }
+
+      await repository.deleteAssetMetadata(activeAsset.id)
 
       await audit({
         action: 'branding_asset_deleted',

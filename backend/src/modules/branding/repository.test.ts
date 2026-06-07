@@ -154,11 +154,13 @@ describe('createBrandingRepository', () => {
         expect.objectContaining({
           logo: expect.objectContaining({
             id: asset.id,
+            assetVersion: String(asset.id),
             kind: 'logo',
-            publicUrl: `/api/branding/assets/${asset.id}?v=asset-hash-a`,
+            publicUrl: `/api/branding/assets/${asset.id}?v=${asset.id}`,
           }),
         }),
       )
+      expect(assetMetadata.logo).not.toHaveProperty('contentHash')
       expect(assetMetadata.logo).not.toHaveProperty('originalFilename')
       await expect(repositoryB.findActiveAssetMetadata()).resolves.toEqual({})
     } finally {

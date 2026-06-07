@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 
 import { describe, expect, it, vi } from 'vitest'
@@ -9,6 +10,11 @@ import {
 import type { PublicTenantAdmin } from '../tenant-admin/adminAuthService.js'
 import { createBrandingAssetService } from './assetService.js'
 import type { BrandingAssetKind } from './brandingAssets.js'
+
+const validPngBytes = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64',
+)
 
 const admin = {
   chatwootAgentId: 42,
@@ -96,17 +102,28 @@ function createRepository({
   }
 }
 
-function createStorage(operations: string[] = []): BrandingObjectStorage {
+function createStorage(
+  operations: string[] = [],
+  {
+    deleteObject,
+  }: {
+    deleteObject?: () => Promise<void>
+  } = {},
+): BrandingObjectStorage {
   return {
     deleteObject: vi.fn().mockImplementation(async () => {
       operations.push('delete-object')
+
+      if (deleteObject) {
+        await deleteObject()
+      }
     }),
     getObject: vi.fn().mockImplementation(async () => {
       operations.push('get-object')
 
       return {
-        body: Readable.from(Buffer.from('image-bytes')),
-        contentLength: 11,
+        body: Readable.from(validPngBytes),
+        contentLength: validPngBytes.byteLength,
         contentType: 'image/png',
       }
     }),
@@ -114,6 +131,10 @@ function createStorage(operations: string[] = []): BrandingObjectStorage {
       operations.push('put-object')
     }),
   }
+}
+
+function getContentHash(data: Buffer) {
+  return createHash('sha256').update(data).digest('hex').slice(0, 32)
 }
 
 describe('createBrandingAssetService', () => {
@@ -133,7 +154,7 @@ describe('createBrandingAssetService', () => {
       admin,
       requestIp: '127.0.0.1',
       upload: {
-        data: Buffer.from('image-bytes'),
+        data: validPngBytes,
         fileName: '../../Tenant Logo.PNG',
         kind: 'logo',
         mimeType: 'image/png',
@@ -143,10 +164,10 @@ describe('createBrandingAssetService', () => {
 
     expect(storage.putObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        contentLength: 11,
+        contentLength: validPngBytes.byteLength,
         contentType: 'image/png',
         key: expect.stringMatching(
-          /^tenants\/7\/branding\/logo\/[a-f0-9]{32}\/tenant-logo\.png$/,
+          /^tenants\/7\/branding\/logo\/[a-f0-9]{32}\/[a-f0-9-]+\/tenant-logo\.png$/,
         ),
       }),
     )
@@ -156,9 +177,11 @@ describe('createBrandingAssetService', () => {
     expect(response.asset).toEqual(
       expect.objectContaining({
         kind: 'logo',
-        publicUrl: `/api/branding/assets/${response.asset.id}?v=${response.asset.contentHash}`,
+        publicUrl: `/api/branding/assets/${response.asset.id}?v=${response.asset.assetVersion}`,
       }),
     )
+    expect(response.asset).toHaveProperty('assetVersion')
+    expect(response.asset).not.toHaveProperty('contentHash')
     expect(response.asset).not.toHaveProperty('objectKey')
     expect(response.asset).not.toHaveProperty('checksumSha256')
     expect(response.asset).not.toHaveProperty('originalFilename')
@@ -168,6 +191,48 @@ describe('createBrandingAssetService', () => {
         actor: admin,
         outcome: 'success',
         subjectEmail: admin.email,
+      }),
+    )
+  })
+
+  it('uses a new object key when replacing the same file with the same bytes and filename', async () => {
+    const contentHash = getContentHash(validPngBytes)
+    const previousObjectKey = `tenants/7/branding/logo/${contentHash}/logo.png`
+    const previousAsset = createAsset({
+      id: 1,
+      contentHash,
+      objectKey: previousObjectKey,
+    })
+    const repository = createRepository({
+      activeByKind: new Map([['logo', previousAsset]]),
+    })
+    const storage = createStorage()
+    const service = createBrandingAssetService({
+      audit: vi.fn(),
+      repository,
+      storage,
+      tenantId: 7,
+    })
+
+    await service.uploadAsset({
+      admin,
+      requestIp: null,
+      upload: {
+        data: validPngBytes,
+        fileName: 'logo.png',
+        kind: 'logo',
+        mimeType: 'image/png',
+      },
+      userAgent: null,
+    })
+
+    expect(storage.putObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.not.stringMatching(
+          new RegExp(
+            `^${previousObjectKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          ),
+        ),
       }),
     )
   })
@@ -194,7 +259,7 @@ describe('createBrandingAssetService', () => {
       admin,
       requestIp: null,
       upload: {
-        data: Buffer.from('new-image'),
+        data: validPngBytes,
         fileName: 'logo.png',
         kind: 'logo',
         mimeType: 'image/png',
@@ -207,13 +272,65 @@ describe('createBrandingAssetService', () => {
       'put-object',
       'create-metadata',
       'activate-settings',
-      'delete-metadata',
       'delete-object',
+      'delete-metadata',
     ])
     expect(repository.deleteAssetMetadata).toHaveBeenCalledWith(1)
     expect(storage.deleteObject).toHaveBeenCalledWith({
       key: 'tenants/7/branding/logo/old/logo.png',
     })
+  })
+
+  it('keeps replacement successful and leaves old metadata when old object cleanup fails', async () => {
+    const previousAsset = createAsset({
+      id: 1,
+      objectKey: 'tenants/7/branding/logo/old/logo.png',
+    })
+    const audit = vi.fn()
+    const repository = createRepository({
+      activeByKind: new Map([['logo', previousAsset]]),
+    })
+    const storage = createStorage([], {
+      deleteObject: async () => {
+        throw new Error('storage delete failed')
+      },
+    })
+    const service = createBrandingAssetService({
+      audit,
+      repository,
+      storage,
+      tenantId: 7,
+    })
+
+    await expect(
+      service.uploadAsset({
+        admin,
+        requestIp: null,
+        upload: {
+          data: validPngBytes,
+          fileName: 'logo.png',
+          kind: 'logo',
+          mimeType: 'image/png',
+        },
+        userAgent: null,
+      }),
+    ).resolves.toEqual({
+      asset: expect.objectContaining({ kind: 'logo' }),
+    })
+    expect(repository.upsertSettings).toHaveBeenCalled()
+    expect(repository.deleteAssetMetadata).not.toHaveBeenCalledWith(1)
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'branding_asset_cleanup_failed',
+        outcome: 'failed',
+      }),
+    )
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'branding_asset_uploaded',
+        outcome: 'success',
+      }),
+    )
   })
 
   it('deletes an active asset kind by deactivating settings and deleting metadata/content', async () => {
@@ -246,9 +363,51 @@ describe('createBrandingAssetService', () => {
     expect(operations).toEqual([
       'find-active-by-kind',
       'deactivate-kind',
+      'delete-object',
       'delete-metadata',
+    ])
+  })
+
+  it('keeps metadata when explicit delete object cleanup fails', async () => {
+    const activeAsset = createAsset({
+      id: 3,
+      kind: 'pwa_icon',
+      objectKey: 'tenants/7/branding/pwa_icon/hash/icon.png',
+    })
+    const operations: string[] = []
+    const repository = createRepository({
+      activeByKind: new Map([['pwa_icon', activeAsset]]),
+      operations,
+    })
+    const storage = createStorage(operations, {
+      deleteObject: async () => {
+        throw new Error('storage delete failed')
+      },
+    })
+    const service = createBrandingAssetService({
+      audit: vi.fn(),
+      repository,
+      storage,
+      tenantId: 7,
+    })
+
+    await expect(
+      service.deleteAsset({
+        admin,
+        kind: 'pwa_icon',
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BRANDING_ASSET_DELETE_FAILED',
+      statusCode: 502,
+    })
+    expect(operations).toEqual([
+      'find-active-by-kind',
+      'deactivate-kind',
       'delete-object',
     ])
+    expect(repository.deleteAssetMetadata).not.toHaveBeenCalledWith(3)
   })
 
   it('returns a controlled unavailable error when storage is disabled', async () => {
@@ -265,7 +424,7 @@ describe('createBrandingAssetService', () => {
         admin,
         requestIp: null,
         upload: {
-          data: Buffer.from('image-bytes'),
+          data: validPngBytes,
           fileName: 'logo.png',
           kind: 'logo',
           mimeType: 'image/png',
@@ -305,7 +464,7 @@ describe('createBrandingAssetService', () => {
     expect(response).toEqual(
       expect.objectContaining({
         body: expect.any(Readable),
-        contentLength: 11,
+        contentLength: validPngBytes.byteLength,
         contentType: 'image/png',
       }),
     )

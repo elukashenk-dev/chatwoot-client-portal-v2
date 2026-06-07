@@ -20,6 +20,10 @@ import {
 import { createTestDatabase } from './test/testDatabase.js'
 
 const fixedNow = new Date('2026-06-06T12:00:00.000Z')
+const validPngBytes = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64',
+)
 
 function extractCode(message: EmailMessage | undefined) {
   const code = message?.text.match(/\b\d{6}\b/)?.[0]
@@ -462,7 +466,7 @@ describe('buildApp branding integration', () => {
   it('uploads a branding logo through an authenticated same-origin admin request', async () => {
     const cookieHeader = await createAdminCookie({ app, sentEmails })
     const multipart = createMultipartBrandingAssetPayload({
-      fileContent: Buffer.from('logo-bytes'),
+      fileContent: validPngBytes,
       fileName: 'logo.png',
       mimeType: 'image/png',
     })
@@ -487,6 +491,7 @@ describe('buildApp branding integration', () => {
       }),
     })
     expect(JSON.stringify(uploadResponse.json())).not.toContain('objectKey')
+    expect(JSON.stringify(uploadResponse.json())).not.toContain('contentHash')
     expect(JSON.stringify(uploadResponse.json())).not.toContain(
       'checksumSha256',
     )
@@ -518,13 +523,38 @@ describe('buildApp branding integration', () => {
 
     expect(assetResponse.statusCode).toBe(200)
     expect(assetResponse.headers['content-type']).toBe('image/png')
-    expect(assetResponse.body).toBe('logo-bytes')
+    expect(assetResponse.headers['x-content-type-options']).toBe('nosniff')
+    expect(assetResponse.rawPayload).toEqual(validPngBytes)
+  })
+
+  it('rejects branding asset uploads when declared MIME type does not match bytes', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+    const multipart = createMultipartBrandingAssetPayload({
+      fileContent: Buffer.from('not-a-real-png'),
+      fileName: 'logo.png',
+      mimeType: 'image/png',
+    })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+        'content-type': multipart.contentType,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/admin/branding/assets/logo',
+    })
+
+    expect(response.statusCode).toBe(415)
+    expect(response.json().error.code).toBe('BRANDING_ASSET_TYPE_NOT_ALLOWED')
+    expect(brandingStorage.storage.putObject).not.toHaveBeenCalled()
   })
 
   it('rejects admin branding asset uploads without same-origin tenant guard', async () => {
     const cookieHeader = await createAdminCookie({ app, sentEmails })
     const multipart = createMultipartBrandingAssetPayload({
-      fileContent: Buffer.from('logo-bytes'),
+      fileContent: validPngBytes,
       fileName: 'logo.png',
       mimeType: 'image/png',
     })
@@ -549,7 +579,7 @@ describe('buildApp branding integration', () => {
     await seedSecondTenant(database)
     const cookieHeader = await createAdminCookie({ app, sentEmails })
     const multipart = createMultipartBrandingAssetPayload({
-      fileContent: Buffer.from('logo-bytes'),
+      fileContent: validPngBytes,
       fileName: 'logo.png',
       mimeType: 'image/png',
     })
@@ -578,7 +608,7 @@ describe('buildApp branding integration', () => {
     })
 
     expect(tenantAResponse.statusCode).toBe(200)
-    expect(tenantAResponse.body).toBe('logo-bytes')
+    expect(tenantAResponse.rawPayload).toEqual(validPngBytes)
     expect(tenantBResponse.statusCode).toBe(404)
     expect(tenantBResponse.json().error.code).toBe('BRANDING_ASSET_NOT_FOUND')
   })
@@ -586,7 +616,7 @@ describe('buildApp branding integration', () => {
   it('deletes an active branding asset through an authenticated same-origin admin request', async () => {
     const cookieHeader = await createAdminCookie({ app, sentEmails })
     const multipart = createMultipartBrandingAssetPayload({
-      fileContent: Buffer.from('logo-bytes'),
+      fileContent: validPngBytes,
       fileName: 'logo.png',
       mimeType: 'image/png',
     })

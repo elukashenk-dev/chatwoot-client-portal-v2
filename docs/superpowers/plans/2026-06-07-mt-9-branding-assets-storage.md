@@ -61,25 +61,30 @@ Out of scope:
   - `docs/superpowers/specs/2026-06-06-mt-9-tenant-admin-branding-prep.md`.
 - `MT-9D` already created `portal_branding_assets` metadata and most settings asset references.
 - Add `pwa_icon_asset_id` because PWA icon activation must be explicit and tenant-owned.
-- Object keys must be tenant-prefixed and backend-owned. The implementation should use:
+- Object keys must be tenant-prefixed, backend-owned and unique per uploaded
+  asset instance. The hardened implementation uses:
 
 ```ts
 export function createBrandingObjectKey({
   contentHash,
   filename,
+  instanceId,
   kind,
   tenantId,
 }: {
   contentHash: string
   filename: string
+  instanceId: string
   kind: BrandingAssetKind
   tenantId: number
 }) {
-  return `tenants/${tenantId}/branding/${kind}/${contentHash}/${filename}`
+  return `tenants/${tenantId}/branding/${kind}/${contentHash}/${instanceId}/${filename}`
 }
 ```
 
-This is tenant-prefixed and content-hash versioned. Portal DB ownership, not key guessing, remains the read/write authority.
+This is tenant-prefixed and content-hash grouped, but not deterministic for
+same-file replacement. Portal DB ownership, not key guessing, remains the
+read/write authority.
 
 Storage reads must return a Node `Readable` at Fastify route boundaries. The S3
 adapter can convert an SDK Web stream internally, but routes must never send a
@@ -187,7 +192,7 @@ DELETE /api/admin/branding/assets/:kind
 Public read:
 
 ```http
-GET /api/branding/assets/:assetId?v=<contentHash>
+GET /api/branding/assets/:assetId?v=<asset-version>
 ```
 
 PWA icon read:
@@ -196,10 +201,13 @@ PWA icon read:
 GET /api/tenant/icons/icon-192.png?v=<tenant-asset-version>
 GET /api/tenant/icons/icon-512.png?v=<tenant-asset-version>
 GET /api/tenant/icons/icon-maskable-512.png?v=<tenant-asset-version>
-GET /api/tenant/apple-touch-icon.png?v=<tenant-asset-version>
+GET /api/tenant/apple-touch-icon.png
 ```
 
 If no active tenant PWA icon exists, existing fallback redirects stay unchanged.
+Manifest PWA icon routes require the requested version to match the active
+tenant asset version before returning immutable cache headers. The unversioned
+Apple icon route may stream the active icon, but only with `no-store`.
 
 ## Error Codes
 
@@ -2050,6 +2058,18 @@ Reviewed and hardened before implementation:
   before old object cleanup, so public URLs do not point at deleted metadata.
 - PWA icon reader is split into metadata and object methods, so manifest
   generation does not fetch binary object content.
+- Review hardening:
+  - object keys include a per-upload instance segment to avoid same-file
+    replacement collisions;
+  - public asset DTOs expose `assetVersion`, not content checksum/hash fields;
+  - upload validation checks declared image MIME against image signatures;
+  - public image responses set `X-Content-Type-Options: nosniff`;
+  - stale or missing manifest PWA icon versions do not stream current icon
+    bytes under immutable cache headers;
+  - PWA icon object reads verify the already validated asset id, so a concurrent
+    icon replacement cannot serve new bytes under an old immutable version URL;
+  - stale object cleanup failures after replacement keep the new asset active
+    and leave old metadata available for future cleanup.
 
 ## Execution Status
 
@@ -2062,6 +2082,6 @@ Closed scope:
 - `pwa_icon_asset_id` metadata and migration;
 - admin upload/delete asset routes;
 - tenant-scoped public asset reads;
-- custom tenant PWA icon manifest/icon routing;
+- custom tenant PWA icon manifest/icon routing with version guard;
 - targeted backend tests for env, storage adapter, validation, repository,
   service, branding routes and tenant PWA routes.

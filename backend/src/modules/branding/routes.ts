@@ -266,6 +266,7 @@ export function registerBrandingRoutes(
       }
 
       reply.header('cache-control', 'public, max-age=31536000, immutable')
+      reply.header('x-content-type-options', 'nosniff')
       reply.header('content-type', asset.contentType)
 
       if (asset.contentLength !== null) {

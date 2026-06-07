@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream'
 
+import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
 
 import { buildApp } from '../../app.js'
@@ -7,11 +8,18 @@ import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
 import type { BrandingObjectStorage } from '../../integrations/object-storage/brandingStorage.js'
+import { registerApiErrorHandler } from '../../lib/errors.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { createBrandingRepository } from '../branding/repository.js'
 import { chatwootWebhookTestInternals } from '../chatwoot-webhooks/service.js'
 import type { TenantStatus } from './repository.js'
+import {
+  registerTenantContext,
+  registerTenantRoutes,
+  type TenantPwaIconReader,
+} from './routes.js'
 import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
+import type { TenantRequestContext } from './service.js'
 
 const tenantSecretKey = Buffer.alloc(32, 5).toString('base64')
 
@@ -404,12 +412,12 @@ describe('tenant routes and request context', () => {
         expect.arrayContaining([
           expect.objectContaining({
             sizes: '192x192',
-            src: '/api/tenant/icons/icon-192.png?v=default-pwa-hash',
+            src: `/api/tenant/icons/icon-192.png?v=default-asset-${asset.id}`,
           }),
           expect.objectContaining({
             purpose: 'maskable',
             sizes: '512x512',
-            src: '/api/tenant/icons/icon-maskable-512.png?v=default-pwa-hash',
+            src: `/api/tenant/icons/icon-maskable-512.png?v=default-asset-${asset.id}`,
           }),
         ]),
       )
@@ -453,7 +461,7 @@ describe('tenant routes and request context', () => {
           host: 'lk.default.test',
         },
         method: 'GET',
-        url: '/api/tenant/icons/icon-512.png?v=default-pwa-hash',
+        url: `/api/tenant/icons/icon-512.png?v=default-asset-${asset.id}`,
       })
 
       expect(response.statusCode).toBe(200)
@@ -462,11 +470,180 @@ describe('tenant routes and request context', () => {
       )
       expect(response.headers.vary).toBe('Host')
       expect(response.headers['content-type']).toBe('image/png')
+      expect(response.headers['x-content-type-options']).toBe('nosniff')
       expect(response.body).toBe('pwa-icon')
     } finally {
       await app.close()
     }
   }, 20_000)
+
+  it('does not stream active tenant pwa icon content for stale or missing manifest icon versions', async () => {
+    const brandingStorage = createTestBrandingObjectStorage()
+    const { app, database, tenantIds } = await createTenantApp(
+      {},
+      {
+        brandingObjectStorage: brandingStorage.storage,
+      },
+    )
+
+    try {
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenantIds.default,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 8,
+        checksumSha256: 'p'.repeat(64),
+        contentHash: 'pwa-hash',
+        contentType: 'image/png',
+        kind: 'pwa_icon',
+        objectKey: `tenants/${tenantIds.default}/branding/pwa_icon/pwa-hash/icon.png`,
+        originalFilename: 'icon.png',
+      })
+
+      await repository.upsertSettings({ pwaIconAssetId: asset.id })
+      brandingStorage.objects.set(asset.objectKey, {
+        body: Buffer.from('pwa-icon'),
+        contentLength: 8,
+        contentType: 'image/png',
+      })
+
+      const staleResponse = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/icon-512.png?v=default-asset-999999',
+      })
+      const missingVersionResponse = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/icon-512.png',
+      })
+
+      expect(staleResponse.statusCode).toBe(404)
+      expect(staleResponse.headers['cache-control']).toBe('no-store')
+      expect(staleResponse.body).not.toBe('pwa-icon')
+      expect(missingVersionResponse.statusCode).toBe(404)
+      expect(missingVersionResponse.headers['cache-control']).toBe('no-store')
+      expect(missingVersionResponse.body).not.toBe('pwa-icon')
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('streams unversioned Apple tenant pwa icon with no-store cache headers', async () => {
+    const brandingStorage = createTestBrandingObjectStorage()
+    const { app, database, tenantIds } = await createTenantApp(
+      {},
+      {
+        brandingObjectStorage: brandingStorage.storage,
+      },
+    )
+
+    try {
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenantIds.default,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 8,
+        checksumSha256: 'p'.repeat(64),
+        contentHash: 'pwa-hash',
+        contentType: 'image/png',
+        kind: 'pwa_icon',
+        objectKey: `tenants/${tenantIds.default}/branding/pwa_icon/pwa-hash/icon.png`,
+        originalFilename: 'icon.png',
+      })
+
+      await repository.upsertSettings({ pwaIconAssetId: asset.id })
+      brandingStorage.objects.set(asset.objectKey, {
+        body: Buffer.from('pwa-icon'),
+        contentLength: 8,
+        contentType: 'image/png',
+      })
+
+      const response = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/apple-touch-icon.png',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.headers.vary).toBe('Host')
+      expect(response.headers['x-content-type-options']).toBe('nosniff')
+      expect(response.body).toBe('pwa-icon')
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('does not immutable-cache a pwa icon object whose asset no longer matches the validated version', async () => {
+    const app = Fastify()
+    const tenant = {
+      chatwoot: {
+        accountId: 1,
+        apiAccessToken: 'token',
+        baseUrl: 'https://chatwoot.example.test',
+        portalInboxId: 1,
+        portalInboxIdentifier: 'portal-inbox',
+        webhookSecret: 'webhook-secret',
+      },
+      displayName: 'Default Tenant',
+      id: 1,
+      isDefault: true,
+      primaryDomain: 'lk.default.test',
+      publicBaseUrl: 'https://lk.default.test',
+      slug: 'default',
+      status: 'active',
+    } satisfies TenantRequestContext
+    const tenantsService = {
+      getPublicTenantContext: (context: TenantRequestContext) => ({
+        displayName: context.displayName,
+        primaryDomain: context.primaryDomain,
+        publicBaseUrl: context.publicBaseUrl,
+        slug: context.slug,
+      }),
+      resolveTenantByHost: async () => tenant,
+    }
+    const pwaIconReader = {
+      getActivePwaIconMetadata: async () => ({
+        assetId: 1,
+        contentType: 'image/png',
+      }),
+      getActivePwaIconObject: async () => ({
+        assetId: 2,
+        body: Readable.from(Buffer.from('new-icon')),
+        contentLength: 8,
+        contentType: 'image/png',
+      }),
+    } satisfies TenantPwaIconReader
+
+    registerApiErrorHandler(app)
+    registerTenantContext(app, { tenantsService })
+    registerTenantRoutes(app, { pwaIconReader, tenantsService })
+
+    try {
+      await app.ready()
+
+      const response = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/icon-512.png?v=default-asset-1',
+      })
+
+      expect(response.statusCode).toBe(404)
+      expect(response.headers['cache-control']).toBe('no-store')
+      expect(response.body).not.toBe('new-icon')
+    } finally {
+      await app.close()
+    }
+  })
 
   it('does not fallback to default tenant for unknown hosts', async () => {
     const { app } = await createTenantApp()

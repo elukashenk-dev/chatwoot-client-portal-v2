@@ -13,6 +13,9 @@ const extensionByType: Record<string, string> = {
 }
 
 const allowedImageTypes = new Set(Object.keys(extensionByType))
+const pngSignature = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+])
 
 export type BrandingAssetUpload = {
   data: Buffer
@@ -27,6 +30,40 @@ export type NormalizedBrandingAssetUpload = {
   fileName: string
   kind: BrandingAssetKind
   size: number
+}
+
+function hasBytes(data: Buffer, bytes: Buffer | string, offset = 0) {
+  const expected = typeof bytes === 'string' ? Buffer.from(bytes) : bytes
+
+  return (
+    data.byteLength >= offset + expected.byteLength &&
+    data.subarray(offset, offset + expected.byteLength).equals(expected)
+  )
+}
+
+function detectImageContentType(data: Buffer) {
+  if (hasBytes(data, pngSignature)) {
+    return 'image/png'
+  }
+
+  if (
+    data.byteLength >= 3 &&
+    data[0] === 0xff &&
+    data[1] === 0xd8 &&
+    data[2] === 0xff
+  ) {
+    return 'image/jpeg'
+  }
+
+  if (hasBytes(data, 'GIF87a') || hasBytes(data, 'GIF89a')) {
+    return 'image/gif'
+  }
+
+  if (hasBytes(data, 'RIFF') && hasBytes(data, 'WEBP', 8)) {
+    return 'image/webp'
+  }
+
+  return null
 }
 
 function normalizeFilename(
@@ -54,7 +91,9 @@ function normalizeFilename(
 export function normalizeBrandingAssetUpload(
   upload: BrandingAssetUpload,
 ): NormalizedBrandingAssetUpload {
-  const size = upload.data.byteLength
+  const data = Buffer.from(upload.data)
+  const size = data.byteLength
+  const contentType = upload.mimeType.trim().toLowerCase()
 
   if (size === 0) {
     throw new ApiError(400, 'BRANDING_ASSET_EMPTY', 'Файл брендинга пустой.')
@@ -68,7 +107,7 @@ export function normalizeBrandingAssetUpload(
     )
   }
 
-  if (!allowedImageTypes.has(upload.mimeType)) {
+  if (!allowedImageTypes.has(contentType)) {
     throw new ApiError(
       415,
       'BRANDING_ASSET_TYPE_NOT_ALLOWED',
@@ -76,10 +115,18 @@ export function normalizeBrandingAssetUpload(
     )
   }
 
+  if (detectImageContentType(data) !== contentType) {
+    throw new ApiError(
+      415,
+      'BRANDING_ASSET_TYPE_NOT_ALLOWED',
+      'Тип файла брендинга не совпадает с содержимым изображения.',
+    )
+  }
+
   return {
-    contentType: upload.mimeType,
-    data: upload.data,
-    fileName: normalizeFilename(upload.fileName, upload.mimeType, upload.kind),
+    contentType,
+    data,
+    fileName: normalizeFilename(upload.fileName, contentType, upload.kind),
     kind: upload.kind,
     size,
   }
