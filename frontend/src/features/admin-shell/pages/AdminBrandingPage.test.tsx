@@ -10,14 +10,23 @@ import {
 } from '../../admin-auth/lib/adminSessionContext'
 import { AdminBrandingPage } from './AdminBrandingPage'
 
-const { getAdminBrandingMock, updateAdminBrandingMock } = vi.hoisted(() => ({
+const {
+  deleteAdminBrandingAssetMock,
+  getAdminBrandingMock,
+  updateAdminBrandingMock,
+  uploadAdminBrandingAssetMock,
+} = vi.hoisted(() => ({
+  deleteAdminBrandingAssetMock: vi.fn(),
   getAdminBrandingMock: vi.fn(),
   updateAdminBrandingMock: vi.fn(),
+  uploadAdminBrandingAssetMock: vi.fn(),
 }))
 
 vi.mock('../../admin-branding/api/adminBrandingClient', () => ({
+  deleteAdminBrandingAsset: deleteAdminBrandingAssetMock,
   getAdminBranding: getAdminBrandingMock,
   updateAdminBranding: updateAdminBrandingMock,
+  uploadAdminBrandingAsset: uploadAdminBrandingAssetMock,
 }))
 
 const savedBrandingResponse = {
@@ -42,6 +51,16 @@ const savedBrandingResponse = {
     version: 1,
   },
 } satisfies AdminBrandingResponse
+
+const logoAsset = {
+  assetVersion: '77',
+  contentType: 'image/png',
+  height: null,
+  id: 77,
+  kind: 'logo',
+  publicUrl: '/api/branding/assets/77?v=77',
+  width: null,
+} satisfies NonNullable<AdminBrandingResponse['branding']['assets']['logo']>
 
 function createBrandingResponse(
   overrides: Partial<AdminBrandingResponse['branding']> = {},
@@ -92,8 +111,15 @@ function renderAdminBrandingPage(
 
 describe('AdminBrandingPage', () => {
   beforeEach(() => {
+    deleteAdminBrandingAssetMock.mockReset()
+    getAdminBrandingMock.mockReset()
+    updateAdminBrandingMock.mockReset()
+    uploadAdminBrandingAssetMock.mockReset()
+
+    deleteAdminBrandingAssetMock.mockResolvedValue({ deleted: true })
     getAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
     updateAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
+    uploadAdminBrandingAssetMock.mockResolvedValue({ asset: logoAsset })
   })
 
   it('loads and renders saved branding settings', async () => {
@@ -154,6 +180,70 @@ describe('AdminBrandingPage', () => {
     await user.type(portalNameInput, ' 2')
 
     expect(screen.queryByText('Настройки сохранены.')).not.toBeInTheDocument()
+  })
+
+  it('refreshes assets after upload without overwriting unsaved text edits', async () => {
+    const user = userEvent.setup()
+    const imageFile = new File(['logo-bytes'], 'logo.png', {
+      type: 'image/png',
+    })
+
+    getAdminBrandingMock
+      .mockResolvedValueOnce(savedBrandingResponse)
+      .mockResolvedValueOnce(
+        createBrandingResponse({
+          assets: { logo: logoAsset },
+          portalName: 'Бухфирма',
+        }),
+      )
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Несохраненное имя')
+    await user.upload(screen.getByLabelText('Загрузить логотип'), imageFile)
+
+    await waitFor(() => {
+      expect(uploadAdminBrandingAssetMock).toHaveBeenCalledWith(
+        'logo',
+        imageFile,
+      )
+    })
+    expect(screen.getByLabelText('Название портала')).toHaveValue(
+      'Несохраненное имя',
+    )
+    expect(await screen.findByAltText('Логотип')).toHaveAttribute(
+      'src',
+      '/api/branding/assets/77?v=77',
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Логотип загружен.',
+    )
+  })
+
+  it('deletes a branding asset and refreshes the slot', async () => {
+    const user = userEvent.setup()
+
+    getAdminBrandingMock
+      .mockResolvedValueOnce(
+        createBrandingResponse({ assets: { logo: logoAsset } }),
+      )
+      .mockResolvedValueOnce(savedBrandingResponse)
+
+    renderAdminBrandingPage()
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Удалить логотип' }),
+    )
+
+    await waitFor(() => {
+      expect(deleteAdminBrandingAssetMock).toHaveBeenCalledWith('logo')
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Логотип удален.',
+    )
+    expect(screen.getByLabelText('Загрузить логотип')).toBeInTheDocument()
   })
 
   it('blocks form edits while saving to avoid stale response overwrite', async () => {

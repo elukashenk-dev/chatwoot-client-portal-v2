@@ -247,6 +247,46 @@ export function ImageIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function UploadIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.45"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11A2.5 2.5 0 0 0 20 18.5V16" />
+    </svg>
+  )
+}
+
+export function TrashIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.45"
+      viewBox="0 0 24 24"
+    >
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 14h10l1-14" />
+      <path d="M9 7V4h6v3" />
+    </svg>
+  )
+}
+
 export function MoreHorizontalIcon({ className = iconClassName }: IconProps) {
   return (
     <svg

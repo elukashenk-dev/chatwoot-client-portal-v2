@@ -1,11 +1,21 @@
 import type { FormEvent } from 'react'
 
-import type { BrandingColors, BrandingCopy } from '../api/adminBrandingClient'
+import type {
+  BrandingAssetKind,
+  BrandingColors,
+  BrandingCopy,
+} from '../api/adminBrandingClient'
 import type { BrandingDraft } from '../lib/brandingState'
+import { BrandingAssetControls } from './BrandingAssetControls'
 
 type AdminBrandingFormProps = {
+  areAssetActionsDisabled: boolean
+  assetActionKind: BrandingAssetKind | null
   draft: BrandingDraft
   isSaving: boolean
+  onAssetDelete: (kind: BrandingAssetKind) => void
+  onAssetUpload: (kind: BrandingAssetKind, file: File) => void
+  onAssetValidationError: (message: string) => void
   onChange: (draft: BrandingDraft) => void
   onSubmit: () => void
 }
@@ -68,8 +78,13 @@ function ColorField({
 }
 
 export function AdminBrandingForm({
+  areAssetActionsDisabled,
+  assetActionKind,
   draft,
   isSaving,
+  onAssetDelete,
+  onAssetUpload,
+  onAssetValidationError,
   onChange,
   onSubmit,
 }: AdminBrandingFormProps) {
@@ -180,6 +195,26 @@ export function AdminBrandingForm({
             value={draft.colors.chatHeaderBackground}
           />
         </div>
+      </section>
+
+      <section
+        className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
+        id="assets"
+      >
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Изображения</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Логотип, PWA-иконка и фоны для auth-экранов и чата.
+          </p>
+        </div>
+        <BrandingAssetControls
+          assets={draft.assets}
+          busyKind={assetActionKind}
+          disabled={areAssetActionsDisabled}
+          onDelete={onAssetDelete}
+          onUpload={onAssetUpload}
+          onValidationError={onAssetValidationError}
+        />
       </section>
 
       <section

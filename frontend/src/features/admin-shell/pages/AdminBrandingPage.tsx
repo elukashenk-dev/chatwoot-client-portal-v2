@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react'
 import { AdminBrandingForm } from '../../admin-branding/components/AdminBrandingForm'
 import { BrandingPreviewPane } from '../../admin-branding/components/BrandingPreviewPane'
 import {
+  deleteAdminBrandingAsset,
   getAdminBranding,
   updateAdminBranding,
+  uploadAdminBrandingAsset,
+  type BrandingAssetKind,
 } from '../../admin-branding/api/adminBrandingClient'
 import {
   createBrandingDraft,
@@ -25,10 +28,51 @@ const brandingSections = [
     title: 'Цвета',
   },
   {
+    id: 'assets',
+    title: 'Изображения',
+  },
+  {
     id: 'auth',
     title: 'Auth-экран',
   },
 ]
+
+const brandingAssetMessages = {
+  auth_background_image: {
+    deleted: 'Фон auth-экрана удален.',
+    uploaded: 'Фон auth-экрана загружен.',
+  },
+  auth_footer_image: {
+    deleted: 'Нижнее изображение auth-экрана удалено.',
+    uploaded: 'Нижнее изображение auth-экрана загружено.',
+  },
+  auth_header_image: {
+    deleted: 'Верхнее изображение auth-экрана удалено.',
+    uploaded: 'Верхнее изображение auth-экрана загружено.',
+  },
+  chat_background_image: {
+    deleted: 'Фон чата удален.',
+    uploaded: 'Фон чата загружен.',
+  },
+  chat_header_background_image: {
+    deleted: 'Фон шапки чата удален.',
+    uploaded: 'Фон шапки чата загружен.',
+  },
+  logo: {
+    deleted: 'Логотип удален.',
+    uploaded: 'Логотип загружен.',
+  },
+  pwa_icon: {
+    deleted: 'PWA-иконка удалена.',
+    uploaded: 'PWA-иконка загружена.',
+  },
+} satisfies Record<
+  BrandingAssetKind,
+  {
+    deleted: string
+    uploaded: string
+  }
+>
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error
@@ -44,9 +88,12 @@ export function AdminBrandingPage() {
   const [brandingStatus, setBrandingStatus] = useState<
     'error' | 'idle' | 'loading' | 'saving'
   >('loading')
+  const [assetActionKind, setAssetActionKind] =
+    useState<BrandingAssetKind | null>(null)
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const isSaving = brandingStatus === 'saving'
+  const areAssetActionsDisabled = isSaving || assetActionKind !== null
 
   useEffect(() => {
     let isCurrent = true
@@ -120,6 +167,58 @@ export function AdminBrandingPage() {
     } catch (error) {
       setBrandingError(getErrorMessage(error))
       setBrandingStatus('error')
+    }
+  }
+
+  async function refreshBrandingAssets() {
+    const response = await getAdminBranding()
+
+    setDraft((currentDraft) => {
+      if (!currentDraft) {
+        return createBrandingDraft(response)
+      }
+
+      return {
+        ...currentDraft,
+        assets: response.branding.assets,
+      }
+    })
+  }
+
+  function handleAssetValidationError(message: string) {
+    setBrandingError(message)
+    setBrandingSuccess(null)
+  }
+
+  async function handleAssetUpload(kind: BrandingAssetKind, file: File) {
+    setAssetActionKind(kind)
+    setBrandingError(null)
+    setBrandingSuccess(null)
+
+    try {
+      await uploadAdminBrandingAsset(kind, file)
+      await refreshBrandingAssets()
+      setBrandingSuccess(brandingAssetMessages[kind].uploaded)
+    } catch (error) {
+      setBrandingError(getErrorMessage(error))
+    } finally {
+      setAssetActionKind(null)
+    }
+  }
+
+  async function handleAssetDelete(kind: BrandingAssetKind) {
+    setAssetActionKind(kind)
+    setBrandingError(null)
+    setBrandingSuccess(null)
+
+    try {
+      await deleteAdminBrandingAsset(kind)
+      await refreshBrandingAssets()
+      setBrandingSuccess(brandingAssetMessages[kind].deleted)
+    } catch (error) {
+      setBrandingError(getErrorMessage(error))
+    } finally {
+      setAssetActionKind(null)
     }
   }
 
@@ -211,8 +310,17 @@ export function AdminBrandingPage() {
               </div>
             ) : draft ? (
               <AdminBrandingForm
+                areAssetActionsDisabled={areAssetActionsDisabled}
+                assetActionKind={assetActionKind}
                 draft={draft}
                 isSaving={isSaving}
+                onAssetDelete={(kind) => {
+                  void handleAssetDelete(kind)
+                }}
+                onAssetUpload={(kind, file) => {
+                  void handleAssetUpload(kind, file)
+                }}
+                onAssetValidationError={handleAssetValidationError}
                 onChange={handleDraftChange}
                 onSubmit={() => {
                   void handleSave()

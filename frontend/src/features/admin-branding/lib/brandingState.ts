@@ -1,11 +1,13 @@
 import type {
   AdminBrandingPatch,
   AdminBrandingResponse,
+  BrandingAssets,
   BrandingColors,
   BrandingCopy,
 } from '../api/adminBrandingClient'
 
 export type BrandingDraft = {
+  assets: BrandingAssets
   colors: BrandingColors
   copy: BrandingCopy
   portalName: string
@@ -16,6 +18,7 @@ export function createBrandingDraft(
   response: AdminBrandingResponse,
 ): BrandingDraft {
   return {
+    assets: response.branding.assets,
     colors: response.branding.colors,
     copy: response.branding.copy,
     portalName: response.branding.portalName,
