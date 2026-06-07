@@ -119,6 +119,26 @@ const booleanFromStringWithDefaultFalse = z
   }, z.boolean())
   .default(false)
 
+const booleanFromStringWithDefaultTrue = z
+  .preprocess((value) => {
+    if (value === undefined || value === null || value === '') {
+      return true
+    }
+
+    if (typeof value === 'string') {
+      if (value === 'true') {
+        return true
+      }
+
+      if (value === 'false') {
+        return false
+      }
+    }
+
+    return value
+  }, z.boolean())
+  .default(true)
+
 const envSchema = z
   .object({
     NODE_ENV: z
@@ -163,6 +183,12 @@ const envSchema = z
     PUSH_VAPID_SUBJECT: optionalNonEmptyString,
     PUSH_VAPID_KEY_ID: optionalNonEmptyString,
     PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: pushSubscriptionAllowedOrigins,
+    BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: optionalNonEmptyString,
+    BRANDING_ASSET_STORAGE_BUCKET: optionalNonEmptyString,
+    BRANDING_ASSET_STORAGE_ENDPOINT: optionalUrlString,
+    BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: booleanFromStringWithDefaultTrue,
+    BRANDING_ASSET_STORAGE_REGION: optionalNonEmptyString.default('us-east-1'),
+    BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: optionalNonEmptyString,
   })
   .superRefine((env, context) => {
     const hasSmtpConfig = Boolean(
@@ -219,6 +245,28 @@ const envSchema = z
             'PUSH_VAPID_SUBJECT is required when Web Push VAPID keys are configured',
           path: ['PUSH_VAPID_SUBJECT'],
         })
+      }
+    }
+
+    const brandingStorageFields = [
+      'BRANDING_ASSET_STORAGE_ACCESS_KEY_ID',
+      'BRANDING_ASSET_STORAGE_BUCKET',
+      'BRANDING_ASSET_STORAGE_ENDPOINT',
+      'BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY',
+    ] as const
+    const hasBrandingStorageConfig = brandingStorageFields.some((field) =>
+      Boolean(env[field]),
+    )
+
+    if (hasBrandingStorageConfig) {
+      for (const field of brandingStorageFields) {
+        if (!env[field]) {
+          context.addIssue({
+            code: 'custom',
+            message: `${field} is required when branding asset storage is configured`,
+            path: [field],
+          })
+        }
       }
     }
   })

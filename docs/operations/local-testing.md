@@ -20,6 +20,11 @@ bootstrap tenants, dev servers и auto-checks.
 обычном локальном режиме; для WSL mirrored + Docker Desktop см.
 troubleshooting ниже.
 
+Branding asset upload использует тот же production-like подход локально:
+metadata в portal Postgres, бинарные файлы в S3-compatible object storage.
+Для локальной разработки используется MinIO на `127.0.0.1:59000`, console UI на
+`http://127.0.0.1:59001`.
+
 ## 1. Перейти В Проект
 
 ```bash
@@ -50,12 +55,45 @@ PORTAL_TENANT_SECRET_KEY=base64-ключ-32-byte
 SMTP_HOST=127.0.0.1
 SMTP_PORT=1025
 SMTP_FROM=noreply@example.com
+BRANDING_ASSET_STORAGE_ENDPOINT=http://127.0.0.1:59000
+BRANDING_ASSET_STORAGE_REGION=us-east-1
+BRANDING_ASSET_STORAGE_BUCKET=portal-branding-assets
+BRANDING_ASSET_STORAGE_ACCESS_KEY_ID=portal_v2_minio
+BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY=portal_v2_minio_password
+BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE=true
 ```
 
 Если нужен новый `PORTAL_TENANT_SECRET_KEY`:
 
 ```bash
 openssl rand -base64 32
+```
+
+## 3. Запустить Локальные Portal Services
+
+Postgres:
+
+```bash
+pnpm db:up
+```
+
+MinIO для branding assets:
+
+```bash
+pnpm storage:up
+```
+
+Проверить контейнеры:
+
+```bash
+docker --context default compose --env-file .env -f infra/postgres/compose.yaml ps
+docker --context default compose --env-file .env -f infra/object-storage/compose.yaml ps
+```
+
+Логи object storage:
+
+```bash
+pnpm storage:logs
 ```
 
 ### WSL Mirrored + Docker Desktop: Postgres Не Отвечает На `127.0.0.1`

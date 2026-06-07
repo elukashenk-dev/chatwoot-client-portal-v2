@@ -189,4 +189,45 @@ describe('loadEnv', () => {
       }),
     ).toThrow(/PUSH_VAPID_SUBJECT/)
   })
+
+  it('leaves branding asset storage unavailable by default', () => {
+    const env = loadEnv(baseRawEnv)
+
+    expect(env.BRANDING_ASSET_STORAGE_BUCKET).toBeUndefined()
+    expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBeUndefined()
+    expect(env.BRANDING_ASSET_STORAGE_ACCESS_KEY_ID).toBeUndefined()
+    expect(env.BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY).toBeUndefined()
+    expect(env.BRANDING_ASSET_STORAGE_REGION).toBe('us-east-1')
+    expect(env.BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE).toBe(true)
+  })
+
+  it('accepts complete branding asset storage configuration', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: 'portal-minio',
+      BRANDING_ASSET_STORAGE_BUCKET: 'portal-branding-assets',
+      BRANDING_ASSET_STORAGE_ENDPOINT: 'http://127.0.0.1:9000',
+      BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: 'false',
+      BRANDING_ASSET_STORAGE_REGION: 'eu-central-1',
+      BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: 'portal-minio-secret',
+    })
+
+    expect(env.BRANDING_ASSET_STORAGE_ACCESS_KEY_ID).toBe('portal-minio')
+    expect(env.BRANDING_ASSET_STORAGE_BUCKET).toBe('portal-branding-assets')
+    expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBe('http://127.0.0.1:9000')
+    expect(env.BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE).toBe(false)
+    expect(env.BRANDING_ASSET_STORAGE_REGION).toBe('eu-central-1')
+    expect(env.BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY).toBe(
+      'portal-minio-secret',
+    )
+  })
+
+  it('rejects partial branding asset storage configuration', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        BRANDING_ASSET_STORAGE_BUCKET: 'portal-branding-assets',
+      }),
+    ).toThrow(/BRANDING_ASSET_STORAGE_ENDPOINT/)
+  })
 })

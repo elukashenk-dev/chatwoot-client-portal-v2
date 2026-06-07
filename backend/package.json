@@ -19,6 +19,7 @@
     "test": "vitest run --no-file-parallelism --reporter verbose"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1063.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^10.0.0",
     "drizzle-orm": "^0.45.2",
