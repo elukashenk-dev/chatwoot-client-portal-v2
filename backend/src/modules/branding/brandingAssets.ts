@@ -1,3 +1,5 @@
+import { ApiError } from '../../lib/errors.js'
+
 export const brandingAssetKinds = [
   'logo',
   'pwa_icon',
@@ -32,4 +34,40 @@ export function createPublicBrandingAssetUrl({
   id: number
 }) {
   return `/api/branding/assets/${id}?v=${encodeURIComponent(contentHash)}`
+}
+
+export function createTenantPwaIconVersion({
+  contentHash,
+  tenantSlug,
+}: {
+  contentHash: string
+  tenantSlug: string
+}) {
+  return encodeURIComponent(`${tenantSlug}-${contentHash}`)
+}
+
+export function parseBrandingAssetKind(input: string): BrandingAssetKind {
+  if (brandingAssetKinds.includes(input as BrandingAssetKind)) {
+    return input as BrandingAssetKind
+  }
+
+  throw new ApiError(
+    404,
+    'BRANDING_ASSET_KIND_NOT_FOUND',
+    'Такой тип файла брендинга не найден.',
+  )
+}
+
+export function parseBrandingAssetId(input: string): number {
+  const assetId = Number(input)
+
+  if (!Number.isSafeInteger(assetId) || assetId <= 0) {
+    throw new ApiError(
+      404,
+      'BRANDING_ASSET_NOT_FOUND',
+      'Файл брендинга не найден.',
+    )
+  }
+
+  return assetId
 }

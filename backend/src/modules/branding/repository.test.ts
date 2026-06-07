@@ -166,6 +166,129 @@ describe('createBrandingRepository', () => {
     }
   }, 15_000)
 
+  it('activates and returns a tenant-scoped pwa icon asset', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 10,
+        checksumSha256: 'p'.repeat(64),
+        contentHash: 'hash-pwa',
+        contentType: 'image/png',
+        kind: 'pwa_icon',
+        objectKey: `tenants/${tenant.id}/branding/pwa_icon/hash-pwa/icon.png`,
+        originalFilename: 'icon.png',
+      })
+
+      await repository.upsertSettings({ pwaIconAssetId: asset.id })
+
+      await expect(repository.findActivePwaIcon()).resolves.toMatchObject({
+        contentHash: 'hash-pwa',
+        contentType: 'image/png',
+        id: asset.id,
+        kind: 'pwa_icon',
+      })
+      await expect(
+        repository.findActiveAssetByKind('pwa_icon'),
+      ).resolves.toMatchObject({
+        id: asset.id,
+        objectKey: `tenants/${tenant.id}/branding/pwa_icon/hash-pwa/icon.png`,
+      })
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
+  it('finds public asset metadata only when the asset is active for the tenant', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+      const inactive = await repository.createAssetMetadata({
+        byteSize: 10,
+        checksumSha256: 'i'.repeat(64),
+        contentHash: 'inactive-hash',
+        contentType: 'image/png',
+        kind: 'logo',
+        objectKey: `tenants/${tenant.id}/branding/logo/inactive/logo.png`,
+      })
+      const active = await repository.createAssetMetadata({
+        byteSize: 11,
+        checksumSha256: 'a'.repeat(64),
+        contentHash: 'active-hash',
+        contentType: 'image/png',
+        kind: 'logo',
+        objectKey: `tenants/${tenant.id}/branding/logo/active/logo.png`,
+      })
+
+      await repository.upsertSettings({ logoAssetId: active.id })
+
+      await expect(
+        repository.findActiveAssetById(inactive.id),
+      ).resolves.toBeNull()
+      await expect(
+        repository.findActiveAssetById(active.id),
+      ).resolves.toMatchObject({
+        id: active.id,
+        objectKey: `tenants/${tenant.id}/branding/logo/active/logo.png`,
+      })
+      await expect(
+        repository.findActiveAssetByKind('logo'),
+      ).resolves.toMatchObject({
+        id: active.id,
+        objectKey: `tenants/${tenant.id}/branding/logo/active/logo.png`,
+      })
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
+  it('deactivates an active asset kind without deleting other settings', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 10,
+        checksumSha256: 'l'.repeat(64),
+        contentHash: 'logo-hash',
+        contentType: 'image/png',
+        kind: 'logo',
+        objectKey: `tenants/${tenant.id}/branding/logo/logo-hash/logo.png`,
+      })
+
+      await repository.upsertSettings({
+        logoAssetId: asset.id,
+        portalName: 'Tenant Portal',
+      })
+      await repository.deactivateAssetKind('logo')
+
+      await expect(repository.findSettings()).resolves.toMatchObject({
+        logoAssetId: null,
+        portalName: 'Tenant Portal',
+      })
+      await expect(repository.findActiveAssetByKind('logo')).resolves.toBeNull()
+
+      await repository.deleteAssetMetadata(asset.id)
+      await expect(repository.findActiveAssetById(asset.id)).resolves.toBeNull()
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
   it('rejects asset references outside the tenant scope', async () => {
     const database = await createTestDatabase()
 

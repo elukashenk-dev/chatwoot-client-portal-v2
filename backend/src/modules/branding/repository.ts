@@ -36,6 +36,7 @@ export type BrandingSettingsPatch = Partial<{
   logoAssetId: number | null
   portalName: string | null
   primaryColor: string | null
+  pwaIconAssetId: number | null
   supportLabel: string | null
 }>
 
@@ -58,6 +59,7 @@ type BrandingAssetReferenceField =
   | 'chatBackgroundImageAssetId'
   | 'chatHeaderBackgroundImageAssetId'
   | 'logoAssetId'
+  | 'pwaIconAssetId'
 
 const brandingAssetReferenceSlots: ReadonlyArray<{
   field: BrandingAssetReferenceField
@@ -72,6 +74,7 @@ const brandingAssetReferenceSlots: ReadonlyArray<{
     field: 'chatHeaderBackgroundImageAssetId',
     kind: 'chat_header_background_image',
   },
+  { field: 'pwaIconAssetId', kind: 'pwa_icon' },
 ]
 
 const settingsSelection = {
@@ -95,6 +98,7 @@ const settingsSelection = {
   logoAssetId: portalBrandingSettings.logoAssetId,
   portalName: portalBrandingSettings.portalName,
   primaryColor: portalBrandingSettings.primaryColor,
+  pwaIconAssetId: portalBrandingSettings.pwaIconAssetId,
   supportLabel: portalBrandingSettings.supportLabel,
   tenantId: portalBrandingSettings.tenantId,
   updatedAt: portalBrandingSettings.updatedAt,
@@ -154,6 +158,7 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     logoAssetId: normalizeAssetId(input.logoAssetId),
     portalName: normalizeNullableText(input.portalName),
     primaryColor: normalizeNullableText(input.primaryColor),
+    pwaIconAssetId: normalizeAssetId(input.pwaIconAssetId),
     supportLabel: normalizeNullableText(input.supportLabel),
   })
 }
@@ -166,6 +171,7 @@ function collectActiveAssetIds(settings: BrandingSettingsRow) {
     ['auth_background_image', settings.authBackgroundImageAssetId],
     ['chat_background_image', settings.chatBackgroundImageAssetId],
     ['chat_header_background_image', settings.chatHeaderBackgroundImageAssetId],
+    ['pwa_icon', settings.pwaIconAssetId],
   ].filter((entry): entry is [BrandingAssetKind, number] => {
     const [, assetId] = entry
 
@@ -309,6 +315,65 @@ export function createBrandingRepository(
       }, {})
     },
 
+    async findActivePwaIcon() {
+      const settings = await this.findSettings()
+
+      if (!settings?.pwaIconAssetId) {
+        return null
+      }
+
+      return this.findActiveAssetById(settings.pwaIconAssetId)
+    },
+
+    async findActiveAssetById(assetId: number) {
+      const settings = await this.findSettings()
+
+      if (!settings) {
+        return null
+      }
+
+      const activeAssetIds = new Set(
+        collectActiveAssetIds(settings).map(
+          ([, activeAssetId]) => activeAssetId,
+        ),
+      )
+
+      if (!activeAssetIds.has(assetId)) {
+        return null
+      }
+
+      const [asset] = await db
+        .select()
+        .from(portalBrandingAssets)
+        .where(
+          and(
+            eq(portalBrandingAssets.tenantId, tenantId),
+            eq(portalBrandingAssets.id, assetId),
+          ),
+        )
+        .limit(1)
+
+      return asset ?? null
+    },
+
+    async findActiveAssetByKind(kind: BrandingAssetKind) {
+      const settings = await this.findSettings()
+
+      if (!settings) {
+        return null
+      }
+
+      const activeAssetId = collectActiveAssetIds(settings).find(
+        ([activeKind]) => activeKind === kind,
+      )?.[1]
+
+      if (!activeAssetId) {
+        return null
+      }
+
+      return this.findActiveAssetById(activeAssetId)
+    },
+
     async findSettings() {
       const [settings] = await db
         .select(settingsSelection)
@@ -317,6 +382,33 @@ export function createBrandingRepository(
         .limit(1)
 
       return settings ?? null
+    },
+
+    async deactivateAssetKind(kind: BrandingAssetKind) {
+      const patchByKind: Record<BrandingAssetKind, BrandingSettingsPatch> = {
+        auth_background_image: { authBackgroundImageAssetId: null },
+        auth_footer_image: { authFooterImageAssetId: null },
+        auth_header_image: { authHeaderImageAssetId: null },
+        chat_background_image: { chatBackgroundImageAssetId: null },
+        chat_header_background_image: {
+          chatHeaderBackgroundImageAssetId: null,
+        },
+        logo: { logoAssetId: null },
+        pwa_icon: { pwaIconAssetId: null },
+      }
+
+      return this.upsertSettings(patchByKind[kind])
+    },
+
+    async deleteAssetMetadata(assetId: number) {
+      await db
+        .delete(portalBrandingAssets)
+        .where(
+          and(
+            eq(portalBrandingAssets.tenantId, tenantId),
+            eq(portalBrandingAssets.id, assetId),
+          ),
+        )
     },
 
     async upsertSettings(input: BrandingSettingsPatch) {

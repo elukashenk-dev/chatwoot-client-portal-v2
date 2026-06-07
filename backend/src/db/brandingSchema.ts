@@ -90,6 +90,7 @@ export const portalBrandingSettings = pgTable(
     chatHeaderBackgroundImageAssetId: integer(
       'chat_header_background_image_asset_id',
     ),
+    pwaIconAssetId: integer('pwa_icon_asset_id'),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
@@ -130,6 +131,11 @@ export const portalBrandingSettings = pgTable(
       columns: [table.tenantId, table.chatHeaderBackgroundImageAssetId],
       foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
       name: 'portal_branding_settings_chat_header_background_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.pwaIconAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_pwa_icon_asset_tenant_fk',
     }).onDelete('restrict'),
     check('portal_branding_settings_version_check', sql`${table.version} > 0`),
   ],

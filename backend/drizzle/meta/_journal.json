@@ -78,6 +78,13 @@
       "when": 1780827891781,
       "tag": "0010_branding_settings_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780846637536,
+      "tag": "0011_branding_pwa_icon_asset",
+      "breakpoints": true
     }
   ]
 }
