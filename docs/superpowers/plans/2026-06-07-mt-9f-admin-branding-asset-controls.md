@@ -10,6 +10,21 @@
 
 ---
 
+## Current Implementation Status
+
+This plan was executed on branch
+`feature/phase-9-branding-admin-asset-controls`. Stable source of truth is the
+code plus `docs/architecture/overview.md`, `docs/roadmap/implementation-plan.md`
+and `docs/roadmap/work-log.md`.
+
+Final implementation corrections compared with the initial plan:
+
+- save is disabled while an asset upload/delete operation is in flight, so a
+  settings PATCH response cannot overwrite a freshly refreshed asset map;
+- migration `0011_branding_pwa_icon_asset` creates the composite
+  `(tenant_id, id)` unique index if an older local database applied the old
+  `0010` migration before that index existed.
+
 ## Scope Boundaries
 
 In scope:

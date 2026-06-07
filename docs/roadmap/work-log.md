@@ -113,9 +113,12 @@ execution-plan детали здесь не хранятся.
   validate image signatures, and tenant PWA icon routes can use an active
   tenant-owned `pwa_icon` asset with fallback icons and cache-version guards
   preserved.
+- `MT-9F` is closed: protected tenant admin branding UI can upload, replace and
+  delete logo, PWA icon and configured auth/chat image slots, refreshes previews
+  through portal-owned asset URLs and keeps settings saves isolated from asset
+  operations.
 
 ## Recommended Next Step
 
-- Start the next `MT-9` admin branding UI asset controls slice: upload,
-  replace and delete controls for logo, PWA icon and configured image slots,
-  wired to the storage-backed asset routes.
+- Start `MT-9G`: apply saved branding colors, copy and image assets to the real
+  customer auth, chat and chat-info runtime surfaces.

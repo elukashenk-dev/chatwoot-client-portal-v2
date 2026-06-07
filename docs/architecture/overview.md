@@ -457,7 +457,8 @@ chatwoot-client-portal-v2/
 - `tenant` - public tenant context and tenant identity metadata;
 - `auth` - registration, password reset, login/logout/me UI;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
-- `admin-branding` - admin branding API client, draft state, settings form and live preview components;
+- `admin-branding` - admin branding API client, draft state, settings form,
+  asset upload controls and live preview components;
 - `admin-shell` - protected admin console shell and `/admin/branding` page wiring;
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
 - `profile` - protected read-only profile page and avatar upload flow;
@@ -495,6 +496,9 @@ tenant-aware runtime.
   upload/read/delete routes, tenant-scoped public asset reads, image signature
   validation, opaque public asset versions and custom tenant PWA icon routing
   without exposing object keys/checksums to browser;
+- `MT-9F` добавил защищенные admin controls для загрузки, замены и удаления
+  logo, PWA icon and auth/chat image slots; admin preview использует только
+  portal-owned asset URLs и не получает object-storage keys/checksums;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

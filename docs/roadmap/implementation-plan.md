@@ -90,6 +90,9 @@ Completed gates:
   storage, admin upload/delete routes, tenant-scoped public asset reads and
   custom PWA icon routing are implemented with image signature validation,
   opaque public asset versions and no browser object keys/checksums.
+- `MT-9F` admin branding asset controls are closed: tenant admins can upload,
+  replace and delete logo, PWA icon and configured auth/chat image slots from
+  the protected admin console, with preview wiring over portal-owned asset URLs.
 
 Branding slice map:
 
@@ -103,16 +106,15 @@ Branding slice map:
   icon routing with image signature validation and cache-version guards. Closed.
 - `MT-9F` - admin asset controls: upload/replace/delete UI for logo, PWA icon
   and configured auth/chat image slots, wired to the storage-backed backend
-  routes. Current next slice.
+  routes. Closed.
 - `MT-9G` - apply branding to customer runtime: auth backgrounds/images,
   chat background, chat header background, logo/brand mark and chat info pages
-  using real portal components.
+  using real portal components. Current next slice.
 - `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache manual
   checks, production runbook updates and final documentation cleanup.
 
-Remaining scope after `MT-9E`:
+Remaining scope after `MT-9F`:
 
-- admin UI controls for asset upload, replacement and deletion;
 - applying text/color/image branding to real customer-facing portal surfaces;
 - preview screens using real portal components;
 - final branding QA, docs and deploy readiness;
