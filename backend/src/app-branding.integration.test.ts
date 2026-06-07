@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -5,11 +7,16 @@ import { buildApp } from './app.js'
 import type { DatabaseClient } from './db/client.js'
 import { portalAdminAuditEvents, portalTenants } from './db/schema.js'
 import type { EmailMessage } from './integrations/email/smtp.js'
+import type { BrandingObjectStorage } from './integrations/object-storage/brandingStorage.js'
 import {
   decodeTenantSecretKey,
   encryptTenantSecret,
 } from './modules/tenants/secrets.js'
-import { seedDefaultTenant, testEnv } from './test/appTestHelpers.js'
+import {
+  createMultipartBrandingAssetPayload,
+  seedDefaultTenant,
+  testEnv,
+} from './test/appTestHelpers.js'
 import { createTestDatabase } from './test/testDatabase.js'
 
 const fixedNow = new Date('2026-06-06T12:00:00.000Z')
@@ -158,8 +165,57 @@ async function createAdminCookie({
   return `${testEnv.ADMIN_SESSION_COOKIE_NAME}=${adminCookie?.value ?? ''}`
 }
 
+function createTestBrandingObjectStorage() {
+  const objects = new Map<
+    string,
+    { body: Buffer; contentLength: number; contentType: string }
+  >()
+
+  return {
+    objects,
+    storage: {
+      deleteObject: vi.fn(async ({ key }: { key: string }) => {
+        objects.delete(key)
+      }),
+      getObject: vi.fn(async ({ key }: { key: string }) => {
+        const object = objects.get(key)
+
+        if (!object) {
+          throw new Error(`Missing object ${key}`)
+        }
+
+        return {
+          body: Readable.from(object.body),
+          contentLength: object.contentLength,
+          contentType: object.contentType,
+        }
+      }),
+      putObject: vi.fn(
+        async ({
+          body,
+          contentLength,
+          contentType,
+          key,
+        }: {
+          body: Buffer
+          contentLength: number
+          contentType: string
+          key: string
+        }) => {
+          objects.set(key, {
+            body,
+            contentLength,
+            contentType,
+          })
+        },
+      ),
+    } satisfies BrandingObjectStorage,
+  }
+}
+
 describe('buildApp branding integration', () => {
   let app: ReturnType<typeof buildApp>
+  let brandingStorage: ReturnType<typeof createTestBrandingObjectStorage>
   let database: DatabaseClient
   let sentEmails: EmailMessage[]
 
@@ -167,8 +223,10 @@ describe('buildApp branding integration', () => {
     database = await createTestDatabase()
     const tenantId = await seedDefaultTenant(database)
     await storeAdminVerificationToken({ database, tenantId })
+    brandingStorage = createTestBrandingObjectStorage()
     sentEmails = []
     app = buildApp({
+      brandingObjectStorage: brandingStorage.storage,
       chatwootFetchFn: createAgentsFetch(),
       database,
       emailDelivery: {
@@ -399,5 +457,174 @@ describe('buildApp branding integration', () => {
         outcome: 'success',
       },
     ])
+  })
+
+  it('uploads a branding logo through an authenticated same-origin admin request', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+    const multipart = createMultipartBrandingAssetPayload({
+      fileContent: Buffer.from('logo-bytes'),
+      fileName: 'logo.png',
+      mimeType: 'image/png',
+    })
+
+    const uploadResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+        'content-type': multipart.contentType,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/admin/branding/assets/logo',
+    })
+
+    expect(uploadResponse.statusCode).toBe(200)
+    expect(uploadResponse.json()).toEqual({
+      asset: expect.objectContaining({
+        contentType: 'image/png',
+        kind: 'logo',
+        publicUrl: expect.stringMatching(/^\/api\/branding\/assets\/\d+\?v=/),
+      }),
+    })
+    expect(JSON.stringify(uploadResponse.json())).not.toContain('objectKey')
+    expect(JSON.stringify(uploadResponse.json())).not.toContain(
+      'checksumSha256',
+    )
+    expect(JSON.stringify(uploadResponse.json())).not.toContain(
+      'originalFilename',
+    )
+
+    const publicBrandingResponse = await app.inject({
+      method: 'GET',
+      url: '/api/branding',
+    })
+
+    expect(publicBrandingResponse.statusCode).toBe(200)
+    expect(publicBrandingResponse.json()).toEqual({
+      branding: expect.objectContaining({
+        assets: expect.objectContaining({
+          logo: expect.objectContaining({
+            kind: 'logo',
+            publicUrl: uploadResponse.json().asset.publicUrl,
+          }),
+        }),
+      }),
+    })
+
+    const assetResponse = await app.inject({
+      method: 'GET',
+      url: uploadResponse.json().asset.publicUrl,
+    })
+
+    expect(assetResponse.statusCode).toBe(200)
+    expect(assetResponse.headers['content-type']).toBe('image/png')
+    expect(assetResponse.body).toBe('logo-bytes')
+  })
+
+  it('rejects admin branding asset uploads without same-origin tenant guard', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+    const multipart = createMultipartBrandingAssetPayload({
+      fileContent: Buffer.from('logo-bytes'),
+      fileName: 'logo.png',
+      mimeType: 'image/png',
+    })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: 'https://evil.example.test',
+        'content-type': multipart.contentType,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/admin/branding/assets/logo',
+    })
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json().error.code).toBe('FORBIDDEN_ORIGIN')
+    expect(brandingStorage.storage.putObject).not.toHaveBeenCalled()
+  })
+
+  it('streams only active tenant-owned branding assets through the public route', async () => {
+    await seedSecondTenant(database)
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+    const multipart = createMultipartBrandingAssetPayload({
+      fileContent: Buffer.from('logo-bytes'),
+      fileName: 'logo.png',
+      mimeType: 'image/png',
+    })
+    const uploadResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+        'content-type': multipart.contentType,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/admin/branding/assets/logo',
+    })
+    const publicUrl = uploadResponse.json().asset.publicUrl
+
+    const tenantAResponse = await app.inject({
+      method: 'GET',
+      url: publicUrl,
+    })
+    const tenantBResponse = await app.inject({
+      headers: {
+        host: 'tenant-b.example.test',
+      },
+      method: 'GET',
+      url: publicUrl,
+    })
+
+    expect(tenantAResponse.statusCode).toBe(200)
+    expect(tenantAResponse.body).toBe('logo-bytes')
+    expect(tenantBResponse.statusCode).toBe(404)
+    expect(tenantBResponse.json().error.code).toBe('BRANDING_ASSET_NOT_FOUND')
+  })
+
+  it('deletes an active branding asset through an authenticated same-origin admin request', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+    const multipart = createMultipartBrandingAssetPayload({
+      fileContent: Buffer.from('logo-bytes'),
+      fileName: 'logo.png',
+      mimeType: 'image/png',
+    })
+    const uploadResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+        'content-type': multipart.contentType,
+      },
+      method: 'POST',
+      payload: multipart.payload,
+      url: '/api/admin/branding/assets/logo',
+    })
+    const publicUrl = uploadResponse.json().asset.publicUrl
+
+    const deleteResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'DELETE',
+      url: '/api/admin/branding/assets/logo',
+    })
+
+    expect(deleteResponse.statusCode).toBe(200)
+    expect(deleteResponse.json()).toEqual({ deleted: true })
+
+    const brandingResponse = await app.inject({
+      method: 'GET',
+      url: '/api/branding',
+    })
+    const assetResponse = await app.inject({
+      method: 'GET',
+      url: publicUrl,
+    })
+
+    expect(brandingResponse.statusCode).toBe(200)
+    expect(brandingResponse.json().branding.assets.logo).toBeUndefined()
+    expect(assetResponse.statusCode).toBe(404)
   })
 })

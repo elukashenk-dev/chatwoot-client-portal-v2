@@ -11,12 +11,17 @@ import {
   createSmtpEmailDelivery,
   type SmtpEmailDelivery,
 } from './integrations/email/smtp.js'
+import {
+  createBrandingObjectStorageFromEnv,
+  type BrandingObjectStorage,
+} from './integrations/object-storage/brandingStorage.js'
 import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
 import { createBrandingRepository } from './modules/branding/repository.js'
 import { registerBrandingRoutes } from './modules/branding/routes.js'
+import { createBrandingAssetService } from './modules/branding/assetService.js'
 import { createBrandingService } from './modules/branding/service.js'
 import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
@@ -76,6 +81,7 @@ import {
 import { createTenantsService } from './modules/tenants/service.js'
 
 type BuildAppOptions = {
+  brandingObjectStorage?: BrandingObjectStorage
   chatwootFetchFn?: typeof fetch
   database: DatabaseClient
   emailDelivery?: Pick<SmtpEmailDelivery, 'send'>
@@ -109,6 +115,7 @@ export function createRuntimeChatwootClientFactory({
 }
 
 export function buildApp({
+  brandingObjectStorage,
   chatwootFetchFn,
   database,
   emailDelivery,
@@ -161,6 +168,8 @@ export function buildApp({
   const chatSendRateLimiter = createChatSendRateLimiter({
     repository: createChatSendRateLimitRepository(database.db),
   })
+  const resolvedBrandingObjectStorage =
+    brandingObjectStorage ?? createBrandingObjectStorageFromEnv(env)
   const tenantsService = createTenantsService({
     defaultTenantSlug: env.DEFAULT_TENANT_SLUG,
     tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
@@ -367,6 +376,21 @@ export function buildApp({
       tenant,
     })
   }
+  const createBrandingAssetServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+    const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
+      tenantId: tenant.id,
+    })
+
+    return createBrandingAssetService({
+      audit: createTenantAdminAuditLogger(adminAuthRepository),
+      repository: createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      storage: resolvedBrandingObjectStorage,
+      tenantId: tenant.id,
+    })
+  }
   const createChatwootWebhookServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -413,6 +437,7 @@ export function buildApp({
     env,
   })
   registerBrandingRoutes(app, {
+    createBrandingAssetService: createBrandingAssetServiceForRequest,
     createBrandingService: createBrandingServiceForRequest,
     createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
     env,

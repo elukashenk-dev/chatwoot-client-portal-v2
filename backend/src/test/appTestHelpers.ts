@@ -18,6 +18,12 @@ export const testEnv: AppEnv = {
   ADMIN_SESSION_COOKIE_NAME: 'portal_admin_session',
   AUTH_RATE_LIMIT_MAX: 5,
   AUTH_RATE_LIMIT_WINDOW_MS: 60_000,
+  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: undefined,
+  BRANDING_ASSET_STORAGE_BUCKET: undefined,
+  BRANDING_ASSET_STORAGE_ENDPOINT: undefined,
+  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: true,
+  BRANDING_ASSET_STORAGE_REGION: 'us-east-1',
+  BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: undefined,
   PORTAL_TRUST_PROXY: false,
   PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',
@@ -119,6 +125,32 @@ export function createMultipartAttachmentPayload({
   )
   chunks.push(fileContent)
   chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`))
+
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    payload: Buffer.concat(chunks),
+  }
+}
+
+export function createMultipartBrandingAssetPayload({
+  fieldName = 'asset',
+  fileContent,
+  fileName,
+  mimeType,
+}: {
+  fieldName?: string
+  fileContent: Buffer
+  fileName: string
+  mimeType: string
+}) {
+  const boundary = '----portal-branding-asset-test-boundary'
+  const chunks: Buffer[] = [
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${fileName}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
+    ),
+    fileContent,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ]
 
   return {
     contentType: `multipart/form-data; boundary=${boundary}`,
