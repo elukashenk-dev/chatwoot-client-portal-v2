@@ -12,6 +12,7 @@ type AdminBrandingFormProps = {
   areAssetActionsDisabled: boolean
   assetActionKind: BrandingAssetKind | null
   draft: BrandingDraft
+  isSubmitDisabled: boolean
   isSaving: boolean
   onAssetDelete: (kind: BrandingAssetKind) => void
   onAssetUpload: (kind: BrandingAssetKind, file: File) => void
@@ -81,6 +82,7 @@ export function AdminBrandingForm({
   areAssetActionsDisabled,
   assetActionKind,
   draft,
+  isSubmitDisabled,
   isSaving,
   onAssetDelete,
   onAssetUpload,
@@ -252,7 +254,7 @@ export function AdminBrandingForm({
       <div className="sticky bottom-0 -mx-6 border-t border-slate-200 bg-slate-100/95 px-6 py-4 backdrop-blur">
         <button
           className="inline-flex min-h-11 items-center justify-center rounded-[0.6rem] bg-brand-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-          disabled={isSaving}
+          disabled={isSubmitDisabled}
           type="submit"
         >
           {isSaving ? 'Сохраняем' : 'Сохранить настройки'}

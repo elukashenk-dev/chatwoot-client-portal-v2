@@ -94,6 +94,7 @@ export function AdminBrandingPage() {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const isSaving = brandingStatus === 'saving'
   const areAssetActionsDisabled = isSaving || assetActionKind !== null
+  const isSubmitDisabled = isSaving || assetActionKind !== null
 
   useEffect(() => {
     let isCurrent = true
@@ -313,6 +314,7 @@ export function AdminBrandingPage() {
                 areAssetActionsDisabled={areAssetActionsDisabled}
                 assetActionKind={assetActionKind}
                 draft={draft}
+                isSubmitDisabled={isSubmitDisabled}
                 isSaving={isSaving}
                 onAssetDelete={(kind) => {
                   void handleAssetDelete(kind)

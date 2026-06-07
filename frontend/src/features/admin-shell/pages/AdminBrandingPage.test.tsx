@@ -246,6 +246,38 @@ describe('AdminBrandingPage', () => {
     expect(screen.getByLabelText('Загрузить логотип')).toBeInTheDocument()
   })
 
+  it('keeps save disabled while an asset action is in flight', async () => {
+    const user = userEvent.setup()
+    const deferredUpload = createDeferred<{ asset: typeof logoAsset }>()
+    const imageFile = new File(['logo-bytes'], 'logo.png', {
+      type: 'image/png',
+    })
+
+    uploadAdminBrandingAssetMock.mockReturnValueOnce(deferredUpload.promise)
+
+    renderAdminBrandingPage()
+
+    await user.upload(
+      await screen.findByLabelText('Загрузить логотип'),
+      imageFile,
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    ).toBeDisabled()
+
+    await act(async () => {
+      deferredUpload.resolve({ asset: logoAsset })
+      await deferredUpload.promise
+    })
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Сохранить настройки' }),
+      ).toBeEnabled()
+    })
+  })
+
   it('blocks form edits while saving to avoid stale response overwrite', async () => {
     const user = userEvent.setup()
     const deferredSave = createDeferred<AdminBrandingResponse>()
