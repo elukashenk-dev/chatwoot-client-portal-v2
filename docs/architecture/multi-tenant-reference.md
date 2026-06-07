@@ -576,14 +576,13 @@ chatwoot_base_url
 chatwoot_account_id
 chatwoot_portal_inbox_id
 chatwoot_runtime_api_token
+chatwoot_admin_verification_token
 chatwoot_webhook_secret
 ```
 
-`MT-9` will add:
-
-```text
-chatwoot_admin_verification_token
-```
+`chatwoot_admin_verification_token` is stored as an encrypted nullable
+per-tenant secret. Tenant admin login fails closed when this token is missing,
+invalid or cannot read the tenant account agents from Chatwoot.
 
 ## 11. Future Extensions
 

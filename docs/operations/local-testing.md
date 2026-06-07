@@ -297,13 +297,23 @@ Chatwoot API tokens не записывать в docs и не коммитить
 
 ```bash
 read -rsp "BUHFIRMA Chatwoot token: " BUHFIRMA_TOKEN; echo
+read -rsp "BUHFIRMA Chatwoot admin verification token: " BUHFIRMA_ADMIN_VERIFICATION_TOKEN; echo
 read -rsp "STROYFIRMA Chatwoot token: " STROYFIRMA_TOKEN; echo
+read -rsp "STROYFIRMA Chatwoot admin verification token: " STROYFIRMA_ADMIN_VERIFICATION_TOKEN; echo
 read -rsp "ZUBI Chatwoot token: " ZUBI_TOKEN; echo
+read -rsp "ZUBI Chatwoot admin verification token: " ZUBI_ADMIN_VERIFICATION_TOKEN; echo
 
 BUHFIRMA_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 STROYFIRMA_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ZUBI_WEBHOOK_SECRET="$(openssl rand -hex 32)"
 ```
+
+Admin verification token нужен для `/admin/login`: backend проверяет email
+администратора через Chatwoot Agents API. В локальном окружении это может быть
+тот же Chatwoot user API token, если он принадлежит подтвержденному
+administrator в соответствующем Chatwoot account и имеет доступ к
+`/api/v1/accounts/<account_id>/agents`. В production держать его отдельным от
+runtime token.
 
 ## 5. Создать Локальные Tenants
 
@@ -333,6 +343,7 @@ DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=3 \
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=6 \
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$BUHFIRMA_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN="$BUHFIRMA_ADMIN_VERIFICATION_TOKEN" \
 DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$BUHFIRMA_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
@@ -353,6 +364,7 @@ DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=5 \
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=9 \
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$STROYFIRMA_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN="$STROYFIRMA_ADMIN_VERIFICATION_TOKEN" \
 DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$STROYFIRMA_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
@@ -368,6 +380,7 @@ DEFAULT_TENANT_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=1 \
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=8 \
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN="$ZUBI_TOKEN" \
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN="$ZUBI_ADMIN_VERIFICATION_TOKEN" \
 DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET="$ZUBI_WEBHOOK_SECRET" \
 pnpm --dir backend tenant:bootstrap-default
 ```
@@ -377,7 +390,7 @@ pnpm --dir backend tenant:bootstrap-default
 ```bash
 set -a && source .env && set +a
 psql "$DATABASE_URL" -c \
-  "select slug, display_name, primary_domain, chatwoot_account_id, chatwoot_portal_inbox_id, status from portal_tenants order by slug;"
+  "select slug, display_name, primary_domain, chatwoot_account_id, chatwoot_portal_inbox_id, chatwoot_admin_verification_token_ciphertext is not null as has_admin_token, status from portal_tenants order by slug;"
 ```
 
 ## 6. Проверить Chatwoot Связку Tenants
