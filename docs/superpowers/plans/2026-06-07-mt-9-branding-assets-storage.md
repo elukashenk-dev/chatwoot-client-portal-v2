@@ -10,6 +10,24 @@
 
 ---
 
+## Position In Full Branding Roadmap
+
+This plan implements `MT-9E` from `docs/roadmap/implementation-plan.md`.
+
+Closed prerequisite slices:
+
+- `MT-9A` - admin verification token boundary.
+- `MT-9B` - tenant admin backend auth/session/audit foundation.
+- `MT-9C` - tenant admin login UI and protected admin shell.
+- `MT-9D` - tenant-owned branding settings, public/admin branding APIs, first settings form and live preview.
+
+This slice intentionally stops at backend asset storage and route contracts.
+The following slices remain separate because they touch different risk areas:
+
+- `MT-9F` - admin asset upload/replace/delete controls.
+- `MT-9G` - applying branding to customer auth/chat/info/PWA runtime surfaces.
+- `MT-9H` - final branding QA, docs and deploy readiness.
+
 ## Scope
 
 This slice implements backend asset storage and route contracts only.
@@ -63,6 +81,15 @@ export function createBrandingObjectKey({
 
 This is tenant-prefixed and content-hash versioned. Portal DB ownership, not key guessing, remains the read/write authority.
 
+Storage reads must return a Node `Readable` at Fastify route boundaries. The S3
+adapter can convert an SDK Web stream internally, but routes must never send a
+raw Web `ReadableStream` directly.
+
+Replace/delete operations must update the active DB reference before deleting
+old object content. If old object deletion fails after a successful activation,
+the active settings must still point to the new asset; the stale object cleanup
+can be retried separately and must not roll back to a broken public URL.
+
 ## File Map
 
 - Modify: `backend/package.json`
@@ -100,9 +127,9 @@ This is tenant-prefixed and content-hash versioned. Portal DB ownership, not key
 - Modify: `backend/drizzle/meta/_journal.json`
   Register migration `0011`.
 - Modify: `backend/src/modules/branding/brandingAssets.ts`
-  Include PWA icon public URL and object-safe asset helpers.
+  Include PWA icon public URL, kind/id parsers and object-safe asset helpers.
 - Modify: `backend/src/modules/branding/repository.ts`
-  Add active PWA icon, asset lookup, active asset lookup, update object key and delete/deactivate helpers.
+  Add active PWA icon, active asset lookup by id/kind, update object key and delete/deactivate helpers.
 - Modify: `backend/src/modules/branding/repository.test.ts`
   Cover PWA icon, active-only reads, wrong tenant and delete/deactivate.
 - Create: `backend/src/modules/branding/assetService.ts`
@@ -348,7 +375,7 @@ Create `infra/object-storage/compose.yaml`:
 ```yaml
 services:
   minio:
-    image: minio/minio:RELEASE.2026-05-02T23-15-09Z
+    image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${PORTAL_V2_MINIO_ROOT_USER:-portal_v2_minio}
@@ -358,20 +385,16 @@ services:
       - '${PORTAL_V2_MINIO_CONSOLE_PORT:-59001}:9001'
     volumes:
       - portal-v2-minio-data:/data
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 5s
-      timeout: 5s
-      retries: 20
 
   minio-init:
-    image: minio/mc:RELEASE.2026-05-04T16-05-30Z
+    image: quay.io/minio/mc:latest
     depends_on:
-      minio:
-        condition: service_healthy
+      - minio
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 ${PORTAL_V2_MINIO_ROOT_USER:-portal_v2_minio} ${PORTAL_V2_MINIO_ROOT_PASSWORD:-portal_v2_minio_password};
+      until mc alias set local http://minio:9000 ${PORTAL_V2_MINIO_ROOT_USER:-portal_v2_minio} ${PORTAL_V2_MINIO_ROOT_PASSWORD:-portal_v2_minio_password}; do
+        sleep 2;
+      done;
       mc mb --ignore-existing local/${BRANDING_ASSET_STORAGE_BUCKET:-portal-branding-assets};
       "
 
@@ -473,6 +496,7 @@ git commit -m "feat: add branding asset storage configuration"
 Create `backend/src/integrations/object-storage/brandingStorage.test.ts`:
 
 ```ts
+import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -497,7 +521,13 @@ describe('branding object storage', () => {
   it('sends bucket-scoped put/get/delete commands through the S3 client', async () => {
     const send = vi.fn().mockResolvedValue({
       Body: {
-        transformToWebStream: () => new ReadableStream(),
+        transformToWebStream: () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array([120]))
+              controller.close()
+            },
+          }),
       },
       ContentLength: 1,
       ContentType: 'image/png',
@@ -513,8 +543,12 @@ describe('branding object storage', () => {
       contentType: 'image/png',
       key: 'tenants/1/branding/logo/hash/logo.png',
     })
-    await storage.getObject({ key: 'tenants/1/branding/logo/hash/logo.png' })
+    const object = await storage.getObject({
+      key: 'tenants/1/branding/logo/hash/logo.png',
+    })
     await storage.deleteObject({ key: 'tenants/1/branding/logo/hash/logo.png' })
+
+    expect(object.body).toBeInstanceOf(Readable)
 
     expect(send).toHaveBeenCalledTimes(3)
     expect(send.mock.calls[0]?.[0].input).toMatchObject({
@@ -626,6 +660,7 @@ Expected: FAIL because files do not exist.
 Create `backend/src/integrations/object-storage/brandingStorage.ts`:
 
 ```ts
+import { Readable } from 'node:stream'
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -642,7 +677,7 @@ type StorageSender = {
 }
 
 export type BrandingStoredObject = {
-  body: ReadableStream | null
+  body: Readable | null
   contentLength: number | null
   contentType: string | null
 }
@@ -698,7 +733,7 @@ export function createBrandingObjectStorage({
 
       const body =
         response.Body && 'transformToWebStream' in response.Body
-          ? response.Body.transformToWebStream()
+          ? Readable.fromWeb(response.Body.transformToWebStream())
           : null
 
       return {
@@ -944,6 +979,12 @@ it('finds public asset metadata only when the asset is active for the tenant', a
     id: active.id,
     objectKey: 'tenants/1/branding/logo/active/logo.png',
   })
+  await expect(repository.findActiveAssetByKind('logo')).resolves.toMatchObject(
+    {
+      id: active.id,
+      objectKey: 'tenants/1/branding/logo/active/logo.png',
+    },
+  )
 })
 
 it('deactivates an active asset kind without deleting other settings', async () => {
@@ -981,7 +1022,9 @@ Run:
 pnpm --dir backend exec vitest run src/modules/branding/repository.test.ts --reporter verbose
 ```
 
-Expected: FAIL because `pwaIconAssetId`, `findActivePwaIcon`, `findActiveAssetById` and `deactivateAssetKind` do not exist.
+Expected: FAIL because `pwaIconAssetId`, `findActivePwaIcon`,
+`findActiveAssetById`, `findActiveAssetByKind`, `deactivateAssetKind`,
+`parseBrandingAssetKind` and `parseBrandingAssetId` do not exist.
 
 - [ ] **Step 3: Add schema and migration**
 
@@ -1009,9 +1052,15 @@ pnpm --dir backend db:generate
 
 Expected new migration name: `0011_branding_pwa_icon_asset.sql`.
 
-- [ ] **Step 4: Update asset helpers**
+- [ ] **Step 4: Update asset helpers and route parsers**
 
-In `backend/src/modules/branding/brandingAssets.ts`, add:
+In `backend/src/modules/branding/brandingAssets.ts`, add the import near the top:
+
+```ts
+import { ApiError } from '../../lib/errors.js'
+```
+
+Then add:
 
 ```ts
 export function createTenantPwaIconVersion({
@@ -1022,6 +1071,32 @@ export function createTenantPwaIconVersion({
   tenantSlug: string
 }) {
   return encodeURIComponent(`${tenantSlug}-${contentHash}`)
+}
+
+export function parseBrandingAssetKind(input: string): BrandingAssetKind {
+  if (brandingAssetKinds.includes(input as BrandingAssetKind)) {
+    return input as BrandingAssetKind
+  }
+
+  throw new ApiError(
+    404,
+    'BRANDING_ASSET_KIND_NOT_FOUND',
+    'Такой тип файла брендинга не найден.',
+  )
+}
+
+export function parseBrandingAssetId(input: string): number {
+  const assetId = Number(input)
+
+  if (!Number.isSafeInteger(assetId) || assetId <= 0) {
+    throw new ApiError(
+      404,
+      'BRANDING_ASSET_NOT_FOUND',
+      'Файл брендинга не найден.',
+    )
+  }
+
+  return assetId
 }
 ```
 
@@ -1075,6 +1150,24 @@ async findActiveAssetById(assetId: number) {
     .limit(1)
 
   return asset ?? null
+},
+
+async findActiveAssetByKind(kind: BrandingAssetKind) {
+  const settings = await this.findSettings()
+
+  if (!settings) {
+    return null
+  }
+
+  const activeAssetId = collectActiveAssetIds(settings).find(
+    ([activeKind]) => activeKind === kind,
+  )?.[1]
+
+  if (!activeAssetId) {
+    return null
+  }
+
+  return this.findActiveAssetById(activeAssetId)
 },
 
 async deactivateAssetKind(kind: BrandingAssetKind) {
@@ -1213,6 +1306,8 @@ type CreateBrandingAssetServiceOptions = {
   storage: BrandingObjectStorage
   tenantId: number
 }
+
+export type BrandingAssetService = ReturnType<typeof createBrandingAssetService>
 ```
 
 Implement:
@@ -1251,6 +1346,44 @@ Compute hashes:
 const checksumSha256 = createHash('sha256').update(asset.data).digest('hex')
 const contentHash = checksumSha256.slice(0, 32)
 ```
+
+Use this operation order for replace:
+
+```ts
+const previousAsset = await repository.findActiveAssetByKind(upload.kind)
+await storage.putObject({ body, contentLength, contentType, key })
+const createdAsset = await repository.createAssetMetadata(metadata)
+await repository.upsertSettings(
+  settingsPatchByKind[upload.kind](createdAsset.id),
+)
+
+if (previousAsset) {
+  await repository.deleteAssetMetadata(previousAsset.id)
+  await storage.deleteObject({ key: previousAsset.objectKey })
+}
+```
+
+The old object cleanup happens after the new DB reference is active. If cleanup
+throws, the service should audit a cleanup failure and rethrow the controlled
+storage error, but must not restore the old settings reference or delete the
+new object.
+
+Use this operation order for delete:
+
+```ts
+const activeAsset = await repository.findActiveAssetByKind(kind)
+if (!activeAsset) {
+  return { deleted: false }
+}
+
+await repository.deactivateAssetKind(kind)
+await repository.deleteAssetMetadata(activeAsset.id)
+await storage.deleteObject({ key: activeAsset.objectKey })
+return { deleted: true }
+```
+
+After delete, a storage failure can leave object content behind, but settings
+must already be cleared so public reads return 404.
 
 Return public metadata without `objectKey`, `checksumSha256` or `originalFilename`.
 
@@ -1322,9 +1455,96 @@ Expected: FAIL because routes are missing.
 
 - [ ] **Step 3: Add multipart parsing helpers**
 
-In `backend/src/modules/branding/routes.ts`, add parsing similar to profile avatar upload:
+In `backend/src/modules/branding/routes.ts`, add imports:
 
 ```ts
+import type { MultipartFile } from '@fastify/multipart'
+
+import { ApiError } from '../../lib/errors.js'
+import {
+  BRANDING_ASSET_MAX_BYTES,
+  type BrandingAssetUpload,
+} from './assetValidation.js'
+import {
+  parseBrandingAssetId,
+  parseBrandingAssetKind,
+  type BrandingAssetKind,
+} from './brandingAssets.js'
+import type { BrandingAssetService } from './assetService.js'
+```
+
+Extend `RegisterBrandingRoutesOptions`:
+
+```ts
+createBrandingAssetService: (request: FastifyRequest) => BrandingAssetService
+```
+
+Add parsing similar to profile avatar upload:
+
+```ts
+const BRANDING_ASSET_REQUEST_OVERHEAD_BYTES = 128 * 1024
+const BRANDING_ASSET_REQUEST_MAX_BYTES =
+  BRANDING_ASSET_MAX_BYTES + BRANDING_ASSET_REQUEST_OVERHEAD_BYTES
+
+async function readBrandingAssetFile({
+  kind,
+  part,
+}: {
+  kind: BrandingAssetKind
+  part: MultipartFile
+}): Promise<BrandingAssetUpload> {
+  if (part.fieldname !== 'asset') {
+    throw new ApiError(
+      400,
+      'BRANDING_ASSET_FIELD_INVALID',
+      'Файл нужно передать в поле asset.',
+    )
+  }
+
+  return {
+    data: await part.toBuffer(),
+    fileName: part.filename,
+    kind,
+    mimeType: part.mimetype,
+  }
+}
+
+function toBrandingMultipartApiError(app: FastifyInstance, error: unknown) {
+  if (error instanceof ApiError) {
+    return error
+  }
+
+  if (error instanceof app.multipartErrors.RequestFileTooLargeError) {
+    return new ApiError(
+      413,
+      'BRANDING_ASSET_TOO_LARGE',
+      'Файл брендинга должен быть не больше 5 МБ.',
+    )
+  }
+
+  if (
+    error instanceof app.multipartErrors.FilesLimitError ||
+    error instanceof app.multipartErrors.FieldsLimitError ||
+    error instanceof app.multipartErrors.PartsLimitError
+  ) {
+    return new ApiError(
+      400,
+      'BRANDING_ASSET_REQUEST_INVALID',
+      'Можно загрузить только один файл брендинга.',
+    )
+  }
+
+  if (error instanceof app.multipartErrors.InvalidMultipartContentTypeError) {
+    return new ApiError(
+      415,
+      'BRANDING_ASSET_MULTIPART_REQUIRED',
+      'Файл нужно отправить как multipart/form-data.',
+    )
+  }
+
+  return null
+}
+
 async function parseBrandingAssetUpload({
   app,
   kind,
@@ -1343,31 +1563,36 @@ async function parseBrandingAssetUpload({
   }
 
   let upload: BrandingAssetUpload | null = null
-  const parts = request.parts({
-    limits: {
-      fields: 0,
-      fileSize: BRANDING_ASSET_MAX_BYTES,
-      files: 1,
-      parts: 1,
-    },
-  })
 
-  for await (const part of parts) {
-    if (part.type === 'field' || part.fieldname !== 'asset' || upload) {
-      throw new ApiError(
-        400,
-        'BRANDING_ASSET_FIELD_INVALID',
-        'Можно загрузить только один файл в поле asset.',
-      )
+  try {
+    const parts = request.parts({
+      limits: {
+        fields: 0,
+        fileSize: BRANDING_ASSET_MAX_BYTES,
+        files: 1,
+        parts: 1,
+      },
+    })
+
+    for await (const part of parts) {
+      if (part.type === 'field' || upload) {
+        throw new ApiError(
+          400,
+          'BRANDING_ASSET_REQUEST_INVALID',
+          'Можно загрузить только один файл брендинга.',
+        )
+      }
+
+      upload = await readBrandingAssetFile({ kind, part })
+    }
+  } catch (error) {
+    const apiError = toBrandingMultipartApiError(app, error)
+
+    if (apiError) {
+      throw apiError
     }
 
-    const data = await part.toBuffer()
-    upload = {
-      data,
-      fileName: part.filename,
-      kind,
-      mimeType: part.mimetype,
-    }
+    throw error
   }
 
   if (!upload) {
@@ -1389,6 +1614,7 @@ In `registerBrandingRoutes`, add:
 ```ts
 app.post<{ Params: { kind: string } }>(
   '/api/admin/branding/assets/:kind',
+  { bodyLimit: BRANDING_ASSET_REQUEST_MAX_BYTES },
   async (request, reply) => {
     assertAllowedTenantOrigin(request)
     requireTenantContext(request)
@@ -1437,8 +1663,16 @@ app.get<{ Params: { assetId: string } }>(
   async (request, reply) => {
     requireTenantContext(request)
     const asset = await createBrandingAssetService(request).getPublicAsset({
-      assetId: Number(request.params.assetId),
+      assetId: parseBrandingAssetId(request.params.assetId),
     })
+
+    if (!asset.body) {
+      throw new ApiError(
+        404,
+        'BRANDING_ASSET_NOT_FOUND',
+        'Файл брендинга не найден.',
+      )
+    }
 
     reply.header('cache-control', 'public, max-age=31536000, immutable')
     reply.header('content-type', asset.contentType)
@@ -1464,6 +1698,33 @@ Use:
 
 ```ts
 const brandingObjectStorage = createBrandingObjectStorageFromEnv(env)
+
+const createBrandingAssetServiceForRequest = (request: FastifyRequest) => {
+  const tenant = requireTenantContext(request)
+  const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
+    tenantId: tenant.id,
+  })
+
+  return createBrandingAssetService({
+    audit: createTenantAdminAuditLogger(adminAuthRepository),
+    repository: createBrandingRepository(database.db, {
+      tenantId: tenant.id,
+    }),
+    storage: brandingObjectStorage,
+    tenantId: tenant.id,
+  })
+}
+```
+
+Pass both branding services:
+
+```ts
+registerBrandingRoutes(app, {
+  createBrandingAssetService: createBrandingAssetServiceForRequest,
+  createBrandingService: createBrandingServiceForRequest,
+  createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
+  env,
+})
 ```
 
 - [ ] **Step 6: Run integration tests**
@@ -1525,12 +1786,22 @@ Expected: FAIL because tenant routes do not know branding PWA icon metadata.
 
 - [ ] **Step 3: Add tenant route injection**
 
+In `backend/src/modules/tenants/routes.ts`, import:
+
+```ts
+import type { Readable } from 'node:stream'
+```
+
 Change `registerTenantRoutes` options:
 
 ```ts
 type TenantPwaIconReader = {
-  getActivePwaIcon(request: FastifyRequest): Promise<{
-    body: ReadableStream | null
+  getActivePwaIconMetadata(request: FastifyRequest): Promise<{
+    contentHash: string
+    contentType: string
+  } | null>
+  getActivePwaIconObject(request: FastifyRequest): Promise<{
+    body: Readable | null
     contentHash: string
     contentLength: number | null
     contentType: string
@@ -1540,13 +1811,22 @@ type TenantPwaIconReader = {
 
 Use `TenantPwaIconReader` in:
 
-- `getTenantPwaManifest`;
-- `/api/tenant/apple-touch-icon.png`;
-- `/api/tenant/icons/:iconName`.
+- `getTenantPwaManifest` through `getActivePwaIconMetadata`, so manifest
+  generation does not fetch object content;
+- `/api/tenant/apple-touch-icon.png` through `getActivePwaIconObject`;
+- `/api/tenant/icons/:iconName` through `getActivePwaIconObject`.
 
 When custom icon exists:
 
 ```ts
+if (!icon.body) {
+  throw new ApiError(
+    404,
+    'TENANT_PWA_ICON_NOT_FOUND',
+    'Иконка приложения не найдена.',
+  )
+}
+
 reply.header('Cache-Control', 'public, max-age=31536000, immutable')
 reply.header('Vary', 'Host')
 reply.type(icon.contentType)
@@ -1558,6 +1838,47 @@ When custom icon does not exist, keep the current fallback redirects and `no-sto
 - [ ] **Step 4: Wire app**
 
 In `backend/src/app.ts`, pass a `TenantPwaIconReader` into `registerTenantRoutes` using the same branding repository/storage service.
+
+Use:
+
+```ts
+const tenantPwaIconReader = {
+  async getActivePwaIconMetadata(request: FastifyRequest) {
+    const tenant = requireTenantContext(request)
+    const asset = await createBrandingRepository(database.db, {
+      tenantId: tenant.id,
+    }).findActivePwaIcon()
+
+    if (!asset) {
+      return null
+    }
+
+    return {
+      contentHash: asset.contentHash,
+      contentType: asset.contentType,
+    }
+  },
+  async getActivePwaIconObject(request: FastifyRequest) {
+    const tenant = requireTenantContext(request)
+    const asset = await createBrandingRepository(database.db, {
+      tenantId: tenant.id,
+    }).findActivePwaIcon()
+
+    if (!asset) {
+      return null
+    }
+
+    return createBrandingAssetServiceForRequest(request).getPublicAsset({
+      assetId: asset.id,
+    })
+  },
+}
+
+registerTenantRoutes(app, {
+  pwaIconReader: tenantPwaIconReader,
+  tenantsService,
+})
+```
 
 - [ ] **Step 5: Run tenant route tests**
 
@@ -1706,3 +2027,26 @@ git commit -m "docs: record mt-9 branding asset storage completion"
 - Placeholder scan: no unresolved placeholder requirements remain.
 - Type consistency: plan consistently uses `BrandingAssetKind`, `pwaIconAssetId`, `BrandingObjectStorage`, `createBrandingObjectStorageFromEnv`, `normalizeBrandingAssetUpload` and `TenantPwaIconReader`.
 - Scope check: admin UI upload controls and visual preview are intentionally left for the next slice after backend storage is reliable.
+
+## Plan Review Notes
+
+Reviewed and hardened before implementation:
+
+- Full branding slice map is recorded in `docs/roadmap/implementation-plan.md`;
+  this plan is explicitly `MT-9E`, not the whole branding feature.
+- Repository/service consistency is fixed: `findActiveAssetByKind` is created
+  before `assetService` depends on it.
+- Route parser consistency is fixed: `parseBrandingAssetKind` and
+  `parseBrandingAssetId` are defined before admin/public routes use them.
+- Storage stream contract is fixed: object storage converts SDK Web streams to
+  Node `Readable` before Fastify routes send the body.
+- Local MinIO bootstrap is made robust through `quay.io/minio/*` images and a
+  retrying `mc alias set` loop instead of an invalid server-image readiness
+  probe.
+- Multipart upload handling is explicit: route-level body limit, file limit,
+  non-multipart error, too-large error and invalid field/parts errors all map
+  to controlled API errors.
+- Replace/delete ordering is explicit: settings move away from stale assets
+  before old object cleanup, so public URLs do not point at deleted metadata.
+- PWA icon reader is split into metadata and object methods, so manifest
+  generation does not fetch binary object content.
