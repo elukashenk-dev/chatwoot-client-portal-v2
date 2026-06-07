@@ -416,7 +416,42 @@ export function buildApp({
     maxRequests: env.AUTH_RATE_LIMIT_MAX,
     windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
   })
-  registerTenantRoutes(app, { tenantsService })
+  const tenantPwaIconReader = {
+    async getActivePwaIconMetadata(request: FastifyRequest) {
+      const tenant = requireTenantContext(request)
+      const asset = await createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      }).findActivePwaIcon()
+
+      if (!asset) {
+        return null
+      }
+
+      return {
+        contentHash: asset.contentHash,
+        contentType: asset.contentType,
+      }
+    },
+    async getActivePwaIconObject(request: FastifyRequest) {
+      const tenant = requireTenantContext(request)
+      const asset = await createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      }).findActivePwaIcon()
+
+      if (!asset) {
+        return null
+      }
+
+      return createBrandingAssetServiceForRequest(request).getPublicAsset({
+        assetId: asset.id,
+      })
+    },
+  }
+
+  registerTenantRoutes(app, {
+    pwaIconReader: tenantPwaIconReader,
+    tenantsService,
+  })
   registerAuthRoutes(app, {
     authService,
     env,

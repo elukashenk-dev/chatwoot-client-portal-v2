@@ -1,6 +1,9 @@
+import type { Readable } from 'node:stream'
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import { ApiError } from '../../lib/errors.js'
+import { createTenantPwaIconVersion } from '../branding/brandingAssets.js'
 import type { TenantRequestContext, TenantsService } from './service.js'
 
 type RegisterTenantContextOptions = {
@@ -8,7 +11,21 @@ type RegisterTenantContextOptions = {
 }
 
 type RegisterTenantRoutesOptions = {
+  pwaIconReader?: TenantPwaIconReader
   tenantsService: Pick<TenantsService, 'getPublicTenantContext'>
+}
+
+type TenantPwaIconReader = {
+  getActivePwaIconMetadata(request: FastifyRequest): Promise<{
+    contentHash: string
+    contentType: string
+  } | null>
+  getActivePwaIconObject(request: FastifyRequest): Promise<{
+    body: Readable | null
+    contentHash: string
+    contentLength: number | null
+    contentType: string
+  } | null>
 }
 
 const tenantOptionalPaths = new Set(['/api/health'])
@@ -42,12 +59,26 @@ function getTenantPwaRootUrl(tenant: TenantRequestContext) {
   return new URL('/', tenant.publicBaseUrl).href
 }
 
-function getTenantPwaIconVersion(tenant: TenantRequestContext) {
+function getTenantPwaIconVersion(
+  tenant: TenantRequestContext,
+  pwaIconMetadata?: { contentHash: string } | null,
+) {
+  if (pwaIconMetadata) {
+    return createTenantPwaIconVersion({
+      contentHash: pwaIconMetadata.contentHash,
+      tenantSlug: tenant.slug,
+    })
+  }
+
   return encodeURIComponent(`${tenant.slug}-${tenantPwaFallbackIconVersion}`)
 }
 
-function getTenantPwaManifest(tenant: TenantRequestContext) {
-  const iconVersion = getTenantPwaIconVersion(tenant)
+function getTenantPwaManifest(
+  tenant: TenantRequestContext,
+  pwaIconMetadata?: { contentHash: string; contentType: string } | null,
+) {
+  const iconVersion = getTenantPwaIconVersion(tenant, pwaIconMetadata)
+  const iconType = pwaIconMetadata?.contentType ?? 'image/png'
 
   return {
     background_color: tenantPwaBackgroundColor,
@@ -58,19 +89,19 @@ function getTenantPwaManifest(tenant: TenantRequestContext) {
         purpose: 'any',
         sizes: '192x192',
         src: `/api/tenant/icons/icon-192.png?v=${iconVersion}`,
-        type: 'image/png',
+        type: iconType,
       },
       {
         purpose: 'any',
         sizes: '512x512',
         src: `/api/tenant/icons/icon-512.png?v=${iconVersion}`,
-        type: 'image/png',
+        type: iconType,
       },
       {
         purpose: 'maskable',
         sizes: '512x512',
         src: `/api/tenant/icons/icon-maskable-512.png?v=${iconVersion}`,
-        type: 'image/png',
+        type: iconType,
       },
     ],
     id: getTenantPwaRootUrl(tenant),
@@ -81,6 +112,42 @@ function getTenantPwaManifest(tenant: TenantRequestContext) {
     start_url: '/',
     theme_color: tenantPwaThemeColor,
   }
+}
+
+async function sendActiveTenantPwaIconIfPresent({
+  pwaIconReader,
+  reply,
+  request,
+}: {
+  pwaIconReader: TenantPwaIconReader | undefined
+  reply: FastifyReply
+  request: FastifyRequest
+}) {
+  const icon = await pwaIconReader?.getActivePwaIconObject(request)
+
+  if (!icon) {
+    return false
+  }
+
+  if (!icon.body) {
+    throw new ApiError(
+      404,
+      'TENANT_PWA_ICON_NOT_FOUND',
+      'Иконка приложения не найдена.',
+    )
+  }
+
+  reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+  reply.header('Vary', 'Host')
+  reply.type(icon.contentType)
+
+  if (icon.contentLength !== null) {
+    reply.header('content-length', String(icon.contentLength))
+  }
+
+  await reply.send(icon.body)
+
+  return true
 }
 
 export function requireTenantContext(
@@ -120,7 +187,7 @@ export function registerTenantContext(
 
 export function registerTenantRoutes(
   app: FastifyInstance,
-  { tenantsService }: RegisterTenantRoutesOptions,
+  { pwaIconReader, tenantsService }: RegisterTenantRoutesOptions,
 ) {
   app.get('/api/tenant', async (request, reply) => {
     const tenant = requireTenantContext(request)
@@ -134,16 +201,29 @@ export function registerTenantRoutes(
 
   app.get('/api/tenant/manifest.webmanifest', async (request, reply) => {
     const tenant = requireTenantContext(request)
+    const pwaIconMetadata =
+      (await pwaIconReader?.getActivePwaIconMetadata(request)) ?? null
 
     setTenantPwaHeaders(reply)
 
     return reply
       .type('application/manifest+json; charset=utf-8')
-      .send(getTenantPwaManifest(tenant))
+      .send(getTenantPwaManifest(tenant, pwaIconMetadata))
   })
 
   app.get('/api/tenant/apple-touch-icon.png', async (request, reply) => {
     requireTenantContext(request)
+
+    if (
+      await sendActiveTenantPwaIconIfPresent({
+        pwaIconReader,
+        reply,
+        request,
+      })
+    ) {
+      return
+    }
+
     setTenantPwaHeaders(reply)
 
     return reply.status(302).header('Location', '/apple-touch-icon.png').send()
@@ -155,7 +235,6 @@ export function registerTenantRoutes(
     }
   }>('/api/tenant/icons/:iconName', async (request, reply) => {
     requireTenantContext(request)
-    setTenantPwaHeaders(reply)
 
     const iconPath =
       tenantPwaIconRedirects[
@@ -165,6 +244,18 @@ export function registerTenantRoutes(
     if (!iconPath) {
       throw new ApiError(404, 'TENANT_PWA_ICON_NOT_FOUND', 'Иконка не найдена.')
     }
+
+    if (
+      await sendActiveTenantPwaIconIfPresent({
+        pwaIconReader,
+        reply,
+        request,
+      })
+    ) {
+      return
+    }
+
+    setTenantPwaHeaders(reply)
 
     return reply.status(302).header('Location', iconPath).send()
   })

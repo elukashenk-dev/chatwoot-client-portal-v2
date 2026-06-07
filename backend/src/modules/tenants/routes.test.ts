@@ -1,10 +1,14 @@
+import { Readable } from 'node:stream'
+
 import { describe, expect, it } from 'vitest'
 
 import { buildApp } from '../../app.js'
 import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
+import type { BrandingObjectStorage } from '../../integrations/object-storage/brandingStorage.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { createBrandingRepository } from '../branding/repository.js'
 import { chatwootWebhookTestInternals } from '../chatwoot-webhooks/service.js'
 import type { TenantStatus } from './repository.js'
 import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
@@ -21,6 +25,12 @@ const baseTestEnv: AppEnv = {
   PORT: 3301,
   AUTH_RATE_LIMIT_MAX: 5,
   AUTH_RATE_LIMIT_WINDOW_MS: 60_000,
+  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: undefined,
+  BRANDING_ASSET_STORAGE_BUCKET: undefined,
+  BRANDING_ASSET_STORAGE_ENDPOINT: undefined,
+  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: true,
+  BRANDING_ASSET_STORAGE_REGION: 'us-east-1',
+  BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: undefined,
   ADMIN_SESSION_COOKIE_NAME: 'portal_admin_session',
   PORTAL_TRUST_PROXY: false,
   PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
@@ -62,44 +72,109 @@ async function seedTenant(
 ) {
   const key = decodeTenantSecretKey(tenantSecretKey)
 
-  await database.db.insert(portalTenants).values({
-    chatwootAccountId: 1,
-    chatwootApiAccessTokenCiphertext: encryptTenantSecret(
-      `${slug}:api-token`,
-      key,
-    ),
-    chatwootBaseUrl: 'https://chatwoot.example.test',
-    chatwootPortalInboxId: 1,
-    chatwootWebhookSecretCiphertext: encryptTenantSecret(
-      `${slug}:webhook-secret`,
-      key,
-    ),
-    displayName,
-    primaryDomain,
-    publicBaseUrl,
-    slug,
-    status,
-  })
+  const [tenant] = await database.db
+    .insert(portalTenants)
+    .values({
+      chatwootAccountId: 1,
+      chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+        `${slug}:api-token`,
+        key,
+      ),
+      chatwootBaseUrl: 'https://chatwoot.example.test',
+      chatwootPortalInboxId: 1,
+      chatwootWebhookSecretCiphertext: encryptTenantSecret(
+        `${slug}:webhook-secret`,
+        key,
+      ),
+      displayName,
+      primaryDomain,
+      publicBaseUrl,
+      slug,
+      status,
+    })
+    .returning({
+      id: portalTenants.id,
+    })
+
+  if (!tenant) {
+    throw new Error(`Failed to seed tenant ${slug}.`)
+  }
+
+  return tenant.id
 }
 
-async function createTenantApp(envOverrides: Partial<AppEnv> = {}) {
+function createTestBrandingObjectStorage() {
+  const objects = new Map<
+    string,
+    { body: Buffer; contentLength: number; contentType: string }
+  >()
+
+  return {
+    objects,
+    storage: {
+      deleteObject: async ({ key }: { key: string }) => {
+        objects.delete(key)
+      },
+      getObject: async ({ key }: { key: string }) => {
+        const object = objects.get(key)
+
+        if (!object) {
+          throw new Error(`Missing object ${key}`)
+        }
+
+        return {
+          body: Readable.from(object.body),
+          contentLength: object.contentLength,
+          contentType: object.contentType,
+        }
+      },
+      putObject: async ({
+        body,
+        contentLength,
+        contentType,
+        key,
+      }: {
+        body: Buffer
+        contentLength: number
+        contentType: string
+        key: string
+      }) => {
+        objects.set(key, {
+          body,
+          contentLength,
+          contentType,
+        })
+      },
+    } satisfies BrandingObjectStorage,
+  }
+}
+
+async function createTenantApp(
+  envOverrides: Partial<AppEnv> = {},
+  {
+    brandingObjectStorage,
+  }: {
+    brandingObjectStorage?: BrandingObjectStorage
+  } = {},
+) {
   const database = await createTestDatabase()
   const env = {
     ...baseTestEnv,
     ...envOverrides,
   } satisfies AppEnv
   const app = buildApp({
+    ...(brandingObjectStorage ? { brandingObjectStorage } : {}),
     database,
     env,
   })
 
-  await seedTenant(database, {
+  const defaultTenantId = await seedTenant(database, {
     displayName: 'Default Tenant',
     primaryDomain: 'lk.default.test',
     publicBaseUrl: 'https://lk.default.test',
     slug: 'default',
   })
-  await seedTenant(database, {
+  const secondTenantId = await seedTenant(database, {
     displayName: 'Second Tenant',
     primaryDomain: 'lk.second.test',
     publicBaseUrl: 'https://lk.second.test',
@@ -110,6 +185,10 @@ async function createTenantApp(envOverrides: Partial<AppEnv> = {}) {
   return {
     app,
     database,
+    tenantIds: {
+      default: defaultTenantId,
+      second: secondTenantId,
+    },
   }
 }
 
@@ -282,6 +361,108 @@ describe('tenant routes and request context', () => {
           message: 'Иконка не найдена.',
         },
       })
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('uses active tenant pwa icon metadata in manifest icon URLs', async () => {
+    const brandingStorage = createTestBrandingObjectStorage()
+    const { app, database, tenantIds } = await createTenantApp(
+      {},
+      {
+        brandingObjectStorage: brandingStorage.storage,
+      },
+    )
+
+    try {
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenantIds.default,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 8,
+        checksumSha256: 'p'.repeat(64),
+        contentHash: 'pwa-hash',
+        contentType: 'image/png',
+        kind: 'pwa_icon',
+        objectKey: `tenants/${tenantIds.default}/branding/pwa_icon/pwa-hash/icon.png`,
+        originalFilename: 'icon.png',
+      })
+
+      await repository.upsertSettings({ pwaIconAssetId: asset.id })
+
+      const response = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/manifest.webmanifest',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().icons).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sizes: '192x192',
+            src: '/api/tenant/icons/icon-192.png?v=default-pwa-hash',
+          }),
+          expect.objectContaining({
+            purpose: 'maskable',
+            sizes: '512x512',
+            src: '/api/tenant/icons/icon-maskable-512.png?v=default-pwa-hash',
+          }),
+        ]),
+      )
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
+  it('streams active tenant pwa icon content for tenant icon routes', async () => {
+    const brandingStorage = createTestBrandingObjectStorage()
+    const { app, database, tenantIds } = await createTenantApp(
+      {},
+      {
+        brandingObjectStorage: brandingStorage.storage,
+      },
+    )
+
+    try {
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenantIds.default,
+      })
+      const asset = await repository.createAssetMetadata({
+        byteSize: 8,
+        checksumSha256: 'p'.repeat(64),
+        contentHash: 'pwa-hash',
+        contentType: 'image/png',
+        kind: 'pwa_icon',
+        objectKey: `tenants/${tenantIds.default}/branding/pwa_icon/pwa-hash/icon.png`,
+        originalFilename: 'icon.png',
+      })
+
+      await repository.upsertSettings({ pwaIconAssetId: asset.id })
+      brandingStorage.objects.set(asset.objectKey, {
+        body: Buffer.from('pwa-icon'),
+        contentLength: 8,
+        contentType: 'image/png',
+      })
+
+      const response = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/icons/icon-512.png?v=default-pwa-hash',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.headers['cache-control']).toBe(
+        'public, max-age=31536000, immutable',
+      )
+      expect(response.headers.vary).toBe('Host')
+      expect(response.headers['content-type']).toBe('image/png')
+      expect(response.body).toBe('pwa-icon')
     } finally {
       await app.close()
     }
