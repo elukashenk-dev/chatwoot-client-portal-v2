@@ -4,7 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
 import { renderWithRouter } from '../../../test/renderWithRouter'
+import {
+  BrandingContext,
+  type BrandingContextValue,
+} from '../../branding/lib/brandingContext'
 import { disableCurrentBrowserPushBestEffort } from '../../chat/pages/notificationBrowserPush'
+import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
+import {
+  AuthSessionContext,
+  type AuthSessionContextValue,
+} from '../lib/authSessionContext'
+import { LoginPage } from './LoginPage'
 
 vi.mock('../../chat/pages/notificationBrowserPush', async () => {
   const actual = await vi.importActual<
@@ -20,6 +30,55 @@ vi.mock('../../chat/pages/notificationBrowserPush', async () => {
 const disableCurrentBrowserPushBestEffortMock = vi.mocked(
   disableCurrentBrowserPushBestEffort,
 )
+
+const tenantContextValue = {
+  errorMessage: null,
+  isUsingCachedData: false,
+  status: 'ready' as const,
+  tenant: {
+    displayName: 'Бухфирма',
+    primaryDomain: 'lk.buhfirma.ru',
+    publicBaseUrl: 'https://lk.buhfirma.ru',
+    slug: 'buhfirma',
+  },
+}
+
+const brandingContextValue: BrandingContextValue = {
+  branding: {
+    assets: {},
+    colors: {
+      accent: '#14b8a6',
+      authBackground: '#ecfeff',
+      chatBackground: '#f8fafc',
+      chatHeaderBackground: '#0f766e',
+      primary: '#134e4a',
+    },
+    copy: {
+      authSubtitle: 'Войдите в кабинет ProvGroup.',
+      authTitle: 'Кабинет ProvGroup',
+      chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
+      chatEmptyTitle: 'Начните диалог',
+      chatInfoTitle: 'О диалоге',
+    },
+    portalName: 'ProvGroup',
+    supportLabel: 'Поддержка ProvGroup',
+    version: 3,
+  },
+  errorMessage: null,
+  status: 'ready',
+}
+
+const unauthenticatedAuthSession: AuthSessionContextValue = {
+  errorMessage: null,
+  localDeviceDataRemovalAvailable: false,
+  refreshSession: vi.fn(async () => undefined),
+  removeLocalDeviceData: vi.fn(async () => undefined),
+  sessionSource: null,
+  signIn: vi.fn(),
+  signOut: vi.fn(async () => undefined),
+  status: 'unauthenticated',
+  user: null,
+}
 
 function createJsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -134,6 +193,24 @@ describe('LoginPage', () => {
     fetchMock.mockReset()
   })
 
+  it('renders tenant auth copy from public branding on the login screen', () => {
+    renderWithRouter(
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <BrandingContext.Provider value={brandingContextValue}>
+          <AuthSessionContext.Provider value={unauthenticatedAuthSession}>
+            <LoginPage />
+          </AuthSessionContext.Provider>
+        </BrandingContext.Provider>
+      </TenantIdentityContext.Provider>,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Войдите в кабинет ProvGroup.')).toBeInTheDocument()
+    expect(screen.queryByText('Центр поддержки')).not.toBeInTheDocument()
+  })
+
   it('redirects to the login route and renders working auth links', async () => {
     fetchMock.mockResolvedValueOnce(
       createJsonResponse(
@@ -151,10 +228,10 @@ describe('LoginPage', () => {
 
     expect(await screen.findByLabelText(/Email/)).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Центр поддержки' }),
+      screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Войдите, чтобы продолжить общение с поддержкой.'),
+      screen.getByText('Введите email и пароль, чтобы продолжить.'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: 'Забыли пароль?' }),
@@ -324,7 +401,7 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/app/chat'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Центр поддержки' }),
+      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('Личный чат')).not.toBeInTheDocument()
   })

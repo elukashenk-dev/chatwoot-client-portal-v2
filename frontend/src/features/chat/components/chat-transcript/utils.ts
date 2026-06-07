@@ -333,3 +333,9 @@ export function shouldRenderDateDivider(
     formatMessageDate(previousMessage.createdAt)
   )
 }
+
+export function restoreFocusToElement(element: HTMLElement | null | undefined) {
+  if (element && document.contains(element)) {
+    element.focus({ preventScroll: true })
+  }
+}

@@ -113,8 +113,8 @@ export function BrandingPreviewPane({ draft }: BrandingPreviewPaneProps) {
             {draft.copy.chatEmptyTitle}
           </div>
           <div className="mt-4 rounded-[0.6rem] border border-dashed border-slate-200 bg-white/80 px-3 py-2 text-xs leading-5 text-slate-500">
-            Изображения показываются только в preview до применения в клиентский
-            портал.
+            Эти же изображения применяются в клиентском портале после
+            сохранения.
           </div>
         </div>
       </div>

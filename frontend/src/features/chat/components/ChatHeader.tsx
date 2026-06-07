@@ -8,6 +8,7 @@ import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { useBranding } from '../../branding/lib/useBranding'
 import { getChatNotificationsStatus } from '../lib/notificationSettingsPresentation'
 import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
 import {
@@ -77,6 +78,7 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   const navigate = useNavigate()
   const { signOut } = useAuthSession()
+  const { branding } = useBranding()
   const { tenant } = useTenantIdentity()
   const chatMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const chatMenuPanelRef = useRef<HTMLDivElement | null>(null)
@@ -223,26 +225,24 @@ export function ChatHeader({
             label: 'Нет связи',
             tone: 'offline',
           }
-  const supportTeamName = tenant
-    ? `Команда ${tenant.displayName}`
-    : 'Команда поддержки'
+  const supportTeamName = branding.supportLabel
   const threadTitle = activeThread?.title ?? 'Личный чат'
-  const threadSubtitle = activeThread?.subtitle ?? supportTeamName
+  const threadSubtitle = activeThread?.subtitle.trim() || supportTeamName
   const availableThreads =
     threads.length > 0 ? threads : activeThread ? [activeThread] : []
   const hasOtherThreadUnread = hasUnreadOutsideSelectedThread(
     availableThreads,
     selectedThreadId,
   )
-  const tenantMonogram = tenant
-    ? createTenantMonogram(tenant.displayName)
-    : 'ЛК'
+  const tenantMonogram = createTenantMonogram(
+    branding.portalName || tenant?.displayName || 'ЛК',
+  )
   const notificationsStatus = getChatNotificationsStatus(
     threadNotificationSettings,
   )
 
   return (
-    <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/90 px-4 pb-2.5 text-slate-900 shadow-sm sm:px-6 sm:pb-3">
+    <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
       <div className="flex min-h-10 items-center gap-3">
         <div className="relative shrink-0" ref={navMenuRef}>
           <button
@@ -251,7 +251,7 @@ export function ChatHeader({
             aria-label={
               isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
             }
-            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={() => {
               setIsNavMenuOpen((currentValue) => !currentValue)
               setIsChatMenuOpen(false)
@@ -342,7 +342,7 @@ export function ChatHeader({
 
         <ChatAvatar
           alt={threadTitle}
-          avatarUrl={activeThread?.avatarUrl}
+          avatarUrl={activeThread?.avatarUrl ?? branding.assets.logo?.publicUrl}
           className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white"
           title={threadTitle}
         >
@@ -350,7 +350,7 @@ export function ChatHeader({
         </ChatAvatar>
 
         <div className="min-w-0 flex-1 py-0.5">
-          <h1 className="truncate text-[16px] font-semibold leading-tight text-slate-900 sm:text-[17px]">
+          <h1 className="truncate text-[16px] font-semibold leading-tight text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:text-[17px]">
             {threadTitle}
           </h1>
           <ChatHeaderPresence
@@ -367,7 +367,7 @@ export function ChatHeader({
             aria-label={
               isChatMenuOpen ? 'Закрыть меню чата' : 'Открыть меню чата'
             }
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/60 bg-slate-50/60 text-slate-500 transition hover:border-slate-300/80 hover:bg-slate-100/80 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[color:var(--portal-chat-header-muted-foreground,#64748b)] transition hover:border-white/30 hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={() => {
               setIsChatMenuOpen((currentValue) => !currentValue)
               setIsNavMenuOpen(false)

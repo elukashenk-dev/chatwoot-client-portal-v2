@@ -24,12 +24,12 @@ export function ChatFullScreenPanel({
   unavailableMessage = 'Не удалось загрузить данные.',
 }: ChatFullScreenPanelProps) {
   return (
-    <section className="absolute inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
-      <header className="app-safe-top chat-header-background border-b border-slate-200/90 px-4 pb-2.5 shadow-sm sm:px-6 sm:pb-3">
+    <section className="chat-runtime-surface absolute inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
+      <header className="app-safe-top chat-header-background border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
         <div className="flex min-h-10 items-center gap-3">
           <button
             aria-label="Вернуться к чату"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-slate-600 transition hover:bg-slate-100/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={onBack}
             type="button"
           >

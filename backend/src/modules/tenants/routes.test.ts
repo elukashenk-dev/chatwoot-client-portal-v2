@@ -426,6 +426,53 @@ describe('tenant routes and request context', () => {
     }
   }, 20_000)
 
+  it('uses active tenant branding colors in PWA manifest metadata', async () => {
+    const { app, database, tenantIds } = await createTenantApp()
+
+    try {
+      const repository = createBrandingRepository(database.db, {
+        tenantId: tenantIds.default,
+      })
+
+      await repository.upsertSettings({
+        authBackgroundColor: '#f8efe3',
+        primaryColor: '#204f7a',
+      })
+
+      const brandedResponse = await app.inject({
+        headers: {
+          host: 'lk.default.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/manifest.webmanifest',
+      })
+      const fallbackResponse = await app.inject({
+        headers: {
+          host: 'lk.second.test',
+        },
+        method: 'GET',
+        url: '/api/tenant/manifest.webmanifest',
+      })
+
+      expect(brandedResponse.statusCode).toBe(200)
+      expect(brandedResponse.json()).toEqual(
+        expect.objectContaining({
+          background_color: '#f8efe3',
+          theme_color: '#204f7a',
+        }),
+      )
+      expect(fallbackResponse.statusCode).toBe(200)
+      expect(fallbackResponse.json()).toEqual(
+        expect.objectContaining({
+          background_color: '#f3f7fc',
+          theme_color: '#112540',
+        }),
+      )
+    } finally {
+      await app.close()
+    }
+  }, 20_000)
+
   it('streams active tenant pwa icon content for tenant icon routes', async () => {
     const brandingStorage = createTestBrandingObjectStorage()
     const { app, database, tenantIds } = await createTenantApp(

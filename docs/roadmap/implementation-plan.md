@@ -93,6 +93,10 @@ Completed gates:
 - `MT-9F` admin branding asset controls are closed: tenant admins can upload,
   replace and delete logo, PWA icon and configured auth/chat image slots from
   the protected admin console, with preview wiring over portal-owned asset URLs.
+- `MT-9G` customer runtime branding is closed: saved public branding colors,
+  copy and portal-owned image asset URLs are applied to customer auth, chat,
+  chat-info and empty chat runtime surfaces; tenant PWA manifest colors now use
+  tenant branding settings without exposing object-storage authority.
 
 Branding slice map:
 
@@ -109,15 +113,16 @@ Branding slice map:
   routes. Closed.
 - `MT-9G` - apply branding to customer runtime: auth backgrounds/images,
   chat background, chat header background, logo/brand mark and chat info pages
-  using real portal components. Current next slice.
+  using real portal components. Closed.
 - `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache manual
-  checks, production runbook updates and final documentation cleanup.
+  checks, production runbook updates and final documentation cleanup. Current
+  next slice.
 
-Remaining scope after `MT-9F`:
+Remaining scope after `MT-9G`:
 
-- applying text/color/image branding to real customer-facing portal surfaces;
-- preview screens using real portal components;
 - final branding QA, docs and deploy readiness;
+- verify admin preview parity during final QA and record a follow-up only if a
+  real-component preview gap remains;
 - archived branch `feature/phase-10-portal-branding-admin` may be used only as
   an idea archive, not merged as-is.
 

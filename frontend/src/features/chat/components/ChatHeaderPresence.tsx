@@ -15,7 +15,7 @@ export function ChatHeaderPresence({
   tone,
 }: ChatHeaderPresenceProps) {
   return (
-    <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-slate-500 sm:text-[13px]">
+    <div className="mt-0.5 flex min-w-0 items-center gap-2 text-[12px] leading-4 text-[color:var(--portal-chat-header-muted-foreground,#64748b)] sm:text-[13px]">
       <span className="hidden min-w-0 truncate sm:inline">{subtitle}</span>
       <span
         aria-hidden="true"

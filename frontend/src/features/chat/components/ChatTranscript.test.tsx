@@ -110,6 +110,33 @@ describe('ChatTranscript', () => {
     vi.unstubAllGlobals()
   })
 
+  it('renders branded empty transcript copy when no messages are available', () => {
+    render(
+      <ChatTranscript
+        emptyBody="Напишите вопрос, мы ответим здесь."
+        emptyTitle="Начните диалог"
+        hasMoreOlder={false}
+        historyErrorMessage={null}
+        isConnectionAvailable
+        isLoadingOlder={false}
+        messages={[]}
+        onLoadOlder={vi.fn()}
+        onReplyToMessage={vi.fn()}
+        onRetryTextMessage={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Начните диалог')).toBeInTheDocument()
+    expect(
+      screen.getByText('Напишите вопрос, мы ответим здесь.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'В этой переписке пока нет сообщений, доступных клиентскому порталу.',
+      ),
+    ).not.toBeInTheDocument()
+  })
+
   it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
     const { container } = renderTranscript([
       createMessage({

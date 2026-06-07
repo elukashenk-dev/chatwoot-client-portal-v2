@@ -862,7 +862,7 @@ describe('ChatPage', () => {
     renderChatRoute()
 
     await screen.findByText(
-      'В этой переписке пока нет сообщений, доступных клиентскому порталу.',
+      'Напишите нам, когда будет удобно. Мы ответим здесь.',
       {},
       CHAT_PAGE_LOAD_TIMEOUT,
     )

@@ -11,8 +11,20 @@ type RegisterTenantContextOptions = {
 }
 
 type RegisterTenantRoutesOptions = {
+  pwaBrandingReader?: TenantPwaBrandingReader
   pwaIconReader?: TenantPwaIconReader
   tenantsService: Pick<TenantsService, 'getPublicTenantContext'>
+}
+
+export type TenantPwaManifestBranding = {
+  backgroundColor: string
+  themeColor: string
+}
+
+export type TenantPwaBrandingReader = {
+  getPwaManifestBranding(
+    request: FastifyRequest,
+  ): Promise<TenantPwaManifestBranding | null>
 }
 
 export type TenantPwaIconReader = {
@@ -87,12 +99,13 @@ function getTenantPwaIconVersion(
 function getTenantPwaManifest(
   tenant: TenantRequestContext,
   pwaIconMetadata?: { assetId: number; contentType: string } | null,
+  branding?: TenantPwaManifestBranding | null,
 ) {
   const iconVersion = getTenantPwaIconVersion(tenant, pwaIconMetadata)
   const iconType = pwaIconMetadata?.contentType ?? 'image/png'
 
   return {
-    background_color: tenantPwaBackgroundColor,
+    background_color: branding?.backgroundColor ?? tenantPwaBackgroundColor,
     description: `Личный кабинет ${tenant.displayName} для безопасной работы с сообщениями и обращениями.`,
     display: 'standalone',
     icons: [
@@ -121,7 +134,7 @@ function getTenantPwaManifest(
     scope: '/',
     short_name: tenant.displayName,
     start_url: '/',
-    theme_color: tenantPwaThemeColor,
+    theme_color: branding?.themeColor ?? tenantPwaThemeColor,
   }
 }
 
@@ -249,7 +262,11 @@ export function registerTenantContext(
 
 export function registerTenantRoutes(
   app: FastifyInstance,
-  { pwaIconReader, tenantsService }: RegisterTenantRoutesOptions,
+  {
+    pwaBrandingReader,
+    pwaIconReader,
+    tenantsService,
+  }: RegisterTenantRoutesOptions,
 ) {
   app.get('/api/tenant', async (request, reply) => {
     const tenant = requireTenantContext(request)
@@ -263,14 +280,17 @@ export function registerTenantRoutes(
 
   app.get('/api/tenant/manifest.webmanifest', async (request, reply) => {
     const tenant = requireTenantContext(request)
-    const pwaIconMetadata =
-      (await pwaIconReader?.getActivePwaIconMetadata(request)) ?? null
+    const [pwaIconMetadata, pwaBranding] = await Promise.all([
+      pwaIconReader?.getActivePwaIconMetadata(request) ?? Promise.resolve(null),
+      pwaBrandingReader?.getPwaManifestBranding(request) ??
+        Promise.resolve(null),
+    ])
 
     setTenantPwaHeaders(reply)
 
     return reply
       .type('application/manifest+json; charset=utf-8')
-      .send(getTenantPwaManifest(tenant, pwaIconMetadata))
+      .send(getTenantPwaManifest(tenant, pwaIconMetadata, pwaBranding))
   })
 
   app.get('/api/tenant/apple-touch-icon.png', async (request, reply) => {

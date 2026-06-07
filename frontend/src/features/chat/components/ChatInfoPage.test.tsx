@@ -6,6 +6,10 @@ import type {
   ChatSupportAvailabilityResponse,
   ChatThreadInfoResponse,
 } from '../types'
+import {
+  BrandingContext,
+  type BrandingContextValue,
+} from '../../branding/lib/brandingContext'
 import { ChatInfoPage } from './ChatInfoPage'
 
 const privateInfo = {
@@ -62,7 +66,74 @@ const supportAvailability = {
   },
 } satisfies ChatSupportAvailabilityResponse
 
+const brandingContextValue: BrandingContextValue = {
+  branding: {
+    assets: {
+      logo: {
+        assetVersion: '11',
+        contentType: 'image/png',
+        height: null,
+        id: 11,
+        kind: 'logo',
+        publicUrl: '/api/branding/assets/11?v=11',
+        width: null,
+      },
+    },
+    colors: {
+      accent: '#14b8a6',
+      authBackground: '#ecfeff',
+      chatBackground: '#f8fafc',
+      chatHeaderBackground: '#0f766e',
+      primary: '#134e4a',
+    },
+    copy: {
+      authSubtitle: 'Войдите в кабинет ProvGroup.',
+      authTitle: 'Кабинет ProvGroup',
+      chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
+      chatEmptyTitle: 'Начните диалог',
+      chatInfoTitle: 'О диалоге',
+    },
+    portalName: 'ProvGroup',
+    supportLabel: 'Поддержка ProvGroup',
+    version: 3,
+  },
+  errorMessage: null,
+  status: 'ready',
+}
+
 describe('ChatInfoPage', () => {
+  it('uses public branding for the chat info page title and fallback logo', () => {
+    render(
+      <BrandingContext.Provider value={brandingContextValue}>
+        <ChatInfoPage
+          info={{
+            ...privateInfo,
+            activeThread: {
+              ...privateInfo.activeThread,
+              avatarUrl: null,
+            },
+          }}
+          isLoading={false}
+          isSupportAvailabilityLoading={false}
+          onBack={vi.fn()}
+          onRetry={vi.fn()}
+          supportAvailability={null}
+        />
+      </BrandingContext.Provider>,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'О диалоге' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/branding/assets/11?v=11',
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Информация о чате' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('renders private chat details without participants', () => {
     render(
       <ChatInfoPage
@@ -156,9 +227,7 @@ describe('ChatInfoPage', () => {
       'src',
       '/api/chat/threads/group%3A154/participants/7/avatar',
     )
-    expect(
-      screen.getByRole('img', { name: 'Мария Соколова' }),
-    ).toHaveAttribute(
+    expect(screen.getByRole('img', { name: 'Мария Соколова' })).toHaveAttribute(
       'src',
       '/api/chat/threads/group%3A154/participants/8/avatar',
     )

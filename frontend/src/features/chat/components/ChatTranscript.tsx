@@ -24,6 +24,7 @@ import {
 } from './chat-transcript/HistoryControls'
 import { MessageBubble } from './chat-transcript/MessageBubble'
 import { MessageContextMenu } from './chat-transcript/MessageContextMenu'
+import { EmptyTranscriptState } from './chat-transcript/EmptyTranscriptState'
 import {
   applyTranscriptScrollAction,
   cancelNextFrame,
@@ -33,6 +34,7 @@ import {
   getMessageBlockPosition,
   getMessageCopyText,
   requestNextFrame,
+  restoreFocusToElement,
   shouldRenderDateDivider,
   shouldRenderAuthorName,
   shouldUseDesktopMessageContextMenu,
@@ -46,6 +48,8 @@ import { useTranscriptMessageScroll } from './useTranscriptMessageScroll'
 
 type ChatTranscriptProps = {
   activeThreadType?: ChatThreadSummary['type'] | null
+  emptyBody?: string
+  emptyTitle?: string
   forceScrollToBottomSignal?: number
   historyFragmentControls?: HistoryFragmentControls | null
   hasMoreOlder: boolean
@@ -63,14 +67,10 @@ type ChatTranscriptProps = {
   scrollToMessageSignal?: number
 }
 
-function restoreFocusToElement(element: HTMLElement | null | undefined) {
-  if (element && document.contains(element)) {
-    element.focus({ preventScroll: true })
-  }
-}
-
 export function ChatTranscript({
   activeThreadType = null,
+  emptyBody,
+  emptyTitle,
   forceScrollToBottomSignal = 0,
   historyFragmentControls = null,
   hasMoreOlder,
@@ -430,10 +430,7 @@ export function ChatTranscript({
           )}
 
           {messages.length === 0 ? (
-            <div className="rounded-[1rem] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center text-[14px] leading-6 text-slate-500">
-              В этой переписке пока нет сообщений, доступных клиентскому
-              порталу.
-            </div>
+            <EmptyTranscriptState body={emptyBody} title={emptyTitle} />
           ) : null}
 
           {messages.map((message, index) => {

@@ -499,6 +499,10 @@ tenant-aware runtime.
 - `MT-9F` добавил защищенные admin controls для загрузки, замены и удаления
   logo, PWA icon and auth/chat image slots; admin preview использует только
   portal-owned asset URLs и не получает object-storage keys/checksums;
+- `MT-9G` применил public branding к реальным customer auth/chat/chat-info
+  surfaces: цвета, тексты, logo, auth/chat фоновые изображения и chat header
+  background идут через portal-owned runtime state; PWA manifest colors также
+  берутся из tenant branding settings;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

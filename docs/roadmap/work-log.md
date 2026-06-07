@@ -117,8 +117,13 @@ execution-plan детали здесь не хранятся.
   delete logo, PWA icon and configured auth/chat image slots, refreshes previews
   through portal-owned asset URLs and keeps settings saves isolated from asset
   operations.
+- `MT-9G` is closed: customer auth, chat, chat-info and empty chat runtime
+  surfaces consume public tenant branding colors, copy and portal-owned image
+  asset URLs, and tenant PWA manifest colors now follow saved branding settings
+  without exposing object-storage authority.
 
 ## Recommended Next Step
 
-- Start `MT-9G`: apply saved branding colors, copy and image assets to the real
-  customer auth, chat and chat-info runtime surfaces.
+- Start `MT-9H`: final branding QA/docs/deploy readiness, including browser,
+  PWA/cache manual checks, production runbook updates and final documentation
+  cleanup.

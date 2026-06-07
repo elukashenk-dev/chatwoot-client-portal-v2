@@ -253,7 +253,7 @@ describe('AppRoutes admin route separation', () => {
     renderRoute('/app/chat')
 
     expect(
-      await screen.findByRole('heading', { name: 'Центр поддержки' }),
+      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/admin/auth/me',
@@ -267,7 +267,7 @@ describe('AppRoutes admin route separation', () => {
     renderRoute('/auth/login')
 
     expect(
-      await screen.findByRole('heading', { name: 'Центр поддержки' }),
+      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/me',

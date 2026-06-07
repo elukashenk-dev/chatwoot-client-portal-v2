@@ -7,6 +7,10 @@ import {
   AuthSessionContext,
   type AuthSessionContextValue,
 } from '../../auth/lib/authSessionContext'
+import {
+  BrandingContext,
+  type BrandingContextValue,
+} from '../../branding/lib/brandingContext'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type {
@@ -54,6 +58,41 @@ const supportAvailability: ChatSupportAvailabilityResponse = {
   },
 }
 
+const brandingContextValue: BrandingContextValue = {
+  branding: {
+    assets: {
+      logo: {
+        assetVersion: '11',
+        contentType: 'image/png',
+        height: null,
+        id: 11,
+        kind: 'logo',
+        publicUrl: '/api/branding/assets/11?v=11',
+        width: null,
+      },
+    },
+    colors: {
+      accent: '#14b8a6',
+      authBackground: '#ecfeff',
+      chatBackground: '#f8fafc',
+      chatHeaderBackground: '#0f766e',
+      primary: '#134e4a',
+    },
+    copy: {
+      authSubtitle: 'Войдите в кабинет ProvGroup.',
+      authTitle: 'Кабинет ProvGroup',
+      chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
+      chatEmptyTitle: 'Начните диалог',
+      chatInfoTitle: 'О диалоге',
+    },
+    portalName: 'ProvGroup',
+    supportLabel: 'Поддержка ProvGroup',
+    version: 3,
+  },
+  errorMessage: null,
+  status: 'ready',
+}
+
 const authSession: AuthSessionContextValue = {
   errorMessage: null,
   localDeviceDataRemovalAvailable: false,
@@ -77,8 +116,10 @@ function CurrentPath() {
 }
 
 function renderHeader({
+  activeThread = privateThread,
   connectionStatus = 'online',
 }: {
+  activeThread?: ChatThreadListSummary
   connectionStatus?: 'connecting' | 'offline' | 'online'
 } = {}) {
   renderWithRouter(
@@ -96,20 +137,22 @@ function renderHeader({
       }}
     >
       <AuthSessionContext.Provider value={authSession}>
-        <ChatHeader
-          activeThread={privateThread}
-          connectionStatus={connectionStatus}
-          onOpenThreadInfo={vi.fn()}
-          onOpenThreadMedia={vi.fn()}
-          onOpenThreadNotifications={vi.fn()}
-          onOpenThreadSearch={vi.fn()}
-          onSelectThread={vi.fn()}
-          selectedThreadId={privateThread.id}
-          supportAvailability={supportAvailability}
-          threadNotificationSettings={notificationSettings}
-          threads={[privateThread]}
-        />
-        <CurrentPath />
+        <BrandingContext.Provider value={brandingContextValue}>
+          <ChatHeader
+            activeThread={activeThread}
+            connectionStatus={connectionStatus}
+            onOpenThreadInfo={vi.fn()}
+            onOpenThreadMedia={vi.fn()}
+            onOpenThreadNotifications={vi.fn()}
+            onOpenThreadSearch={vi.fn()}
+            onSelectThread={vi.fn()}
+            selectedThreadId={activeThread.id}
+            supportAvailability={supportAvailability}
+            threadNotificationSettings={notificationSettings}
+            threads={[activeThread]}
+          />
+          <CurrentPath />
+        </BrandingContext.Provider>
       </AuthSessionContext.Provider>
     </TenantIdentityContext.Provider>,
     { initialEntries: ['/app/chat'] },
@@ -124,6 +167,22 @@ describe('ChatHeader', () => {
       'src',
       '/api/tenant/icons/icon-192.png',
     )
+  })
+
+  it('uses public branding as header fallback when the thread has no avatar or subtitle', () => {
+    renderHeader({
+      activeThread: {
+        ...privateThread,
+        avatarUrl: null,
+        subtitle: '',
+      },
+    })
+
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/branding/assets/11?v=11',
+    )
+    expect(screen.getByText('Поддержка ProvGroup')).toBeInTheDocument()
   })
 
   it('prioritizes offline connection status over the support subtitle on mobile', () => {

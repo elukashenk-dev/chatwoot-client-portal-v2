@@ -3,14 +3,17 @@ import { Link } from 'react-router-dom'
 import { routePaths } from '../../../app/routePaths'
 import { PhoneIcon } from '../../../shared/ui/icons'
 import { authSecondaryLinkClassName } from '../../../shared/ui/inputStyles'
+import { useBranding } from '../../branding/lib/useBranding'
 import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { LoginForm } from '../components/LoginForm'
 
 export function LoginPage() {
+  const { branding } = useBranding()
+
   return (
     <TenantAuthShell
-      description="Войдите, чтобы продолжить общение с поддержкой."
-      title="Центр поддержки"
+      description={branding.copy.authSubtitle}
+      title={branding.copy.authTitle}
     >
       <LoginForm />
 

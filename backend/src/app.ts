@@ -79,6 +79,7 @@ import {
   registerTenantRoutes,
 } from './modules/tenants/routes.js'
 import { createTenantsService } from './modules/tenants/service.js'
+import { createTenantPwaBrandingReader } from './modules/tenants/pwaBrandingReader.js'
 import { createTenantPwaIconReader } from './modules/tenants/pwaIconReader.js'
 
 type BuildAppOptions = {
@@ -418,6 +419,9 @@ export function buildApp({
     windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
   })
   registerTenantRoutes(app, {
+    pwaBrandingReader: createTenantPwaBrandingReader({
+      db: database.db,
+    }),
     pwaIconReader: createTenantPwaIconReader({
       createBrandingAssetService: createBrandingAssetServiceForRequest,
       db: database.db,

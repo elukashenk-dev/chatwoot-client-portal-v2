@@ -8,6 +8,7 @@ export type AuthBrandPlacement = 'center' | 'left' | 'right'
 
 export type AuthShellProps = {
   brandPlacement?: AuthBrandPlacement
+  brandLogoUrl?: string | null
   brandMonogram?: string
   brandName?: string
   children: ReactNode
@@ -31,6 +32,7 @@ function imageBackgroundStyle(
 
 export function AuthShell({
   brandPlacement = 'left',
+  brandLogoUrl,
   brandMonogram,
   brandName,
   children,
@@ -40,7 +42,7 @@ export function AuthShell({
   title,
 }: AuthShellProps) {
   return (
-    <section className="relative flex min-h-full w-full flex-col bg-white">
+    <section className="auth-shell-background relative flex min-h-full w-full flex-col bg-white">
       <div
         aria-hidden="true"
         className={cn(
@@ -70,6 +72,7 @@ export function AuthShell({
             'auth-brand-mark absolute',
             brandPlacementClassMap[brandPlacement],
           )}
+          logoUrl={brandLogoUrl}
           monogram={brandMonogram}
           name={brandName}
         />

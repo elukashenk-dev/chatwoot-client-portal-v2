@@ -1,6 +1,7 @@
 import { ChatFullScreenPanel } from './ChatFullScreenPanel'
 import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
+import { useBranding } from '../../branding/lib/useBranding'
 import {
   getSupportAvailabilityPresentation,
   groupWorkingHoursRows,
@@ -158,8 +159,11 @@ export function ChatInfoPage({
   onRetry,
   supportAvailability,
 }: ChatInfoPageProps) {
+  const { branding } = useBranding()
   const { tenant } = useTenantIdentity()
-  const monogram = tenant ? createTenantMonogram(tenant.displayName) : 'ЛК'
+  const monogram = createTenantMonogram(
+    branding.portalName || tenant?.displayName || 'ЛК',
+  )
   const startedAt = formatDateTime(info?.startedAt ?? null)
   const lastActivityAt = formatDateTime(info?.lastActivityAt ?? null)
   const isUnavailable = !info || info.result !== 'ready'
@@ -172,7 +176,7 @@ export function ChatInfoPage({
       loadingMessage="Загружаем информацию о чате."
       onBack={onBack}
       onRetry={onRetry}
-      title="Информация о чате"
+      title={branding.copy.chatInfoTitle}
       unavailableMessage="Не удалось загрузить информацию о чате."
     >
       {info ? (
@@ -180,7 +184,9 @@ export function ChatInfoPage({
           <div className="flex flex-col items-center text-center">
             <ChatAvatar
               alt={threadTitle}
-              avatarUrl={info.activeThread?.avatarUrl}
+              avatarUrl={
+                info.activeThread?.avatarUrl ?? branding.assets.logo?.publicUrl
+              }
               className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-brand-900 text-base font-semibold text-white"
               title={threadTitle}
             >

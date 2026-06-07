@@ -17,6 +17,7 @@ import {
   readChatThreadIdFromSearch,
 } from '../lib/chatThreadRoute'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
+import { useBranding } from '../../branding/lib/useBranding'
 import { readStartupChatFallback } from '../../offline/startupCache'
 import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
@@ -55,6 +56,7 @@ export function ChatPage() {
   const isMountedRef = useRef(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const { branding } = useBranding()
   const { tenant } = useTenantIdentity()
   const { refreshSession, sessionSource, user } = useAuthSession()
   const tenantSlug = tenant?.slug ?? null
@@ -453,6 +455,8 @@ export function ChatPage() {
         {shouldRenderTranscript ? (
           <ChatTranscript
             activeThreadType={snapshot?.activeThread?.type ?? null}
+            emptyBody={branding.copy.chatEmptyBody}
+            emptyTitle={branding.copy.chatEmptyTitle}
             forceScrollToBottomSignal={forceScrollToBottomSignal}
             hasMoreOlder={
               historyFragment ? false : (snapshot?.hasMoreOlder ?? false)
