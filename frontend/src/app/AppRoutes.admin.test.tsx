@@ -38,6 +38,31 @@ function createAdminSessionResponse() {
   })
 }
 
+function createAdminBrandingResponse() {
+  return createJsonResponse({
+    branding: {
+      assets: {},
+      colors: {
+        accent: '#4676b4',
+        authBackground: '#f3f7fc',
+        chatBackground: '#ffffff',
+        chatHeaderBackground: '#112540',
+        primary: '#112540',
+      },
+      copy: {
+        authSubtitle: 'Введите email и пароль, чтобы продолжить.',
+        authTitle: 'Вход в личный кабинет',
+        chatEmptyBody: 'Напишите нам, когда будет удобно.',
+        chatEmptyTitle: 'Мы на связи',
+        chatInfoTitle: 'Информация о чате',
+      },
+      portalName: 'Бухфирма',
+      supportLabel: 'Команда Бухфирма',
+      version: 1,
+    },
+  })
+}
+
 function createCustomerUnauthorizedResponse() {
   return createJsonResponse(
     {
@@ -84,20 +109,44 @@ describe('AppRoutes admin route separation', () => {
   })
 
   it('renders branding for an authenticated admin session', async () => {
-    fetchMock.mockResolvedValueOnce(createAdminSessionResponse())
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminSessionResponse()
+      }
+
+      if (url === '/api/admin/branding') {
+        return createAdminBrandingResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
 
     renderRoute('/admin/branding')
 
     expect(
       await screen.findByRole('heading', { name: 'Брендинг' }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Фоны и изображения' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByLabelText('Название портала')).toHaveValue(
+      'Бухфирма',
+    )
   })
 
   it('redirects authenticated admin login visits to branding', async () => {
-    fetchMock.mockResolvedValueOnce(createAdminSessionResponse())
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminSessionResponse()
+      }
+
+      if (url === '/api/admin/branding') {
+        return createAdminBrandingResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
 
     renderRoute('/admin/login')
 
@@ -162,6 +211,10 @@ describe('AppRoutes admin route separation', () => {
 
       if (url === '/api/admin/auth/me') {
         return createAdminSessionResponse()
+      }
+
+      if (url === '/api/admin/branding') {
+        return createAdminBrandingResponse()
       }
 
       if (url === '/api/auth/me') {

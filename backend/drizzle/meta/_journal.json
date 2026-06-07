@@ -71,6 +71,13 @@
       "when": 1780756006786,
       "tag": "0009_robust_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780827891781,
+      "tag": "0010_branding_settings_foundation",
+      "breakpoints": true
     }
   ]
 }

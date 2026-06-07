@@ -1,13 +1,47 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AdminBrandingResponse } from '../../admin-branding/api/adminBrandingClient'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import {
   AdminSessionContext,
   type AdminSessionContextValue,
 } from '../../admin-auth/lib/adminSessionContext'
 import { AdminBrandingPage } from './AdminBrandingPage'
+
+const { getAdminBrandingMock, updateAdminBrandingMock } = vi.hoisted(() => ({
+  getAdminBrandingMock: vi.fn(),
+  updateAdminBrandingMock: vi.fn(),
+}))
+
+vi.mock('../../admin-branding/api/adminBrandingClient', () => ({
+  getAdminBranding: getAdminBrandingMock,
+  updateAdminBranding: updateAdminBrandingMock,
+}))
+
+const savedBrandingResponse = {
+  branding: {
+    assets: {},
+    colors: {
+      accent: '#4676b4',
+      authBackground: '#f3f7fc',
+      chatBackground: '#ffffff',
+      chatHeaderBackground: '#112540',
+      primary: '#112540',
+    },
+    copy: {
+      authSubtitle: 'Введите email и пароль, чтобы продолжить.',
+      authTitle: 'Вход в личный кабинет',
+      chatEmptyBody: 'Напишите нам, когда будет удобно.',
+      chatEmptyTitle: 'Мы на связи',
+      chatInfoTitle: 'Информация о чате',
+    },
+    portalName: 'Бухфирма',
+    supportLabel: 'Команда Бухфирма',
+    version: 1,
+  },
+} satisfies AdminBrandingResponse
 
 function renderAdminBrandingPage(
   overrides: Partial<AdminSessionContextValue> = {},
@@ -37,83 +71,83 @@ function renderAdminBrandingPage(
 }
 
 describe('AdminBrandingPage', () => {
-  it('renders read-only branding console groups and preview shell', () => {
+  beforeEach(() => {
+    getAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
+    updateAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
+  })
+
+  it('loads and renders saved branding settings', async () => {
     renderAdminBrandingPage()
 
     expect(
-      screen.getByRole('heading', { name: 'Брендинг' }),
+      screen.getByText('Загружаем настройки брендинга'),
     ).toBeInTheDocument()
+
+    expect(await screen.findByDisplayValue('Бухфирма')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Команда Бухфирма')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Основное' }),
+      screen.getAllByRole('heading', { name: 'Бухфирма' })[0],
     ).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Цвета' })).toBeInTheDocument()
+    expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('updates preview while editing portal name', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Портал Бухфирма')
+
     expect(
-      screen.getByRole('heading', { name: 'Фоны и изображения' }),
+      screen.getByRole('heading', { name: 'Портал Бухфирма' }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Фоны и изображения' }),
-    ).toHaveAttribute('href', '#backgrounds')
-    expect(
-      screen
-        .getByRole('heading', { name: 'Фоны и изображения' })
-        .closest('section'),
-    ).toHaveAttribute('id', 'backgrounds')
-    expect(screen.getByRole('heading', { name: 'Тексты' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Чат' })).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', { name: 'Страницы портала' }),
-    ).toBeInTheDocument()
-    expect(screen.getAllByText('только просмотр')).toHaveLength(6)
-    expect(screen.getByText('Предпросмотр')).toBeInTheDocument()
+  })
+
+  it('saves controlled branding settings', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Новый портал')
+    await user.click(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    )
+
+    await waitFor(() => {
+      expect(updateAdminBrandingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          portalName: 'Новый портал',
+        }),
+      )
+    })
+  })
+
+  it('shows API errors in Russian', async () => {
+    getAdminBrandingMock.mockRejectedValueOnce(
+      new Error('Админ вход сейчас недоступен. Попробуйте позже.'),
+    )
+
+    renderAdminBrandingPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Админ вход сейчас недоступен. Попробуйте позже.',
+    )
+  })
+
+  it('keeps mobile blocker and logout behavior', async () => {
+    const user = userEvent.setup()
+    const adminSession = renderAdminBrandingPage()
+
     expect(
       screen.getByText('Админ-консоль доступна с широкого экрана'),
     ).toBeInTheDocument()
-  })
-
-  it('keeps future branding controls disabled', () => {
-    renderAdminBrandingPage()
-
-    for (const controlName of [
-      'Название портала',
-      'Загрузить логотип',
-      'Основной цвет',
-      'Фон auth-экранов',
-      'Фон чата',
-      'Label поддержки',
-      'Страница информации о чате',
-    ]) {
-      expect(screen.getByRole('button', { name: controlName })).toBeDisabled()
-    }
-  })
-
-  it('calls admin sign out from the shell', async () => {
-    const user = userEvent.setup()
-    const adminSession = renderAdminBrandingPage()
 
     await user.click(screen.getAllByRole('button', { name: 'Выйти' })[0])
 
     expect(adminSession.signOut).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows logout errors without leaving the page', async () => {
-    const user = userEvent.setup()
-
-    renderAdminBrandingPage({
-      signOut: vi.fn().mockRejectedValue(new Error('Не удалось выйти.')),
-    })
-
-    await user.click(screen.getAllByRole('button', { name: 'Выйти' })[0])
-
-    const alerts = await screen.findAllByRole('alert')
-    expect(alerts[0]).toHaveTextContent('Не удалось выйти.')
-    expect(alerts[1]).toHaveTextContent('Не удалось выйти.')
-    expect(
-      screen.getByRole('heading', { name: 'Брендинг' }),
-    ).toBeInTheDocument()
-    for (const logoutButton of screen.getAllByRole('button', {
-      name: 'Выйти',
-    })) {
-      expect(logoutButton).toBeEnabled()
-    }
   })
 })

@@ -104,9 +104,12 @@ execution-plan детали здесь не хранятся.
 - `MT-9C` is closed: React admin login/session UI uses the separate admin
   auth boundary, `/admin/branding` is a protected read-only console shell, and
   browser admin runtime stores no Chatwoot tokens or offline admin session data.
+- `MT-9D` is closed: tenant-owned branding settings persistence,
+  public/admin branding APIs, tenant admin audit events and first admin UI data
+  wiring are implemented without binary asset upload or browser object keys.
 
 ## Recommended Next Step
 
-- Start the next `MT-9` branding settings foundation: tenant-owned settings
-  persistence/API contracts, asset metadata/object storage shape, audit events
-  and real-component preview boundaries.
+- Start the next `MT-9` branding asset upload/object-storage slice:
+  MinIO/S3-compatible storage client, upload/replace/delete routes,
+  tenant-scoped asset reads and PWA icon integration.

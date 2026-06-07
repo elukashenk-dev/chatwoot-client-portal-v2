@@ -37,7 +37,7 @@ Tenant владеет:
 - своей Chatwoot-связкой: `chatwoot_base_url`, `chatwoot_account_id`, `chatwoot_portal_inbox_id`;
 - своими encrypted Chatwoot runtime secrets;
 - своим webhook secret;
-- будущими branding и tenant-admin настройками.
+- tenant-admin auth/audit и branding settings.
 
 Текущий пользовательский контур:
 
@@ -366,6 +366,12 @@ API `v2` остается простым и явным:
 - `/api/auth/password-reset/set-password`;
 - `/api/profile`;
 - `/api/profile/avatar`;
+- `/api/branding`;
+- `/api/admin/auth/request`;
+- `/api/admin/auth/verify`;
+- `/api/admin/auth/me`;
+- `/api/admin/auth/logout`;
+- `/api/admin/branding`;
 - `/api/chat/threads`;
 - `/api/chat/threads/:threadId/info`;
 - `/api/chat/messages`;
@@ -421,6 +427,7 @@ chatwoot-client-portal-v2/
 - `registration` - eligibility, verification request/confirm and password setup completion;
 - `password-reset` - reset request, verification and password update;
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
+- `branding` - tenant-scoped public/admin branding settings read model and admin update boundary;
 - `portal-users` - portal user persistence helpers;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send, attachment proxy, media, search and send ledger;
@@ -431,6 +438,7 @@ chatwoot-client-portal-v2/
 - `chat-realtime` - SSE admission, stream lifecycle and backend fanout;
 - `chatwoot-webhooks` - signed webhook validation, delivery bookkeeping and scoped fanout;
 - `maintenance` - portal-only retention cleanup for service traces;
+- `tenant-admin` - separate admin login/session/audit boundary for tenant-owned admin flows;
 - `integrations/chatwoot` - Chatwoot API client;
 - `integrations/email` - email delivery adapter.
 
@@ -439,7 +447,8 @@ chatwoot-client-portal-v2/
 - `tenant` - public tenant context and tenant identity metadata;
 - `auth` - registration, password reset, login/logout/me UI;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
-- `admin-shell` - protected read-only admin console shell for future branding;
+- `admin-branding` - admin branding API client, draft state, settings form and live preview components;
+- `admin-shell` - protected admin console shell and `/admin/branding` page wiring;
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
 - `profile` - protected read-only profile page and avatar upload flow;
 - `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
@@ -467,8 +476,11 @@ tenant-aware runtime.
 - `MT-9B` добавил backend-only tenant admin auth foundation: login challenges,
   email code verification, отдельный signed admin session cookie, logout и
   tenant-scoped audit events;
-- `MT-9C` добавил отдельный React admin login/session UI, защищенный read-only
+- `MT-9C` добавил отдельный React admin login/session UI, защищенный
   `/admin/branding` shell и разделение customer/admin route-session boundaries;
+- `MT-9D` добавил tenant-owned branding settings persistence, public/admin
+  branding APIs, admin audit events and first admin UI data wiring without
+  binary asset upload;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

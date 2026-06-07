@@ -15,6 +15,9 @@ import { registerApiErrorHandler } from './lib/errors.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
+import { createBrandingRepository } from './modules/branding/repository.js'
+import { registerBrandingRoutes } from './modules/branding/routes.js'
+import { createBrandingService } from './modules/branding/service.js'
 import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
@@ -60,6 +63,7 @@ import { createRegistrationRepository } from './modules/registration/repository.
 import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
 import { createTenantAdminAuthRepository } from './modules/tenant-admin/adminAuthRepository.js'
+import { createTenantAdminAuditLogger } from './modules/tenant-admin/adminAuthAudit.js'
 import { registerTenantAdminAuthRoutes } from './modules/tenant-admin/adminAuthRoutes.js'
 import { createTenantAdminAuthService } from './modules/tenant-admin/adminAuthService.js'
 import { createTenantAdminVerificationService } from './modules/tenant-admin/adminVerification.js'
@@ -349,6 +353,20 @@ export function buildApp({
       ...(now ? { now } : {}),
     })
   }
+  const createBrandingServiceForRequest = (request: FastifyRequest) => {
+    const tenant = requireTenantContext(request)
+    const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
+      tenantId: tenant.id,
+    })
+
+    return createBrandingService({
+      audit: createTenantAdminAuditLogger(adminAuthRepository),
+      repository: createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      }),
+      tenant,
+    })
+  }
   const createChatwootWebhookServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -391,6 +409,11 @@ export function buildApp({
     createPasswordResetService: createPasswordResetServiceForRequest,
   })
   registerTenantAdminAuthRoutes(app, {
+    createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
+    env,
+  })
+  registerBrandingRoutes(app, {
+    createBrandingService: createBrandingServiceForRequest,
     createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
     env,
   })

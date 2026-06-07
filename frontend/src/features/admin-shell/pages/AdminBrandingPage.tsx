@@ -1,53 +1,84 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
+import { AdminBrandingForm } from '../../admin-branding/components/AdminBrandingForm'
+import { BrandingPreviewPane } from '../../admin-branding/components/BrandingPreviewPane'
+import {
+  getAdminBranding,
+  updateAdminBranding,
+} from '../../admin-branding/api/adminBrandingClient'
+import {
+  createBrandingDraft,
+  createBrandingPatch,
+  type BrandingDraft,
+} from '../../admin-branding/lib/brandingState'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { LogOutIcon } from '../../../shared/ui/icons'
 import { useAdminSession } from '../../admin-auth/lib/adminSessionContext'
 
-const brandingGroups = [
+const brandingSections = [
   {
-    controls: ['Название портала', 'Загрузить логотип'],
-    description: 'Название портала, логотип и PWA identity.',
     id: 'main',
     title: 'Основное',
   },
   {
-    controls: ['Основной цвет'],
-    description: 'Основной цвет, кнопки, focus states и исходящие сообщения.',
     id: 'colors',
     title: 'Цвета',
   },
   {
-    controls: ['Фон auth-экранов', 'Фон чата'],
-    description: 'Auth-фоны, фон чата, фон шапки чата и controlled overlays.',
-    id: 'backgrounds',
-    title: 'Фоны и изображения',
-  },
-  {
-    controls: ['Label поддержки'],
-    description: 'Auth заголовки, help/welcome copy и label поддержки.',
-    id: 'texts',
-    title: 'Тексты',
-  },
-  {
-    controls: ['Пустое состояние чата'],
-    description:
-      'Шапка, пустое состояние, недоступность и читаемость сообщений.',
-    id: 'chat',
-    title: 'Чат',
-  },
-  {
-    controls: ['Страница информации о чате'],
-    description: 'Информация о чате, профиль, настройки и уведомления.',
-    id: 'portal-pages',
-    title: 'Страницы портала',
+    id: 'auth',
+    title: 'Auth-экран',
   },
 ]
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : 'Не удалось загрузить настройки брендинга.'
+}
+
 export function AdminBrandingPage() {
   const { admin, signOut } = useAdminSession()
+  const [draft, setDraft] = useState<BrandingDraft | null>(null)
+  const [brandingError, setBrandingError] = useState<string | null>(null)
+  const [brandingStatus, setBrandingStatus] = useState<
+    'error' | 'idle' | 'loading' | 'saving'
+  >('loading')
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const isSaving = brandingStatus === 'saving'
+
+  useEffect(() => {
+    let isCurrent = true
+
+    async function loadBranding() {
+      setBrandingStatus('loading')
+      setBrandingError(null)
+
+      try {
+        const response = await getAdminBranding()
+
+        if (!isCurrent) {
+          return
+        }
+
+        setDraft(createBrandingDraft(response))
+        setBrandingStatus('idle')
+      } catch (error) {
+        if (!isCurrent) {
+          return
+        }
+
+        setBrandingError(getErrorMessage(error))
+        setBrandingStatus('error')
+      }
+    }
+
+    void loadBranding()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [])
 
   async function handleLogout() {
     setLogoutError(null)
@@ -61,6 +92,25 @@ export function AdminBrandingPage() {
       )
     } finally {
       setIsSigningOut(false)
+    }
+  }
+
+  async function handleSave() {
+    if (!draft) {
+      return
+    }
+
+    setBrandingStatus('saving')
+    setBrandingError(null)
+
+    try {
+      const response = await updateAdminBranding(createBrandingPatch(draft))
+
+      setDraft(createBrandingDraft(response))
+      setBrandingStatus('idle')
+    } catch (error) {
+      setBrandingError(getErrorMessage(error))
+      setBrandingStatus('error')
     }
   }
 
@@ -105,13 +155,13 @@ export function AdminBrandingPage() {
           </div>
 
           <nav aria-label="Разделы админки" className="mt-8 space-y-2">
-            {brandingGroups.map((group) => (
+            {brandingSections.map((section) => (
               <a
                 className="block rounded-[0.6rem] px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
-                href={`#${group.id}`}
-                key={group.title}
+                href={`#${section.id}`}
+                key={section.title}
               >
-                {group.title}
+                {section.title}
               </a>
             ))}
           </nav>
@@ -135,72 +185,41 @@ export function AdminBrandingPage() {
         <section className="overflow-y-auto px-6 py-6">
           <div className="mx-auto max-w-4xl">
             <div className="mb-5">
-              <p className="text-sm font-medium text-slate-500">
-                Будущие настройки
-              </p>
               <h2 className="mt-1 text-3xl font-semibold tracking-normal">
                 Настройки брендинга
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Первый проход показывает структуру будущих настроек. Сохранение,
-                загрузка assets и preview реальных компонентов будут в следующем
-                branding slice.
+                Цвета и тексты применяются к текущему tenant после сохранения.
               </p>
             </div>
 
-            <div className="grid gap-3">
-              {brandingGroups.map((group) => (
-                <section
-                  className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
-                  id={group.id}
-                  key={group.title}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-semibold">{group.title}</h3>
-                      <p className="mt-1 text-sm leading-6 text-slate-500">
-                        {group.description}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-                      только просмотр
-                    </span>
-                  </div>
+            <InlineAlert message={brandingError} tone="error" />
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {group.controls.map((controlName) => (
-                      <button
-                        className="rounded-[0.6rem] border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-medium text-slate-400"
-                        disabled
-                        key={controlName}
-                        type="button"
-                      >
-                        {controlName}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
+            {brandingStatus === 'loading' ? (
+              <div className="rounded-[0.6rem] border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
+                Загружаем настройки брендинга
+              </div>
+            ) : draft ? (
+              <AdminBrandingForm
+                draft={draft}
+                isSaving={isSaving}
+                onChange={setDraft}
+                onSubmit={() => {
+                  void handleSave()
+                }}
+              />
+            ) : null}
           </div>
         </section>
 
         <aside className="border-l border-slate-200 bg-white px-5 py-6">
-          <p className="text-xs font-semibold uppercase tracking-normal text-brand-700">
-            Предпросмотр
-          </p>
-          <h2 className="mt-2 text-xl font-semibold">Копия портала</h2>
-          <div className="mt-5 rounded-[0.6rem] border border-slate-200 bg-slate-50 p-4">
-            <div className="rounded-[0.6rem] bg-white p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">
-                Центр поддержки
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Здесь появится предпросмотр реальных экранов портала: auth, чат,
-                шапка чата и страницы вроде информации о чате.
-              </p>
+          {draft ? (
+            <BrandingPreviewPane draft={draft} />
+          ) : (
+            <div className="rounded-[0.6rem] border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              Предпросмотр появится после загрузки настроек.
             </div>
-          </div>
+          )}
         </aside>
       </section>
     </main>

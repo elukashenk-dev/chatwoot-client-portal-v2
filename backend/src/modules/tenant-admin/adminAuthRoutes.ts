@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
-import { ApiError } from '../../lib/errors.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { TenantAdminAuthService } from './adminAuthService.js'
@@ -11,6 +10,7 @@ import {
   getAdminSessionCookieOptions,
   getAdminSessionToken,
 } from './adminSessionCookie.js'
+import { requireTenantAdminSession } from './adminSessionGuard.js'
 
 const requestAdminLoginBodySchema = z.object({
   email: z
@@ -69,14 +69,6 @@ function formatAdminSessionResponse(
   }
 }
 
-function createAdminUnauthorizedError() {
-  return new ApiError(
-    401,
-    'TENANT_ADMIN_UNAUTHORIZED',
-    'Требуется вход администратора.',
-  )
-}
-
 export function registerTenantAdminAuthRoutes(
   app: FastifyInstance,
   { createTenantAdminAuthService, env }: RegisterTenantAdminAuthRoutesOptions,
@@ -121,22 +113,14 @@ export function registerTenantAdminAuthRoutes(
   })
 
   app.get('/api/admin/auth/me', async (request, reply) => {
-    const sessionToken = getAdminSessionToken(request, env)
-    const service = createTenantAdminAuthService(request)
-
-    if (!sessionToken) {
-      clearAdminSessionCookie(reply, env)
-      throw createAdminUnauthorizedError()
-    }
-
     const session = formatAdminSessionResponse(
-      await service.getCurrentAdminSession({ sessionToken }),
+      await requireTenantAdminSession({
+        createTenantAdminAuthService,
+        env,
+        reply,
+        request,
+      }),
     )
-
-    if (!session) {
-      clearAdminSessionCookie(reply, env)
-      throw createAdminUnauthorizedError()
-    }
 
     return session
   })

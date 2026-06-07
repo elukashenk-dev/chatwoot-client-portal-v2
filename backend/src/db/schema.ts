@@ -261,8 +261,8 @@ export const portalChatMessageSends = pgTable(
   ],
 )
 
+export * from './brandingSchema.js'
 export * from './notificationSchema.js'
-
 export const portalRateLimitBuckets = pgTable(
   'portal_rate_limit_buckets',
   {
