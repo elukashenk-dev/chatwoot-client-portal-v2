@@ -51,6 +51,29 @@ export type CreateBrandingAssetMetadataInput = {
   width?: number | null
 }
 
+type BrandingAssetReferenceField =
+  | 'authBackgroundImageAssetId'
+  | 'authFooterImageAssetId'
+  | 'authHeaderImageAssetId'
+  | 'chatBackgroundImageAssetId'
+  | 'chatHeaderBackgroundImageAssetId'
+  | 'logoAssetId'
+
+const brandingAssetReferenceSlots: ReadonlyArray<{
+  field: BrandingAssetReferenceField
+  kind: BrandingAssetKind
+}> = [
+  { field: 'logoAssetId', kind: 'logo' },
+  { field: 'authHeaderImageAssetId', kind: 'auth_header_image' },
+  { field: 'authFooterImageAssetId', kind: 'auth_footer_image' },
+  { field: 'authBackgroundImageAssetId', kind: 'auth_background_image' },
+  { field: 'chatBackgroundImageAssetId', kind: 'chat_background_image' },
+  {
+    field: 'chatHeaderBackgroundImageAssetId',
+    kind: 'chat_header_background_image',
+  },
+]
+
 const settingsSelection = {
   accentColor: portalBrandingSettings.accentColor,
   authBackgroundColor: portalBrandingSettings.authBackgroundColor,
@@ -150,6 +173,55 @@ function collectActiveAssetIds(settings: BrandingSettingsRow) {
   })
 }
 
+async function validateAssetReferenceSlots({
+  db,
+  input,
+  tenantId,
+}: {
+  db: AppDatabase
+  input: ReturnType<typeof normalizeSettingsPatch>
+  tenantId: number
+}) {
+  const requestedReferences = brandingAssetReferenceSlots.flatMap((slot) => {
+    const assetId = input[slot.field]
+
+    if (typeof assetId !== 'number') {
+      return []
+    }
+
+    return [{ ...slot, assetId }]
+  })
+
+  if (requestedReferences.length === 0) {
+    return
+  }
+
+  const assets = await db
+    .select({
+      id: portalBrandingAssets.id,
+      kind: portalBrandingAssets.kind,
+    })
+    .from(portalBrandingAssets)
+    .where(
+      and(
+        eq(portalBrandingAssets.tenantId, tenantId),
+        inArray(
+          portalBrandingAssets.id,
+          requestedReferences.map(({ assetId }) => assetId),
+        ),
+      ),
+    )
+  const kindByAssetId = new Map(
+    assets.map((asset) => [asset.id, asset.kind as BrandingAssetKind]),
+  )
+
+  for (const { assetId, kind } of requestedReferences) {
+    if (kindByAssetId.get(assetId) !== kind) {
+      throw new Error('Branding asset reference is not available.')
+    }
+  }
+}
+
 export function createBrandingRepository(
   db: AppDatabase,
   { tenantId }: BrandingRepositoryScope,
@@ -200,7 +272,6 @@ export function createBrandingRepository(
           height: portalBrandingAssets.height,
           id: portalBrandingAssets.id,
           kind: portalBrandingAssets.kind,
-          originalFilename: portalBrandingAssets.originalFilename,
           width: portalBrandingAssets.width,
         })
         .from(portalBrandingAssets)
@@ -227,7 +298,6 @@ export function createBrandingRepository(
           height: asset.height,
           id: asset.id,
           kind,
-          originalFilename: asset.originalFilename,
           publicUrl: createPublicBrandingAssetUrl({
             contentHash: asset.contentHash,
             id: asset.id,
@@ -251,6 +321,17 @@ export function createBrandingRepository(
 
     async upsertSettings(input: BrandingSettingsPatch) {
       const normalizedInput = normalizeSettingsPatch(input)
+
+      if (Object.keys(normalizedInput).length === 0) {
+        throw new Error('Branding settings patch is empty.')
+      }
+
+      await validateAssetReferenceSlots({
+        db,
+        input: normalizedInput,
+        tenantId,
+      })
+
       const now = new Date()
       const [settings] = await db
         .insert(portalBrandingSettings)

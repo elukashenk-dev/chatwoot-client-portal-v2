@@ -11,18 +11,20 @@ type AdminBrandingFormProps = {
 }
 
 type TextFieldProps = {
+  disabled: boolean
   label: string
   name: string
   onChange: (value: string) => void
   value: string
 }
 
-function TextField({ label, name, onChange, value }: TextFieldProps) {
+function TextField({ disabled, label, name, onChange, value }: TextFieldProps) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
-        className="mt-2 block h-11 w-full rounded-[0.55rem] border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm transition focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
+        className="mt-2 block h-11 w-full rounded-[0.55rem] border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm transition focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+        disabled={disabled}
         name={name}
         onChange={(event) => {
           onChange(event.target.value)
@@ -34,7 +36,13 @@ function TextField({ label, name, onChange, value }: TextFieldProps) {
   )
 }
 
-function ColorField({ label, name, onChange, value }: TextFieldProps) {
+function ColorField({
+  disabled,
+  label,
+  name,
+  onChange,
+  value,
+}: TextFieldProps) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
@@ -45,7 +53,8 @@ function ColorField({ label, name, onChange, value }: TextFieldProps) {
           style={{ backgroundColor: value }}
         />
         <input
-          className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm text-slate-950 outline-none"
+          className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm text-slate-950 outline-none disabled:cursor-not-allowed disabled:text-slate-400"
+          disabled={disabled}
           name={name}
           onChange={(event) => {
             onChange(event.target.value)
@@ -91,7 +100,10 @@ export function AdminBrandingForm({
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
-      <section className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <section
+        className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
+        id="main"
+      >
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Основное</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -100,6 +112,7 @@ export function AdminBrandingForm({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <TextField
+            disabled={isSaving}
             label="Название портала"
             name="portalName"
             onChange={(value) => {
@@ -108,7 +121,8 @@ export function AdminBrandingForm({
             value={draft.portalName}
           />
           <TextField
-            label="Label поддержки"
+            disabled={isSaving}
+            label="Подпись поддержки"
             name="supportLabel"
             onChange={(value) => {
               onChange({ ...draft, supportLabel: value })
@@ -118,7 +132,10 @@ export function AdminBrandingForm({
         </div>
       </section>
 
-      <section className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <section
+        className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
+        id="colors"
+      >
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Цвета</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -127,6 +144,7 @@ export function AdminBrandingForm({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <ColorField
+            disabled={isSaving}
             label="Основной цвет"
             name="colors.primary"
             onChange={(value) => {
@@ -135,6 +153,7 @@ export function AdminBrandingForm({
             value={draft.colors.primary}
           />
           <ColorField
+            disabled={isSaving}
             label="Цвет auth-фона"
             name="colors.authBackground"
             onChange={(value) => {
@@ -143,6 +162,7 @@ export function AdminBrandingForm({
             value={draft.colors.authBackground}
           />
           <ColorField
+            disabled={isSaving}
             label="Фон чата"
             name="colors.chatBackground"
             onChange={(value) => {
@@ -151,6 +171,7 @@ export function AdminBrandingForm({
             value={draft.colors.chatBackground}
           />
           <ColorField
+            disabled={isSaving}
             label="Фон шапки чата"
             name="colors.chatHeaderBackground"
             onChange={(value) => {
@@ -161,7 +182,10 @@ export function AdminBrandingForm({
         </div>
       </section>
 
-      <section className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <section
+        className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
+        id="auth"
+      >
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Auth-экран</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -170,6 +194,7 @@ export function AdminBrandingForm({
         </div>
         <div className="grid gap-4">
           <TextField
+            disabled={isSaving}
             label="Заголовок входа"
             name="copy.authTitle"
             onChange={(value) => {
@@ -178,6 +203,7 @@ export function AdminBrandingForm({
             value={draft.copy.authTitle}
           />
           <TextField
+            disabled={isSaving}
             label="Подзаголовок входа"
             name="copy.authSubtitle"
             onChange={(value) => {

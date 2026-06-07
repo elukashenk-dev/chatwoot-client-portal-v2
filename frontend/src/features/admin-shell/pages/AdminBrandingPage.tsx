@@ -40,6 +40,7 @@ export function AdminBrandingPage() {
   const { admin, signOut } = useAdminSession()
   const [draft, setDraft] = useState<BrandingDraft | null>(null)
   const [brandingError, setBrandingError] = useState<string | null>(null)
+  const [brandingSuccess, setBrandingSuccess] = useState<string | null>(null)
   const [brandingStatus, setBrandingStatus] = useState<
     'error' | 'idle' | 'loading' | 'saving'
   >('loading')
@@ -53,6 +54,7 @@ export function AdminBrandingPage() {
     async function loadBranding() {
       setBrandingStatus('loading')
       setBrandingError(null)
+      setBrandingSuccess(null)
 
       try {
         const response = await getAdminBranding()
@@ -95,6 +97,11 @@ export function AdminBrandingPage() {
     }
   }
 
+  function handleDraftChange(nextDraft: BrandingDraft) {
+    setDraft(nextDraft)
+    setBrandingSuccess(null)
+  }
+
   async function handleSave() {
     if (!draft) {
       return
@@ -102,11 +109,13 @@ export function AdminBrandingPage() {
 
     setBrandingStatus('saving')
     setBrandingError(null)
+    setBrandingSuccess(null)
 
     try {
       const response = await updateAdminBranding(createBrandingPatch(draft))
 
       setDraft(createBrandingDraft(response))
+      setBrandingSuccess('Настройки сохранены.')
       setBrandingStatus('idle')
     } catch (error) {
       setBrandingError(getErrorMessage(error))
@@ -194,6 +203,7 @@ export function AdminBrandingPage() {
             </div>
 
             <InlineAlert message={brandingError} tone="error" />
+            <InlineAlert message={brandingSuccess} tone="success" />
 
             {brandingStatus === 'loading' ? (
               <div className="rounded-[0.6rem] border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
@@ -203,7 +213,7 @@ export function AdminBrandingPage() {
               <AdminBrandingForm
                 draft={draft}
                 isSaving={isSaving}
-                onChange={setDraft}
+                onChange={handleDraftChange}
                 onSubmit={() => {
                   void handleSave()
                 }}

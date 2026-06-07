@@ -82,6 +82,41 @@ async function storeAdminVerificationToken({
     .where(eq(portalTenants.id, tenantId))
 }
 
+async function seedSecondTenant(database: DatabaseClient) {
+  const key = decodeTenantSecretKey(getTestTenantSecretKey())
+
+  const [tenant] = await database.db
+    .insert(portalTenants)
+    .values({
+      chatwootAccountId: 2,
+      chatwootAdminVerificationTokenCiphertext: encryptTenantSecret(
+        'tenant-b-admin-verification-token',
+        key,
+      ),
+      chatwootApiAccessTokenCiphertext: encryptTenantSecret(
+        'tenant-b-runtime-token',
+        key,
+      ),
+      chatwootBaseUrl: 'https://chatwoot.example.test',
+      chatwootPortalInboxId: 1,
+      chatwootWebhookSecretCiphertext: encryptTenantSecret(
+        'tenant-b-webhook-secret',
+        key,
+      ),
+      displayName: 'Tenant B',
+      primaryDomain: 'tenant-b.example.test',
+      publicBaseUrl: 'https://tenant-b.example.test',
+      slug: 'tenant-b',
+    })
+    .returning({ id: portalTenants.id })
+
+  if (!tenant) {
+    throw new Error('Failed to seed tenant B.')
+  }
+
+  return tenant.id
+}
+
 async function createAdminCookie({
   app,
   sentEmails,
@@ -175,6 +210,129 @@ describe('buildApp branding integration', () => {
       payload: {
         portalName: 'Новый портал',
       },
+      url: '/api/admin/branding',
+    })
+
+    expect(response.statusCode).toBe(401)
+    expect(response.json().error.code).toBe('TENANT_ADMIN_UNAUTHORIZED')
+  })
+
+  it('loads admin branding with a valid admin session without requiring an origin header', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/admin/branding',
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      branding: expect.objectContaining({
+        portalName: 'Local Test Tenant',
+        supportLabel: 'Команда Local Test Tenant',
+      }),
+    })
+  })
+
+  it.each([{}, { colors: {} }, { copy: {} }])(
+    'rejects empty admin branding patch %# without internal error',
+    async (payload) => {
+      const cookieHeader = await createAdminCookie({ app, sentEmails })
+
+      const response = await app.inject({
+        headers: {
+          cookie: cookieHeader,
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'PATCH',
+        payload,
+        url: '/api/admin/branding',
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({
+        error: {
+          code: 'BRANDING_SETTINGS_EMPTY',
+          message: 'Передайте хотя бы одно изменение настроек брендинга.',
+        },
+      })
+    },
+  )
+
+  it('rejects invalid admin branding payload before writing', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'PATCH',
+      payload: {
+        colors: {
+          primary: 'javascript:alert(1)',
+        },
+      },
+      url: '/api/admin/branding',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({
+      error: {
+        code: 'BRANDING_SETTINGS_INVALID',
+        message: 'Проверьте значения настроек брендинга.',
+      },
+    })
+  })
+
+  it('keeps admin branding writes protected by the tenant origin guard', async () => {
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'PATCH',
+      payload: {
+        portalName: 'Новый портал',
+      },
+      url: '/api/admin/branding',
+    })
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({
+      error: {
+        code: 'FORBIDDEN_ORIGIN',
+        message: 'Недопустимый источник запроса.',
+      },
+    })
+
+    const publicResponse = await app.inject({
+      method: 'GET',
+      url: '/api/branding',
+    })
+
+    expect(publicResponse.statusCode).toBe(200)
+    expect(publicResponse.json()).toEqual({
+      branding: expect.objectContaining({
+        portalName: 'Local Test Tenant',
+      }),
+    })
+  })
+
+  it('does not resolve a tenant A admin cookie for tenant B branding routes', async () => {
+    await seedSecondTenant(database)
+    const cookieHeader = await createAdminCookie({ app, sentEmails })
+
+    const response = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+        host: 'tenant-b.example.test',
+      },
+      method: 'GET',
       url: '/api/admin/branding',
     })
 

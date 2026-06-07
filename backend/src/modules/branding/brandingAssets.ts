@@ -16,7 +16,6 @@ export type PublicBrandingAsset = {
   height: number | null
   id: number
   kind: BrandingAssetKind
-  originalFilename: string | null
   publicUrl: string
   width: number | null
 }

@@ -8,6 +8,26 @@
 
 **Tech Stack:** Fastify, Drizzle/Postgres, Zod, Vitest/PGlite, React 19, React Router 7, Testing Library, Playwright, Tailwind CSS.
 
+## Current Implementation Status
+
+This plan was executed and then tightened by review findings. Stable source of
+truth is the code plus `docs/architecture/overview.md` and
+`docs/roadmap/work-log.md`.
+
+Final implementation corrections compared with some older snippets below:
+
+- branding asset references are tenant-owned through composite `(tenant_id,
+asset_id)` constraints and repository slot-kind validation;
+- public asset metadata does not expose `originalFilename`, `objectKey`,
+  checksums or storage keys;
+- `GET /api/admin/branding` requires a valid tenant admin session but does not
+  require an `Origin` header; `PATCH /api/admin/branding` still requires the
+  tenant origin guard;
+- empty effective admin patches return controlled `400
+BRANDING_SETTINGS_EMPTY`;
+- admin UI disables editable fields while saving and shows `Настройки
+сохранены.` after a successful save.
+
 ---
 
 ## Scope Boundaries

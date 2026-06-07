@@ -1,5 +1,30 @@
 import { expect, type Page, test } from '@playwright/test'
 
+const adminEmail = 'cbr@provgroup.com'
+
+const brandingResponse = {
+  branding: {
+    assets: {},
+    colors: {
+      accent: '#4676b4',
+      authBackground: '#f3f7fc',
+      chatBackground: '#ffffff',
+      chatHeaderBackground: '#112540',
+      primary: '#112540',
+    },
+    copy: {
+      authSubtitle: 'Введите email и пароль, чтобы продолжить.',
+      authTitle: 'Вход в личный кабинет',
+      chatEmptyBody: 'Напишите нам, когда будет удобно.',
+      chatEmptyTitle: 'Мы на связи',
+      chatInfoTitle: 'Информация о чате',
+    },
+    portalName: 'Бухфирма',
+    supportLabel: 'Команда Бухфирма',
+    version: 1,
+  },
+}
+
 async function mockAdminUiRoutes(page: Page) {
   let isAdminAuthenticated = false
 
@@ -38,7 +63,7 @@ async function mockAdminUiRoutes(page: Page) {
       json: {
         admin: {
           chatwootAgentId: 11,
-          email: 'admin@example.test',
+          email: adminEmail,
           role: 'administrator',
         },
         session: {
@@ -52,14 +77,14 @@ async function mockAdminUiRoutes(page: Page) {
   await page.route('**/api/admin/auth/request', async (route) => {
     expect(route.request().method()).toBe('POST')
     expect(await route.request().postDataJSON()).toEqual({
-      email: 'admin@example.test',
+      email: adminEmail,
     })
 
     await route.fulfill({
       contentType: 'application/json',
       json: {
         delivery: 'sent',
-        email: 'admin@example.test',
+        email: adminEmail,
         expiresInSeconds: 900,
         nextStep: 'verify_code',
         purpose: 'tenant_admin_login',
@@ -74,7 +99,7 @@ async function mockAdminUiRoutes(page: Page) {
     expect(route.request().method()).toBe('POST')
     expect(await route.request().postDataJSON()).toEqual({
       code: '123456',
-      email: 'admin@example.test',
+      email: adminEmail,
     })
     isAdminAuthenticated = true
 
@@ -83,7 +108,7 @@ async function mockAdminUiRoutes(page: Page) {
       json: {
         admin: {
           chatwootAgentId: 11,
-          email: 'admin@example.test',
+          email: adminEmail,
           role: 'administrator',
         },
         session: {
@@ -98,6 +123,15 @@ async function mockAdminUiRoutes(page: Page) {
     expect(route.request().method()).toBe('POST')
     isAdminAuthenticated = false
     await route.fulfill({ status: 204 })
+  })
+
+  await page.route('**/api/admin/branding', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({
+      contentType: 'application/json',
+      json: brandingResponse,
+      status: 200,
+    })
   })
 }
 
@@ -120,7 +154,7 @@ test('logs into admin console through email code UI and logs out', async ({
     page.getByRole('heading', { name: 'Вход в админ-консоль' }),
   ).toBeVisible()
 
-  await page.getByLabel('Email администратора').fill('admin@example.test')
+  await page.getByLabel('Email администратора').fill(adminEmail)
   await page.getByRole('button', { name: 'Получить код' }).click()
 
   await expect(
@@ -135,11 +169,11 @@ test('logs into admin console through email code UI and logs out', async ({
     page.getByRole('heading', { exact: true, name: 'Брендинг' }),
   ).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Фоны и изображения' }),
+    page.getByRole('heading', { name: 'Настройки брендинга' }),
   ).toBeVisible()
-  await expect(
-    page.getByRole('heading', { name: 'Страницы портала' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Основное' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Цвета' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Auth-экран' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Выйти' }).click()
   await expect(page).toHaveURL(/\/admin\/login$/)
@@ -151,7 +185,7 @@ test('shows controlled mobile state for admin branding shell', async ({
   await page.setViewportSize({ height: 844, width: 390 })
   await mockAdminUiRoutes(page)
   await page.goto('/admin/login')
-  await page.getByLabel('Email администратора').fill('admin@example.test')
+  await page.getByLabel('Email администратора').fill(adminEmail)
   await page.getByRole('button', { name: 'Получить код' }).click()
   await fillOtpCode(page)
   await page.getByRole('button', { name: 'Войти в админ-консоль' }).click()
@@ -167,6 +201,6 @@ test('shows controlled mobile state for admin branding shell', async ({
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Фоны и изображения' }),
+    page.getByRole('heading', { name: 'Настройки брендинга' }),
   ).not.toBeVisible()
 })

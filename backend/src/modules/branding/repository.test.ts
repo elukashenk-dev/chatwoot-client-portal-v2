@@ -87,6 +87,37 @@ describe('createBrandingRepository', () => {
     }
   }, 15_000)
 
+  it('increments version while preserving omitted fields and normalizing cleared text', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const brandingRepository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+
+      await brandingRepository.upsertSettings({
+        portalName: 'Портал Альфа',
+        primaryColor: '#112540',
+        supportLabel: 'Поддержка Альфа',
+      })
+      const updatedSettings = await brandingRepository.upsertSettings({
+        portalName: '   ',
+        supportLabel: null,
+      })
+
+      expect(updatedSettings).toMatchObject({
+        portalName: null,
+        primaryColor: '#112540',
+        supportLabel: null,
+        version: 2,
+      })
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
   it('returns active asset metadata only inside the tenant scope', async () => {
     const database = await createTestDatabase()
 
@@ -117,7 +148,9 @@ describe('createBrandingRepository', () => {
         portalName: 'Портал Альфа',
       })
 
-      await expect(repositoryA.findActiveAssetMetadata()).resolves.toEqual(
+      const assetMetadata = await repositoryA.findActiveAssetMetadata()
+
+      expect(assetMetadata).toEqual(
         expect.objectContaining({
           logo: expect.objectContaining({
             id: asset.id,
@@ -126,7 +159,95 @@ describe('createBrandingRepository', () => {
           }),
         }),
       )
+      expect(assetMetadata.logo).not.toHaveProperty('originalFilename')
       await expect(repositoryB.findActiveAssetMetadata()).resolves.toEqual({})
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
+  it('rejects asset references outside the tenant scope', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenantA = await createTenant(tenantsRepository, 'alpha')
+      const tenantB = await createTenant(tenantsRepository, 'beta')
+      const repositoryA = createBrandingRepository(database.db, {
+        tenantId: tenantA.id,
+      })
+      const repositoryB = createBrandingRepository(database.db, {
+        tenantId: tenantB.id,
+      })
+      const asset = await repositoryA.createAssetMetadata({
+        byteSize: 1234,
+        checksumSha256: 'a'.repeat(64),
+        contentHash: 'asset-hash-a',
+        contentType: 'image/png',
+        height: 128,
+        kind: 'logo',
+        objectKey: `tenants/${tenantA.id}/branding/logo/asset-hash-a`,
+        originalFilename: 'logo.png',
+        width: 128,
+      })
+
+      await expect(
+        repositoryB.upsertSettings({
+          logoAssetId: asset.id,
+        }),
+      ).rejects.toThrow('Branding asset reference is not available')
+      await expect(repositoryB.findSettings()).resolves.toBeNull()
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
+  it('rejects asset references that do not match the target branding slot kind', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const brandingRepository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+      const asset = await brandingRepository.createAssetMetadata({
+        byteSize: 1234,
+        checksumSha256: 'a'.repeat(64),
+        contentHash: 'asset-hash-a',
+        contentType: 'image/png',
+        height: 128,
+        kind: 'auth_background_image',
+        objectKey: `tenants/${tenant.id}/branding/auth-background/asset-hash-a`,
+        originalFilename: 'auth-background.png',
+        width: 128,
+      })
+
+      await expect(
+        brandingRepository.upsertSettings({
+          logoAssetId: asset.id,
+        }),
+      ).rejects.toThrow('Branding asset reference is not available')
+      await expect(brandingRepository.findSettings()).resolves.toBeNull()
+    } finally {
+      await database.close()
+    }
+  }, 15_000)
+
+  it('rejects empty settings patches without creating version churn', async () => {
+    const database = await createTestDatabase()
+
+    try {
+      const tenantsRepository = createTenantsRepository(database.db)
+      const tenant = await createTenant(tenantsRepository, 'alpha')
+      const brandingRepository = createBrandingRepository(database.db, {
+        tenantId: tenant.id,
+      })
+
+      await expect(brandingRepository.upsertSettings({})).rejects.toThrow(
+        'Branding settings patch is empty',
+      )
+      await expect(brandingRepository.findSettings()).resolves.toBeNull()
     } finally {
       await database.close()
     }

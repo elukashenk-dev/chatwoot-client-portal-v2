@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +42,26 @@ const savedBrandingResponse = {
     version: 1,
   },
 } satisfies AdminBrandingResponse
+
+function createBrandingResponse(
+  overrides: Partial<AdminBrandingResponse['branding']> = {},
+) {
+  return {
+    branding: {
+      ...savedBrandingResponse.branding,
+      ...overrides,
+    },
+  } satisfies AdminBrandingResponse
+}
+
+function createDeferred<T>() {
+  let resolve: (value: T) => void = () => {}
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
+}
 
 function renderAdminBrandingPage(
   overrides: Partial<AdminSessionContextValue> = {},
@@ -107,6 +127,9 @@ describe('AdminBrandingPage', () => {
 
   it('saves controlled branding settings', async () => {
     const user = userEvent.setup()
+    updateAdminBrandingMock.mockResolvedValueOnce(
+      createBrandingResponse({ portalName: 'Новый портал', version: 2 }),
+    )
 
     renderAdminBrandingPage()
 
@@ -124,6 +147,43 @@ describe('AdminBrandingPage', () => {
         }),
       )
     })
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Настройки сохранены.',
+    )
+
+    await user.type(portalNameInput, ' 2')
+
+    expect(screen.queryByText('Настройки сохранены.')).not.toBeInTheDocument()
+  })
+
+  it('blocks form edits while saving to avoid stale response overwrite', async () => {
+    const user = userEvent.setup()
+    const deferredSave = createDeferred<AdminBrandingResponse>()
+
+    updateAdminBrandingMock.mockReturnValueOnce(deferredSave.promise)
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Новый портал')
+    await user.click(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    )
+
+    expect(screen.getByRole('button', { name: 'Сохраняем' })).toBeDisabled()
+    expect(portalNameInput).toBeDisabled()
+
+    await act(async () => {
+      deferredSave.resolve(
+        createBrandingResponse({ portalName: 'Новый портал', version: 2 }),
+      )
+      await deferredSave.promise
+    })
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Настройки сохранены.',
+    )
   })
 
   it('shows API errors in Russian', async () => {

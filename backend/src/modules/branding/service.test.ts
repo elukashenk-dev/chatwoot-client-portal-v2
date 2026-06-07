@@ -151,4 +151,29 @@ describe('createBrandingService', () => {
     })
     expect(repository.upsertSettings).not.toHaveBeenCalled()
   })
+
+  it.each([{}, { colors: {} }, { copy: {} }])(
+    'rejects empty admin branding updates without repository write %#',
+    async (input) => {
+      const repository = createRepository()
+      const service = createBrandingService({
+        audit: vi.fn(),
+        repository,
+        tenant,
+      })
+
+      await expect(
+        service.updateAdminBranding({
+          admin,
+          input,
+          requestIp: null,
+          userAgent: null,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BRANDING_SETTINGS_EMPTY',
+        statusCode: 400,
+      })
+      expect(repository.upsertSettings).not.toHaveBeenCalled()
+    },
+  )
 })

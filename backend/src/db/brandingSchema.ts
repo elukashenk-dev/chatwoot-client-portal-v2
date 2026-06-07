@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -43,6 +44,10 @@ export const portalBrandingAssets = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex('portal_branding_assets_tenant_id_unique').on(
+      table.tenantId,
+      table.id,
+    ),
     uniqueIndex('portal_branding_assets_object_key_unique').on(table.objectKey),
     index('portal_branding_assets_tenant_kind_idx').on(
       table.tenantId,
@@ -77,27 +82,14 @@ export const portalBrandingSettings = pgTable(
     chatEmptyTitle: text('chat_empty_title'),
     chatEmptyBody: text('chat_empty_body'),
     chatInfoTitle: text('chat_info_title'),
-    logoAssetId: integer('logo_asset_id').references(
-      () => portalBrandingAssets.id,
-      { onDelete: 'set null' },
-    ),
-    authHeaderImageAssetId: integer('auth_header_image_asset_id').references(
-      () => portalBrandingAssets.id,
-      { onDelete: 'set null' },
-    ),
-    authFooterImageAssetId: integer('auth_footer_image_asset_id').references(
-      () => portalBrandingAssets.id,
-      { onDelete: 'set null' },
-    ),
-    authBackgroundImageAssetId: integer(
-      'auth_background_image_asset_id',
-    ).references(() => portalBrandingAssets.id, { onDelete: 'set null' }),
-    chatBackgroundImageAssetId: integer(
-      'chat_background_image_asset_id',
-    ).references(() => portalBrandingAssets.id, { onDelete: 'set null' }),
+    logoAssetId: integer('logo_asset_id'),
+    authHeaderImageAssetId: integer('auth_header_image_asset_id'),
+    authFooterImageAssetId: integer('auth_footer_image_asset_id'),
+    authBackgroundImageAssetId: integer('auth_background_image_asset_id'),
+    chatBackgroundImageAssetId: integer('chat_background_image_asset_id'),
     chatHeaderBackgroundImageAssetId: integer(
       'chat_header_background_image_asset_id',
-    ).references(() => portalBrandingAssets.id, { onDelete: 'set null' }),
+    ),
     version: integer('version').notNull().default(1),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
@@ -109,6 +101,36 @@ export const portalBrandingSettings = pgTable(
   (table) => [
     uniqueIndex('portal_branding_settings_tenant_unique').on(table.tenantId),
     index('portal_branding_settings_updated_at_idx').on(table.updatedAt),
+    foreignKey({
+      columns: [table.tenantId, table.logoAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_logo_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.authHeaderImageAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_auth_header_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.authFooterImageAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_auth_footer_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.authBackgroundImageAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_auth_background_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.chatBackgroundImageAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_chat_background_asset_tenant_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.chatHeaderBackgroundImageAssetId],
+      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
+      name: 'portal_branding_settings_chat_header_background_asset_tenant_fk',
+    }).onDelete('restrict'),
     check('portal_branding_settings_version_check', sql`${table.version} > 0`),
   ],
 )

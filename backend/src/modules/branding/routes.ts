@@ -36,7 +36,6 @@ export function registerBrandingRoutes(
   })
 
   app.get('/api/admin/branding', async (request, reply) => {
-    assertAllowedTenantOrigin(request)
     requireTenantContext(request)
     await requireTenantAdminSession({
       createTenantAdminAuthService,

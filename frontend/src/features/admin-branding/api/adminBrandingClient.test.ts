@@ -28,6 +28,7 @@ const brandingResponse = {
 describe('adminBrandingClient', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('loads admin branding settings through the admin API', async () => {
@@ -98,5 +99,53 @@ describe('adminBrandingClient', () => {
         method: 'PATCH',
       }),
     )
+  })
+
+  it('surfaces backend error payloads with code, message and status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue({
+          error: {
+            code: 'BRANDING_SETTINGS_EMPTY',
+            message: 'Передайте хотя бы одно изменение настроек брендинга.',
+          },
+        }),
+        ok: false,
+        status: 400,
+      }),
+    )
+
+    await expect(updateAdminBranding({})).rejects.toMatchObject({
+      code: 'BRANDING_SETTINGS_EMPTY',
+      message: 'Передайте хотя бы одно изменение настроек брендинга.',
+      statusCode: 400,
+    })
+  })
+
+  it('uses a Russian fallback message for non-json API errors', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        ok: false,
+        status: 502,
+      }),
+    )
+
+    await expect(getAdminBranding()).rejects.toMatchObject({
+      message: 'Мы не смогли выполнить запрос. Попробуйте еще раз чуть позже.',
+      statusCode: 502,
+    })
+  })
+
+  it('uses a Russian fallback message for network failures', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('failed')))
+
+    await expect(getAdminBranding()).rejects.toMatchObject({
+      message: 'Мы не смогли выполнить запрос. Попробуйте еще раз чуть позже.',
+      statusCode: 0,
+    })
   })
 })

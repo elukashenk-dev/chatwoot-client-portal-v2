@@ -2102,6 +2102,27 @@
         }
       },
       "indexes": {
+        "portal_branding_assets_tenant_id_unique": {
+          "name": "portal_branding_assets_tenant_id_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "portal_branding_assets_object_key_unique": {
           "name": "portal_branding_assets_object_key_unique",
           "columns": [
@@ -2361,82 +2382,94 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_logo_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_logo_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_logo_asset_tenant_fk": {
+          "name": "portal_branding_settings_logo_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "logo_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_auth_header_image_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_auth_header_image_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_auth_header_asset_tenant_fk": {
+          "name": "portal_branding_settings_auth_header_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "auth_header_image_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_auth_footer_image_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_auth_footer_image_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_auth_footer_asset_tenant_fk": {
+          "name": "portal_branding_settings_auth_footer_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "auth_footer_image_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_auth_background_image_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_auth_background_image_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_auth_background_asset_tenant_fk": {
+          "name": "portal_branding_settings_auth_background_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "auth_background_image_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_chat_background_image_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_chat_background_image_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_chat_background_asset_tenant_fk": {
+          "name": "portal_branding_settings_chat_background_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "chat_background_image_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "portal_branding_settings_chat_header_background_image_asset_id_portal_branding_assets_id_fk": {
-          "name": "portal_branding_settings_chat_header_background_image_asset_id_portal_branding_assets_id_fk",
+        "portal_branding_settings_chat_header_background_asset_tenant_fk": {
+          "name": "portal_branding_settings_chat_header_background_asset_tenant_fk",
           "tableFrom": "portal_branding_settings",
           "tableTo": "portal_branding_assets",
           "columnsFrom": [
+            "tenant_id",
             "chat_header_background_image_asset_id"
           ],
           "columnsTo": [
+            "tenant_id",
             "id"
           ],
-          "onDelete": "set null",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

@@ -1,5 +1,6 @@
 import type { TenantRequestContext } from '../tenants/service.js'
 import type { PublicTenantAdmin } from '../tenant-admin/adminAuthService.js'
+import { ApiError } from '../../lib/errors.js'
 import {
   createDefaultBrandingCopy,
   defaultBrandingColors,
@@ -189,6 +190,14 @@ export function createBrandingService({
       userAgent: string | null
     }) {
       const settingsPatch = toSettingsPatch(input)
+
+      if (Object.keys(settingsPatch).length === 0) {
+        throw new ApiError(
+          400,
+          'BRANDING_SETTINGS_EMPTY',
+          'Передайте хотя бы одно изменение настроек брендинга.',
+        )
+      }
 
       const settings = await repository.upsertSettings(settingsPatch)
       await audit({
