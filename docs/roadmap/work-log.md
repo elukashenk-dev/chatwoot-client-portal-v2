@@ -107,9 +107,14 @@ execution-plan детали здесь не хранятся.
 - `MT-9D` is closed: tenant-owned branding settings persistence,
   public/admin branding APIs, tenant admin audit events and first admin UI data
   wiring are implemented without binary asset upload or browser object keys.
+- `MT-9E` is closed: branding asset binary upload/read/delete is backed by
+  S3-compatible object storage through backend-owned routes, public/admin
+  responses expose portal URLs and safe metadata only, and tenant PWA icon
+  routes can use an active tenant-owned `pwa_icon` asset with fallback icons
+  preserved.
 
 ## Recommended Next Step
 
-- Start the next `MT-9` branding asset upload/object-storage slice:
-  MinIO/S3-compatible storage client, upload/replace/delete routes,
-  tenant-scoped asset reads and PWA icon integration.
+- Start the next `MT-9` admin branding UI asset controls slice: upload,
+  replace and delete controls for logo, PWA icon and configured image slots,
+  wired to the storage-backed asset routes.

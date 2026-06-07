@@ -296,6 +296,8 @@ Tenant-aware PWA endpoints:
 
 - manifest `id`, `name`, `short_name`, `start_url`, `scope`, colors и icon URLs строятся по current tenant;
 - iOS Home Screen icon тоже tenant-aware;
+- tenant PWA icon routes могут использовать активный tenant-owned `pwa_icon`
+  asset из branding storage, а при его отсутствии сохраняют fallback redirects;
 - tenant dynamic metadata отдается с `no-store`;
 - service worker не кэширует tenant dynamic metadata;
 - production service worker кэширует только app shell/assets, не перехватывает
@@ -324,6 +326,8 @@ Tenant-aware PWA endpoints:
 - `portal_push_subscriptions`;
 - `portal_push_deliveries`;
 - `portal_chat_unread_messages`.
+- `portal_branding_settings`;
+- `portal_branding_assets`.
 
 Принципиальные правила:
 
@@ -367,11 +371,13 @@ API `v2` остается простым и явным:
 - `/api/profile`;
 - `/api/profile/avatar`;
 - `/api/branding`;
+- `/api/branding/assets/:assetId`;
 - `/api/admin/auth/request`;
 - `/api/admin/auth/verify`;
 - `/api/admin/auth/me`;
 - `/api/admin/auth/logout`;
 - `/api/admin/branding`;
+- `/api/admin/branding/assets/:kind`;
 - `/api/chat/threads`;
 - `/api/chat/threads/:threadId/info`;
 - `/api/chat/messages`;
@@ -427,7 +433,8 @@ chatwoot-client-portal-v2/
 - `registration` - eligibility, verification request/confirm and password setup completion;
 - `password-reset` - reset request, verification and password update;
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
-- `branding` - tenant-scoped public/admin branding settings read model and admin update boundary;
+- `branding` - tenant-scoped public/admin branding settings read model,
+  backend-owned asset upload/read/delete routes and admin update boundary;
 - `portal-users` - portal user persistence helpers;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send, attachment proxy, media, search and send ledger;
@@ -481,6 +488,9 @@ tenant-aware runtime.
 - `MT-9D` добавил tenant-owned branding settings persistence, public/admin
   branding APIs, admin audit events and first admin UI data wiring without
   binary asset upload;
+- `MT-9E` добавил S3-compatible branding asset storage, backend-owned
+  upload/read/delete routes, tenant-scoped public asset reads and custom tenant
+  PWA icon routing without exposing object keys to browser;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

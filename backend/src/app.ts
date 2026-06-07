@@ -79,6 +79,7 @@ import {
   registerTenantRoutes,
 } from './modules/tenants/routes.js'
 import { createTenantsService } from './modules/tenants/service.js'
+import { createTenantPwaIconReader } from './modules/tenants/pwaIconReader.js'
 
 type BuildAppOptions = {
   brandingObjectStorage?: BrandingObjectStorage
@@ -416,40 +417,11 @@ export function buildApp({
     maxRequests: env.AUTH_RATE_LIMIT_MAX,
     windowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
   })
-  const tenantPwaIconReader = {
-    async getActivePwaIconMetadata(request: FastifyRequest) {
-      const tenant = requireTenantContext(request)
-      const asset = await createBrandingRepository(database.db, {
-        tenantId: tenant.id,
-      }).findActivePwaIcon()
-
-      if (!asset) {
-        return null
-      }
-
-      return {
-        contentHash: asset.contentHash,
-        contentType: asset.contentType,
-      }
-    },
-    async getActivePwaIconObject(request: FastifyRequest) {
-      const tenant = requireTenantContext(request)
-      const asset = await createBrandingRepository(database.db, {
-        tenantId: tenant.id,
-      }).findActivePwaIcon()
-
-      if (!asset) {
-        return null
-      }
-
-      return createBrandingAssetServiceForRequest(request).getPublicAsset({
-        assetId: asset.id,
-      })
-    },
-  }
-
   registerTenantRoutes(app, {
-    pwaIconReader: tenantPwaIconReader,
+    pwaIconReader: createTenantPwaIconReader({
+      createBrandingAssetService: createBrandingAssetServiceForRequest,
+      db: database.db,
+    }),
     tenantsService,
   })
   registerAuthRoutes(app, {

@@ -86,6 +86,9 @@ Completed gates:
   settings persistence, public/admin branding APIs, tenant admin audit events
   and first admin UI data wiring are implemented without binary asset upload or
   browser object keys.
+- `MT-9E` branding asset storage backend is closed: S3-compatible object
+  storage, admin upload/delete routes, tenant-scoped public asset reads and
+  custom PWA icon routing are implemented without browser object keys.
 
 Branding slice map:
 
@@ -96,19 +99,18 @@ Branding slice map:
   settings form and live preview. Closed.
 - `MT-9E` - branding asset storage backend: S3-compatible object storage,
   admin upload/delete routes, tenant-scoped public asset reads and custom PWA
-  icon routing. Current slice.
+  icon routing. Closed.
 - `MT-9F` - admin asset controls: upload/replace/delete UI for logo, PWA icon
   and configured auth/chat image slots, wired to the storage-backed backend
-  routes.
+  routes. Current next slice.
 - `MT-9G` - apply branding to customer runtime: auth backgrounds/images,
   chat background, chat header background, logo/brand mark and chat info pages
   using real portal components.
 - `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache manual
   checks, production runbook updates and final documentation cleanup.
 
-Remaining scope after `MT-9D`:
+Remaining scope after `MT-9E`:
 
-- storage-backed branding assets and tenant-owned PWA icon routing;
 - admin UI controls for asset upload, replacement and deletion;
 - applying text/color/image branding to real customer-facing portal surfaces;
 - preview screens using real portal components;

@@ -15,7 +15,7 @@ type RegisterTenantRoutesOptions = {
   tenantsService: Pick<TenantsService, 'getPublicTenantContext'>
 }
 
-type TenantPwaIconReader = {
+export type TenantPwaIconReader = {
   getActivePwaIconMetadata(request: FastifyRequest): Promise<{
     contentHash: string
     contentType: string

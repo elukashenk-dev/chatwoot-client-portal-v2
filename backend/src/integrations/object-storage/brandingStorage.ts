@@ -34,7 +34,7 @@ export type BrandingObjectStorage = {
 }
 
 export function createDisabledBrandingObjectStorage(): BrandingObjectStorage {
-  const fail = () => {
+  const fail = (): never => {
     throw new ApiError(
       503,
       'BRANDING_ASSET_STORAGE_UNAVAILABLE',
@@ -44,13 +44,13 @@ export function createDisabledBrandingObjectStorage(): BrandingObjectStorage {
 
   return {
     async deleteObject() {
-      fail()
+      return fail()
     },
     async getObject() {
-      fail()
+      return fail()
     },
     async putObject() {
-      fail()
+      return fail()
     },
   }
 }

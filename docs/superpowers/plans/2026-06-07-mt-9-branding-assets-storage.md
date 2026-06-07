@@ -2050,3 +2050,18 @@ Reviewed and hardened before implementation:
   before old object cleanup, so public URLs do not point at deleted metadata.
 - PWA icon reader is split into metadata and object methods, so manifest
   generation does not fetch binary object content.
+
+## Execution Status
+
+Implemented in `feature/phase-9-branding-assets-storage` as `MT-9E`.
+Closed scope:
+
+- storage env validation, local MinIO compose and helper scripts;
+- S3-compatible branding object storage adapter;
+- branding upload validation;
+- `pwa_icon_asset_id` metadata and migration;
+- admin upload/delete asset routes;
+- tenant-scoped public asset reads;
+- custom tenant PWA icon manifest/icon routing;
+- targeted backend tests for env, storage adapter, validation, repository,
+  service, branding routes and tenant PWA routes.
