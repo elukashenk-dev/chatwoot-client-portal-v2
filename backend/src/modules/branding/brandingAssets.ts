@@ -36,6 +36,20 @@ export function createPublicBrandingAssetUrl({
   return `/api/branding/assets/${id}?v=${encodeURIComponent(contentHash)}`
 }
 
+export function createBrandingObjectKey({
+  contentHash,
+  filename,
+  kind,
+  tenantId,
+}: {
+  contentHash: string
+  filename: string
+  kind: BrandingAssetKind
+  tenantId: number
+}) {
+  return `tenants/${tenantId}/branding/${kind}/${contentHash}/${filename}`
+}
+
 export function createTenantPwaIconVersion({
   contentHash,
   tenantSlug,
