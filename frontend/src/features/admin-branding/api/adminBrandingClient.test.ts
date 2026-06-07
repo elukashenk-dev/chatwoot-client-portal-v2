@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getAdminBranding, updateAdminBranding } from './adminBrandingClient'
+import {
+  deleteAdminBrandingAsset,
+  getAdminBranding,
+  updateAdminBranding,
+  uploadAdminBrandingAsset,
+} from './adminBrandingClient'
 
 const brandingResponse = {
   branding: {
@@ -97,6 +102,69 @@ describe('adminBrandingClient', () => {
         }),
         credentials: 'include',
         method: 'PATCH',
+      }),
+    )
+  })
+
+  it('uploads a branding asset as multipart form data', async () => {
+    const imageFile = new File(['logo-bytes'], 'logo.png', {
+      type: 'image/png',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue({
+          asset: {
+            assetVersion: '42',
+            contentType: 'image/png',
+            height: null,
+            id: 42,
+            kind: 'logo',
+            publicUrl: '/api/branding/assets/42?v=42',
+            width: null,
+          },
+        }),
+        ok: true,
+        status: 200,
+      }),
+    )
+
+    await uploadAdminBrandingAsset('logo', imageFile)
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/branding/assets/logo',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    const init = vi.mocked(fetch).mock.calls[0]?.[1]
+
+    expect(init?.body).toBeInstanceOf(FormData)
+    expect((init?.body as FormData).get('asset')).toBe(imageFile)
+    expect(JSON.stringify(init)).not.toContain('content-type')
+  })
+
+  it('deletes an active branding asset by kind', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue({ deleted: true }),
+        ok: true,
+        status: 200,
+      }),
+    )
+
+    await deleteAdminBrandingAsset('pwa_icon')
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/branding/assets/pwa_icon',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'DELETE',
       }),
     )
   })

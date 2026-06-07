@@ -27,15 +27,44 @@ export type BrandingCopy = {
   chatInfoTitle: string
 }
 
+export type BrandingAssetKind =
+  | 'logo'
+  | 'pwa_icon'
+  | 'auth_header_image'
+  | 'auth_footer_image'
+  | 'auth_background_image'
+  | 'chat_background_image'
+  | 'chat_header_background_image'
+
+export type BrandingAsset = {
+  assetVersion: string
+  contentType: string
+  height: number | null
+  id: number
+  kind: BrandingAssetKind
+  publicUrl: string
+  width: number | null
+}
+
+export type BrandingAssets = Partial<Record<BrandingAssetKind, BrandingAsset>>
+
 export type AdminBrandingResponse = {
   branding: {
-    assets: Record<string, unknown>
+    assets: BrandingAssets
     colors: BrandingColors
     copy: BrandingCopy
     portalName: string
     supportLabel: string
     version: number
   }
+}
+
+export type AdminBrandingAssetUploadResponse = {
+  asset: BrandingAsset
+}
+
+export type AdminBrandingAssetDeleteResponse = {
+  deleted: boolean
 }
 
 export type AdminBrandingPatch = Partial<{
@@ -101,4 +130,30 @@ export function updateAdminBranding(input: AdminBrandingPatch) {
     headers: { 'Content-Type': 'application/json' },
     method: 'PATCH',
   })
+}
+
+export function uploadAdminBrandingAsset(
+  kind: BrandingAssetKind,
+  file: File,
+) {
+  const formData = new FormData()
+
+  formData.set('asset', file)
+
+  return request<AdminBrandingAssetUploadResponse>(
+    `/admin/branding/assets/${kind}`,
+    {
+      body: formData,
+      method: 'POST',
+    },
+  )
+}
+
+export function deleteAdminBrandingAsset(kind: BrandingAssetKind) {
+  return request<AdminBrandingAssetDeleteResponse>(
+    `/admin/branding/assets/${kind}`,
+    {
+      method: 'DELETE',
+    },
+  )
 }
