@@ -7,10 +7,8 @@ import {
   decodeTenantSecretKey,
   encryptTenantSecret,
 } from '../tenants/secrets.js'
-import {
-  createTenantAdminAuthRepository,
-  TenantAdminAuditMetadataError,
-} from './adminAuthRepository.js'
+import { createTenantAdminAuthRepository } from './adminAuthRepository.js'
+import { TenantAdminAuditMetadataError } from './adminAuditMetadata.js'
 
 const tenantSecretKey = Buffer.alloc(32, 9).toString('base64')
 

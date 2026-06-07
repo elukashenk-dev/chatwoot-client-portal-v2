@@ -16,7 +16,6 @@ const timestampWithTimezone = {
   mode: 'date',
   withTimezone: true,
 } as const
-
 export const portalTenants = pgTable(
   'portal_tenants',
   {
@@ -56,7 +55,6 @@ export const portalTenants = pgTable(
     ),
   ],
 )
-
 export const portalUsers = pgTable(
   'portal_users',
   {

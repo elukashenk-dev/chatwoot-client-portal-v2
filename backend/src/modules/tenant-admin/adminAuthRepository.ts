@@ -9,27 +9,14 @@ import {
   portalAdminSessions,
 } from '../../db/schema.js'
 import { normalizeEmail } from '../../lib/email.js'
+import { normalizeAuditMetadata } from './adminAuditMetadata.js'
+import {
+  baseAuditEventSelection,
+  baseChallengeSelection,
+} from './adminAuthSelections.js'
 
 const ADMIN_LOGIN_PURPOSE = 'tenant_admin_login'
 const ACTIVE_CHALLENGE_STATUSES = ['pending', 'sending']
-const unsafeAuditMetadataKeys = new Set([
-  'adminverificationtoken',
-  'apiaccesstoken',
-  'code',
-  'codehash',
-  'runtimetoken',
-  'sessiontoken',
-  'token',
-  'tokenhash',
-])
-
-export class TenantAdminAuditMetadataError extends Error {
-  constructor(message: string) {
-    super(message)
-
-    this.name = 'TenantAdminAuditMetadataError'
-  }
-}
 
 type CreatePendingChallengeInput = {
   chatwootAgentId: number
@@ -75,40 +62,6 @@ type CreateAuditEventInput = {
   userAgent?: string | null
 }
 
-function baseChallengeSelection() {
-  return {
-    attemptsCount: portalAdminLoginChallenges.attemptsCount,
-    chatwootAgentId: portalAdminLoginChallenges.chatwootAgentId,
-    codeHash: portalAdminLoginChallenges.codeHash,
-    email: portalAdminLoginChallenges.email,
-    expiresAt: portalAdminLoginChallenges.expiresAt,
-    id: portalAdminLoginChallenges.id,
-    lastSentAt: portalAdminLoginChallenges.lastSentAt,
-    maxAttempts: portalAdminLoginChallenges.maxAttempts,
-    resendCount: portalAdminLoginChallenges.resendCount,
-    resendNotBefore: portalAdminLoginChallenges.resendNotBefore,
-    role: portalAdminLoginChallenges.role,
-    status: portalAdminLoginChallenges.status,
-    verifiedAt: portalAdminLoginChallenges.verifiedAt,
-  }
-}
-
-function baseAuditEventSelection() {
-  return {
-    action: portalAdminAuditEvents.action,
-    actorChatwootAgentId: portalAdminAuditEvents.actorChatwootAgentId,
-    actorEmail: portalAdminAuditEvents.actorEmail,
-    createdAt: portalAdminAuditEvents.createdAt,
-    id: portalAdminAuditEvents.id,
-    metadata: portalAdminAuditEvents.metadata,
-    outcome: portalAdminAuditEvents.outcome,
-    requestIp: portalAdminAuditEvents.requestIp,
-    subjectEmail: portalAdminAuditEvents.subjectEmail,
-    tenantId: portalAdminAuditEvents.tenantId,
-    userAgent: portalAdminAuditEvents.userAgent,
-  }
-}
-
 function normalizeNonEmptyString(value: string, fieldName: string) {
   const normalizedValue = value.trim()
 
@@ -137,52 +90,6 @@ function createScopedLockKey(tenantId: number, email: string) {
     .digest()
 
   return [digest.readInt32BE(0), digest.readInt32BE(4)] as const
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function normalizeAuditMetadataKey(key: string) {
-  return key.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
-function assertSafeAuditMetadataValue(value: unknown) {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      assertSafeAuditMetadataValue(item)
-    }
-
-    return
-  }
-
-  if (!isPlainObject(value)) {
-    return
-  }
-
-  for (const [key, nestedValue] of Object.entries(value)) {
-    if (unsafeAuditMetadataKeys.has(normalizeAuditMetadataKey(key))) {
-      throw new TenantAdminAuditMetadataError(
-        'Tenant admin audit metadata must not include secrets.',
-      )
-    }
-
-    assertSafeAuditMetadataValue(nestedValue)
-  }
-}
-
-function normalizeAuditMetadata(metadata: Record<string, unknown> | undefined) {
-  const normalizedMetadata = metadata ?? {}
-
-  if (!isPlainObject(normalizedMetadata)) {
-    throw new TenantAdminAuditMetadataError(
-      'Tenant admin audit metadata must be an object.',
-    )
-  }
-
-  assertSafeAuditMetadataValue(normalizedMetadata)
-
-  return normalizedMetadata
 }
 
 async function findLatestChallengeByEmail({
