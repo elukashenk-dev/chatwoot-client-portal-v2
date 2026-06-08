@@ -201,6 +201,41 @@ describe('loadEnv', () => {
     expect(env.BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE).toBe(true)
   })
 
+  it('requires branding asset storage in production', () => {
+    expect(() =>
+      loadEnv({
+        ...baseRawEnv,
+        NODE_ENV: 'production',
+      }),
+    ).toThrow(/BRANDING_ASSET_STORAGE_ENDPOINT/)
+  })
+
+  it('accepts complete branding asset storage configuration in production', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      NODE_ENV: 'production',
+      BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: 'portal-minio',
+      BRANDING_ASSET_STORAGE_BUCKET: 'portal-branding-assets',
+      BRANDING_ASSET_STORAGE_ENDPOINT: 'http://portal-object-storage:9000',
+      BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: 'true',
+      BRANDING_ASSET_STORAGE_REGION: 'us-east-1',
+      BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: 'portal-minio-secret',
+    })
+
+    expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBe(
+      'http://portal-object-storage:9000',
+    )
+  })
+
+  it('continues allowing disabled branding asset storage outside production', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      NODE_ENV: 'test',
+    })
+
+    expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBeUndefined()
+  })
+
   it('accepts complete branding asset storage configuration', () => {
     const env = loadEnv({
       ...baseRawEnv,

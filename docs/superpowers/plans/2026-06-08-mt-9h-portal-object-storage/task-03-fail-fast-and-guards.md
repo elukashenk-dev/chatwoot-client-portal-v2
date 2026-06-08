@@ -15,7 +15,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Add failing env test for production storage**
+- [x] **Step 1: Add failing env test for production storage**
 
 In `backend/src/config/env.test.ts`, after
 `it('leaves branding asset storage unavailable by default', ...)`, add:
@@ -71,7 +71,7 @@ Expected before implementation:
 
 - the new test fails because production currently allows disabled storage.
 
-- [ ] **Step 2: Require complete branding storage config in production**
+- [x] **Step 2: Require complete branding storage config in production**
 
 In `backend/src/config/env.ts`, inside the existing `superRefine`, after
 `const hasBrandingStorageConfig = ...`, change the branding-storage validation
@@ -100,7 +100,7 @@ Keep test/local behavior:
 - partial storage env is still rejected;
 - complete storage env is accepted.
 
-- [ ] **Step 3: Run env tests**
+- [x] **Step 3: Run env tests**
 
 Run:
 
@@ -112,7 +112,7 @@ Expected:
 
 - all env tests pass.
 
-- [ ] **Step 4: Add code-health production storage guard**
+- [x] **Step 4: Add code-health production storage guard**
 
 In `scripts/check-code-health.mjs`, add this function before `main()`:
 
@@ -238,7 +238,7 @@ Call it from `main()` after `checkRetiredWebhookScripts(failures)`:
 await checkProductionObjectStorageConfig(failures)
 ```
 
-- [ ] **Step 5: Run code-health**
+- [x] **Step 5: Run code-health**
 
 Run:
 

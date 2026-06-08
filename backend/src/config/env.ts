@@ -257,8 +257,10 @@ const envSchema = z
     const hasBrandingStorageConfig = brandingStorageFields.some((field) =>
       Boolean(env[field]),
     )
+    const requiresBrandingStorageConfig =
+      env.NODE_ENV === 'production' || hasBrandingStorageConfig
 
-    if (hasBrandingStorageConfig) {
+    if (requiresBrandingStorageConfig) {
       for (const field of brandingStorageFields) {
         if (!env[field]) {
           context.addIssue({

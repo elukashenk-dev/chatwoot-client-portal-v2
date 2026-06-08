@@ -130,6 +130,120 @@ async function checkRetiredWebhookScripts(failures) {
   }
 }
 
+async function checkProductionObjectStorageConfig(failures) {
+  const composePath = 'infra/production/compose.yaml'
+  const envExamplePath = '.env.production.example'
+  const compose = await readFile(path.join(repoRoot, composePath), 'utf8')
+  const envExample = await readFile(path.join(repoRoot, envExamplePath), 'utf8')
+  const requiredComposeSnippets = [
+    'portal-object-storage:',
+    'portal-object-storage-init:',
+    'portal-object-storage-data:',
+    '../../scripts/init-production-object-storage.sh:/usr/local/bin/init-production-object-storage.sh:ro',
+    'BRANDING_ASSET_STORAGE_ACCESS_KEY_ID:',
+    'BRANDING_ASSET_STORAGE_BUCKET:',
+    'BRANDING_ASSET_STORAGE_ENDPOINT:',
+    'BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY:',
+    'condition: service_completed_successfully',
+    'portal-internal',
+  ]
+  const requiredEnvNames = [
+    'PORTAL_OBJECT_STORAGE_IMAGE',
+    'PORTAL_OBJECT_STORAGE_MC_IMAGE',
+    'PORTAL_OBJECT_STORAGE_ROOT_USER',
+    'PORTAL_OBJECT_STORAGE_ROOT_PASSWORD',
+    'BRANDING_ASSET_STORAGE_ENDPOINT',
+    'BRANDING_ASSET_STORAGE_REGION',
+    'BRANDING_ASSET_STORAGE_BUCKET',
+    'BRANDING_ASSET_STORAGE_ACCESS_KEY_ID',
+    'BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY',
+    'BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE',
+  ]
+
+  for (const snippet of requiredComposeSnippets) {
+    if (!compose.includes(snippet)) {
+      failures.push({
+        relativePath: composePath,
+        message: `missing production object-storage wiring: ${snippet}`,
+      })
+    }
+  }
+
+  for (const envName of requiredEnvNames) {
+    if (!envExample.includes(`${envName}=`)) {
+      failures.push({
+        relativePath: envExamplePath,
+        message: `missing production object-storage env example: ${envName}`,
+      })
+    }
+  }
+
+  const initScriptPath = 'scripts/init-production-object-storage.sh'
+  const initScript = await readFile(path.join(repoRoot, initScriptPath), 'utf8')
+  const requiredInitSnippets = [
+    'mc mb --ignore-existing',
+    'mc admin policy create',
+    'mc admin user add',
+    'mc admin policy attach',
+    's3:GetObject',
+    's3:PutObject',
+    's3:DeleteObject',
+    'mc admin policy remove',
+    'mc admin user remove',
+  ]
+
+  for (const snippet of requiredInitSnippets) {
+    if (!initScript.includes(snippet)) {
+      failures.push({
+        relativePath: initScriptPath,
+        message: `missing production object-storage init behavior: ${snippet}`,
+      })
+    }
+  }
+
+  const minioServiceBlock = compose.split('portal-object-storage:')[1] ?? ''
+  const minioBlockBeforeInit =
+    minioServiceBlock.split('portal-object-storage-init:')[0] ?? ''
+
+  if (!minioBlockBeforeInit.includes('networks:')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production object storage must declare explicit networks',
+    })
+  }
+
+  if (!minioBlockBeforeInit.includes('- portal-internal')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production object storage must be on portal-internal only',
+    })
+  }
+
+  if (minioBlockBeforeInit.includes('ports:')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production object storage must not publish host ports',
+    })
+  }
+
+  const backendBlock = compose.split('portal-backend:')[1] ?? ''
+  const backendBlockBeforeWeb = backendBlock.split('portal-web:')[0] ?? ''
+
+  if (backendBlockBeforeWeb.includes('PORTAL_OBJECT_STORAGE_ROOT_PASSWORD')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'backend must not receive object-storage root password',
+    })
+  }
+
+  if (!backendBlockBeforeWeb.includes('portal-object-storage-init:')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'backend must depend on object-storage init service',
+    })
+  }
+}
+
 async function main() {
   const relativePaths = (
     await Promise.all(codeHealthConfig.roots.map((root) => listFiles(root)))
@@ -161,6 +275,7 @@ async function main() {
 
   await checkProductionSecurityHeaders(failures)
   await checkRetiredWebhookScripts(failures)
+  await checkProductionObjectStorageConfig(failures)
 
   if (failures.length > 0) {
     console.error('Code health check failed.\n')
