@@ -12,7 +12,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Create the object-storage init script**
+- [x] **Step 1: Create the object-storage init script**
 
 Create `scripts/init-production-object-storage.sh`:
 
@@ -97,7 +97,7 @@ sh -n scripts/init-production-object-storage.sh
 
 Expected: exit `0`.
 
-- [ ] **Step 2: Add the production object-storage service**
+- [x] **Step 2: Add the production object-storage service**
 
 Add this service before `portal-backend`:
 
@@ -129,7 +129,7 @@ Rules:
 - do not expose console `9001`;
 - keep this service on `portal-internal` only.
 
-- [ ] **Step 3: Add the bucket and app-user init service**
+- [x] **Step 3: Add the bucket and app-user init service**
 
 Add this service after `portal-object-storage`:
 
@@ -164,7 +164,7 @@ This service must be idempotent:
 - this may briefly revoke the app user during production reconfigure, so
   object-storage init must run before backend starts.
 
-- [ ] **Step 4: Wire backend dependencies and env**
+- [x] **Step 4: Wire backend dependencies and env**
 
 Change `portal-backend.depends_on`:
 
@@ -193,7 +193,7 @@ Keep backend storage endpoint internal:
 BRANDING_ASSET_STORAGE_ENDPOINT=http://portal-object-storage:9000
 ```
 
-- [ ] **Step 5: Add the production object-storage volume**
+- [x] **Step 5: Add the production object-storage volume**
 
 Add to the bottom `volumes` block:
 
@@ -201,7 +201,7 @@ Add to the bottom `volumes` block:
 portal-object-storage-data:
 ```
 
-- [ ] **Step 6: Validate compose config with a temporary env file**
+- [x] **Step 6: Validate compose config with a temporary env file**
 
 Create `/tmp/portal-object-storage-compose.env` with safe dummy values:
 
@@ -255,7 +255,7 @@ Expected:
 - rendered service does not contain published MinIO host ports.
 - init script syntax check exits `0`.
 
-- [ ] **Step 7: Smoke the production storage/init chain**
+- [x] **Step 7: Smoke the production storage/init chain**
 
 Run an isolated compose project with only storage and init:
 

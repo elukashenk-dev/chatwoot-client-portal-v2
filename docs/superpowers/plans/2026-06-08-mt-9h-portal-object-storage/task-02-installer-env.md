@@ -12,7 +12,7 @@ Operator installs one VM stack; B2B clients never choose or configure storage.
 
 ## Steps
 
-- [ ] **Step 1: Add env variables to `.env.production.example`**
+- [x] **Step 1: Add env variables to `.env.production.example`**
 
 Replace the current external-S3 wording with portal-owned defaults:
 
@@ -39,7 +39,7 @@ The comments must say:
 - external S3-compatible providers are not supported in this slice and need a
   separate operator-mode plan.
 
-- [ ] **Step 2: Add installer prompts and generated defaults**
+- [x] **Step 2: Add installer prompts and generated defaults**
 
 In `scripts/install-production.sh`, inside `configure_env`, after `DATABASE_URL`
 is built and before tenant secrets, add:
@@ -76,7 +76,7 @@ Rationale:
 - endpoint, bucket, access key, region and path-style are fixed internal
   defaults for this slice; do not prompt for custom values.
 
-- [ ] **Step 3: Write object-storage values to `.env.production`**
+- [x] **Step 3: Write object-storage values to `.env.production`**
 
 In the env writer block, after `DATABASE_URL`, add:
 
@@ -93,7 +93,7 @@ In the env writer block, after `DATABASE_URL`, add:
     write_env_line BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "$BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE"
 ```
 
-- [ ] **Step 4: Extend installer summary/log hints**
+- [x] **Step 4: Extend installer summary/log hints**
 
 In `print_summary`, update the useful logs command:
 
@@ -103,7 +103,7 @@ In `print_summary`, update the useful logs command:
 
 Do not print secrets.
 
-- [ ] **Step 5: Static shell verification**
+- [x] **Step 5: Static shell verification**
 
 Run:
 

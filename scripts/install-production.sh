@@ -537,6 +537,27 @@ collect_env() {
   fi
   DATABASE_URL="postgresql://${PORTAL_V2_POSTGRES_USER}:${PORTAL_V2_POSTGRES_PASSWORD}@portal-db:5432/${PORTAL_V2_POSTGRES_DB}"
 
+  PORTAL_OBJECT_STORAGE_IMAGE="quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+  PORTAL_OBJECT_STORAGE_MC_IMAGE="quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+  PORTAL_OBJECT_STORAGE_ROOT_USER="portal_v2_minio_root"
+
+  local existing_storage_root_password
+  existing_storage_root_password="$(env_value PORTAL_OBJECT_STORAGE_ROOT_PASSWORD)"
+  existing_storage_root_password="${existing_storage_root_password:-$(random_hex 32)}"
+  prompt_secret PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "Portal object storage root password" "$existing_storage_root_password"
+
+  BRANDING_ASSET_STORAGE_ENDPOINT="http://portal-object-storage:9000"
+  BRANDING_ASSET_STORAGE_REGION="us-east-1"
+  BRANDING_ASSET_STORAGE_BUCKET="portal-branding-assets"
+  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID="portal_v2_branding_assets"
+
+  local existing_branding_storage_secret
+  existing_branding_storage_secret="$(env_value BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY)"
+  existing_branding_storage_secret="${existing_branding_storage_secret:-$(random_hex 32)}"
+  prompt_secret BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "Branding asset storage app secret key" "$existing_branding_storage_secret"
+
+  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE="true"
+
   local existing_tenant_secret_key
   existing_tenant_secret_key="$(env_value PORTAL_TENANT_SECRET_KEY)"
   existing_tenant_secret_key="${existing_tenant_secret_key:-$(random_base64 32)}"
@@ -633,6 +654,16 @@ collect_env() {
     write_env_line PORTAL_V2_POSTGRES_USER "$PORTAL_V2_POSTGRES_USER"
     write_env_line PORTAL_V2_POSTGRES_PASSWORD "$PORTAL_V2_POSTGRES_PASSWORD"
     write_env_line DATABASE_URL "$DATABASE_URL"
+    write_env_line PORTAL_OBJECT_STORAGE_IMAGE "$PORTAL_OBJECT_STORAGE_IMAGE"
+    write_env_line PORTAL_OBJECT_STORAGE_MC_IMAGE "$PORTAL_OBJECT_STORAGE_MC_IMAGE"
+    write_env_line PORTAL_OBJECT_STORAGE_ROOT_USER "$PORTAL_OBJECT_STORAGE_ROOT_USER"
+    write_env_line PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "$PORTAL_OBJECT_STORAGE_ROOT_PASSWORD"
+    write_env_line BRANDING_ASSET_STORAGE_ENDPOINT "$BRANDING_ASSET_STORAGE_ENDPOINT"
+    write_env_line BRANDING_ASSET_STORAGE_REGION "$BRANDING_ASSET_STORAGE_REGION"
+    write_env_line BRANDING_ASSET_STORAGE_BUCKET "$BRANDING_ASSET_STORAGE_BUCKET"
+    write_env_line BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "$BRANDING_ASSET_STORAGE_ACCESS_KEY_ID"
+    write_env_line BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "$BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY"
+    write_env_line BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "$BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE"
     write_env_line PORTAL_TENANT_SECRET_KEY "$PORTAL_TENANT_SECRET_KEY"
     write_env_line DEFAULT_TENANT_SLUG "$DEFAULT_TENANT_SLUG"
     write_env_line DEFAULT_TENANT_DISPLAY_NAME "$DEFAULT_TENANT_DISPLAY_NAME"
@@ -932,7 +963,7 @@ print_summary() {
   echo "  scripts/install-production.sh --install-maintenance-cleanup"
   echo "  scripts/install-production.sh --maintenance-cleanup-dry-run"
   echo "  docker compose --env-file .env.production -f infra/production/compose.yaml ps"
-  echo "  docker compose --env-file .env.production -f infra/production/compose.yaml logs -f portal-backend portal-web"
+  echo "  docker compose --env-file .env.production -f infra/production/compose.yaml logs -f portal-backend portal-web portal-object-storage"
 }
 
 print_status() {
