@@ -38,6 +38,22 @@ function coalesce<T>(value: T | null | undefined, fallback: T) {
   return value ?? fallback
 }
 
+function getReadableTextColor(backgroundColor: string) {
+  const normalized = backgroundColor.trim()
+
+  if (!/^#[0-9a-fA-F]{6}$/u.test(normalized)) {
+    return defaultBrandingColors.chatHeaderText
+  }
+
+  const red = Number.parseInt(normalized.slice(1, 3), 16)
+  const green = Number.parseInt(normalized.slice(3, 5), 16)
+  const blue = Number.parseInt(normalized.slice(5, 7), 16)
+  const relativeLuminance =
+    (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255
+
+  return relativeLuminance < 0.55 ? '#ffffff' : '#0f172a'
+}
+
 async function buildBrandingResponse({
   repository,
   settings: settingsOverride,
@@ -54,31 +70,61 @@ async function buildBrandingResponse({
     repository.findActiveAssetMetadata(),
   ])
   const defaultCopy = createDefaultBrandingCopy(tenant.displayName)
+  const accentColor = coalesce(
+    resolvedSettings?.accentColor,
+    defaultBrandingColors.accent,
+  )
+  const authBackgroundColor = coalesce(
+    resolvedSettings?.authBackgroundColor,
+    defaultBrandingColors.authBackground,
+  )
+  const authMutedTextColor = coalesce(
+    resolvedSettings?.authMutedTextColor,
+    defaultBrandingColors.authMutedText,
+  )
+  const authTextColor = coalesce(
+    resolvedSettings?.authTextColor,
+    defaultBrandingColors.authText,
+  )
+  const chatBackgroundColor = coalesce(
+    resolvedSettings?.chatBackgroundColor,
+    defaultBrandingColors.chatBackground,
+  )
+  const chatHeaderBackgroundColor = coalesce(
+    resolvedSettings?.chatHeaderBackgroundColor,
+    defaultBrandingColors.chatHeaderBackground,
+  )
+  const chatHeaderTextColor = coalesce(
+    resolvedSettings?.chatHeaderTextColor,
+    getReadableTextColor(chatHeaderBackgroundColor),
+  )
+  const chatMutedTextColor = coalesce(
+    resolvedSettings?.chatMutedTextColor,
+    defaultBrandingColors.chatMutedText,
+  )
+  const chatTextColor = coalesce(
+    resolvedSettings?.chatTextColor,
+    defaultBrandingColors.chatText,
+  )
+  const primaryColor = coalesce(
+    resolvedSettings?.primaryColor,
+    defaultBrandingColors.primary,
+  )
 
   return {
     branding: {
       assets,
       colors: {
-        accent: coalesce(
-          resolvedSettings?.accentColor,
-          defaultBrandingColors.accent,
-        ),
-        authBackground: coalesce(
-          resolvedSettings?.authBackgroundColor,
-          defaultBrandingColors.authBackground,
-        ),
-        chatBackground: coalesce(
-          resolvedSettings?.chatBackgroundColor,
-          defaultBrandingColors.chatBackground,
-        ),
-        chatHeaderBackground: coalesce(
-          resolvedSettings?.chatHeaderBackgroundColor,
-          defaultBrandingColors.chatHeaderBackground,
-        ),
-        primary: coalesce(
-          resolvedSettings?.primaryColor,
-          defaultBrandingColors.primary,
-        ),
+        accent: accentColor,
+        authBackground: authBackgroundColor,
+        authMutedText: authMutedTextColor,
+        authText: authTextColor,
+        chatBackground: chatBackgroundColor,
+        chatHeaderBackground: chatHeaderBackgroundColor,
+        chatHeaderText: chatHeaderTextColor,
+        chatMutedText: chatMutedTextColor,
+        chatText: chatTextColor,
+        primary: primaryColor,
       },
       copy: {
         authSubtitle: coalesce(
@@ -121,6 +167,14 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
     patch.authBackgroundColor = parsedInput.colors.authBackground
   }
 
+  if (parsedInput.colors?.authMutedText !== undefined) {
+    patch.authMutedTextColor = parsedInput.colors.authMutedText
+  }
+
+  if (parsedInput.colors?.authText !== undefined) {
+    patch.authTextColor = parsedInput.colors.authText
+  }
+
   if (parsedInput.copy?.authSubtitle !== undefined) {
     patch.authSubtitle = parsedInput.copy.authSubtitle
   }
@@ -145,8 +199,20 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
     patch.chatHeaderBackgroundColor = parsedInput.colors.chatHeaderBackground
   }
 
+  if (parsedInput.colors?.chatHeaderText !== undefined) {
+    patch.chatHeaderTextColor = parsedInput.colors.chatHeaderText
+  }
+
   if (parsedInput.copy?.chatInfoTitle !== undefined) {
     patch.chatInfoTitle = parsedInput.copy.chatInfoTitle
+  }
+
+  if (parsedInput.colors?.chatMutedText !== undefined) {
+    patch.chatMutedTextColor = parsedInput.colors.chatMutedText
+  }
+
+  if (parsedInput.colors?.chatText !== undefined) {
+    patch.chatTextColor = parsedInput.colors.chatText
   }
 
   if (parsedInput.portalName !== undefined) {

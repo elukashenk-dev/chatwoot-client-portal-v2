@@ -20,8 +20,13 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
+    authMutedText: '#456179',
+    authText: '#0f172a',
     chatBackground: '#f8fafc',
     chatHeaderBackground: '#0f766e',
+    chatHeaderText: '#f8fafc',
+    chatMutedText: '#52637a',
+    chatText: '#1f2937',
     primary: '#134e4a',
   },
   copy: {
@@ -246,7 +251,10 @@ describe('PortalPreviewFrame', () => {
     ).toHaveAttribute('src', '/api/branding/assets/12?v=12')
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
+      '--portal-auth-text-color': '#0f172a',
       '--portal-chat-header-background-color': '#164e63',
+      '--portal-chat-header-foreground': '#f8fafc',
+      '--portal-chat-text-color': '#1f2937',
     })
   })
 })

@@ -49,16 +49,16 @@ export function AuthLoginPreview() {
         </div>
 
         <div className="mt-auto pt-6">
-          <aside className="flex items-center gap-3 rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-[13px] leading-5 shadow-sm">
+          <aside className="auth-muted-text flex items-center gap-3 rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-[13px] leading-5 shadow-sm">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200/80 text-brand-800 max-[360px]:hidden">
               <PhoneIcon className="h-4 w-4" />
             </span>
 
             <div className="min-w-0">
-              <p className="text-[14px] font-medium text-slate-800">
+              <p className="auth-text text-[14px] font-medium">
                 Нет доступа к чату?
               </p>
-              <p className="whitespace-nowrap text-slate-500">
+              <p className="whitespace-nowrap">
                 Поддержка: +7 (906) 12-955-12
               </p>
             </div>

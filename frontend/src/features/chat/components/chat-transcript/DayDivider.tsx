@@ -15,7 +15,7 @@ export function DayDivider({
       )}
     >
       <div className="h-px flex-1 bg-slate-100" />
-      <span className="rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-0.5 text-[11px] font-normal text-slate-500 shadow-sm shadow-slate-900/[0.03]">
+      <span className="chat-muted-text rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-0.5 text-[11px] font-normal text-slate-500 shadow-sm shadow-slate-900/[0.03]">
         {label}
       </span>
       <div className="h-px flex-1 bg-slate-100" />

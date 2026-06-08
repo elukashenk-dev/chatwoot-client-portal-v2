@@ -5,6 +5,7 @@ import type {
   BrandingColors,
   BrandingCopy,
 } from '../api/adminBrandingClient'
+import { defaultBrandingColors } from '../../branding/lib/brandingDefaults'
 import type { BrandingDraft } from '../lib/brandingState'
 import { BrandingAssetControls } from './BrandingAssetControls'
 
@@ -29,6 +30,49 @@ type TextFieldProps = {
   value: string
 }
 
+type ColorFieldConfig = {
+  key: keyof BrandingColors
+  label: string
+}
+
+const validHexColorPattern = /^#[0-9a-fA-F]{6}$/u
+
+const colorFieldGroups = [
+  {
+    fields: [
+      { key: 'primary', label: 'Основной цвет' },
+      { key: 'accent', label: 'Акцентный цвет' },
+    ],
+    title: 'Основные',
+  },
+  {
+    fields: [
+      { key: 'authBackground', label: 'Цвет auth-фона' },
+      { key: 'authText', label: 'Цвет текста auth-экрана' },
+      {
+        key: 'authMutedText',
+        label: 'Цвет вторичного текста auth-экрана',
+      },
+    ],
+    title: 'Auth-экран',
+  },
+  {
+    fields: [
+      { key: 'chatBackground', label: 'Фон чата' },
+      { key: 'chatText', label: 'Цвет текста чата' },
+      { key: 'chatMutedText', label: 'Цвет вторичного текста чата' },
+    ],
+    title: 'Чат',
+  },
+  {
+    fields: [
+      { key: 'chatHeaderBackground', label: 'Фон шапки чата' },
+      { key: 'chatHeaderText', label: 'Цвет текста шапки чата' },
+    ],
+    title: 'Шапка чата',
+  },
+] satisfies Array<{ fields: ColorFieldConfig[]; title: string }>
+
 function TextField({ disabled, label, name, onChange, value }: TextFieldProps) {
   return (
     <label className="block">
@@ -47,6 +91,10 @@ function TextField({ disabled, label, name, onChange, value }: TextFieldProps) {
   )
 }
 
+function getColorPickerValue(value: string) {
+  return validHexColorPattern.test(value) ? value : '#000000'
+}
+
 function ColorField({
   disabled,
   label,
@@ -54,16 +102,40 @@ function ColorField({
   onChange,
   value,
 }: TextFieldProps) {
+  const colorValue = getColorPickerValue(value)
+  const textInputId = `${name.replaceAll('.', '-')}-hex`
+
   return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+    <div className="block">
+      <label
+        className="text-sm font-medium text-slate-700"
+        htmlFor={textInputId}
+      >
+        {label}
+      </label>
       <span className="mt-2 flex h-11 items-center gap-2 rounded-[0.55rem] border border-slate-200 bg-white px-2 shadow-sm focus-within:border-brand-300 focus-within:ring-4 focus-within:ring-brand-100 focus-within:outline-none">
-        <span
-          aria-hidden="true"
-          className="h-7 w-7 shrink-0 rounded-md border border-slate-200"
-          style={{ backgroundColor: value }}
-        />
+        <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-md border border-slate-200">
+          <span
+            aria-hidden="true"
+            className="absolute inset-0"
+            style={{ backgroundColor: colorValue }}
+          />
+          <input
+            aria-label={`Выбрать ${label.toLocaleLowerCase('ru-RU')}`}
+            className="absolute inset-0 h-full w-full cursor-pointer appearance-none border-0 opacity-0 disabled:cursor-not-allowed"
+            disabled={disabled}
+            onChange={(event) => {
+              onChange(event.currentTarget.value)
+            }}
+            onInput={(event) => {
+              onChange(event.currentTarget.value)
+            }}
+            type="color"
+            value={colorValue}
+          />
+        </span>
         <input
+          id={textInputId}
           className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent px-1 text-sm text-slate-950 shadow-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-slate-400"
           disabled={disabled}
           name={name}
@@ -74,7 +146,7 @@ function ColorField({
           value={value}
         />
       </span>
-    </label>
+    </div>
   )
 }
 
@@ -102,6 +174,13 @@ export function AdminBrandingForm({
         ...draft.colors,
         [key]: value,
       },
+    })
+  }
+
+  function resetColors() {
+    onChange({
+      ...draft,
+      colors: { ...defaultBrandingColors },
     })
   }
 
@@ -153,49 +232,44 @@ export function AdminBrandingForm({
         className="rounded-[0.6rem] border border-slate-200 bg-white p-4 shadow-sm"
         id="colors"
       >
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold">Цвета</h3>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            Основные цвета auth-экранов, чата и шапки чата.
-          </p>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Цвета</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              Основные цвета auth-экранов, чата и шапки чата.
+            </p>
+          </div>
+          <button
+            className="inline-flex min-h-9 w-fit items-center justify-center rounded-[0.55rem] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-brand-200 hover:text-brand-900 disabled:cursor-not-allowed disabled:text-slate-400"
+            disabled={isSaving}
+            onClick={resetColors}
+            type="button"
+          >
+            Сбросить цвета
+          </button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <ColorField
-            disabled={isSaving}
-            label="Основной цвет"
-            name="colors.primary"
-            onChange={(value) => {
-              updateColor('primary', value)
-            }}
-            value={draft.colors.primary}
-          />
-          <ColorField
-            disabled={isSaving}
-            label="Цвет auth-фона"
-            name="colors.authBackground"
-            onChange={(value) => {
-              updateColor('authBackground', value)
-            }}
-            value={draft.colors.authBackground}
-          />
-          <ColorField
-            disabled={isSaving}
-            label="Фон чата"
-            name="colors.chatBackground"
-            onChange={(value) => {
-              updateColor('chatBackground', value)
-            }}
-            value={draft.colors.chatBackground}
-          />
-          <ColorField
-            disabled={isSaving}
-            label="Фон шапки чата"
-            name="colors.chatHeaderBackground"
-            onChange={(value) => {
-              updateColor('chatHeaderBackground', value)
-            }}
-            value={draft.colors.chatHeaderBackground}
-          />
+        <div className="space-y-5">
+          {colorFieldGroups.map((group) => (
+            <fieldset className="space-y-3" key={group.title}>
+              <legend className="text-sm font-semibold text-slate-900">
+                {group.title}
+              </legend>
+              <div className="grid gap-4 md:grid-cols-2">
+                {group.fields.map((field) => (
+                  <ColorField
+                    disabled={isSaving}
+                    key={field.key}
+                    label={field.label}
+                    name={`colors.${field.key}`}
+                    onChange={(value) => {
+                      updateColor(field.key, value)
+                    }}
+                    value={draft.colors[field.key]}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ))}
         </div>
       </section>
 

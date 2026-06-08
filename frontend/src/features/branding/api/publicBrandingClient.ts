@@ -12,8 +12,13 @@ type ApiErrorResponse = {
 export type BrandingColors = {
   accent: string
   authBackground: string
+  authMutedText: string
+  authText: string
   chatBackground: string
   chatHeaderBackground: string
+  chatHeaderText: string
+  chatMutedText: string
+  chatText: string
   primary: string
 }
 

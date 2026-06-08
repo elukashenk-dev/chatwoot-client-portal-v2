@@ -27,8 +27,13 @@ export const adminBrandingPatchSchema = z
       .object({
         accent: colorSchema.optional(),
         authBackground: colorSchema.optional(),
+        authMutedText: colorSchema.optional(),
+        authText: colorSchema.optional(),
         chatBackground: colorSchema.optional(),
         chatHeaderBackground: colorSchema.optional(),
+        chatHeaderText: colorSchema.optional(),
+        chatMutedText: colorSchema.optional(),
+        chatText: colorSchema.optional(),
         primary: colorSchema.optional(),
       })
       .strict()

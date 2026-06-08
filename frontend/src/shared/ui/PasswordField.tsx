@@ -31,7 +31,7 @@ export function PasswordField({
   return (
     <div className="relative">
       {leadingIcon ? (
-        <span className="pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-slate-500">
+        <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
           {leadingIcon}
         </span>
       ) : null}
@@ -53,7 +53,7 @@ export function PasswordField({
         aria-controls={id}
         aria-label={isVisible ? hideLabel : showLabel}
         aria-pressed={isVisible}
-        className="absolute inset-y-0 right-3 my-auto inline-flex h-10 w-10 items-center justify-center rounded-[0.6rem] text-slate-400 transition hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+        className="auth-muted-text absolute inset-y-0 right-3 my-auto inline-flex h-10 w-10 items-center justify-center rounded-[0.6rem] transition hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
         onClick={() => setIsVisible((currentValue) => !currentValue)}
         type="button"
       >

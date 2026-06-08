@@ -77,6 +77,21 @@ function getReadableForeground(backgroundColor: string) {
   }
 }
 
+function createMutedTextColor(
+  textColor: string,
+  surfaceColor: string,
+  fallback: string,
+) {
+  const text = parseHexColor(textColor)
+  const surface = parseHexColor(surfaceColor)
+
+  if (!text || !surface) {
+    return fallback
+  }
+
+  return toHexColor(mixColor(text, surface, 0.32))
+}
+
 function cssUrlValue(imageUrl?: string | null) {
   if (!imageUrl) {
     return 'none'
@@ -119,6 +134,14 @@ export function createBrandingCssProperties(
     branding.colors.authBackground,
     defaultBrandingColors.authBackground,
   )
+  const authMutedTextColor = normalizeHexColor(
+    branding.colors.authMutedText,
+    defaultBrandingColors.authMutedText,
+  )
+  const authTextColor = normalizeHexColor(
+    branding.colors.authText,
+    defaultBrandingColors.authText,
+  )
   const chatBackgroundColor = normalizeHexColor(
     branding.colors.chatBackground,
     defaultBrandingColors.chatBackground,
@@ -127,7 +150,19 @@ export function createBrandingCssProperties(
     branding.colors.chatHeaderBackground,
     defaultBrandingColors.chatHeaderBackground,
   )
-  const { foreground, mutedForeground } = getReadableForeground(
+  const chatHeaderTextColor = normalizeHexColor(
+    branding.colors.chatHeaderText,
+    defaultBrandingColors.chatHeaderText,
+  )
+  const chatMutedTextColor = normalizeHexColor(
+    branding.colors.chatMutedText,
+    defaultBrandingColors.chatMutedText,
+  )
+  const chatTextColor = normalizeHexColor(
+    branding.colors.chatText,
+    defaultBrandingColors.chatText,
+  )
+  const { mutedForeground } = getReadableForeground(
     chatHeaderBackgroundColor,
   )
 
@@ -137,6 +172,8 @@ export function createBrandingCssProperties(
     '--portal-auth-background-image': cssUrlValue(
       branding.assets.auth_background_image?.publicUrl,
     ),
+    '--portal-auth-muted-text-color': authMutedTextColor,
+    '--portal-auth-text-color': authTextColor,
     '--portal-chat-background-color': chatBackgroundColor,
     '--portal-chat-background-image': cssUrlValue(
       branding.assets.chat_background_image?.publicUrl,
@@ -145,7 +182,13 @@ export function createBrandingCssProperties(
     '--portal-chat-header-background-image': cssUrlValue(
       branding.assets.chat_header_background_image?.publicUrl,
     ),
-    '--portal-chat-header-foreground': foreground,
-    '--portal-chat-header-muted-foreground': mutedForeground,
+    '--portal-chat-header-foreground': chatHeaderTextColor,
+    '--portal-chat-header-muted-foreground': createMutedTextColor(
+      chatHeaderTextColor,
+      chatHeaderBackgroundColor,
+      mutedForeground,
+    ),
+    '--portal-chat-muted-text-color': chatMutedTextColor,
+    '--portal-chat-text-color': chatTextColor,
   }
 }

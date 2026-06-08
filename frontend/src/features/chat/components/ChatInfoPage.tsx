@@ -39,8 +39,10 @@ function formatDateTime(value: string | null) {
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-h-11 items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 last:border-b-0">
-      <dt className="shrink-0 text-[13px] leading-5 text-slate-500">{label}</dt>
-      <dd className="min-w-0 max-w-[65%] break-words text-right text-[13px] font-medium leading-5 text-slate-900">
+      <dt className="chat-muted-text shrink-0 text-[13px] leading-5">
+        {label}
+      </dt>
+      <dd className="chat-text min-w-0 max-w-[65%] break-words text-right text-[13px] font-medium leading-5">
         {value}
       </dd>
     </div>
@@ -81,14 +83,14 @@ function WorkingHoursSection({
     return (
       <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
         <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
-          <h2 className="text-[13px] font-semibold text-slate-900">
+          <h2 className="chat-text text-[13px] font-semibold">
             Часы работы
           </h2>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
             Проверяем
           </span>
         </div>
-        <p className="px-4 py-3 text-[13px] leading-5 text-slate-500">
+        <p className="chat-muted-text px-4 py-3 text-[13px] leading-5">
           {isLoading
             ? 'Проверяем расписание поддержки.'
             : 'Не удалось загрузить расписание поддержки.'}
@@ -107,7 +109,7 @@ function WorkingHoursSection({
   return (
     <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
       <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
-        <h2 className="text-[13px] font-semibold text-slate-900">
+        <h2 className="chat-text text-[13px] font-semibold">
           Часы работы
         </h2>
         <span
@@ -131,15 +133,17 @@ function WorkingHoursSection({
                 className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3 text-[13px] leading-5"
                 key={`${row.daysLabel}-${row.timeLabel}`}
               >
-                <dt className="text-slate-500">{row.daysLabel}</dt>
-                <dd className="font-medium text-slate-900">{row.timeLabel}</dd>
+                <dt className="chat-muted-text">{row.daysLabel}</dt>
+                <dd className="chat-text font-medium">{row.timeLabel}</dd>
               </div>
             ))}
           </dl>
         ) : (
-          <p className="text-[13px] leading-5 text-slate-500">Без расписания</p>
+          <p className="chat-muted-text text-[13px] leading-5">
+            Без расписания
+          </p>
         )}
-        <p className="mt-3 text-[12px] leading-4 text-slate-500">
+        <p className="chat-muted-text mt-3 text-[12px] leading-4">
           Часовой пояс: {supportAvailability.workingHours.timezone}
         </p>
         {showOutOfOfficeMessage ? (
@@ -198,7 +202,7 @@ export function ChatInfoPage({
             <h2 className="mt-3 max-w-full truncate text-[18px] font-semibold leading-tight">
               {threadTitle}
             </h2>
-            <p className="mt-1 max-w-full truncate text-[13px] text-slate-500">
+            <p className="chat-muted-text mt-1 max-w-full truncate text-[13px]">
               {info.activeThread?.subtitle ?? info.supportLabel}
             </p>
           </div>
@@ -225,7 +229,7 @@ export function ChatInfoPage({
 
           {info.participants.length > 0 ? (
             <section className="mt-5">
-              <h2 className="px-1 text-[12px] font-semibold uppercase tracking-normal text-slate-500">
+              <h2 className="chat-muted-text px-1 text-[12px] font-semibold uppercase tracking-normal">
                 Участники портала
               </h2>
               <div className="mt-2 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
@@ -238,11 +242,11 @@ export function ChatInfoPage({
                       avatarUrl={participant.avatarUrl}
                       name={participant.displayName}
                     />
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-900">
+                    <span className="chat-text min-w-0 flex-1 truncate text-[13px] font-medium">
                       {participant.displayName}
                     </span>
                     {participant.isCurrentUser ? (
-                      <span className="shrink-0 text-[12px] text-slate-500">
+                      <span className="chat-muted-text shrink-0 text-[12px]">
                         Вы
                       </span>
                     ) : null}

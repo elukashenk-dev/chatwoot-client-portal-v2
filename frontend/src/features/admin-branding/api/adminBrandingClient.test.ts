@@ -13,8 +13,13 @@ const brandingResponse = {
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
+      authMutedText: '#64748b',
+      authText: '#0f172a',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#112540',
+      chatHeaderText: '#ffffff',
+      chatMutedText: '#64748b',
+      chatText: '#334155',
       primary: '#112540',
     },
     copy: {

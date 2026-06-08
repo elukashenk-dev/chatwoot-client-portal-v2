@@ -31,7 +31,7 @@ export function TextField({
 
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center text-slate-500">
+      <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
         {leadingIcon}
       </span>
 

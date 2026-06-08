@@ -27,7 +27,7 @@ export function BrandMark({
         )}
       </div>
 
-      <p className="brand-mark-name max-w-[11rem] truncate text-center text-[12px] font-semibold uppercase tracking-normal text-brand-700/85">
+      <p className="auth-text brand-mark-name max-w-[11rem] truncate text-center text-[12px] font-semibold uppercase tracking-normal">
         {name}
       </p>
 

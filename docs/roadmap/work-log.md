@@ -118,9 +118,9 @@ execution-plan детали здесь не хранятся.
   through portal-owned asset URLs and keeps settings saves isolated from asset
   operations.
 - `MT-9G` is closed: customer auth, chat, chat-info and empty chat runtime
-  surfaces consume public tenant branding colors, copy and portal-owned image
-  asset URLs, and tenant PWA manifest colors now follow saved branding settings
-  without exposing object-storage authority.
+  surfaces consume public tenant branding background/text colors, copy and
+  portal-owned image asset URLs, and tenant PWA manifest colors now follow saved
+  branding settings without exposing object-storage authority.
 - `MT-9H` admin preview parity checkpoint is closed: `/admin/branding` now
   shows read-only real portal preview screens for `Вход`, `Чат` and `Инфо`,
   updates from unsaved draft values and is covered against customer runtime API

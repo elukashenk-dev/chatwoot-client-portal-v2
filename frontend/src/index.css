@@ -74,6 +74,7 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  color: var(--portal-auth-text-color, #0f172a);
 }
 
 .auth-shell-background {
@@ -84,6 +85,15 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  color: var(--portal-auth-text-color, #0f172a);
+}
+
+.auth-text {
+  color: var(--portal-auth-text-color, #0f172a);
+}
+
+.auth-muted-text {
+  color: var(--portal-auth-muted-text-color, #64748b);
 }
 
 .app-runtime-background {
@@ -92,6 +102,7 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  color: var(--portal-chat-text-color, #334155);
 }
 
 .portal-shell,
@@ -101,6 +112,24 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
+  color: var(--portal-chat-text-color, #334155);
+}
+
+.chat-text {
+  color: var(--portal-chat-text-color, #334155);
+}
+
+.chat-muted-text,
+.portal-branding-scope [data-message-header] {
+  color: var(--portal-chat-muted-text-color, #64748b);
+}
+
+.portal-branding-scope .chat-incoming-surface {
+  color: var(--portal-chat-text-color, #334155);
+}
+
+.portal-branding-scope .chat-incoming-surface [data-message-meta] {
+  color: var(--portal-chat-muted-text-color, #64748b);
 }
 
 html.app-shell-scroll-lock,

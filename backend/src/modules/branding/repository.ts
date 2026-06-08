@@ -24,7 +24,9 @@ export type BrandingSettingsPatch = Partial<{
   authBackgroundImageAssetId: number | null
   authFooterImageAssetId: number | null
   authHeaderImageAssetId: number | null
+  authMutedTextColor: string | null
   authSubtitle: string | null
+  authTextColor: string | null
   authTitle: string | null
   chatBackgroundColor: string | null
   chatBackgroundImageAssetId: number | null
@@ -32,7 +34,10 @@ export type BrandingSettingsPatch = Partial<{
   chatEmptyTitle: string | null
   chatHeaderBackgroundColor: string | null
   chatHeaderBackgroundImageAssetId: number | null
+  chatHeaderTextColor: string | null
   chatInfoTitle: string | null
+  chatMutedTextColor: string | null
+  chatTextColor: string | null
   logoAssetId: number | null
   portalName: string | null
   primaryColor: string | null
@@ -83,7 +88,9 @@ const settingsSelection = {
   authBackgroundImageAssetId: portalBrandingSettings.authBackgroundImageAssetId,
   authFooterImageAssetId: portalBrandingSettings.authFooterImageAssetId,
   authHeaderImageAssetId: portalBrandingSettings.authHeaderImageAssetId,
+  authMutedTextColor: portalBrandingSettings.authMutedTextColor,
   authSubtitle: portalBrandingSettings.authSubtitle,
+  authTextColor: portalBrandingSettings.authTextColor,
   authTitle: portalBrandingSettings.authTitle,
   chatBackgroundColor: portalBrandingSettings.chatBackgroundColor,
   chatBackgroundImageAssetId: portalBrandingSettings.chatBackgroundImageAssetId,
@@ -92,7 +99,10 @@ const settingsSelection = {
   chatHeaderBackgroundColor: portalBrandingSettings.chatHeaderBackgroundColor,
   chatHeaderBackgroundImageAssetId:
     portalBrandingSettings.chatHeaderBackgroundImageAssetId,
+  chatHeaderTextColor: portalBrandingSettings.chatHeaderTextColor,
   chatInfoTitle: portalBrandingSettings.chatInfoTitle,
+  chatMutedTextColor: portalBrandingSettings.chatMutedTextColor,
+  chatTextColor: portalBrandingSettings.chatTextColor,
   createdAt: portalBrandingSettings.createdAt,
   id: portalBrandingSettings.id,
   logoAssetId: portalBrandingSettings.logoAssetId,
@@ -140,7 +150,9 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     ),
     authFooterImageAssetId: normalizeAssetId(input.authFooterImageAssetId),
     authHeaderImageAssetId: normalizeAssetId(input.authHeaderImageAssetId),
+    authMutedTextColor: normalizeNullableText(input.authMutedTextColor),
     authSubtitle: normalizeNullableText(input.authSubtitle),
+    authTextColor: normalizeNullableText(input.authTextColor),
     authTitle: normalizeNullableText(input.authTitle),
     chatBackgroundColor: normalizeNullableText(input.chatBackgroundColor),
     chatBackgroundImageAssetId: normalizeAssetId(
@@ -154,7 +166,10 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     chatHeaderBackgroundImageAssetId: normalizeAssetId(
       input.chatHeaderBackgroundImageAssetId,
     ),
+    chatHeaderTextColor: normalizeNullableText(input.chatHeaderTextColor),
     chatInfoTitle: normalizeNullableText(input.chatInfoTitle),
+    chatMutedTextColor: normalizeNullableText(input.chatMutedTextColor),
+    chatTextColor: normalizeNullableText(input.chatTextColor),
     logoAssetId: normalizeAssetId(input.logoAssetId),
     portalName: normalizeNullableText(input.portalName),
     primaryColor: normalizeNullableText(input.primaryColor),

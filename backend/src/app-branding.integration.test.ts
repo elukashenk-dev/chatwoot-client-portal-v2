@@ -413,6 +413,9 @@ describe('buildApp branding integration', () => {
       method: 'PATCH',
       payload: {
         colors: {
+          authText: '#223344',
+          chatHeaderText: '#f8fafc',
+          chatText: '#334455',
           primary: '#123456',
         },
         portalName: 'Новый портал',
@@ -424,6 +427,9 @@ describe('buildApp branding integration', () => {
     expect(updateResponse.json()).toEqual({
       branding: expect.objectContaining({
         colors: expect.objectContaining({
+          authText: '#223344',
+          chatHeaderText: '#f8fafc',
+          chatText: '#334455',
           primary: '#123456',
         }),
         portalName: 'Новый портал',
@@ -439,6 +445,9 @@ describe('buildApp branding integration', () => {
     expect(publicResponse.json()).toEqual({
       branding: expect.objectContaining({
         colors: expect.objectContaining({
+          authText: '#223344',
+          chatHeaderText: '#f8fafc',
+          chatText: '#334455',
           primary: '#123456',
         }),
         portalName: 'Новый портал',

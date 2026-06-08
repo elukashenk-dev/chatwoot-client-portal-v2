@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,8 +35,13 @@ const savedBrandingResponse = {
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
+      authMutedText: '#64748b',
+      authText: '#0f172a',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#112540',
+      chatHeaderText: '#ffffff',
+      chatMutedText: '#64748b',
+      chatText: '#334155',
       primary: '#112540',
     },
     copy: {
@@ -247,6 +252,85 @@ describe('AdminBrandingPage', () => {
     await user.type(portalNameInput, ' 2')
 
     expect(screen.queryByText('Настройки сохранены.')).not.toBeInTheDocument()
+  })
+
+  it('syncs selected picker color into the hex text field before saving', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    const authTextInput = await screen.findByLabelText(
+      'Цвет текста auth-экрана',
+    )
+    const authTextPicker = screen.getByLabelText(
+      'Выбрать цвет текста auth-экрана',
+    )
+
+    expect(authTextInput).toHaveValue('#0f172a')
+
+    fireEvent.input(authTextPicker, { target: { value: '#445566' } })
+
+    expect(authTextInput).toHaveValue('#445566')
+
+    await user.click(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    )
+
+    await waitFor(() => {
+      expect(updateAdminBrandingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          colors: expect.objectContaining({
+            authText: '#445566',
+          }),
+        }),
+      )
+    })
+  })
+
+  it('resets only color fields to default branding colors', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Портал без изменения')
+
+    fireEvent.input(screen.getByLabelText('Выбрать основной цвет'), {
+      target: { value: '#445566' },
+    })
+    fireEvent.input(screen.getByLabelText('Выбрать цвет текста чата'), {
+      target: { value: '#778899' },
+    })
+
+    expect(screen.getByLabelText('Основной цвет')).toHaveValue('#445566')
+    expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#778899')
+
+    await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
+
+    expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
+    expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')
+    expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
+      '#ffffff',
+    )
+    expect(portalNameInput).toHaveValue('Портал без изменения')
+
+    await user.click(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    )
+
+    await waitFor(() => {
+      expect(updateAdminBrandingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          colors: expect.objectContaining({
+            chatHeaderText: '#ffffff',
+            chatText: '#334155',
+            primary: '#112540',
+          }),
+          portalName: 'Портал без изменения',
+        }),
+      )
+    })
   })
 
   it('refreshes assets after upload without overwriting unsaved text edits', async () => {

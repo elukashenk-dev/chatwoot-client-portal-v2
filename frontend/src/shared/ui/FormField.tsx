@@ -32,7 +32,7 @@ export function FormField({
     <div>
       <label
         className={cn(
-          'mb-2.5 block text-sm font-medium text-slate-700',
+          'auth-text mb-2.5 block text-sm font-medium',
           labelHidden && 'sr-only',
         )}
         htmlFor={htmlFor}
@@ -50,7 +50,7 @@ export function FormField({
 
       {hint ? (
         <p
-          className="mt-2 text-sm leading-6 text-slate-500"
+          className="auth-muted-text mt-2 text-sm leading-6"
           id={resolvedHintId}
         >
           {hint}

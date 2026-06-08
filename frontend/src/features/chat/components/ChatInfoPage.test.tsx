@@ -82,8 +82,13 @@ const brandingContextValue: BrandingContextValue = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
+      authMutedText: '#456179',
+      authText: '#0f172a',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
+      chatHeaderText: '#f8fafc',
+      chatMutedText: '#52637a',
+      chatText: '#1f2937',
       primary: '#134e4a',
     },
     copy: {

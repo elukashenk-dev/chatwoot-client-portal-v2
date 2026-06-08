@@ -27,7 +27,9 @@ function createRepository(settings: unknown = null) {
       authBackgroundImageAssetId: null,
       authFooterImageAssetId: null,
       authHeaderImageAssetId: null,
+      authMutedTextColor: null,
       authSubtitle: null,
+      authTextColor: null,
       authTitle: null,
       chatBackgroundColor: null,
       chatBackgroundImageAssetId: null,
@@ -35,7 +37,10 @@ function createRepository(settings: unknown = null) {
       chatEmptyTitle: null,
       chatHeaderBackgroundColor: null,
       chatHeaderBackgroundImageAssetId: null,
+      chatHeaderTextColor: null,
       chatInfoTitle: null,
+      chatMutedTextColor: null,
+      chatTextColor: null,
       logoAssetId: null,
       portalName: null,
       primaryColor: null,
@@ -60,6 +65,9 @@ describe('createBrandingService', () => {
       branding: expect.objectContaining({
         assets: {},
         colors: expect.objectContaining({
+          authText: '#0f172a',
+          chatHeaderText: '#ffffff',
+          chatText: '#334155',
           primary: '#112540',
         }),
         copy: expect.objectContaining({
@@ -85,6 +93,8 @@ describe('createBrandingService', () => {
         admin,
         input: {
           colors: {
+            authText: '#223344',
+            chatHeaderText: '#f8fafc',
             primary: '#123456',
           },
           copy: {
@@ -99,6 +109,8 @@ describe('createBrandingService', () => {
     ).resolves.toEqual({
       branding: expect.objectContaining({
         colors: expect.objectContaining({
+          authText: '#223344',
+          chatHeaderText: '#f8fafc',
           primary: '#123456',
         }),
         copy: expect.objectContaining({
@@ -111,6 +123,8 @@ describe('createBrandingService', () => {
     expect(repository.upsertSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         authTitle: 'Добро пожаловать',
+        authTextColor: '#223344',
+        chatHeaderTextColor: '#f8fafc',
         portalName: 'Новый портал',
         primaryColor: '#123456',
         supportLabel: 'Поддержка',
@@ -124,6 +138,50 @@ describe('createBrandingService', () => {
         subjectEmail: 'admin@example.test',
       }),
     )
+  })
+
+  it('uses readable chat header text fallback for existing header backgrounds', async () => {
+    const repository = createRepository({
+      accentColor: null,
+      authBackgroundColor: null,
+      authBackgroundImageAssetId: null,
+      authFooterImageAssetId: null,
+      authHeaderImageAssetId: null,
+      authMutedTextColor: null,
+      authSubtitle: null,
+      authTextColor: null,
+      authTitle: null,
+      chatBackgroundColor: null,
+      chatBackgroundImageAssetId: null,
+      chatEmptyBody: null,
+      chatEmptyTitle: null,
+      chatHeaderBackgroundColor: '#f8fafc',
+      chatHeaderBackgroundImageAssetId: null,
+      chatHeaderTextColor: null,
+      chatInfoTitle: null,
+      chatMutedTextColor: null,
+      chatTextColor: null,
+      logoAssetId: null,
+      portalName: null,
+      primaryColor: null,
+      supportLabel: null,
+      updatedAt: new Date('2026-06-07T00:00:00Z'),
+      version: 2,
+    })
+    const service = createBrandingService({
+      audit: vi.fn(),
+      repository,
+      tenant,
+    })
+
+    await expect(service.getPublicBranding()).resolves.toEqual({
+      branding: expect.objectContaining({
+        colors: expect.objectContaining({
+          chatHeaderBackground: '#f8fafc',
+          chatHeaderText: '#0f172a',
+        }),
+      }),
+    })
   })
 
   it('rejects unsafe colors before repository write', async () => {
