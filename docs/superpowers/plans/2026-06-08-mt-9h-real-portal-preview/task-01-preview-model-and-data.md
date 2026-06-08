@@ -21,12 +21,12 @@ Do not modify:
 
 ## Implementation Steps
 
-- [ ] Написать unit tests для `createPreviewPublicBranding` и
+- [x] Написать unit tests для `createPreviewPublicBranding` и
       `createPreviewTenantIdentity` в `previewBranding.test.ts`.
-- [ ] Проверить в тестах, что `createPreviewPublicBranding(draft)` переносит
+- [x] Проверить в тестах, что `createPreviewPublicBranding(draft)` переносит
       `portalName`, `supportLabel`, `colors`, `copy`, `assets` and sets
       deterministic preview `version`.
-- [ ] Проверить в тестах, что `createPreviewTenantIdentity(draft)` возвращает
+- [x] Проверить в тестах, что `createPreviewTenantIdentity(draft)` возвращает
       safe deterministic tenant values:
   - `displayName: draft.portalName`;
   - `slug: 'preview'`;
@@ -35,19 +35,19 @@ Do not modify:
   - `status: 'ready'`.
   - `errorMessage: null`;
   - `isUsingCachedData: false`.
-- [ ] Не импортировать `PortalPreviewFrame` в Task 01 tests. UI render and
+- [x] Не импортировать `PortalPreviewFrame` в Task 01 tests. UI render and
       no-fetch preview assertions start in Task 02, where the frame exists.
-- [ ] Создать `createPreviewPublicBranding(draft)`, который возвращает
+- [x] Создать `createPreviewPublicBranding(draft)`, который возвращает
       `PublicBranding` без network-зависимостей.
-- [ ] Создать `createPreviewTenantIdentity(draft)`, который возвращает
+- [x] Создать `createPreviewTenantIdentity(draft)`, который возвращает
       `TenantIdentityContextValue` со статусом `ready` и preview tenant data.
-- [ ] Создать `previewData.ts` с минимальными typed fixtures:
+- [x] Создать `previewData.ts` с минимальными typed fixtures:
       `previewThread`, `previewMessages`, `previewSupportAvailability`,
       `previewThreadInfo`.
-- [ ] В `previewData.ts` использовать реальные текущие type shapes из
+- [x] В `previewData.ts` использовать реальные текущие type shapes из
       `frontend/src/features/chat/types.ts`, включая `ChatWorkingHoursRow`:
       `openTime`, `closeTime`, `isOpenAllDay`, `isClosedAllDay`.
-- [ ] Keep `previewMessages` text-only: `attachments: []` for every message.
+- [x] Keep `previewMessages` text-only: `attachments: []` for every message.
 
 ## Test Requirements
 
