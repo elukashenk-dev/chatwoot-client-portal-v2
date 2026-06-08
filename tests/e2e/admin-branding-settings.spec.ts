@@ -55,10 +55,31 @@ function createBrandingResponse(overrides: BrandingResponseOverrides = {}) {
   }
 }
 
+async function mockPublicBrandingRoute(page: Page) {
+  await page.route('**/api/branding', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+
+    if (url.pathname !== '/api/branding') {
+      await route.fallback()
+      return
+    }
+
+    expect(request.method()).toBe('GET')
+    await route.fulfill({
+      contentType: 'application/json',
+      json: brandingResponse,
+      status: 200,
+    })
+  })
+}
+
 async function mockAdminBrandingRoutes(
   page: Page,
   onPatch: BrandingPatchRouteHandler,
 ) {
+  await mockPublicBrandingRoute(page)
+
   await page.route('**/api/tenant', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -157,9 +178,11 @@ test('admin can edit all branding setting groups and see preview update', async 
   await page
     .getByLabel('Цвет auth-фона')
     .fill(updatedBranding.colors.authBackground)
-  await page.getByLabel('Фон чата').fill(updatedBranding.colors.chatBackground)
   await page
-    .getByLabel('Фон шапки чата')
+    .getByLabel('Фон чата', { exact: true })
+    .fill(updatedBranding.colors.chatBackground)
+  await page
+    .getByLabel('Фон шапки чата', { exact: true })
     .fill(updatedBranding.colors.chatHeaderBackground)
   await page
     .getByLabel('Заголовок входа', { exact: true })
@@ -168,18 +191,43 @@ test('admin can edit all branding setting groups and see preview update', async 
     .getByLabel('Подзаголовок входа', { exact: true })
     .fill(updatedBranding.copy.authSubtitle)
 
+  const phonePreview = page.getByRole('region', {
+    name: 'Телефонный предпросмотр портала',
+  })
+
+  await expect(phonePreview).toContainText(updatedBranding.portalName)
+  await expect(phonePreview).toContainText(updatedBranding.supportLabel)
   await expect(
-    page.getByRole('heading', { name: updatedBranding.portalName }),
+    phonePreview.getByRole('heading', {
+      name: updatedBranding.copy.authTitle,
+    }),
   ).toBeVisible()
   await expect(
-    page.getByText(updatedBranding.supportLabel).first(),
+    phonePreview.getByText(updatedBranding.copy.authSubtitle),
   ).toBeVisible()
-  await expect(page.getByText(updatedBranding.copy.authTitle)).toBeVisible()
-  await expect(page.getByText(updatedBranding.copy.authSubtitle)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Продолжить' })).toHaveCSS(
-    'background-color',
-    'rgb(15, 118, 110)',
-  )
+  await expect(
+    phonePreview.getByRole('button', { name: 'Войти' }),
+  ).toBeDisabled()
+
+  await page.getByRole('tab', { name: 'Чат' }).click()
+  await expect(
+    phonePreview.getByRole('heading', { name: 'Личный чат' }),
+  ).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Инфо' }).click()
+  await expect(
+    phonePreview.getByText(updatedBranding.supportLabel).first(),
+  ).toBeVisible()
+  await expect(
+    phonePreview.getByRole('heading', { name: 'Информация о чате' }),
+  ).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Вход' }).click()
+  await expect(
+    phonePreview.getByRole('heading', {
+      name: updatedBranding.copy.authTitle,
+    }),
+  ).toBeVisible()
 
   const patchResponsePromise = page.waitForResponse(
     (response) =>

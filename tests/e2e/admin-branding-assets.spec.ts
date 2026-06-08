@@ -39,9 +39,30 @@ const brandingBase = {
   },
 }
 
+async function mockPublicBrandingRoute(page: Page) {
+  await page.route('**/api/branding', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+
+    if (url.pathname !== '/api/branding') {
+      await route.fallback()
+      return
+    }
+
+    expect(request.method()).toBe('GET')
+    await route.fulfill({
+      contentType: 'application/json',
+      json: brandingBase,
+      status: 200,
+    })
+  })
+}
+
 async function mockAdminBrandingAssetRoutes(page: Page) {
   const assetRequests: string[] = []
   let currentAssets: Record<string, typeof logoAsset> = {}
+
+  await mockPublicBrandingRoute(page)
 
   await page.route('**/api/tenant', async (route) => {
     await route.fulfill({
@@ -116,6 +137,7 @@ async function mockAdminBrandingAssetRoutes(page: Page) {
   })
 
   await page.route('**/api/branding/assets/77**', async (route) => {
+    expect(route.request().method()).toBe('GET')
     await route.fulfill({
       body: onePixelPng,
       contentType: 'image/png',

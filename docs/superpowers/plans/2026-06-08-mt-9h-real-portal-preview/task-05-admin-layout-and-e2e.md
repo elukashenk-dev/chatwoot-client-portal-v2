@@ -24,7 +24,7 @@ Create:
 
 ## Implementation Steps
 
-- [ ] В `AdminBrandingPage.tsx` заменить grid:
+- [x] В `AdminBrandingPage.tsx` заменить grid:
 
 ```tsx
 <section className="hidden min-h-full grid-cols-[15rem_minmax(0,1fr)_22rem] lg:grid">
@@ -36,18 +36,18 @@ Create:
 <section className="hidden min-h-full grid-cols-[15rem_minmax(0,1fr)_minmax(25rem,28rem)] 2xl:grid-cols-[15rem_minmax(36rem,1fr)_30rem] lg:grid">
 ```
 
-- [ ] Сделать preview aside scrollable:
+- [x] Сделать preview aside scrollable:
 
 ```tsx
 <aside className="max-h-screen overflow-y-auto border-l border-slate-200 bg-white px-3 py-6 xl:px-5">
 ```
 
-- [ ] Обновить `AdminBrandingPage.test.tsx`:
+- [x] Обновить `AdminBrandingPage.test.tsx`:
   - старую проверку heading/card заменить на `Копия портала`;
   - проверить tab `Вход` selected;
   - проверить login heading from saved branding;
   - проверить, что edit portal name обновляет login preview.
-- [ ] Обновить `tests/e2e/admin-branding-settings.spec.ts`:
+- [x] Обновить `tests/e2e/admin-branding-settings.spec.ts`:
   - add deterministic mock for exact public `GET /api/branding`, because
     admin routes are wrapped by the app-level `BrandingProvider`;
   - убрать assertion старой кнопки `Продолжить`;
@@ -56,10 +56,10 @@ Create:
     auth subtitle;
   - перейти на tab `Чат` и проверить `Личный чат`;
   - перейти на tab `Инфо` и проверить updated support label.
-- [ ] Обновить `tests/e2e/admin-branding-assets.spec.ts`:
+- [x] Обновить `tests/e2e/admin-branding-assets.spec.ts`:
   - add the same deterministic mock for exact public `GET /api/branding`;
   - keep existing admin asset route mocks unchanged.
-- [ ] Создать `admin-branding-real-preview.spec.ts`:
+- [x] Создать `admin-branding-real-preview.spec.ts`:
   - mock `/api/tenant`, `/api/admin/auth/me`, `/api/admin/branding`;
   - allow/mock initial exact public `GET /api/branding`;
   - mock `/api/branding/assets/**`;
@@ -73,7 +73,7 @@ Create:
   - переключить `Вход -> Чат -> Инфо`;
   - проверить, что URL остается `/admin/branding`;
   - проверить, что switching не увеличил public `/api/branding` count.
-- [ ] Добавить viewport e2e in the same spec:
+- [x] Добавить viewport e2e in the same spec:
   - widths `1024`, `1280`, `1440`;
   - preview heading visible;
   - tablist visible;

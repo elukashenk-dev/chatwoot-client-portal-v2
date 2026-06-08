@@ -153,7 +153,14 @@ describe('AdminBrandingPage', () => {
     await user.clear(portalNameInput)
     await user.type(portalNameInput, 'Портал Бухфирма')
 
-    expect(screen.getByText('Портал Бухфирма')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('region', {
+        name: 'Телефонный предпросмотр портала',
+      }),
+    ).toHaveTextContent('Портал Бухфирма')
+    expect(
+      screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
+    ).toBeInTheDocument()
   })
 
   it('saves controlled branding settings', async () => {

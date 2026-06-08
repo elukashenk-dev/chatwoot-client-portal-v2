@@ -251,7 +251,7 @@ export function AdminBrandingPage() {
         </div>
       </section>
 
-      <section className="hidden min-h-full grid-cols-[15rem_minmax(0,1fr)_22rem] lg:grid">
+      <section className="hidden min-h-full grid-cols-[15rem_minmax(0,1fr)_minmax(25rem,28rem)] 2xl:grid-cols-[15rem_minmax(36rem,1fr)_30rem] lg:grid">
         <aside className="border-r border-slate-200 bg-white px-5 py-6">
           <div>
             <p className="text-xs font-semibold uppercase tracking-normal text-brand-700">
@@ -332,7 +332,7 @@ export function AdminBrandingPage() {
           </div>
         </section>
 
-        <aside className="border-l border-slate-200 bg-white px-5 py-6">
+        <aside className="max-h-screen overflow-y-auto border-l border-slate-200 bg-white px-3 py-6 xl:px-5">
           {draft ? (
             <BrandingPreviewPane draft={draft} />
           ) : (
