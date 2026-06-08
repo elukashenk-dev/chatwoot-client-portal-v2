@@ -80,7 +80,7 @@ export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
           >
             <div
               aria-label="Телефонный предпросмотр портала"
-              className="mx-auto h-[720px] w-full overflow-hidden rounded-[1rem] border border-slate-200 bg-white shadow-sm"
+              className="portal-preview-no-scrollbar mx-auto h-[720px] w-full overflow-hidden rounded-[1rem] border border-slate-200 bg-white shadow-sm"
               role="region"
             >
               {activeScreen === 'auth' ? <AuthLoginPreview /> : null}

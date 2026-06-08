@@ -6,7 +6,7 @@ export function AuthLoginPreview() {
   const { branding } = useBranding()
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="portal-preview-no-scrollbar h-full overflow-y-auto">
       <TenantAuthShell
         description={branding.copy.authSubtitle}
         title={branding.copy.authTitle}
@@ -16,7 +16,7 @@ export function AuthLoginPreview() {
             <MailIcon className="h-5 w-5 shrink-0 text-slate-500" />
             <input
               aria-label="Email"
-              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-slate-400"
+              className="min-w-0 flex-1 appearance-none border-0 bg-transparent text-[16px] shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
               disabled
               placeholder="name@company.ru"
               type="email"
@@ -27,7 +27,7 @@ export function AuthLoginPreview() {
             <LockIcon className="h-5 w-5 shrink-0 text-slate-500" />
             <input
               aria-label="Пароль"
-              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-slate-400"
+              className="min-w-0 flex-1 appearance-none border-0 bg-transparent text-[16px] shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
               disabled
               placeholder="Введите пароль"
               type="password"

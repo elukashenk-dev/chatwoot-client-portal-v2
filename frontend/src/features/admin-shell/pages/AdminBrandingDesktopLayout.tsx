@@ -237,7 +237,7 @@ export function AdminBrandingDesktopLayout({
       </section>
 
       <aside
-        className="relative sticky top-0 z-20 h-screen overflow-y-auto border-l border-slate-200 bg-white px-3 py-6 xl:px-5"
+        className="portal-preview-no-scrollbar relative sticky top-0 z-20 h-screen overflow-y-auto border-l border-slate-200 bg-white px-3 py-6 xl:px-5"
         data-admin-branding-preview
         id="admin-branding-preview-panel"
       >

@@ -232,6 +232,64 @@ test('admin can collapse sticky navigation and resize the portal preview width',
   await expect(sidebar).toBeVisible()
   await expect(preview).toBeVisible()
   await expect(resizeHandle).toHaveAttribute('aria-valuenow', '28')
+  await page.getByLabel('Название портала').focus()
+
+  const visualPolish = await page.evaluate(() => {
+    const previewElement = document.querySelector(
+      '[data-admin-branding-preview]',
+    )
+    const phoneElement = document.querySelector(
+      '[aria-label="Телефонный предпросмотр портала"]',
+    )
+    const authScrollElement = phoneElement?.firstElementChild
+    const adminTextInput = document.querySelector('input[name="portalName"]')
+    const adminColorInput = document.querySelector(
+      'input[name="colors.primary"]',
+    )
+    const portalEmailInput = phoneElement?.querySelector(
+      'input[aria-label="Email"]',
+    )
+
+    function readStyle(element: Element | null | undefined) {
+      if (!element) {
+        return null
+      }
+
+      const style = window.getComputedStyle(element)
+
+      return {
+        appearance: style.appearance,
+        borderRadius: style.borderRadius,
+        borderWidth: style.borderWidth,
+        outlineStyle: style.outlineStyle,
+        scrollbarWidth: style.scrollbarWidth,
+      }
+    }
+
+    return {
+      adminColorInput: readStyle(adminColorInput),
+      adminTextInput: readStyle(adminTextInput),
+      authScrollElement: readStyle(authScrollElement),
+      phoneElement: readStyle(phoneElement),
+      portalEmailInput: readStyle(portalEmailInput),
+      previewElement: readStyle(previewElement),
+    }
+  })
+
+  expect(visualPolish.previewElement?.scrollbarWidth).toBe('none')
+  expect(visualPolish.phoneElement?.scrollbarWidth).toBe('none')
+  expect(visualPolish.authScrollElement?.scrollbarWidth).toBe('none')
+  expect(visualPolish.adminTextInput?.appearance).toBe('none')
+  expect(visualPolish.adminTextInput?.outlineStyle).toBe('none')
+  expect(
+    Number.parseFloat(visualPolish.adminTextInput?.borderRadius ?? '0'),
+  ).toBeGreaterThan(0)
+  expect(visualPolish.adminColorInput?.appearance).toBe('none')
+  expect(visualPolish.adminColorInput?.borderWidth).toBe('0px')
+  expect(visualPolish.adminColorInput?.outlineStyle).toBe('none')
+  expect(visualPolish.portalEmailInput?.appearance).toBe('none')
+  expect(visualPolish.portalEmailInput?.borderWidth).toBe('0px')
+  expect(visualPolish.portalEmailInput?.outlineStyle).toBe('none')
 
   await editor.evaluate((element) => {
     element.scrollTop = 700
@@ -309,6 +367,12 @@ test('admin can collapse sticky navigation and resize the portal preview width',
       ),
     )
     .toBe(true)
+  await page.getByRole('tab', { name: 'Чат' }).click()
+  const chatScrollbarWidth = await page
+    .locator('[aria-label="Телефонный предпросмотр портала"] .chat-scroll')
+    .evaluate((element) => window.getComputedStyle(element).scrollbarWidth)
+
+  expect(chatScrollbarWidth).toBe('none')
   expect(routes.forbiddenRequests).toEqual([])
 })
 

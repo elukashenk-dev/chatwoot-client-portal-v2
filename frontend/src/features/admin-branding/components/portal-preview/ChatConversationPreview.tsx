@@ -40,7 +40,7 @@ export function ChatConversationPreview() {
 
           <textarea
             aria-label="Сообщение"
-            className="max-h-32 min-h-10 min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-400 shadow-none outline-none placeholder:text-slate-400"
+            className="max-h-32 min-h-10 min-w-0 flex-1 resize-none appearance-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 text-slate-400 shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
             disabled
             placeholder="Сообщение..."
             rows={1}

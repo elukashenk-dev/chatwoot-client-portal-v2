@@ -34,7 +34,7 @@ function TextField({ disabled, label, name, onChange, value }: TextFieldProps) {
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
-        className="mt-2 block h-11 w-full rounded-[0.55rem] border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm transition focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+        className="mt-2 block h-11 w-full appearance-none rounded-[0.55rem] border border-slate-200 bg-white px-3 text-sm text-slate-950 shadow-sm transition focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         disabled={disabled}
         name={name}
         onChange={(event) => {
@@ -57,14 +57,14 @@ function ColorField({
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
-      <span className="mt-2 flex h-11 items-center gap-2 rounded-[0.55rem] border border-slate-200 bg-white px-2 shadow-sm focus-within:border-brand-300 focus-within:ring-4 focus-within:ring-brand-100">
+      <span className="mt-2 flex h-11 items-center gap-2 rounded-[0.55rem] border border-slate-200 bg-white px-2 shadow-sm focus-within:border-brand-300 focus-within:ring-4 focus-within:ring-brand-100 focus-within:outline-none">
         <span
           aria-hidden="true"
           className="h-7 w-7 shrink-0 rounded-md border border-slate-200"
           style={{ backgroundColor: value }}
         />
         <input
-          className="h-full min-w-0 flex-1 bg-transparent px-1 text-sm text-slate-950 outline-none disabled:cursor-not-allowed disabled:text-slate-400"
+          className="h-full min-w-0 flex-1 appearance-none border-0 bg-transparent px-1 text-sm text-slate-950 shadow-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed disabled:text-slate-400"
           disabled={disabled}
           name={name}
           onChange={(event) => {
