@@ -132,7 +132,14 @@ describe('AdminBrandingPage', () => {
     expect(await screen.findByDisplayValue('Бухфирма')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Команда Бухфирма')).toBeInTheDocument()
     expect(
-      screen.getAllByRole('heading', { name: 'Бухфирма' })[0],
+      screen.getByRole('heading', { name: 'Копия портала' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Вход' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(
+      screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
     expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
   })
@@ -146,9 +153,7 @@ describe('AdminBrandingPage', () => {
     await user.clear(portalNameInput)
     await user.type(portalNameInput, 'Портал Бухфирма')
 
-    expect(
-      screen.getByRole('heading', { name: 'Портал Бухфирма' }),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Портал Бухфирма')).toBeInTheDocument()
   })
 
   it('saves controlled branding settings', async () => {

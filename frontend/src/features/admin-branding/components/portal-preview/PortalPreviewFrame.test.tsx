@@ -1,0 +1,151 @@
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { BrandingDraft } from '../../lib/brandingState'
+import { PortalPreviewFrame } from './PortalPreviewFrame'
+
+const draft = {
+  assets: {
+    logo: {
+      assetVersion: '11',
+      contentType: 'image/png',
+      height: null,
+      id: 11,
+      kind: 'logo',
+      publicUrl: '/api/branding/assets/11?v=11',
+      width: null,
+    },
+  },
+  colors: {
+    accent: '#14b8a6',
+    authBackground: '#ecfeff',
+    chatBackground: '#f8fafc',
+    chatHeaderBackground: '#0f766e',
+    primary: '#134e4a',
+  },
+  copy: {
+    authSubtitle: 'Войдите в кабинет ProvGroup.',
+    authTitle: 'Кабинет ProvGroup',
+    chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
+    chatEmptyTitle: 'Начните диалог',
+    chatInfoTitle: 'О диалоге',
+  },
+  portalName: 'ProvGroup',
+  supportLabel: 'Поддержка ProvGroup',
+} satisfies BrandingDraft
+
+describe('PortalPreviewFrame', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('renders only the first-slice preview screens', async () => {
+    const user = userEvent.setup()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    render(<PortalPreviewFrame draft={draft} />)
+
+    const tablist = screen.getByRole('tablist', {
+      name: 'Экраны предпросмотра портала',
+    })
+
+    expect(within(tablist).getByRole('tab', { name: 'Вход' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(
+      within(tablist).getByRole('tab', { name: 'Чат' }),
+    ).toBeInTheDocument()
+    expect(
+      within(tablist).getByRole('tab', { name: 'Инфо' }),
+    ).toBeInTheDocument()
+    expect(
+      within(tablist).queryByRole('tab', { name: 'Настройки' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(tablist).queryByRole('tab', { name: 'Уведомления' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(within(tablist).getByRole('tab', { name: 'Чат' }))
+    expect(screen.getByText('Предпросмотр чата')).toBeInTheDocument()
+
+    await user.click(within(tablist).getByRole('tab', { name: 'Инфо' }))
+    expect(screen.getByText('Предпросмотр информации')).toBeInTheDocument()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders the login preview as read-only from the draft branding', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    render(<PortalPreviewFrame draft={draft} />)
+
+    expect(
+      screen.getByRole('region', { name: 'Телефонный предпросмотр портала' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Войдите в кабинет ProvGroup.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(screen.getByLabelText('Email')).toBeDisabled()
+    expect(screen.getByLabelText('Пароль')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    expect(
+      screen.queryByRole('link', { name: 'Забыли пароль?' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Создать аккаунт' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /\+7/ })).not.toBeInTheDocument()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('updates the preview when the unsaved draft changes', () => {
+    const updatedDraft = {
+      ...draft,
+      assets: {
+        ...draft.assets,
+        logo: {
+          assetVersion: '12',
+          contentType: 'image/png',
+          height: null,
+          id: 12,
+          kind: 'logo',
+          publicUrl: '/api/branding/assets/12?v=12',
+          width: null,
+        },
+      },
+      colors: {
+        ...draft.colors,
+        chatHeaderBackground: '#164e63',
+        primary: '#0f766e',
+      },
+      copy: {
+        ...draft.copy,
+        authSubtitle: 'Используйте рабочий email.',
+        authTitle: 'Вход для клиентов',
+      },
+      portalName: 'Портал Бухфирма',
+      supportLabel: 'Поддержка 24/7',
+    } satisfies BrandingDraft
+
+    const { container, rerender } = render(<PortalPreviewFrame draft={draft} />)
+
+    rerender(<PortalPreviewFrame draft={updatedDraft} />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Вход для клиентов' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Используйте рабочий email.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', { name: 'Логотип Портал Бухфирма' }),
+    ).toHaveAttribute('src', '/api/branding/assets/12?v=12')
+    expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
+      '--color-brand-800': '#0f766e',
+      '--portal-chat-header-background-color': '#164e63',
+    })
+  })
+})

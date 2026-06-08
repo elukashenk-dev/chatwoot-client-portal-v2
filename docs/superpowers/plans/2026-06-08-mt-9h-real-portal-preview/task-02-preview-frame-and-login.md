@@ -20,6 +20,7 @@ Modify:
 
 - `frontend/src/features/admin-branding/components/BrandingPreviewPane.tsx`
 - `frontend/src/features/admin-branding/components/portal-preview/PortalPreviewFrame.test.tsx`
+- `frontend/src/features/admin-shell/pages/AdminBrandingPage.test.tsx`
 
 Do not include:
 
@@ -30,23 +31,23 @@ Do not include:
 
 ## Implementation Steps
 
-- [ ] В `PortalPreviewFrame.test.tsx` добавить test на screen selector:
+- [x] В `PortalPreviewFrame.test.tsx` добавить test на screen selector:
       default selected tab is `Вход`; tabs exist only for `Вход`, `Чат`, `Инфо`.
-- [ ] Для Task 02 сделать `Чат` и `Инфо` временными read-only placeholders,
+- [x] Для Task 02 сделать `Чат` и `Инфо` временными read-only placeholders,
       чтобы targeted tests task-а были green сразу после Task 02. Реальный content
       этих tab-ов добавляют Task 03 и Task 04.
-- [ ] Добавить draft-update test: после `rerender` preview должен обновить
+- [x] Добавить draft-update test: после `rerender` preview должен обновить
       auth heading, subtitle, logo URL и CSS variables.
-- [ ] Реализовать `PortalPreviewFrame`:
+- [x] Реализовать `PortalPreviewFrame`:
   - local state `PreviewScreen = 'auth' | 'chat' | 'info'`;
   - `BrandingContext.Provider`;
   - `TenantIdentityContext.Provider`;
   - `.portal-branding-scope` со style из `createBrandingCssProperties`;
   - phone region с `role="region"` и
     `aria-label="Телефонный предпросмотр портала"`.
-- [ ] Не добавлять `AuthSessionContext.Provider`: preview не должен зависеть от
+- [x] Не добавлять `AuthSessionContext.Provider`: preview не должен зависеть от
       customer auth/session.
-- [ ] Реализовать `AuthLoginPreview` через `TenantAuthShell`, а не bare
+- [x] Реализовать `AuthLoginPreview` через `TenantAuthShell`, а не bare
       `AuthShell`:
   - `title` и `description` из `branding.copy`;
   - brand name, logo, monogram и auth images должны приходить через
@@ -56,8 +57,10 @@ Do not include:
   - reset/register controls render as static text/spans, not `Link`;
   - phone support renders as static text, not active `tel:` link;
   - footer helper block как static presentation.
-- [ ] Заменить body `BrandingPreviewPane` на `PortalPreviewFrame`.
-- [ ] Добавить read-only login assertions:
+- [x] Заменить body `BrandingPreviewPane` на `PortalPreviewFrame`.
+- [x] Обновить существующие assertions `AdminBrandingPage.test.tsx`, которые
+      проверяли старую mock preview-карточку.
+- [x] Добавить read-only login assertions:
   - email/password controls disabled;
   - `Войти` disabled;
   - `Забыли пароль?` и `Создать аккаунт` are not links;
