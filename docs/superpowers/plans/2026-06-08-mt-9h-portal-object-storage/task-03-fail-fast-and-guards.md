@@ -31,6 +31,36 @@ it('requires branding asset storage in production', () => {
 })
 ```
 
+Add companion regression tests:
+
+```ts
+it('accepts complete branding asset storage configuration in production', () => {
+  const env = loadEnv({
+    ...baseRawEnv,
+    NODE_ENV: 'production',
+    BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: 'portal-minio',
+    BRANDING_ASSET_STORAGE_BUCKET: 'portal-branding-assets',
+    BRANDING_ASSET_STORAGE_ENDPOINT: 'http://portal-object-storage:9000',
+    BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE: 'true',
+    BRANDING_ASSET_STORAGE_REGION: 'us-east-1',
+    BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: 'portal-minio-secret',
+  })
+
+  expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBe(
+    'http://portal-object-storage:9000',
+  )
+})
+
+it('continues allowing disabled branding asset storage outside production', () => {
+  const env = loadEnv({
+    ...baseRawEnv,
+    NODE_ENV: 'test',
+  })
+
+  expect(env.BRANDING_ASSET_STORAGE_ENDPOINT).toBeUndefined()
+})
+```
+
 Run:
 
 ```bash
@@ -102,6 +132,7 @@ async function checkProductionObjectStorageConfig(failures) {
     'BRANDING_ASSET_STORAGE_ENDPOINT:',
     'BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY:',
     'condition: service_completed_successfully',
+    'portal-internal',
   ]
   const requiredEnvNames = [
     'PORTAL_OBJECT_STORAGE_IMAGE',
@@ -144,6 +175,8 @@ async function checkProductionObjectStorageConfig(failures) {
     's3:GetObject',
     's3:PutObject',
     's3:DeleteObject',
+    'mc admin policy remove',
+    'mc admin user remove',
   ]
 
   for (const snippet of requiredInitSnippets) {
@@ -163,6 +196,23 @@ async function checkProductionObjectStorageConfig(failures) {
     failures.push({
       relativePath: composePath,
       message: 'production object storage must not publish host ports',
+    })
+  }
+
+  const backendBlock = compose.split('portal-backend:')[1] ?? ''
+  const backendBlockBeforeWeb = backendBlock.split('portal-web:')[0] ?? ''
+
+  if (backendBlockBeforeWeb.includes('PORTAL_OBJECT_STORAGE_ROOT_PASSWORD')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'backend must not receive object-storage root password',
+    })
+  }
+
+  if (!backendBlockBeforeWeb.includes('portal-object-storage-init:')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'backend must depend on object-storage init service',
     })
   }
 }
@@ -189,6 +239,7 @@ Expected:
 - fail if production storage service publishes host ports.
 - fail if the init script stops creating the bucket, app user or bucket-scoped
   policy.
+- fail if backend receives MinIO root credentials.
 
 ## Review Notes
 

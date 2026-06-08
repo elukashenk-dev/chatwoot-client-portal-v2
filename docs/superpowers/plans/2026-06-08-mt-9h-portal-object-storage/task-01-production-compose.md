@@ -33,6 +33,22 @@ mc alias set portal \
 
 mc mb --ignore-existing "portal/${BRANDING_ASSET_STORAGE_BUCKET}"
 
+if mc admin user info \
+  portal \
+  "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}" >/dev/null 2>&1; then
+  mc admin policy detach \
+    portal \
+    portal-branding-assets \
+    --user "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}" >/dev/null 2>&1 || true
+  mc admin user remove \
+    portal \
+    "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}"
+fi
+
+if mc admin policy info portal portal-branding-assets >/dev/null 2>&1; then
+  mc admin policy remove portal portal-branding-assets
+fi
+
 cat >/tmp/portal-branding-assets-policy.json <<POLICY
 {
   "Version": "2012-10-17",
@@ -51,21 +67,15 @@ cat >/tmp/portal-branding-assets-policy.json <<POLICY
 }
 POLICY
 
-if ! mc admin policy info portal portal-branding-assets >/dev/null 2>&1; then
-  mc admin policy create \
-    portal \
-    portal-branding-assets \
-    /tmp/portal-branding-assets-policy.json
-fi
-
-if ! mc admin user info \
+mc admin policy create \
   portal \
-  "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}" >/dev/null 2>&1; then
-  mc admin user add \
-    portal \
-    "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}" \
-    "${BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY}"
-fi
+  portal-branding-assets \
+  /tmp/portal-branding-assets-policy.json
+
+mc admin user add \
+  portal \
+  "${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID}" \
+  "${BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY}"
 
 mc admin policy attach \
   portal \
@@ -148,9 +158,11 @@ portal-object-storage-init:
 This service must be idempotent:
 
 - bucket already exists -> success;
-- policy already exists -> success;
-- app user already exists -> success;
+- policy is recreated from current bucket env on every init run;
+- app user is recreated from current app secret env on every init run;
 - policy attach can run repeatedly.
+- this may briefly revoke the app user during production reconfigure, so
+  object-storage init must run before backend starts.
 
 - [ ] **Step 4: Wire backend dependencies and env**
 
@@ -242,6 +254,32 @@ Expected:
 - rendered volumes contain `portal-object-storage-data`;
 - rendered service does not contain published MinIO host ports.
 - init script syntax check exits `0`.
+
+- [ ] **Step 7: Smoke the production storage/init chain**
+
+Run an isolated compose project with only storage and init:
+
+```bash
+docker compose \
+  --project-name portal-object-storage-plan-smoke \
+  --env-file /tmp/portal-object-storage-compose.env \
+  -f infra/production/compose.yaml \
+  up --abort-on-container-exit --exit-code-from portal-object-storage-init portal-object-storage-init
+
+docker compose \
+  --project-name portal-object-storage-plan-smoke \
+  --env-file /tmp/portal-object-storage-compose.env \
+  -f infra/production/compose.yaml \
+  down -v --remove-orphans
+```
+
+Expected:
+
+- `portal-object-storage` becomes healthy;
+- `portal-object-storage-init` exits `0`;
+- bind mount path for `scripts/init-production-object-storage.sh` works;
+- bucket, policy and app user initialization completes against the pinned
+  images.
 
 ## Review Notes
 

@@ -72,6 +72,19 @@ Add a branding asset check:
 
 In `docs/operations/production-clean-reinstall.md`:
 
+0. Add a new section before the reset step:
+
+```markdown
+## Data Safety For Portal Object Storage
+
+After branding uploads are enabled, `portal-object-storage-data` is production
+data alongside `portal-db-data`.
+
+Default reinstall/deploy flow must preserve both volumes. Destructive reset is
+allowed only when the operator explicitly confirms that portal-owned data is
+disposable or has been backed up and restored elsewhere.
+```
+
 1. Add required generated storage inputs after Postgres secrets:
 
 ```text
@@ -107,6 +120,10 @@ BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE=true
 
 ```markdown
 - portal-owned object-storage volume exists and is treated as production data;
+- data-preserving reinstall path does not remove `portal-db-data` or
+  `portal-object-storage-data`;
+- destructive clean reset has an explicit warning and requires operator
+  approval after backup;
 - branding asset upload/readback works through portal admin and public asset
   routes.
 ```

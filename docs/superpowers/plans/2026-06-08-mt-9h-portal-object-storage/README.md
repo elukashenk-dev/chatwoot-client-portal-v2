@@ -89,9 +89,11 @@ Default production mode:
 - MinIO ports are not published publicly in production compose;
 - adding a new tenant requires no object-storage provisioning step.
 
-Operator override remains possible by setting `BRANDING_ASSET_STORAGE_*` to an
-external S3-compatible provider, but that is not the default product path and
-must not be required for a normal one-VM install.
+External S3-compatible storage is deliberately deferred. This slice supports
+one default production path only: internal portal-owned MinIO in the production
+compose stack. Adding managed S3/Yandex/Selectel as an operator override would
+need a separate compose/profile/runbook slice so it does not weaken the default
+one-VM install.
 
 ## Task Files
 
@@ -120,6 +122,9 @@ must not be required for a normal one-VM install.
 - Installer generates root credentials, app credentials and bucket name.
 - Backend uses app credentials for branding storage, not MinIO root
   credentials.
+- Object-storage init resets the bucket policy and app user to match the
+  current generated env, so `--reconfigure` cannot leave backend credentials
+  out of sync with MinIO.
 - In `NODE_ENV=production`, missing branding storage env fails during backend
   startup instead of returning upload-time `503`.
 - Code-health fails if future compose/env edits remove the production storage
@@ -142,6 +147,7 @@ must not be required for a normal one-VM install.
 - Do not migrate Chatwoot uploads.
 - Do not add image resizing or transformation.
 - Do not change admin branding upload UI.
+- Do not support external S3-compatible production storage in this slice.
 - Do not mark all of `MT-9H` complete before final browser/PWA/cache QA and
   deploy docs are closed.
 

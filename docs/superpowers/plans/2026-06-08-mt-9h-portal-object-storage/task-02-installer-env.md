@@ -36,7 +36,8 @@ The comments must say:
 
 - these values are portal infrastructure;
 - normal B2B clients do not provision buckets;
-- external S3-compatible providers are an operator override, not the default.
+- external S3-compatible providers are not supported in this slice and need a
+  separate operator-mode plan.
 
 - [ ] **Step 2: Add installer prompts and generated defaults**
 
@@ -44,47 +45,26 @@ In `scripts/install-production.sh`, inside `configure_env`, after `DATABASE_URL`
 is built and before tenant secrets, add:
 
 ```bash
-  PORTAL_OBJECT_STORAGE_IMAGE="$(env_value PORTAL_OBJECT_STORAGE_IMAGE)"
-  PORTAL_OBJECT_STORAGE_IMAGE="${PORTAL_OBJECT_STORAGE_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}"
-  prompt_value PORTAL_OBJECT_STORAGE_IMAGE "Portal object storage image" "$PORTAL_OBJECT_STORAGE_IMAGE"
-
-  PORTAL_OBJECT_STORAGE_MC_IMAGE="$(env_value PORTAL_OBJECT_STORAGE_MC_IMAGE)"
-  PORTAL_OBJECT_STORAGE_MC_IMAGE="${PORTAL_OBJECT_STORAGE_MC_IMAGE:-quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z}"
-  prompt_value PORTAL_OBJECT_STORAGE_MC_IMAGE "Portal object storage init image" "$PORTAL_OBJECT_STORAGE_MC_IMAGE"
-
-  PORTAL_OBJECT_STORAGE_ROOT_USER="$(env_value PORTAL_OBJECT_STORAGE_ROOT_USER)"
-  PORTAL_OBJECT_STORAGE_ROOT_USER="${PORTAL_OBJECT_STORAGE_ROOT_USER:-portal_v2_minio_root}"
-  prompt_value PORTAL_OBJECT_STORAGE_ROOT_USER "Portal object storage root user" "$PORTAL_OBJECT_STORAGE_ROOT_USER"
+  PORTAL_OBJECT_STORAGE_IMAGE="quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+  PORTAL_OBJECT_STORAGE_MC_IMAGE="quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+  PORTAL_OBJECT_STORAGE_ROOT_USER="portal_v2_minio_root"
 
   local existing_storage_root_password
   existing_storage_root_password="$(env_value PORTAL_OBJECT_STORAGE_ROOT_PASSWORD)"
   existing_storage_root_password="${existing_storage_root_password:-$(random_hex 32)}"
   prompt_secret PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "Portal object storage root password" "$existing_storage_root_password"
 
-  BRANDING_ASSET_STORAGE_ENDPOINT="$(env_value BRANDING_ASSET_STORAGE_ENDPOINT)"
-  BRANDING_ASSET_STORAGE_ENDPOINT="${BRANDING_ASSET_STORAGE_ENDPOINT:-http://portal-object-storage:9000}"
-  prompt_value BRANDING_ASSET_STORAGE_ENDPOINT "Branding asset storage endpoint" "$BRANDING_ASSET_STORAGE_ENDPOINT"
-
-  BRANDING_ASSET_STORAGE_REGION="$(env_value BRANDING_ASSET_STORAGE_REGION)"
-  BRANDING_ASSET_STORAGE_REGION="${BRANDING_ASSET_STORAGE_REGION:-us-east-1}"
-  prompt_value BRANDING_ASSET_STORAGE_REGION "Branding asset storage region" "$BRANDING_ASSET_STORAGE_REGION"
-
-  BRANDING_ASSET_STORAGE_BUCKET="$(env_value BRANDING_ASSET_STORAGE_BUCKET)"
-  BRANDING_ASSET_STORAGE_BUCKET="${BRANDING_ASSET_STORAGE_BUCKET:-portal-branding-assets}"
-  prompt_value BRANDING_ASSET_STORAGE_BUCKET "Branding asset storage bucket" "$BRANDING_ASSET_STORAGE_BUCKET"
-
-  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID="$(env_value BRANDING_ASSET_STORAGE_ACCESS_KEY_ID)"
-  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID="${BRANDING_ASSET_STORAGE_ACCESS_KEY_ID:-portal_v2_branding_assets}"
-  prompt_value BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "Branding asset storage app access key" "$BRANDING_ASSET_STORAGE_ACCESS_KEY_ID"
+  BRANDING_ASSET_STORAGE_ENDPOINT="http://portal-object-storage:9000"
+  BRANDING_ASSET_STORAGE_REGION="us-east-1"
+  BRANDING_ASSET_STORAGE_BUCKET="portal-branding-assets"
+  BRANDING_ASSET_STORAGE_ACCESS_KEY_ID="portal_v2_branding_assets"
 
   local existing_branding_storage_secret
   existing_branding_storage_secret="$(env_value BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY)"
   existing_branding_storage_secret="${existing_branding_storage_secret:-$(random_hex 32)}"
   prompt_secret BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "Branding asset storage app secret key" "$existing_branding_storage_secret"
 
-  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE="$(env_value BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE)"
-  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE="${BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE:-true}"
-  prompt_value BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "Branding asset storage force path style true/false" "$BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE"
+  BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE="true"
 ```
 
 Rationale:
@@ -93,6 +73,8 @@ Rationale:
 - `BRANDING_ASSET_STORAGE_*` credentials are app credentials used by backend;
 - generated secrets are hex to avoid shell, URL and compose interpolation
   problems.
+- endpoint, bucket, access key, region and path-style are fixed internal
+  defaults for this slice; do not prompt for custom values.
 
 - [ ] **Step 3: Write object-storage values to `.env.production`**
 

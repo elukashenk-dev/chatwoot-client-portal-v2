@@ -17,7 +17,7 @@ bash -n scripts/install-production.sh scripts/install-maintenance-cleanup-timer.
 sh -n scripts/init-production-object-storage.sh
 docker compose --env-file /tmp/portal-object-storage-compose.env -f infra/production/compose.yaml config >/tmp/portal-object-storage-compose.yaml
 rg 'portal-object-storage|portal-object-storage-init|BRANDING_ASSET_STORAGE_ENDPOINT|portal-object-storage-data' /tmp/portal-object-storage-compose.yaml
-pnpm exec prettier --check infra/production/compose.yaml .env.production.example scripts/install-production.sh scripts/init-production-object-storage.sh scripts/check-code-health.mjs docs/architecture/overview.md docs/architecture/decisions.md docs/operations/production-deployment.md docs/operations/production-clean-reinstall.md docs/operations/production-server-notes.md docs/roadmap/implementation-plan.md docs/roadmap/work-log.md
+pnpm exec prettier --check infra/production/compose.yaml scripts/check-code-health.mjs docs/architecture/overview.md docs/architecture/decisions.md docs/operations/production-deployment.md docs/operations/production-clean-reinstall.md docs/operations/production-server-notes.md docs/roadmap/implementation-plan.md docs/roadmap/work-log.md
 git diff --check
 ```
 
@@ -30,6 +30,31 @@ Expected:
 - bash syntax checks pass;
 - Prettier check passes;
 - `git diff --check` passes.
+
+## Production Compose Storage Smoke
+
+Run an isolated compose smoke for the storage/init chain:
+
+```bash
+docker compose \
+  --project-name portal-object-storage-plan-smoke \
+  --env-file /tmp/portal-object-storage-compose.env \
+  -f infra/production/compose.yaml \
+  up --abort-on-container-exit --exit-code-from portal-object-storage-init portal-object-storage-init
+
+docker compose \
+  --project-name portal-object-storage-plan-smoke \
+  --env-file /tmp/portal-object-storage-compose.env \
+  -f infra/production/compose.yaml \
+  down -v --remove-orphans
+```
+
+Expected:
+
+- storage service healthcheck works with the pinned image;
+- init service exits `0`;
+- bucket, policy and app user are created;
+- init script bind mount works from `infra/production/compose.yaml`.
 
 ## Runtime Smoke
 
