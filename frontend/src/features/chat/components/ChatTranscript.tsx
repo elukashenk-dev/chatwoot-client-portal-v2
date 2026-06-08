@@ -57,6 +57,7 @@ type ChatTranscriptProps = {
   historyErrorMessage: string | null
   isConnectionAvailable: boolean
   isLoadingOlder: boolean
+  isReadOnly?: boolean
   messages: ChatMessage[]
   onLoadOlder: () => void
   onLatestEdgeChange?: (isAtLatestEdge: boolean) => void
@@ -78,6 +79,7 @@ export function ChatTranscript({
   historyErrorMessage,
   isConnectionAvailable,
   isLoadingOlder,
+  isReadOnly = false,
   messages,
   onLoadOlder,
   onLatestEdgeChange,
@@ -349,6 +351,10 @@ export function ChatTranscript({
   }
 
   function handleOpenContextMenu(message: ChatMessage, event: MouseEvent) {
+    if (isReadOnly) {
+      return
+    }
+
     if (!shouldUseDesktopMessageContextMenu()) {
       return
     }
@@ -374,6 +380,10 @@ export function ChatTranscript({
     message: ChatMessage,
     triggerElement: HTMLElement,
   ) {
+    if (isReadOnly) {
+      return
+    }
+
     const triggerBounds = triggerElement.getBoundingClientRect()
     const position = getContextMenuPosition({
       clientX: triggerBounds.left,
@@ -462,6 +472,7 @@ export function ChatTranscript({
                   }
                   isConnectionAvailable={isConnectionAvailable}
                   isHighlighted={highlightedMessageId === message.id}
+                  isReadOnly={isReadOnly}
                   message={message}
                   onOpenActionMenu={handleOpenActionMenu}
                   onOpenContextMenu={handleOpenContextMenu}
@@ -480,7 +491,7 @@ export function ChatTranscript({
         </div>
       </section>
 
-      {contextMenu ? (
+      {!isReadOnly && contextMenu ? (
         <MessageContextMenu
           menu={contextMenu}
           menuRef={contextMenuRef}

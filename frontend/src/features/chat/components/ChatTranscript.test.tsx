@@ -24,9 +24,13 @@ function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
 function renderTranscript(
   messages: ChatMessage[],
   {
+    isReadOnly = false,
     onReplyToMessage = vi.fn(),
+    onRetryTextMessage = vi.fn(),
   }: {
+    isReadOnly?: boolean
     onReplyToMessage?: (message: ChatMessage) => void
+    onRetryTextMessage?: (clientMessageKey: string) => void
   } = {},
 ) {
   return render(
@@ -35,10 +39,11 @@ function renderTranscript(
       historyErrorMessage={null}
       isConnectionAvailable
       isLoadingOlder={false}
+      isReadOnly={isReadOnly}
       messages={messages}
       onLoadOlder={vi.fn()}
       onReplyToMessage={onReplyToMessage}
-      onRetryTextMessage={vi.fn()}
+      onRetryTextMessage={onRetryTextMessage}
     />,
   )
 }
@@ -454,6 +459,148 @@ describe('ChatTranscript', () => {
         id: 2,
       }),
     )
+  })
+
+  it('keeps default runtime retry and action behavior enabled', async () => {
+    const user = userEvent.setup()
+    const onRetryTextMessage = vi.fn()
+
+    renderTranscript(
+      [
+        createMessage({
+          clientMessageKey: 'portal-send:failed',
+          content: 'Сообщение не отправилось',
+          id: -1000,
+          status: 'failed',
+        }),
+        createMessage({
+          content: 'Обычное отправленное сообщение',
+          id: 2,
+          status: 'sent',
+        }),
+      ],
+      {
+        onRetryTextMessage,
+      },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Повторить' }))
+
+    expect(onRetryTextMessage).toHaveBeenCalledWith('portal-send:failed')
+    expect(
+      screen.getByRole('button', { name: /Действия с сообщением/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('hides retry and message action controls when read-only', () => {
+    renderTranscript(
+      [
+        createMessage({
+          clientMessageKey: 'portal-send:failed',
+          content: 'Сообщение не отправилось',
+          id: -1000,
+          status: 'failed',
+        }),
+      ],
+      {
+        isReadOnly: true,
+      },
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Повторить' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Действия с сообщением/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not reveal a context menu through desktop context menu when read-only', () => {
+    const onReplyToMessage = vi.fn()
+    const { container } = renderTranscript(
+      [
+        createMessage({
+          content: 'Сообщение без read-only меню',
+          id: 2,
+        }),
+      ],
+      {
+        isReadOnly: true,
+        onReplyToMessage,
+      },
+    )
+
+    fireEvent.contextMenu(getBubble(container, 2), {
+      clientX: 120,
+      clientY: 160,
+    })
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
+    expect(onReplyToMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not reveal action controls through touch tap behavior when read-only', () => {
+    stubCoarsePointer()
+
+    const { container } = renderTranscript(
+      [
+        createMessage({
+          content: 'Сообщение без touch-действий',
+          id: 2,
+        }),
+      ],
+      {
+        isReadOnly: true,
+      },
+    )
+
+    fireEvent.click(getBubble(container, 2))
+
+    expect(
+      screen.queryByRole('button', { name: /Действия с сообщением/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('does not trigger swipe reply when read-only', () => {
+    const onReplyToMessage = vi.fn()
+    const { container } = renderTranscript(
+      [
+        createMessage({
+          content: 'Сообщение без read-only свайпа',
+          id: 2,
+        }),
+      ],
+      {
+        isReadOnly: true,
+        onReplyToMessage,
+      },
+    )
+    const swipeSurface = getSwipeSurface(container, 2)
+
+    fireEvent.pointerDown(swipeSurface, {
+      button: 0,
+      clientX: 220,
+      clientY: 120,
+      pointerId: 1,
+      pointerType: 'touch',
+    })
+    fireEvent.pointerMove(swipeSurface, {
+      clientX: 150,
+      clientY: 124,
+      pointerId: 1,
+      pointerType: 'touch',
+    })
+    fireEvent.pointerUp(swipeSurface, {
+      clientX: 150,
+      clientY: 124,
+      pointerId: 1,
+      pointerType: 'touch',
+    })
+
+    expect(onReplyToMessage).not.toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('opens message actions from the keyboard and restores focus on Escape', async () => {

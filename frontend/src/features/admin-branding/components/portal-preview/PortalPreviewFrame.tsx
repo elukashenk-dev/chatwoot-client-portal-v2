@@ -9,6 +9,7 @@ import {
   createPreviewTenantIdentity,
 } from '../../lib/previewBranding'
 import { AuthLoginPreview } from './AuthLoginPreview'
+import { ChatConversationPreview } from './ChatConversationPreview'
 
 type PreviewScreen = 'auth' | 'chat' | 'info'
 
@@ -90,9 +91,7 @@ export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
               role="region"
             >
               {activeScreen === 'auth' ? <AuthLoginPreview /> : null}
-              {activeScreen === 'chat' ? (
-                <PreviewPlaceholder title="Предпросмотр чата" />
-              ) : null}
+              {activeScreen === 'chat' ? <ChatConversationPreview /> : null}
               {activeScreen === 'info' ? (
                 <PreviewPlaceholder title="Предпросмотр информации" />
               ) : null}

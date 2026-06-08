@@ -35,14 +35,14 @@ Do not use:
 
 ## Implementation Steps
 
-- [ ] Add `isReadOnly?: boolean` to `ChatTranscript`, default `false`.
-- [ ] Pass `isReadOnly` into `MessageBubble`.
-- [ ] In `ChatConversationPreview`, pass safe transcript props:
+- [x] Add `isReadOnly?: boolean` to `ChatTranscript`, default `false`.
+- [x] Pass `isReadOnly` into `MessageBubble`.
+- [x] In `ChatConversationPreview`, pass safe transcript props:
   - `hasMoreOlder={false}`;
   - `historyFragmentControls={null}` or omit it so default is null;
   - no-op callbacks;
   - text-only preview messages from Task 01.
-- [ ] In `MessageBubble`:
+- [x] In `MessageBubble`:
   - add `isReadOnly?: boolean`;
   - set reply/action availability to false when read-only;
   - hide `Действия с сообщением ...` buttons when read-only;
@@ -51,24 +51,24 @@ Do not use:
     implementation may enforce this by keeping preview messages text-only and
     adding tests that no attachments are present.
   - prevent swipe/context-menu reply paths when read-only.
-- [ ] Add regression tests in `ChatTranscript.test.tsx`:
+- [x] Add regression tests in `ChatTranscript.test.tsx`:
   - default runtime still exposes message actions and reply behavior;
   - `isReadOnly` hides action/retry controls and does not call reply handlers.
   - `isReadOnly` does not reveal actions through desktop context menu;
   - `isReadOnly` does not reveal actions through touch/tap behavior;
   - `isReadOnly` does not trigger swipe reply;
   - `isReadOnly` renders no message context menu.
-- [ ] Create `ChatHeaderPreview` as presentational copy:
+- [x] Create `ChatHeaderPreview` as presentational copy:
   - `span aria-hidden` for menu/more icons;
   - no buttons;
   - no router/session imports;
   - logo/avatar from branding logo or monogram.
-- [ ] Create `ChatConversationPreview`:
+- [x] Create `ChatConversationPreview`:
   - `ChatHeaderPreview`;
   - `ChatTranscript isReadOnly`;
   - sample messages from `previewData`;
   - disabled composer controls.
-- [ ] Add unit test for chat preview:
+- [x] Add unit test for chat preview:
   - spy on `globalThis.fetch`;
   - click tab `Чат`;
   - heading `Личный чат`;

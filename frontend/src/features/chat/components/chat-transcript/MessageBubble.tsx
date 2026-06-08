@@ -42,6 +42,7 @@ type MessageBubbleProps = {
   isConnectionAvailable: boolean
   isActionButtonRevealed?: boolean
   isHighlighted?: boolean
+  isReadOnly?: boolean
   message: ChatMessage
   onOpenActionMenu: (message: ChatMessage, triggerElement: HTMLElement) => void
   onOpenContextMenu: (message: ChatMessage, event: MouseEvent) => void
@@ -230,6 +231,7 @@ export function MessageBubble({
   isConnectionAvailable,
   isActionButtonRevealed = false,
   isHighlighted = false,
+  isReadOnly = false,
   message,
   onOpenActionMenu,
   onOpenContextMenu,
@@ -241,7 +243,7 @@ export function MessageBubble({
   const isOutgoing = message.authorRole === 'current_user'
   const hasIncomingAuthorAvatarSlot =
     message.authorRole === 'agent' || message.authorRole === 'group_member'
-  const canReplyToMessage = !isLocalTextSend(message)
+  const canReplyToMessage = !isReadOnly && !isLocalTextSend(message)
   const [isSwipeActive, setIsSwipeActive] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeGestureRef = useRef<SwipeGesture>(EMPTY_SWIPE_GESTURE)
@@ -280,6 +282,7 @@ export function MessageBubble({
 
   function handleSwipePointerDown(event: PointerEvent<HTMLDivElement>) {
     if (
+      !canReplyToMessage ||
       event.pointerType === 'mouse' ||
       event.button !== 0 ||
       isInteractiveEventTarget(event.target)
@@ -482,11 +485,13 @@ export function MessageBubble({
               <BubbleMetadata message={message} />
             ) : null}
           </div>
-          <RetryTextSend
-            isConnectionAvailable={isConnectionAvailable}
-            message={message}
-            onRetryTextMessage={onRetryTextMessage}
-          />
+          {!isReadOnly ? (
+            <RetryTextSend
+              isConnectionAvailable={isConnectionAvailable}
+              message={message}
+              onRetryTextMessage={onRetryTextMessage}
+            />
+          ) : null}
         </div>
       </div>
     </div>

@@ -68,10 +68,78 @@ describe('PortalPreviewFrame', () => {
     ).not.toBeInTheDocument()
 
     await user.click(within(tablist).getByRole('tab', { name: 'Чат' }))
-    expect(screen.getByText('Предпросмотр чата')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Личный чат' }),
+    ).toBeInTheDocument()
 
     await user.click(within(tablist).getByRole('tab', { name: 'Инфо' }))
     expect(screen.getByText('Предпросмотр информации')).toBeInTheDocument()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders the chat preview as read-only without runtime actions', async () => {
+    const user = userEvent.setup()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    render(<PortalPreviewFrame draft={draft} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Чат' }))
+
+    const phonePreview = screen.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    expect(
+      within(phonePreview).getByRole('heading', { name: 'Личный чат' }),
+    ).toBeInTheDocument()
+    expect(within(phonePreview).getByText('Вы и поддержка')).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('Здравствуйте, вижу ваше обращение.'),
+    ).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('И снова здравствуйте'),
+    ).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('Привет, сейчас посмотрю.'),
+    ).toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByRole('button', {
+        name: 'Загрузить более ранние сообщения',
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByRole('button', {
+        name: 'К последним сообщениям',
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByRole('button', {
+        name: /Открыть меню чата|Открыть навигацию/,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByRole('button', {
+        name: /Действия с сообщением/,
+      }),
+    ).not.toBeInTheDocument()
+    expect(within(phonePreview).queryByRole('menu')).not.toBeInTheDocument()
+    expect(within(phonePreview).queryByRole('link')).not.toBeInTheDocument()
+    expect(
+      within(phonePreview).getByRole('button', { name: 'Прикрепить файл' }),
+    ).toBeDisabled()
+    expect(
+      within(phonePreview).getByRole('button', { name: 'Голосовое сообщение' }),
+    ).toBeDisabled()
+    expect(within(phonePreview).getByLabelText('Сообщение')).toBeDisabled()
+    expect(
+      within(phonePreview).getByRole('button', { name: 'Отправить' }),
+    ).toBeDisabled()
+    expect(
+      screen.queryByRole('tab', { name: 'Настройки' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('tab', { name: 'Уведомления' }),
+    ).not.toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
