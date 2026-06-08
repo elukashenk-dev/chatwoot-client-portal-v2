@@ -192,6 +192,20 @@ async function checkProductionObjectStorageConfig(failures) {
   const minioBlockBeforeInit =
     minioServiceBlock.split('portal-object-storage-init:')[0] ?? ''
 
+  if (!minioBlockBeforeInit.includes('networks:')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production object storage must declare explicit networks',
+    })
+  }
+
+  if (!minioBlockBeforeInit.includes('- portal-internal')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production object storage must be on portal-internal only',
+    })
+  }
+
   if (minioBlockBeforeInit.includes('ports:')) {
     failures.push({
       relativePath: composePath,
@@ -237,6 +251,8 @@ Expected:
 - pass after Task 01 and Task 02 are implemented;
 - fail if production compose is missing storage services/env wiring;
 - fail if production storage service publishes host ports.
+- fail if production storage service is not explicitly scoped to
+  `portal-internal`;
 - fail if the init script stops creating the bucket, app user or bucket-scoped
   policy.
 - fail if backend receives MinIO root credentials.

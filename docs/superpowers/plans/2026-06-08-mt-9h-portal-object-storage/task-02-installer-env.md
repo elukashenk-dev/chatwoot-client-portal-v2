@@ -120,6 +120,9 @@ Expected:
 
 ## Review Notes
 
-- The installer may still allow an operator to override endpoint and images.
+- The installer must not prompt for storage endpoint, bucket, app access key,
+  region or path-style in this slice.
+- Image constants may stay in `.env.production` only for pinned image
+  maintenance; they are not tenant/client configuration.
 - The default must stay internal MinIO on `portal-internal`.
 - Do not ask for any object-storage value in tenant onboarding UI.
