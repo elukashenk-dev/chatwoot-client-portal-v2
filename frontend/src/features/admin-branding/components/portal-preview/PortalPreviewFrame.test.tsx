@@ -73,7 +73,9 @@ describe('PortalPreviewFrame', () => {
     ).toBeInTheDocument()
 
     await user.click(within(tablist).getByRole('tab', { name: 'Инфо' }))
-    expect(screen.getByText('Предпросмотр информации')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'О диалоге' }),
+    ).toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
@@ -139,6 +141,37 @@ describe('PortalPreviewFrame', () => {
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('tab', { name: 'Уведомления' }),
+    ).not.toBeInTheDocument()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders the chat info preview as read-only from the draft branding', async () => {
+    const user = userEvent.setup()
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    render(<PortalPreviewFrame draft={draft} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Инфо' }))
+
+    const phonePreview = screen.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    expect(
+      within(phonePreview).getByRole('heading', { name: 'О диалоге' }),
+    ).toBeInTheDocument()
+    expect(within(phonePreview).getByText('Личный чат')).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('Поддержка ProvGroup'),
+    ).toBeInTheDocument()
+    expect(within(phonePreview).getByText('Часы работы')).toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByRole('button', {
+        name: 'Вернуться к чату',
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(phonePreview).queryByLabelText('Вернуться к чату'),
     ).not.toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
   })

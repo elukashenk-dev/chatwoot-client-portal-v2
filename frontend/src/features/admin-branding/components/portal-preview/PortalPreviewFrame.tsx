@@ -10,6 +10,7 @@ import {
 } from '../../lib/previewBranding'
 import { AuthLoginPreview } from './AuthLoginPreview'
 import { ChatConversationPreview } from './ChatConversationPreview'
+import { ChatInfoPreview } from './ChatInfoPreview'
 
 type PreviewScreen = 'auth' | 'chat' | 'info'
 
@@ -22,14 +23,6 @@ const previewScreens = [
   { id: 'chat', label: 'Чат' },
   { id: 'info', label: 'Инфо' },
 ] satisfies Array<{ id: PreviewScreen; label: string }>
-
-function PreviewPlaceholder({ title }: { title: string }) {
-  return (
-    <div className="flex h-full items-center justify-center bg-white px-6 text-center">
-      <p className="text-sm font-semibold text-slate-500">{title}</p>
-    </div>
-  )
-}
 
 export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
   const [activeScreen, setActiveScreen] = useState<PreviewScreen>('auth')
@@ -92,9 +85,7 @@ export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
             >
               {activeScreen === 'auth' ? <AuthLoginPreview /> : null}
               {activeScreen === 'chat' ? <ChatConversationPreview /> : null}
-              {activeScreen === 'info' ? (
-                <PreviewPlaceholder title="Предпросмотр информации" />
-              ) : null}
+              {activeScreen === 'info' ? <ChatInfoPreview /> : null}
             </div>
           </div>
         </TenantIdentityContext.Provider>

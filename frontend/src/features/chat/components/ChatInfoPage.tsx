@@ -14,6 +14,7 @@ import { ChatAvatar } from './ChatAvatar'
 
 type ChatInfoPageProps = {
   info: ChatThreadInfoResponse | null
+  isBackActionReadOnly?: boolean
   isLoading: boolean
   isSupportAvailabilityLoading: boolean
   onBack: () => void
@@ -153,6 +154,7 @@ function WorkingHoursSection({
 
 export function ChatInfoPage({
   info,
+  isBackActionReadOnly = false,
   isLoading,
   isSupportAvailabilityLoading,
   onBack,
@@ -171,6 +173,7 @@ export function ChatInfoPage({
 
   return (
     <ChatFullScreenPanel
+      isBackActionReadOnly={isBackActionReadOnly}
       isLoading={isLoading}
       isUnavailable={isUnavailable}
       loadingMessage="Загружаем информацию о чате."

@@ -161,6 +161,28 @@ describe('ChatInfoPage', () => {
     expect(screen.queryByText('Участники портала')).not.toBeInTheDocument()
   })
 
+  it('passes read-only back mode to the full-screen panel', () => {
+    render(
+      <ChatInfoPage
+        info={privateInfo}
+        isBackActionReadOnly
+        isLoading={false}
+        isSupportAvailabilityLoading={false}
+        onBack={vi.fn()}
+        onRetry={vi.fn()}
+        supportAvailability={supportAvailability}
+      />,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Информация о чате' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Вернуться к чату')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Вернуться к чату' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('hides absent optional rows and renders empty conversation state', () => {
     render(
       <ChatInfoPage

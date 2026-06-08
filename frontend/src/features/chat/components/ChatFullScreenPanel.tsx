@@ -4,6 +4,7 @@ import { ChevronLeftIcon, RefreshIcon } from '../../../shared/ui/icons'
 
 type ChatFullScreenPanelProps = {
   children: ReactNode
+  isBackActionReadOnly?: boolean
   isLoading: boolean
   isUnavailable?: boolean
   loadingMessage?: string
@@ -15,6 +16,7 @@ type ChatFullScreenPanelProps = {
 
 export function ChatFullScreenPanel({
   children,
+  isBackActionReadOnly = false,
   isLoading,
   isUnavailable = false,
   loadingMessage = 'Загружаем данные.',
@@ -23,18 +25,31 @@ export function ChatFullScreenPanel({
   title,
   unavailableMessage = 'Не удалось загрузить данные.',
 }: ChatFullScreenPanelProps) {
+  const backControlClassName =
+    'inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
+
   return (
     <section className="chat-runtime-surface absolute inset-0 z-40 flex min-h-0 flex-col bg-white text-slate-900">
       <header className="app-safe-top chat-header-background border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
         <div className="flex min-h-10 items-center gap-3">
-          <button
-            aria-label="Вернуться к чату"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-            onClick={onBack}
-            type="button"
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </button>
+          {isBackActionReadOnly ? (
+            <span
+              aria-hidden="true"
+              className={backControlClassName}
+              data-chat-read-only-back-affordance
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </span>
+          ) : (
+            <button
+              aria-label="Вернуться к чату"
+              className={backControlClassName}
+              onClick={onBack}
+              type="button"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
+          )}
           <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-tight">
             {title}
           </h1>

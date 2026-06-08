@@ -32,6 +32,35 @@ describe('ChatFullScreenPanel', () => {
     expect(container.firstElementChild).not.toHaveClass('fixed')
   })
 
+  it('renders a non-focusable back affordance in read-only mode', () => {
+    const onBack = vi.fn()
+
+    const { container } = render(
+      <ChatFullScreenPanel
+        isBackActionReadOnly
+        isLoading={false}
+        onBack={onBack}
+        onRetry={vi.fn()}
+        title="Информация о чате"
+      >
+        <p>Содержимое страницы</p>
+      </ChatFullScreenPanel>,
+    )
+    const readOnlyBackAffordance = container.querySelector(
+      '[data-chat-read-only-back-affordance]',
+    )
+
+    expect(screen.queryByLabelText('Вернуться к чату')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Вернуться к чату' }),
+    ).not.toBeInTheDocument()
+    expect(readOnlyBackAffordance).toBeInstanceOf(HTMLElement)
+    expect(readOnlyBackAffordance?.tagName).toBe('SPAN')
+    expect(readOnlyBackAffordance).not.toHaveAttribute('tabindex')
+    expect(readOnlyBackAffordance).not.toHaveAttribute('role')
+    expect(onBack).not.toHaveBeenCalled()
+  })
+
   it('renders loading and unavailable states', async () => {
     const user = userEvent.setup()
     const onRetry = vi.fn()
