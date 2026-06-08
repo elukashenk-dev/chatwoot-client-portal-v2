@@ -125,8 +125,12 @@ execution-plan детали здесь не хранятся.
   shows read-only real portal preview screens for `Вход`, `Чат` and `Инфо`,
   updates from unsaved draft values and is covered against customer runtime API
   calls and desktop layout overflow.
+- Branding asset storage is packaged as portal-owned production infrastructure:
+  the default one-VM production stack runs internal object storage, while
+  browser access stays through portal-owned asset URLs.
 
 ## Recommended Next Step
 
-- Continue `MT-9H`: final browser/PWA/cache manual QA, production runbook
-  updates and final branding documentation cleanup before production push.
+- Continue `MT-9H`: final browser/PWA/cache manual QA, production deploy
+  readiness verification and final branding documentation cleanup before
+  production push.

@@ -120,6 +120,9 @@ Branding slice map:
   Admin preview parity checkpoint inside `MT-9H` is closed: `/admin/branding`
   uses read-only real portal preview screens for `Вход`, `Чат` and `Инфо`
   without customer runtime API calls.
+  Portal object-storage deploy readiness is part of `MT-9H`: production
+  branding uploads must work in the default one-VM stack with no external
+  storage provisioning for B2B clients.
 
 Remaining scope after `MT-9G`:
 

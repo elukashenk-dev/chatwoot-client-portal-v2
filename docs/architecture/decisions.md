@@ -191,6 +191,12 @@
   metadata в portal DB, binary content в S3-compatible object storage. Для
   локальной разработки используется тот же подход через MinIO или совместимый
   local object storage, а не временная альтернативная схема.
+  Production default: portal deployment owns an internal S3-compatible MinIO
+  service and a persistent Docker volume for branding binaries. This is part of
+  the provider-operated portal stack, not a B2B-client provisioning
+  responsibility. External managed S3-compatible storage is a future operator
+  mode that requires a separate compose/profile/runbook slice; it is not part
+  of the current default one-VM install path.
 - причина:
   shared SaaS и dedicated install должны использовать одну архитектуру. Local
   files в контейнере легко потерять при redeploy, трудно масштабировать на

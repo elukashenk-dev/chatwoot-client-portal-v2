@@ -481,6 +481,10 @@ tenant-aware runtime.
   S3-compatible object storage;
 - локальная разработка использует тот же object-storage подход через
   MinIO/compatible service;
+- production branding assets use portal-owned internal object storage by
+  default: the production compose stack runs MinIO on the private Docker
+  network, while portal DB remains the source of truth for tenant ownership and
+  active asset references;
 - tenant admin login отдельный от customer login;
 - для admin verification добавлен отдельный encrypted per-tenant Chatwoot
   admin-verification token boundary;

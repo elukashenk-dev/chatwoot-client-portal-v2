@@ -119,6 +119,7 @@ Portal-owned artifacts at this path may include:
 - Docker compose state;
 - portal Docker volumes;
 - portal DB data;
+- portal object-storage data;
 - generated logs and deployment artifacts.
 
 Production cleanup must affect only portal-owned resources. Production Chatwoot,
@@ -130,6 +131,13 @@ Allowed `MT-10` Chatwoot-side change is limited to tenant API Channel setup:
 - enable single-conversation mode if needed;
 - set the portal webhook URL;
 - store the returned `Channel::Api.secret` in portal DB.
+
+## Portal Object Storage
+
+- Branding assets are stored in the portal-owned object-storage Docker volume,
+  not in Chatwoot uploads and not in the frontend/backend image.
+- Backups must include both `portal-db-data` and
+  `portal-object-storage-data`.
 
 ## План Развертывания
 

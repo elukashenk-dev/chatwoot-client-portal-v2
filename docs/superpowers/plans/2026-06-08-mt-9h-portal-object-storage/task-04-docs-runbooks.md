@@ -17,7 +17,7 @@
 
 ## Steps
 
-- [ ] **Step 1: Update architecture overview**
+- [x] **Step 1: Update architecture overview**
 
 In `docs/architecture/overview.md`, in the branding/admin section, add:
 
@@ -30,7 +30,7 @@ In `docs/architecture/overview.md`, in the branding/admin section, add:
 
 Keep existing browser authority text unchanged.
 
-- [ ] **Step 2: Update `D-014A` decision**
+- [x] **Step 2: Update `D-014A` decision**
 
 In `docs/architecture/decisions.md`, extend `D-014A` with:
 
@@ -43,7 +43,7 @@ In `docs/architecture/decisions.md`, extend `D-014A` with:
   of the current default one-VM install path.
 ```
 
-- [ ] **Step 3: Update production deployment guardrails**
+- [x] **Step 3: Update production deployment guardrails**
 
 In `docs/operations/production-deployment.md`, under `Runtime Rules`, add:
 
@@ -69,7 +69,7 @@ Add a branding asset check:
   evidence is captured.
 ```
 
-- [ ] **Step 4: Update clean reinstall runbook**
+- [x] **Step 4: Update clean reinstall runbook**
 
 In `docs/operations/production-clean-reinstall.md`:
 
@@ -161,7 +161,7 @@ BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE=true
   routes.
 ```
 
-- [ ] **Step 5: Update server notes and roadmap**
+- [x] **Step 5: Update server notes and roadmap**
 
 In `docs/operations/production-server-notes.md`, add a short current-facts
 section if not already present:

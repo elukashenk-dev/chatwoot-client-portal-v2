@@ -43,6 +43,9 @@ Production runtime uses:
 - `PORTAL_TENANT_SECRET_KEY`;
 - `DEFAULT_TENANT_*` bootstrap values;
 - isolated portal Postgres;
+- portal-owned internal object storage for branding assets; object-storage
+  credentials are production secrets and browser-facing routes never expose
+  bucket names, object keys or storage endpoints;
 - tenant-owned encrypted Chatwoot runtime config;
 - tenant API Channel webhook configuration;
 - Chatwoot `v4.13+` `Channel::Api.secret` as webhook signature secret source;
@@ -70,7 +73,8 @@ Before archive deploy:
 After archive deploy:
 
 - `docker compose --env-file .env.production -f infra/production/compose.yaml ps`
-  shows `portal-db` and `portal-backend` healthy and `portal-web` running;
+  shows `portal-db`, `portal-object-storage` and `portal-backend` healthy,
+  `portal-object-storage-init` completed successfully and `portal-web` running;
 - `cat DEPLOY_SOURCE.txt` matches the intended clean commit;
 - `curl -fsS https://lk.provgroup.ru/api/health` returns `status: ok`;
 - `curl -fsS https://lk.provgroup.ru/api/tenant` returns `provgroup`;
@@ -80,6 +84,10 @@ After archive deploy:
 docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
   node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=provgroup
 ```
+
+- admin branding can upload a small PNG logo and `/api/branding/assets/:id`
+  returns `200` with `content-type: image/png`; remove the test logo after
+  evidence is captured.
 
 ## Maintenance Cleanup
 
