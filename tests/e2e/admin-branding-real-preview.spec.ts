@@ -207,6 +207,111 @@ test('admin real preview switches screens without customer runtime requests', as
   expect(routes.forbiddenRequests).toEqual([])
 })
 
+test('admin can collapse sticky navigation and resize the portal preview width', async ({
+  page,
+}) => {
+  const routes = await mockAdminRealPreviewRoutes(page)
+
+  await page.setViewportSize({ height: 700, width: 1280 })
+  await page.goto('/admin/branding')
+
+  await expect(
+    page.getByRole('heading', { name: 'Копия портала' }),
+  ).toBeVisible()
+
+  const sidebar = page.locator('[data-admin-branding-sidebar]')
+  const editor = page.locator('[data-admin-branding-editor]')
+  const preview = page.locator('[data-admin-branding-preview]')
+  const resizeHandle = page.getByRole('separator', {
+    name: 'Изменить ширину предпросмотра',
+  })
+  const phonePreview = page.getByRole('region', {
+    name: 'Телефонный предпросмотр портала',
+  })
+
+  await expect(sidebar).toBeVisible()
+  await expect(preview).toBeVisible()
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '28')
+
+  await editor.evaluate((element) => {
+    element.scrollTop = 700
+  })
+
+  const stickyTops = await page.evaluate(() => {
+    const sidebarElement = document.querySelector(
+      '[data-admin-branding-sidebar]',
+    )
+    const previewElement = document.querySelector(
+      '[data-admin-branding-preview]',
+    )
+
+    return {
+      preview: previewElement?.getBoundingClientRect().top ?? null,
+      sidebar: sidebarElement?.getBoundingClientRect().top ?? null,
+    }
+  })
+
+  expect(Math.abs(stickyTops.sidebar ?? Number.NaN)).toBeLessThan(1)
+  expect(Math.abs(stickyTops.preview ?? Number.NaN)).toBeLessThan(1)
+
+  await page.getByRole('button', { name: 'Свернуть меню админки' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Развернуть меню админки' }),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Цвета' })).toHaveCount(0)
+
+  await resizeHandle.focus()
+  await page.keyboard.press('End')
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '36')
+
+  await page.keyboard.press('Home')
+  await expect(resizeHandle).toHaveAttribute('aria-valuenow', '25')
+
+  const narrowPhoneBox = await phonePreview.boundingBox()
+
+  if (!narrowPhoneBox) {
+    throw new Error('Missing narrow portal preview box.')
+  }
+
+  const handleBox = await resizeHandle.boundingBox()
+
+  if (!handleBox) {
+    throw new Error('Missing preview resize handle box.')
+  }
+
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  )
+  await page.mouse.down()
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2 - 64,
+    handleBox.y + handleBox.height / 2,
+  )
+  await page.mouse.up()
+
+  await expect
+    .poll(async () => Number(await resizeHandle.getAttribute('aria-valuenow')))
+    .toBeGreaterThan(25)
+  const widerPhoneBox = await phonePreview.boundingBox()
+
+  if (!widerPhoneBox) {
+    throw new Error('Missing wider portal preview box.')
+  }
+
+  expect(widerPhoneBox.width).toBeGreaterThan(narrowPhoneBox.width + 20)
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true)
+  expect(routes.forbiddenRequests).toEqual([])
+})
+
 for (const width of [1024, 1280, 1440] as const) {
   test(`admin real preview fits desktop viewport at ${width}px`, async ({
     page,

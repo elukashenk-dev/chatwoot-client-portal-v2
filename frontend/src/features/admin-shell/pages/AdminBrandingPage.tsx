@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 
 import { AdminBrandingForm } from '../../admin-branding/components/AdminBrandingForm'
-import { BrandingPreviewPane } from '../../admin-branding/components/BrandingPreviewPane'
 import {
   deleteAdminBrandingAsset,
   getAdminBranding,
@@ -17,25 +16,7 @@ import {
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { LogOutIcon } from '../../../shared/ui/icons'
 import { useAdminSession } from '../../admin-auth/lib/adminSessionContext'
-
-const brandingSections = [
-  {
-    id: 'main',
-    title: 'Основное',
-  },
-  {
-    id: 'colors',
-    title: 'Цвета',
-  },
-  {
-    id: 'assets',
-    title: 'Изображения',
-  },
-  {
-    id: 'auth',
-    title: 'Auth-экран',
-  },
-]
+import { AdminBrandingDesktopLayout } from './AdminBrandingDesktopLayout'
 
 const brandingAssetMessages = {
   auth_background_image: {
@@ -251,97 +232,52 @@ export function AdminBrandingPage() {
         </div>
       </section>
 
-      <section className="hidden min-h-full grid-cols-[15rem_minmax(0,1fr)_minmax(25rem,28rem)] 2xl:grid-cols-[15rem_minmax(36rem,1fr)_30rem] lg:grid">
-        <aside className="border-r border-slate-200 bg-white px-5 py-6">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-normal text-brand-700">
-              Админ-консоль
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold">Брендинг</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              {admin?.email ?? 'Администратор портала'}
-            </p>
+      <AdminBrandingDesktopLayout
+        adminEmail={admin?.email ?? 'Администратор портала'}
+        draft={draft}
+        isSigningOut={isSigningOut}
+        logoutError={logoutError}
+        onLogout={() => {
+          void handleLogout()
+        }}
+      >
+        <div className="mb-5">
+          <h2 className="mt-1 text-3xl font-semibold tracking-normal">
+            Настройки брендинга
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Цвета и тексты применяются к текущему tenant после сохранения.
+          </p>
+        </div>
+
+        <InlineAlert message={brandingError} tone="error" />
+        <InlineAlert message={brandingSuccess} tone="success" />
+
+        {brandingStatus === 'loading' ? (
+          <div className="rounded-[0.6rem] border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
+            Загружаем настройки брендинга
           </div>
-
-          <nav aria-label="Разделы админки" className="mt-8 space-y-2">
-            {brandingSections.map((section) => (
-              <a
-                className="block rounded-[0.6rem] px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
-                href={`#${section.id}`}
-                key={section.title}
-              >
-                {section.title}
-              </a>
-            ))}
-          </nav>
-
-          <div className="mt-8 space-y-3">
-            <InlineAlert message={logoutError} tone="error" />
-            <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-[0.6rem] border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-              disabled={isSigningOut}
-              onClick={() => {
-                void handleLogout()
-              }}
-              type="button"
-            >
-              <LogOutIcon className="h-4 w-4" />
-              Выйти
-            </button>
-          </div>
-        </aside>
-
-        <section className="overflow-y-auto px-6 py-6">
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-5">
-              <h2 className="mt-1 text-3xl font-semibold tracking-normal">
-                Настройки брендинга
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Цвета и тексты применяются к текущему tenant после сохранения.
-              </p>
-            </div>
-
-            <InlineAlert message={brandingError} tone="error" />
-            <InlineAlert message={brandingSuccess} tone="success" />
-
-            {brandingStatus === 'loading' ? (
-              <div className="rounded-[0.6rem] border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
-                Загружаем настройки брендинга
-              </div>
-            ) : draft ? (
-              <AdminBrandingForm
-                areAssetActionsDisabled={areAssetActionsDisabled}
-                assetActionKind={assetActionKind}
-                draft={draft}
-                isSubmitDisabled={isSubmitDisabled}
-                isSaving={isSaving}
-                onAssetDelete={(kind) => {
-                  void handleAssetDelete(kind)
-                }}
-                onAssetUpload={(kind, file) => {
-                  void handleAssetUpload(kind, file)
-                }}
-                onAssetValidationError={handleAssetValidationError}
-                onChange={handleDraftChange}
-                onSubmit={() => {
-                  void handleSave()
-                }}
-              />
-            ) : null}
-          </div>
-        </section>
-
-        <aside className="max-h-screen overflow-y-auto border-l border-slate-200 bg-white px-3 py-6 xl:px-5">
-          {draft ? (
-            <BrandingPreviewPane draft={draft} />
-          ) : (
-            <div className="rounded-[0.6rem] border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-              Предпросмотр появится после загрузки настроек.
-            </div>
-          )}
-        </aside>
-      </section>
+        ) : draft ? (
+          <AdminBrandingForm
+            areAssetActionsDisabled={areAssetActionsDisabled}
+            assetActionKind={assetActionKind}
+            draft={draft}
+            isSubmitDisabled={isSubmitDisabled}
+            isSaving={isSaving}
+            onAssetDelete={(kind) => {
+              void handleAssetDelete(kind)
+            }}
+            onAssetUpload={(kind, file) => {
+              void handleAssetUpload(kind, file)
+            }}
+            onAssetValidationError={handleAssetValidationError}
+            onChange={handleDraftChange}
+            onSubmit={() => {
+              void handleSave()
+            }}
+          />
+        ) : null}
+      </AdminBrandingDesktopLayout>
     </main>
   )
 }

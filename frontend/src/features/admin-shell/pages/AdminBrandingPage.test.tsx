@@ -163,6 +163,61 @@ describe('AdminBrandingPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('collapses the admin rail and resizes the sticky preview panel', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    await screen.findByDisplayValue('Бухфирма')
+
+    const layout = screen.getByRole('region', {
+      name: 'Макет админки брендинга',
+    })
+    const sidebar = document.querySelector('[data-admin-branding-sidebar]')
+    const preview = document.querySelector('[data-admin-branding-preview]')
+    const resizeHandle = screen.getByRole('separator', {
+      name: 'Изменить ширину предпросмотра',
+    })
+
+    expect(sidebar).toHaveClass('sticky', 'top-0', 'h-screen')
+    expect(preview).toHaveClass('sticky', 'top-0', 'h-screen')
+    expect(layout).toHaveStyle({
+      gridTemplateColumns: '15rem minmax(0,1fr) 28rem',
+    })
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '28')
+    expect(screen.getByRole('link', { name: 'Цвета' })).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Свернуть меню админки' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Развернуть меню админки' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Цвета' }),
+    ).not.toBeInTheDocument()
+    expect(layout).toHaveStyle({
+      gridTemplateColumns: '4.5rem minmax(0,1fr) 28rem',
+    })
+
+    resizeHandle.focus()
+    await user.keyboard('{ArrowLeft}')
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '29')
+    expect(layout).toHaveStyle({
+      gridTemplateColumns: '4.5rem minmax(0,1fr) 29rem',
+    })
+
+    await user.keyboard('{End}')
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '36')
+
+    await user.keyboard('{ArrowRight}')
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '35')
+
+    await user.keyboard('{Home}')
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '25')
+  })
+
   it('saves controlled branding settings', async () => {
     const user = userEvent.setup()
     updateAdminBrandingMock.mockResolvedValueOnce(
