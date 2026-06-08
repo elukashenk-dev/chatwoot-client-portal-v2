@@ -117,12 +117,15 @@ Branding slice map:
 - `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache manual
   checks, production runbook updates and final documentation cleanup. Current
   next slice.
+  Admin preview parity checkpoint inside `MT-9H` is closed: `/admin/branding`
+  uses read-only real portal preview screens for `Вход`, `Чат` and `Инфо`
+  without customer runtime API calls.
 
 Remaining scope after `MT-9G`:
 
 - final branding QA, docs and deploy readiness;
-- verify admin preview parity during final QA and record a follow-up only if a
-  real-component preview gap remains;
+- complete browser/PWA/cache manual checks and record follow-ups only for
+  remaining real-device or deploy-readiness gaps;
 - archived branch `feature/phase-10-portal-branding-admin` may be used only as
   an idea archive, not merged as-is.
 

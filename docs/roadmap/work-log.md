@@ -121,9 +121,12 @@ execution-plan детали здесь не хранятся.
   surfaces consume public tenant branding colors, copy and portal-owned image
   asset URLs, and tenant PWA manifest colors now follow saved branding settings
   without exposing object-storage authority.
+- `MT-9H` admin preview parity checkpoint is closed: `/admin/branding` now
+  shows read-only real portal preview screens for `Вход`, `Чат` and `Инфо`,
+  updates from unsaved draft values and is covered against customer runtime API
+  calls and desktop layout overflow.
 
 ## Recommended Next Step
 
-- Start `MT-9H`: final branding QA/docs/deploy readiness, including browser,
-  PWA/cache manual checks, production runbook updates and final documentation
-  cleanup.
+- Continue `MT-9H`: final browser/PWA/cache manual QA, production runbook
+  updates and final branding documentation cleanup before production push.

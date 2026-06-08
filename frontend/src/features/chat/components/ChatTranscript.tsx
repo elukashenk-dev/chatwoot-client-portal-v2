@@ -110,11 +110,7 @@ export function ChatTranscript({
   })
 
   const closeContextMenu = useCallback(
-    ({
-      restoreFocus = false,
-    }: {
-      restoreFocus?: boolean
-    } = {}) => {
+    ({ restoreFocus = false }: { restoreFocus?: boolean } = {}) => {
       const returnFocusTo = restoreFocus ? contextMenu?.returnFocusTo : null
 
       setContextMenu(null)
@@ -351,11 +347,7 @@ export function ChatTranscript({
   }
 
   function handleOpenContextMenu(message: ChatMessage, event: MouseEvent) {
-    if (isReadOnly) {
-      return
-    }
-
-    if (!shouldUseDesktopMessageContextMenu()) {
+    if (isReadOnly || !shouldUseDesktopMessageContextMenu()) {
       return
     }
 

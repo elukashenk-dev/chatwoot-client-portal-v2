@@ -14,7 +14,7 @@ each task file.
 Run:
 
 ```bash
-pnpm --dir frontend exec vitest run src/features/admin-branding/components/portal-preview/PortalPreviewFrame.test.tsx src/features/admin-shell/pages/AdminBrandingPage.test.tsx src/features/chat/components/ChatTranscript.test.tsx src/features/chat/components/ChatFullScreenPanel.test.tsx src/features/chat/components/ChatInfoPage.test.tsx --reporter verbose
+pnpm --dir frontend exec vitest run src/features/admin-branding/components/portal-preview/PortalPreviewFrame.test.tsx src/features/admin-shell/pages/AdminBrandingPage.test.tsx src/features/chat/components/ChatTranscript.test.tsx src/features/chat/components/ChatTranscript.read-only.test.tsx src/features/chat/components/ChatFullScreenPanel.test.tsx src/features/chat/components/ChatInfoPage.test.tsx --reporter verbose
 PLAYWRIGHT_BASE_URL=http://buhfirma.127.0.0.1.nip.io:5173 pnpm test:e2e -- tests/e2e/admin-branding-settings.spec.ts tests/e2e/admin-branding-assets.spec.ts tests/e2e/admin-branding-real-preview.spec.ts
 pnpm lint
 pnpm --dir frontend exec tsc --noEmit -p tsconfig.app.json
