@@ -15,6 +15,40 @@ export type BrandingCssProperties = CSSProperties &
 const black: RgbColor = { b: 0, g: 0, r: 0 }
 const white: RgbColor = { b: 255, g: 255, r: 255 }
 
+const productionVisualDefaults = {
+  authFrameBackground: '#e2e8f0',
+  authSurfaceBackground: '#ffffff',
+  chatAppBackground: '#e2e8f0',
+  chatOutgoing: '#465a72',
+  chatSurfaceBackground: '#ffffff',
+  darkHeaderBorder: 'rgb(226 232 240 / 0.4)',
+  darkHeaderControlBorder: 'rgb(255 255 255 / 0.2)',
+  darkHeaderControlHoverBackground: 'rgb(255 255 255 / 0.15)',
+  darkHeaderControlHoverText: '#ffffff',
+  darkHeaderControlSurface: 'rgb(255 255 255 / 0.1)',
+  darkHeaderControlText: 'rgb(255 255 255 / 0.74)',
+  lightHeaderBorder: 'rgb(226 232 240 / 0.9)',
+  lightHeaderControlBorder: 'rgb(226 232 240 / 0.6)',
+  lightHeaderControlHoverBackground: 'rgb(241 245 249 / 0.8)',
+  lightHeaderControlHoverText: '#112540',
+  lightHeaderControlSurface: 'rgb(248 250 252 / 0.6)',
+  lightHeaderControlText: '#475569',
+} as const
+
+const legacyBrandColorVariables = {
+  '--color-brand-50': '#f3f7fc',
+  '--color-brand-100': '#e7eef8',
+  '--color-brand-200': '#c4d5ed',
+  '--color-brand-300': '#9cb9df',
+  '--color-brand-400': '#6d96cb',
+  '--color-brand-500': '#4676b4',
+  '--color-brand-600': '#315d97',
+  '--color-brand-700': '#234776',
+  '--color-brand-800': '#173258',
+  '--color-brand-900': '#112540',
+  '--color-chat-outgoing': productionVisualDefaults.chatOutgoing,
+} as const
+
 function parseHexColor(value: string): RgbColor | null {
   const normalized = value.trim()
 
@@ -55,6 +89,16 @@ function mixColor(color: RgbColor, target: RgbColor, targetWeight: number) {
 
 function normalizeHexColor(value: string, fallback: string) {
   return parseHexColor(value) ? value.trim() : fallback
+}
+
+function isDarkColor(value: string, fallback = false) {
+  const color = parseHexColor(value)
+
+  if (!color) {
+    return fallback
+  }
+
+  return (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255 < 0.55
 }
 
 function getReadableForeground(backgroundColor: string) {
@@ -101,6 +145,13 @@ function cssUrlValue(imageUrl?: string | null) {
 }
 
 function createBrandColorVariables(primaryColor: string, accentColor: string) {
+  if (
+    primaryColor.toLowerCase() === defaultBrandingColors.primary &&
+    accentColor.toLowerCase() === defaultBrandingColors.accent
+  ) {
+    return legacyBrandColorVariables
+  }
+
   const primary = parseHexColor(primaryColor) ?? parseHexColor('#112540')!
   const accent = parseHexColor(accentColor) ?? parseHexColor('#4676b4')!
 
@@ -162,9 +213,12 @@ export function createBrandingCssProperties(
     branding.colors.chatText,
     defaultBrandingColors.chatText,
   )
-  const { mutedForeground } = getReadableForeground(
-    chatHeaderBackgroundColor,
-  )
+  const { mutedForeground } = getReadableForeground(chatHeaderBackgroundColor)
+  const isDefaultAuthBackground =
+    authBackgroundColor.toLowerCase() === defaultBrandingColors.authBackground
+  const isDefaultChatBackground =
+    chatBackgroundColor.toLowerCase() === defaultBrandingColors.chatBackground
+  const isDarkHeader = isDarkColor(chatHeaderBackgroundColor)
 
   return {
     ...createBrandColorVariables(primaryColor, accentColor),
@@ -172,8 +226,17 @@ export function createBrandingCssProperties(
     '--portal-auth-background-image': cssUrlValue(
       branding.assets.auth_background_image?.publicUrl,
     ),
+    '--portal-auth-frame-background-color': isDefaultAuthBackground
+      ? productionVisualDefaults.authFrameBackground
+      : authBackgroundColor,
     '--portal-auth-muted-text-color': authMutedTextColor,
+    '--portal-auth-surface-background-color': isDefaultAuthBackground
+      ? productionVisualDefaults.authSurfaceBackground
+      : authBackgroundColor,
     '--portal-auth-text-color': authTextColor,
+    '--portal-chat-app-background-color': isDefaultChatBackground
+      ? productionVisualDefaults.chatAppBackground
+      : chatBackgroundColor,
     '--portal-chat-background-color': chatBackgroundColor,
     '--portal-chat-background-image': cssUrlValue(
       branding.assets.chat_background_image?.publicUrl,
@@ -182,6 +245,24 @@ export function createBrandingCssProperties(
     '--portal-chat-header-background-image': cssUrlValue(
       branding.assets.chat_header_background_image?.publicUrl,
     ),
+    '--portal-chat-header-border-color': isDarkHeader
+      ? productionVisualDefaults.darkHeaderBorder
+      : productionVisualDefaults.lightHeaderBorder,
+    '--portal-chat-header-control-border': isDarkHeader
+      ? productionVisualDefaults.darkHeaderControlBorder
+      : productionVisualDefaults.lightHeaderControlBorder,
+    '--portal-chat-header-control-hover-background': isDarkHeader
+      ? productionVisualDefaults.darkHeaderControlHoverBackground
+      : productionVisualDefaults.lightHeaderControlHoverBackground,
+    '--portal-chat-header-control-hover-text': isDarkHeader
+      ? productionVisualDefaults.darkHeaderControlHoverText
+      : productionVisualDefaults.lightHeaderControlHoverText,
+    '--portal-chat-header-control-surface': isDarkHeader
+      ? productionVisualDefaults.darkHeaderControlSurface
+      : productionVisualDefaults.lightHeaderControlSurface,
+    '--portal-chat-header-control-text': isDarkHeader
+      ? productionVisualDefaults.darkHeaderControlText
+      : productionVisualDefaults.lightHeaderControlText,
     '--portal-chat-header-foreground': chatHeaderTextColor,
     '--portal-chat-header-muted-foreground': createMutedTextColor(
       chatHeaderTextColor,
@@ -189,6 +270,9 @@ export function createBrandingCssProperties(
       mutedForeground,
     ),
     '--portal-chat-muted-text-color': chatMutedTextColor,
+    '--portal-chat-surface-background-color': isDefaultChatBackground
+      ? productionVisualDefaults.chatSurfaceBackground
+      : chatBackgroundColor,
     '--portal-chat-text-color': chatTextColor,
   }
 }

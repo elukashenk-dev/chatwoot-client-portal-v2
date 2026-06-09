@@ -38,10 +38,12 @@ test('serves the PWA manifest with installable app metadata', async ({
     scope?: string
     short_name?: string
     start_url?: string
+    background_color?: string
     theme_color?: string
   }
 
   expect(manifest).toMatchObject({
+    background_color: '#f3f7fc',
     display: 'standalone',
     scope: '/',
     start_url: '/',

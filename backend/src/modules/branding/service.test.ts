@@ -65,8 +65,10 @@ describe('createBrandingService', () => {
       branding: expect.objectContaining({
         assets: {},
         colors: expect.objectContaining({
+          authBackground: '#f3f7fc',
           authText: '#0f172a',
-          chatHeaderText: '#ffffff',
+          chatHeaderBackground: '#ffffff',
+          chatHeaderText: '#0f172a',
           chatText: '#334155',
           primary: '#112540',
         }),

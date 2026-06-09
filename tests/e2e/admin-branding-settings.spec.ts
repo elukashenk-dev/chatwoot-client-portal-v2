@@ -2,16 +2,23 @@ import { expect, type Page, type Route, test } from '@playwright/test'
 
 const adminEmail = 'cbr@provgroup.com'
 
+const defaultBrandingColors = {
+  accent: '#4676b4',
+  authBackground: '#f3f7fc',
+  authMutedText: '#64748b',
+  authText: '#0f172a',
+  chatBackground: '#ffffff',
+  chatHeaderBackground: '#ffffff',
+  chatHeaderText: '#0f172a',
+  chatMutedText: '#64748b',
+  chatText: '#334155',
+  primary: '#112540',
+} as const
+
 const brandingResponse = {
   branding: {
     assets: {},
-    colors: {
-      accent: '#4676b4',
-      authBackground: '#f3f7fc',
-      chatBackground: '#ffffff',
-      chatHeaderBackground: '#112540',
-      primary: '#112540',
-    },
+    colors: defaultBrandingColors,
     copy: {
       authSubtitle: 'Введите email и пароль, чтобы продолжить.',
       authTitle: 'Вход в личный кабинет',
@@ -124,6 +131,21 @@ async function mockAdminBrandingRoutes(
   })
 }
 
+async function gotoAdminBrandingPage(page: Page) {
+  const adminBrandingResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/admin/branding') &&
+      response.request().method() === 'GET',
+  )
+
+  await page.goto('/admin/branding')
+  await expect((await adminBrandingResponse).status()).toBe(200)
+  await expect(
+    page.getByRole('heading', { exact: true, name: 'Брендинг' }),
+  ).toBeVisible()
+  await expect(page.getByLabel('Название портала')).toBeVisible()
+}
+
 function createDeferred() {
   let resolve!: () => void
   const promise = new Promise<void>((nextResolve) => {
@@ -141,6 +163,7 @@ test('admin can edit all branding setting groups and see preview update', async 
       authBackground: '#eefcf8',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#164e63',
+      chatHeaderText: '#ffffff',
       primary: '#0f766e',
     },
     copy: {
@@ -162,7 +185,7 @@ test('admin can edit all branding setting groups and see preview update', async 
     })
   })
 
-  await page.goto('/admin/branding')
+  await gotoAdminBrandingPage(page)
 
   await expect(
     page.getByRole('heading', { exact: true, name: 'Брендинг' }),
@@ -174,9 +197,11 @@ test('admin can edit all branding setting groups and see preview update', async 
 
   await page.getByLabel('Название портала').fill(updatedBranding.portalName)
   await page.getByLabel('Подпись поддержки').fill(updatedBranding.supportLabel)
-  await page.getByLabel('Основной цвет').fill(updatedBranding.colors.primary)
   await page
-    .getByLabel('Цвет auth-фона')
+    .getByLabel('Основной цвет', { exact: true })
+    .fill(updatedBranding.colors.primary)
+  await page
+    .getByLabel('Цвет auth-фона', { exact: true })
     .fill(updatedBranding.colors.authBackground)
   await page
     .getByLabel('Фон чата', { exact: true })
@@ -184,6 +209,9 @@ test('admin can edit all branding setting groups and see preview update', async 
   await page
     .getByLabel('Фон шапки чата', { exact: true })
     .fill(updatedBranding.colors.chatHeaderBackground)
+  await expect(
+    page.getByLabel('Цвет текста шапки чата', { exact: true }),
+  ).toHaveValue(updatedBranding.colors.chatHeaderText)
   await page
     .getByLabel('Заголовок входа', { exact: true })
     .fill(updatedBranding.copy.authTitle)
@@ -246,6 +274,50 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(page.getByText('Настройки сохранены.')).not.toBeVisible()
 })
 
+test('admin reset colors restores production-like default color contract', async ({
+  page,
+}) => {
+  await mockAdminBrandingRoutes(page, async ({ payload, route }) => {
+    await expect(payload).toMatchObject({
+      colors: defaultBrandingColors,
+    })
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createBrandingResponse({
+        colors: defaultBrandingColors,
+        version: 2,
+      }),
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+  await expect(page.getByRole('heading', { name: 'Цвета' })).toBeVisible()
+
+  await page.getByLabel('Фон шапки чата', { exact: true }).fill('#164e63')
+  await page
+    .getByLabel('Цвет текста шапки чата', { exact: true })
+    .fill('#f8fafc')
+  await page.getByLabel('Цвет текста чата', { exact: true }).fill('#778899')
+
+  await page.getByRole('button', { name: 'Сбросить цвета' }).click()
+
+  await expect(page.getByLabel('Фон шапки чата', { exact: true })).toHaveValue(
+    '#ffffff',
+  )
+  await expect(
+    page.getByLabel('Цвет текста шапки чата', { exact: true }),
+  ).toHaveValue('#0f172a')
+  await expect(
+    page.getByLabel('Цвет текста чата', { exact: true }),
+  ).toHaveValue('#334155')
+  await expect(page.getByLabel('Основной цвет', { exact: true })).toHaveValue(
+    '#112540',
+  )
+
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click()
+  await expect(page.getByRole('status')).toContainText('Настройки сохранены.')
+})
+
 test('admin controls are locked while branding save is in flight', async ({
   page,
 }) => {
@@ -265,7 +337,7 @@ test('admin controls are locked while branding save is in flight', async ({
     })
   })
 
-  await page.goto('/admin/branding')
+  await gotoAdminBrandingPage(page)
   await page.getByLabel('Название портала').fill('Портал Бухфирма')
 
   const patchResponsePromise = page.waitForResponse(
@@ -277,7 +349,7 @@ test('admin controls are locked while branding save is in flight', async ({
   await page.getByRole('button', { name: 'Сохранить настройки' }).click()
   await expect(page.getByRole('button', { name: 'Сохраняем' })).toBeDisabled()
   await expect(page.getByLabel('Название портала')).toBeDisabled()
-  await expect(page.getByLabel('Основной цвет')).toBeDisabled()
+  await expect(page.getByLabel('Основной цвет', { exact: true })).toBeDisabled()
 
   patchRelease.resolve()
   await expect((await patchResponsePromise).status()).toBe(200)
@@ -303,8 +375,8 @@ test('admin sees a controlled save error and keeps the draft editable', async ({
     })
   })
 
-  await page.goto('/admin/branding')
-  await page.getByLabel('Основной цвет').fill('#zzzzzz')
+  await gotoAdminBrandingPage(page)
+  await page.getByLabel('Основной цвет', { exact: true }).fill('#zzzzzz')
 
   const patchResponsePromise = page.waitForResponse(
     (response) =>
@@ -317,7 +389,9 @@ test('admin sees a controlled save error and keeps the draft editable', async ({
   await expect(page.getByRole('alert')).toContainText(
     'Некорректный цвет брендинга.',
   )
-  await expect(page.getByLabel('Основной цвет')).toHaveValue('#zzzzzz')
+  await expect(page.getByLabel('Основной цвет', { exact: true })).toHaveValue(
+    '#zzzzzz',
+  )
   await expect(
     page.getByRole('button', { name: 'Сохранить настройки' }),
   ).toBeEnabled()

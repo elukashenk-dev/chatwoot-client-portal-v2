@@ -28,6 +28,10 @@ describe('ChatFullScreenPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Вернуться к чату' }))
     expect(onBack).toHaveBeenCalledTimes(1)
 
+    expect(container.querySelector('header')).toHaveClass('chat-header-border')
+    expect(
+      screen.getByRole('button', { name: 'Вернуться к чату' }),
+    ).toHaveClass('chat-header-icon-button')
     expect(container.firstElementChild).toHaveClass('absolute')
     expect(container.firstElementChild).not.toHaveClass('fixed')
   })
@@ -56,6 +60,7 @@ describe('ChatFullScreenPanel', () => {
     ).not.toBeInTheDocument()
     expect(readOnlyBackAffordance).toBeInstanceOf(HTMLElement)
     expect(readOnlyBackAffordance?.tagName).toBe('SPAN')
+    expect(readOnlyBackAffordance).toHaveClass('chat-header-icon-button')
     expect(readOnlyBackAffordance).not.toHaveAttribute('tabindex')
     expect(readOnlyBackAffordance).not.toHaveAttribute('role')
     expect(onBack).not.toHaveBeenCalled()

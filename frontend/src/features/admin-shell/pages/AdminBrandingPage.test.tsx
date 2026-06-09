@@ -38,8 +38,8 @@ const savedBrandingResponse = {
       authMutedText: '#64748b',
       authText: '#0f172a',
       chatBackground: '#ffffff',
-      chatHeaderBackground: '#112540',
-      chatHeaderText: '#ffffff',
+      chatHeaderBackground: '#ffffff',
+      chatHeaderText: '#0f172a',
       chatMutedText: '#64748b',
       chatText: '#334155',
       primary: '#112540',
@@ -309,9 +309,10 @@ describe('AdminBrandingPage', () => {
     await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
+    expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#ffffff')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')
     expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
-      '#ffffff',
+      '#0f172a',
     )
     expect(portalNameInput).toHaveValue('Портал без изменения')
 
@@ -323,7 +324,8 @@ describe('AdminBrandingPage', () => {
       expect(updateAdminBrandingMock).toHaveBeenCalledWith(
         expect.objectContaining({
           colors: expect.objectContaining({
-            chatHeaderText: '#ffffff',
+            chatHeaderBackground: '#ffffff',
+            chatHeaderText: '#0f172a',
             chatText: '#334155',
             primary: '#112540',
           }),
@@ -331,6 +333,69 @@ describe('AdminBrandingPage', () => {
         }),
       )
     })
+  })
+
+  it('keeps chat header text readable when only the header background changes after reset', async () => {
+    const user = userEvent.setup()
+
+    renderAdminBrandingPage()
+
+    await screen.findByLabelText('Название портала')
+
+    await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
+    expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
+      '#0f172a',
+    )
+
+    fireEvent.input(screen.getByLabelText('Выбрать фон шапки чата'), {
+      target: { value: '#164e63' },
+    })
+
+    expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#164e63')
+    expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
+      '#ffffff',
+    )
+
+    fireEvent.input(screen.getByLabelText('Выбрать фон шапки чата'), {
+      target: { value: '#ffffff' },
+    })
+
+    expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
+      '#0f172a',
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    )
+
+    await waitFor(() => {
+      expect(updateAdminBrandingMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          colors: expect.objectContaining({
+            chatHeaderBackground: '#ffffff',
+            chatHeaderText: '#0f172a',
+          }),
+        }),
+      )
+    })
+  })
+
+  it('does not overwrite manually customized chat header text when header background changes', async () => {
+    renderAdminBrandingPage()
+
+    await screen.findByLabelText('Название портала')
+
+    fireEvent.input(screen.getByLabelText('Выбрать цвет текста шапки чата'), {
+      target: { value: '#445566' },
+    })
+    fireEvent.input(screen.getByLabelText('Выбрать фон шапки чата'), {
+      target: { value: '#164e63' },
+    })
+
+    expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#164e63')
+    expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
+      '#445566',
+    )
   })
 
   it('refreshes assets after upload without overwriting unsaved text edits', async () => {

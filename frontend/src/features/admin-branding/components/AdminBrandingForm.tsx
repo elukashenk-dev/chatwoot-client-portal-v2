@@ -37,6 +37,12 @@ type ColorFieldConfig = {
 
 const validHexColorPattern = /^#[0-9a-fA-F]{6}$/u
 
+type RgbColor = {
+  b: number
+  g: number
+  r: number
+}
+
 const colorFieldGroups = [
   {
     fields: [
@@ -93,6 +99,42 @@ function TextField({ disabled, label, name, onChange, value }: TextFieldProps) {
 
 function getColorPickerValue(value: string) {
   return validHexColorPattern.test(value) ? value : '#000000'
+}
+
+function parseHexColor(value: string): RgbColor | null {
+  const normalized = value.trim()
+
+  if (!validHexColorPattern.test(normalized)) {
+    return null
+  }
+
+  return {
+    b: Number.parseInt(normalized.slice(5, 7), 16),
+    g: Number.parseInt(normalized.slice(3, 5), 16),
+    r: Number.parseInt(normalized.slice(1, 3), 16),
+  }
+}
+
+function getReadableChatHeaderText(backgroundColor: string) {
+  const color = parseHexColor(backgroundColor)
+
+  if (!color) {
+    return defaultBrandingColors.chatHeaderText
+  }
+
+  const isDark =
+    (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255 < 0.55
+
+  return isDark ? '#ffffff' : '#0f172a'
+}
+
+function shouldSyncChatHeaderText(colors: BrandingColors) {
+  const currentText = colors.chatHeaderText.toLowerCase()
+
+  return (
+    currentText === defaultBrandingColors.chatHeaderText ||
+    currentText === getReadableChatHeaderText(colors.chatHeaderBackground)
+  )
 }
 
 function ColorField({
@@ -168,12 +210,21 @@ export function AdminBrandingForm({
   }
 
   function updateColor(key: keyof BrandingColors, value: string) {
+    const nextColors = {
+      ...draft.colors,
+      [key]: value,
+    }
+
+    if (
+      key === 'chatHeaderBackground' &&
+      shouldSyncChatHeaderText(draft.colors)
+    ) {
+      nextColors.chatHeaderText = getReadableChatHeaderText(value)
+    }
+
     onChange({
       ...draft,
-      colors: {
-        ...draft.colors,
-        [key]: value,
-      },
+      colors: nextColors,
     })
   }
 

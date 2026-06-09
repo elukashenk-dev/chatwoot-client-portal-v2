@@ -214,6 +214,18 @@ describe('ChatHeader', () => {
     expect(screen.getByRole('status', { name: 'На связи' })).toBeInTheDocument()
   })
 
+  it('uses semantic header control classes for light and dark branded headers', () => {
+    renderHeader()
+
+    expect(screen.getByRole('banner')).toHaveClass('chat-header-border')
+    expect(
+      screen.getByRole('button', { name: 'Открыть навигацию' }),
+    ).toHaveClass('chat-header-icon-button')
+    expect(
+      screen.getByRole('button', { name: 'Открыть меню чата' }),
+    ).toHaveClass('chat-header-menu-button')
+  })
+
   it('groups the right chat menu and navigates to profile', async () => {
     const user = userEvent.setup()
 

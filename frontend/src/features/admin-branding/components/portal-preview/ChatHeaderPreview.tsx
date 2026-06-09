@@ -14,11 +14,11 @@ export function ChatHeaderPreview() {
   )
 
   return (
-    <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm">
+    <header className="app-safe-top chat-header-background chat-header-border relative z-30 border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm">
       <div className="flex min-h-10 items-center gap-3">
         <span
           aria-hidden="true"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)]"
+          className="chat-header-icon-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control"
         >
           <MenuIcon className="h-6 w-6" />
         </span>
@@ -45,7 +45,7 @@ export function ChatHeaderPreview() {
 
         <span
           aria-hidden="true"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[color:var(--portal-chat-header-muted-foreground,#64748b)]"
+          className="chat-header-menu-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
         >
           <MoreHorizontalIcon className="h-5 w-5" />
         </span>

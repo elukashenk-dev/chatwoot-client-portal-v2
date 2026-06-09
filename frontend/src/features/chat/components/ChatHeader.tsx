@@ -242,7 +242,7 @@ export function ChatHeader({
   )
 
   return (
-    <header className="app-safe-top chat-header-background relative z-30 border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
+    <header className="app-safe-top chat-header-background chat-header-border relative z-30 border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
       <div className="flex min-h-10 items-center gap-3">
         <div className="relative shrink-0" ref={navMenuRef}>
           <button
@@ -251,7 +251,7 @@ export function ChatHeader({
             aria-label={
               isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
             }
-            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="chat-header-icon-button inline-flex h-10 w-10 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={() => {
               setIsNavMenuOpen((currentValue) => !currentValue)
               setIsChatMenuOpen(false)
@@ -367,7 +367,7 @@ export function ChatHeader({
             aria-label={
               isChatMenuOpen ? 'Закрыть меню чата' : 'Открыть меню чата'
             }
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-[color:var(--portal-chat-header-muted-foreground,#64748b)] transition hover:border-white/30 hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            className="chat-header-menu-button inline-flex h-10 w-10 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
             onClick={() => {
               setIsChatMenuOpen((currentValue) => !currentValue)
               setIsNavMenuOpen(false)

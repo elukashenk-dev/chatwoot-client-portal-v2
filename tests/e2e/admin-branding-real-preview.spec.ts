@@ -16,18 +16,25 @@ const logoAsset = {
   width: null,
 } as const
 
+const defaultBrandingColors = {
+  accent: '#4676b4',
+  authBackground: '#f3f7fc',
+  authMutedText: '#64748b',
+  authText: '#0f172a',
+  chatBackground: '#ffffff',
+  chatHeaderBackground: '#ffffff',
+  chatHeaderText: '#0f172a',
+  chatMutedText: '#64748b',
+  chatText: '#334155',
+  primary: '#112540',
+} as const
+
 const brandingResponse = {
   branding: {
     assets: {
       logo: logoAsset,
     },
-    colors: {
-      accent: '#4676b4',
-      authBackground: '#f3f7fc',
-      chatBackground: '#ffffff',
-      chatHeaderBackground: '#112540',
-      primary: '#112540',
-    },
+    colors: defaultBrandingColors,
     copy: {
       authSubtitle: 'Введите email и пароль, чтобы продолжить.',
       authTitle: 'Вход в личный кабинет',
@@ -190,6 +197,35 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect(
     phonePreview.getByRole('heading', { name: 'Личный чат' }),
   ).toBeVisible()
+
+  const previewScope = page
+    .locator('[data-admin-branding-preview] .portal-branding-scope')
+    .first()
+  await expect
+    .poll(() =>
+      previewScope.evaluate((node) =>
+        getComputedStyle(node)
+          .getPropertyValue('--portal-chat-header-background-color')
+          .trim(),
+      ),
+    )
+    .toBe('#ffffff')
+  await expect
+    .poll(() =>
+      previewScope.evaluate((node) =>
+        getComputedStyle(node)
+          .getPropertyValue('--portal-chat-header-foreground')
+          .trim(),
+      ),
+    )
+    .toBe('#0f172a')
+  await expect
+    .poll(() =>
+      previewScope.evaluate((node) =>
+        getComputedStyle(node).getPropertyValue('--color-chat-outgoing').trim(),
+      ),
+    )
+    .toBe('#465a72')
 
   await page.getByRole('tab', { name: 'Инфо' }).click()
   await expect(

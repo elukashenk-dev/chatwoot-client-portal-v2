@@ -26,11 +26,11 @@ export function ChatFullScreenPanel({
   unavailableMessage = 'Не удалось загрузить данные.',
 }: ChatFullScreenPanelProps) {
   const backControlClassName =
-    'inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-muted-foreground,#475569)] transition hover:bg-white/15 hover:text-[color:var(--portal-chat-header-foreground,#0f172a)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
+    'chat-header-icon-button inline-flex h-10 w-10 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
 
   return (
     <section className="chat-runtime-surface chat-text absolute inset-0 z-40 flex min-h-0 flex-col bg-white">
-      <header className="app-safe-top chat-header-background border-b border-slate-200/40 px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
+      <header className="app-safe-top chat-header-background chat-header-border border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
         <div className="flex min-h-10 items-center gap-3">
           {isBackActionReadOnly ? (
             <span

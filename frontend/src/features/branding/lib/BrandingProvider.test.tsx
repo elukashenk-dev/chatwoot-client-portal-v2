@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { BrandingProvider } from './BrandingProvider'
+import { createDefaultPublicBranding } from './brandingDefaults'
 import { useBranding } from './useBranding'
 
 function createJsonResponse(body: unknown, status = 200) {
@@ -151,6 +152,42 @@ describe('BrandingProvider', () => {
         .querySelector('meta[name="theme-color"]')
         ?.getAttribute('content'),
     ).toBe('#134e4a')
+  })
+
+  it('exposes production-like visual defaults for default branding', async () => {
+    vi.stubGlobal(
+      'fetch',
+      fetchMock.mockResolvedValueOnce(
+        createJsonResponse({
+          branding: createDefaultPublicBranding('PROVGROUP'),
+        }),
+      ),
+    )
+
+    const { container } = render(
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <BrandingProvider>
+          <BrandingProbe />
+        </BrandingProvider>
+      </TenantIdentityContext.Provider>,
+    )
+
+    expect(await screen.findByText('PROVGROUP')).toBeInTheDocument()
+
+    const scope = container.querySelector('.portal-branding-scope')
+    expect(scope).not.toBeNull()
+    expect(scope).toHaveStyle({
+      '--color-brand-700': '#234776',
+      '--color-brand-800': '#173258',
+      '--color-brand-900': '#112540',
+      '--color-chat-outgoing': '#465a72',
+      '--portal-auth-frame-background-color': '#e2e8f0',
+      '--portal-auth-surface-background-color': '#ffffff',
+      '--portal-chat-app-background-color': '#e2e8f0',
+      '--portal-chat-header-background-color': '#ffffff',
+      '--portal-chat-header-foreground': '#0f172a',
+      '--portal-chat-surface-background-color': '#ffffff',
+    })
   })
 
   it('keeps tenant-derived fallback branding when public branding fails', async () => {

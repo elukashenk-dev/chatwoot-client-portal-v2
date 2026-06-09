@@ -125,6 +125,9 @@ execution-plan детали здесь не хранятся.
   shows read-only real portal preview screens for `Вход`, `Чат` and `Инфо`,
   updates from unsaved draft values and is covered against customer runtime API
   calls and desktop layout overflow.
+- Branding reset/default visual parity is corrected: no-assets color reset
+  restores production-like auth/chat/info defaults, keeps PWA manifest defaults
+  and keeps chat header text readable when only header background changes.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.

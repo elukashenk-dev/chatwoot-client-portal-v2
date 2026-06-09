@@ -40,6 +40,22 @@ const draft = {
   supportLabel: 'Поддержка ProvGroup',
 } satisfies BrandingDraft
 
+const defaultDraft = {
+  ...draft,
+  colors: {
+    accent: '#4676b4',
+    authBackground: '#f3f7fc',
+    authMutedText: '#64748b',
+    authText: '#0f172a',
+    chatBackground: '#ffffff',
+    chatHeaderBackground: '#ffffff',
+    chatHeaderText: '#0f172a',
+    chatMutedText: '#64748b',
+    chatText: '#334155',
+    primary: '#112540',
+  },
+} satisfies BrandingDraft
+
 describe('PortalPreviewFrame', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -193,6 +209,27 @@ describe('PortalPreviewFrame', () => {
       screen.queryByRole('tab', { name: 'Уведомления' }),
     ).not.toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('uses production-like default CSS variables and semantic header controls in chat preview', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<PortalPreviewFrame draft={defaultDraft} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Чат' }))
+
+    expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
+      '--color-chat-outgoing': '#465a72',
+      '--portal-chat-header-background-color': '#ffffff',
+      '--portal-chat-header-control-hover-text': '#112540',
+      '--portal-chat-header-foreground': '#0f172a',
+    })
+    expect(container.querySelector('header')).toHaveClass('chat-header-border')
+    expect(container.querySelector('.chat-header-icon-button')).toBeInstanceOf(
+      HTMLElement,
+    )
+    expect(container.querySelector('.chat-header-menu-button')).toBeInstanceOf(
+      HTMLElement,
+    )
   })
 
   it('renders the chat info preview as read-only from the draft branding', async () => {

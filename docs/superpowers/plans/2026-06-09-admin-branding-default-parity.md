@@ -221,9 +221,7 @@ the reset expectations:
 ```ts
 expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
 expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#ffffff')
-expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
-  '#0f172a',
-)
+expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue('#0f172a')
 expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')
 ```
 
@@ -330,14 +328,13 @@ const isDefaultAuthBackground =
   authBackgroundColor.toLowerCase() === defaultBrandingColors.authBackground
 const isDefaultChatBackground =
   chatBackgroundColor.toLowerCase() === defaultBrandingColors.chatBackground
-const isDarkHeader =
-  (parseHexColor(chatHeaderBackgroundColor)
-    ? (0.2126 * parseHexColor(chatHeaderBackgroundColor)!.r +
-        0.7152 * parseHexColor(chatHeaderBackgroundColor)!.g +
-        0.0722 * parseHexColor(chatHeaderBackgroundColor)!.b) /
-        255 <
-      0.55
-    : false)
+const isDarkHeader = parseHexColor(chatHeaderBackgroundColor)
+  ? (0.2126 * parseHexColor(chatHeaderBackgroundColor)!.r +
+      0.7152 * parseHexColor(chatHeaderBackgroundColor)!.g +
+      0.0722 * parseHexColor(chatHeaderBackgroundColor)!.b) /
+      255 <
+    0.55
+  : false
 ```
 
 If this inline luminance is too awkward, extract a small `isDarkColor(value,
@@ -486,13 +483,15 @@ Expected result: test passes and proves default visual semantic variables.
 In `ChatHeader.tsx`, replace the nav button base style with semantic variables:
 
 ```tsx
-className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-control-text,#475569)] transition hover:bg-[color:var(--portal-chat-header-control-hover-background,rgb(241_245_249_/_0.8))] hover:text-[color:var(--portal-chat-header-control-hover-text,#112540)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+className =
+  'inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-[color:var(--portal-chat-header-control-text,#475569)] transition hover:bg-[color:var(--portal-chat-header-control-hover-background,rgb(241_245_249_/_0.8))] hover:text-[color:var(--portal-chat-header-control-hover-text,#112540)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
 ```
 
 Replace the chat menu button style with:
 
 ```tsx
-className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--portal-chat-header-control-border,rgb(226_232_240_/_0.6))] bg-[color:var(--portal-chat-header-control-surface,rgb(248_250_252_/_0.6))] text-[color:var(--portal-chat-header-control-text,#64748b)] transition hover:border-[color:var(--portal-chat-header-control-border,rgb(226_232_240_/_0.6))] hover:bg-[color:var(--portal-chat-header-control-hover-background,rgb(241_245_249_/_0.8))] hover:text-[color:var(--portal-chat-header-control-hover-text,#112540)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+className =
+  'inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--portal-chat-header-control-border,rgb(226_232_240_/_0.6))] bg-[color:var(--portal-chat-header-control-surface,rgb(248_250_252_/_0.6))] text-[color:var(--portal-chat-header-control-text,#64748b)] transition hover:border-[color:var(--portal-chat-header-control-border,rgb(226_232_240_/_0.6))] hover:bg-[color:var(--portal-chat-header-control-hover-background,rgb(241_245_249_/_0.8))] hover:text-[color:var(--portal-chat-header-control-hover-text,#112540)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
 ```
 
 If Tailwind arbitrary class escaping becomes brittle, define small CSS utility
@@ -617,12 +616,17 @@ In `tests/e2e/admin-branding-real-preview.spec.ts`, add a preview assertion
 after default branding loads:
 
 ```ts
-const previewScope = page.locator('.portal-preview-device .portal-branding-scope')
+const previewScope = page.locator(
+  '.portal-preview-device .portal-branding-scope',
+)
 await expect(previewScope).toHaveCSS(
   '--portal-chat-header-background-color',
   '#ffffff',
 )
-await expect(previewScope).toHaveCSS('--portal-chat-header-foreground', '#0f172a')
+await expect(previewScope).toHaveCSS(
+  '--portal-chat-header-foreground',
+  '#0f172a',
+)
 await expect(previewScope).toHaveCSS('--color-chat-outgoing', '#465a72')
 ```
 
