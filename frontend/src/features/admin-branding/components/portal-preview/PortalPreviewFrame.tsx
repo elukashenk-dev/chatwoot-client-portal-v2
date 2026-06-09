@@ -75,17 +75,61 @@ export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
       <BrandingContext.Provider value={brandingValue}>
         <TenantIdentityContext.Provider value={tenantIdentity}>
           <div
-            className="portal-branding-scope rounded-[1rem] border border-slate-200 bg-slate-100 p-3 shadow-sm"
+            className="portal-branding-scope portal-preview-stage rounded-[1.4rem] border border-slate-200 p-3 shadow-sm"
             style={cssProperties}
           >
-            <div
-              aria-label="Телефонный предпросмотр портала"
-              className="portal-preview-no-scrollbar mx-auto h-[720px] w-full overflow-hidden rounded-[1rem] border border-slate-200 bg-white shadow-sm"
-              role="region"
-            >
-              {activeScreen === 'auth' ? <AuthLoginPreview /> : null}
-              {activeScreen === 'chat' ? <ChatConversationPreview /> : null}
-              {activeScreen === 'info' ? <ChatInfoPreview /> : null}
+            <div className="portal-preview-device" data-portal-preview-device>
+              <div
+                aria-hidden="true"
+                className="portal-preview-device-hardware"
+              >
+                <span data-portal-preview-device-camera />
+                <span data-portal-preview-device-speaker />
+              </div>
+
+              <div
+                aria-label="Телефонный предпросмотр портала"
+                className="portal-preview-device-screen portal-preview-no-scrollbar"
+                role="region"
+              >
+                <div
+                  aria-hidden="true"
+                  className="portal-preview-device-status-bar"
+                  data-portal-preview-device-status-bar
+                >
+                  <span data-portal-preview-device-time>12:59</span>
+                  <span className="portal-preview-device-status-icons">
+                    <span data-portal-preview-device-network />
+                    <span data-portal-preview-device-wifi />
+                    <span data-portal-preview-device-battery />
+                  </span>
+                </div>
+
+                <div className="portal-preview-device-content">
+                  {activeScreen === 'auth' ? <AuthLoginPreview /> : null}
+                  {activeScreen === 'chat' ? <ChatConversationPreview /> : null}
+                  {activeScreen === 'info' ? <ChatInfoPreview /> : null}
+                </div>
+              </div>
+
+              <div
+                aria-hidden="true"
+                className="portal-preview-device-navigation"
+                data-portal-preview-device-navigation
+              >
+                <span
+                  className="portal-preview-device-nav-recents"
+                  data-portal-preview-device-nav-control
+                />
+                <span
+                  className="portal-preview-device-nav-home"
+                  data-portal-preview-device-nav-control
+                />
+                <span
+                  className="portal-preview-device-nav-back"
+                  data-portal-preview-device-nav-control
+                />
+              </div>
             </div>
           </div>
         </TenantIdentityContext.Provider>

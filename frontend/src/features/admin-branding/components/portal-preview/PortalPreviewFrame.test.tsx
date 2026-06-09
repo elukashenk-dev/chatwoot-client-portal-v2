@@ -45,6 +45,51 @@ describe('PortalPreviewFrame', () => {
     vi.restoreAllMocks()
   })
 
+  it('renders the portal preview inside a smartphone device frame', () => {
+    const { container } = render(<PortalPreviewFrame draft={draft} />)
+
+    const phonePreview = screen.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+    const deviceFrame = phonePreview.closest('[data-portal-preview-device]')
+
+    expect(deviceFrame).toHaveClass('portal-preview-device')
+    expect(phonePreview).toHaveClass('portal-preview-device-screen')
+    expect(
+      container.querySelector('[data-portal-preview-device-camera]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-portal-preview-device-speaker]'),
+    ).toBeInTheDocument()
+  })
+
+  it('adds Android-style status and navigation chrome around the preview', () => {
+    const { container } = render(<PortalPreviewFrame draft={draft} />)
+
+    expect(
+      container.querySelector('[data-portal-preview-device-status-bar]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-portal-preview-device-time]'),
+    ).toHaveTextContent('12:59')
+    expect(
+      container.querySelector('[data-portal-preview-device-network]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-portal-preview-device-wifi]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-portal-preview-device-battery]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('[data-portal-preview-device-navigation]'),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelectorAll('[data-portal-preview-device-nav-control]'),
+    ).toHaveLength(3)
+    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+  })
+
   it('renders only the first-slice preview screens', async () => {
     const user = userEvent.setup()
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
