@@ -30,8 +30,14 @@ type TextFieldProps = {
   value: string
 }
 
+type ColorValueKey = {
+  [Key in keyof BrandingColors]: BrandingColors[Key] extends string
+    ? Key
+    : never
+}[keyof BrandingColors]
+
 type ColorFieldConfig = {
-  key: keyof BrandingColors
+  key: ColorValueKey
   label: string
 }
 
@@ -53,7 +59,8 @@ const colorFieldGroups = [
   },
   {
     fields: [
-      { key: 'authBackground', label: 'Цвет auth-фона' },
+      { key: 'authBackground', label: 'Фон auth-страницы' },
+      { key: 'authContentSurface', label: 'Фон области входа' },
       { key: 'authText', label: 'Цвет текста auth-экрана' },
       {
         key: 'authMutedText',
@@ -192,6 +199,53 @@ function ColorField({
   )
 }
 
+function OpacityField({
+  disabled,
+  label,
+  name,
+  onChange,
+  value,
+}: {
+  disabled: boolean
+  label: string
+  name: string
+  onChange: (value: number) => void
+  value: number
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <span className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-3">
+        <input
+          aria-label={label}
+          className="h-2 w-full accent-brand-800 disabled:cursor-not-allowed"
+          disabled={disabled}
+          max={100}
+          min={0}
+          name={name}
+          onChange={(event) => {
+            onChange(Number(event.currentTarget.value))
+          }}
+          type="range"
+          value={value}
+        />
+        <input
+          aria-label={`${label}, значение`}
+          className="h-10 rounded-[0.55rem] border border-slate-200 bg-white px-2 text-sm text-slate-950 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+          disabled={disabled}
+          max={100}
+          min={0}
+          onChange={(event) => {
+            onChange(Number(event.currentTarget.value))
+          }}
+          type="number"
+          value={value}
+        />
+      </span>
+    </label>
+  )
+}
+
 export function AdminBrandingForm({
   areAssetActionsDisabled,
   assetActionKind,
@@ -209,14 +263,18 @@ export function AdminBrandingForm({
     onSubmit()
   }
 
-  function updateColor(key: keyof BrandingColors, value: string) {
-    const nextColors = {
+  function updateColor<Key extends keyof BrandingColors>(
+    key: Key,
+    value: BrandingColors[Key],
+  ) {
+    const nextColors: BrandingColors = {
       ...draft.colors,
       [key]: value,
     }
 
     if (
       key === 'chatHeaderBackground' &&
+      typeof value === 'string' &&
       shouldSyncChatHeaderText(draft.colors)
     ) {
       nextColors.chatHeaderText = getReadableChatHeaderText(value)
@@ -319,6 +377,17 @@ export function AdminBrandingForm({
                   />
                 ))}
               </div>
+              {group.title === 'Auth-экран' ? (
+                <OpacityField
+                  disabled={isSaving}
+                  label="Плотность области входа"
+                  name="colors.authContentSurfaceOpacity"
+                  onChange={(value) => {
+                    updateColor('authContentSurfaceOpacity', value)
+                  }}
+                  value={draft.colors.authContentSurfaceOpacity}
+                />
+              ) : null}
             </fieldset>
           ))}
         </div>
