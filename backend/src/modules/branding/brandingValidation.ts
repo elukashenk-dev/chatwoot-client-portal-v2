@@ -7,6 +7,7 @@ const colorSchema = z
   .trim()
   .regex(/^#[0-9a-fA-F]{6}$/u)
   .transform((value) => value.toLowerCase())
+const opacitySchema = z.number().int().min(0).max(100)
 
 function optionalText(maxLength: number) {
   return z
@@ -27,6 +28,8 @@ export const adminBrandingPatchSchema = z
       .object({
         accent: colorSchema.optional(),
         authBackground: colorSchema.optional(),
+        authContentSurface: colorSchema.optional(),
+        authContentSurfaceOpacity: opacitySchema.optional(),
         authMutedText: colorSchema.optional(),
         authText: colorSchema.optional(),
         chatBackground: colorSchema.optional(),

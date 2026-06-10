@@ -64,6 +64,8 @@ describe('createBrandingRepository', () => {
       await repositoryA.upsertSettings({
         accentColor: '#4676b4',
         authBackgroundColor: '#f3f7fc',
+        authContentSurfaceColor: '#f8fafc',
+        authContentSurfaceOpacity: 84,
         authMutedTextColor: '#52637a',
         authSubtitle: 'Для защищенной переписки',
         authTextColor: '#111827',
@@ -81,7 +83,15 @@ describe('createBrandingRepository', () => {
         supportLabel: 'Поддержка Альфа',
       })
 
-      await expect(repositoryA.findSettings()).resolves.toMatchObject({
+      const settings = await repositoryA.findSettings()
+
+      expect(settings).toEqual(
+        expect.objectContaining({
+          authContentSurfaceColor: '#f8fafc',
+          authContentSurfaceOpacity: 84,
+        }),
+      )
+      expect(settings).toMatchObject({
         authMutedTextColor: '#52637a',
         authTextColor: '#111827',
         chatHeaderTextColor: '#f8fafc',

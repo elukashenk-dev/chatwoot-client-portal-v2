@@ -22,6 +22,8 @@ export type BrandingSettingsPatch = Partial<{
   accentColor: string | null
   authBackgroundColor: string | null
   authBackgroundImageAssetId: number | null
+  authContentSurfaceColor: string | null
+  authContentSurfaceOpacity: number | null
   authFooterImageAssetId: number | null
   authHeaderImageAssetId: number | null
   authMutedTextColor: string | null
@@ -86,6 +88,8 @@ const settingsSelection = {
   accentColor: portalBrandingSettings.accentColor,
   authBackgroundColor: portalBrandingSettings.authBackgroundColor,
   authBackgroundImageAssetId: portalBrandingSettings.authBackgroundImageAssetId,
+  authContentSurfaceColor: portalBrandingSettings.authContentSurfaceColor,
+  authContentSurfaceOpacity: portalBrandingSettings.authContentSurfaceOpacity,
   authFooterImageAssetId: portalBrandingSettings.authFooterImageAssetId,
   authHeaderImageAssetId: portalBrandingSettings.authHeaderImageAssetId,
   authMutedTextColor: portalBrandingSettings.authMutedTextColor,
@@ -148,6 +152,10 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     authBackgroundImageAssetId: normalizeAssetId(
       input.authBackgroundImageAssetId,
     ),
+    authContentSurfaceColor: normalizeNullableText(
+      input.authContentSurfaceColor,
+    ),
+    authContentSurfaceOpacity: input.authContentSurfaceOpacity,
     authFooterImageAssetId: normalizeAssetId(input.authFooterImageAssetId),
     authHeaderImageAssetId: normalizeAssetId(input.authHeaderImageAssetId),
     authMutedTextColor: normalizeNullableText(input.authMutedTextColor),
