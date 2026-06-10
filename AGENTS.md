@@ -176,6 +176,35 @@
 - В конце `docs/roadmap/work-log.md` всегда держать один актуальный блок `Recommended Next Step`.
 - Перед записью нового рекомендуемого следующего шага удалять предыдущий, чтобы в конце файла всегда оставался только один актуальный следующий шаг.
 
+## Execution Efficiency Rule
+
+- Надежность важнее экономии токенов, но агент не должен выполнять пустую,
+  дублирующую или непропорционально дорогую работу.
+- Перед subagent-driven work агент должен выбирать минимальный достаточный
+  execution/review уровень по риску задачи:
+  - high-risk: auth, session, security, database migrations, persistence,
+    tenant isolation, production deploy, public API contracts - полный review
+    flow обязателен;
+  - medium-risk: обычные feature slices - focused implementer/reviewer и
+    targeted checks достаточны, если нет архитектурных изменений;
+  - low-risk: docs-only, copy, локальные UI polish fixes - локальная проверка и
+    targeted checks обычно достаточны.
+- Subagent prompt должен быть коротким и точным: ссылка на plan/task section,
+  write scope, acceptance criteria и hard boundaries. Не копировать весь
+  большой plan в prompt, если subagent может прочитать нужный файл сам.
+- Generated файлы не ревьюить целиком построчно без причины. Проверять
+  targeted: presence, journal/snapshot consistency, schema diff, migration SQL
+  и тесты.
+- Повторное независимое ревью делать обязательно для Critical/Important
+  findings. Minor findings можно закрывать локальной правкой и targeted checks,
+  если они не затрагивают runtime/security/data behavior.
+- Выводы команд в чат держать краткими: команда, pass/fail, ключевые числа и
+  failures. Не вставлять verbose output без необходимости.
+- Нельзя сокращать обязательные проверки: tests/build/lint/diff-check и
+  acceptance criteria остаются gate перед commit/closure.
+- Если экономия процесса создает риск ухудшения качества, выбирать качество и
+  явно объяснять пользователю, почему нужен полный flow.
+
 ## New Feature Intake Rule
 
 - Новый функционал должен явно соответствовать одной из фаз `docs/roadmap/implementation-plan.md`, confirmed follow-up slice или отдельному finding из `docs/findings/`.

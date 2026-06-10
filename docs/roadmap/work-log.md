@@ -131,6 +131,10 @@ execution-plan детали здесь не хранятся.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
+- Agent execution governance now uses risk-based efficiency rules: full review
+  flow remains mandatory for high-risk auth/security/migration/runtime work,
+  while low-risk docs/UI-polish work should avoid duplicate subagent/review
+  cycles and verbose generated-output churn.
 
 ## Recommended Next Step
 
