@@ -13,6 +13,8 @@ const brandingResponse = {
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
+      authContentSurface: '#ffffff',
+      authContentSurfaceOpacity: 100,
       authMutedText: '#64748b',
       authText: '#0f172a',
       chatBackground: '#ffffff',
@@ -92,7 +94,11 @@ describe('adminBrandingClient', () => {
     )
 
     await updateAdminBranding({
-      colors: { primary: '#123456' },
+      colors: {
+        authContentSurface: '#f8fafc',
+        authContentSurfaceOpacity: 84,
+        primary: '#123456',
+      },
       copy: { authTitle: 'Добро пожаловать' },
       portalName: 'Новый портал',
     })
@@ -101,12 +107,26 @@ describe('adminBrandingClient', () => {
       '/api/admin/branding',
       expect.objectContaining({
         body: JSON.stringify({
-          colors: { primary: '#123456' },
+          colors: {
+            authContentSurface: '#f8fafc',
+            authContentSurfaceOpacity: 84,
+            primary: '#123456',
+          },
           copy: { authTitle: 'Добро пожаловать' },
           portalName: 'Новый портал',
         }),
         credentials: 'include',
         method: 'PATCH',
+      }),
+    )
+    const init = vi.mocked(fetch).mock.calls[0]?.[1]
+
+    expect(JSON.parse(String(init?.body))).toEqual(
+      expect.objectContaining({
+        colors: expect.objectContaining({
+          authContentSurface: '#f8fafc',
+          authContentSurfaceOpacity: 84,
+        }),
       }),
     )
   })

@@ -79,6 +79,25 @@ function toHexColor({ b, g, r }: RgbColor) {
     .join('')}`
 }
 
+function clampPercentage(value: number, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function toCssRgb({ b, g, r }: RgbColor) {
+  return `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`
+}
+
+function toCssRgbAlpha(color: string, opacityPercent: number) {
+  const parsed = parseHexColor(color) ?? parseHexColor('#ffffff')!
+  const alpha = clampPercentage(opacityPercent, 100) / 100
+
+  return `rgb(${toCssRgb(parsed)} / ${alpha})`
+}
+
 function mixColor(color: RgbColor, target: RgbColor, targetWeight: number) {
   return {
     b: color.b * (1 - targetWeight) + target.b * targetWeight,
@@ -185,6 +204,15 @@ export function createBrandingCssProperties(
     branding.colors.authBackground,
     defaultBrandingColors.authBackground,
   )
+  const authContentSurfaceColor = normalizeHexColor(
+    branding.colors.authContentSurface,
+    defaultBrandingColors.authContentSurface,
+  )
+  const authContentSurfaceOpacity = clampPercentage(
+    branding.colors.authContentSurfaceOpacity,
+    defaultBrandingColors.authContentSurfaceOpacity,
+  )
+  const authContentSurfaceAlpha = String(authContentSurfaceOpacity / 100)
   const authMutedTextColor = normalizeHexColor(
     branding.colors.authMutedText,
     defaultBrandingColors.authMutedText,
@@ -225,6 +253,22 @@ export function createBrandingCssProperties(
     '--portal-auth-background-color': authBackgroundColor,
     '--portal-auth-background-image': cssUrlValue(
       branding.assets.auth_background_image?.publicUrl,
+    ),
+    '--portal-auth-canvas-background-color': authBackgroundColor,
+    '--portal-auth-content-surface-background': toCssRgbAlpha(
+      authContentSurfaceColor,
+      authContentSurfaceOpacity,
+    ),
+    '--portal-auth-content-surface-color': authContentSurfaceColor,
+    '--portal-auth-content-surface-opacity': authContentSurfaceAlpha,
+    '--portal-auth-control-background': toCssRgbAlpha(
+      authContentSurfaceColor,
+      Math.max(82, authContentSurfaceOpacity),
+    ),
+    '--portal-auth-control-border-color': createMutedTextColor(
+      authMutedTextColor,
+      authContentSurfaceColor,
+      '#cbd5e1',
     ),
     '--portal-auth-frame-background-color': isDefaultAuthBackground
       ? productionVisualDefaults.authFrameBackground
