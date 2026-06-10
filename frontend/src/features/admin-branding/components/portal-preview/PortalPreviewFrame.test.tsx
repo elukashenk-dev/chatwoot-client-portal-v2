@@ -20,8 +20,8 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
-    authContentSurface: '#ffffff',
-    authContentSurfaceOpacity: 100,
+    authContentSurface: '#f8fafc',
+    authContentSurfaceOpacity: 84,
     authMutedText: '#456179',
     authText: '#0f172a',
     chatBackground: '#f8fafc',
@@ -282,9 +282,20 @@ describe('PortalPreviewFrame', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
-    expect(screen.getByLabelText('Email')).toBeDisabled()
-    expect(screen.getByLabelText('Пароль')).toBeDisabled()
+    const emailInput = screen.getByLabelText('Email')
+    const passwordInput = screen.getByLabelText('Пароль')
+
+    expect(emailInput).toBeDisabled()
+    expect(emailInput).toHaveClass('auth-input')
+    expect(passwordInput).toBeDisabled()
+    expect(passwordInput).toHaveClass('auth-input')
     expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    expect(
+      document.querySelector('.auth-canvas-background'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
+    expect(document.querySelector('.auth-input')).toBeInTheDocument()
+    expect(document.querySelector('.auth-support-card')).toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Забыли пароль?' }),
     ).not.toBeInTheDocument()
@@ -337,6 +348,9 @@ describe('PortalPreviewFrame', () => {
     ).toHaveAttribute('src', '/api/branding/assets/12?v=12')
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
+      '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
+      '--portal-auth-content-surface-color': '#f8fafc',
+      '--portal-auth-content-surface-opacity': '0.84',
       '--portal-auth-text-color': '#0f172a',
       '--portal-chat-header-background-color': '#164e63',
       '--portal-chat-header-foreground': '#f8fafc',

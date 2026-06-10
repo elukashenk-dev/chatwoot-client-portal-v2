@@ -1,4 +1,8 @@
 import { LockIcon, MailIcon, PhoneIcon } from '../../../../shared/ui/icons'
+import {
+  authFieldIconClassName,
+  inputClassName,
+} from '../../../../shared/ui/inputStyles'
 import { useBranding } from '../../../branding/lib/useBranding'
 import { TenantAuthShell } from '../../../tenant/components/TenantAuthShell'
 
@@ -12,22 +16,26 @@ export function AuthLoginPreview() {
         title={branding.copy.authTitle}
       >
         <form aria-label="Форма входа предпросмотра" className="space-y-3">
-          <label className="flex min-h-14 items-center gap-3 rounded-[0.6rem] border border-slate-200 bg-white px-4 text-slate-500">
-            <MailIcon className="h-5 w-5 shrink-0 text-slate-500" />
+          <label className="relative block">
+            <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+              <MailIcon className={authFieldIconClassName} />
+            </span>
             <input
               aria-label="Email"
-              className="min-w-0 flex-1 appearance-none border-0 bg-transparent text-[16px] shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
+              className={`${inputClassName(false, false)} pl-16`}
               disabled
               placeholder="name@company.ru"
               type="email"
             />
           </label>
 
-          <label className="flex min-h-14 items-center gap-3 rounded-[0.6rem] border border-slate-200 bg-white px-4 text-slate-500">
-            <LockIcon className="h-5 w-5 shrink-0 text-slate-500" />
+          <label className="relative block">
+            <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+              <LockIcon className={authFieldIconClassName} />
+            </span>
             <input
               aria-label="Пароль"
-              className="min-w-0 flex-1 appearance-none border-0 bg-transparent text-[16px] shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
+              className={`${inputClassName(false, false)} pl-16`}
               disabled
               placeholder="Введите пароль"
               type="password"
@@ -49,7 +57,7 @@ export function AuthLoginPreview() {
         </div>
 
         <div className="mt-auto pt-6">
-          <aside className="auth-muted-text flex items-center gap-3 rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-[13px] leading-5 shadow-sm">
+          <aside className="auth-support-card auth-muted-text flex items-center gap-3 rounded-[0.6rem] px-3.5 py-3 text-[13px] leading-5 shadow-sm">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200/80 text-brand-800 max-[360px]:hidden">
               <PhoneIcon className="h-4 w-4" />
             </span>
