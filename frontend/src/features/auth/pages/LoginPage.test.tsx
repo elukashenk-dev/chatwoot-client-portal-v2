@@ -215,6 +215,11 @@ describe('LoginPage', () => {
       screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Войдите в кабинет ProvGroup.')).toBeInTheDocument()
+    expect(document.querySelector('.auth-canvas-background')).toBeInTheDocument()
+    expect(document.querySelector('.auth-content-layer')).toBeInTheDocument()
+    expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
+    expect(document.querySelector('.auth-support-card')).toBeInTheDocument()
+    expect(document.querySelector('.auth-input')).toBeInTheDocument()
     expect(screen.queryByText('Центр поддержки')).not.toBeInTheDocument()
   })
 

@@ -42,7 +42,7 @@ export function AuthShell({
   title,
 }: AuthShellProps) {
   return (
-    <section className="auth-shell-background relative flex min-h-full w-full flex-col bg-white">
+    <section className="auth-canvas-background relative flex min-h-full w-full flex-col">
       <div
         aria-hidden="true"
         className={cn(
@@ -78,12 +78,15 @@ export function AuthShell({
         />
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col px-7 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-10 sm:pb-6">
-        <div className="text-center">
-          <PageIntro description={description} title={title} />
-        </div>
+      <div className="auth-content-layer relative z-10 flex flex-1 flex-col px-7 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-10 sm:pb-6">
+        <div aria-hidden="true" className="auth-content-veil" />
+        <div className="auth-content-body relative z-10 flex min-h-full flex-1 flex-col">
+          <div className="text-center">
+            <PageIntro description={description} title={title} />
+          </div>
 
-        <div className="mt-7 flex flex-1 flex-col">{children}</div>
+          <div className="mt-7 flex flex-1 flex-col">{children}</div>
+        </div>
       </div>
     </section>
   )

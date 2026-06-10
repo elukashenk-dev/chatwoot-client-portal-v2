@@ -1,7 +1,7 @@
 import { cn } from '../lib/cn'
 
 export const authFieldClassName =
-  'h-[52px] rounded-auth-control bg-slate-50/80 text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)]'
+  'h-[52px] rounded-auth-control bg-[color:var(--portal-auth-control-background,rgb(248_250_252_/_0.86))] text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)]'
 
 export const authFieldIconClassName = 'h-6 w-6'
 
@@ -13,13 +13,13 @@ export const authPrimaryLinkClassName =
 
 export function inputClassName(hasError: boolean, isFilled = false) {
   return cn(
-    'auth-input auth-text block h-16 w-full appearance-none rounded-auth-control border bg-white px-5 text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-[color:var(--portal-auth-muted-text-color,#64748b)]',
+    'auth-input auth-text block h-16 w-full appearance-none rounded-auth-control border bg-[color:var(--portal-auth-control-background,rgb(255_255_255_/_0.92))] px-5 text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-[color:var(--portal-auth-control-border-color,#cbd5e1)] disabled:bg-[color:var(--portal-auth-control-background,rgb(248_250_252_/_0.86))] disabled:text-[color:var(--portal-auth-muted-text-color,#64748b)]',
     !hasError &&
       !isFilled &&
-      'border-slate-300 focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[color:var(--portal-auth-control-border-color,#cbd5e1)] focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     !hasError &&
       isFilled &&
-      'border-brand-300 shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[color:var(--portal-auth-control-border-color,#cbd5e1)] shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     hasError &&
       'border-rose-200 bg-rose-50/30 focus:border-rose-300 focus:ring-4 focus:ring-rose-50/80',
   )

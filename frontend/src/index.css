@@ -297,15 +297,33 @@ body {
   color: var(--portal-auth-text-color, #0f172a);
 }
 
-.auth-shell-background {
-  background-color: var(--portal-auth-surface-background-color, #ffffff);
-  background-image:
-    linear-gradient(180deg, rgb(255 255 255 / 0.78), rgb(255 255 255 / 0.92)),
-    var(--portal-auth-background-image, none);
+.auth-canvas-background {
+  background-color: var(--portal-auth-canvas-background-color, #f3f7fc);
+  background-image: var(--portal-auth-background-image, none);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
   color: var(--portal-auth-text-color, #0f172a);
+}
+
+.auth-shell-background {
+  background-color: var(--portal-auth-surface-background-color, #ffffff);
+  color: var(--portal-auth-text-color, #0f172a);
+}
+
+.auth-content-layer {
+  isolation: isolate;
+}
+
+.auth-content-veil {
+  position: absolute;
+  inset: -1rem 0 0;
+  z-index: 0;
+  background: var(
+    --portal-auth-content-surface-background,
+    rgb(255 255 255 / 1)
+  );
+  pointer-events: none;
 }
 
 .auth-text {
@@ -396,15 +414,19 @@ button:not(:disabled),
 .auth-input[data-filled='true']:not([aria-invalid='true']),
 .auth-input[placeholder]:not(:placeholder-shown):not([aria-invalid='true']),
 .auth-input:-webkit-autofill:not([aria-invalid='true']) {
-  background-color: rgb(243 247 252 / 0.86);
-  border-color: #9cb9df;
+  background-color: var(
+    --portal-auth-control-background,
+    rgb(248 250 252 / 0.86)
+  );
+  border-color: var(--portal-auth-control-border-color, #cbd5e1);
   box-shadow: 0 6px 14px rgb(15 45 87 / 0.06);
 }
 
 .auth-input:-webkit-autofill {
-  -webkit-text-fill-color: #0f172a;
+  -webkit-text-fill-color: var(--portal-auth-text-color, #0f172a);
   -webkit-box-shadow:
-    0 0 0 1000px rgb(243 247 252 / 0.86) inset,
+    0 0 0 1000px
+      var(--portal-auth-control-background, rgb(248 250 252 / 0.86)) inset,
     0 6px 14px rgb(15 45 87 / 0.06);
   transition: background-color 9999s ease-in-out 0s;
 }
@@ -466,8 +488,8 @@ button:not(:disabled),
     180deg,
     rgb(255 255 255 / 0) 0%,
     rgb(255 255 255 / 0.18) 28%,
-    rgb(255 255 255 / 0.72) 68%,
-    #ffffff 100%
+    var(--portal-auth-content-surface-background, rgb(255 255 255 / 0.72)) 68%,
+    var(--portal-auth-content-surface-color, #ffffff) 100%
   );
   pointer-events: none;
 }
@@ -585,14 +607,19 @@ button:not(:disabled),
   height: 104px;
   background: linear-gradient(
     180deg,
-    #ffffff 0%,
-    rgb(255 255 255 / 0.78) 34%,
+    var(--portal-auth-content-surface-color, #ffffff) 0%,
+    var(--portal-auth-content-surface-background, rgb(255 255 255 / 0.78)) 34%,
     rgb(255 255 255 / 0) 100%
   );
 }
 
 .auth-footer-art--fallback {
   background-image: url('/default-branding/auth-footer.png');
+}
+
+.auth-support-card {
+  border: 1px solid var(--portal-auth-control-border-color, #e2e8f0);
+  background: var(--portal-auth-control-background, rgb(248 250 252 / 0.86));
 }
 
 .app-skeleton {
