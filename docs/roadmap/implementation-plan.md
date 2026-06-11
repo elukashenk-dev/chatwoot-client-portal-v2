@@ -167,8 +167,12 @@ Status:
 
 - dedicated one-tenant clean reinstall flow exists and has been used;
 - routine clean archive deploy flow exists for already bootstrapped production;
+- central MT-10 operations index links routine deploy, clean reinstall,
+  provisioning boundaries, domain rules, secret rotation, backup/restore and
+  acceptance checklist;
 - shared SaaS rollout docs remain future expansion of the same tenant-aware
-  runtime model.
+  runtime model, but arbitrary tenant creation still needs a dedicated
+  operator CLI/UI before it is repeatable as a one-command operation.
 
 Цель:
 
@@ -194,9 +198,11 @@ Required checks:
 
 Exit criteria:
 
-- shared SaaS install can be explained and repeated;
 - dedicated install can be explained and repeated as one-tenant portal;
-- tenant provisioning, webhook setup and secret rotation have clear commands.
+- tenant Chatwoot verification, webhook setup and secret rotation have clear
+  operator guidance;
+- shared SaaS install is explained with the explicit gap that arbitrary tenant
+  creation needs a future operator CLI/UI slice before production rollout.
 
 ## Deferred Backlog
 

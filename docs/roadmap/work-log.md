@@ -139,6 +139,12 @@ execution-plan детали здесь не хранятся.
   build/lint, production object-storage compose/init smoke and local runtime
   asset upload/readback smoke passed. Real-device installed PWA smoke remains a
   production post-deploy check.
+- `MT-10` deployment/runbook documentation baseline is added: routine deploy,
+  clean reinstall, tenant provisioning boundaries, domain rules, tenant
+  Chatwoot verification, secret rotation, backup/restore and production
+  acceptance checks are linked from one operations index. Current executable
+  production path remains dedicated one-tenant; arbitrary shared SaaS tenant
+  creation still needs a future operator CLI/UI slice.
 - Agent execution governance now uses risk-based efficiency rules: full review
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
@@ -146,6 +152,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- After user approval, push the reviewed local `main` branding baseline and
-  deploy it to production, then run production post-deploy smoke including
-  installed PWA checks where available.
+- Review and accept the MT-10 runbook baseline, then choose either production
+  push/deploy of the current branding baseline or a focused tenant creation
+  operator-tooling slice before shared SaaS rollout.

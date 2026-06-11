@@ -18,6 +18,14 @@ production stack must be recreated or reconfigured:
 docs/operations/production-clean-reinstall.md
 ```
 
+Use the MT-10 operations index when choosing between routine deploy, clean
+reinstall, tenant provisioning, secret rotation, backup/restore and acceptance
+checks:
+
+```text
+docs/operations/mt-10-deployment-runbooks.md
+```
+
 This file keeps only guardrails. The runbook is the executable checklist.
 
 ## Hard Boundaries

@@ -1,0 +1,418 @@
+# MT-10 Deployment And Operations Runbook
+
+Status: current operations source of truth for deployment, runbooks and
+operational readiness.
+
+## Purpose
+
+MT-10 keeps portal production operations repeatable without mixing portal work
+with Chatwoot core maintenance.
+
+This document is an index and operator checklist. It links to executable
+runbooks instead of duplicating every low-level command.
+
+## Current Support Level
+
+### Ready Now
+
+- dedicated one-tenant production install on the current one-VM stack;
+- routine deploy from a clean reviewed commit;
+- clean reinstall/reconfigure of portal-owned runtime;
+- tenant Chatwoot API Channel verification and webhook configuration;
+- portal-owned object storage for branding assets;
+- production smoke checklist for portal auth, chat, admin branding and PWA.
+
+### Not Ready As A One-Command Shared SaaS Operation
+
+The runtime model is tenant-aware and supports the shared SaaS direction, but
+there is no general operator CLI/UI yet for creating an arbitrary new tenant
+with all encrypted secrets and domain configuration.
+
+Current executable provisioning is the default/dedicated tenant path:
+
+```bash
+pnpm --dir backend tenant:bootstrap-default
+pnpm --dir backend tenant:chatwoot:verify -- --tenant=<slug>
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
+```
+
+Before shared SaaS rollout is treated as repeatable operations, add a focused
+operator tooling slice for either:
+
+- `tenant:create` CLI with idempotent tenant creation, encrypted secret writes
+  and domain validation; or
+- platform admin UI with the same backend authority and audit trail.
+
+## Source Of Truth Map
+
+- Routine deploy guardrails:
+  `docs/operations/production-deployment.md`
+- Clean reinstall/reconfigure runbook:
+  `docs/operations/production-clean-reinstall.md`
+- Stable production VM facts:
+  `docs/operations/production-server-notes.md`
+- Production browser QA cycle:
+  `docs/operations/production-mcp-playwright-test-cycle.md`
+- Installed PWA smoke:
+  `docs/operations/installed-pwa-smoke.md`
+- Local runtime testing:
+  `docs/operations/local-testing.md`
+- Local cross-tenant data:
+  `docs/operations/local-cross-tenant-test-data.md`
+- Architecture boundaries:
+  `docs/architecture/overview.md`
+- Tenant model and platform operations:
+  `docs/architecture/multi-tenant-reference.md`
+
+## Hard Boundaries
+
+- Do not stop, reset, migrate or edit production Chatwoot as part of portal
+  deploys.
+- Do not touch Chatwoot PostgreSQL, uploads, services or
+  `chat.provgroup.ru` Nginx config.
+- Do not use global `CHATWOOT_*` env as portal runtime authority.
+- Do not expose portal backend, portal Postgres or object storage publicly.
+- Do not commit `.env`, secrets, deploy logs, `node_modules`, `dist`,
+  `playwright-report`, `test-results` or runtime artifacts.
+- Browser never receives Chatwoot tokens, object-storage credentials, bucket
+  names or object keys.
+
+Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
+
+- verify that the inbox belongs to the tenant Chatwoot account and is
+  `Channel::Api`;
+- enable `lock_to_single_conversation=true` when needed;
+- set the portal webhook URL;
+- read the returned Chatwoot `Channel::Api.secret`;
+- store that secret encrypted in the portal tenant record.
+
+## Routine Dedicated Deploy
+
+Use this path for ordinary feature/fix deploys when production is already
+bootstrapped.
+
+Prerequisites:
+
+- user explicitly approved production push/deploy;
+- current branch is `main`;
+- `git status --short` is empty;
+- `origin/main` contains the reviewed commit;
+- targeted checks for the current slice passed;
+- `pnpm build`, `pnpm lint` and `git diff --check` pass, or a blocker is
+  explicitly recorded.
+
+Deploy command:
+
+```bash
+scripts/deploy-production-archive.sh \
+  --host=ubuntu@93.77.166.238 \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --activate
+```
+
+After deploy, verify:
+
+```bash
+ssh ubuntu@93.77.166.238
+cd /opt/chatwoot-client-portal-v2
+cat DEPLOY_SOURCE.txt
+docker compose --env-file .env.production -f infra/production/compose.yaml ps
+curl -fsS https://lk.provgroup.ru/api/health
+curl -fsS https://lk.provgroup.ru/api/tenant
+```
+
+Then run the tenant Chatwoot verification:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=provgroup
+```
+
+## Clean Reinstall Or Reconfigure
+
+Use the clean reinstall runbook only when portal-owned production runtime must
+be recreated or deeply reconfigured.
+
+Runbook:
+
+```text
+docs/operations/production-clean-reinstall.md
+```
+
+Default clean reinstall must preserve these production volumes:
+
+- `chatwoot-client-portal-v2_portal-db-data`;
+- `chatwoot-client-portal-v2_portal-object-storage-data`.
+
+Destructive volume reset is allowed only after explicit operator approval and a
+verified backup/restore plan.
+
+## Dedicated One-Tenant Provisioning
+
+The current production business mode is a dedicated one-tenant portal. It uses
+the same tenant-aware runtime model as shared SaaS, but only one tenant is
+bootstrapped.
+
+Required inputs:
+
+```text
+DEFAULT_TENANT_SLUG
+DEFAULT_TENANT_DISPLAY_NAME
+DEFAULT_TENANT_PRIMARY_DOMAIN
+DEFAULT_TENANT_PUBLIC_BASE_URL
+DEFAULT_TENANT_CHATWOOT_BASE_URL
+DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID
+DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID
+DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN
+DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET
+PORTAL_TENANT_SECRET_KEY
+```
+
+From a source checkout with dependencies installed, the script family is:
+
+```bash
+pnpm --dir backend tenant:bootstrap-default
+pnpm --dir backend tenant:chatwoot:verify -- --tenant=<slug>
+pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
+```
+
+In production compose, use the built scripts:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/bootstrap-default-tenant.js
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=<slug>
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/configure-tenant-chatwoot-webhook.js --tenant=<slug>
+```
+
+Expected result:
+
+- tenant exists in portal DB;
+- tenant primary domain resolves through `/api/tenant`;
+- Chatwoot account ID matches the configured tenant account;
+- Chatwoot inbox is an API Channel inbox;
+- API Channel webhook URL points to
+  `https://<tenant-domain>/api/chatwoot/webhooks`;
+- Chatwoot returned `Channel::Api.secret` is stored encrypted in portal DB.
+
+## Shared SaaS Provisioning Readiness
+
+Shared SaaS should reuse the same runtime boundaries:
+
+- tenant is resolved by Host/domain;
+- one tenant maps to one Chatwoot account and one portal API Channel inbox;
+- browser never chooses tenant manually in production;
+- portal DB stores tenant runtime configuration and encrypted secrets;
+- Chatwoot remains an external service and system of record for chat data.
+
+To make shared SaaS operationally repeatable, the next tooling slice must
+provide an explicit tenant creation path. Minimum inputs:
+
+```text
+slug
+display_name
+primary_domain
+public_base_url
+chatwoot_base_url
+chatwoot_account_id
+chatwoot_portal_inbox_id
+chatwoot_runtime_api_token
+chatwoot_admin_verification_token
+chatwoot_webhook_secret
+```
+
+Minimum acceptance before production shared SaaS:
+
+- operator can create a tenant without editing DB rows manually;
+- tenant creation is idempotent by `slug` and `primary_domain`;
+- secrets are encrypted with `PORTAL_TENANT_SECRET_KEY`;
+- tenant Chatwoot connection verification passes;
+- tenant API Channel webhook configuration passes;
+- unknown Host does not fall back to another tenant;
+- tenant A cannot read or mutate tenant B settings, assets, sessions or
+  Chatwoot runtime config;
+- per-tenant smoke covers auth, chat, admin branding, webhook delivery and PWA
+  manifest.
+
+## Domain And DNS Runbook
+
+Production domain convention:
+
+```text
+lk.<client-domain>
+```
+
+Examples:
+
+```text
+lk.provgroup.ru
+lk.buhfirma.ru
+lk.stroyfirma.ru
+```
+
+For each tenant:
+
+- DNS for `lk.<client-domain>` points to the portal reverse proxy VM;
+- `DEFAULT_TENANT_PRIMARY_DOMAIN` or tenant `primary_domain` equals that host;
+- `DEFAULT_TENANT_PUBLIC_BASE_URL` or tenant `public_base_url` equals
+  `https://lk.<client-domain>`;
+- portal reverse proxy routes that host to the portal web container;
+- backend tenant resolution uses the request Host through the trusted proxy
+  boundary;
+- unknown hosts fail closed and must not resolve to the default tenant.
+
+## Tenant Chatwoot Connection Verification
+
+Use verification after:
+
+- clean reinstall;
+- routine deploy that touched Chatwoot integration;
+- Chatwoot upgrade;
+- tenant token rotation;
+- API Channel inbox change;
+- webhook reconfiguration.
+
+Command in production compose:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=<slug>
+```
+
+Then configure the API Channel webhook:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/configure-tenant-chatwoot-webhook.js --tenant=<slug>
+```
+
+Expected:
+
+- verification exits `0`;
+- configured inbox belongs to the tenant Chatwoot account;
+- `lock_to_single_conversation=true`;
+- webhook URL matches the tenant public base URL;
+- stored webhook secret is the Chatwoot `Channel::Api.secret`, not an account
+  webhook secret.
+
+## Secret Rotation Notes
+
+Never write secret values into docs, commits or chat.
+
+`PORTAL_TENANT_SECRET_KEY`:
+
+- high-risk root key for tenant secret encryption;
+- no automated rotation flow exists yet;
+- rotation requires maintenance window, DB backup, decrypt/re-encrypt plan and
+  rollback path;
+- do not rotate casually.
+
+Tenant Chatwoot runtime API token:
+
+- update the encrypted tenant secret through a future operator CLI/UI or the
+  dedicated reinstall/reconfigure path;
+- run tenant Chatwoot verification after rotation;
+- run webhook configure if the API Channel permissions or inbox changed.
+
+Tenant admin verification token:
+
+- affects admin login verification, not customer chat runtime;
+- rotate separately from the runtime API token when possible;
+- tenant admin login must fail closed if the token is missing, invalid or cannot
+  read Chatwoot agents.
+
+Tenant API Channel webhook secret:
+
+- source of truth is Chatwoot `Channel::Api.secret`;
+- run webhook configure to refresh and store the current value;
+- do not invent or manually reuse account-level webhook secrets.
+
+`SESSION_SECRET`:
+
+- rotation invalidates existing portal sessions;
+- plan user logout impact.
+
+Object-storage credentials:
+
+- rotate the object-storage app user and backend env together;
+- preserve bucket and object-storage volume;
+- verify admin branding upload/readback/delete after rotation.
+
+SMTP credentials:
+
+- update env and restart backend;
+- verify registration, login code and password reset email delivery.
+
+VAPID keys:
+
+- rotation can invalidate existing Web Push subscriptions;
+- plan a re-subscribe path for installed PWAs.
+
+## Backup And Restore Notes
+
+Portal backup scope:
+
+- portal DB volume: `chatwoot-client-portal-v2_portal-db-data`;
+- portal object-storage volume:
+  `chatwoot-client-portal-v2_portal-object-storage-data`;
+- production env: `.env.production`;
+- deploy source marker: `DEPLOY_SOURCE.txt`;
+- portal Nginx site for `lk.<client-domain>`, if managed on the host.
+
+Chatwoot backup is separate and not covered by portal runbooks.
+
+Restore order:
+
+1. Restore `.env.production`.
+2. Restore portal DB volume.
+3. Restore portal object-storage volume.
+4. Deploy the intended reviewed portal commit.
+5. Run migrations/startup.
+6. Check `/api/health`.
+7. Check `/api/tenant`.
+8. Run tenant Chatwoot verification.
+9. Verify branding asset readback.
+10. Run auth/chat/admin/PWA smoke.
+
+Do not restore a portal DB without the matching `PORTAL_TENANT_SECRET_KEY`,
+because encrypted tenant secrets become unreadable.
+
+Do not restore object-storage assets without the matching portal DB records,
+because the DB is the source of truth for asset ownership, kind, content type,
+checksum and active branding references.
+
+## Production Acceptance Checklist
+
+Before deploy:
+
+- user approved production push/deploy;
+- branch is `main`;
+- `git status --short` is empty;
+- reviewed commit is present in `origin/main`;
+- required checks for the slice passed;
+- secrets are not staged;
+- no generated output is staged.
+
+After deploy:
+
+- `DEPLOY_SOURCE.txt` matches the intended commit;
+- compose services are healthy/running;
+- `/api/health` returns ok;
+- `/api/tenant` returns the intended tenant;
+- tenant Chatwoot verification passes;
+- API Channel webhook configure/check passes when required;
+- login, registration and password reset flows work;
+- personal chat can send a customer message and receive support reply;
+- group chat still renders participants and support badges;
+- admin login works for the tenant;
+- admin branding settings save and reset work;
+- admin branding upload/readback/delete works for a small PNG;
+- public branding asset route returns `200` and image content type;
+- tenant PWA manifest title/colors/icons are correct;
+- installed PWA smoke is run on real device when available;
+- production Chatwoot remains healthy on `chat.provgroup.ru`.
