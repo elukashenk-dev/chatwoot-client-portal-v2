@@ -13,7 +13,7 @@ export type DeprovisionTenantResult = {
 type DeprovisionTenantOptions = {
   confirmSlug: string
   deleteChatwootAccount: boolean
-  platformClient: ChatwootPlatformClient
+  platformClient?: Pick<ChatwootPlatformClient, 'deleteAccount'>
   tenantSlug: string
   tenantsRepository: Pick<
     TenantsRepository,
@@ -55,6 +55,10 @@ export async function deprovisionTenant({
   const previousStatus = readTenantStatus(tenant.status)
 
   if (deleteChatwootAccount) {
+    if (!platformClient) {
+      throw new Error('Chatwoot Platform client is required for account delete.')
+    }
+
     await tenantsRepository.updateTenantStatus({
       status: 'suspended',
       tenantId: tenant.id,

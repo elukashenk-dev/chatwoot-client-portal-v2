@@ -12,13 +12,6 @@ import {
 async function main() {
   const env = loadEnv()
   const args = parseDeprovisionTenantArgs(process.argv.slice(2))
-  const platformApiAccessToken = env.CHATWOOT_PLATFORM_API_ACCESS_TOKEN
-
-  if (!platformApiAccessToken) {
-    throw new DeprovisionTenantCliConfigError(
-      'CHATWOOT_PLATFORM_API_ACCESS_TOKEN is required.',
-    )
-  }
 
   const database = createDatabaseClient({
     connectionString: env.DATABASE_URL,
@@ -33,17 +26,28 @@ async function main() {
     if (!tenant) {
       throw new Error('Tenant was not found.')
     }
+    const platformApiAccessToken = env.CHATWOOT_PLATFORM_API_ACCESS_TOKEN
+
+    if (args.deleteChatwootAccount && !platformApiAccessToken) {
+      throw new DeprovisionTenantCliConfigError(
+        'CHATWOOT_PLATFORM_API_ACCESS_TOKEN is required.',
+      )
+    }
+
+    const platformClient = args.deleteChatwootAccount
+      ? createChatwootPlatformClient({
+          config: {
+            apiAccessToken: platformApiAccessToken ?? '',
+            baseUrl: tenant.chatwootBaseUrl,
+          },
+          requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
+        })
+      : null
 
     const result = await deprovisionTenant({
       confirmSlug: args.confirmSlug,
       deleteChatwootAccount: args.deleteChatwootAccount,
-      platformClient: createChatwootPlatformClient({
-        config: {
-          apiAccessToken: platformApiAccessToken,
-          baseUrl: tenant.chatwootBaseUrl,
-        },
-        requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
-      }),
+      ...(platformClient ? { platformClient } : {}),
       tenantSlug: args.tenantSlug,
       tenantsRepository,
     })

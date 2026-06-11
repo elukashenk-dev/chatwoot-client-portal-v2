@@ -21,6 +21,7 @@ import {
   provisionTenant,
   type TenantProvisioningChatwootAccountClient,
 } from './service.js'
+import { createDefaultPassword } from './serviceHelpers.js'
 import type { TenantProvisioningInput } from './input.js'
 
 type CustomDomainInput = Extract<
@@ -219,6 +220,15 @@ describe('provisionTenant', () => {
       tenantsRepository: createTenantsRepository(database.db),
     }
   }
+
+  it('generates default service passwords accepted by Chatwoot password policy', () => {
+    const password = createDefaultPassword()
+
+    expect(password).toMatch(/[A-Z]/)
+    expect(password).toMatch(/[a-z]/)
+    expect(password).toMatch(/[0-9]/)
+    expect(password).toMatch(/[!@#$%^&*()_+\-=[\]{}|"/\\.,`<>:;?~']/)
+  })
 
   it('creates all Chatwoot resources and an active portal tenant', async () => {
     const harness = await createHarness()

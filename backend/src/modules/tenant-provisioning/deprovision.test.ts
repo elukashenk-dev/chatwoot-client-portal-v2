@@ -85,6 +85,23 @@ describe('deprovisionTenant', () => {
     })
   })
 
+  it('archives a tenant without requiring a Chatwoot Platform client', async () => {
+    const tenantsRepository = createTenantsRepository(createTenant())
+
+    await expect(
+      deprovisionTenant({
+        confirmSlug: 'buhfirma',
+        deleteChatwootAccount: false,
+        tenantSlug: 'buhfirma',
+        tenantsRepository,
+      }),
+    ).resolves.toMatchObject({
+      chatwootDeleteRequested: false,
+      finalStatus: 'archived',
+      tenantSlug: 'buhfirma',
+    })
+  })
+
   it('suspends, deletes the Chatwoot account, then archives the tenant', async () => {
     const platformClient = createPlatformClient()
     const tenantsRepository = createTenantsRepository(createTenant())

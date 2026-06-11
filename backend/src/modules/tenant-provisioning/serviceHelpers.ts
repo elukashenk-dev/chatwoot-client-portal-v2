@@ -16,7 +16,7 @@ type ActiveTenant = Awaited<ReturnType<TenantsRepository['createTenant']>>
 const sensitiveErrorPattern = /token|secret|password|ciphertext/i
 
 export function createDefaultPassword() {
-  return crypto.randomUUID().replace(/-/g, '')
+  return `Aa1!${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 export function sanitizeProvisioningError(error: unknown) {
