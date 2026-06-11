@@ -274,11 +274,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           cancelStartupRequest()
           setUser(null)
           setSessionSource(null)
-          setOfflineRemovalScope(
-            signoutScope
-              ? null
-              : rejectedScope,
-          )
+          setOfflineRemovalScope(signoutScope ? null : rejectedScope)
           setAuthStatus('unauthenticated')
           return
         }

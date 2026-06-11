@@ -44,7 +44,9 @@ async function buildPresenceRoutesTestApp({
     .fn<SetCurrentUserThreadTyping>()
     .mockResolvedValue({ result: 'synced' }),
 }: {
-  markCurrentUserThreadRead?: ReturnType<typeof vi.fn<MarkCurrentUserThreadRead>>
+  markCurrentUserThreadRead?: ReturnType<
+    typeof vi.fn<MarkCurrentUserThreadRead>
+  >
   setCurrentUserThreadTyping?: ReturnType<
     typeof vi.fn<SetCurrentUserThreadTyping>
   >
@@ -109,13 +111,14 @@ describe('registerChatPresenceRoutes', () => {
   })
 
   it('returns no content when read sync is unavailable', async () => {
-    const { app, markCurrentUserThreadRead } =
-      await buildPresenceRoutesTestApp({
+    const { app, markCurrentUserThreadRead } = await buildPresenceRoutesTestApp(
+      {
         markCurrentUserThreadRead: vi.fn().mockResolvedValue({
           reason: 'chatwoot_unavailable',
           result: 'unavailable',
         }),
-      })
+      },
+    )
 
     try {
       const response = await app.inject({

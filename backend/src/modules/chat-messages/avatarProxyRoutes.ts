@@ -11,7 +11,10 @@ import {
   ATTACHMENT_PROXY_CACHE_CONTROL,
   copyAttachmentProxyHeaders,
 } from './attachmentProxyHeaders.js'
-import type { ChatAttachmentProxyResponse, ChatMessagesService } from './service.js'
+import type {
+  ChatAttachmentProxyResponse,
+  ChatMessagesService,
+} from './service.js'
 
 const publicThreadIdSchema = z.string().trim().min(1).max(80)
 

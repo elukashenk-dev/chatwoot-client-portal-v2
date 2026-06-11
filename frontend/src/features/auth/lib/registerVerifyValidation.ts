@@ -1,4 +1,7 @@
-import type { RegisterVerifyFormErrors, RegisterVerifyFormValues } from '../types'
+import type {
+  RegisterVerifyFormErrors,
+  RegisterVerifyFormValues,
+} from '../types'
 
 export function validateRegisterVerifyForm(
   values: RegisterVerifyFormValues,

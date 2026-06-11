@@ -45,8 +45,7 @@ export function hasChatNotificationOverrides(
   overrides: ChatNotificationOverrides,
 ) {
   return (
-    overrides.newMessagesEnabled !== null ||
-    overrides.soundEnabled !== null
+    overrides.newMessagesEnabled !== null || overrides.soundEnabled !== null
   )
 }
 

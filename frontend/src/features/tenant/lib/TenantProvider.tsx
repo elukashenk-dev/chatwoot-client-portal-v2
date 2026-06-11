@@ -229,11 +229,10 @@ export function TenantProvider({ children }: TenantProviderProps) {
       return true
     }
 
-    const showOnlineRequired = ({ force = false }: { force?: boolean } = {}) => {
-      if (
-        !isCurrentAttempt() ||
-        (!force && statusRef.current !== 'loading')
-      ) {
+    const showOnlineRequired = ({
+      force = false,
+    }: { force?: boolean } = {}) => {
+      if (!isCurrentAttempt() || (!force && statusRef.current !== 'loading')) {
         return
       }
 

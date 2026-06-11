@@ -21,7 +21,9 @@ function isMessageVisibleInTranscript({
     return true
   }
 
-  return messageRect.bottom > scrollRect.top && messageRect.top < scrollRect.bottom
+  return (
+    messageRect.bottom > scrollRect.top && messageRect.top < scrollRect.bottom
+  )
 }
 
 function getLatestVisibleAgentMessageId(
@@ -57,9 +59,7 @@ export function useLatestMessagesVisibleReporter({
 }: {
   hasHistoryFragmentControls: boolean
   messages: ChatMessage[]
-  onLatestMessagesVisible?: (
-    boundary: LatestMessagesVisibleBoundary,
-  ) => void
+  onLatestMessagesVisible?: (boundary: LatestMessagesVisibleBoundary) => void
 }) {
   return useCallback(
     (scrollElement: HTMLElement) => {

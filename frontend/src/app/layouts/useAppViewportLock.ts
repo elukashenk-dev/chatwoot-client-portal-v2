@@ -22,7 +22,10 @@ export function useAppViewportLock() {
         APP_VIEWPORT_HEIGHT_VAR,
         `${viewportHeight}px`,
       )
-      rootElement.style.setProperty(APP_VIEWPORT_WIDTH_VAR, `${viewportWidth}px`)
+      rootElement.style.setProperty(
+        APP_VIEWPORT_WIDTH_VAR,
+        `${viewportWidth}px`,
+      )
       rootElement.style.setProperty(
         APP_VIEWPORT_OFFSET_LEFT_VAR,
         `${viewportOffsetLeft}px`,

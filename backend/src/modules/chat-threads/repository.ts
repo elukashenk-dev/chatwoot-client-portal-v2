@@ -210,8 +210,9 @@ export function createChatThreadsRepository(
       const [thread] = await db
         .update(portalChatThreads)
         .set({
-          chatwootContactSourceId:
-            normalizeThreadContactSourceId(chatwootContactSourceId),
+          chatwootContactSourceId: normalizeThreadContactSourceId(
+            chatwootContactSourceId,
+          ),
           updatedAt: now,
         })
         .where(

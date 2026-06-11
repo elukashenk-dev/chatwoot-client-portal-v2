@@ -14,7 +14,9 @@ function createJsonResponse(status = 200) {
 
 describe('createPublicConversationEventsClient', () => {
   it('posts update_last_seen to the Chatwoot public API path', async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(createJsonResponse())
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createJsonResponse())
     const client = createPublicConversationEventsClient({
       baseUrl: 'https://chatwoot.example.test',
       fetchFn,
@@ -36,7 +38,9 @@ describe('createPublicConversationEventsClient', () => {
   })
 
   it('posts toggle_typing with on and off statuses', async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(createJsonResponse())
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createJsonResponse())
     const client = createPublicConversationEventsClient({
       baseUrl: 'https://chatwoot.example.test',
       fetchFn,
@@ -105,7 +109,9 @@ describe('createPublicConversationEventsClient', () => {
   })
 
   it('uses the default Chatwoot request timeout when no override is supplied', async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(createJsonResponse())
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createJsonResponse())
     const client = createPublicConversationEventsClient({
       baseUrl: 'https://chatwoot.example.test',
       fetchFn,

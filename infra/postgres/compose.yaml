@@ -9,14 +9,14 @@ services:
       POSTGRES_PASSWORD: ${PORTAL_V2_POSTGRES_PASSWORD:-portal_v2_local_dev_password}
       POSTGRES_USER: ${PORTAL_V2_POSTGRES_USER:-portal_v2}
     ports:
-      - "${PORTAL_V2_POSTGRES_PORT:-55433}:5432"
+      - '${PORTAL_V2_POSTGRES_PORT:-55433}:5432'
     volumes:
       - chatwoot-client-portal-v2-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "pg_isready -U ${PORTAL_V2_POSTGRES_USER:-portal_v2} -d ${PORTAL_V2_POSTGRES_DB:-chatwoot_client_portal_v2}",
+          'CMD-SHELL',
+          'pg_isready -U ${PORTAL_V2_POSTGRES_USER:-portal_v2} -d ${PORTAL_V2_POSTGRES_DB:-chatwoot_client_portal_v2}',
         ]
       interval: 5s
       timeout: 5s

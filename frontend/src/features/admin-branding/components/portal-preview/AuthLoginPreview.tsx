@@ -66,9 +66,7 @@ export function AuthLoginPreview() {
               <p className="auth-text text-[14px] font-medium">
                 Нет доступа к чату?
               </p>
-              <p className="whitespace-nowrap">
-                Поддержка: +7 (906) 12-955-12
-              </p>
+              <p className="whitespace-nowrap">Поддержка: +7 (906) 12-955-12</p>
             </div>
           </aside>
         </div>

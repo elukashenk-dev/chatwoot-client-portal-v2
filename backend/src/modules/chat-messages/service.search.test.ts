@@ -458,7 +458,9 @@ describe('chat search service', () => {
       reason: 'none',
       result: 'ready',
     })
-    expect(JSON.stringify(response.items)).not.toContain('participants/8/avatar')
+    expect(JSON.stringify(response.items)).not.toContain(
+      'participants/8/avatar',
+    )
     expect(response.items[0]).not.toHaveProperty('authorAvatarUrl')
   })
 })

@@ -12,7 +12,10 @@ import {
   copyAttachmentProxyHeaders,
   getRangeHeader,
 } from './attachmentProxyHeaders.js'
-import type { ChatAttachmentProxyVariant, ChatMessagesService } from './service.js'
+import type {
+  ChatAttachmentProxyVariant,
+  ChatMessagesService,
+} from './service.js'
 
 const publicThreadIdSchema = z.string().trim().min(1).max(80)
 

@@ -292,7 +292,8 @@ describe('createChatMessagesService thread runtime integration', () => {
     ).resolves.toMatchObject({
       messages: [
         {
-          authorAvatarUrl: '/api/chat/threads/group%3A154/participants/8/avatar',
+          authorAvatarUrl:
+            '/api/chat/threads/group%3A154/participants/8/avatar',
           authorName: 'Мария Соколова',
           authorRole: 'group_member',
           content: 'Нужен договор 123.',

@@ -21,9 +21,7 @@ describe('install-maintenance-cleanup-timer.sh', () => {
       '--docker=/usr/bin/docker',
     ])
 
-    expect(stdout).toContain(
-      'WorkingDirectory=/opt/chatwoot-client-portal-v2',
-    )
+    expect(stdout).toContain('WorkingDirectory=/opt/chatwoot-client-portal-v2')
     expect(stdout).toContain(
       'ExecStart=/usr/bin/docker compose --env-file /opt/chatwoot-client-portal-v2/.env.production -f /opt/chatwoot-client-portal-v2/infra/production/compose.yaml exec -T portal-backend node backend/dist/scripts/cleanup-maintenance-data.js',
     )

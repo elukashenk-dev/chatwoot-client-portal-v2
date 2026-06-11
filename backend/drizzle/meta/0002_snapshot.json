@@ -160,13 +160,9 @@
         "chatwoot_webhook_deliveries_tenant_id_portal_tenants_id_fk": {
           "name": "chatwoot_webhook_deliveries_tenant_id_portal_tenants_id_fk",
           "tableFrom": "chatwoot_webhook_deliveries",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -390,39 +386,27 @@
         "portal_chat_message_sends_tenant_id_portal_tenants_id_fk": {
           "name": "portal_chat_message_sends_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_chat_message_sends",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "portal_chat_message_sends_user_id_portal_users_id_fk": {
           "name": "portal_chat_message_sends_user_id_portal_users_id_fk",
           "tableFrom": "portal_chat_message_sends",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "portal_users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
         "portal_chat_message_sends_portal_chat_thread_id_portal_chat_threads_id_fk": {
           "name": "portal_chat_message_sends_portal_chat_thread_id_portal_chat_threads_id_fk",
           "tableFrom": "portal_chat_message_sends",
-          "columnsFrom": [
-            "portal_chat_thread_id"
-          ],
+          "columnsFrom": ["portal_chat_thread_id"],
           "tableTo": "portal_chat_threads",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -587,26 +571,18 @@
         "portal_chat_threads_tenant_id_portal_tenants_id_fk": {
           "name": "portal_chat_threads_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_chat_threads",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "portal_chat_threads_portal_user_id_portal_users_id_fk": {
           "name": "portal_chat_threads_portal_user_id_portal_users_id_fk",
           "tableFrom": "portal_chat_threads",
-          "columnsFrom": [
-            "portal_user_id"
-          ],
+          "columnsFrom": ["portal_user_id"],
           "tableTo": "portal_users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -729,13 +705,9 @@
         "portal_rate_limit_buckets_tenant_id_portal_tenants_id_fk": {
           "name": "portal_rate_limit_buckets_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_rate_limit_buckets",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -851,26 +823,18 @@
         "portal_sessions_tenant_id_portal_tenants_id_fk": {
           "name": "portal_sessions_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_sessions",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "portal_sessions_user_id_portal_users_id_fk": {
           "name": "portal_sessions_user_id_portal_users_id_fk",
           "tableFrom": "portal_sessions",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "portal_users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -1117,26 +1081,18 @@
         "portal_user_contact_links_tenant_id_portal_tenants_id_fk": {
           "name": "portal_user_contact_links_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_user_contact_links",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "portal_user_contact_links_user_id_portal_users_id_fk": {
           "name": "portal_user_contact_links_user_id_portal_users_id_fk",
           "tableFrom": "portal_user_contact_links",
-          "columnsFrom": [
-            "user_id"
-          ],
+          "columnsFrom": ["user_id"],
           "tableTo": "portal_users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -1251,13 +1207,9 @@
         "portal_users_tenant_id_portal_tenants_id_fk": {
           "name": "portal_users_tenant_id_portal_tenants_id_fk",
           "tableFrom": "portal_users",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         }
@@ -1495,26 +1447,18 @@
         "verification_records_tenant_id_portal_tenants_id_fk": {
           "name": "verification_records_tenant_id_portal_tenants_id_fk",
           "tableFrom": "verification_records",
-          "columnsFrom": [
-            "tenant_id"
-          ],
+          "columnsFrom": ["tenant_id"],
           "tableTo": "portal_tenants",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
         "verification_records_portal_user_id_portal_users_id_fk": {
           "name": "verification_records_portal_user_id_portal_users_id_fk",
           "tableFrom": "verification_records",
-          "columnsFrom": [
-            "portal_user_id"
-          ],
+          "columnsFrom": ["portal_user_id"],
           "tableTo": "portal_users",
-          "columnsTo": [
-            "id"
-          ],
+          "columnsTo": ["id"],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }

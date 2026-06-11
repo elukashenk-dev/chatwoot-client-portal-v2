@@ -5,10 +5,7 @@ import {
   normalizeTenantHost,
   TenantHostValidationError,
 } from './service.js'
-import {
-  decodeTenantSecretKey,
-  encryptTenantSecret,
-} from './secrets.js'
+import { decodeTenantSecretKey, encryptTenantSecret } from './secrets.js'
 
 const tenantSecretKey = Buffer.alloc(32, 7).toString('base64')
 

@@ -9,7 +9,9 @@ import {
 } from './contactAttributes.js'
 
 function buildGroupIds(count: number) {
-  return Array.from({ length: count }, (_, index) => String(index + 1)).join(',')
+  return Array.from({ length: count }, (_, index) => String(index + 1)).join(
+    ',',
+  )
 }
 
 describe('portal contact attributes', () => {

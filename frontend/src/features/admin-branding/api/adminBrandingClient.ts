@@ -139,10 +139,7 @@ export function updateAdminBranding(input: AdminBrandingPatch) {
   })
 }
 
-export function uploadAdminBrandingAsset(
-  kind: BrandingAssetKind,
-  file: File,
-) {
+export function uploadAdminBrandingAsset(kind: BrandingAssetKind, file: File) {
   const formData = new FormData()
 
   formData.set('asset', file)

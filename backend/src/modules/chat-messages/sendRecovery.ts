@@ -90,12 +90,14 @@ export async function sendWithDeletedConversationRecovery<TMessage>({
     }
   }
 
-  const recoveredContext = await recoverWritableContextAfterMissingConversation({
-    chatThreadsService,
-    staleConversationId: conversationId,
-    threadId,
-    userId,
-  })
+  const recoveredContext = await recoverWritableContextAfterMissingConversation(
+    {
+      chatThreadsService,
+      staleConversationId: conversationId,
+      threadId,
+      userId,
+    },
+  )
 
   if (
     recoveredContext.result !== 'ready' ||

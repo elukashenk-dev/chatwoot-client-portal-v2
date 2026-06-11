@@ -13,8 +13,8 @@ describe('parseCleanupMaintenanceArgs', () => {
   })
 
   it('rejects invalid tenant ids', () => {
-    expect(() =>
-      parseCleanupMaintenanceArgs(['--tenant-id=0']),
-    ).toThrowError('--tenant-id must be a positive integer.')
+    expect(() => parseCleanupMaintenanceArgs(['--tenant-id=0'])).toThrowError(
+      '--tenant-id must be a positive integer.',
+    )
   })
 })

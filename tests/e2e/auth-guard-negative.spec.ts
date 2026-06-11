@@ -206,9 +206,9 @@ test('keeps password reset on verify step when the code is invalid', async ({
     ),
   ).toBeVisible()
   await expect(page).toHaveURL(/\/auth\/password-reset\/verify$/)
-  await expect(
-    page.getByRole('heading', { name: 'Новый пароль' }),
-  ).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Новый пароль' })).toHaveCount(
+    0,
+  )
 })
 
 test('accepts password reset request for unknown email without sending reset mail', async ({

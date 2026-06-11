@@ -24,9 +24,12 @@ function renderTypingSync(overrides: Partial<TypingSyncOptions> = {}) {
     setTyping,
     ...overrides,
   }
-  const hook = renderHook((props: TypingSyncOptions) => useChatTypingSync(props), {
-    initialProps,
-  })
+  const hook = renderHook(
+    (props: TypingSyncOptions) => useChatTypingSync(props),
+    {
+      initialProps,
+    },
+  )
 
   return {
     setTyping,

@@ -92,9 +92,7 @@ describe('TenantAuthShell', () => {
 
     expect(screen.getByText('Бухфирма')).toBeInTheDocument()
     expect(screen.getByText('БУ')).toBeInTheDocument()
-    expect(
-      screen.queryByText('Клиентский портал'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Клиентский портал')).not.toBeInTheDocument()
   })
 
   it('uses public branding logo and auth images while keeping page copy explicit', () => {

@@ -16,25 +16,21 @@ describe('createTestDatabase migration cache', () => {
     vi.clearAllMocks()
   })
 
-  it(
-    'runs migrations once and reuses the migrated template for later test databases',
-    async () => {
-      const { migrate } = await import('drizzle-orm/pglite/migrator')
-      const { createTestDatabase } = await import('./testDatabase.js')
+  it('runs migrations once and reuses the migrated template for later test databases', async () => {
+    const { migrate } = await import('drizzle-orm/pglite/migrator')
+    const { createTestDatabase } = await import('./testDatabase.js')
 
-      const firstDatabase = await createTestDatabase()
+    const firstDatabase = await createTestDatabase()
+    try {
+      const secondDatabase = await createTestDatabase()
+
       try {
-        const secondDatabase = await createTestDatabase()
-
-        try {
-          expect(migrate).toHaveBeenCalledTimes(1)
-        } finally {
-          await secondDatabase.close()
-        }
+        expect(migrate).toHaveBeenCalledTimes(1)
       } finally {
-        await firstDatabase.close()
+        await secondDatabase.close()
       }
-    },
-    15000,
-  )
+    } finally {
+      await firstDatabase.close()
+    }
+  }, 15000)
 })

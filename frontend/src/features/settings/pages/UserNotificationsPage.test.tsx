@@ -128,9 +128,7 @@ describe('UserNotificationsPage', () => {
     })
     renderPage()
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Подключить' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'Подключить' }))
 
     await waitFor(() => {
       expect(ensureBrowserPushSubscriptionMock).toHaveBeenCalled()
@@ -159,9 +157,7 @@ describe('UserNotificationsPage', () => {
 
     renderPage()
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Отключить' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'Отключить' }))
 
     await waitFor(() => {
       expect(disableBrowserPushOnDeviceMock).toHaveBeenCalled()
@@ -188,9 +184,7 @@ describe('UserNotificationsPage', () => {
 
     renderPage()
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Подключить' }),
-    )
+    await user.click(await screen.findByRole('button', { name: 'Подключить' }))
 
     await waitFor(() => {
       expect(ensureBrowserPushSubscriptionMock).toHaveBeenCalled()

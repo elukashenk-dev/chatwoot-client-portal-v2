@@ -32,9 +32,7 @@ function createAvatarUnavailableError(statusCode = 404) {
   return new ApiError(statusCode, 'attachment_unavailable', 'Файл недоступен.')
 }
 
-function createAvatarThreadContextError(
-  context: CurrentUserChatThreadContext,
-) {
+function createAvatarThreadContextError(context: CurrentUserChatThreadContext) {
   if (context.reason === 'thread_access_denied') {
     return new ApiError(403, 'thread_access_denied', 'Доступ к чату запрещен.')
   }

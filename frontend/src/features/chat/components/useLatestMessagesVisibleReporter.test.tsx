@@ -19,13 +19,7 @@ function createMessage(overrides: Partial<ChatMessage>): ChatMessage {
   }
 }
 
-function createDomRect({
-  bottom,
-  top,
-}: {
-  bottom: number
-  top: number
-}) {
+function createDomRect({ bottom, top }: { bottom: number; top: number }) {
   return {
     bottom,
     height: bottom - top,

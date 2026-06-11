@@ -27,7 +27,12 @@ export class SmtpEmailDeliveryError extends Error {
 type CreateSmtpEmailDeliveryOptions = {
   env: Pick<
     AppEnv,
-    'SMTP_FROM' | 'SMTP_HOST' | 'SMTP_PASS' | 'SMTP_PORT' | 'SMTP_SECURE' | 'SMTP_USER'
+    | 'SMTP_FROM'
+    | 'SMTP_HOST'
+    | 'SMTP_PASS'
+    | 'SMTP_PORT'
+    | 'SMTP_SECURE'
+    | 'SMTP_USER'
   >
   createTransport?: typeof nodemailer.createTransport
 }

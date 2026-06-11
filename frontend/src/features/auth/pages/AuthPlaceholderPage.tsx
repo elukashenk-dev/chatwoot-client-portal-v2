@@ -22,8 +22,8 @@ export function AuthPlaceholderPage({
         />
 
         <div className="rounded-[0.9rem] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-600">
-          В следующем auth-шаге здесь появятся реальные поля, состояния загрузки,
-          валидация и связка с backend-контрактами.
+          В следующем auth-шаге здесь появятся реальные поля, состояния
+          загрузки, валидация и связка с backend-контрактами.
         </div>
 
         <Link

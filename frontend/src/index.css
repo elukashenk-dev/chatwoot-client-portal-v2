@@ -425,8 +425,8 @@ button:not(:disabled),
 .auth-input:-webkit-autofill {
   -webkit-text-fill-color: var(--portal-auth-text-color, #0f172a);
   -webkit-box-shadow:
-    0 0 0 1000px
-      var(--portal-auth-control-background, rgb(248 250 252 / 0.86)) inset,
+    0 0 0 1000px var(--portal-auth-control-background, rgb(248 250 252 / 0.86))
+      inset,
     0 6px 14px rgb(15 45 87 / 0.06);
   transition: background-color 9999s ease-in-out 0s;
 }

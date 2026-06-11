@@ -35,7 +35,11 @@ describe('createChatSendRateLimiter', () => {
   it('limits text sends per tenant, user and thread, then resets after the window', async () => {
     const limiter = createLimiter()
 
-    for (let index = 0; index < CHAT_TEXT_SEND_RATE_LIMIT.maxRequests; index += 1) {
+    for (
+      let index = 0;
+      index < CHAT_TEXT_SEND_RATE_LIMIT.maxRequests;
+      index += 1
+    ) {
       await expect(
         limiter.consume({
           kind: 'text',

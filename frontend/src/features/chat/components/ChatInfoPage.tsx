@@ -83,9 +83,7 @@ function WorkingHoursSection({
     return (
       <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
         <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
-          <h2 className="chat-text text-[13px] font-semibold">
-            Часы работы
-          </h2>
+          <h2 className="chat-text text-[13px] font-semibold">Часы работы</h2>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
             Проверяем
           </span>
@@ -109,9 +107,7 @@ function WorkingHoursSection({
   return (
     <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
       <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
-        <h2 className="chat-text text-[13px] font-semibold">
-          Часы работы
-        </h2>
+        <h2 className="chat-text text-[13px] font-semibold">Часы работы</h2>
         <span
           className={[
             'rounded-full px-2 py-1 text-[11px] font-semibold',

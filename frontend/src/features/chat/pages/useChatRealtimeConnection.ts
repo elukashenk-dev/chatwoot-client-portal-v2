@@ -36,10 +36,7 @@ export function useChatRealtimeConnection({
   setPageState,
   threadId,
 }: UseChatRealtimeConnectionInput) {
-  const {
-    handleAgentTyping,
-    isAgentTypingVisible,
-  } = useAgentTypingState({
+  const { handleAgentTyping, isAgentTypingVisible } = useAgentTypingState({
     realtimeThreadId: threadId,
     selectedThreadId: threadId,
   })

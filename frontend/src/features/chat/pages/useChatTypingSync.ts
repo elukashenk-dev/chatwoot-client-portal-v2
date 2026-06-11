@@ -79,18 +79,9 @@ export function useChatTypingSync({
       }
 
       clearOffTimer()
-      offTimerRef.current = window.setTimeout(
-        sendTypingOff,
-        TYPING_IDLE_OFF_MS,
-      )
+      offTimerRef.current = window.setTimeout(sendTypingOff, TYPING_IDLE_OFF_MS)
     },
-    [
-      canUseBackend,
-      clearOffTimer,
-      selectedThreadId,
-      sendTypingOff,
-      setTyping,
-    ],
+    [canUseBackend, clearOffTimer, selectedThreadId, sendTypingOff, setTyping],
   )
 
   useEffect(() => {

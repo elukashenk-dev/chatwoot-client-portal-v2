@@ -30,9 +30,7 @@ type RequestChatwootJsonOptions = {
   unavailableMessage: string
 }
 
-export function normalizeChatwootRequestTimeoutMs(
-  value: number | undefined,
-) {
+export function normalizeChatwootRequestTimeoutMs(value: number | undefined) {
   if (value === undefined) {
     return DEFAULT_CHATWOOT_REQUEST_TIMEOUT_MS
   }

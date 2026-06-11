@@ -20,7 +20,9 @@ function createJsonResponse(body: unknown, status = 200) {
 
 describe('createChatwootClient public conversation events', () => {
   it('updates customer last seen through the Chatwoot public API', async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(createJsonResponse({}))
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createJsonResponse({}))
     const client = createChatwootClient({
       config: testChatwootConfig,
       fetchFn,
@@ -44,7 +46,9 @@ describe('createChatwootClient public conversation events', () => {
   })
 
   it('toggles customer typing through the Chatwoot public API', async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(createJsonResponse({}))
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createJsonResponse({}))
     const client = createChatwootClient({
       config: testChatwootConfig,
       fetchFn,

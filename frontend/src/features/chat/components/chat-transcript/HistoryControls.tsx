@@ -19,9 +19,7 @@ export function HistoryFragmentTopControls({
   return (
     <div className="mb-3 grid gap-2 self-stretch">
       <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-[12px] leading-5 text-brand-900">
-        <strong className="block text-[13px]">
-          Показан фрагмент истории
-        </strong>
+        <strong className="block text-[13px]">Показан фрагмент истории</strong>
         Найденное сообщение открыто в контексте переписки.
       </div>
       {controls.hasMoreEarlier ? (

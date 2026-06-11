@@ -138,7 +138,10 @@ export function loadServiceWorker({
   const serviceWorkerScope = {
     addEventListener: vi.fn(
       (eventName: string, listener: ServiceWorkerTestListener) => {
-        listeners.set(eventName, [...(listeners.get(eventName) ?? []), listener])
+        listeners.set(eventName, [
+          ...(listeners.get(eventName) ?? []),
+          listener,
+        ])
       },
     ),
     location: {

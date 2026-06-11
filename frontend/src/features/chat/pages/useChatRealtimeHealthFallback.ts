@@ -13,7 +13,9 @@ type UseChatRealtimeHealthFallbackInput = {
 }
 
 function documentIsVisible() {
-  return typeof document === 'undefined' || document.visibilityState === 'visible'
+  return (
+    typeof document === 'undefined' || document.visibilityState === 'visible'
+  )
 }
 
 export function useChatRealtimeHealthFallback({

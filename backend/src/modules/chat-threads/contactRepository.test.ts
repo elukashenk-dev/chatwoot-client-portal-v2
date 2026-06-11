@@ -107,7 +107,7 @@ describe('createChatThreadContactRepository', () => {
         fullName: 'Иван Петров',
         userId: activeUser.id,
       },
-      ])
+    ])
   })
 
   it('finds an active participant contact link by portal user id in the scoped tenant', async () => {

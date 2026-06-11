@@ -19,10 +19,11 @@ export type ParsedCleanupMaintenanceArgs = {
   tenantId?: number
 }
 
-export type CleanupMaintenanceDataReport = CleanupPortalMaintenanceDataResult & {
-  retention: PortalMaintenanceRetention
-  tenantId: number | null
-}
+export type CleanupMaintenanceDataReport =
+  CleanupPortalMaintenanceDataResult & {
+    retention: PortalMaintenanceRetention
+    tenantId: number | null
+  }
 
 export function parseCleanupMaintenanceArgs(
   argv: string[],
