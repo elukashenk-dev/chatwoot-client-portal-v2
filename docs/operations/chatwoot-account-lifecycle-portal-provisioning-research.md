@@ -2,7 +2,31 @@
 
 Дата: 2026-06-11
 
-Статус: исследование для MT-10 и подготовки operator-ready shared SaaS.
+Статус: research note preserved for Chatwoot lifecycle facts. MT-10A operator
+tenant provisioning is now implemented as portal-owned CLI tooling; current
+operator runbook lives in `docs/operations/mt-10-deployment-runbooks.md`.
+
+## Текущий implementation status
+
+MT-10A реализовал recommended portal/operator-owned path:
+
+- `pnpm --dir backend tenant:create -- ...` creates a Chatwoot account, client
+  admin, service users, API Channel inbox, webhook configuration and portal
+  tenant with encrypted secrets;
+- custom-domain tenants use explicit `--primary-domain` and
+  `--public-base-url`;
+- provider-subdomain tenants use `--provider-subdomain` plus deployment env
+  `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`;
+- `pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run|--apply` detects
+  Chatwoot account drift for provisioned tenants;
+- `pnpm --dir backend tenant:deprovision -- --tenant=<slug> --archive-only`
+  archives safely, and `--delete-chatwoot-account` additionally requests
+  Chatwoot Platform API account deletion after explicit confirmation.
+
+Remaining operations work is production rehearsal, DNS/certificate/proxy
+automation for provider-owned subdomains and optional operator UI/audit
+wrapping. Public Chatwoot signup remains outside the production portal tenant
+creation authority.
 
 ## Короткий вывод
 
@@ -278,16 +302,14 @@ POST /api/v1/accounts/{account_id}/inboxes
 - `hmac_mandatory`;
 - `additional_attributes`.
 
-Наш текущий portal уже умеет:
+Наш текущий portal умеет:
 
 - проверять, что `chatwoot_portal_inbox_id` указывает на `Channel::Api`;
 - настраивать API Channel `webhook_url`;
 - читать возвращенный `Channel::Api.secret`;
 - сохранять webhook secret encrypted в `portal_tenants`.
-
-Но наш текущий portal пока не умеет автоматически создавать Chatwoot account,
-Chatwoot user и API Channel inbox. Для этого нужен отдельный operator tooling
-slice.
+- автоматически создавать Chatwoot account, client admin user, service users
+  and API Channel inbox through the MT-10A `tenant:create` operator CLI.
 
 ## Installation events webhook в Chatwoot
 
@@ -462,8 +484,9 @@ after_destroy :remove_account_sequences
    - webhook signature verification;
    - auth/chat/admin branding smoke.
 
-Такой flow не требует менять Chatwoot core. Он требует добавить operator
-tooling в наш portal.
+Такой flow не требует менять Chatwoot core. MT-10A реализует его как
+`tenant:create` CLI; production still needs operator rehearsal and
+DNS/certificate/proxy readiness for the chosen domain mode.
 
 ## Можно ли автоматически удалить portal при удалении Chatwoot account?
 
@@ -491,8 +514,9 @@ tooling в наш portal.
 
 1. Reconciliation job в portal:
    - периодически проверяет связанные `chatwoot_account_id`;
-   - если Chatwoot account исчез или API возвращает 404/unauthorized,
-     переводит portal tenant в `suspended`/`orphaned`;
+   - если Chatwoot account исчез, переводит portal tenant в `suspended`;
+   - если Platform API token не авторизован, возвращает
+     `platform_auth_failed` и не меняет tenant status;
    - уведомляет оператора;
    - cleanup выполняется только после подтверждения или policy decision.
 2. Запретить ручное удаление Chatwoot accounts вне portal operator flow как
@@ -512,7 +536,8 @@ onDelete: 'restrict'
 Это хорошо защищает от случайного удаления tenant, но значит:
 
 - простого физического `DELETE FROM portal_tenants` сейчас быть не должно;
-- нужен явный tenant archival/deletion service;
+- tenant archival/deletion service уже есть для safe archive и explicit
+  Chatwoot delete request;
 - надо решить retention policy для пользователей, сессий, chat threads,
   branding assets, push subscriptions, send ledger и webhook deliveries;
 - object-storage assets надо удалять через portal-owned metadata, а не только
@@ -535,9 +560,9 @@ ENABLE_ACCOUNT_SIGNUP=false
 CREATE_NEW_ACCOUNT_FROM_DASHBOARD=false
 ```
 
-2. Сделать отдельный `portal-tenant-provisioning` slice:
+2. Использовать реализованный `portal-tenant-provisioning` slice:
 
-- operator CLI или admin UI;
+- operator CLI now; admin UI remains optional;
 - Chatwoot Platform API client;
 - create account;
 - create/find admin user;
@@ -547,7 +572,7 @@ CREATE_NEW_ACCOUNT_FROM_DASHBOARD=false
 - create portal tenant with encrypted secrets;
 - verify/smoke;
 - idempotent retry;
-- audit/outbox.
+- audit/outbox can be added with a future operator UI if needed.
 
 3. Использовать `INSTALLATION_EVENTS_WEBHOOK_URL` только как optional discovery
    signal:
@@ -562,22 +587,16 @@ CREATE_NEW_ACCOUNT_FROM_DASHBOARD=false
 
 - основной путь: delete/archive through portal operator flow;
 - ручные удаления в Chatwoot считать drift;
-- добавить reconciliation job, который обнаруживает drift и переводит portal
-  tenant в безопасный disabled state;
+- использовать reconciliation job, который обнаруживает drift и переводит
+  portal tenant в безопасный disabled state;
 - physical purge делать отдельным service после backup/retention решения.
 
 ## Последствия для MT-10
 
-Текущий MT-10 runbook правильно говорит, что shared SaaS еще не является
-полностью repeatable one-command operation.
+Текущий MT-10 runbook now treats shared SaaS tenant lifecycle as
+operator-repeatable CLI operations, not as public self-service signup.
 
-Следующий надежный шаг после MT-10 docs:
-
-```text
-MT-10A / operator tenant provisioning
-```
-
-Минимальный acceptance для этого шага:
+MT-10A acceptance is implemented:
 
 - оператор может создать нового клиента без ручного SQL;
 - Chatwoot account создается через Platform API;
@@ -586,6 +605,10 @@ MT-10A / operator tenant provisioning
 - webhook URL и secret настроены автоматически;
 - portal tenant создан с encrypted secrets;
 - повторный запуск idempotent;
-- manual Chatwoot deletion переводит portal tenant в safe disabled state через
-  reconciliation;
+- manual Chatwoot deletion переводит portal tenant в `suspended` через
+  reconciliation apply;
 - Chatwoot core остается нетронутым.
+
+Next operational step: run an end-to-end rehearsal against the intended
+production Chatwoot and domain mode, including `/api/tenant`, Chatwoot
+verification, webhook configuration and tenant archive/deprovision dry run.

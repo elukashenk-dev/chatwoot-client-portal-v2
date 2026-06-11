@@ -29,10 +29,14 @@ Tenant model:
 Tenant = company + domain + exact Chatwoot connection
 ```
 
-Production domain convention:
+Production domain modes:
 
 ```text
-lk.<client-domain>
+custom client domain:
+  lk.<client-domain>
+
+provider-owned subdomain:
+  <tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>
 ```
 
 Examples:
@@ -41,7 +45,11 @@ Examples:
 lk.buhfirma.ru -> tenant buhfirma
 lk.stroyfirma.ru -> tenant stroyfirma
 lk.zubi.ru -> tenant zubi
+buhfirma.portal.example.com -> tenant buhfirma
 ```
+
+`PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is deployment configuration, not a
+hard-coded provider brand.
 
 Shared/dedicated is inferred from the actual Chatwoot connection:
 
@@ -257,6 +265,10 @@ Production:
 ```text
 Host: lk.buhfirma.ru
   -> portal_tenants.primary_domain = lk.buhfirma.ru
+  -> tenant = buhfirma
+
+Host: buhfirma.portal.example.com
+  -> portal_tenants.primary_domain = buhfirma.portal.example.com
   -> tenant = buhfirma
 ```
 
@@ -555,6 +567,9 @@ Current useful script family:
 
 ```text
 pnpm --dir backend tenant:bootstrap-default
+pnpm --dir backend tenant:create -- --slug=<slug> ...
+pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
+pnpm --dir backend tenant:deprovision -- --tenant=<slug> --archive-only --confirm=<slug>
 pnpm --dir backend tenant:chatwoot:verify -- --tenant=<slug>
 pnpm --dir backend tenant:chatwoot:ensure-portal-inbox -- --tenant=<slug>
 pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
@@ -570,19 +585,35 @@ Tenant provisioning inputs:
 ```text
 slug
 display_name
-primary_domain
-public_base_url
 chatwoot_base_url
-chatwoot_account_id
-chatwoot_portal_inbox_id
-chatwoot_runtime_api_token
-chatwoot_admin_verification_token
-chatwoot_webhook_secret
+client_admin_email
+client_admin_name
+
+custom-domain mode:
+  primary_domain
+  public_base_url
+
+provider-subdomain mode:
+  provider_subdomain
+  PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX
 ```
 
 `chatwoot_admin_verification_token` is stored as an encrypted nullable
 per-tenant secret. Tenant admin login fails closed when this token is missing,
 invalid or cannot read the tenant account agents from Chatwoot.
+
+`tenant:create` obtains Chatwoot account, inbox and service-user token details
+through Chatwoot Platform/account APIs, then stores runtime token,
+admin-verification token and API Channel webhook secret encrypted in
+`portal_tenants`.
+
+`tenant:chatwoot:reconcile -- --apply` can suspend a provisioned tenant when
+its Chatwoot account is gone. Platform API authentication failures are surfaced
+as operator errors and must not silently suspend tenants.
+
+`tenant:deprovision` is explicit-confirmation only. `--archive-only` archives
+portal runtime without deleting Chatwoot; `--delete-chatwoot-account` first
+closes portal runtime and then requests Chatwoot Platform API account deletion.
 
 ## 11. Future Extensions
 

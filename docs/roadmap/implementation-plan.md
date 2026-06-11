@@ -170,9 +170,10 @@ Status:
 - central MT-10 operations index links routine deploy, clean reinstall,
   provisioning boundaries, domain rules, secret rotation, backup/restore and
   acceptance checklist;
-- shared SaaS rollout docs remain future expansion of the same tenant-aware
-  runtime model, but arbitrary tenant creation still needs a dedicated
-  operator CLI/UI before it is repeatable as a one-command operation.
+- MT-10A operator CLI tenant lifecycle tooling exists for custom-domain and
+  provider-owned subdomain tenants: create, reconcile and archive/deprovision.
+  Shared SaaS still needs production rehearsal, DNS/cert/proxy automation and
+  optional operator UI before broad rollout.
 
 Цель:
 
@@ -201,8 +202,9 @@ Exit criteria:
 - dedicated install can be explained and repeated as one-tenant portal;
 - tenant Chatwoot verification, webhook setup and secret rotation have clear
   operator guidance;
-- shared SaaS install is explained with the explicit gap that arbitrary tenant
-  creation needs a future operator CLI/UI slice before production rollout.
+- shared SaaS install is explained with the explicit gap that broad rollout
+  still needs production rehearsal, DNS/cert/proxy automation and optional
+  operator UI around the existing CLI tooling.
 
 ## Deferred Backlog
 
@@ -221,8 +223,9 @@ UX and privacy review.
 
 Status: deferred.
 
-Reason: current production convention uses one canonical domain:
-`lk.<client-domain>`.
+Reason: current tenant model uses one canonical `primary_domain` per tenant,
+either a custom client domain like `lk.<client-domain>` or a provider-owned
+subdomain like `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`.
 
 Minimum future scope:
 

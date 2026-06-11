@@ -18,30 +18,36 @@ runbooks instead of duplicating every low-level command.
 - dedicated one-tenant production install on the current one-VM stack;
 - routine deploy from a clean reviewed commit;
 - clean reinstall/reconfigure of portal-owned runtime;
+- operator CLI tenant creation through Chatwoot Platform API and portal DB;
+- operator CLI tenant archive/deprovision flow with explicit confirmation;
+- tenant Chatwoot account reconciliation for drift detection;
 - tenant Chatwoot API Channel verification and webhook configuration;
 - portal-owned object storage for branding assets;
 - production smoke checklist for portal auth, chat, admin branding and PWA.
 
-### Not Ready As A One-Command Shared SaaS Operation
+### Ready As Operator CLI, Not Yet Self-Service
 
-The runtime model is tenant-aware and supports the shared SaaS direction, but
-there is no general operator CLI/UI yet for creating an arbitrary new tenant
-with all encrypted secrets and domain configuration.
+The runtime model is tenant-aware and shared SaaS tenant creation now has an
+operator CLI path. It is not yet a self-service client signup flow and does not
+automate provider DNS/cert/proxy changes.
 
-Current executable provisioning is the default/dedicated tenant path:
+Current executable provisioning paths:
 
 ```bash
 pnpm --dir backend tenant:bootstrap-default
+pnpm --dir backend tenant:create -- --slug=<slug> ...
+pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
+pnpm --dir backend tenant:deprovision -- --tenant=<slug> --archive-only --confirm=<slug>
 pnpm --dir backend tenant:chatwoot:verify -- --tenant=<slug>
 pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
 ```
 
-Before shared SaaS rollout is treated as repeatable operations, add a focused
-operator tooling slice for either:
+Before broad shared SaaS rollout, the remaining operations gap is rehearsal and
+automation around:
 
-- `tenant:create` CLI with idempotent tenant creation, encrypted secret writes
-  and domain validation; or
-- platform admin UI with the same backend authority and audit trail.
+- production DNS/certificate/proxy provisioning;
+- provider-domain `/api/tenant` smoke before client handoff;
+- operator UX/audit wrapper if CLI is not enough for day-to-day operations.
 
 ## Source Of Truth Map
 
@@ -151,9 +157,9 @@ verified backup/restore plan.
 
 ## Dedicated One-Tenant Provisioning
 
-The current production business mode is a dedicated one-tenant portal. It uses
-the same tenant-aware runtime model as shared SaaS, but only one tenant is
-bootstrapped.
+The current production business mode can still be a dedicated one-tenant
+portal. It uses the same tenant-aware runtime model as shared SaaS, but only
+one tenant is bootstrapped.
 
 Required inputs:
 
@@ -202,7 +208,7 @@ Expected result:
   `https://<tenant-domain>/api/chatwoot/webhooks`;
 - Chatwoot returned `Channel::Api.secret` is stored encrypted in portal DB.
 
-## Shared SaaS Provisioning Readiness
+## Shared SaaS Operator Provisioning
 
 Shared SaaS should reuse the same runtime boundaries:
 
@@ -210,29 +216,81 @@ Shared SaaS should reuse the same runtime boundaries:
 - one tenant maps to one Chatwoot account and one portal API Channel inbox;
 - browser never chooses tenant manually in production;
 - portal DB stores tenant runtime configuration and encrypted secrets;
-- Chatwoot remains an external service and system of record for chat data.
+- Chatwoot remains an external service and system of record for chat data;
+- provider/operator runs provisioning; public Chatwoot signup is not a
+  production tenant creation authority.
 
-To make shared SaaS operationally repeatable, the next tooling slice must
-provide an explicit tenant creation path. Minimum inputs:
+Required runtime env:
 
 ```text
-slug
-display_name
-primary_domain
-public_base_url
-chatwoot_base_url
-chatwoot_account_id
-chatwoot_portal_inbox_id
-chatwoot_runtime_api_token
-chatwoot_admin_verification_token
-chatwoot_webhook_secret
+DATABASE_URL
+PORTAL_TENANT_SECRET_KEY
+CHATWOOT_PLATFORM_API_ACCESS_TOKEN
+PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN
 ```
+
+Provider-subdomain tenants additionally require:
+
+```text
+PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX
+```
+
+`PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is deployment configuration, not a
+hard-coded provider brand. Examples below use `portal.example.com`; production
+must use the provider-owned suffix chosen for that deployment.
+
+Custom-domain tenant creation:
+
+```bash
+pnpm --dir backend tenant:create -- \
+  --slug=buhfirma \
+  --display-name="Бухфирма" \
+  --primary-domain=lk.buhfirma.ru \
+  --public-base-url=https://lk.buhfirma.ru \
+  --chatwoot-base-url=https://example.ru \
+  --client-admin-email=admin@buhfirma.ru \
+  --client-admin-name="Иван Админ"
+```
+
+Provider-subdomain tenant creation:
+
+```bash
+pnpm --dir backend tenant:create -- \
+  --slug=buhfirma \
+  --display-name="Бухфирма" \
+  --provider-subdomain=buhfirma \
+  --chatwoot-base-url=https://example.ru \
+  --client-admin-email=admin@buhfirma.example \
+  --client-admin-name="Иван Админ"
+```
+
+Lifecycle checks:
+
+```bash
+pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
+pnpm --dir backend tenant:deprovision -- --tenant=buhfirma --archive-only --confirm=buhfirma
+```
+
+Use `tenant:chatwoot:reconcile -- --apply` only after reviewing dry-run output.
+Use
+`tenant:deprovision -- --tenant=<slug> --delete-chatwoot-account --confirm=<slug>`
+only when the operator explicitly intends to suspend the portal tenant and
+request Chatwoot Platform API account deletion.
+
+Expected result from `tenant:create`:
+
+- Chatwoot account exists and belongs to the platform app;
+- client admin user exists and is an administrator in that account;
+- portal runtime and admin-verification service users exist;
+- tenant API Channel inbox exists and is configured for the tenant webhook URL;
+- portal tenant row exists with encrypted runtime/admin/webhook secrets;
+- rerunning the same command is idempotent for the same tenant/domain inputs.
 
 Minimum acceptance before production shared SaaS:
 
-- operator can create a tenant without editing DB rows manually;
-- tenant creation is idempotent by `slug` and `primary_domain`;
-- secrets are encrypted with `PORTAL_TENANT_SECRET_KEY`;
+- operator creates a tenant without editing DB rows manually;
+- provider DNS/cert/proxy route the tenant host to the portal;
+- `/api/tenant` returns the intended tenant on the new host;
 - tenant Chatwoot connection verification passes;
 - tenant API Channel webhook configuration passes;
 - unknown Host does not fall back to another tenant;
@@ -243,7 +301,11 @@ Minimum acceptance before production shared SaaS:
 
 ## Domain And DNS Runbook
 
-Production domain convention:
+Production supports two tenant domain modes.
+
+### Custom Client Domain
+
+Client-facing convention:
 
 ```text
 lk.<client-domain>
@@ -257,9 +319,10 @@ lk.buhfirma.ru
 lk.stroyfirma.ru
 ```
 
-For each tenant:
+For each custom-domain tenant:
 
-- DNS for `lk.<client-domain>` points to the portal reverse proxy VM;
+- B2B client or provider creates DNS for `lk.<client-domain>` pointing to the
+  portal reverse proxy VM;
 - `DEFAULT_TENANT_PRIMARY_DOMAIN` or tenant `primary_domain` equals that host;
 - `DEFAULT_TENANT_PUBLIC_BASE_URL` or tenant `public_base_url` equals
   `https://lk.<client-domain>`;
@@ -267,6 +330,43 @@ For each tenant:
 - backend tenant resolution uses the request Host through the trusted proxy
   boundary;
 - unknown hosts fail closed and must not resolve to the default tenant.
+
+### Provider-Owned Subdomain
+
+Provider-facing convention:
+
+```text
+<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>
+```
+
+Example:
+
+```text
+buhfirma.portal.example.com
+```
+
+For each provider-subdomain tenant:
+
+- `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is set to the provider-owned suffix,
+  for example `portal.example.com`;
+- wildcard DNS for `*.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` points to the
+  portal reverse proxy VM;
+- TLS covers the generated host, usually through a wildcard certificate or
+  equivalent certificate automation;
+- reverse proxy routes the generated host to the portal web container and
+  preserves the original `Host`;
+- trusted proxy configuration preserves only controlled `X-Forwarded-Host`
+  values when `PORTAL_TRUST_PROXY=true`;
+- `tenant:create -- --provider-subdomain=<tenant-slug>` resolves
+  `primary_domain` to
+  `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>` and `public_base_url`
+  to `https://<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`;
+- `/api/tenant` returns the intended tenant on the generated host before
+  handoff.
+
+In both modes, provisioning is provider/operator-owned. The browser never
+chooses tenant manually, and public Chatwoot signup does not create a production
+portal tenant.
 
 ## Tenant Chatwoot Connection Verification
 

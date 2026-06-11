@@ -142,9 +142,13 @@ execution-plan детали здесь не хранятся.
 - `MT-10` deployment/runbook documentation baseline is added: routine deploy,
   clean reinstall, tenant provisioning boundaries, domain rules, tenant
   Chatwoot verification, secret rotation, backup/restore and production
-  acceptance checks are linked from one operations index. Current executable
-  production path remains dedicated one-tenant; arbitrary shared SaaS tenant
-  creation still needs a future operator CLI/UI slice.
+  acceptance checks are linked from one operations index.
+- `MT-10A` operator tenant lifecycle tooling is implemented: CLI tenant
+  creation provisions Chatwoot account/admin/service users/API Channel inbox
+  and portal tenant secrets, provider-owned subdomain mode derives
+  `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`, reconciliation detects
+  Chatwoot account drift, and deprovisioning supports explicit-confirmation
+  archive or Chatwoot account delete request.
 - Agent execution governance now uses risk-based efficiency rules: full review
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
@@ -152,6 +156,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Review and accept the MT-10 runbook baseline, then choose either production
-  push/deploy of the current branding baseline or a focused tenant creation
-  operator-tooling slice before shared SaaS rollout.
+- Run an end-to-end MT-10A tenant lifecycle rehearsal against the intended
+  Chatwoot/domain mode, including `/api/tenant`, Chatwoot verification, webhook
+  configuration and archive/deprovision dry run before exposing an operator UI.

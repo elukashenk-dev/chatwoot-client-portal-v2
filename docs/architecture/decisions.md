@@ -42,9 +42,10 @@
 - дата: `2026-05-05`
 - решение:
   production tenant resolution строится по normalized `Host`/domain до
-  auth/session/chat/admin runtime. Production convention:
-  `lk.<client-domain>`. Unknown host получает controlled failure, а не fallback
-  в default tenant.
+  auth/session/chat/admin runtime. Production supports custom client domains
+  such as `lk.<client-domain>` and provider-owned subdomains such as
+  `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`. Unknown host получает
+  controlled failure, а не fallback в default tenant.
 - причина:
   host-based tenancy дает естественные browser origin boundaries для cookies,
   service worker, PWA install identity и same-origin API. Body/query/header
@@ -398,3 +399,24 @@
   Chatwoot asset URLs or turning display names into authority. Role-aware visual
   grouping prevents support and group member messages with the same display name
   from merging into one visual block.
+
+## D-026. Tenant lifecycle provisioning is operator-owned
+
+- дата: `2026-06-12`
+- решение:
+  production portal tenant creation is owned by the provider/operator, not by
+  public Chatwoot signup. The `tenant:create` CLI creates or reuses the
+  Chatwoot account, client admin, portal service users and API Channel inbox
+  through Chatwoot Platform/account APIs, configures the webhook, and writes the
+  portal tenant with encrypted runtime/admin/webhook secrets. Domain mode is
+  explicit: custom-domain inputs provide `primary_domain` and `public_base_url`,
+  while provider-subdomain inputs derive
+  `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`. Safe lifecycle tooling
+  uses reconciliation for Chatwoot account drift and explicit-confirmation
+  archive/deprovision commands; physical portal tenant purge remains a separate
+  future retention/backup decision.
+- причина:
+  Chatwoot public signup cannot supply the portal domain, API Channel inbox,
+  runtime/admin tokens or signed webhook secret. Provider-owned provisioning
+  keeps Chatwoot core untouched while preserving portal backend authority,
+  encrypted tenant secrets and Host-based tenant resolution.
