@@ -85,6 +85,22 @@ Provider-owned domain prerequisites:
 - `/api/tenant` must resolve the generated host before a provider-subdomain
   tenant is considered production-ready.
 
+Chatwoot domain input is independent from the portal tenant domain. The
+operator must pass an explicit `chatwootBaseUrl`; code must not derive it from
+`primaryDomain`, `publicBaseUrl`, provider suffix or a `chat.` convention.
+Valid examples include:
+
+```text
+chatwootBaseUrl=https://example.ru
+chatwootBaseUrl=https://chat.example.ru
+chatwootBaseUrl=https://support.client.example
+```
+
+The portal tenant domain remains separate, for example
+`publicBaseUrl=https://lk.example.ru`. Chatwoot and the portal should not share
+the exact same host unless a future, separately reviewed path-routing runbook
+explicitly supports that deployment mode.
+
 ## Lifecycle Model
 
 Provisioning creates these Chatwoot resources:
@@ -436,10 +452,24 @@ Modify:
 
 - [ ] **Step 2: Extend request helper if needed**
 
-  Update `ChatwootJsonMethod` in `backend/src/integrations/chatwoot/request.ts`:
+  Keep `requestChatwootJson` restricted to methods that return JSON:
 
   ```ts
-  type ChatwootJsonMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST'
+  type ChatwootJsonMethod = 'GET' | 'PATCH' | 'POST'
+  ```
+
+  If Platform API delete is implemented through the shared request layer, add a
+  separate no-body helper instead of making the JSON helper parse empty
+  `head :ok` responses:
+
+  ```ts
+  export async function requestChatwootWithoutBody(options: {
+    apiAccessToken: string
+    fetchChatwoot: ReturnType<typeof createChatwootFetch>
+    method: 'DELETE'
+    requestUrl: URL
+    unavailableMessage: string
+  }): Promise<void>
   ```
 
 - [ ] **Step 3: Add env config**
@@ -456,6 +486,7 @@ Modify:
   - all three are absent by default;
   - all three parse when set;
   - `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is a host suffix, not a URL;
+  - `PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN` is a host suffix, not a URL;
   - production does not require them unless provisioning scripts are used.
 
 - [ ] **Step 4: Implement platform client**
@@ -515,7 +546,7 @@ Modify:
 - [ ] **Step 5: Run tests**
 
   ```bash
-  pnpm --dir backend test -- src/integrations/chatwoot/platformClient.test.ts src/config/env.test.ts
+  pnpm --dir backend test -- src/integrations/chatwoot/request.test.ts src/integrations/chatwoot/platformClient.test.ts src/config/env.test.ts
   ```
 
   Expected: pass.
@@ -647,7 +678,10 @@ Modify:
     lowercase plus trailing dot removal;
   - provider-subdomain mode resolves `buhfirma.portal.example.com` and
     `https://buhfirma.portal.example.com`;
-  - `chatwootBaseUrl` must be http/https URL;
+  - `chatwootBaseUrl` must be an explicit http/https URL and can use an apex
+    host such as `https://example.ru`;
+  - `chatwootBaseUrl` is not derived from portal domain fields and does not
+    require a `chat.` host prefix;
   - service email domain must be a domain, not URL;
   - generated service emails are deterministic:
 
@@ -852,7 +886,7 @@ Modify:
   --display-name=Бухфирма
   --primary-domain=lk.buhfirma.ru
   --public-base-url=https://lk.buhfirma.ru
-  --chatwoot-base-url=https://chat.example.ru
+  --chatwoot-base-url=https://example.ru
   --client-admin-email=admin@buhfirma.ru
   --client-admin-name="Иван Админ"
   ```
@@ -863,7 +897,7 @@ Modify:
   --slug=buhfirma
   --display-name=Бухфирма
   --provider-subdomain=buhfirma
-  --chatwoot-base-url=https://chat.example.ru
+  --chatwoot-base-url=https://example.ru
   --client-admin-email=admin@buhfirma.example
   --client-admin-name="Иван Админ"
   ```
@@ -1169,7 +1203,7 @@ Modify:
     --display-name="Бухфирма" \
     --primary-domain=lk.buhfirma.ru \
     --public-base-url=https://lk.buhfirma.ru \
-    --chatwoot-base-url=https://chat.example.ru \
+    --chatwoot-base-url=https://example.ru \
     --client-admin-email=admin@buhfirma.ru \
     --client-admin-name="Иван Админ"
   ```
@@ -1181,7 +1215,7 @@ Modify:
     --slug=buhfirma \
     --display-name="Бухфирма" \
     --provider-subdomain=buhfirma \
-    --chatwoot-base-url=https://chat.example.ru \
+    --chatwoot-base-url=https://example.ru \
     --client-admin-email=admin@buhfirma.example \
     --client-admin-name="Иван Админ"
   ```
