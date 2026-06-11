@@ -46,6 +46,19 @@ const optionalUrlString = z.preprocess((value) => {
   return trimmedValue === '' ? undefined : trimmedValue
 }, z.string().url().optional())
 
+const hostSuffixPattern =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+
+const optionalHostSuffixString = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const normalizedValue = value.trim().toLowerCase().replace(/\.$/, '')
+
+  return normalizedValue === '' ? undefined : normalizedValue
+}, z.string().regex(hostSuffixPattern).optional())
+
 const optionalUrlList = z.preprocess((value) => {
   if (value === undefined || value === null) {
     return []
@@ -160,7 +173,10 @@ const envSchema = z
     AUTH_RATE_LIMIT_MAX: optionalPositiveInt.default(5),
     AUTH_RATE_LIMIT_WINDOW_MS: optionalPositiveInt.default(60_000),
     CHATWOOT_REQUEST_TIMEOUT_MS: optionalPositiveInt,
+    CHATWOOT_PLATFORM_API_ACCESS_TOKEN: optionalNonEmptyString,
     CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS: optionalUrlList,
+    PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX: optionalHostSuffixString,
+    PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN: optionalHostSuffixString,
     PORTAL_TENANT_SECRET_KEY: optionalNonEmptyString,
     DEFAULT_TENANT_SLUG: optionalNonEmptyString,
     DEFAULT_TENANT_DISPLAY_NAME: optionalNonEmptyString,

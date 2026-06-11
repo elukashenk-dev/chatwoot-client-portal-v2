@@ -104,6 +104,78 @@ describe('loadEnv', () => {
     ).toThrow(/CHATWOOT_REQUEST_TIMEOUT_MS/)
   })
 
+  it('leaves operator provisioning configuration unset by default', () => {
+    const env = loadEnv(baseRawEnv)
+
+    expect(env.CHATWOOT_PLATFORM_API_ACCESS_TOKEN).toBeUndefined()
+    expect(env.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX).toBeUndefined()
+    expect(env.PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN).toBeUndefined()
+  })
+
+  it('parses operator provisioning configuration when set', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      CHATWOOT_PLATFORM_API_ACCESS_TOKEN: ' platform-token ',
+      PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX: ' PORTAL.EXAMPLE.COM. ',
+      PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN: ' service.portal.example.com ',
+    })
+
+    expect(env.CHATWOOT_PLATFORM_API_ACCESS_TOKEN).toBe('platform-token')
+    expect(env.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX).toBe('portal.example.com')
+    expect(env.PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN).toBe(
+      'service.portal.example.com',
+    )
+  })
+
+  it('rejects provider tenant domain suffix values that are not host suffixes', () => {
+    for (const value of [
+      'https://portal.example.com',
+      'portal.example.com/path',
+      'portal.example.com:443',
+      '*.portal.example.com',
+      '.portal.example.com',
+    ]) {
+      expect(() =>
+        loadEnv({
+          ...baseRawEnv,
+          PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX: value,
+        }),
+      ).toThrow(/PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX/)
+    }
+  })
+
+  it('rejects provisioning service email domain values that are not host suffixes', () => {
+    for (const value of [
+      'https://service.portal.example.com',
+      'service.portal.example.com/path',
+      'service.portal.example.com:443',
+      '*.service.portal.example.com',
+      '.service.portal.example.com',
+    ]) {
+      expect(() =>
+        loadEnv({
+          ...baseRawEnv,
+          PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN: value,
+        }),
+      ).toThrow(/PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN/)
+    }
+  })
+
+  it('does not require operator provisioning configuration in production', () => {
+    const env = loadEnv({
+      ...baseRawEnv,
+      BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: 'portal-minio',
+      BRANDING_ASSET_STORAGE_BUCKET: 'portal-branding-assets',
+      BRANDING_ASSET_STORAGE_ENDPOINT: 'http://portal-object-storage:9000',
+      BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY: 'portal-minio-secret',
+      NODE_ENV: 'production',
+    })
+
+    expect(env.CHATWOOT_PLATFORM_API_ACCESS_TOKEN).toBeUndefined()
+    expect(env.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX).toBeUndefined()
+    expect(env.PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN).toBeUndefined()
+  })
+
   it('leaves Web Push VAPID configuration unset by default', () => {
     const env = loadEnv(baseRawEnv)
 

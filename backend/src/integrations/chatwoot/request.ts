@@ -11,6 +11,7 @@ type CreateChatwootFetchOptions = {
 }
 
 type ChatwootJsonMethod = 'GET' | 'PATCH' | 'POST'
+type ChatwootWithoutBodyMethod = 'DELETE'
 
 type ReadChatwootJsonOptions = {
   invalidJsonMessage: string
@@ -26,6 +27,14 @@ type RequestChatwootJsonOptions = {
   body: unknown | undefined
   fetchChatwoot: ReturnType<typeof createChatwootFetch>
   method: ChatwootJsonMethod
+  requestUrl: URL
+  unavailableMessage: string
+}
+
+type RequestChatwootWithoutBodyOptions = {
+  apiAccessToken: string
+  fetchChatwoot: ReturnType<typeof createChatwootFetch>
+  method: ChatwootWithoutBodyMethod
   requestUrl: URL
   unavailableMessage: string
 }
@@ -124,6 +133,32 @@ export async function requestChatwootJson({
       request,
       unavailableMessage,
     })
+  } finally {
+    request.clearTimeout()
+  }
+}
+
+export async function requestChatwootWithoutBody({
+  apiAccessToken,
+  fetchChatwoot,
+  method,
+  requestUrl,
+  unavailableMessage,
+}: RequestChatwootWithoutBodyOptions) {
+  const request = await fetchChatwoot(requestUrl, unavailableMessage, {
+    headers: {
+      Accept: 'application/json',
+      api_access_token: apiAccessToken,
+    },
+    method,
+  })
+
+  try {
+    if (!request.response.ok) {
+      throw new ChatwootClientRequestError(
+        `${unavailableMessage} Status: ${request.response.status}.`,
+      )
+    }
   } finally {
     request.clearTimeout()
   }
