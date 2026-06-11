@@ -59,6 +59,8 @@ operator tooling slice for either:
   `docs/operations/local-testing.md`
 - Local cross-tenant data:
   `docs/operations/local-cross-tenant-test-data.md`
+- Chatwoot account lifecycle and portal provisioning research:
+  `docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md`
 - Architecture boundaries:
   `docs/architecture/overview.md`
 - Tenant model and platform operations:
