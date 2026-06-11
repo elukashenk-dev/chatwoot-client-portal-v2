@@ -1,5 +1,5 @@
 import type { TenantsRepository } from './repository.js'
-import type { ChatwootClientConfig } from '../../integrations/chatwoot/client.js'
+import type { ChatwootPortalClientConfig } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
 import {
   decodeTenantSecretKey,
@@ -9,7 +9,7 @@ import {
 } from './secrets.js'
 
 export type TenantRequestContext = {
-  chatwoot: ChatwootClientConfig & {
+  chatwoot: ChatwootPortalClientConfig & {
     portalInboxIdentifier: string | null
     webhookSecret: string
   }

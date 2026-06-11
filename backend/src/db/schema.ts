@@ -11,7 +11,6 @@ import {
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
-
 const timestampWithTimezone = {
   mode: 'date',
   withTimezone: true,

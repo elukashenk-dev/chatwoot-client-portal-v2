@@ -4,6 +4,19 @@ import {
   ChatwootClientConfigurationError,
   ChatwootClientRequestError,
 } from './errors.js'
+import {
+  mapCreatedApiInbox,
+  mapPortalInboxDetails,
+  mapPortalInboxRouting,
+  parseInboxesResponse,
+  parseInboxMembersResponse,
+  PORTAL_CONVERSATION_CHANNEL_TYPE,
+} from './inboxClient.js'
+import type {
+  ChatwootCreatedApiInbox,
+  ChatwootInboxSummary,
+  ChatwootPortalInboxWebhook,
+} from './inboxClient.js'
 import { createChatwootMessageClient } from './messageClient.js'
 import { mapMessage } from './messagePayload.js'
 import { createPublicConversationEventsClient } from './publicConversationEvents.js'
@@ -26,7 +39,15 @@ export type {
   ChatwootMessagesPage,
 } from './messagePayload.js'
 export type { ChatwootContact } from './contactLookup.js'
-const PORTAL_CONVERSATION_CHANNEL_TYPE = 'Channel::Api'
+export type {
+  ChatwootCreatedApiInbox,
+  ChatwootInboxSummary,
+  ChatwootPortalInboxDetails,
+  ChatwootPortalInboxMember,
+  ChatwootPortalInboxRouting,
+  ChatwootPortalInboxWebhook,
+  ChatwootPortalInboxWorkingHour,
+} from './inboxClient.js'
 const CONTACT_CONVERSATIONS_PAGE_LIMIT = 20
 const ACCOUNT_CONVERSATIONS_LOOKUP_MAX_PAGES = 5
 
@@ -80,45 +101,6 @@ export type ChatwootConversation = {
   status: string
 }
 
-export type ChatwootPortalInboxRouting = {
-  channelType: string | null
-  id: number
-  inboxIdentifier: string | null
-  lockToSingleConversation: boolean
-  webhookSecret: string | null
-  webhookUrl: string | null
-}
-
-export type ChatwootPortalInboxWorkingHour = {
-  closeHour: number | null
-  closeMinutes: number | null
-  closedAllDay: boolean
-  dayOfWeek: number
-  openAllDay: boolean
-  openHour: number | null
-  openMinutes: number | null
-}
-
-export type ChatwootPortalInboxDetails = ChatwootPortalInboxRouting & {
-  outOfOfficeMessage: string | null
-  timezone: string | null
-  workingHours: ChatwootPortalInboxWorkingHour[]
-  workingHoursEnabled: boolean
-}
-
-export type ChatwootPortalInboxMember = {
-  availabilityStatus: string | null
-  id: number
-  name: string | null
-}
-
-export type ChatwootPortalInboxWebhook = {
-  id: number
-  inboxIdentifier: string | null
-  secret: string | null
-  url: string | null
-}
-
 export type ChatwootAttachmentUpload = {
   data: Uint8Array
   fileName: string
@@ -142,6 +124,10 @@ export type ChatwootClientConfig = {
   accountId: number
   apiAccessToken: string
   baseUrl: string
+  portalInboxId?: number | null | undefined
+}
+
+export type ChatwootPortalClientConfig = ChatwootClientConfig & {
   portalInboxId: number
 }
 
@@ -154,6 +140,16 @@ type CreateChatwootClientOptions = {
 type CreateChatwootClientFactoryOptions = {
   fetchFn?: typeof fetch
   requestTimeoutMs?: number | undefined
+}
+
+type ResolvedChatwootAccountConfig = {
+  accountId: number
+  apiAccessToken: string
+  baseUrl: string
+}
+
+type ResolvedChatwootPortalConfig = ResolvedChatwootAccountConfig & {
+  portalInboxId: number
 }
 
 function normalizeConfig(
@@ -187,18 +183,8 @@ function readString(value: unknown) {
   return typeof value === 'string' ? value : null
 }
 
-function readTrimmedString(value: unknown) {
-  const stringValue = readString(value)?.trim()
-
-  return stringValue || null
-}
-
 function readObject(value: unknown) {
   return isPlainObject(value) ? value : null
-}
-
-function readBoolean(value: unknown) {
-  return typeof value === 'boolean' ? value : null
 }
 
 function readAssigneeName(conversation: Record<string, unknown>) {
@@ -262,118 +248,6 @@ function parseAccountConversationsResponse(
     allCount,
     payload: rawPayload,
   }
-}
-
-function mapPortalInboxRouting(payload: unknown): ChatwootPortalInboxRouting {
-  if (!isPlainObject(payload)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot inbox lookup returned an unexpected response shape.',
-    )
-  }
-
-  const id = readInteger(payload.id)
-  const channelType = readString(payload.channel_type)
-  const lockToSingleConversation =
-    typeof payload.lock_to_single_conversation === 'boolean'
-      ? payload.lock_to_single_conversation
-      : null
-
-  if (id === null || lockToSingleConversation === null) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot inbox lookup returned an invalid inbox payload.',
-    )
-  }
-
-  return {
-    channelType,
-    id,
-    inboxIdentifier: readTrimmedString(payload.inbox_identifier),
-    lockToSingleConversation,
-    webhookSecret: readTrimmedString(payload.secret),
-    webhookUrl: readTrimmedString(payload.webhook_url),
-  }
-}
-
-function mapPortalInboxWorkingHour(
-  payload: unknown,
-): ChatwootPortalInboxWorkingHour | null {
-  if (!isPlainObject(payload)) {
-    return null
-  }
-
-  const dayOfWeek = readInteger(payload.day_of_week)
-  const closedAllDay = readBoolean(payload.closed_all_day)
-  const openAllDay = readBoolean(payload.open_all_day)
-
-  if (dayOfWeek === null || closedAllDay === null || openAllDay === null) {
-    return null
-  }
-
-  return {
-    closeHour: readInteger(payload.close_hour),
-    closeMinutes: readInteger(payload.close_minutes),
-    closedAllDay,
-    dayOfWeek,
-    openAllDay,
-    openHour: readInteger(payload.open_hour),
-    openMinutes: readInteger(payload.open_minutes),
-  }
-}
-
-function mapPortalInboxDetails(payload: unknown): ChatwootPortalInboxDetails {
-  const routing = mapPortalInboxRouting(payload)
-
-  if (!isPlainObject(payload)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot inbox lookup returned an unexpected response shape.',
-    )
-  }
-
-  const workingHoursEnabled =
-    typeof payload.working_hours_enabled === 'boolean'
-      ? payload.working_hours_enabled
-      : false
-  const workingHours = Array.isArray(payload.working_hours)
-    ? payload.working_hours
-        .map(mapPortalInboxWorkingHour)
-        .filter((row): row is ChatwootPortalInboxWorkingHour => row !== null)
-    : []
-
-  return {
-    ...routing,
-    outOfOfficeMessage: readTrimmedString(payload.out_of_office_message),
-    timezone: readTrimmedString(payload.timezone),
-    workingHours,
-    workingHoursEnabled,
-  }
-}
-
-function parseInboxMembersResponse(payload: unknown) {
-  const parsedPayload = readObject(payload)
-  const rawMembers = parsedPayload?.payload
-
-  if (!Array.isArray(rawMembers)) {
-    throw new ChatwootClientRequestError(
-      'Chatwoot inbox members lookup returned an unexpected response shape.',
-    )
-  }
-
-  return rawMembers
-    .map((rawMember): ChatwootPortalInboxMember | null => {
-      const member = readObject(rawMember)
-      const id = readInteger(member?.id)
-
-      if (id === null) {
-        return null
-      }
-
-      return {
-        availabilityStatus: readTrimmedString(member?.availability_status),
-        id,
-        name: readTrimmedString(member?.name),
-      }
-    })
-    .filter((member): member is ChatwootPortalInboxMember => member !== null)
 }
 
 function mapConversation(payload: unknown): ChatwootConversation {
@@ -555,13 +429,8 @@ export function createChatwootClient({
   )
   const fetchChatwoot = createChatwootFetch({ fetchFn, requestTimeoutMs })
 
-  function assertConfigured(): {
-    accountId: number
-    apiAccessToken: string
-    baseUrl: string
-    portalInboxId: number
-  } {
-    if (!config || !config.portalInboxId) {
+  function assertAccountConfigured(): ResolvedChatwootAccountConfig {
+    if (!config) {
       throw new ChatwootClientConfigurationError()
     }
 
@@ -569,6 +438,18 @@ export function createChatwootClient({
       accountId: config.accountId,
       apiAccessToken: config.apiAccessToken,
       baseUrl: config.baseUrl,
+    }
+  }
+
+  function assertConfigured(): ResolvedChatwootPortalConfig {
+    const accountConfig = assertAccountConfigured()
+
+    if (!config?.portalInboxId) {
+      throw new ChatwootClientConfigurationError()
+    }
+
+    return {
+      ...accountConfig,
       portalInboxId: config.portalInboxId,
     }
   }
@@ -594,7 +475,7 @@ export function createChatwootClient({
       method?: 'GET' | 'PATCH' | 'POST'
     } = {},
   ): Promise<unknown> {
-    const resolvedConfig = assertConfigured()
+    const resolvedConfig = assertAccountConfigured()
     return requestChatwootJson({
       apiAccessToken: resolvedConfig.apiAccessToken,
       body,
@@ -741,6 +622,18 @@ export function createChatwootClient({
     }
 
     return normalizedSubscriptions
+  }
+
+  function normalizeInboxName(value: string) {
+    const normalizedValue = value.trim()
+
+    if (!normalizedValue) {
+      throw new ChatwootClientRequestError(
+        'Chatwoot API inbox provisioning requires an inbox name.',
+      )
+    }
+
+    return normalizedValue
   }
 
   async function saveAccountWebhook({
@@ -1008,6 +901,60 @@ export function createChatwootClient({
   })
 
   return {
+    async createPortalApiInbox({
+      name,
+    }: {
+      name: string
+    }): Promise<ChatwootCreatedApiInbox> {
+      const resolvedConfig = assertAccountConfigured()
+      const normalizedName = normalizeInboxName(name)
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/inboxes`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot API inbox creation is unavailable.',
+        {
+          body: {
+            channel: {
+              type: 'api',
+            },
+            lock_to_single_conversation: true,
+            name: normalizedName,
+          },
+          method: 'POST',
+        },
+      )
+
+      return mapCreatedApiInbox(payload)
+    },
+
+    async findPortalApiInboxByName({
+      name,
+    }: {
+      name: string
+    }): Promise<ChatwootInboxSummary | null> {
+      const resolvedConfig = assertAccountConfigured()
+      const normalizedName = normalizeInboxName(name)
+      const requestUrl = new URL(
+        `/api/v1/accounts/${resolvedConfig.accountId}/inboxes`,
+        resolvedConfig.baseUrl,
+      )
+      const payload = await requestJson(
+        requestUrl,
+        'Chatwoot inboxes lookup is unavailable.',
+      )
+
+      return (
+        parseInboxesResponse(payload).find(
+          (inbox) =>
+            inbox.channelType === PORTAL_CONVERSATION_CHANNEL_TYPE &&
+            inbox.name === normalizedName,
+        ) ?? null
+      )
+    },
+
     async listAccountWebhooks() {
       const resolvedConfig = assertConfigured()
       const requestUrl = new URL(
