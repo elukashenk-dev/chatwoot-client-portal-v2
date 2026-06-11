@@ -97,6 +97,11 @@ Completed gates:
   copy and portal-owned image asset URLs are applied to customer auth, chat,
   chat-info and empty chat runtime surfaces; tenant PWA manifest colors now use
   tenant branding settings without exposing object-storage authority.
+- `MT-9H` final branding QA/docs/deploy readiness is closed for production
+  push readiness: backend/frontend unit suites, branding/PWA Playwright gates,
+  production build/lint, production object-storage compose/init smoke and local
+  runtime upload/readback smoke passed. Real-device installed PWA smoke remains
+  a production post-deploy check.
 
 Branding slice map:
 
@@ -114,21 +119,27 @@ Branding slice map:
 - `MT-9G` - apply branding to customer runtime: auth backgrounds/images,
   chat background, chat header background, logo/brand mark and chat info pages
   using real portal components. Closed.
-- `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache manual
-  checks, production runbook updates and final documentation cleanup. Current
-  next slice.
+- `MT-9H` - final branding QA/docs/deploy readiness: browser/PWA/cache
+  readiness checks, production runbook updates and final documentation cleanup.
+  Closed for production push readiness.
   Admin preview parity checkpoint inside `MT-9H` is closed: `/admin/branding`
   uses read-only real portal preview screens for `Вход`, `Чат` and `Инфо`
   without customer runtime API calls.
   Portal object-storage deploy readiness is part of `MT-9H`: production
   branding uploads must work in the default one-VM stack with no external
   storage provisioning for B2B clients.
+  Final readiness checkpoint is closed by automated backend/frontend/e2e
+  checks, production object-storage compose/init smoke and local runtime
+  branding asset upload/readback/delete smoke. Real-device installed PWA smoke
+  remains a production post-deploy check.
 
-Remaining scope after `MT-9G`:
+Remaining scope after `MT-9`:
 
-- final branding QA, docs and deploy readiness;
-- complete browser/PWA/cache manual checks and record follow-ups only for
-  remaining real-device or deploy-readiness gaps;
+- no remaining branding implementation scope before production push;
+- production push/deploy still requires explicit user approval because remote
+  publishing was intentionally deferred until the full branding scope closed;
+- run production post-deploy smoke, including installed PWA checks where
+  available, after the approved deploy;
 - archived branch `feature/phase-10-portal-branding-admin` may be used only as
   an idea archive, not merged as-is.
 

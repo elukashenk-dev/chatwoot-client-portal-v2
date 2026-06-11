@@ -134,6 +134,11 @@ execution-plan детали здесь не хранятся.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
+- `MT-9H` final branding QA/docs/deploy readiness is closed for production
+  push readiness: automated backend/frontend/browser gates, production
+  build/lint, production object-storage compose/init smoke and local runtime
+  asset upload/readback smoke passed. Real-device installed PWA smoke remains a
+  production post-deploy check.
 - Agent execution governance now uses risk-based efficiency rules: full review
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
@@ -141,5 +146,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Continue `MT-9H`: final browser/PWA/cache manual QA and production deploy
-  readiness verification before production push.
+- After user approval, push the reviewed local `main` branding baseline and
+  deploy it to production, then run production post-deploy smoke including
+  installed PWA checks where available.
