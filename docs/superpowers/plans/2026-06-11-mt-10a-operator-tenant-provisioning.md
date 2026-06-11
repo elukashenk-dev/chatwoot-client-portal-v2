@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a reliable operator-owned tenant lifecycle flow that creates a Chatwoot account, service users, API Channel inbox, portal tenant, safe deprovision path and drift reconciliation without requiring B2B clients to configure Chatwoot internals.
+**Goal:** Build a reliable operator-owned tenant lifecycle flow that creates a Chatwoot account, service users, API Channel inbox, portal tenant, safe deprovision path and drift reconciliation without requiring B2B clients to configure Chatwoot internals or own a domain.
 
-**Architecture:** Provisioning is backend/operator-only. The browser never receives Chatwoot authority. A new provisioning run table records external Chatwoot IDs before the final `portal_tenants` row is activated, so reruns can resume safely after partial failures. Physical tenant deletion is not part of this plan; deletion means suspend/archive in portal plus optional Chatwoot Platform API delete.
+**Architecture:** Provisioning is backend/operator-only. The browser never receives Chatwoot authority. Tenant domain input supports either a client-owned custom domain or a provider-owned subdomain built from `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`. A new provisioning run table records external Chatwoot IDs before the final `portal_tenants` row is activated, so reruns can resume safely after partial failures. Physical tenant deletion is not part of this plan; deletion means suspend/archive in portal plus optional Chatwoot Platform API delete.
 
 **Tech Stack:** Node 24, TypeScript, Fastify backend modules, Drizzle schema/migrations in `backend/drizzle`, Vitest, PGlite test DB, Chatwoot CE 4.13 Platform API and Account API.
 
@@ -35,6 +35,40 @@ Read these before implementation:
 - Do not physically delete `portal_tenants` rows in this plan.
 - Do not store generated service-user passwords after Chatwoot accepts them.
 - Do not log plaintext Chatwoot tokens, webhook secrets or generated passwords.
+- Do not hard-code the current provider/company domain in code. Provider-owned
+  tenant domains must come from `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`.
+
+## Domain Model
+
+Provisioning supports two domain modes:
+
+1. Client-owned custom domain:
+
+   ```text
+   primaryDomain=lk.client.example
+   publicBaseUrl=https://lk.client.example
+   ```
+
+   The B2B client creates DNS for `lk.<client-domain>` to the provider reverse
+   proxy.
+
+2. Provider-owned subdomain:
+
+   ```text
+   providerSubdomain=buhfirma
+   PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX=portal.example.com
+   ```
+
+   The operator tooling resolves:
+
+   ```text
+   primaryDomain=buhfirma.portal.example.com
+   publicBaseUrl=https://buhfirma.portal.example.com
+   ```
+
+Provider-owned domains are controlled by our deployment DNS/certificate setup.
+The plan must use neutral examples like `portal.example.com`; the real SaaS
+domain is deploy configuration.
 
 ## Lifecycle Model
 
@@ -112,6 +146,11 @@ Modify:
 
   Add tests that prove:
   - a run is created by normalized `slug`;
+  - a run stores `domainMode='custom_domain'` with no provider subdomain fields
+    for client-owned domains;
+  - a run stores `domainMode='provider_subdomain'`,
+    `providerSubdomain` and `providerTenantDomainSuffix` for provider-owned
+    subdomains;
   - rerun by same `slug` returns the same run;
   - `chatwootAccountId`, service user IDs and inbox ID can be stored one step at a time;
   - safe reports never include plaintext secrets;
@@ -146,8 +185,11 @@ Modify:
     {
       id: serial('id').primaryKey(),
       slug: text('slug').notNull(),
+      domainMode: text('domain_mode').notNull(),
       displayName: text('display_name').notNull(),
       primaryDomain: text('primary_domain').notNull(),
+      providerSubdomain: text('provider_subdomain'),
+      providerTenantDomainSuffix: text('provider_tenant_domain_suffix'),
       publicBaseUrl: text('public_base_url').notNull(),
       chatwootBaseUrl: text('chatwoot_base_url').notNull(),
       clientAdminEmail: text('client_admin_email').notNull(),
@@ -365,12 +407,14 @@ Modify:
 
   ```ts
   CHATWOOT_PLATFORM_API_ACCESS_TOKEN: optionalNonEmptyString,
+  PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX: optionalNonEmptyString,
   PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN: optionalNonEmptyString,
   ```
 
   Add tests that:
-  - both are absent by default;
-  - both parse when set;
+  - all three are absent by default;
+  - all three parse when set;
+  - `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is a host suffix, not a URL;
   - production does not require them unless provisioning scripts are used.
 
 - [ ] **Step 4: Implement platform client**
@@ -548,15 +592,23 @@ Modify:
 
   Cover:
   - `slug` normalization;
-  - `primaryDomain` rejects protocol/path/port;
-  - `publicBaseUrl` host must match `primaryDomain`;
+  - custom-domain mode requires `primaryDomain` and `publicBaseUrl`;
+  - provider-subdomain mode requires `providerSubdomain` and
+    `providerTenantDomainSuffix`;
+  - custom-domain `primaryDomain` rejects protocol/path/port;
+  - custom-domain `publicBaseUrl` host must match `primaryDomain`;
+  - provider-subdomain value rejects uppercase, dots, protocol, slash, spaces
+    and reserved labels `admin`, `api`, `www`, `mail`, `chat`, `support`;
+  - provider-domain suffix rejects protocol/path/port;
+  - provider-subdomain mode resolves `buhfirma.portal.example.com` and
+    `https://buhfirma.portal.example.com`;
   - `chatwootBaseUrl` must be http/https URL;
   - service email domain must be a domain, not URL;
   - generated service emails are deterministic:
 
   ```text
-  portal-runtime+buhfirma@portal-service.provgroup.ru
-  portal-admin-verify+buhfirma@portal-service.provgroup.ru
+  portal-runtime+buhfirma@portal-service.example.com
+  portal-admin-verify+buhfirma@portal-service.example.com
   ```
 
 - [ ] **Step 2: Implement input normalization**
@@ -564,18 +616,38 @@ Modify:
   Export:
 
   ```ts
-  export type TenantProvisioningInput = {
+  export type TenantProvisioningBaseInput = {
     chatwootBaseUrl: string
     clientAdminEmail: string
     clientAdminName: string
     displayName: string
-    primaryDomain: string
-    publicBaseUrl: string
     serviceEmailDomain: string
     slug: string
   }
 
-  export type NormalizedTenantProvisioningInput = TenantProvisioningInput
+  export type TenantProvisioningDomainInput =
+    | {
+        mode: 'custom_domain'
+        primaryDomain: string
+        publicBaseUrl: string
+      }
+    | {
+        mode: 'provider_subdomain'
+        providerSubdomain: string
+        providerTenantDomainSuffix: string
+      }
+
+  export type TenantProvisioningInput = TenantProvisioningBaseInput &
+    TenantProvisioningDomainInput
+
+  export type NormalizedTenantProvisioningInput =
+    TenantProvisioningBaseInput & {
+      domainMode: 'custom_domain' | 'provider_subdomain'
+      primaryDomain: string
+      providerSubdomain: string | null
+      providerTenantDomainSuffix: string | null
+      publicBaseUrl: string
+    }
 
   export function normalizeTenantProvisioningInput(
     input: TenantProvisioningInput,
@@ -598,6 +670,8 @@ Modify:
 
   Cover:
   - happy path creates all Chatwoot resources and active portal tenant;
+  - provider-subdomain path stores resolved `primaryDomain` and
+    `publicBaseUrl`, not only the suffix;
   - safe report contains IDs and statuses but no tokens/passwords/secrets;
   - existing completed tenant returns `action='already_exists'`;
   - rerun after account creation reuses `chatwootAccountId` from provisioning run;
@@ -652,7 +726,9 @@ Modify:
   Required orchestration order:
   1. Normalize input.
   2. If a portal tenant already exists by slug or primary domain, return `already_exists` only if it matches the requested domain and Chatwoot base URL; otherwise throw a conflict error.
-  3. Create or resume provisioning run by slug.
+  3. Create or resume provisioning run by slug with normalized `domainMode`,
+     `primaryDomain`, `publicBaseUrl`, `providerSubdomain` and
+     `providerTenantDomainSuffix`.
   4. Find existing Platform API account with `custom_attributes.portal_tenant_slug === slug`; create it if absent.
   5. Create/link real client admin user.
   6. Create/link runtime service user.
@@ -710,7 +786,7 @@ Modify:
 
 - [ ] **Step 1: Write CLI core tests**
 
-  Cover parsing:
+  Cover custom-domain parsing:
 
   ```bash
   --slug=buhfirma
@@ -722,13 +798,39 @@ Modify:
   --client-admin-name="Иван Админ"
   ```
 
-  Required env:
+  Cover provider-subdomain parsing:
+
+  ```bash
+  --slug=buhfirma
+  --display-name=Бухфирма
+  --provider-subdomain=buhfirma
+  --chatwoot-base-url=https://chat.example.ru
+  --client-admin-email=admin@buhfirma.example
+  --client-admin-name="Иван Админ"
+  ```
+
+  Cover rejected combinations:
+  - `--provider-subdomain` together with `--primary-domain`;
+  - `--provider-subdomain` together with `--public-base-url`;
+  - `--primary-domain` without `--public-base-url`;
+  - `--public-base-url` without `--primary-domain`;
+  - provider-subdomain mode without `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`;
+  - provider-subdomain value `admin`, `api`, `www`, `mail`, `chat` or
+    `support`.
+
+  Required env for every run:
 
   ```text
   CHATWOOT_PLATFORM_API_ACCESS_TOKEN
   PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN
   PORTAL_TENANT_SECRET_KEY
   DATABASE_URL
+  ```
+
+  Additional env required only for `--provider-subdomain`:
+
+  ```text
+  PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX
   ```
 
   Tests must assert missing required args/env fail with clear messages.
@@ -738,10 +840,16 @@ Modify:
   `create-tenant-core.ts` exports:
 
   ```ts
-  export type CreateTenantCliArgs = Omit<
-    TenantProvisioningInput,
-    'serviceEmailDomain'
-  >
+  export type CreateTenantCliArgs = {
+    chatwootBaseUrl: string
+    clientAdminEmail: string
+    clientAdminName: string
+    displayName: string
+    primaryDomain?: string
+    providerSubdomain?: string
+    publicBaseUrl?: string
+    slug: string
+  }
 
   export function parseCreateTenantArgs(argv: string[]): CreateTenantCliArgs
 
@@ -751,8 +859,11 @@ Modify:
   ```
 
   `create-tenant.ts` must combine `CreateTenantCliArgs` with
-  `PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN` from env before calling
-  `provisionTenant`. Do not accept passwords through CLI args.
+  `PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN` from env. If
+  `providerSubdomain` is present, it must also inject
+  `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` and call `provisionTenant` with
+  `mode='provider_subdomain'`. Otherwise it must call `provisionTenant` with
+  `mode='custom_domain'`. Do not accept passwords through CLI args.
 
 - [ ] **Step 3: Implement executable script**
 
@@ -987,7 +1098,7 @@ Modify:
 
 - [ ] **Step 1: Update MT-10 runbook**
 
-  Add operator commands:
+  Add custom-domain operator command:
 
   ```bash
   pnpm --dir backend tenant:create -- \
@@ -998,7 +1109,23 @@ Modify:
     --chatwoot-base-url=https://chat.example.ru \
     --client-admin-email=admin@buhfirma.ru \
     --client-admin-name="Иван Админ"
+  ```
 
+  Add provider-subdomain operator command:
+
+  ```bash
+  pnpm --dir backend tenant:create -- \
+    --slug=buhfirma \
+    --display-name="Бухфирма" \
+    --provider-subdomain=buhfirma \
+    --chatwoot-base-url=https://chat.example.ru \
+    --client-admin-email=admin@buhfirma.example \
+    --client-admin-name="Иван Админ"
+  ```
+
+  Add lifecycle commands:
+
+  ```bash
   pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
 
   pnpm --dir backend tenant:deprovision -- \
@@ -1010,9 +1137,14 @@ Modify:
   Explain DNS responsibility:
 
   ```text
-  B2B client only creates DNS record lk.<client-domain> to the portal reverse proxy.
-  Provider/operator runs tenant provisioning.
+  Custom domain: B2B client creates DNS record lk.<client-domain> to the portal reverse proxy.
+  Provider subdomain: provider owns DNS/certificates for <tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>.
+  In both cases provider/operator runs tenant provisioning.
   ```
+
+  Add note that `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` is a deploy config value,
+  not a hard-coded brand name. Documentation examples must use neutral
+  `portal.example.com`.
 
 - [ ] **Step 2: Update research note status**
 
@@ -1084,7 +1216,7 @@ Modify:
 
 - [ ] **Step 3: Manual local smoke with real Chatwoot**
 
-  With local Chatwoot and portal DB running:
+  With local Chatwoot and portal DB running, first test custom-domain mode:
 
   ```bash
   pnpm --dir backend tenant:create -- \
@@ -1093,16 +1225,34 @@ Modify:
     --primary-domain=buhfirma.127.0.0.1.nip.io \
     --public-base-url=http://buhfirma.127.0.0.1.nip.io:5173 \
     --chatwoot-base-url=http://127.0.0.1:3000 \
-    --client-admin-email=cbr+smoke@provgroup.com \
+    --client-admin-email=cbr+smoke@example.com \
     --client-admin-name="Smoke Admin"
+  ```
+
+  Then test provider-subdomain mode with a neutral local suffix configured in
+  env, for example
+  `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX=portal.127.0.0.1.nip.io`:
+
+  ```bash
+  pnpm --dir backend tenant:create -- \
+    --slug=buhfirma-provider-smoke \
+    --display-name="Бухфирма Provider Smoke" \
+    --provider-subdomain=buhfirma-provider-smoke \
+    --chatwoot-base-url=http://127.0.0.1:3000 \
+    --client-admin-email=cbr+provider-smoke@example.com \
+    --client-admin-name="Provider Smoke Admin"
   ```
 
   Verify:
   - JSON report has `action=created` or `action=already_exists`;
   - no plaintext tokens/passwords/secrets are printed;
   - tenant appears in portal DB with status `active`;
+  - provider-subdomain tenant resolves to
+    `buhfirma-provider-smoke.portal.127.0.0.1.nip.io`;
   - Chatwoot has account, service users and API Channel inbox;
   - `pnpm --dir backend tenant:chatwoot:verify -- --tenant=buhfirma-smoke` passes.
+  - `pnpm --dir backend tenant:chatwoot:verify -- --tenant=buhfirma-provider-smoke`
+    passes.
 
 - [ ] **Step 4: Review**
 
@@ -1130,7 +1280,12 @@ Modify:
 ## Acceptance Criteria
 
 - Operator can create a tenant without manual SQL.
-- B2B client only needs DNS for `lk.<client-domain>`; the client does not configure Chatwoot, object storage, inboxes, webhooks or tokens.
+- B2B client with its own domain only needs DNS for `lk.<client-domain>`; the client does not configure Chatwoot, object storage, inboxes, webhooks or tokens.
+- B2B client without its own domain can be created on
+  `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>` with no client-side DNS
+  work.
+- Provider-owned domain suffix is deploy config, not a hard-coded current
+  provider/company name.
 - Chatwoot account is created through Platform API.
 - Client admin user is created or reused and linked to the account.
 - Portal runtime service user and admin-verification service user are separate.
@@ -1148,6 +1303,8 @@ Modify:
 - Customer self-service signup directly from Chatwoot login page.
 - Browser/admin UI for tenant creation.
 - Automatic DNS or certificate management.
+- Migrating an existing tenant from provider-owned subdomain to client-owned
+  custom domain.
 - Physical purge of portal-owned tenant data.
 - Billing, tariff setup or payment integration.
 - Patching Chatwoot to emit `account.deleted`.

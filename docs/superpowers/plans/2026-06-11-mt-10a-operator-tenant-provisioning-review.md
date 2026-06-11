@@ -15,6 +15,8 @@ Reviewed plan:
 - безопасность Platform API token и tenant secrets;
 - idempotency после частичных Chatwoot failures;
 - safe deletion model с учетом `onDelete: restrict` в `portal_tenants`;
+- поддержка клиентов без собственного домена через provider-owned subdomain;
+- отсутствие жесткой привязки к текущему provider/company domain;
 - пригодность плана для пошаговой реализации через subagent-driven или inline
   execution;
 - наличие тестов на каждый рискованный backend boundary.
@@ -86,6 +88,40 @@ Resolution:
 
 Status: closed in plan.
 
+### F5. Provider-Owned Subdomains Needed To Be First-Class Scope
+
+Severity: Important
+
+After the initial review, the product scope added clients without their own
+domains. If this stayed only as a runbook note, implementation could still
+require `--primary-domain` and force every client to own DNS.
+
+Resolution:
+
+- added a Domain Model section with `custom_domain` and `provider_subdomain`
+  modes;
+- added `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` as deploy config;
+- added provider-subdomain input validation, CLI parsing and local smoke steps;
+- added acceptance criteria for clients without their own domain.
+
+Status: closed in plan.
+
+### F6. Current Provider Brand Must Not Leak Into Code Logic
+
+Severity: Important
+
+Provider-owned subdomains could accidentally hard-code the current company name
+or current production domain. That would make a future neutral SaaS domain
+change require code changes.
+
+Resolution:
+
+- plan now requires neutral examples such as `portal.example.com`;
+- code must use `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`;
+- real SaaS domain is treated as deployment configuration only.
+
+Status: closed in plan.
+
 ## Remaining Intentional Tradeoffs
 
 - The first implementation is CLI/operator-only, not an admin UI.
@@ -94,8 +130,11 @@ Status: closed in plan.
   Reason: current tenant references use `onDelete: restrict`; archive/suspend is
   safer and matches retention needs.
 - DNS and certificate automation are excluded.
-  Reason: client only needs DNS; provider-side certificate automation should be a
-  separate operations slice.
+  Reason: custom-domain clients only need DNS, and provider-subdomain DNS/cert
+  automation should be a separate operations slice.
+- Migration from provider-owned subdomain to client-owned custom domain is
+  excluded.
+  Reason: this needs a focused domain-change and certificate cutover flow.
 - Public Chatwoot signup remains excluded.
   Reason: it does not provide domain, API Channel inbox, webhook secret or
   trusted provisioning authority.
