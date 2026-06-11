@@ -20,16 +20,16 @@ import { AdminBrandingDesktopLayout } from './AdminBrandingDesktopLayout'
 
 const brandingAssetMessages = {
   auth_background_image: {
-    deleted: 'Фон auth-экрана удален.',
-    uploaded: 'Фон auth-экрана загружен.',
+    deleted: 'Общий фон экрана входа удален.',
+    uploaded: 'Общий фон экрана входа загружен.',
   },
   auth_footer_image: {
-    deleted: 'Нижнее изображение auth-экрана удалено.',
-    uploaded: 'Нижнее изображение auth-экрана загружено.',
+    deleted: 'Нижнее изображение экрана входа удалено.',
+    uploaded: 'Нижнее изображение экрана входа загружено.',
   },
   auth_header_image: {
-    deleted: 'Верхнее изображение auth-экрана удалено.',
-    uploaded: 'Верхнее изображение auth-экрана загружено.',
+    deleted: 'Верхнее изображение экрана входа удалено.',
+    uploaded: 'Верхнее изображение экрана входа загружено.',
   },
   chat_background_image: {
     deleted: 'Фон чата удален.',
@@ -44,8 +44,8 @@ const brandingAssetMessages = {
     uploaded: 'Логотип загружен.',
   },
   pwa_icon: {
-    deleted: 'PWA-иконка удалена.',
-    uploaded: 'PWA-иконка загружена.',
+    deleted: 'Иконка приложения удалена.',
+    uploaded: 'Иконка приложения загружена.',
   },
 } satisfies Record<
   BrandingAssetKind,
@@ -215,7 +215,7 @@ export function AdminBrandingPage() {
             Админ-консоль доступна с широкого экрана
           </h1>
           <p className="text-sm leading-6 text-slate-600">
-            Настройки и предпросмотр требуют desktop ширину.
+            Настройки и предпросмотр доступны на широком экране.
           </p>
           <button
             className="mx-auto inline-flex items-center gap-2 rounded-[0.6rem] bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200"
@@ -246,7 +246,7 @@ export function AdminBrandingPage() {
             Настройки брендинга
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Цвета и тексты применяются к текущему tenant после сохранения.
+            Изменения применятся к этому клиентскому порталу после сохранения.
           </p>
         </div>
 

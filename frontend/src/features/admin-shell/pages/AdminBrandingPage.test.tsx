@@ -139,7 +139,7 @@ describe('AdminBrandingPage', () => {
     expect(await screen.findByDisplayValue('Бухфирма')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Команда Бухфирма')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Копия портала' }),
+      screen.getByRole('heading', { name: 'Предпросмотр портала' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Вход' })).toHaveAttribute(
       'aria-selected',
@@ -262,10 +262,10 @@ describe('AdminBrandingPage', () => {
     renderAdminBrandingPage()
 
     const authTextInput = await screen.findByLabelText(
-      'Цвет текста auth-экрана',
+      'Основной текст на входе',
     )
     const authTextPicker = screen.getByLabelText(
-      'Выбрать цвет текста auth-экрана',
+      'Выбрать основной текст на входе',
     )
 
     expect(authTextInput).toHaveValue('#0f172a')
@@ -304,11 +304,11 @@ describe('AdminBrandingPage', () => {
     fireEvent.input(screen.getByLabelText('Выбрать цвет текста чата'), {
       target: { value: '#778899' },
     })
-    fireEvent.input(screen.getByLabelText('Выбрать фон области входа'), {
+    fireEvent.input(screen.getByLabelText('Выбрать фон формы входа'), {
       target: { value: '#eef2ff' },
     })
     fireEvent.change(
-      screen.getByLabelText('Плотность области входа, значение'),
+      screen.getByLabelText('Непрозрачность формы входа, значение'),
       {
         target: { value: '72' },
       },
@@ -316,18 +316,18 @@ describe('AdminBrandingPage', () => {
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#445566')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#778899')
-    expect(screen.getByLabelText('Фон области входа')).toHaveValue('#eef2ff')
+    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#eef2ff')
     expect(
-      screen.getByLabelText('Плотность области входа, значение'),
+      screen.getByLabelText('Непрозрачность формы входа, значение'),
     ).toHaveValue(72)
 
     await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
-    expect(screen.getByLabelText('Фон auth-страницы')).toHaveValue('#f3f7fc')
-    expect(screen.getByLabelText('Фон области входа')).toHaveValue('#ffffff')
+    expect(screen.getByLabelText('Фон страницы входа')).toHaveValue('#f3f7fc')
+    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#ffffff')
     expect(
-      screen.getByLabelText('Плотность области входа, значение'),
+      screen.getByLabelText('Непрозрачность формы входа, значение'),
     ).toHaveValue(100)
     expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#ffffff')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')

@@ -176,7 +176,7 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect((await initialPublicBrandingResponse).status()).toBe(200)
 
   await expect(
-    page.getByRole('heading', { name: 'Копия портала' }),
+    page.getByRole('heading', { name: 'Предпросмотр портала' }),
   ).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Вход' })).toHaveAttribute(
     'aria-selected',
@@ -254,7 +254,7 @@ test('admin can collapse sticky navigation and resize the portal preview width',
   await page.goto('/admin/branding')
 
   await expect(
-    page.getByRole('heading', { name: 'Копия портала' }),
+    page.getByRole('heading', { name: 'Предпросмотр портала' }),
   ).toBeVisible()
 
   const sidebar = page.locator('[data-admin-branding-sidebar]')
@@ -426,7 +426,7 @@ for (const width of [1024, 1280, 1440] as const) {
     await page.goto('/admin/branding')
 
     await expect(
-      page.getByRole('heading', { name: 'Копия портала' }),
+      page.getByRole('heading', { name: 'Предпросмотр портала' }),
     ).toBeVisible()
     await expect(
       page.getByRole('tablist', {

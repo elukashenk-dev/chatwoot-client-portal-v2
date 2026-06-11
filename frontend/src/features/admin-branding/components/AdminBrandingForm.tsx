@@ -59,15 +59,15 @@ const colorFieldGroups = [
   },
   {
     fields: [
-      { key: 'authBackground', label: 'Фон auth-страницы' },
-      { key: 'authContentSurface', label: 'Фон области входа' },
-      { key: 'authText', label: 'Цвет текста auth-экрана' },
+      { key: 'authBackground', label: 'Фон страницы входа' },
+      { key: 'authContentSurface', label: 'Фон формы входа' },
+      { key: 'authText', label: 'Основной текст на входе' },
       {
         key: 'authMutedText',
-        label: 'Цвет вторичного текста auth-экрана',
+        label: 'Подсказки на входе',
       },
     ],
-    title: 'Auth-экран',
+    title: 'Экран входа',
   },
   {
     fields: [
@@ -242,6 +242,9 @@ function OpacityField({
           value={value}
         />
       </span>
+      <span className="mt-1 block text-xs leading-5 text-slate-500">
+        100 - плотный фон, 0 - прозрачный.
+      </span>
     </label>
   )
 }
@@ -312,7 +315,7 @@ export function AdminBrandingForm({
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Основное</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Название портала и подпись поддержки.
+            Как портал и команда поддержки называются для клиента.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -327,7 +330,7 @@ export function AdminBrandingForm({
           />
           <TextField
             disabled={isSaving}
-            label="Подпись поддержки"
+            label="Название команды поддержки"
             name="supportLabel"
             onChange={(value) => {
               onChange({ ...draft, supportLabel: value })
@@ -345,7 +348,7 @@ export function AdminBrandingForm({
           <div>
             <h3 className="text-lg font-semibold">Цвета</h3>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Основные цвета auth-экранов, чата и шапки чата.
+              Цвета страницы входа, чата и шапки чата.
             </p>
           </div>
           <button
@@ -377,10 +380,10 @@ export function AdminBrandingForm({
                   />
                 ))}
               </div>
-              {group.title === 'Auth-экран' ? (
+              {group.title === 'Экран входа' ? (
                 <OpacityField
                   disabled={isSaving}
-                  label="Плотность области входа"
+                  label="Непрозрачность формы входа"
                   name="colors.authContentSurfaceOpacity"
                   onChange={(value) => {
                     updateColor('authContentSurfaceOpacity', value)
@@ -400,7 +403,7 @@ export function AdminBrandingForm({
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Изображения</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Логотип, PWA-иконка и фоны для auth-экранов и чата.
+            Логотип, иконка приложения и фоны для входа и чата.
           </p>
         </div>
         <BrandingAssetControls
@@ -418,9 +421,9 @@ export function AdminBrandingForm({
         id="auth"
       >
         <div className="mb-4">
-          <h3 className="text-lg font-semibold">Auth-экран</h3>
+          <h3 className="text-lg font-semibold">Экран входа</h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Текст входа и регистрации.
+            Заголовок и пояснение на странице входа.
           </p>
         </div>
         <div className="grid gap-4">

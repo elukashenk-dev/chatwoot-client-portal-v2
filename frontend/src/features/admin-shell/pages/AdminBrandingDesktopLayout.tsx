@@ -25,7 +25,7 @@ const brandingSections = [
   },
   {
     id: 'auth',
-    title: 'Auth-экран',
+    title: 'Экран входа',
   },
 ]
 

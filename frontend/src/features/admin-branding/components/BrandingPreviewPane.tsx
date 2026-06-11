@@ -12,7 +12,7 @@ export function BrandingPreviewPane({ draft }: BrandingPreviewPaneProps) {
         <p className="text-xs font-semibold uppercase tracking-normal text-brand-700">
           Предпросмотр
         </p>
-        <h2 className="mt-2 text-xl font-semibold">Копия портала</h2>
+        <h2 className="mt-2 text-xl font-semibold">Предпросмотр портала</h2>
       </div>
 
       <PortalPreviewFrame draft={draft} />

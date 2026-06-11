@@ -40,11 +40,17 @@ describe('BrandingAssetControls', () => {
       },
     })
 
-    expect(screen.getByLabelText('Заменить логотип')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Удалить логотип' }),
-    ).toBeInTheDocument()
-    expect(screen.getByLabelText('Загрузить PWA-иконку')).toBeInTheDocument()
+    const replaceLogoInput = screen.getByLabelText('Заменить логотип')
+    const deleteLogoButton = screen.getByRole('button', {
+      name: 'Удалить логотип',
+    })
+    const uploadPwaIconInput = screen.getByLabelText(
+      'Загрузить иконку приложения',
+    )
+
+    expect(replaceLogoInput.closest('label')).toHaveTextContent(/^Заменить$/)
+    expect(deleteLogoButton).toHaveTextContent(/^Удалить$/)
+    expect(uploadPwaIconInput.closest('label')).toHaveTextContent(/^Загрузить$/)
     expect(screen.getByRole('img', { name: 'Логотип' })).toHaveAttribute(
       'src',
       '/api/branding/assets/7?v=7',
@@ -128,8 +134,13 @@ describe('BrandingAssetControls', () => {
       disabled: true,
     })
 
-    expect(screen.getByLabelText('Загружаем логотип')).toBeInTheDocument()
-    expect(screen.getByLabelText('Загружаем логотип')).toBeDisabled()
+    const busyInput = screen.getByLabelText('Загружаем логотип')
+
+    expect(busyInput.closest('label')).toHaveTextContent(/^Загружаем$/)
+    expect(busyInput).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Удалить логотип' }),
+    ).toHaveTextContent(/^Удалить$/)
     expect(
       screen.getByRole('button', { name: 'Удалить логотип' }),
     ).toBeDisabled()

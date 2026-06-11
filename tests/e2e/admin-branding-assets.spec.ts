@@ -19,6 +19,8 @@ const logoAsset = {
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
+  authContentSurface: '#ffffff',
+  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
   authText: '#0f172a',
   chatBackground: '#ffffff',
@@ -176,8 +178,13 @@ test('admin uploads and deletes a branding logo asset from the console', async (
   await expect(page.getByRole('status')).toContainText('Логотип загружен.')
   await expect(page.getByLabel('Заменить логотип')).toBeAttached()
   await expect(
+    page.locator('label').filter({
+      has: page.getByLabel('Заменить логотип'),
+    }),
+  ).toHaveText('Заменить')
+  await expect(
     page.getByRole('button', { name: 'Удалить логотип' }),
-  ).toBeVisible()
+  ).toHaveText('Удалить')
   await expect(
     page.getByRole('img', { exact: true, name: 'Логотип' }),
   ).toHaveAttribute('src', '/api/branding/assets/77?v=77')
@@ -186,5 +193,10 @@ test('admin uploads and deletes a branding logo asset from the console', async (
 
   await expect(page.getByRole('status')).toContainText('Логотип удален.')
   await expect(page.getByLabel('Загрузить логотип')).toBeAttached()
+  await expect(
+    page.locator('label').filter({
+      has: page.getByLabel('Загрузить логотип'),
+    }),
+  ).toHaveText('Загрузить')
   expect(assetRequests).toEqual(['POST', 'DELETE'])
 })

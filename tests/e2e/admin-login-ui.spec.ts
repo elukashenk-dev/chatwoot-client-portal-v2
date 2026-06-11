@@ -5,6 +5,8 @@ const adminEmail = 'cbr@provgroup.com'
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
+  authContentSurface: '#ffffff',
+  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
   authText: '#0f172a',
   chatBackground: '#ffffff',
@@ -180,7 +182,7 @@ test('logs into admin console through email code UI and logs out', async ({
   ).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Основное' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Цвета' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Auth-экран' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Экран входа' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Выйти' }).click()
   await expect(page).toHaveURL(/\/admin\/login$/)
@@ -204,7 +206,7 @@ test('shows controlled mobile state for admin branding shell', async ({
     }),
   ).toBeVisible()
   await expect(
-    page.getByText('Настройки и предпросмотр требуют desktop ширину.'),
+    page.getByText('Настройки и предпросмотр доступны на широком экране.'),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible()
   await expect(

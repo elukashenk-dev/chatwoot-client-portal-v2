@@ -16,21 +16,25 @@ const allowedBrandingAssetTypes = new Set([
 
 const brandingAssetSlots = [
   { actionName: 'логотип', kind: 'logo', title: 'Логотип' },
-  { actionName: 'PWA-иконку', kind: 'pwa_icon', title: 'PWA-иконка' },
   {
-    actionName: 'верхнее изображение auth-экрана',
+    actionName: 'иконку приложения',
+    kind: 'pwa_icon',
+    title: 'Иконка приложения',
+  },
+  {
+    actionName: 'верхнее изображение экрана входа',
     kind: 'auth_header_image',
-    title: 'Auth: верхнее изображение',
+    title: 'Вход: верхнее изображение',
   },
   {
-    actionName: 'нижнее изображение auth-экрана',
+    actionName: 'нижнее изображение экрана входа',
     kind: 'auth_footer_image',
-    title: 'Auth: нижнее изображение',
+    title: 'Вход: нижнее изображение',
   },
   {
-    actionName: 'фон auth-экрана',
+    actionName: 'общий фон экрана входа',
     kind: 'auth_background_image',
-    title: 'Auth: общий фон',
+    title: 'Вход: общий фон',
   },
   {
     actionName: 'фон чата',
@@ -83,6 +87,20 @@ function getUploadLabel({
   return asset ? `Заменить ${actionName}` : `Загрузить ${actionName}`
 }
 
+function getUploadButtonText({
+  asset,
+  isBusy,
+}: {
+  asset?: BrandingAsset
+  isBusy: boolean
+}) {
+  if (isBusy) {
+    return 'Загружаем'
+  }
+
+  return asset ? 'Заменить' : 'Загрузить'
+}
+
 export function BrandingAssetControls({
   assets,
   busyKind,
@@ -126,6 +144,7 @@ export function BrandingAssetControls({
           asset,
           isBusy,
         })
+        const uploadButtonText = getUploadButtonText({ asset, isBusy })
 
         return (
           <div
@@ -168,7 +187,7 @@ export function BrandingAssetControls({
                   ].join(' ')}
                 >
                   <UploadIcon className="h-4 w-4" />
-                  {uploadLabel}
+                  {uploadButtonText}
                   <input
                     accept={brandingAssetAccept}
                     aria-label={uploadLabel}
@@ -183,6 +202,7 @@ export function BrandingAssetControls({
 
                 {asset ? (
                   <button
+                    aria-label={`Удалить ${slot.actionName}`}
                     className="inline-flex min-h-9 items-center gap-2 rounded-[0.55rem] border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-rose-200 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={disabled}
                     onClick={() => {
@@ -191,7 +211,7 @@ export function BrandingAssetControls({
                     type="button"
                   >
                     <TrashIcon className="h-4 w-4" />
-                    Удалить {slot.actionName}
+                    Удалить
                   </button>
                 ) : null}
               </div>
