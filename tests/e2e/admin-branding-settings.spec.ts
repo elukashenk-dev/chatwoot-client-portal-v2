@@ -5,6 +5,8 @@ const adminEmail = 'cbr@provgroup.com'
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
+  authContentSurface: '#ffffff',
+  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
   authText: '#0f172a',
   chatBackground: '#ffffff',
@@ -161,6 +163,8 @@ test('admin can edit all branding setting groups and see preview update', async 
   const updatedBranding = {
     colors: {
       authBackground: '#eefcf8',
+      authContentSurface: '#f8fafc',
+      authContentSurfaceOpacity: 84,
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#164e63',
       chatHeaderText: '#ffffff',
@@ -201,8 +205,14 @@ test('admin can edit all branding setting groups and see preview update', async 
     .getByLabel('Основной цвет', { exact: true })
     .fill(updatedBranding.colors.primary)
   await page
-    .getByLabel('Цвет auth-фона', { exact: true })
+    .getByLabel('Фон auth-страницы', { exact: true })
     .fill(updatedBranding.colors.authBackground)
+  await page
+    .getByLabel('Фон области входа', { exact: true })
+    .fill(updatedBranding.colors.authContentSurface)
+  await page
+    .getByLabel('Плотность области входа, значение', { exact: true })
+    .fill(String(updatedBranding.colors.authContentSurfaceOpacity))
   await page
     .getByLabel('Фон чата', { exact: true })
     .fill(updatedBranding.colors.chatBackground)
@@ -236,6 +246,18 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(
     phonePreview.getByRole('button', { name: 'Войти' }),
   ).toBeDisabled()
+  const previewScope = page.locator(
+    '[data-admin-branding-preview] .portal-branding-scope',
+  )
+  await expect
+    .poll(() =>
+      previewScope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-content-surface-color')
+          .trim(),
+      ),
+    )
+    .toBe('#f8fafc')
 
   await page.getByRole('tab', { name: 'Чат' }).click()
   await expect(
@@ -294,6 +316,11 @@ test('admin reset colors restores production-like default color contract', async
   await expect(page.getByRole('heading', { name: 'Цвета' })).toBeVisible()
 
   await page.getByLabel('Фон шапки чата', { exact: true }).fill('#164e63')
+  await page.getByLabel('Фон auth-страницы', { exact: true }).fill('#eefcf8')
+  await page.getByLabel('Фон области входа', { exact: true }).fill('#eef2ff')
+  await page
+    .getByLabel('Плотность области входа, значение', { exact: true })
+    .fill('72')
   await page
     .getByLabel('Цвет текста шапки чата', { exact: true })
     .fill('#f8fafc')
@@ -313,6 +340,15 @@ test('admin reset colors restores production-like default color contract', async
   await expect(page.getByLabel('Основной цвет', { exact: true })).toHaveValue(
     '#112540',
   )
+  await expect(
+    page.getByLabel('Фон auth-страницы', { exact: true }),
+  ).toHaveValue('#f3f7fc')
+  await expect(
+    page.getByLabel('Фон области входа', { exact: true }),
+  ).toHaveValue('#ffffff')
+  await expect(
+    page.getByLabel('Плотность области входа, значение', { exact: true }),
+  ).toHaveValue('100')
 
   await page.getByRole('button', { name: 'Сохранить настройки' }).click()
   await expect(page.getByRole('status')).toContainText('Настройки сохранены.')

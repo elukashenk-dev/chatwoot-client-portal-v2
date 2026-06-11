@@ -128,6 +128,9 @@ execution-plan детали здесь не хранятся.
 - Branding reset/default visual parity is corrected: no-assets color reset
   restores production-like auth/chat/info defaults, keeps PWA manifest defaults
   and keeps chat header text readable when only header background changes.
+- Auth branding middle-surface customization is implemented with tenant-owned
+  `authContentSurface` and `authContentSurfaceOpacity` fields, preserving
+  default visual parity and keeping chat runtime layout unchanged.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
@@ -138,6 +141,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Continue `MT-9H`: final browser/PWA/cache manual QA, production deploy
-  readiness verification and final branding documentation cleanup before
-  production push.
+- Continue `MT-9H`: final browser/PWA/cache manual QA and production deploy
+  readiness verification before production push.

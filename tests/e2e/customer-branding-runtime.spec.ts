@@ -77,8 +77,15 @@ const branding = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
+      authContentSurface: '#f8fafc',
+      authContentSurfaceOpacity: 84,
+      authMutedText: '#456179',
+      authText: '#0f172a',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
+      chatHeaderText: '#f8fafc',
+      chatMutedText: '#52637a',
+      chatText: '#1f2937',
       primary: '#134e4a',
     },
     copy: {
@@ -290,6 +297,29 @@ test('applies public branding on the customer auth login screen', async ({
     'style',
     /--portal-auth-background-image: url\("\/api\/branding\/assets\/14\?v=14"\)/,
   )
+  const authScope = page.locator('.portal-branding-scope')
+  await expect
+    .poll(() =>
+      authScope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-content-surface-color')
+          .trim(),
+      ),
+    )
+    .toBe('#f8fafc')
+  await expect(page.locator('.auth-content-veil')).toBeVisible()
+
+  const firstAuthInput = page.locator('.auth-input').first()
+  await expect(firstAuthInput).toBeVisible()
+  await firstAuthInput.fill('name@example.com')
+  await expect(firstAuthInput).toHaveAttribute('data-filled', 'true')
+  await expect
+    .poll(() =>
+      firstAuthInput.evaluate((element) =>
+        getComputedStyle(element).getPropertyValue('background-color'),
+      ),
+    )
+    .toBe('rgba(248, 250, 252, 0.84)')
 })
 
 test('applies public branding on the customer chat and info surfaces', async ({

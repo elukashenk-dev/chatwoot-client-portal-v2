@@ -19,6 +19,8 @@ const logoAsset = {
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
+  authContentSurface: '#ffffff',
+  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
   authText: '#0f172a',
   chatBackground: '#ffffff',
@@ -324,8 +326,10 @@ test('admin can collapse sticky navigation and resize the portal preview width',
   expect(visualPolish.adminColorInput?.borderWidth).toBe('0px')
   expect(visualPolish.adminColorInput?.outlineStyle).toBe('none')
   expect(visualPolish.portalEmailInput?.appearance).toBe('none')
-  expect(visualPolish.portalEmailInput?.borderWidth).toBe('0px')
   expect(visualPolish.portalEmailInput?.outlineStyle).toBe('none')
+  expect(
+    Number.parseFloat(visualPolish.portalEmailInput?.borderRadius ?? '0'),
+  ).toBeGreaterThan(0)
 
   await editor.evaluate((element) => {
     element.scrollTop = 700

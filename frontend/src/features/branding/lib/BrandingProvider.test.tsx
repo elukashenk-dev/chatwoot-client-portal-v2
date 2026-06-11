@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
@@ -155,11 +155,13 @@ describe('BrandingProvider', () => {
     expect(scope?.getAttribute('style')).toContain(
       '--portal-chat-background-image: url("/api/branding/assets/13?v=13")',
     )
-    expect(
-      document
-        .querySelector('meta[name="theme-color"]')
-        ?.getAttribute('content'),
-    ).toBe('#134e4a')
+    await waitFor(() => {
+      expect(
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.getAttribute('content'),
+      ).toBe('#134e4a')
+    })
   })
 
   it('exposes production-like visual defaults for default branding', async () => {

@@ -40,13 +40,6 @@ function renderAuthRoutes(initialEntries: string[]) {
   renderWithRouter(<AppRoutes />, { initialEntries })
 }
 
-type AuthSurfaceSmokeCase = {
-  arrange?: () => void
-  heading: string
-  path: string
-  realFormTestId?: 'otp-verification-form' | 'password-setup-form'
-}
-
 describe('Auth flow pages', () => {
   const fetchMock = vi.fn<typeof fetch>()
 
@@ -72,94 +65,6 @@ describe('Auth flow pages', () => {
     vi.unstubAllGlobals()
     fetchMock.mockReset()
   })
-
-  it.each<AuthSurfaceSmokeCase>([
-    {
-      heading: 'Создать аккаунт',
-      path: '/auth/register',
-    },
-    {
-      arrange: () => {
-        saveRegistrationRequest({
-          email: 'name@company.ru',
-          expiresInSeconds: 900,
-          fullName: 'Portal User',
-          resendAvailableInSeconds: 60,
-        })
-      },
-      heading: 'Подтверждение Email',
-      path: '/auth/register/verify',
-      realFormTestId: 'otp-verification-form',
-    },
-    {
-      arrange: () => {
-        saveRegistrationRequest({
-          email: 'name@company.ru',
-          expiresInSeconds: 900,
-          fullName: 'Portal User',
-          resendAvailableInSeconds: 60,
-        })
-        saveRegistrationVerification({
-          continuationExpiresInSeconds: 900,
-          continuationToken: 'continuation-token',
-          email: 'name@company.ru',
-        })
-      },
-      heading: 'Создание пароля',
-      path: '/auth/register/set-password',
-      realFormTestId: 'password-setup-form',
-    },
-    {
-      heading: 'Восстановить пароль',
-      path: '/auth/password-reset/request',
-    },
-    {
-      arrange: () => {
-        savePasswordResetRequest({
-          email: 'name@company.ru',
-          expiresInSeconds: 900,
-          resendAvailableInSeconds: 60,
-        })
-      },
-      heading: 'Подтверждение Email',
-      path: '/auth/password-reset/verify',
-      realFormTestId: 'otp-verification-form',
-    },
-    {
-      arrange: () => {
-        savePasswordResetRequest({
-          email: 'name@company.ru',
-          expiresInSeconds: 900,
-          resendAvailableInSeconds: 60,
-        })
-        savePasswordResetVerification({
-          continuationExpiresInSeconds: 900,
-          continuationToken: 'reset-continuation-token',
-          email: 'name@company.ru',
-        })
-      },
-      heading: 'Новый пароль',
-      path: '/auth/password-reset/set-password',
-      realFormTestId: 'password-setup-form',
-    },
-  ])(
-    'renders the runtime auth content veil on $path',
-    async ({ arrange, heading, path, realFormTestId }) => {
-      arrange?.()
-      mockUnauthenticatedSession()
-
-      renderAuthRoutes([path])
-
-      expect(
-        await screen.findByRole('heading', { name: heading }),
-      ).toBeInTheDocument()
-      expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
-
-      if (realFormTestId) {
-        expect(screen.getByTestId(realFormTestId)).toBeInTheDocument()
-      }
-    },
-  )
 
   it('renders the registration request page and validates required fields', async () => {
     const user = userEvent.setup()

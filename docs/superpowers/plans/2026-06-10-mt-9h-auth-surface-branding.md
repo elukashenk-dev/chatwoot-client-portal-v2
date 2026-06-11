@@ -1258,7 +1258,7 @@ Browser checks:
         getComputedStyle(element).getPropertyValue('background-color'),
       ),
     )
-    .toBe('rgba(248, 250, 252, 0.86)')
+    .toBe('rgba(248, 250, 252, 0.84)')
   ```
 
   Keep existing chat assertions. Do not change chat runtime mocks except adding new auth color fields to the public branding response.
