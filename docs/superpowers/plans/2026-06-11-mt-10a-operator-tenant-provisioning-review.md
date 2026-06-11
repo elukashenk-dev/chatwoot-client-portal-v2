@@ -17,6 +17,8 @@ Reviewed plan:
 - safe deletion model с учетом `onDelete: restrict` в `portal_tenants`;
 - поддержка клиентов без собственного домена через provider-owned subdomain;
 - отсутствие жесткой привязки к текущему provider/company domain;
+- follow-up findings from independent sub reviewer after provider-subdomain
+  update;
 - пригодность плана для пошаговой реализации через subagent-driven или inline
   execution;
 - наличие тестов на каждый рискованный backend boundary.
@@ -35,6 +37,106 @@ Resolution:
 - replaced empty bodies with explicit type/interface signatures;
 - added concrete return/result types for provisioning, reconciliation and
   deprovision flows.
+
+Status: closed in plan.
+
+### F7. Provider Subdomain Could Drift From Tenant Slug
+
+Severity: Important
+
+Independent review found that accepting both `slug` and `providerSubdomain`
+without an equality rule could create `slug=a` on host `b.<suffix>`.
+
+Resolution:
+
+- provider-owned subdomain is now defined as exactly the normalized tenant
+  `slug`;
+- CLI must reject `--slug=a --provider-subdomain=b`;
+- DB conditional check requires `provider_subdomain = slug` in
+  `provider_subdomain` mode.
+
+Status: closed in plan.
+
+### F8. Provisioning Resume Needed Immutable Input Contract
+
+Severity: Important
+
+Independent review found that reruns could reuse a partially completed
+provisioning run while changing domain mode, domain, suffix or Chatwoot base
+URL.
+
+Resolution:
+
+- `createOrResumeRun` now has an immutable input contract;
+- mismatches on domain mode, resolved domain, provider fields, Chatwoot base URL
+  and client admin identity must fail before any Chatwoot call;
+- service tests must cover custom-to-provider, suffix change, domain change and
+  Chatwoot base URL change.
+
+Status: closed in plan.
+
+### F9. Provider Subdomain Validation Needed Exact DNS Label Rule
+
+Severity: Important
+
+Independent review found that reject-case validation was not enough for safe
+DNS/SNI/certificate behavior.
+
+Resolution:
+
+- added exact lowercase ASCII DNS label pattern;
+- added length, edge-character, wildcard, dot, unicode/IDNA and reserved-label
+  negative tests;
+- provider suffix normalization now requires lowercase/trailing-dot policy and
+  rejects protocol/path/port/wildcard.
+
+Status: closed in plan.
+
+### F10. Provider DNS/TLS/Proxy Prerequisites Were Missing
+
+Severity: Important
+
+Independent review found that provider-subdomain mode could create a tenant
+whose URL does not work if wildcard DNS, TLS or Host preservation are absent.
+
+Resolution:
+
+- added provider-domain prerequisites to the plan and runbook task;
+- added `/api/tenant` generated-host smoke;
+- production handoff now requires HTTPS `/api/tenant` on the generated host.
+
+Status: closed in plan.
+
+### F11. Stable Architecture Docs Needed Domain-Mode Update
+
+Severity: Important
+
+Independent review found that architecture docs still described only
+`lk.<client-domain>`.
+
+Resolution:
+
+- Task 08 now updates `docs/architecture/overview.md`,
+  `docs/architecture/decisions.md` and
+  `docs/architecture/multi-tenant-reference.md`;
+- the plan requires documenting both domain modes while keeping Host-based
+  tenant resolution unchanged.
+
+Status: closed in plan.
+
+### F12. Provisioning Run Schema Needed DB Constraints
+
+Severity: Minor
+
+Independent review found that repository validation alone would not protect
+manual SQL or future bugs from invalid provisioning run rows.
+
+Resolution:
+
+- schema snippet now includes status/domain-mode checks;
+- conditional provider-field check requires custom mode to have null provider
+  fields and provider mode to have non-null provider fields with
+  `provider_subdomain = slug`.
 
 Status: closed in plan.
 
@@ -64,10 +166,12 @@ Initial CLI parser returned full `TenantProvisioningInput`, but
 
 Resolution:
 
-- added `CreateTenantCliArgs = Omit<TenantProvisioningInput,
-'serviceEmailDomain'>`;
+- added a separate `CreateTenantCliArgs` type that contains only CLI-owned
+  fields;
 - `create-tenant.ts` must combine parsed args with
-  `PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN`.
+  `PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN`;
+- provider-subdomain mode also injects
+  `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` from env.
 
 Status: closed in plan.
 
@@ -141,7 +245,7 @@ Status: closed in plan.
 
 ## Final Review Result
 
-Plan status: approved for implementation.
+Plan status: approved for implementation after follow-up fixes.
 
 Open blockers: none.
 

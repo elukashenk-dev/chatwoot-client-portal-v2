@@ -55,7 +55,7 @@ Provisioning supports two domain modes:
 2. Provider-owned subdomain:
 
    ```text
-   providerSubdomain=buhfirma
+   providerSubdomain=<normalized slug>
    PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX=portal.example.com
    ```
 
@@ -66,9 +66,24 @@ Provisioning supports two domain modes:
    publicBaseUrl=https://buhfirma.portal.example.com
    ```
 
+   `providerSubdomain` is not an independent alias in MT-10A. It must be
+   exactly the normalized tenant `slug`, and the CLI must reject
+   `--slug=a --provider-subdomain=b`.
+
 Provider-owned domains are controlled by our deployment DNS/certificate setup.
 The plan must use neutral examples like `portal.example.com`; the real SaaS
 domain is deploy configuration.
+
+Provider-owned domain prerequisites:
+
+- wildcard DNS for `*.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` resolves to the
+  portal reverse proxy;
+- TLS certificate covers either the wildcard
+  `*.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX` or each generated host;
+- reverse proxy preserves `Host`, and if `X-Forwarded-Host` is used then
+  `PORTAL_TRUST_PROXY=true` is allowed only behind the trusted proxy boundary;
+- `/api/tenant` must resolve the generated host before a provider-subdomain
+  tenant is considered production-ready.
 
 ## Lifecycle Model
 
@@ -124,6 +139,9 @@ Modify:
 - `.env.example`
 - `.env.production.example`
 - `docs/operations/mt-10-deployment-runbooks.md`
+- `docs/architecture/overview.md`
+- `docs/architecture/decisions.md`
+- `docs/architecture/multi-tenant-reference.md`
 - `docs/roadmap/work-log.md` only after implementation is complete and verified.
 
 ---
@@ -152,6 +170,10 @@ Modify:
     `providerSubdomain` and `providerTenantDomainSuffix` for provider-owned
     subdomains;
   - rerun by same `slug` returns the same run;
+  - rerun by same `slug` rejects immutable input mismatch for `domainMode`,
+    `primaryDomain`, `publicBaseUrl`, `providerSubdomain`,
+    `providerTenantDomainSuffix`, `chatwootBaseUrl`, `clientAdminEmail` and
+    `clientAdminName`;
   - `chatwootAccountId`, service user IDs and inbox ID can be stored one step at a time;
   - safe reports never include plaintext secrets;
   - tenant status can be updated to `suspended` and `archived`.
@@ -169,8 +191,9 @@ Modify:
   Create `backend/src/db/provisioningSchema.ts` with one table:
 
   ```ts
-  import { relations, sql } from 'drizzle-orm'
+  import { sql } from 'drizzle-orm'
   import {
+    check,
     integer,
     jsonb,
     pgTable,
@@ -218,6 +241,18 @@ Modify:
       uniqueIndex('portal_tenant_provisioning_runs_slug_idx').on(table.slug),
       uniqueIndex('portal_tenant_provisioning_runs_primary_domain_idx').on(
         table.primaryDomain,
+      ),
+      check(
+        'portal_tenant_provisioning_runs_status_check',
+        sql`${table.status} in ('pending', 'creating_chatwoot_account', 'creating_client_admin', 'creating_runtime_user', 'creating_admin_verification_user', 'creating_portal_inbox', 'creating_portal_tenant', 'verifying', 'completed', 'failed')`,
+      ),
+      check(
+        'portal_tenant_provisioning_runs_domain_mode_check',
+        sql`${table.domainMode} in ('custom_domain', 'provider_subdomain')`,
+      ),
+      check(
+        'portal_tenant_provisioning_runs_domain_fields_check',
+        sql`(${table.domainMode} = 'custom_domain' and ${table.providerSubdomain} is null and ${table.providerTenantDomainSuffix} is null) or (${table.domainMode} = 'provider_subdomain' and ${table.providerSubdomain} is not null and ${table.providerTenantDomainSuffix} is not null and ${table.providerSubdomain} = ${table.slug})`,
       ),
     ],
   )
@@ -342,6 +377,12 @@ Modify:
   ```
 
   Use the same normalization rules as `tenants/repository.ts` for slug/domain/url. Do not duplicate large validators if exporting small normalizers from `tenants/repository.ts` is cleaner.
+
+  `createOrResumeRun` must treat these fields as immutable for an existing run:
+  `domainMode`, `primaryDomain`, `publicBaseUrl`, `providerSubdomain`,
+  `providerTenantDomainSuffix`, `chatwootBaseUrl`, `clientAdminEmail` and
+  `clientAdminName`. If a rerun passes different values for the same `slug`, it
+  must throw a conflict error before any Chatwoot call.
 
 - [ ] **Step 6: Run tests**
 
@@ -597,9 +638,13 @@ Modify:
     `providerTenantDomainSuffix`;
   - custom-domain `primaryDomain` rejects protocol/path/port;
   - custom-domain `publicBaseUrl` host must match `primaryDomain`;
-  - provider-subdomain value rejects uppercase, dots, protocol, slash, spaces
-    and reserved labels `admin`, `api`, `www`, `mail`, `chat`, `support`;
-  - provider-domain suffix rejects protocol/path/port;
+  - provider-subdomain value must exactly equal normalized `slug`;
+  - provider-subdomain value rejects uppercase, dots, protocol, slash, spaces,
+    `_`, wildcard values, unicode/IDNA ambiguity, leading hyphen, trailing
+    hyphen, labels longer than 63 chars and reserved labels `admin`, `api`,
+    `www`, `mail`, `chat`, `support`;
+  - provider-domain suffix rejects protocol/path/port/wildcard and normalizes
+    lowercase plus trailing dot removal;
   - provider-subdomain mode resolves `buhfirma.portal.example.com` and
     `https://buhfirma.portal.example.com`;
   - `chatwootBaseUrl` must be http/https URL;
@@ -664,6 +709,15 @@ Modify:
   }
   ```
 
+  Use this exact provider-subdomain DNS label rule:
+
+  ```ts
+  const providerSubdomainPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+  ```
+
+  The implementation must reject reserved labels after lower-case normalization
+  and before building `primaryDomain`.
+
 - [ ] **Step 3: Write service tests**
 
   Use mocked Platform API client, mocked Chatwoot account client and PGlite DB.
@@ -672,11 +726,16 @@ Modify:
   - happy path creates all Chatwoot resources and active portal tenant;
   - provider-subdomain path stores resolved `primaryDomain` and
     `publicBaseUrl`, not only the suffix;
+  - provider-subdomain path rejects `providerSubdomain` that differs from
+    normalized `slug`;
   - safe report contains IDs and statuses but no tokens/passwords/secrets;
   - existing completed tenant returns `action='already_exists'`;
   - rerun after account creation reuses `chatwootAccountId` from provisioning run;
   - rerun finds existing account by `custom_attributes.portal_tenant_slug`;
   - rerun finds existing API inbox by exact name before creating another inbox;
+  - rerun rejects immutable input mismatch for custom-domain to
+    provider-subdomain, provider suffix change, domain change and Chatwoot base
+    URL change;
   - failure marks run `failed` and stores sanitized error;
   - runtime token and admin-verification token decrypt to different values.
 
@@ -812,6 +871,7 @@ Modify:
   Cover rejected combinations:
   - `--provider-subdomain` together with `--primary-domain`;
   - `--provider-subdomain` together with `--public-base-url`;
+  - `--provider-subdomain=other` when normalized `--slug=buhfirma`;
   - `--primary-domain` without `--public-base-url`;
   - `--public-base-url` without `--primary-domain`;
   - provider-subdomain mode without `PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`;
@@ -1094,6 +1154,9 @@ Modify:
 
 - Modify: `docs/operations/mt-10-deployment-runbooks.md`
 - Modify: `docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md`
+- Modify: `docs/architecture/overview.md`
+- Modify: `docs/architecture/decisions.md`
+- Modify: `docs/architecture/multi-tenant-reference.md`
 - Modify: `docs/roadmap/work-log.md`
 
 - [ ] **Step 1: Update MT-10 runbook**
@@ -1138,7 +1201,7 @@ Modify:
 
   ```text
   Custom domain: B2B client creates DNS record lk.<client-domain> to the portal reverse proxy.
-  Provider subdomain: provider owns DNS/certificates for <tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>.
+  Provider subdomain: provider owns wildcard DNS/certificates/reverse proxy readiness for <tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>.
   In both cases provider/operator runs tenant provisioning.
   ```
 
@@ -1146,11 +1209,34 @@ Modify:
   not a hard-coded brand name. Documentation examples must use neutral
   `portal.example.com`.
 
+  Add provider-domain prerequisites:
+
+  ```text
+  *.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX resolves to the portal reverse proxy.
+  TLS covers the wildcard or generated host.
+  Reverse proxy preserves Host / trusted X-Forwarded-Host.
+  /api/tenant works on generated host before production handoff.
+  ```
+
 - [ ] **Step 2: Update research note status**
 
   Add a short status block pointing from research to implemented operator flow.
 
-- [ ] **Step 3: Update work-log after all tests pass**
+- [ ] **Step 3: Update architecture docs**
+
+  Update stable architecture docs so they describe both production domain modes:
+
+  ```text
+  custom domain: lk.<client-domain>
+  provider-owned subdomain: <tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>
+  ```
+
+  Add or update a decision entry in `docs/architecture/decisions.md` stating
+  that tenant resolution remains Host-based, while provisioning can produce
+  either domain mode. The current provider/company domain must not appear as
+  code-level policy.
+
+- [ ] **Step 4: Update work-log after all tests pass**
 
   Add one short bullet to `Current Baseline` only after implementation closure:
 
@@ -1160,19 +1246,19 @@ Modify:
 
   Replace `Recommended Next Step` with the next concrete follow-up, for example UI wrapper or production rehearsal.
 
-- [ ] **Step 4: Run docs checks**
+- [ ] **Step 5: Run docs checks**
 
   ```bash
-  pnpm exec prettier --check docs/operations/mt-10-deployment-runbooks.md docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md docs/roadmap/work-log.md
+  pnpm exec prettier --check docs/operations/mt-10-deployment-runbooks.md docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md docs/architecture/overview.md docs/architecture/decisions.md docs/architecture/multi-tenant-reference.md docs/roadmap/work-log.md
   git diff --check
   ```
 
   Expected: pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
   ```bash
-  git add docs/operations docs/roadmap/work-log.md
+  git add docs/operations docs/architecture docs/roadmap/work-log.md
   git commit -m "docs: document tenant lifecycle operations"
   ```
 
@@ -1249,10 +1335,28 @@ Modify:
   - tenant appears in portal DB with status `active`;
   - provider-subdomain tenant resolves to
     `buhfirma-provider-smoke.portal.127.0.0.1.nip.io`;
+  - backend Host-based tenant resolution works for the generated host, for
+    example through local proxy or direct backend request:
+
+    ```bash
+    curl -fsS \
+      -H 'Host: buhfirma-provider-smoke.portal.127.0.0.1.nip.io' \
+      http://127.0.0.1:3301/api/tenant
+    ```
+
   - Chatwoot has account, service users and API Channel inbox;
   - `pnpm --dir backend tenant:chatwoot:verify -- --tenant=buhfirma-smoke` passes.
   - `pnpm --dir backend tenant:chatwoot:verify -- --tenant=buhfirma-provider-smoke`
     passes.
+
+  Before production handoff for a provider-subdomain tenant, also verify:
+
+  ```bash
+  curl -fsS https://<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>/api/tenant
+  ```
+
+  Expected: 200 JSON for that tenant. If wildcard DNS/TLS/proxy are not ready,
+  this is a production readiness blocker, not an implementation success.
 
 - [ ] **Step 4: Review**
 
@@ -1286,6 +1390,8 @@ Modify:
   work.
 - Provider-owned domain suffix is deploy config, not a hard-coded current
   provider/company name.
+- Provider-owned domain mode has documented and verified wildcard DNS, TLS and
+  reverse-proxy Host preservation prerequisites before production handoff.
 - Chatwoot account is created through Platform API.
 - Client admin user is created or reused and linked to the account.
 - Portal runtime service user and admin-verification service user are separate.
