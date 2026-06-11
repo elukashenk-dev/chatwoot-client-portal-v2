@@ -288,4 +288,110 @@ describe('tenants repository', () => {
       'Failed to update tenant Chatwoot portal inbox identifier.',
     )
   })
+
+  it('loads a tenant by Chatwoot account ID within a Chatwoot base URL scope', async () => {
+    const repository = createTenantsRepository(database.db)
+    const tenant = await repository.createTenant({
+      chatwootAccountId: 77,
+      chatwootApiAccessTokenCiphertext: 'v1:api-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru',
+      slug: 'buhfirma',
+    })
+    await repository.createTenant({
+      chatwootAccountId: 77,
+      chatwootApiAccessTokenCiphertext: 'v1:api-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.other.example.com',
+      chatwootPortalInboxId: 8,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Other',
+      primaryDomain: 'lk.other.ru',
+      publicBaseUrl: 'https://lk.other.ru',
+      slug: 'other',
+    })
+
+    await expect(
+      repository.findByChatwootAccountId({
+        chatwootAccountId: 77,
+        chatwootBaseUrl: 'https://chatwoot.shared.example.com/',
+      }),
+    ).resolves.toMatchObject({
+      id: tenant.id,
+      slug: 'buhfirma',
+    })
+    await expect(
+      repository.findByChatwootAccountId({
+        chatwootAccountId: 77,
+        chatwootBaseUrl: 'https://chatwoot.missing.example.com',
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      repository.findByChatwootAccountId({
+        chatwootAccountId: 404,
+        chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      repository.findByChatwootAccountId({
+        chatwootAccountId: 77,
+        chatwootBaseUrl: 'https://chatwoot.other.example.com',
+      }),
+    ).resolves.toMatchObject({
+      slug: 'other',
+    })
+    await expect(repository.findBySlug('buhfirma')).resolves.toMatchObject({
+      id: tenant.id,
+      slug: 'buhfirma',
+    })
+  })
+
+  it('updates tenant status for suspend and archive flows', async () => {
+    const repository = createTenantsRepository(database.db)
+    const tenant = await repository.createTenant({
+      chatwootAccountId: 77,
+      chatwootApiAccessTokenCiphertext: 'v1:api-token-ciphertext',
+      chatwootBaseUrl: 'https://chatwoot.shared.example.com',
+      chatwootPortalInboxId: 6,
+      chatwootWebhookSecretCiphertext: 'v1:webhook-secret-ciphertext',
+      displayName: 'Buhfirma',
+      primaryDomain: 'lk.buhfirma.ru',
+      publicBaseUrl: 'https://lk.buhfirma.ru',
+      slug: 'buhfirma',
+    })
+
+    const suspendedTenant = await repository.updateTenantStatus({
+      status: 'suspended',
+      tenantId: tenant.id,
+      updatedAt: new Date('2026-06-11T08:00:00.000Z'),
+    })
+    const archivedTenant = await repository.updateTenantStatus({
+      status: 'archived',
+      tenantId: tenant.id,
+      updatedAt: new Date('2026-06-11T09:00:00.000Z'),
+    })
+
+    expect(suspendedTenant.status).toBe('suspended')
+    expect(suspendedTenant.updatedAt.toISOString()).toBe(
+      '2026-06-11T08:00:00.000Z',
+    )
+    expect(archivedTenant.status).toBe('archived')
+    await expect(repository.findBySlug('buhfirma')).resolves.toMatchObject({
+      status: 'archived',
+    })
+  })
+
+  it('throws when updating a missing tenant status', async () => {
+    const repository = createTenantsRepository(database.db)
+
+    await expect(
+      repository.updateTenantStatus({
+        status: 'suspended',
+        tenantId: 404,
+      }),
+    ).rejects.toThrow('Failed to update tenant status.')
+  })
 })

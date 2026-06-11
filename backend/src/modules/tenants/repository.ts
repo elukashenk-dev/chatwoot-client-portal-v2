@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import { portalTenants } from '../../db/schema.js'
@@ -48,12 +48,17 @@ type UpdateTenantPortalInboxIdentifierInput = {
   updatedAt?: Date
 }
 
+type ChatwootAccountLookupInput = {
+  chatwootAccountId: number
+  chatwootBaseUrl: string
+}
+
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const domainPattern =
   /^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)$/
 const allowedTenantStatuses = new Set<string>(tenantStatuses)
 
-function normalizeSlug(slug: string) {
+export function normalizeSlug(slug: string) {
   const normalizedSlug = slug.trim().toLowerCase()
 
   if (!slugPattern.test(normalizedSlug)) {
@@ -65,7 +70,7 @@ function normalizeSlug(slug: string) {
   return normalizedSlug
 }
 
-function normalizeDomain(domain: string) {
+export function normalizeDomain(domain: string) {
   const normalizedDomain = domain.trim().toLowerCase().replace(/\.$/, '')
 
   if (
@@ -84,7 +89,7 @@ function normalizeDomain(domain: string) {
   return normalizedDomain
 }
 
-function normalizeUrl(url: string, fieldName: string) {
+export function normalizeUrl(url: string, fieldName: string) {
   let parsedUrl: URL
 
   try {
@@ -128,7 +133,7 @@ function assertPublicBaseUrlMatchesPrimaryDomain({
   }
 }
 
-function normalizePositiveInteger(value: number, fieldName: string) {
+export function normalizePositiveInteger(value: number, fieldName: string) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new TenantValidationError(`${fieldName} must be a positive integer.`)
   }
@@ -136,7 +141,7 @@ function normalizePositiveInteger(value: number, fieldName: string) {
   return value
 }
 
-function normalizeNonEmptyString(value: string, fieldName: string) {
+export function normalizeNonEmptyString(value: string, fieldName: string) {
   const normalizedValue = value.trim()
 
   if (!normalizedValue) {
@@ -161,7 +166,7 @@ function normalizeOptionalNonEmptyString(
   return normalizeNonEmptyString(value, fieldName)
 }
 
-function normalizeTenantStatus(status: TenantStatus | undefined) {
+export function normalizeTenantStatus(status: TenantStatus | undefined) {
   const normalizedStatus = status ?? 'active'
 
   if (!allowedTenantStatuses.has(normalizedStatus)) {
@@ -239,6 +244,33 @@ export function createTenantsRepository(db: AppDatabase) {
       return tenant ?? null
     },
 
+    async findByChatwootAccountId({
+      chatwootAccountId,
+      chatwootBaseUrl,
+    }: ChatwootAccountLookupInput) {
+      const normalizedChatwootAccountId = normalizePositiveInteger(
+        chatwootAccountId,
+        'chatwootAccountId',
+      )
+      const normalizedChatwootBaseUrl = normalizeUrl(
+        chatwootBaseUrl,
+        'chatwootBaseUrl',
+      )
+
+      const [tenant] = await db
+        .select()
+        .from(portalTenants)
+        .where(
+          and(
+            eq(portalTenants.chatwootAccountId, normalizedChatwootAccountId),
+            eq(portalTenants.chatwootBaseUrl, normalizedChatwootBaseUrl),
+          ),
+        )
+        .limit(1)
+
+      return tenant ?? null
+    },
+
     async findBySlug(slug: string) {
       const normalizedSlug = normalizeSlug(slug)
 
@@ -249,6 +281,31 @@ export function createTenantsRepository(db: AppDatabase) {
         .limit(1)
 
       return tenant ?? null
+    },
+
+    async updateTenantStatus({
+      status,
+      tenantId,
+      updatedAt = new Date(),
+    }: {
+      status: TenantStatus
+      tenantId: number
+      updatedAt?: Date
+    }) {
+      const [tenant] = await db
+        .update(portalTenants)
+        .set({
+          status: normalizeTenantStatus(status),
+          updatedAt,
+        })
+        .where(eq(portalTenants.id, tenantId))
+        .returning()
+
+      if (!tenant) {
+        throw new Error('Failed to update tenant status.')
+      }
+
+      return tenant
     },
 
     async listTenants() {
