@@ -532,7 +532,12 @@ describe('AdminBrandingPage', () => {
       screen.getByRole('button', { name: 'Сохранить настройки' }),
     )
 
-    expect(screen.getByRole('button', { name: 'Сохраняем' })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Сохранить настройки' }),
+    ).toHaveAttribute('aria-busy', 'true')
     expect(portalNameInput).toBeDisabled()
 
     await act(async () => {

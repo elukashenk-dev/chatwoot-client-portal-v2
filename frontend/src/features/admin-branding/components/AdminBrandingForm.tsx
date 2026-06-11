@@ -450,11 +450,12 @@ export function AdminBrandingForm({
 
       <div className="sticky bottom-0 -mx-6 border-t border-slate-200 bg-slate-100/95 px-6 py-4 backdrop-blur">
         <button
-          className="inline-flex min-h-11 items-center justify-center rounded-[0.6rem] bg-brand-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          aria-busy={isSaving ? true : undefined}
+          className="inline-flex min-h-11 min-w-[10.75rem] items-center justify-center rounded-[0.6rem] bg-brand-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           disabled={isSubmitDisabled}
           type="submit"
         >
-          {isSaving ? 'Сохраняем' : 'Сохранить настройки'}
+          Сохранить настройки
         </button>
       </div>
     </form>

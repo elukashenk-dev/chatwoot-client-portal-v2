@@ -385,7 +385,12 @@ test('admin controls are locked while branding save is in flight', async ({
   )
 
   await page.getByRole('button', { name: 'Сохранить настройки' }).click()
-  await expect(page.getByRole('button', { name: 'Сохраняем' })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: 'Сохранить настройки' }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: 'Сохранить настройки' }),
+  ).toHaveAttribute('aria-busy', 'true')
   await expect(page.getByLabel('Название портала')).toBeDisabled()
   await expect(page.getByLabel('Основной цвет', { exact: true })).toBeDisabled()
 
