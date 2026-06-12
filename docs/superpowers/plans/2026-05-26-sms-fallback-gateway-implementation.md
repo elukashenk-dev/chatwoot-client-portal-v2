@@ -10,6 +10,31 @@ it blindly: if SMS fallback is reopened, first run a fresh feature intake and
 update the plan against the current offline-first PWA, chat runtime,
 multi-tenant and production operations baseline.
 
+## MT-10A Baseline Integration Required
+
+The current baseline now includes MT-10A operator-owned tenant lifecycle
+provisioning. SMS fallback must be treated as an optional tenant add-on on top
+of an already provisioned MT-10A tenant, not as manual SQL or as part of the
+base `tenant:create` command.
+
+Before implementing production SMS fallback, update this plan against the
+supplemental lifecycle plan:
+
+`docs/superpowers/plans/2026-06-12-mt-10a-sms-fallback-tenant-lifecycle.md`
+
+That supplemental plan owns:
+
+- operator CLI provisioning for the separate Chatwoot SMS Fallback API inbox;
+- encrypted storage of the SMS fallback webhook secret and SMSGate credentials;
+- tenant SMS fallback verification, reconciliation and disable/deprovision
+  behavior;
+- runbook updates that keep SMS fallback under the same operator authority as
+  MT-10A tenant creation.
+
+The SMS bridge/PWA implementation below must not silently bypass those lifecycle
+steps. If the supplemental plan is not implemented yet, SMS runtime can be built
+and tested with fixtures, but production tenant enablement remains blocked.
+
 > **Для агентных исполнителей:** ОБЯЗАТЕЛЬНЫЙ SUB-SKILL: используйте `superpowers:subagent-driven-development` (recommended) или `superpowers:executing-plans`, чтобы выполнять этот план task-by-task. Steps используют checkbox (`- [ ]`) syntax для tracking.
 
 **Goal:** реализовать аварийный двусторонний SMS fallback для `private:me` сразу после закрытия Offline-first PWA MVP: клиент открывает native SMS из offline-first PWA, Android SMS Gateway доставляет входящие SMS в отдельный Chatwoot SMS Fallback inbox, а ответы агента из этого inbox уходят клиенту обратно через SMS.
@@ -25,6 +50,9 @@ multi-tenant and production operations baseline.
 - Spec: `docs/superpowers/specs/2026-05-26-sms-fallback-gateway-design.md`
 - Stable architecture: `docs/architecture/overview.md`
 - Roadmap baseline: `docs/roadmap/implementation-plan.md`
+- MT-10A operator lifecycle: `docs/operations/mt-10-deployment-runbooks.md`
+- MT-10A SMS lifecycle add-on:
+  `docs/superpowers/plans/2026-06-12-mt-10a-sms-fallback-tenant-lifecycle.md`
 - Current repository rule: `AGENTS.md`
 
 ## Execution Rules
@@ -48,6 +76,8 @@ multi-tenant and production operations baseline.
   4. `feature/sms-fallback-pwa`
   5. `feature/sms-fallback-ops`
 - The backend bridge must not start until the SMSGate Private Server gate is closed with a written go/no-go note.
+- Production tenant enablement must not start until the MT-10A SMS fallback
+  lifecycle add-on plan has an operator provisioning and verification path.
 - Keep Chatwoot core external. Do not patch or restart Chatwoot unless a separate explicit operational step requires it.
 - `docs/roadmap/work-log.md` is updated only after an implementation slice is complete, reviewed, checked, and accepted as stable baseline.
 - After each branch reaches closure, propose a checkpoint commit; do not make WIP commits by default.
@@ -112,7 +142,8 @@ multi-tenant and production operations baseline.
 
 - Create `docs/operations/sms-fallback.md`: setup, monitoring, recovery, secrets, tenant-owned Android/SIM rules.
 - Modify `.env.example` only if runtime needs a non-secret public setting or worker tuning setting.
-- Modify backend tenant bootstrap/verification scripts only after the schema and manual provisioning contract are stable.
+- Modify backend tenant lifecycle scripts through the supplemental MT-10A SMS
+  fallback plan only after the schema and SMS bridge contract are stable.
 
 ---
 
@@ -1895,8 +1926,12 @@ If local browser dependencies or dev services are unavailable, record the exact 
 **Files:**
 
 - Create: `docs/operations/sms-fallback.md`
-- Modify: `backend/src/scripts/verify-tenant-chatwoot-connection.ts` if SMS inbox verification is added.
-- Create: `backend/src/scripts/verify-sms-fallback-tenant.ts` if a separate verification script is clearer than extending the existing Chatwoot script.
+- Read:
+  `docs/superpowers/plans/2026-06-12-mt-10a-sms-fallback-tenant-lifecycle.md`
+- Modify: `backend/src/scripts/verify-tenant-chatwoot-connection.ts` only if
+  the supplemental lifecycle plan intentionally extends the existing verifier.
+- Create: `backend/src/scripts/verify-sms-fallback-tenant.ts` through the
+  supplemental lifecycle plan when a separate verifier remains clearer.
 
 - [ ] **Step 1: Write runbook**
 
@@ -1943,7 +1978,22 @@ Create `docs/operations/sms-fallback.md` with sections:
 - mark abandoned jobs only after operator decision.
 ```
 
-- [ ] **Step 2: Add tenant verification script**
+- [ ] **Step 2: Implement or verify the supplemental lifecycle plan**
+
+Before marking SMS fallback production-ready, complete the supplemental MT-10A
+SMS fallback lifecycle plan. At minimum it must provide:
+
+```text
+tenant:sms-fallback:provision
+tenant:sms-fallback:verify
+tenant:sms-fallback:reconcile --dry-run|--apply
+automatic SMS disable behavior during tenant archive/deprovision
+```
+
+Expected: operator can enable and verify SMS fallback for an MT-10A tenant
+without manual SQL or browser-held Chatwoot/SMSGate authority.
+
+- [ ] **Step 3: Add tenant verification script**
 
 The script must verify:
 
@@ -1965,7 +2015,7 @@ pnpm --dir backend build
 
 Expected: script compiles.
 
-- [ ] **Step 3: Add health/metrics exposure if already consistent with project patterns**
+- [ ] **Step 4: Add health/metrics exposure if already consistent with project patterns**
 
 If the project has no metrics endpoint, do not introduce a new observability stack in this slice. Add a repository/service method used by the verification script to report:
 
