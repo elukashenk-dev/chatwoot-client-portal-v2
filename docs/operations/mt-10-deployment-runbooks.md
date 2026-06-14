@@ -48,7 +48,8 @@ automation around:
 - production DNS/certificate/proxy provisioning;
 - provider-domain `/api/tenant` smoke before client handoff, using
   `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`;
-- operator UX/audit wrapper if CLI is not enough for day-to-day operations.
+- operator UX/audit wrapper if CLI is not enough for day-to-day operations,
+  tracked in `docs/findings/F-OPS-003-mt10a-operator-ui-audit-wrapper.md`.
 
 ## Source Of Truth Map
 
