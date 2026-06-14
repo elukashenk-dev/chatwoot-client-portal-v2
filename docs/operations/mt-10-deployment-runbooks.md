@@ -46,7 +46,8 @@ Before broad shared SaaS rollout, the remaining operations gap is rehearsal and
 automation around:
 
 - production DNS/certificate/proxy provisioning;
-- provider-domain `/api/tenant` smoke before client handoff;
+- provider-domain `/api/tenant` smoke before client handoff, using
+  `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`;
 - operator UX/audit wrapper if CLI is not enough for day-to-day operations.
 
 ## Source Of Truth Map
@@ -67,6 +68,8 @@ automation around:
   `docs/operations/local-cross-tenant-test-data.md`
 - Chatwoot account lifecycle and portal provisioning research:
   `docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md`
+- MT-10A tenant lifecycle production rehearsal:
+  `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`
 - Architecture boundaries:
   `docs/architecture/overview.md`
 - Tenant model and platform operations:

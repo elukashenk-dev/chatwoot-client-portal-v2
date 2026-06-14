@@ -25,7 +25,8 @@
   MT-10A tenant domain mode. For provider-subdomain rollout, configure wildcard
   DNS, TLS and reverse proxy Host preservation for
   `*.PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX`, then prove it with a real tenant
-  lifecycle smoke.
+  lifecycle smoke using
+  `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`.
 - `acceptance`:
   - The chosen production tenant domain mode is documented for the deployment:
     custom client domain, provider-owned subdomain, or both.
