@@ -42,4 +42,25 @@ describe('auth input CSS contract', () => {
     expect(logoRule).toContain('width: 63px')
     expect(logoRule).toContain('height: 63px')
   })
+
+  it('scopes Inter typography to auth surfaces', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
+    const frameRule = getCssRule(css, '.auth-frame-background')
+    const canvasRule = getCssRule(css, '.auth-canvas-background {')
+    const portalFrameRule = getCssRule(css, '.portal-frame-background')
+
+    expect(css).toContain("--portal-auth-font-family: 'Inter'")
+    expect(frameRule).toContain('font-family: var(--portal-auth-font-family')
+    expect(canvasRule).toContain('font-family: var(--portal-auth-font-family')
+    expect(portalFrameRule).not.toContain('--portal-auth-font-family')
+  })
+
+  it('loads local Inter font assets for auth typography weights', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
+
+    for (const weight of ['400', '500', '600', '700']) {
+      expect(css).toContain(`inter-cyrillic-${weight}-normal.woff2`)
+      expect(css).toContain(`inter-latin-${weight}-normal.woff2`)
+    }
+  })
 })
