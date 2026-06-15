@@ -8,6 +8,7 @@ const colorSchema = z
   .regex(/^#[0-9a-fA-F]{6}$/u)
   .transform((value) => value.toLowerCase())
 const opacitySchema = z.number().int().min(0).max(100)
+const authBrandPlacementSchema = z.enum(['left', 'center', 'right'])
 
 function optionalText(maxLength: number) {
   return z
@@ -48,6 +49,12 @@ export const adminBrandingPatchSchema = z
         chatEmptyBody: optionalText(280),
         chatEmptyTitle: optionalText(120),
         chatInfoTitle: optionalText(120),
+      })
+      .strict()
+      .optional(),
+    layout: z
+      .object({
+        authBrandPlacement: authBrandPlacementSchema.optional(),
       })
       .strict()
       .optional(),

@@ -19,7 +19,7 @@ export function BrandMark({
         {logoUrl ? (
           <img
             alt={`Логотип ${name}`}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
             src={logoUrl}
           />
         ) : (

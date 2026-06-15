@@ -72,6 +72,9 @@ const brandingContextValue: BrandingContextValue = {
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
     },
+    layout: {
+      authBrandPlacement: 'right',
+    },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
@@ -110,6 +113,9 @@ describe('TenantAuthShell', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(container.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--right',
+    )
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument()
     expect(screen.getByText('Описание страницы')).toBeInTheDocument()
     expect(

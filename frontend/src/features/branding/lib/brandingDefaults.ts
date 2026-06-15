@@ -15,6 +15,10 @@ export const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+export const defaultBrandingLayout = {
+  authBrandPlacement: 'left',
+} as const
+
 export function createDefaultPublicBranding(
   tenantDisplayName = 'Клиентский портал',
 ): PublicBranding {
@@ -28,6 +32,7 @@ export function createDefaultPublicBranding(
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: { ...defaultBrandingLayout },
     portalName: tenantDisplayName,
     supportLabel: `Команда ${tenantDisplayName}`,
     version: 1,

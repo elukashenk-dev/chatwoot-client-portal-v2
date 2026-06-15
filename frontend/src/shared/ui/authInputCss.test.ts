@@ -32,4 +32,14 @@ describe('auth input CSS contract', () => {
     expect(filledRule).not.toContain('#9cb9df')
     expect(autofillRule).not.toContain('rgb(243 247 252 / 0.86)')
   })
+
+  it('keeps the mobile auth brand mark size and placement stable', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
+    const brandMarkRule = getCssRule(css, '.auth-brand-mark {')
+    const logoRule = getCssRule(css, '.auth-brand-mark .brand-mark-logo {')
+
+    expect(brandMarkRule).toContain('top: 52px')
+    expect(logoRule).toContain('width: 63px')
+    expect(logoRule).toContain('height: 63px')
+  })
 })

@@ -31,6 +31,9 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -84,6 +87,9 @@ describe('adminBrandingClient', () => {
               ...brandingResponse.branding.copy,
               authTitle: 'Добро пожаловать',
             },
+            layout: {
+              authBrandPlacement: 'right',
+            },
             portalName: 'Новый портал',
             version: 2,
           },
@@ -100,6 +106,7 @@ describe('adminBrandingClient', () => {
         primary: '#123456',
       },
       copy: { authTitle: 'Добро пожаловать' },
+      layout: { authBrandPlacement: 'right' },
       portalName: 'Новый портал',
     })
 
@@ -113,6 +120,7 @@ describe('adminBrandingClient', () => {
             primary: '#123456',
           },
           copy: { authTitle: 'Добро пожаловать' },
+          layout: { authBrandPlacement: 'right' },
           portalName: 'Новый портал',
         }),
         credentials: 'include',

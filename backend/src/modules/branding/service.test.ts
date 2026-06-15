@@ -43,6 +43,7 @@ function createRepository(settings: unknown = null) {
       chatInfoTitle: null,
       chatMutedTextColor: null,
       chatTextColor: null,
+      authBrandPlacement: null,
       logoAssetId: null,
       portalName: null,
       primaryColor: null,
@@ -79,6 +80,9 @@ describe('createBrandingService', () => {
         copy: expect.objectContaining({
           authTitle: 'Вход в личный кабинет',
         }),
+        layout: {
+          authBrandPlacement: 'left',
+        },
         portalName: 'Бухфирма',
         supportLabel: 'Команда Бухфирма',
       }),
@@ -108,6 +112,9 @@ describe('createBrandingService', () => {
           copy: {
             authTitle: 'Добро пожаловать',
           },
+          layout: {
+            authBrandPlacement: 'right',
+          },
           portalName: 'Новый портал',
           supportLabel: 'Поддержка',
         },
@@ -126,6 +133,9 @@ describe('createBrandingService', () => {
         copy: expect.objectContaining({
           authTitle: 'Добро пожаловать',
         }),
+        layout: {
+          authBrandPlacement: 'right',
+        },
         portalName: 'Новый портал',
         supportLabel: 'Поддержка',
       }),
@@ -134,6 +144,7 @@ describe('createBrandingService', () => {
       expect.objectContaining({
         authContentSurfaceColor: '#f8fafc',
         authContentSurfaceOpacity: 84,
+        authBrandPlacement: 'right',
         authTitle: 'Добро пожаловать',
         authTextColor: '#223344',
         chatHeaderTextColor: '#f8fafc',
@@ -175,6 +186,7 @@ describe('createBrandingService', () => {
       chatInfoTitle: null,
       chatMutedTextColor: null,
       chatTextColor: null,
+      authBrandPlacement: null,
       logoAssetId: null,
       portalName: null,
       primaryColor: null,
@@ -253,7 +265,36 @@ describe('createBrandingService', () => {
     },
   )
 
-  it.each([{}, { colors: {} }, { copy: {} }])(
+  it.each(['top', 'bottom', '', null, 42])(
+    'rejects invalid auth brand placement %#',
+    async (authBrandPlacement) => {
+      const repository = createRepository()
+      const service = createBrandingService({
+        audit: vi.fn(),
+        repository,
+        tenant,
+      })
+
+      await expect(
+        service.updateAdminBranding({
+          admin,
+          input: {
+            layout: {
+              authBrandPlacement,
+            },
+          },
+          requestIp: null,
+          userAgent: null,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BRANDING_SETTINGS_INVALID',
+        statusCode: 400,
+      })
+      expect(repository.upsertSettings).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each([{}, { colors: {} }, { copy: {} }, { layout: {} }])(
     'rejects empty admin branding updates without repository write %#',
     async (input) => {
       const repository = createRepository()

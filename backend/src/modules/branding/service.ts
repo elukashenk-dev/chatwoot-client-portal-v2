@@ -4,6 +4,7 @@ import { ApiError } from '../../lib/errors.js'
 import {
   createDefaultBrandingCopy,
   defaultBrandingColors,
+  defaultBrandingLayout,
 } from './brandingDefaults.js'
 import { parseAdminBrandingPatch } from './brandingValidation.js'
 import type { BrandingRepository, BrandingSettingsPatch } from './repository.js'
@@ -155,6 +156,12 @@ async function buildBrandingResponse({
           defaultCopy.chatInfoTitle,
         ),
       },
+      layout: {
+        authBrandPlacement: coalesce(
+          resolvedSettings?.authBrandPlacement,
+          defaultBrandingLayout.authBrandPlacement,
+        ),
+      },
       portalName: coalesce(resolvedSettings?.portalName, tenant.displayName),
       supportLabel: coalesce(
         resolvedSettings?.supportLabel,
@@ -200,6 +207,10 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
 
   if (parsedInput.copy?.authTitle !== undefined) {
     patch.authTitle = parsedInput.copy.authTitle
+  }
+
+  if (parsedInput.layout?.authBrandPlacement !== undefined) {
+    patch.authBrandPlacement = parsedInput.layout.authBrandPlacement
   }
 
   if (parsedInput.colors?.chatBackground !== undefined) {

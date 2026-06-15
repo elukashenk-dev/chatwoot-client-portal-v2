@@ -77,6 +77,9 @@ const publicBrandingResponse = {
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
     version: 3,

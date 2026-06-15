@@ -34,6 +34,10 @@ export type BrandingCopy = {
   chatInfoTitle: string
 }
 
+export type BrandingLayout = {
+  authBrandPlacement: 'center' | 'left' | 'right'
+}
+
 export type BrandingAssetKind =
   | 'logo'
   | 'pwa_icon'
@@ -60,6 +64,7 @@ export type AdminBrandingResponse = {
     assets: BrandingAssets
     colors: BrandingColors
     copy: BrandingCopy
+    layout: BrandingLayout
     portalName: string
     supportLabel: string
     version: number
@@ -77,6 +82,7 @@ export type AdminBrandingAssetDeleteResponse = {
 export type AdminBrandingPatch = Partial<{
   colors: Partial<BrandingColors>
   copy: Partial<BrandingCopy>
+  layout: Partial<BrandingLayout>
   portalName: string
   supportLabel: string
 }>

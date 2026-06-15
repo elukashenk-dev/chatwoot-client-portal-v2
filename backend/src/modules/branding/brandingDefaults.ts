@@ -13,6 +13,10 @@ export const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+export const defaultBrandingLayout = {
+  authBrandPlacement: 'left',
+} as const
+
 export function createDefaultBrandingCopy(tenantDisplayName: string) {
   return {
     authSubtitle: 'Введите email и пароль, чтобы продолжить.',

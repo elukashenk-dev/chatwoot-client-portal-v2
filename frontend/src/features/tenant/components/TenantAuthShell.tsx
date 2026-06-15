@@ -19,6 +19,9 @@ export function TenantAuthShell(props: AuthShellProps) {
   return (
     <AuthShell
       {...props}
+      brandPlacement={
+        props.brandPlacement ?? branding.layout.authBrandPlacement
+      }
       brandLogoUrl={props.brandLogoUrl ?? branding.assets.logo?.publicUrl}
       brandMonogram={brandMonogram}
       brandName={brandName}

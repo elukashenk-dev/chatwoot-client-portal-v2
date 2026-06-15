@@ -9,6 +9,7 @@ export function createPreviewPublicBranding(
     assets: draft.assets,
     colors: draft.colors,
     copy: draft.copy,
+    layout: draft.layout,
     portalName: draft.portalName,
     supportLabel: draft.supportLabel,
     version: 1,

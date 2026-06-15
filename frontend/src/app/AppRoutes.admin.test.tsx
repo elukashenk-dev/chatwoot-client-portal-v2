@@ -63,6 +63,9 @@ function createAdminBrandingResponse() {
         chatEmptyTitle: 'Мы на связи',
         chatInfoTitle: 'Информация о чате',
       },
+      layout: {
+        authBrandPlacement: 'left',
+      },
       portalName: 'Бухфирма',
       supportLabel: 'Команда Бухфирма',
       version: 1,

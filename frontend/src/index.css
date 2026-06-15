@@ -495,7 +495,7 @@ button:not(:disabled),
 }
 
 .auth-brand-mark {
-  top: 40px;
+  top: 52px;
 }
 
 .auth-brand-mark--left {
@@ -512,11 +512,11 @@ button:not(:disabled),
 }
 
 .auth-brand-mark .brand-mark-logo {
-  width: 48px;
-  height: 48px;
+  width: 63px;
+  height: 63px;
   margin-bottom: 10px;
   border-radius: 15px;
-  font-size: 16px;
+  font-size: 18px;
 }
 
 .auth-brand-mark .brand-mark-name {
@@ -530,7 +530,7 @@ button:not(:disabled),
 
 @media (min-width: 361px) {
   .auth-brand-mark {
-    top: 42px;
+    top: 52px;
   }
 
   .auth-brand-mark--left {
@@ -558,7 +558,7 @@ button:not(:disabled),
   }
 
   .auth-brand-mark {
-    top: 64px;
+    top: 74px;
   }
 
   .auth-brand-mark--left {
@@ -570,8 +570,8 @@ button:not(:disabled),
   }
 
   .auth-brand-mark .brand-mark-logo {
-    width: 56px;
-    height: 56px;
+    width: 63px;
+    height: 63px;
     margin-bottom: 12px;
     border-radius: 18px;
     font-size: 18px;

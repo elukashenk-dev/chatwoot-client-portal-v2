@@ -38,6 +38,9 @@ const draft = {
     chatEmptyTitle: 'Начните диалог',
     chatInfoTitle: 'О диалоге',
   },
+  layout: {
+    authBrandPlacement: 'left',
+  },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
 } satisfies BrandingDraft
@@ -282,6 +285,9 @@ describe('PortalPreviewFrame', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(document.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--left',
+    )
     const emailInput = screen.getByLabelText('Email')
     const passwordInput = screen.getByLabelText('Пароль')
 
@@ -331,6 +337,9 @@ describe('PortalPreviewFrame', () => {
         authSubtitle: 'Используйте рабочий email.',
         authTitle: 'Вход для клиентов',
       },
+      layout: {
+        authBrandPlacement: 'right',
+      },
       portalName: 'Портал Бухфирма',
       supportLabel: 'Поддержка 24/7',
     } satisfies BrandingDraft
@@ -346,6 +355,9 @@ describe('PortalPreviewFrame', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип Портал Бухфирма' }),
     ).toHaveAttribute('src', '/api/branding/assets/12?v=12')
+    expect(document.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--right',
+    )
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
       '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',

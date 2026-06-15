@@ -53,6 +53,9 @@ const savedBrandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -236,6 +239,7 @@ describe('AdminBrandingPage', () => {
     const portalNameInput = await screen.findByLabelText('Название портала')
     await user.clear(portalNameInput)
     await user.type(portalNameInput, 'Новый портал')
+    await user.click(screen.getByRole('radio', { name: 'Справа' }))
     await user.click(
       screen.getByRole('button', { name: 'Сохранить настройки' }),
     )
@@ -243,6 +247,9 @@ describe('AdminBrandingPage', () => {
     await waitFor(() => {
       expect(updateAdminBrandingMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          layout: {
+            authBrandPlacement: 'right',
+          },
           portalName: 'Новый портал',
         }),
       )

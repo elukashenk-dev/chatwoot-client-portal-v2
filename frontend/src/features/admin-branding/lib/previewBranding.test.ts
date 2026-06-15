@@ -39,6 +39,9 @@ const draft = {
     chatEmptyTitle: 'Начните диалог',
     chatInfoTitle: 'О диалоге',
   },
+  layout: {
+    authBrandPlacement: 'right',
+  },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
 } satisfies BrandingDraft
@@ -49,6 +52,7 @@ describe('previewBranding', () => {
       assets: draft.assets,
       colors: draft.colors,
       copy: draft.copy,
+      layout: draft.layout,
       portalName: 'ProvGroup',
       supportLabel: 'Поддержка ProvGroup',
       version: 1,

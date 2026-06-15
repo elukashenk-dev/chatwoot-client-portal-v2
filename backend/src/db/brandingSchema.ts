@@ -79,6 +79,7 @@ export const portalBrandingSettings = pgTable(
     authContentSurfaceOpacity: integer('auth_content_surface_opacity'),
     authTextColor: text('auth_text_color'),
     authMutedTextColor: text('auth_muted_text_color'),
+    authBrandPlacement: text('auth_brand_placement'),
     chatBackgroundColor: text('chat_background_color'),
     chatTextColor: text('chat_text_color'),
     chatMutedTextColor: text('chat_muted_text_color'),
@@ -147,6 +148,10 @@ export const portalBrandingSettings = pgTable(
     check(
       'portal_branding_settings_auth_content_surface_opacity_check',
       sql`${table.authContentSurfaceOpacity} is null or (${table.authContentSurfaceOpacity} >= 0 and ${table.authContentSurfaceOpacity} <= 100)`,
+    ),
+    check(
+      'portal_branding_settings_auth_brand_placement_check',
+      sql`${table.authBrandPlacement} is null or ${table.authBrandPlacement} in ('left', 'center', 'right')`,
     ),
     check('portal_branding_settings_version_check', sql`${table.version} > 0`),
   ],
