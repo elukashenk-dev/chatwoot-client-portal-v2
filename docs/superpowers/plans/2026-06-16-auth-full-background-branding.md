@@ -2456,7 +2456,7 @@ the remaining auth pages.
 - Modify: `tests/e2e/customer-branding-runtime.spec.ts`
 - Modify: `docs/roadmap/work-log.md`
 
-- [ ] **Step 1: Add browser coverage for full background admin settings**
+- [x] **Step 1: Add browser coverage for full background admin settings**
 
   In `tests/e2e/admin-branding-settings.spec.ts`, cover:
   - upload/preview of `auth_background_image`;
@@ -2468,7 +2468,7 @@ the remaining auth pages.
 
   Assert the saved controls still show the selected values after reload.
 
-- [ ] **Step 2: Add browser coverage for real preview parity**
+- [x] **Step 2: Add browser coverage for real preview parity**
 
   In `tests/e2e/admin-branding-real-preview.spec.ts`, assert the real preview receives:
 
@@ -2481,7 +2481,7 @@ the remaining auth pages.
   await expect(previewFrame.getByText('+7 (800) 000-00-00')).toBeVisible()
   ```
 
-- [ ] **Step 3: Add runtime negative checks**
+- [x] **Step 3: Add runtime negative checks**
 
   In `tests/e2e/customer-branding-runtime.spec.ts`, assert:
   - `.portal-frame-background` does not use `auth_background_image`;
@@ -2489,7 +2489,7 @@ the remaining auth pages.
   - `.auth-header-shell` does not render on `/auth/login`;
   - dark overlay does not block field focus or submit.
 
-- [ ] **Step 4: Add Figma layout geometry smoke**
+- [x] **Step 4: Add Figma layout geometry smoke**
 
   In `tests/e2e/customer-branding-runtime.spec.ts`, add focused desktop-browser mobile viewport smokes for the Figma baseline and the larger-mobile target.
 
@@ -2556,7 +2556,7 @@ the remaining auth pages.
   expect(largeSubmitBox?.width).toBeLessThanOrEqual(304)
   ```
 
-- [ ] **Step 5: Run targeted browser checks**
+- [x] **Step 5: Run targeted browser checks**
 
   Run:
 
@@ -2566,7 +2566,7 @@ the remaining auth pages.
 
   Expected: PASS.
 
-- [ ] **Step 6: Run required final checks**
+- [x] **Step 6: Run required final checks**
 
   Run:
 
@@ -2581,7 +2581,7 @@ the remaining auth pages.
 
   Expected: all commands PASS.
 
-- [ ] **Step 7: Review the implementation**
+- [x] **Step 7: Review the implementation**
 
   Do a focused code review of:
   - DB migration and Drizzle snapshot consistency;
@@ -2609,7 +2609,7 @@ the remaining auth pages.
 
   Create a finding in `docs/findings/` for any unresolved risk that is not fixed in this branch.
 
-- [ ] **Step 8: Update work log**
+- [x] **Step 8: Update work log**
 
   If the full implementation is complete and verified, update
   `docs/roadmap/work-log.md` with one or two short baseline bullets under
@@ -2622,7 +2622,7 @@ the remaining auth pages.
 
   Replace the existing `Recommended Next Step` block with the next real product step after this slice.
 
-- [ ] **Step 9: Commit closure docs**
+- [x] **Step 9: Commit closure docs**
 
   Commit:
 

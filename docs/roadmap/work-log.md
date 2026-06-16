@@ -131,6 +131,12 @@ execution-plan детали здесь не хранятся.
 - Auth branding middle-surface customization is implemented with tenant-owned
   `authContentSurface` and `authContentSurfaceOpacity` fields, preserving
   default visual parity and keeping chat runtime layout unchanged.
+- Auth branding now uses the approved Full Background design model: tenant
+  admins can style login screens through a prepared full-screen auth
+  background, light/dark appearance presets, overlay protection, field/button
+  style presets and real runtime preview parity.
+- Auth legal UX has public terms/privacy pages, informational login legal links
+  and explicit registration consent with backend persistence.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
@@ -156,6 +162,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Run an end-to-end MT-10A tenant lifecycle rehearsal against the intended
-  Chatwoot/domain mode, including `/api/tenant`, Chatwoot verification, webhook
-  configuration and archive/deprovision dry run before exposing an operator UI.
+- Review the default auth login and registration screens in browser, then
+  replace first-run legal document copy with operator-approved legal texts
+  before production rollout.

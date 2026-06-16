@@ -41,6 +41,12 @@ function createAdminSessionResponse() {
 function createAdminBrandingResponse() {
   return createJsonResponse({
     branding: {
+      appearance: {
+        authBackgroundOverlay: 'none',
+        authButtonStyle: 'solid',
+        authColorScheme: 'light',
+        authFieldStyle: 'solid',
+      },
       assets: {},
       colors: {
         accent: '#4676b4',

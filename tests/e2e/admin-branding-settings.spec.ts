@@ -1,6 +1,22 @@
+import { Buffer } from 'node:buffer'
+
 import { expect, type Page, type Route, test } from '@playwright/test'
 
 const adminEmail = 'cbr@provgroup.com'
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGSc9h4NwAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+const authBackgroundAsset = {
+  assetVersion: '88',
+  contentType: 'image/png',
+  height: null,
+  id: 88,
+  kind: 'auth_background_image',
+  publicUrl: '/api/branding/assets/88?v=88',
+  width: null,
+} as const
 
 const defaultBrandingColors = {
   accent: '#4676b4',
@@ -17,9 +33,23 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingResponse = {
   branding: {
-    assets: {},
+    appearance: defaultBrandingAppearance,
+    assets: {} as Partial<
+      Record<'auth_background_image', typeof authBackgroundAsset>
+    >,
     colors: defaultBrandingColors,
     copy: {
       authSubtitle: 'Введите email и пароль, чтобы продолжить.',
@@ -28,6 +58,7 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -37,10 +68,12 @@ const brandingResponse = {
 type BrandingResponseBody = typeof brandingResponse.branding
 type BrandingResponseOverrides = Omit<
   Partial<BrandingResponseBody>,
-  'colors' | 'copy'
+  'appearance' | 'colors' | 'copy' | 'layout'
 > & {
+  appearance?: Partial<BrandingResponseBody['appearance']>
   colors?: Partial<BrandingResponseBody['colors']>
   copy?: Partial<BrandingResponseBody['copy']>
+  layout?: Partial<BrandingResponseBody['layout']>
 }
 type BrandingPatchRouteHandler = (params: {
   payload: unknown
@@ -52,6 +85,10 @@ function createBrandingResponse(overrides: BrandingResponseOverrides = {}) {
     branding: {
       ...brandingResponse.branding,
       ...overrides,
+      appearance: {
+        ...brandingResponse.branding.appearance,
+        ...overrides.appearance,
+      },
       colors: {
         ...brandingResponse.branding.colors,
         ...overrides.colors,
@@ -59,6 +96,10 @@ function createBrandingResponse(overrides: BrandingResponseOverrides = {}) {
       copy: {
         ...brandingResponse.branding.copy,
         ...overrides.copy,
+      },
+      layout: {
+        ...brandingResponse.branding.layout,
+        ...overrides.layout,
       },
     },
   }
@@ -86,6 +127,7 @@ async function mockPublicBrandingRoute(page: Page) {
 async function mockAdminBrandingRoutes(
   page: Page,
   onPatch: BrandingPatchRouteHandler,
+  getBrandingResponse = () => brandingResponse,
 ) {
   await mockPublicBrandingRoute(page)
 
@@ -121,7 +163,7 @@ async function mockAdminBrandingRoutes(
     if (route.request().method() === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
-        json: brandingResponse,
+        json: getBrandingResponse(),
       })
       return
     }
@@ -146,6 +188,15 @@ async function gotoAdminBrandingPage(page: Page) {
     page.getByRole('heading', { exact: true, name: 'Брендинг' }),
   ).toBeVisible()
   await expect(page.getByLabel('Название портала')).toBeVisible()
+}
+
+async function clickSegmentedRadio(page: Page, name: string) {
+  await page
+    .locator('label')
+    .filter({
+      has: page.getByRole('radio', { exact: true, name }),
+    })
+    .click()
 }
 
 function createDeferred() {
@@ -236,7 +287,7 @@ test('admin can edit all branding setting groups and see preview update', async 
   })
 
   await expect(phonePreview).toContainText(updatedBranding.portalName)
-  await expect(phonePreview).toContainText(updatedBranding.supportLabel)
+  await expect(phonePreview).toContainText('+7 (800) 000-00-00')
   await expect(
     phonePreview.getByRole('heading', {
       name: updatedBranding.copy.authTitle,
@@ -296,6 +347,118 @@ test('admin can edit all branding setting groups and see preview update', async 
 
   await page.getByLabel('Название команды поддержки').fill('Поддержка 24/7')
   await expect(page.getByText('Настройки сохранены.')).not.toBeVisible()
+})
+
+test('admin saves full background auth appearance settings after upload and reload', async ({
+  page,
+}) => {
+  const expectedAppearance = {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  } as const
+  let currentBranding = createBrandingResponse()
+
+  await mockAdminBrandingRoutes(
+    page,
+    async ({ payload, route }) => {
+      await expect(payload).toMatchObject({
+        appearance: expectedAppearance,
+      })
+
+      currentBranding = createBrandingResponse({
+        ...currentBranding.branding,
+        appearance: expectedAppearance,
+        version: 2,
+      })
+
+      await route.fulfill({
+        contentType: 'application/json',
+        json: currentBranding,
+        status: 200,
+      })
+    },
+    () => currentBranding,
+  )
+
+  await page.route(
+    '**/api/admin/branding/assets/auth_background_image',
+    async (route) => {
+      expect(route.request().method()).toBe('POST')
+      expect(route.request().headers()['content-type']).toContain(
+        'multipart/form-data',
+      )
+      currentBranding = createBrandingResponse({
+        ...currentBranding.branding,
+        assets: {
+          ...currentBranding.branding.assets,
+          auth_background_image: authBackgroundAsset,
+        },
+      })
+
+      await route.fulfill({
+        contentType: 'application/json',
+        json: { asset: authBackgroundAsset },
+        status: 200,
+      })
+    },
+  )
+  await page.route('**/api/branding/assets/88**', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({
+      body: onePixelPng,
+      contentType: 'image/png',
+      status: 200,
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+
+  await page.getByRole('link', { name: 'Изображения' }).click()
+  await page.getByLabel('Загрузить общий фон экрана входа').setInputFiles({
+    buffer: onePixelPng,
+    mimeType: 'image/png',
+    name: 'auth-background.png',
+  })
+  await expect(page.getByRole('status')).toContainText(
+    'Общий фон экрана входа загружен.',
+  )
+  await expect(
+    page.getByLabel('Заменить общий фон экрана входа'),
+  ).toBeAttached()
+
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+  await clickSegmentedRadio(page, 'Темная')
+  await clickSegmentedRadio(page, 'Темная дымка')
+  await clickSegmentedRadio(page, 'Контур')
+  await clickSegmentedRadio(page, 'Градиент')
+
+  const patchResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/admin/branding') &&
+      response.request().method() === 'PATCH',
+  )
+
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click()
+  await expect((await patchResponsePromise).status()).toBe(200)
+  await expect(page.getByRole('status')).toContainText('Настройки сохранены.')
+
+  await page.reload()
+  await expect(page.getByLabel('Название портала')).toBeVisible()
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+
+  await expect(
+    page.getByRole('radio', { exact: true, name: 'Темная' }),
+  ).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Темная дымка' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Контур' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Градиент' })).toBeChecked()
+
+  await page.getByRole('link', { name: 'Изображения' }).click()
+  await expect(
+    page.getByLabel('Заменить общий фон экрана входа'),
+  ).toBeAttached()
 })
 
 test('admin reset colors restores production-like default color contract', async ({

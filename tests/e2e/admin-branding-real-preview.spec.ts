@@ -16,6 +16,16 @@ const logoAsset = {
   width: null,
 } as const
 
+const authBackgroundAsset = {
+  assetVersion: '78',
+  contentType: 'image/png',
+  height: null,
+  id: 78,
+  kind: 'auth_background_image',
+  publicUrl: '/api/branding/assets/78?v=78',
+  width: null,
+} as const
+
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
@@ -31,9 +41,22 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'dark',
+  authButtonStyle: 'gradient',
+  authColorScheme: 'dark',
+  authFieldStyle: 'outline',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingResponse = {
   branding: {
+    appearance: defaultBrandingAppearance,
     assets: {
+      auth_background_image: authBackgroundAsset,
       logo: logoAsset,
     },
     colors: defaultBrandingColors,
@@ -44,6 +67,7 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -194,6 +218,12 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect(
     phonePreview.getByRole('button', { name: 'Войти' }),
   ).toBeDisabled()
+  await expect(phonePreview.locator('.auth-canvas-background')).toHaveCSS(
+    'background-image',
+    /\/api\/branding\/assets\/78\?v=78/,
+  )
+  await expect(phonePreview.locator('.auth-background-overlay')).toBeVisible()
+  await expect(phonePreview.getByText('+7 (800) 000-00-00')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Чат' }).click()
   await expect(
