@@ -22,6 +22,7 @@
 - [operations/chatwoot-4-13-upgrade-notes.md](operations/chatwoot-4-13-upgrade-notes.md) - Chatwoot 4.13 notes.
 - [operations/installed-pwa-smoke.md](operations/installed-pwa-smoke.md) - smoke для установленного Offline-first PWA.
 - [operations/production-mcp-playwright-test-cycle.md](operations/production-mcp-playwright-test-cycle.md) - сценарии production-like QA через MCP Playwright.
+- [operations/auth-full-background-branding-manual-test-cases.md](operations/auth-full-background-branding-manual-test-cases.md) - ручные test cases для Full Background auth branding и legal consent.
 - [findings/](findings/) - открытые review findings.
 
 ## Execution Artifacts
