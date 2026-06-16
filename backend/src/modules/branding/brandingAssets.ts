@@ -3,8 +3,6 @@ import { ApiError } from '../../lib/errors.js'
 export const brandingAssetKinds = [
   'logo',
   'pwa_icon',
-  'auth_header_image',
-  'auth_footer_image',
   'auth_background_image',
   'chat_background_image',
   'chat_header_background_image',

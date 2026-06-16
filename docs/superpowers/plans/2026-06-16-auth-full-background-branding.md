@@ -846,7 +846,7 @@ user can approve or reject the layout before the larger implementation starts.
 - Test: `backend/src/modules/branding/brandingAssets.test.ts`
 - Test: `backend/src/modules/branding/assetService.test.ts`
 
-- [ ] **Step 1: Add failing service tests for default appearance response**
+- [x] **Step 1: Add failing service tests for default appearance response**
 
   In `backend/src/modules/branding/service.test.ts`, extend the default admin and public branding assertions:
 
@@ -861,7 +861,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected before implementation: FAIL because `branding.appearance` is missing.
 
-- [ ] **Step 2: Add failing service tests for appearance patch mapping**
+- [x] **Step 2: Add failing service tests for appearance patch mapping**
 
   In `backend/src/modules/branding/service.test.ts`, extend the existing admin update test input:
 
@@ -889,7 +889,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected before implementation: FAIL with `BRANDING_SETTINGS_INVALID`.
 
-- [ ] **Step 3: Add invalid enum validation tests**
+- [x] **Step 3: Add invalid enum validation tests**
 
   In `backend/src/modules/branding/service.test.ts`, add:
 
@@ -924,7 +924,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected before implementation: FAIL if invalid values are accepted or fail with a different error shape.
 
-- [ ] **Step 4: Add repository storage/readback tests**
+- [x] **Step 4: Add repository storage/readback tests**
 
   In `backend/src/modules/branding/repository.test.ts`, extend the settings patch used by the readback test:
 
@@ -950,7 +950,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected before implementation: FAIL because repository types/schema do not include these fields.
 
-- [ ] **Step 5: Implement schema fields and constraints**
+- [x] **Step 5: Implement schema fields and constraints**
 
   In `backend/src/db/brandingSchema.ts`, add columns to `portalBrandingSettings`:
 
@@ -982,7 +982,7 @@ user can approve or reject the layout before the larger implementation starts.
   ),
   ```
 
-- [ ] **Step 6: Remove old auth top/bottom image contract from backend**
+- [x] **Step 6: Remove old auth top/bottom image contract from backend**
 
   In `backend/src/modules/branding/brandingAssets.ts`, remove `auth_header_image` and `auth_footer_image` from `brandingAssetKinds`.
 
@@ -1028,7 +1028,7 @@ user can approve or reject the layout before the larger implementation starts.
   must fail if stale `auth_header_image` or `auth_footer_image` mappings remain
   in `assetService.ts`.
 
-- [ ] **Step 7: Generate migration**
+- [x] **Step 7: Generate migration**
 
   Run:
 
@@ -1049,7 +1049,7 @@ user can approve or reject the layout before the larger implementation starts.
   WHERE "kind" IN ('auth_header_image', 'auth_footer_image');
   ```
 
-- [ ] **Step 8: Implement backend defaults, validation, repository and service mapping**
+- [x] **Step 8: Implement backend defaults, validation, repository and service mapping**
 
   In `backend/src/modules/branding/brandingDefaults.ts`, add `defaultBrandingAppearance` with the defaults from this plan.
 
@@ -1080,7 +1080,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   In `service.ts`, coalesce response values from settings to `defaultBrandingAppearance` and map parsed patch values to repository fields.
 
-- [ ] **Step 9: Run backend targeted tests**
+- [x] **Step 9: Run backend targeted tests**
 
   Run:
 
@@ -1090,7 +1090,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected: PASS.
 
-- [ ] **Step 10: Commit backend contract slice**
+- [x] **Step 10: Commit backend contract slice**
 
   Commit only backend contract files and tests:
 

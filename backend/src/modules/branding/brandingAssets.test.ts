@@ -18,6 +18,9 @@ describe('branding asset helpers', () => {
 
   it('parses supported branding asset kinds', () => {
     expect(parseBrandingAssetKind('pwa_icon')).toBe('pwa_icon')
+    expect(parseBrandingAssetKind('auth_background_image')).toBe(
+      'auth_background_image',
+    )
   })
 
   it('rejects unsupported branding asset kinds with a controlled not-found code', () => {
@@ -28,6 +31,18 @@ describe('branding asset helpers', () => {
       }),
     )
   })
+
+  it.each(['auth_header_image', 'auth_footer_image'])(
+    'rejects removed auth artwork kind %s',
+    (kind) => {
+      expect(() => parseBrandingAssetKind(kind)).toThrow(
+        expect.objectContaining({
+          code: 'BRANDING_ASSET_KIND_NOT_FOUND',
+          statusCode: 404,
+        }),
+      )
+    },
+  )
 
   it('parses positive asset ids', () => {
     expect(parseBrandingAssetId('42')).toBe(42)

@@ -55,7 +55,7 @@ export const portalBrandingAssets = pgTable(
     ),
     check(
       'portal_branding_assets_kind_check',
-      sql`${table.kind} in ('logo', 'pwa_icon', 'auth_header_image', 'auth_footer_image', 'auth_background_image', 'chat_background_image', 'chat_header_background_image')`,
+      sql`${table.kind} in ('logo', 'pwa_icon', 'auth_background_image', 'chat_background_image', 'chat_header_background_image')`,
     ),
     check('portal_branding_assets_byte_size_check', sql`${table.byteSize} > 0`),
   ],
@@ -75,8 +75,12 @@ export const portalBrandingSettings = pgTable(
     primaryColor: text('primary_color'),
     accentColor: text('accent_color'),
     authBackgroundColor: text('auth_background_color'),
+    authBackgroundOverlay: text('auth_background_overlay'),
+    authButtonStyle: text('auth_button_style'),
+    authColorScheme: text('auth_color_scheme'),
     authContentSurfaceColor: text('auth_content_surface_color'),
     authContentSurfaceOpacity: integer('auth_content_surface_opacity'),
+    authFieldStyle: text('auth_field_style'),
     authTextColor: text('auth_text_color'),
     authMutedTextColor: text('auth_muted_text_color'),
     authBrandPlacement: text('auth_brand_placement'),
@@ -91,8 +95,6 @@ export const portalBrandingSettings = pgTable(
     chatEmptyBody: text('chat_empty_body'),
     chatInfoTitle: text('chat_info_title'),
     logoAssetId: integer('logo_asset_id'),
-    authHeaderImageAssetId: integer('auth_header_image_asset_id'),
-    authFooterImageAssetId: integer('auth_footer_image_asset_id'),
     authBackgroundImageAssetId: integer('auth_background_image_asset_id'),
     chatBackgroundImageAssetId: integer('chat_background_image_asset_id'),
     chatHeaderBackgroundImageAssetId: integer(
@@ -114,16 +116,6 @@ export const portalBrandingSettings = pgTable(
       columns: [table.tenantId, table.logoAssetId],
       foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
       name: 'portal_branding_settings_logo_asset_tenant_fk',
-    }).onDelete('restrict'),
-    foreignKey({
-      columns: [table.tenantId, table.authHeaderImageAssetId],
-      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
-      name: 'portal_branding_settings_auth_header_asset_tenant_fk',
-    }).onDelete('restrict'),
-    foreignKey({
-      columns: [table.tenantId, table.authFooterImageAssetId],
-      foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
-      name: 'portal_branding_settings_auth_footer_asset_tenant_fk',
     }).onDelete('restrict'),
     foreignKey({
       columns: [table.tenantId, table.authBackgroundImageAssetId],
@@ -148,6 +140,22 @@ export const portalBrandingSettings = pgTable(
     check(
       'portal_branding_settings_auth_content_surface_opacity_check',
       sql`${table.authContentSurfaceOpacity} is null or (${table.authContentSurfaceOpacity} >= 0 and ${table.authContentSurfaceOpacity} <= 100)`,
+    ),
+    check(
+      'portal_branding_settings_auth_color_scheme_check',
+      sql`${table.authColorScheme} is null or ${table.authColorScheme} in ('light', 'dark')`,
+    ),
+    check(
+      'portal_branding_settings_auth_background_overlay_check',
+      sql`${table.authBackgroundOverlay} is null or ${table.authBackgroundOverlay} in ('none', 'light', 'dark')`,
+    ),
+    check(
+      'portal_branding_settings_auth_field_style_check',
+      sql`${table.authFieldStyle} is null or ${table.authFieldStyle} in ('solid', 'translucent', 'outline')`,
+    ),
+    check(
+      'portal_branding_settings_auth_button_style_check',
+      sql`${table.authButtonStyle} is null or ${table.authButtonStyle} in ('solid', 'gradient')`,
     ),
     check(
       'portal_branding_settings_auth_brand_placement_check',

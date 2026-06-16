@@ -3,6 +3,7 @@ import type { PublicTenantAdmin } from '../tenant-admin/adminAuthService.js'
 import { ApiError } from '../../lib/errors.js'
 import {
   createDefaultBrandingCopy,
+  defaultBrandingAppearance,
   defaultBrandingColors,
   defaultBrandingLayout,
 } from './brandingDefaults.js'
@@ -122,6 +123,24 @@ async function buildBrandingResponse({
 
   return {
     branding: {
+      appearance: {
+        authBackgroundOverlay: coalesce(
+          resolvedSettings?.authBackgroundOverlay,
+          defaultBrandingAppearance.authBackgroundOverlay,
+        ),
+        authButtonStyle: coalesce(
+          resolvedSettings?.authButtonStyle,
+          defaultBrandingAppearance.authButtonStyle,
+        ),
+        authColorScheme: coalesce(
+          resolvedSettings?.authColorScheme,
+          defaultBrandingAppearance.authColorScheme,
+        ),
+        authFieldStyle: coalesce(
+          resolvedSettings?.authFieldStyle,
+          defaultBrandingAppearance.authFieldStyle,
+        ),
+      },
       assets,
       colors: {
         accent: accentColor,
@@ -175,6 +194,22 @@ async function buildBrandingResponse({
 function toSettingsPatch(input: unknown): BrandingSettingsPatch {
   const parsedInput = parseAdminBrandingPatch(input)
   const patch: BrandingSettingsPatch = {}
+
+  if (parsedInput.appearance?.authBackgroundOverlay !== undefined) {
+    patch.authBackgroundOverlay = parsedInput.appearance.authBackgroundOverlay
+  }
+
+  if (parsedInput.appearance?.authButtonStyle !== undefined) {
+    patch.authButtonStyle = parsedInput.appearance.authButtonStyle
+  }
+
+  if (parsedInput.appearance?.authColorScheme !== undefined) {
+    patch.authColorScheme = parsedInput.appearance.authColorScheme
+  }
+
+  if (parsedInput.appearance?.authFieldStyle !== undefined) {
+    patch.authFieldStyle = parsedInput.appearance.authFieldStyle
+  }
 
   if (parsedInput.colors?.accent !== undefined) {
     patch.accentColor = parsedInput.colors.accent

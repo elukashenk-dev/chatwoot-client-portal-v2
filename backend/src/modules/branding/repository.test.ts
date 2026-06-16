@@ -64,8 +64,12 @@ describe('createBrandingRepository', () => {
       await repositoryA.upsertSettings({
         accentColor: '#4676b4',
         authBackgroundColor: '#f3f7fc',
+        authBackgroundOverlay: 'dark',
+        authButtonStyle: 'gradient',
+        authColorScheme: 'dark',
         authContentSurfaceColor: '#f8fafc',
         authContentSurfaceOpacity: 84,
+        authFieldStyle: 'outline',
         authMutedTextColor: '#52637a',
         authSubtitle: 'Для защищенной переписки',
         authTextColor: '#111827',
@@ -87,8 +91,12 @@ describe('createBrandingRepository', () => {
 
       expect(settings).toEqual(
         expect.objectContaining({
+          authBackgroundOverlay: 'dark',
+          authButtonStyle: 'gradient',
+          authColorScheme: 'dark',
           authContentSurfaceColor: '#f8fafc',
           authContentSurfaceOpacity: 84,
+          authFieldStyle: 'outline',
         }),
       )
       expect(settings).toMatchObject({

@@ -17,6 +17,13 @@ export const defaultBrandingLayout = {
   authBrandPlacement: 'center',
 } as const
 
+export const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
 export function createDefaultBrandingCopy(tenantDisplayName: string) {
   return {
     authSubtitle: 'Войдите, чтобы продолжить общение с поддержкой.',

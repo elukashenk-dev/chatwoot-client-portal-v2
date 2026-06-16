@@ -17,6 +17,13 @@ const admin = {
   role: 'administrator',
 } satisfies PublicTenantAdmin
 
+const defaultAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+}
+
 function createRepository(settings: unknown = null) {
   return {
     findActiveAssetMetadata: vi.fn().mockResolvedValue({}),
@@ -27,8 +34,6 @@ function createRepository(settings: unknown = null) {
       authBackgroundImageAssetId: null,
       authContentSurfaceColor: null,
       authContentSurfaceOpacity: null,
-      authFooterImageAssetId: null,
-      authHeaderImageAssetId: null,
       authMutedTextColor: null,
       authSubtitle: null,
       authTextColor: null,
@@ -66,6 +71,7 @@ describe('createBrandingService', () => {
 
     await expect(service.getPublicBranding()).resolves.toEqual({
       branding: expect.objectContaining({
+        appearance: defaultAppearance,
         assets: {},
         colors: expect.objectContaining({
           authBackground: '#f3f7fc',
@@ -89,6 +95,21 @@ describe('createBrandingService', () => {
     })
   })
 
+  it('returns default admin branding appearance', async () => {
+    const repository = createRepository()
+    const service = createBrandingService({
+      audit: vi.fn(),
+      repository,
+      tenant,
+    })
+
+    await expect(service.getAdminBranding()).resolves.toEqual({
+      branding: expect.objectContaining({
+        appearance: defaultAppearance,
+      }),
+    })
+  })
+
   it('validates and saves admin branding updates with audit event', async () => {
     const audit = vi.fn()
     const repository = createRepository()
@@ -102,6 +123,12 @@ describe('createBrandingService', () => {
       service.updateAdminBranding({
         admin,
         input: {
+          appearance: {
+            authBackgroundOverlay: 'dark',
+            authButtonStyle: 'gradient',
+            authColorScheme: 'dark',
+            authFieldStyle: 'outline',
+          },
           colors: {
             authContentSurface: '#f8fafc',
             authContentSurfaceOpacity: 84,
@@ -123,6 +150,12 @@ describe('createBrandingService', () => {
       }),
     ).resolves.toEqual({
       branding: expect.objectContaining({
+        appearance: {
+          authBackgroundOverlay: 'dark',
+          authButtonStyle: 'gradient',
+          authColorScheme: 'dark',
+          authFieldStyle: 'outline',
+        },
         colors: expect.objectContaining({
           authContentSurface: '#f8fafc',
           authContentSurfaceOpacity: 84,
@@ -142,8 +175,12 @@ describe('createBrandingService', () => {
     })
     expect(repository.upsertSettings).toHaveBeenCalledWith(
       expect.objectContaining({
+        authBackgroundOverlay: 'dark',
+        authButtonStyle: 'gradient',
+        authColorScheme: 'dark',
         authContentSurfaceColor: '#f8fafc',
         authContentSurfaceOpacity: 84,
+        authFieldStyle: 'outline',
         authBrandPlacement: 'right',
         authTitle: 'Добро пожаловать',
         authTextColor: '#223344',
@@ -170,8 +207,6 @@ describe('createBrandingService', () => {
       authBackgroundImageAssetId: null,
       authContentSurfaceColor: null,
       authContentSurfaceOpacity: null,
-      authFooterImageAssetId: null,
-      authHeaderImageAssetId: null,
       authMutedTextColor: null,
       authSubtitle: null,
       authTextColor: null,
@@ -293,6 +328,33 @@ describe('createBrandingService', () => {
       expect(repository.upsertSettings).not.toHaveBeenCalled()
     },
   )
+
+  it.each([
+    [{ authColorScheme: 'auto' }],
+    [{ authBackgroundOverlay: 'heavy' }],
+    [{ authFieldStyle: 'glassmorphism' }],
+    [{ authButtonStyle: 'image' }],
+  ])('rejects invalid auth appearance %#', async (appearance) => {
+    const repository = createRepository()
+    const service = createBrandingService({
+      audit: vi.fn(),
+      repository,
+      tenant,
+    })
+
+    await expect(
+      service.updateAdminBranding({
+        admin,
+        input: { appearance },
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BRANDING_SETTINGS_INVALID',
+      statusCode: 400,
+    })
+    expect(repository.upsertSettings).not.toHaveBeenCalled()
+  })
 
   it.each([{}, { colors: {} }, { copy: {} }, { layout: {} }])(
     'rejects empty admin branding updates without repository write %#',

@@ -8,7 +8,11 @@ const colorSchema = z
   .regex(/^#[0-9a-fA-F]{6}$/u)
   .transform((value) => value.toLowerCase())
 const opacitySchema = z.number().int().min(0).max(100)
+const authBackgroundOverlaySchema = z.enum(['none', 'light', 'dark'])
 const authBrandPlacementSchema = z.enum(['left', 'center', 'right'])
+const authButtonStyleSchema = z.enum(['solid', 'gradient'])
+const authColorSchemeSchema = z.enum(['light', 'dark'])
+const authFieldStyleSchema = z.enum(['solid', 'translucent', 'outline'])
 
 function optionalText(maxLength: number) {
   return z
@@ -25,6 +29,15 @@ function optionalText(maxLength: number) {
 
 export const adminBrandingPatchSchema = z
   .object({
+    appearance: z
+      .object({
+        authBackgroundOverlay: authBackgroundOverlaySchema.optional(),
+        authButtonStyle: authButtonStyleSchema.optional(),
+        authColorScheme: authColorSchemeSchema.optional(),
+        authFieldStyle: authFieldStyleSchema.optional(),
+      })
+      .strict()
+      .optional(),
     colors: z
       .object({
         accent: colorSchema.optional(),
