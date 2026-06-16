@@ -1613,7 +1613,7 @@ the remaining auth pages.
 - Test: `frontend/src/features/auth/pages/LoginPage.test.tsx`
 - Test: `frontend/src/features/admin-branding/components/portal-preview/PortalPreviewFrame.test.tsx`
 
-- [ ] **Step 1: Add failing support block tests**
+- [x] **Step 1: Add failing support block tests**
 
   In `LoginPage.test.tsx`, assert the default support phone:
 
@@ -1632,7 +1632,7 @@ the remaining auth pages.
 
   Expected before implementation: FAIL because runtime and preview still show `+7 (906) 12-955-12`.
 
-- [ ] **Step 2: Extend the approved secondary links component for preview**
+- [x] **Step 2: Extend the approved secondary links component for preview**
 
   Update the `AuthSecondaryLinks.tsx` created in Task 0 so it supports runtime
   links and non-interactive preview rendering:
@@ -1684,7 +1684,7 @@ the remaining auth pages.
 
   During implementation, avoid duplicating interactive links inside preview mode.
 
-- [ ] **Step 3: Extend the approved support block for preview**
+- [x] **Step 3: Extend the approved support block for preview**
 
   Update the `AuthSupportBlock.tsx` created in Task 0 so it supports runtime
   phone links and non-interactive preview rendering:
@@ -1722,7 +1722,7 @@ the remaining auth pages.
 
   If `HeadphonesIcon` does not exist, add it to the local icon module using the same style as existing icons.
 
-- [ ] **Step 4: Use shared components in runtime and preview**
+- [x] **Step 4: Use shared components in runtime and preview**
 
   In `LoginPage.tsx`, replace the duplicated links/support markup with:
 
@@ -1738,7 +1738,7 @@ the remaining auth pages.
   <AuthSupportBlock preview />
   ```
 
-- [ ] **Step 5: Add CSS for support block and secondary links**
+- [x] **Step 5: Add CSS for support block and secondary links**
 
   In `index.css`, add tokenized classes:
 
@@ -1794,7 +1794,7 @@ the remaining auth pages.
   }
   ```
 
-- [ ] **Step 6: Run targeted preview/runtime tests**
+- [x] **Step 6: Run targeted preview/runtime tests**
 
   Run:
 
@@ -1804,7 +1804,7 @@ the remaining auth pages.
 
   Expected: PASS.
 
-- [ ] **Step 7: Commit shared login slice**
+- [x] **Step 7: Commit shared login slice**
 
   Commit:
 

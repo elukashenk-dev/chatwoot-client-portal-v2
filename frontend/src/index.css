@@ -811,9 +811,9 @@ button:not(:disabled),
 
 .auth-legal-text a,
 .auth-legal-preview-link,
-.auth-secondary-links a,
+.auth-secondary-links,
 .auth-support-block {
-  color: #003a78;
+  color: var(--portal-auth-link-color, #003a78);
 }
 
 .auth-legal-text a {
@@ -821,8 +821,8 @@ button:not(:disabled),
 }
 
 .auth-legal-text a:hover,
-.auth-secondary-links a:hover,
-.auth-support-phone:hover {
+a.auth-secondary-link:hover,
+a.auth-support-phone:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -833,25 +833,24 @@ button:not(:disabled),
   align-items: center;
   gap: 24px;
   margin-top: 29px;
-  color: #003a78;
   font-size: 13px;
   font-weight: 400;
   line-height: 18px;
 }
 
-.auth-secondary-links a {
+.auth-secondary-link {
   text-decoration: none;
   white-space: nowrap;
 }
 
-.auth-secondary-links a:last-child {
+.auth-secondary-link:last-child {
   text-align: right;
 }
 
-.auth-secondary-links__separator {
+.auth-link-separator {
   width: 1px;
   height: 21px;
-  background: #c4c9d2;
+  background: var(--portal-auth-divider-color, #c4c9d2);
 }
 
 .auth-support-block {
@@ -878,7 +877,7 @@ button:not(:disabled),
   margin: 0 auto;
 }
 
-.auth-support-block p {
+.auth-support-question {
   margin: 32px 0 0;
   font-size: 14px;
   font-weight: 400;
@@ -889,8 +888,8 @@ button:not(:disabled),
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  margin-top: 7px;
-  color: #003a78;
+  margin: 7px 0 0;
+  color: var(--portal-auth-link-color, #003a78);
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;

@@ -239,6 +239,9 @@ describe('LoginPage', () => {
     expect(document.querySelector('.auth-form-slot')).toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
     expect(screen.getByText('+7 (800) 000-00-00')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
+    ).toHaveAttribute('href', 'tel:+78000000000')
     const supportIcon = document.querySelector('.auth-support-icon')
     expect(supportIcon?.tagName).toBe('IMG')
     expect(supportIcon).toHaveAttribute(

@@ -281,9 +281,11 @@ describe('PortalPreviewFrame', () => {
 
     render(<PortalPreviewFrame draft={draft} />)
 
-    expect(
-      screen.getByRole('region', { name: 'Телефонный предпросмотр портала' }),
-    ).toBeInTheDocument()
+    const phonePreview = screen.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    expect(phonePreview).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
     ).toBeInTheDocument()
@@ -313,6 +315,18 @@ describe('PortalPreviewFrame', () => {
     expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
     expect(document.querySelector('.auth-support-block')).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('Нет доступа к чату?'),
+    ).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('+7 (800) 000-00-00'),
+    ).toBeInTheDocument()
+    expect(
+      phonePreview.querySelector('.auth-link-separator'),
+    ).toBeInTheDocument()
+    expect(
+      phonePreview.querySelector('.auth-support-divider .auth-support-icon'),
+    ).toBeInTheDocument()
     expect(document.querySelector('.auth-support-card')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Забыли пароль?' }),

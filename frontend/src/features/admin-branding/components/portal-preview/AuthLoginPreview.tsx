@@ -1,9 +1,10 @@
-import headsetIconUrl from '../../../../assets/auth/headset.svg'
-import { LockIcon, MailIcon, PhoneFilledIcon } from '../../../../shared/ui/icons'
+import { LockIcon, MailIcon } from '../../../../shared/ui/icons'
 import {
   authFieldIconClassName,
   inputClassName,
 } from '../../../../shared/ui/inputStyles'
+import { AuthSecondaryLinks } from '../../../auth/components/AuthSecondaryLinks'
+import { AuthSupportBlock } from '../../../auth/components/AuthSupportBlock'
 import { useBranding } from '../../../branding/lib/useBranding'
 import { TenantAuthShell } from '../../../tenant/components/TenantAuthShell'
 
@@ -65,26 +66,8 @@ export function AuthLoginPreview() {
           </button>
         </form>
 
-        <div className="auth-secondary-links">
-          <span>Забыли пароль?</span>
-          <span aria-hidden="true" className="auth-secondary-links__separator" />
-          <span className="text-right">Создать аккаунт</span>
-        </div>
-
-        <div className="auth-support-block">
-          <div aria-hidden="true" className="auth-support-divider">
-            <span />
-            <img alt="" className="auth-support-icon" src={headsetIconUrl} />
-            <span />
-          </div>
-
-          <p>Нет доступа к чату?</p>
-
-          <span className="auth-support-phone">
-            <PhoneFilledIcon className="auth-support-phone-icon" />
-            +7 (800) 000-00-00
-          </span>
-        </div>
+        <AuthSecondaryLinks preview />
+        <AuthSupportBlock preview />
       </TenantAuthShell>
     </div>
   )
