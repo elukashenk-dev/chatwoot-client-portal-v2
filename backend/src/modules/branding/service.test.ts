@@ -32,8 +32,6 @@ function createRepository(settings: unknown = null) {
       accentColor: null,
       authBackgroundColor: null,
       authBackgroundImageAssetId: null,
-      authContentSurfaceColor: null,
-      authContentSurfaceOpacity: null,
       authMutedTextColor: null,
       authSubtitle: null,
       authTextColor: null,
@@ -75,9 +73,7 @@ describe('createBrandingService', () => {
         assets: {},
         colors: expect.objectContaining({
           authBackground: '#f3f7fc',
-          authContentSurface: '#ffffff',
-          authContentSurfaceOpacity: 100,
-          authText: '#0f172a',
+          authText: '#15486b',
           chatHeaderBackground: '#ffffff',
           chatHeaderText: '#0f172a',
           chatText: '#334155',
@@ -130,8 +126,6 @@ describe('createBrandingService', () => {
             authFieldStyle: 'outline',
           },
           colors: {
-            authContentSurface: '#f8fafc',
-            authContentSurfaceOpacity: 84,
             authText: '#223344',
             chatHeaderText: '#f8fafc',
             primary: '#123456',
@@ -157,8 +151,6 @@ describe('createBrandingService', () => {
           authFieldStyle: 'outline',
         },
         colors: expect.objectContaining({
-          authContentSurface: '#f8fafc',
-          authContentSurfaceOpacity: 84,
           authText: '#223344',
           chatHeaderText: '#f8fafc',
           primary: '#123456',
@@ -178,8 +170,6 @@ describe('createBrandingService', () => {
         authBackgroundOverlay: 'dark',
         authButtonStyle: 'gradient',
         authColorScheme: 'dark',
-        authContentSurfaceColor: '#f8fafc',
-        authContentSurfaceOpacity: 84,
         authFieldStyle: 'outline',
         authBrandPlacement: 'right',
         authTitle: 'Добро пожаловать',
@@ -205,8 +195,6 @@ describe('createBrandingService', () => {
       accentColor: null,
       authBackgroundColor: null,
       authBackgroundImageAssetId: null,
-      authContentSurfaceColor: null,
-      authContentSurfaceOpacity: null,
       authMutedTextColor: null,
       authSubtitle: null,
       authTextColor: null,
@@ -271,34 +259,32 @@ describe('createBrandingService', () => {
     expect(repository.upsertSettings).not.toHaveBeenCalled()
   })
 
-  it.each([-1, 101, 42.5, '80'])(
-    'rejects invalid auth content surface opacity %#',
-    async (authContentSurfaceOpacity) => {
-      const repository = createRepository()
-      const service = createBrandingService({
-        audit: vi.fn(),
-        repository,
-        tenant,
-      })
+  it.each([
+    { authContentSurface: '#ffffff' },
+    { authContentSurfaceOpacity: 100 },
+  ])('rejects removed auth surface branding color %#', async (colors) => {
+    const repository = createRepository()
+    const service = createBrandingService({
+      audit: vi.fn(),
+      repository,
+      tenant,
+    })
 
-      await expect(
-        service.updateAdminBranding({
-          admin,
-          input: {
-            colors: {
-              authContentSurfaceOpacity,
-            },
-          },
-          requestIp: null,
-          userAgent: null,
-        }),
-      ).rejects.toMatchObject({
-        code: 'BRANDING_SETTINGS_INVALID',
-        statusCode: 400,
-      })
-      expect(repository.upsertSettings).not.toHaveBeenCalled()
-    },
-  )
+    await expect(
+      service.updateAdminBranding({
+        admin,
+        input: {
+          colors,
+        },
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BRANDING_SETTINGS_INVALID',
+      statusCode: 400,
+    })
+    expect(repository.upsertSettings).not.toHaveBeenCalled()
+  })
 
   it.each(['top', 'bottom', '', null, 42])(
     'rejects invalid auth brand placement %#',

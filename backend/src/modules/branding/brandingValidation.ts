@@ -7,7 +7,6 @@ const colorSchema = z
   .trim()
   .regex(/^#[0-9a-fA-F]{6}$/u)
   .transform((value) => value.toLowerCase())
-const opacitySchema = z.number().int().min(0).max(100)
 const authBackgroundOverlaySchema = z.enum(['none', 'light', 'dark'])
 const authBrandPlacementSchema = z.enum(['left', 'center', 'right'])
 const authButtonStyleSchema = z.enum(['solid', 'gradient'])
@@ -42,8 +41,6 @@ export const adminBrandingPatchSchema = z
       .object({
         accent: colorSchema.optional(),
         authBackground: colorSchema.optional(),
-        authContentSurface: colorSchema.optional(),
-        authContentSurfaceOpacity: opacitySchema.optional(),
         authMutedText: colorSchema.optional(),
         authText: colorSchema.optional(),
         chatBackground: colorSchema.optional(),

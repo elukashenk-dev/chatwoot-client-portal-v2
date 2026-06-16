@@ -25,8 +25,6 @@ export type BrandingSettingsPatch = Partial<{
   authBackgroundOverlay: 'dark' | 'light' | 'none' | null
   authButtonStyle: 'gradient' | 'solid' | null
   authColorScheme: 'dark' | 'light' | null
-  authContentSurfaceColor: string | null
-  authContentSurfaceOpacity: number | null
   authBrandPlacement: 'center' | 'left' | 'right' | null
   authFieldStyle: 'outline' | 'solid' | 'translucent' | null
   authMutedTextColor: string | null
@@ -90,8 +88,6 @@ const settingsSelection = {
   authBackgroundOverlay: portalBrandingSettings.authBackgroundOverlay,
   authButtonStyle: portalBrandingSettings.authButtonStyle,
   authColorScheme: portalBrandingSettings.authColorScheme,
-  authContentSurfaceColor: portalBrandingSettings.authContentSurfaceColor,
-  authContentSurfaceOpacity: portalBrandingSettings.authContentSurfaceOpacity,
   authBrandPlacement: portalBrandingSettings.authBrandPlacement,
   authFieldStyle: portalBrandingSettings.authFieldStyle,
   authMutedTextColor: portalBrandingSettings.authMutedTextColor,
@@ -157,10 +153,6 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     authBackgroundOverlay: input.authBackgroundOverlay,
     authButtonStyle: input.authButtonStyle,
     authColorScheme: input.authColorScheme,
-    authContentSurfaceColor: normalizeNullableText(
-      input.authContentSurfaceColor,
-    ),
-    authContentSurfaceOpacity: input.authContentSurfaceOpacity,
     authBrandPlacement: input.authBrandPlacement,
     authFieldStyle: input.authFieldStyle,
     authMutedTextColor: normalizeNullableText(input.authMutedTextColor),

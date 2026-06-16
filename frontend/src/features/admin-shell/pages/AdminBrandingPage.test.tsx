@@ -41,10 +41,8 @@ const savedBrandingResponse = {
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#64748b',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#ffffff',
       chatHeaderText: '#0f172a',
@@ -176,6 +174,12 @@ describe('AdminBrandingPage', () => {
     expect(
       screen.getByRole('group', { name: /Стиль кнопки/i }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Фон формы входа'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Непрозрачность формы входа, значение'),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Вход: общий фон')).toBeInTheDocument()
     expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
   })
@@ -311,7 +315,7 @@ describe('AdminBrandingPage', () => {
       'Выбрать основной текст на входе',
     )
 
-    expect(authTextInput).toHaveValue('#0f172a')
+    expect(authTextInput).toHaveValue('#15486b')
 
     fireEvent.input(authTextPicker, { target: { value: '#445566' } })
 
@@ -347,31 +351,14 @@ describe('AdminBrandingPage', () => {
     fireEvent.input(screen.getByLabelText('Выбрать цвет текста чата'), {
       target: { value: '#778899' },
     })
-    fireEvent.input(screen.getByLabelText('Выбрать фон формы входа'), {
-      target: { value: '#eef2ff' },
-    })
-    fireEvent.change(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-      {
-        target: { value: '72' },
-      },
-    )
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#445566')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#778899')
-    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#eef2ff')
-    expect(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-    ).toHaveValue(72)
 
     await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
     expect(screen.getByLabelText('Фон страницы входа')).toHaveValue('#f3f7fc')
-    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#ffffff')
-    expect(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-    ).toHaveValue(100)
     expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#ffffff')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')
     expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
@@ -388,8 +375,6 @@ describe('AdminBrandingPage', () => {
         expect.objectContaining({
           colors: expect.objectContaining({
             authBackground: '#f3f7fc',
-            authContentSurface: '#ffffff',
-            authContentSurfaceOpacity: 100,
             chatHeaderBackground: '#ffffff',
             chatHeaderText: '#0f172a',
             chatText: '#334155',

@@ -1143,8 +1143,6 @@ user can approve or reject the layout before the larger implementation starts.
     ...defaultBrandingColors,
     accent: '#a9ef2a',
     authBackground: '#101820',
-    authContentSurface: '#101820',
-    authContentSurfaceOpacity: 40,
     authMutedText: '#cbd5e1',
     authText: '#ffffff',
     primary: '#a9ef2a',
@@ -1457,7 +1455,7 @@ the remaining auth pages.
 
   ```ts
   export const authFieldClassName =
-    'h-[50px] rounded-[10px] bg-[color:var(--portal-auth-control-background,rgb(255_255_255_/_0.86))] text-[15px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)]'
+    'h-[50px] rounded-[10px] bg-transparent text-[15px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)]'
   ```
 
   Make `inputClassName()` use the same `h-[50px]`, `rounded-[10px]`, tokenized border and focus variables.

@@ -464,14 +464,14 @@ Steps:
    - `auth-header-art`;
    - `auth-footer-art`;
    - `auth-header-shell`;
-   - `auth-support-card`;
-   - `auth-content-veil`.
+   - `auth-support-card`.
 
 Expected:
 
 - В admin нет upload slots для old auth header/footer artwork.
 - В runtime DOM старые auth classes не рендерятся.
 - Auth artwork представлен только full-screen background layer.
+- В admin colors нет отдельного поля `Фон формы входа`.
 
 Result:
 

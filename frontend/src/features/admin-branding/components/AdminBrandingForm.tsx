@@ -72,7 +72,6 @@ const colorFieldGroups = [
   {
     fields: [
       { key: 'authBackground', label: 'Фон страницы входа' },
-      { key: 'authContentSurface', label: 'Фон формы входа' },
       { key: 'authText', label: 'Основной текст на входе' },
       {
         key: 'authMutedText',
@@ -208,56 +207,6 @@ function ColorField({
         />
       </span>
     </div>
-  )
-}
-
-function OpacityField({
-  disabled,
-  label,
-  name,
-  onChange,
-  value,
-}: {
-  disabled: boolean
-  label: string
-  name: string
-  onChange: (value: number) => void
-  value: number
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <span className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-3">
-        <input
-          aria-label={label}
-          className="h-2 w-full accent-brand-800 disabled:cursor-not-allowed"
-          disabled={disabled}
-          max={100}
-          min={0}
-          name={name}
-          onChange={(event) => {
-            onChange(Number(event.currentTarget.value))
-          }}
-          type="range"
-          value={value}
-        />
-        <input
-          aria-label={`${label}, значение`}
-          className="h-10 rounded-[0.55rem] border border-slate-200 bg-white px-2 text-sm text-slate-950 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          disabled={disabled}
-          max={100}
-          min={0}
-          onChange={(event) => {
-            onChange(Number(event.currentTarget.value))
-          }}
-          type="number"
-          value={value}
-        />
-      </span>
-      <span className="mt-1 block text-xs leading-5 text-slate-500">
-        100 - плотный фон, 0 - прозрачный.
-      </span>
-    </label>
   )
 }
 
@@ -464,17 +413,6 @@ export function AdminBrandingForm({
                   />
                 ))}
               </div>
-              {group.title === 'Экран входа' ? (
-                <OpacityField
-                  disabled={isSaving}
-                  label="Непрозрачность формы входа"
-                  name="colors.authContentSurfaceOpacity"
-                  onChange={(value) => {
-                    updateColor('authContentSurfaceOpacity', value)
-                  }}
-                  value={draft.colors.authContentSurfaceOpacity}
-                />
-              ) : null}
             </fieldset>
           ))}
         </div>

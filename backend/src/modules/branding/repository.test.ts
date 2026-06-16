@@ -67,8 +67,6 @@ describe('createBrandingRepository', () => {
         authBackgroundOverlay: 'dark',
         authButtonStyle: 'gradient',
         authColorScheme: 'dark',
-        authContentSurfaceColor: '#f8fafc',
-        authContentSurfaceOpacity: 84,
         authFieldStyle: 'outline',
         authMutedTextColor: '#52637a',
         authSubtitle: 'Для защищенной переписки',
@@ -94,8 +92,6 @@ describe('createBrandingRepository', () => {
           authBackgroundOverlay: 'dark',
           authButtonStyle: 'gradient',
           authColorScheme: 'dark',
-          authContentSurfaceColor: '#f8fafc',
-          authContentSurfaceOpacity: 84,
           authFieldStyle: 'outline',
         }),
       )

@@ -27,10 +27,8 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
-    authContentSurface: '#ffffff',
-    authContentSurfaceOpacity: 100,
     authMutedText: '#456179',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#f8fafc',
     chatHeaderBackground: '#0f766e',
     chatHeaderText: '#f8fafc',

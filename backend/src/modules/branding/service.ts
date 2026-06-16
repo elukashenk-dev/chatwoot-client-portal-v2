@@ -80,14 +80,6 @@ async function buildBrandingResponse({
     resolvedSettings?.authBackgroundColor,
     defaultBrandingColors.authBackground,
   )
-  const authContentSurfaceColor = coalesce(
-    resolvedSettings?.authContentSurfaceColor,
-    defaultBrandingColors.authContentSurface,
-  )
-  const authContentSurfaceOpacity = coalesce(
-    resolvedSettings?.authContentSurfaceOpacity,
-    defaultBrandingColors.authContentSurfaceOpacity,
-  )
   const authMutedTextColor = coalesce(
     resolvedSettings?.authMutedTextColor,
     defaultBrandingColors.authMutedText,
@@ -145,8 +137,6 @@ async function buildBrandingResponse({
       colors: {
         accent: accentColor,
         authBackground: authBackgroundColor,
-        authContentSurface: authContentSurfaceColor,
-        authContentSurfaceOpacity,
         authMutedText: authMutedTextColor,
         authText: authTextColor,
         chatBackground: chatBackgroundColor,
@@ -217,15 +207,6 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
 
   if (parsedInput.colors?.authBackground !== undefined) {
     patch.authBackgroundColor = parsedInput.colors.authBackground
-  }
-
-  if (parsedInput.colors?.authContentSurface !== undefined) {
-    patch.authContentSurfaceColor = parsedInput.colors.authContentSurface
-  }
-
-  if (parsedInput.colors?.authContentSurfaceOpacity !== undefined) {
-    patch.authContentSurfaceOpacity =
-      parsedInput.colors.authContentSurfaceOpacity
   }
 
   if (parsedInput.colors?.authMutedText !== undefined) {

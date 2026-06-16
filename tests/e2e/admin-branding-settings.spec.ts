@@ -21,10 +21,8 @@ const authBackgroundAsset = {
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
-  authContentSurface: '#ffffff',
-  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
-  authText: '#0f172a',
+  authText: '#15486b',
   chatBackground: '#ffffff',
   chatHeaderBackground: '#ffffff',
   chatHeaderText: '#0f172a',
@@ -214,8 +212,6 @@ test('admin can edit all branding setting groups and see preview update', async 
   const updatedBranding = {
     colors: {
       authBackground: '#eefcf8',
-      authContentSurface: '#f8fafc',
-      authContentSurfaceOpacity: 84,
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#164e63',
       chatHeaderText: '#ffffff',
@@ -260,12 +256,12 @@ test('admin can edit all branding setting groups and see preview update', async 
   await page
     .getByLabel('Фон страницы входа', { exact: true })
     .fill(updatedBranding.colors.authBackground)
-  await page
-    .getByLabel('Фон формы входа', { exact: true })
-    .fill(updatedBranding.colors.authContentSurface)
-  await page
-    .getByLabel('Непрозрачность формы входа, значение', { exact: true })
-    .fill(String(updatedBranding.colors.authContentSurfaceOpacity))
+  await expect(
+    page.getByLabel('Фон формы входа', { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByLabel('Непрозрачность формы входа, значение', { exact: true }),
+  ).toHaveCount(0)
   await page
     .getByLabel('Фон чата', { exact: true })
     .fill(updatedBranding.colors.chatBackground)
@@ -306,11 +302,11 @@ test('admin can edit all branding setting groups and see preview update', async 
     .poll(() =>
       previewScope.evaluate((element) =>
         getComputedStyle(element)
-          .getPropertyValue('--portal-auth-content-surface-color')
+          .getPropertyValue('--portal-auth-background-color')
           .trim(),
       ),
     )
-    .toBe('#f8fafc')
+    .toBe(updatedBranding.colors.authBackground)
 
   await page.getByRole('tab', { name: 'Чат' }).click()
   await expect(
@@ -482,10 +478,6 @@ test('admin reset colors restores production-like default color contract', async
 
   await page.getByLabel('Фон шапки чата', { exact: true }).fill('#164e63')
   await page.getByLabel('Фон страницы входа', { exact: true }).fill('#eefcf8')
-  await page.getByLabel('Фон формы входа', { exact: true }).fill('#eef2ff')
-  await page
-    .getByLabel('Непрозрачность формы входа, значение', { exact: true })
-    .fill('72')
   await page
     .getByLabel('Цвет текста шапки чата', { exact: true })
     .fill('#f8fafc')
@@ -508,12 +500,9 @@ test('admin reset colors restores production-like default color contract', async
   await expect(
     page.getByLabel('Фон страницы входа', { exact: true }),
   ).toHaveValue('#f3f7fc')
-  await expect(page.getByLabel('Фон формы входа', { exact: true })).toHaveValue(
-    '#ffffff',
-  )
   await expect(
-    page.getByLabel('Непрозрачность формы входа, значение', { exact: true }),
-  ).toHaveValue('100')
+    page.getByLabel('Фон формы входа', { exact: true }),
+  ).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Сохранить настройки' }).click()
   await expect(page.getByRole('status')).toContainText('Настройки сохранены.')

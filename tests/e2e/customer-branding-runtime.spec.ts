@@ -65,10 +65,8 @@ const branding = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#f8fafc',
-      authContentSurfaceOpacity: 84,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#7c2d12',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -290,6 +288,9 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(
     page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
   ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+  ).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(page.getByText('Войдите в кабинет ProvGroup.')).toBeVisible()
   await expect(
     page.getByRole('img', { name: 'Логотип ProvGroup' }),
@@ -298,7 +299,6 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(page.locator('.auth-footer-art')).toHaveCount(0)
   await expect(page.locator('.auth-header-shell')).toHaveCount(0)
   await expect(page.locator('.auth-support-card')).toHaveCount(0)
-  await expect(page.locator('.auth-content-veil')).toHaveCount(0)
   await expect(page.locator('.portal-branding-scope')).toHaveAttribute(
     'style',
     /--portal-auth-background-image: url\("\/api\/branding\/assets\/14\?v=14"\)/,
@@ -313,16 +313,16 @@ test('applies public branding on the customer auth login screen', async ({
     .poll(() =>
       authScope.evaluate((element) =>
         getComputedStyle(element)
-          .getPropertyValue('--portal-auth-content-surface-color')
+          .getPropertyValue('--portal-auth-background-color')
           .trim(),
       ),
     )
-    .toBe('#f8fafc')
-  await expect(page.locator('.auth-content-veil')).toHaveCount(0)
+    .toBe('#ecfeff')
 
   const firstAuthInput = page.locator('.auth-input').first()
   await expect(firstAuthInput).toBeVisible()
   await firstAuthInput.fill('name@example.com')
+  await expect(firstAuthInput).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(firstAuthInput).toHaveAttribute('data-filled', 'true')
   await expect
     .poll(() =>

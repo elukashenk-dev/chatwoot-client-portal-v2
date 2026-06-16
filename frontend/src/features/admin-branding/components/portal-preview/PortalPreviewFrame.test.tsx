@@ -26,10 +26,8 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
-    authContentSurface: '#f8fafc',
-    authContentSurfaceOpacity: 84,
     authMutedText: '#456179',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#f8fafc',
     chatHeaderBackground: '#0f766e',
     chatHeaderText: '#f8fafc',
@@ -56,10 +54,8 @@ const defaultDraft = {
   colors: {
     accent: '#4676b4',
     authBackground: '#f3f7fc',
-    authContentSurface: '#ffffff',
-    authContentSurfaceOpacity: 100,
     authMutedText: '#64748b',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#ffffff',
     chatHeaderBackground: '#ffffff',
     chatHeaderText: '#0f172a',
@@ -386,13 +382,14 @@ describe('PortalPreviewFrame', () => {
     )
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
-      '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
-      '--portal-auth-content-surface-color': '#f8fafc',
-      '--portal-auth-content-surface-opacity': '0.84',
-      '--portal-auth-text-color': '#0f172a',
+      '--portal-auth-control-border-color': '#7a93a4',
+      '--portal-auth-text-color': '#15486b',
       '--portal-chat-header-background-color': '#164e63',
       '--portal-chat-header-foreground': '#f8fafc',
       '--portal-chat-text-color': '#1f2937',
     })
+    expect(
+      container.querySelector('.portal-branding-scope')?.getAttribute('style'),
+    ).not.toContain('--portal-auth-content-surface')
   })
 })

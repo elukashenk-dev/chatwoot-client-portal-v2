@@ -128,13 +128,11 @@ execution-plan детали здесь не хранятся.
 - Branding reset/default visual parity is corrected: no-assets color reset
   restores production-like auth/chat/info defaults, keeps PWA manifest defaults
   and keeps chat header text readable when only header background changes.
-- Auth branding middle-surface customization is implemented with tenant-owned
-  `authContentSurface` and `authContentSurfaceOpacity` fields, preserving
-  default visual parity and keeping chat runtime layout unchanged.
 - Auth branding now uses the approved Full Background design model: tenant
   admins can style login screens through a prepared full-screen auth
   background, light/dark appearance presets, overlay protection, field/button
-  style presets and real runtime preview parity.
+  style presets and real runtime preview parity. Separate auth form background
+  controls were removed from the active branding contract.
 - Auth legal UX has public terms/privacy pages, informational login legal links
   and explicit registration consent with backend persistence.
 - Branding asset storage is packaged as portal-owned production infrastructure:

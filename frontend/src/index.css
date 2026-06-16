@@ -416,17 +416,6 @@ body {
   isolation: isolate;
 }
 
-.auth-content-veil {
-  position: absolute;
-  inset: -1rem 0 0;
-  z-index: 0;
-  background: var(
-    --portal-auth-content-surface-background,
-    rgb(255 255 255 / 1)
-  );
-  pointer-events: none;
-}
-
 .auth-text {
   color: var(--portal-auth-text-color, #0f172a);
 }
@@ -619,7 +608,7 @@ button:not(:disabled),
 
 .auth-title {
   margin: 0;
-  color: #15486b;
+  color: var(--portal-auth-text-color, #15486b);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0;
@@ -629,7 +618,7 @@ button:not(:disabled),
 }
 
 .auth-canvas-background .auth-text {
-  color: #15486b;
+  color: var(--portal-auth-text-color, #15486b);
 }
 
 .auth-canvas-background .auth-muted-text {

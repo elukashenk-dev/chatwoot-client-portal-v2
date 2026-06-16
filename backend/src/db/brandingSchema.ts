@@ -78,8 +78,6 @@ export const portalBrandingSettings = pgTable(
     authBackgroundOverlay: text('auth_background_overlay'),
     authButtonStyle: text('auth_button_style'),
     authColorScheme: text('auth_color_scheme'),
-    authContentSurfaceColor: text('auth_content_surface_color'),
-    authContentSurfaceOpacity: integer('auth_content_surface_opacity'),
     authFieldStyle: text('auth_field_style'),
     authTextColor: text('auth_text_color'),
     authMutedTextColor: text('auth_muted_text_color'),
@@ -137,10 +135,6 @@ export const portalBrandingSettings = pgTable(
       foreignColumns: [portalBrandingAssets.tenantId, portalBrandingAssets.id],
       name: 'portal_branding_settings_pwa_icon_asset_tenant_fk',
     }).onDelete('restrict'),
-    check(
-      'portal_branding_settings_auth_content_surface_opacity_check',
-      sql`${table.authContentSurfaceOpacity} is null or (${table.authContentSurfaceOpacity} >= 0 and ${table.authContentSurfaceOpacity} <= 100)`,
-    ),
     check(
       'portal_branding_settings_auth_color_scheme_check',
       sql`${table.authColorScheme} is null or ${table.authColorScheme} in ('light', 'dark')`,

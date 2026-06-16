@@ -20,10 +20,8 @@ const brandingResponse = {
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#64748b',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#ffffff',
       chatHeaderText: '#0f172a',
@@ -120,8 +118,6 @@ describe('adminBrandingClient', () => {
         authFieldStyle: 'outline',
       },
       colors: {
-        authContentSurface: '#f8fafc',
-        authContentSurfaceOpacity: 84,
         primary: '#123456',
       },
       copy: { authTitle: 'Добро пожаловать' },
@@ -140,8 +136,6 @@ describe('adminBrandingClient', () => {
             authFieldStyle: 'outline',
           },
           colors: {
-            authContentSurface: '#f8fafc',
-            authContentSurfaceOpacity: 84,
             primary: '#123456',
           },
           copy: { authTitle: 'Добро пожаловать' },
@@ -161,8 +155,6 @@ describe('adminBrandingClient', () => {
           authColorScheme: 'dark',
         }),
         colors: expect.objectContaining({
-          authContentSurface: '#f8fafc',
-          authContentSurfaceOpacity: 84,
         }),
       }),
     )
