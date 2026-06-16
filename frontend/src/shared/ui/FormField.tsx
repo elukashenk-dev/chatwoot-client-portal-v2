@@ -59,11 +59,28 @@ export function FormField({
 
       {error ? (
         <p
-          className="mt-2 text-sm font-normal text-rose-600"
+          className="auth-field-message"
           id={resolvedErrorId}
           role="alert"
         >
-          {error}
+          <span aria-hidden="true" className="auth-field-message__icon">
+            <svg fill="none" viewBox="0 0 16 16">
+              <path
+                d="M8 1.75 14.25 13H1.75L8 1.75Z"
+                stroke="currentColor"
+                strokeLinejoin="round"
+                strokeWidth="1.4"
+              />
+              <path
+                d="M8 5.7v3.2"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.4"
+              />
+              <circle cx="8" cy="11.4" fill="currentColor" r="0.7" />
+            </svg>
+          </span>
+          <span>{error}</span>
         </p>
       ) : null}
     </div>

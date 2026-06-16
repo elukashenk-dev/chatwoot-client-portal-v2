@@ -130,17 +130,28 @@ describe('Auth flow pages surface contract', () => {
       realFormTestId: 'password-setup-form',
     },
   ])(
-    'renders the runtime auth content veil on $path',
+    'renders the stacked auth shell on $path',
     async ({ arrange, heading, path, realFormTestId }) => {
       arrange?.()
       fetchMock.mockResolvedValueOnce(createUnauthorizedSessionResponse())
 
       renderAuthRoutes([path])
 
+      const pageHeading = await screen.findByRole('heading', { name: heading })
+
+      expect(pageHeading).toBeInTheDocument()
+      expect(pageHeading).toHaveClass('auth-title')
+      expect(document.querySelector('.auth-stack')).toBeInTheDocument()
       expect(
-        await screen.findByRole('heading', { name: heading }),
+        document.querySelector('.auth-brand-mark--in-flow'),
       ).toBeInTheDocument()
-      expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
+      expect(
+        document.querySelector('.auth-subtitle--login'),
+      ).not.toBeInTheDocument()
+      expect(
+        document.querySelector('.auth-header-shell'),
+      ).not.toBeInTheDocument()
+      expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
 
       if (realFormTestId) {
         expect(screen.getByTestId(realFormTestId)).toBeInTheDocument()

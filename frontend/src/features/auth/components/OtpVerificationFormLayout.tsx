@@ -69,7 +69,7 @@ export function OtpVerificationFormLayout({
 
   return (
     <form
-      className="space-y-4"
+      className="auth-flow-form"
       data-testid="otp-verification-form"
       noValidate
       onSubmit={onSubmit}
@@ -89,9 +89,7 @@ export function OtpVerificationFormLayout({
         />
       </FormField>
 
-      <div className="rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-sm leading-5 text-slate-500 shadow-sm">
-        {helperText}
-      </div>
+      <p className="auth-form-note">{helperText}</p>
 
       <InlineAlert message={infoMessage} tone="success" />
       <InlineAlert message={errorMessage} tone="error" />

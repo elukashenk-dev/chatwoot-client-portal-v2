@@ -78,10 +78,10 @@ describe('createBrandingService', () => {
           primary: '#112540',
         }),
         copy: expect.objectContaining({
-          authTitle: 'Вход в личный кабинет',
+          authTitle: 'ВХОД ДЛЯ КЛИЕНТОВ',
         }),
         layout: {
-          authBrandPlacement: 'left',
+          authBrandPlacement: 'center',
         },
         portalName: 'Бухфирма',
         supportLabel: 'Команда Бухфирма',

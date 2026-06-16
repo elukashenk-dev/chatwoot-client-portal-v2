@@ -16,7 +16,7 @@ export const defaultBrandingColors = {
 } as const
 
 export const defaultBrandingLayout = {
-  authBrandPlacement: 'left',
+  authBrandPlacement: 'center',
 } as const
 
 export function createDefaultPublicBranding(
@@ -26,8 +26,8 @@ export function createDefaultPublicBranding(
     assets: {},
     colors: { ...defaultBrandingColors },
     copy: {
-      authSubtitle: 'Введите email и пароль, чтобы продолжить.',
-      authTitle: 'Вход в личный кабинет',
+      authSubtitle: 'Войдите, чтобы продолжить общение с поддержкой.',
+      authTitle: 'ВХОД ДЛЯ КЛИЕНТОВ',
       chatEmptyBody: 'Напишите нам, когда будет удобно. Мы ответим здесь.',
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',

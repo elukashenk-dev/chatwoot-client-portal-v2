@@ -366,7 +366,7 @@ migrations, admin branding controls, asset-kind removal, legal persistence and
 registration consent logic. It creates the default visual baseline first so the
 user can approve or reject the layout before the larger implementation starts.
 
-- [ ] **Step 1: Add failing visual structure tests**
+- [x] **Step 1: Add failing visual structure tests**
 
   In `frontend/src/features/auth/pages/LoginPage.test.tsx`, add assertions to
   the existing login render test:
@@ -401,7 +401,7 @@ user can approve or reject the layout before the larger implementation starts.
   Expected before implementation: FAIL because the current auth shell still
   uses old header/footer art markup.
 
-- [ ] **Step 2: Build the minimal stacked auth shell**
+- [x] **Step 2: Build the minimal stacked auth shell**
 
   In `AuthFrame.tsx`, keep viewport locking but remove the inner hardcoded white
   frame:
@@ -445,7 +445,7 @@ user can approve or reject the layout before the larger implementation starts.
   </section>
   ```
 
-- [ ] **Step 3: Add login visual helper components**
+- [x] **Step 3: Add login visual helper components**
 
   Add minimal public legal routes during the approval slice so the login legal
   text uses real links from the first preview.
@@ -630,7 +630,7 @@ user can approve or reject the layout before the larger implementation starts.
   `frontend/src/shared/ui/icons.tsx` using the same prop shape and stroke style
   as the existing local icons.
 
-- [ ] **Step 4: Wire the approval layout into login**
+- [x] **Step 4: Wire the approval layout into login**
 
   In `LoginPage.tsx`, render the login form, legal notice, secondary links and
   support block in the Figma order:
@@ -644,7 +644,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Keep existing login submit behavior and password visibility behavior intact.
 
-- [ ] **Step 5: Apply approval CSS for the default design**
+- [x] **Step 5: Apply approval CSS for the default design**
 
   In `frontend/src/index.css`, add the approval baseline from
   `docs/design/2026-06-16-provgroup-login-screen-figma-spec.md`:
@@ -785,7 +785,7 @@ user can approve or reject the layout before the larger implementation starts.
   }
   ```
 
-- [ ] **Step 6: Run small approval-slice checks**
+- [x] **Step 6: Run small approval-slice checks**
 
   Run:
 
@@ -796,7 +796,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected: PASS.
 
-- [ ] **Step 7: Start local preview and stop for user approval**
+- [x] **Step 7: Start local preview and stop for user approval**
 
   Run:
 
@@ -818,7 +818,7 @@ user can approve or reject the layout before the larger implementation starts.
   admin branding controls and do not commit the visual baseline until the user
   explicitly approves the default design.
 
-- [ ] **Step 8: Commit only after approval**
+- [x] **Step 8: Commit only after approval**
 
   After user approval and passing checks, commit:
 

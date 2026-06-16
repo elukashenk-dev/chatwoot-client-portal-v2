@@ -299,9 +299,15 @@ describe('PortalPreviewFrame', () => {
     expect(
       document.querySelector('.auth-canvas-background'),
     ).toBeInTheDocument()
-    expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
+    expect(document.querySelector('.auth-stack')).toBeInTheDocument()
+    expect(
+      document.querySelector('.auth-brand-mark--in-flow'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-header-shell')).not.toBeInTheDocument()
+    expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
-    expect(document.querySelector('.auth-support-card')).toBeInTheDocument()
+    expect(document.querySelector('.auth-support-block')).toBeInTheDocument()
+    expect(document.querySelector('.auth-support-card')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Забыли пароль?' }),
     ).not.toBeInTheDocument()

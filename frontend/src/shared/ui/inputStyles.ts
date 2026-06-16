@@ -1,9 +1,9 @@
 import { cn } from '../lib/cn'
 
 export const authFieldClassName =
-  'h-[52px] rounded-auth-control bg-[color:var(--portal-auth-control-background,rgb(248_250_252_/_0.86))] text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)]'
+  'h-[50px] rounded-[10px] bg-transparent text-[15px] placeholder:text-[#B4BAC4]'
 
-export const authFieldIconClassName = 'h-6 w-6'
+export const authFieldIconClassName = 'h-[21px] w-[21px]'
 
 export const authSecondaryLinkClassName =
   'auth-muted-text rounded-auth-link font-normal underline-offset-4 transition hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100'
@@ -13,13 +13,13 @@ export const authPrimaryLinkClassName =
 
 export function inputClassName(hasError: boolean, isFilled = false) {
   return cn(
-    'auth-input auth-text block h-16 w-full appearance-none rounded-auth-control border bg-[color:var(--portal-auth-control-background,rgb(255_255_255_/_0.92))] px-5 text-[17px] placeholder:text-[color:var(--portal-auth-muted-text-color,#64748b)] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-[color:var(--portal-auth-control-border-color,#cbd5e1)] disabled:bg-[color:var(--portal-auth-control-background,rgb(248_250_252_/_0.86))] disabled:text-[color:var(--portal-auth-muted-text-color,#64748b)]',
+    'auth-input auth-text block h-[50px] w-full appearance-none rounded-[10px] border bg-transparent px-5 text-[15px] placeholder:text-[#B4BAC4] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-[#DDDFE4] disabled:bg-transparent disabled:text-[#B4BAC4]',
     !hasError &&
       !isFilled &&
-      'border-[color:var(--portal-auth-control-border-color,#cbd5e1)] focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[#DDDFE4] focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     !hasError &&
       isFilled &&
-      'border-[color:var(--portal-auth-control-border-color,#cbd5e1)] shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[#DDDFE4] shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     hasError &&
       'border-rose-200 bg-rose-50/30 focus:border-rose-300 focus:ring-4 focus:ring-rose-50/80',
   )

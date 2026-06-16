@@ -98,7 +98,7 @@ describe('TenantAuthShell', () => {
     expect(screen.queryByText('Клиентский портал')).not.toBeInTheDocument()
   })
 
-  it('uses public branding logo and auth images while keeping page copy explicit', () => {
+  it('uses public branding logo while keeping page copy explicit', () => {
     const { container } = render(
       <TenantIdentityContext.Provider value={tenantContextValue}>
         <BrandingContext.Provider value={brandingContextValue}>
@@ -119,10 +119,8 @@ describe('TenantAuthShell', () => {
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument()
     expect(screen.getByText('Описание страницы')).toBeInTheDocument()
     expect(
-      container.querySelector('.auth-header-art')?.getAttribute('style'),
-    ).toContain('url("/api/branding/assets/12?v=12")')
-    expect(
-      container.querySelector('.auth-footer-art')?.getAttribute('style'),
-    ).toContain('url("/api/branding/assets/13?v=13")')
+      container.querySelector('.auth-header-art'),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('.auth-footer-art')).not.toBeInTheDocument()
   })
 })

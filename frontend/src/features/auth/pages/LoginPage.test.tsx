@@ -218,13 +218,39 @@ describe('LoginPage', () => {
       screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Войдите в кабинет ProvGroup.')).toBeInTheDocument()
+    expect(document.querySelector('.auth-subtitle--login')).toHaveTextContent(
+      'Войдите в кабинет ProvGroup.',
+    )
     expect(
       document.querySelector('.auth-canvas-background'),
     ).toBeInTheDocument()
-    expect(document.querySelector('.auth-content-layer')).toBeInTheDocument()
-    expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
-    expect(document.querySelector('.auth-support-card')).toBeInTheDocument()
+    expect(document.querySelector('.auth-stack')).toBeInTheDocument()
+    expect(
+      document.querySelector('.auth-brand-mark--in-flow'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-header-shell')).not.toBeInTheDocument()
+    expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
+    expect(document.querySelector('.auth-form-slot')).toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
+    expect(screen.getByText('+7 (800) 000-00-00')).toBeInTheDocument()
+    const supportIcon = document.querySelector('.auth-support-icon')
+    expect(supportIcon?.tagName).toBe('IMG')
+    expect(supportIcon).toHaveAttribute(
+      'src',
+      expect.stringContaining('image/svg'),
+    )
+    expect(
+      screen.getByText(/Используя сервис, вы принимаете/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Пользовательское соглашение' }),
+    ).toHaveAttribute('href', '/legal/terms')
+    expect(
+      screen.getByRole('link', {
+        name: 'Политикой обработки персональных данных',
+      }),
+    ).toHaveAttribute('href', '/legal/privacy')
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByText('Центр поддержки')).not.toBeInTheDocument()
   })
 
@@ -245,11 +271,14 @@ describe('LoginPage', () => {
 
     expect(await screen.findByLabelText(/Email/)).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
+      screen.getByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Введите email и пароль, чтобы продолжить.'),
+      screen.getByText('Войдите, чтобы продолжить общение с поддержкой.'),
     ).toBeInTheDocument()
+    expect(document.querySelector('.auth-subtitle--login')).toHaveTextContent(
+      'Войдите, чтобы продолжить общение с поддержкой.',
+    )
     expect(
       screen.getByRole('link', { name: 'Забыли пароль?' }),
     ).toHaveAttribute('href', '/auth/password-reset/request')
@@ -257,10 +286,9 @@ describe('LoginPage', () => {
       screen.getByRole('link', { name: 'Создать аккаунт' }),
     ).toHaveAttribute('href', '/auth/register')
     expect(screen.getByText('Нет доступа к чату?')).toBeInTheDocument()
-    expect(screen.getByText(/Поддержка/)).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: '+7 (906) 12-955-12' }),
-    ).toHaveAttribute('href', 'tel:+79061295512')
+      screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
+    ).toHaveAttribute('href', 'tel:+78000000000')
     expect(
       screen.queryByText(/Используйте рабочий email/),
     ).not.toBeInTheDocument()
@@ -418,7 +446,7 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/app/chat'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
+      await screen.findByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
     ).toBeInTheDocument()
     expect(screen.queryByText('Личный чат')).not.toBeInTheDocument()
   })

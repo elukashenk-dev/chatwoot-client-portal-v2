@@ -12,8 +12,8 @@ function PasswordRule({
     <div
       className={
         isSatisfied
-          ? 'flex items-center gap-2 text-emerald-700'
-          : 'flex items-center gap-2 text-slate-500'
+          ? 'auth-password-rule auth-password-rule--satisfied'
+          : 'auth-password-rule'
       }
     >
       <span
@@ -46,11 +46,11 @@ export function PasswordRulesCard({
 
   return (
     <div
-      className="rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-sm leading-5 text-slate-500 shadow-sm"
+      className="auth-password-rules"
       data-testid="password-rules-card"
     >
-      <p className="mb-2 font-medium text-slate-600">Требования к паролю</p>
-      <div className="space-y-1.5">
+      <p className="auth-password-rules__title">Требования к паролю</p>
+      <div className="auth-password-rules__items">
         <PasswordRule
           isSatisfied={passwordRuleStates.hasLength}
           label="Не менее 8 символов"

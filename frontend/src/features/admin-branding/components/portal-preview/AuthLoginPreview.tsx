@@ -1,4 +1,5 @@
-import { LockIcon, MailIcon, PhoneIcon } from '../../../../shared/ui/icons'
+import headsetIconUrl from '../../../../assets/auth/headset.svg'
+import { LockIcon, MailIcon, PhoneFilledIcon } from '../../../../shared/ui/icons'
 import {
   authFieldIconClassName,
   inputClassName,
@@ -13,9 +14,10 @@ export function AuthLoginPreview() {
     <div className="portal-preview-no-scrollbar h-full overflow-y-auto">
       <TenantAuthShell
         description={branding.copy.authSubtitle}
+        descriptionClassName="auth-subtitle--login"
         title={branding.copy.authTitle}
       >
-        <form aria-label="Форма входа предпросмотра" className="space-y-3">
+        <form aria-label="Форма входа предпросмотра" className="auth-login-form">
           <label className="relative block">
             <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
               <MailIcon className={authFieldIconClassName} />
@@ -42,8 +44,20 @@ export function AuthLoginPreview() {
             />
           </label>
 
+          <p className="auth-legal-text">
+            Используя сервис, вы принимаете{' '}
+            <span className="auth-legal-preview-link">
+              Пользовательское соглашение
+            </span>{' '}
+            и подтверждаете ознакомление с{' '}
+            <span className="auth-legal-preview-link">
+              Политикой обработки персональных данных
+            </span>
+            .
+          </p>
+
           <button
-            className="min-h-14 w-full rounded-[0.7rem] bg-brand-900 text-[16px] font-semibold text-white shadow-sm disabled:opacity-100"
+            className="auth-login-submit w-full bg-brand-900 text-white disabled:opacity-100"
             disabled
             type="button"
           >
@@ -51,24 +65,25 @@ export function AuthLoginPreview() {
           </button>
         </form>
 
-        <div className="mt-4 flex items-center justify-between gap-4 text-sm text-brand-700 sm:text-[15px]">
+        <div className="auth-secondary-links">
           <span>Забыли пароль?</span>
+          <span aria-hidden="true" className="auth-secondary-links__separator" />
           <span className="text-right">Создать аккаунт</span>
         </div>
 
-        <div className="mt-auto pt-6">
-          <aside className="auth-support-card auth-muted-text flex items-center gap-3 rounded-[0.6rem] px-3.5 py-3 text-[13px] leading-5 shadow-sm">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200/80 text-brand-800 max-[360px]:hidden">
-              <PhoneIcon className="h-4 w-4" />
-            </span>
+        <div className="auth-support-block">
+          <div aria-hidden="true" className="auth-support-divider">
+            <span />
+            <img alt="" className="auth-support-icon" src={headsetIconUrl} />
+            <span />
+          </div>
 
-            <div className="min-w-0">
-              <p className="auth-text text-[14px] font-medium">
-                Нет доступа к чату?
-              </p>
-              <p className="whitespace-nowrap">Поддержка: +7 (906) 12-955-12</p>
-            </div>
-          </aside>
+          <p>Нет доступа к чату?</p>
+
+          <span className="auth-support-phone">
+            <PhoneFilledIcon className="auth-support-phone-icon" />
+            +7 (800) 000-00-00
+          </span>
         </div>
       </TenantAuthShell>
     </div>
