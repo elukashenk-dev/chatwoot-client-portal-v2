@@ -692,6 +692,8 @@ button:not(:disabled),
   height: 47px;
   margin-top: 27px;
   border-radius: 9px;
+  background: var(--portal-auth-button-background, var(--color-brand-900));
+  color: var(--portal-auth-button-text-color, #ffffff);
   font-size: 16px;
   font-weight: 400;
   line-height: 20px;
@@ -844,6 +846,7 @@ button:not(:disabled),
   height: 16px;
   margin-top: 1px;
   accent-color: var(--portal-auth-link-color, #003a78);
+  color: var(--portal-auth-link-color, #003a78);
 }
 
 .auth-legal-consent a {

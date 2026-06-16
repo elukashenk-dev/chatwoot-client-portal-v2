@@ -92,7 +92,10 @@ const branding = {
   },
 } as const
 
-async function mockTenantAndBranding(page: Page) {
+async function mockTenantAndBranding(
+  page: Page,
+  brandingResponse: unknown = branding,
+) {
   await page.route('**/api/tenant', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -111,7 +114,7 @@ async function mockTenantAndBranding(page: Page) {
   await page.route('**/api/branding', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      json: branding,
+      json: brandingResponse,
       status: 200,
     })
   })
@@ -333,6 +336,59 @@ test('applies public branding on the customer auth login screen', async ({
   await page.locator('#login-password').fill('correct horse battery staple')
   await page.getByRole('button', { name: 'Войти' }).click()
   await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
+})
+
+test('applies auth accent color and gradient button style on auth controls', async ({
+  page,
+}) => {
+  const redAccentBranding = {
+    branding: {
+      ...branding.branding,
+      appearance: {
+        ...branding.branding.appearance,
+        authButtonStyle: 'gradient',
+      },
+      colors: {
+        ...branding.branding.colors,
+        accent: '#ff0050',
+        primary: '#10284a',
+      },
+    },
+  }
+
+  await mockTenantAndBranding(page, redAccentBranding)
+  await mockAuthState(page, 'unauthenticated')
+
+  await page.goto('/auth/login')
+
+  const submitButton = page.getByRole('button', { name: 'Войти' })
+  await expect
+    .poll(() =>
+      submitButton.evaluate(
+        (element) => getComputedStyle(element).backgroundImage,
+      ),
+    )
+    .toContain('linear-gradient')
+  await expect
+    .poll(() =>
+      submitButton.evaluate(
+        (element) => getComputedStyle(element).backgroundImage,
+      ),
+    )
+    .toContain('rgb(255, 0, 80)')
+  await expect(page.getByRole('link', { name: 'Создать аккаунт' })).toHaveCSS(
+    'color',
+    'rgb(255, 0, 80)',
+  )
+
+  await page.goto('/auth/register')
+
+  const termsCheckbox = page.getByRole('checkbox', {
+    name: /Я принимаю Пользовательское соглашение/i,
+  })
+
+  await termsCheckbox.check()
+  await expect(termsCheckbox).toHaveCSS('color', 'rgb(255, 0, 80)')
 })
 
 test('applies public branding on the customer chat and info surfaces', async ({
