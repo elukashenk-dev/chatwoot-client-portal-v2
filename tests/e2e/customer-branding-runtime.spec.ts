@@ -338,7 +338,7 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
 })
 
-test('applies auth accent color and gradient button style on auth controls', async ({
+test('uses accent for auth links and volumetric primary gradient for auth button', async ({
   page,
 }) => {
   const redAccentBranding = {
@@ -362,20 +362,13 @@ test('applies auth accent color and gradient button style on auth controls', asy
   await page.goto('/auth/login')
 
   const submitButton = page.getByRole('button', { name: 'Войти' })
-  await expect
-    .poll(() =>
-      submitButton.evaluate(
-        (element) => getComputedStyle(element).backgroundImage,
-      ),
-    )
-    .toContain('linear-gradient')
-  await expect
-    .poll(() =>
-      submitButton.evaluate(
-        (element) => getComputedStyle(element).backgroundImage,
-      ),
-    )
-    .toContain('rgb(255, 0, 80)')
+  const submitBackgroundImage = await submitButton.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(submitBackgroundImage).toContain('linear-gradient')
+  expect(submitBackgroundImage).toContain('rgb(16, 40, 74)')
+  expect(submitBackgroundImage).not.toContain('rgb(255, 0, 80)')
   await expect(page.getByRole('link', { name: 'Создать аккаунт' })).toHaveCSS(
     'color',
     'rgb(255, 0, 80)',

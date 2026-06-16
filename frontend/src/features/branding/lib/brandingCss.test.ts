@@ -98,10 +98,11 @@ describe('createBrandingCssProperties', () => {
       '--portal-auth-background-image':
         'url("/api/branding/assets/14?v=14")',
       '--portal-auth-button-background':
-        'linear-gradient(135deg, #134e4a 0%, #14b8a6 100%)',
+        'linear-gradient(180deg, #3d6e6b 0%, #134e4a 56%, #10403d 100%)',
       '--portal-auth-field-style': 'outline',
       '--portal-auth-scheme': 'dark',
     })
+    expect(styles['--portal-auth-button-background']).not.toContain('#14b8a6')
   })
 
   it('keeps solid auth button styling when gradient mode is not selected', () => {

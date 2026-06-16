@@ -195,6 +195,16 @@ function createBrandColorVariables(primaryColor: string, accentColor: string) {
   }
 }
 
+function createAuthButtonGradient(primaryColor: string) {
+  const primary = parseHexColor(primaryColor) ?? parseHexColor('#112540')!
+
+  return `linear-gradient(180deg, ${toHexColor(
+    mixColor(primary, white, 0.18),
+  )} 0%, ${toHexColor(primary)} 56%, ${toHexColor(
+    mixColor(primary, black, 0.18),
+  )} 100%)`
+}
+
 export function createBrandingCssProperties(
   branding: PublicBranding,
 ): BrandingCssProperties {
@@ -250,7 +260,7 @@ export function createBrandingCssProperties(
   const { mutedForeground } = getReadableForeground(chatHeaderBackgroundColor)
   const authButtonBackground =
     branding.appearance.authButtonStyle === 'gradient'
-      ? `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`
+      ? createAuthButtonGradient(primaryColor)
       : primaryColor
   const authButtonTextColor = getReadableForeground(primaryColor).foreground
   const isDefaultAuthBackground =

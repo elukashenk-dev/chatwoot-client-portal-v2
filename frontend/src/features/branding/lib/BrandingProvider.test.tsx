@@ -147,7 +147,7 @@ describe('BrandingProvider', () => {
       '--portal-auth-background-color': '#ecfeff',
       '--portal-auth-background-overlay': 'rgb(0 0 0 / 0.48)',
       '--portal-auth-button-background':
-        'linear-gradient(135deg, #134e4a 0%, #14b8a6 100%)',
+        'linear-gradient(180deg, #3d6e6b 0%, #134e4a 56%, #10403d 100%)',
       '--portal-auth-canvas-background-color': '#ecfeff',
       '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
       '--portal-auth-content-surface-color': '#f8fafc',
