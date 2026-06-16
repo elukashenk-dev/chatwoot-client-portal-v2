@@ -19,10 +19,18 @@ export const defaultBrandingLayout = {
   authBrandPlacement: 'center',
 } as const
 
+export const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
 export function createDefaultPublicBranding(
   tenantDisplayName = 'Клиентский портал',
 ): PublicBranding {
   return {
+    appearance: { ...defaultBrandingAppearance },
     assets: {},
     colors: { ...defaultBrandingColors },
     copy: {

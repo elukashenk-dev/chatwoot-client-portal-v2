@@ -60,6 +60,12 @@ const supportAvailability: ChatSupportAvailabilityResponse = {
 
 const brandingContextValue: BrandingContextValue = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {
       logo: {
         assetVersion: '11',

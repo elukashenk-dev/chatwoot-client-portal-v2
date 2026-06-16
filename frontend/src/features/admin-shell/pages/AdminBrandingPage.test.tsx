@@ -31,6 +31,12 @@ vi.mock('../../admin-branding/api/adminBrandingClient', () => ({
 
 const savedBrandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {},
     colors: {
       accent: '#4676b4',
@@ -75,11 +81,15 @@ const logoAsset = {
 function createBrandingResponse(
   overrides: Partial<AdminBrandingResponse['branding']> = {},
 ) {
+  const branding = {
+    ...savedBrandingResponse.branding,
+    ...overrides,
+    appearance:
+      overrides.appearance ?? savedBrandingResponse.branding.appearance,
+  } satisfies AdminBrandingResponse['branding']
+
   return {
-    branding: {
-      ...savedBrandingResponse.branding,
-      ...overrides,
-    },
+    branding,
   } satisfies AdminBrandingResponse
 }
 

@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getPublicBranding } from './publicBrandingClient'
+import { getPublicBranding, type PublicBranding } from './publicBrandingClient'
 
 const brandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'dark',
+      authButtonStyle: 'gradient',
+      authColorScheme: 'dark',
+      authFieldStyle: 'outline',
+    },
     assets: {
       logo: {
         assetVersion: '11',
@@ -43,7 +49,7 @@ const brandingResponse = {
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
-}
+} satisfies { branding: PublicBranding }
 
 describe('publicBrandingClient', () => {
   const fetchMock = vi.fn<typeof fetch>()

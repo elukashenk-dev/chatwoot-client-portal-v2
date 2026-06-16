@@ -22,16 +22,6 @@ const brandingAssetSlots = [
     title: 'Иконка приложения',
   },
   {
-    actionName: 'верхнее изображение экрана входа',
-    kind: 'auth_header_image',
-    title: 'Вход: верхнее изображение',
-  },
-  {
-    actionName: 'нижнее изображение экрана входа',
-    kind: 'auth_footer_image',
-    title: 'Вход: нижнее изображение',
-  },
-  {
     actionName: 'общий фон экрана входа',
     kind: 'auth_background_image',
     title: 'Вход: общий фон',

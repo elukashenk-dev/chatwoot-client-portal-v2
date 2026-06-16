@@ -49,6 +49,12 @@ const legacyBrandColorVariables = {
   '--color-chat-outgoing': productionVisualDefaults.chatOutgoing,
 } as const
 
+const authOverlayByMode = {
+  dark: 'rgb(0 0 0 / 0.48)',
+  light: 'rgb(255 255 255 / 0.58)',
+  none: 'rgb(0 0 0 / 0)',
+} as const
+
 function parseHexColor(value: string): RgbColor | null {
   const normalized = value.trim()
 
@@ -242,6 +248,11 @@ export function createBrandingCssProperties(
     defaultBrandingColors.chatText,
   )
   const { mutedForeground } = getReadableForeground(chatHeaderBackgroundColor)
+  const authButtonBackground =
+    branding.appearance.authButtonStyle === 'gradient'
+      ? `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`
+      : primaryColor
+  const authButtonTextColor = getReadableForeground(primaryColor).foreground
   const isDefaultAuthBackground =
     authBackgroundColor.toLowerCase() === defaultBrandingColors.authBackground
   const isDefaultChatBackground =
@@ -254,6 +265,10 @@ export function createBrandingCssProperties(
     '--portal-auth-background-image': cssUrlValue(
       branding.assets.auth_background_image?.publicUrl,
     ),
+    '--portal-auth-background-overlay':
+      authOverlayByMode[branding.appearance.authBackgroundOverlay],
+    '--portal-auth-button-background': authButtonBackground,
+    '--portal-auth-button-text-color': authButtonTextColor,
     '--portal-auth-canvas-background-color': authBackgroundColor,
     '--portal-auth-content-surface-background': toCssRgbAlpha(
       authContentSurfaceColor,
@@ -270,10 +285,19 @@ export function createBrandingCssProperties(
       authContentSurfaceColor,
       '#cbd5e1',
     ),
+    '--portal-auth-divider-color': createMutedTextColor(
+      authMutedTextColor,
+      authContentSurfaceColor,
+      '#c7cdd6',
+    ),
+    '--portal-auth-field-style': branding.appearance.authFieldStyle,
     '--portal-auth-frame-background-color': isDefaultAuthBackground
       ? productionVisualDefaults.authFrameBackground
       : authBackgroundColor,
+    '--portal-auth-icon-color': accentColor,
+    '--portal-auth-link-color': accentColor,
     '--portal-auth-muted-text-color': authMutedTextColor,
+    '--portal-auth-scheme': branding.appearance.authColorScheme,
     '--portal-auth-surface-background-color': isDefaultAuthBackground
       ? productionVisualDefaults.authSurfaceBackground
       : authBackgroundColor,

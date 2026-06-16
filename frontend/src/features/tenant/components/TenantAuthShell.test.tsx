@@ -22,25 +22,13 @@ const tenantContextValue = {
 
 const brandingContextValue: BrandingContextValue = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {
-      auth_footer_image: {
-        assetVersion: '13',
-        contentType: 'image/png',
-        height: null,
-        id: 13,
-        kind: 'auth_footer_image',
-        publicUrl: '/api/branding/assets/13?v=13',
-        width: null,
-      },
-      auth_header_image: {
-        assetVersion: '12',
-        contentType: 'image/png',
-        height: null,
-        id: 12,
-        kind: 'auth_header_image',
-        publicUrl: '/api/branding/assets/12?v=12',
-        width: null,
-      },
       logo: {
         assetVersion: '11',
         contentType: 'image/png',

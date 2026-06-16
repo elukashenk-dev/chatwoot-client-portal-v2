@@ -1,6 +1,7 @@
 import type {
   AdminBrandingPatch,
   AdminBrandingResponse,
+  BrandingAppearance,
   BrandingAssets,
   BrandingColors,
   BrandingCopy,
@@ -8,6 +9,7 @@ import type {
 } from '../api/adminBrandingClient'
 
 export type BrandingDraft = {
+  appearance: BrandingAppearance
   assets: BrandingAssets
   colors: BrandingColors
   copy: BrandingCopy
@@ -20,6 +22,7 @@ export function createBrandingDraft(
   response: AdminBrandingResponse,
 ): BrandingDraft {
   return {
+    appearance: response.branding.appearance,
     assets: response.branding.assets,
     colors: response.branding.colors,
     copy: response.branding.copy,
@@ -31,6 +34,7 @@ export function createBrandingDraft(
 
 export function createBrandingPatch(draft: BrandingDraft): AdminBrandingPatch {
   return {
+    appearance: draft.appearance,
     colors: draft.colors,
     copy: draft.copy,
     layout: draft.layout,

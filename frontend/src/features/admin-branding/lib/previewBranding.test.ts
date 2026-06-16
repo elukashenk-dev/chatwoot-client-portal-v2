@@ -7,6 +7,12 @@ import {
 } from './previewBranding'
 
 const draft = {
+  appearance: {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  },
   assets: {
     logo: {
       assetVersion: '11',
@@ -49,6 +55,7 @@ const draft = {
 describe('previewBranding', () => {
   it('creates public branding from an unsaved admin draft', () => {
     expect(createPreviewPublicBranding(draft)).toEqual({
+      appearance: draft.appearance,
       assets: draft.assets,
       colors: draft.colors,
       copy: draft.copy,

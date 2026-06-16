@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { PublicBranding } from '../api/publicBrandingClient'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { BrandingProvider } from './BrandingProvider'
 import { createDefaultPublicBranding } from './brandingDefaults'
@@ -27,6 +28,12 @@ const tenantContextValue = {
 
 const publicBrandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'dark',
+      authButtonStyle: 'gradient',
+      authColorScheme: 'dark',
+      authFieldStyle: 'outline',
+    },
     assets: {
       auth_background_image: {
         assetVersion: '12',
@@ -84,7 +91,7 @@ const publicBrandingResponse = {
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
-}
+} satisfies { branding: PublicBranding }
 
 function BrandingProbe() {
   const { branding, status } = useBranding()
@@ -138,13 +145,18 @@ describe('BrandingProvider', () => {
     expect(scope).not.toBeNull()
     expect(scope).toHaveStyle({
       '--portal-auth-background-color': '#ecfeff',
+      '--portal-auth-background-overlay': 'rgb(0 0 0 / 0.48)',
+      '--portal-auth-button-background':
+        'linear-gradient(135deg, #134e4a 0%, #14b8a6 100%)',
       '--portal-auth-canvas-background-color': '#ecfeff',
       '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
       '--portal-auth-content-surface-color': '#f8fafc',
       '--portal-auth-content-surface-opacity': '0.84',
       '--portal-auth-control-background': 'rgb(248 250 252 / 0.84)',
       '--portal-auth-control-border-color': '#7e92a3',
+      '--portal-auth-field-style': 'outline',
       '--portal-auth-muted-text-color': '#456179',
+      '--portal-auth-scheme': 'dark',
       '--portal-auth-text-color': '#0f172a',
       '--portal-chat-background-color': '#f8fafc',
       '--portal-chat-header-background-color': '#0f766e',
@@ -201,6 +213,7 @@ describe('BrandingProvider', () => {
       '--portal-auth-control-background': 'rgb(255 255 255 / 1)',
       '--portal-auth-control-border-color': '#96a0b0',
       '--portal-auth-frame-background-color': '#e2e8f0',
+      '--portal-auth-scheme': 'light',
       '--portal-auth-surface-background-color': '#ffffff',
       '--portal-chat-app-background-color': '#e2e8f0',
       '--portal-chat-header-background-color': '#ffffff',

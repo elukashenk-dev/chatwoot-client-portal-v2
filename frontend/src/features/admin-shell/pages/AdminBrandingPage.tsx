@@ -23,14 +23,6 @@ const brandingAssetMessages = {
     deleted: 'Общий фон экрана входа удален.',
     uploaded: 'Общий фон экрана входа загружен.',
   },
-  auth_footer_image: {
-    deleted: 'Нижнее изображение экрана входа удалено.',
-    uploaded: 'Нижнее изображение экрана входа загружено.',
-  },
-  auth_header_image: {
-    deleted: 'Верхнее изображение экрана входа удалено.',
-    uploaded: 'Верхнее изображение экрана входа загружено.',
-  },
   chat_background_image: {
     deleted: 'Фон чата удален.',
     uploaded: 'Фон чата загружен.',

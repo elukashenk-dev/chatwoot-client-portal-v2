@@ -1113,7 +1113,7 @@ user can approve or reject the layout before the larger implementation starts.
 - Test: `frontend/src/features/branding/api/publicBrandingClient.test.ts`
 - Test: `frontend/src/features/admin-branding/api/adminBrandingClient.test.ts`
 
-- [ ] **Step 1: Add failing frontend contract tests**
+- [x] **Step 1: Add failing frontend contract tests**
 
   In public/admin branding client tests, update sample payloads and expected parsed values to include:
 
@@ -1128,7 +1128,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected before implementation: TypeScript/test failures because `appearance` is not typed.
 
-- [ ] **Step 2: Add failing CSS token tests**
+- [x] **Step 2: Add failing CSS token tests**
 
   In `frontend/src/features/branding/lib/BrandingProvider.test.tsx`, create a branding object with:
 
@@ -1165,7 +1165,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   If exact gradient interpolation is implemented with primary/accent mixing, update the expected string in the test to the deterministic implementation value in the same task.
 
-- [ ] **Step 3: Implement frontend types and defaults**
+- [x] **Step 3: Implement frontend types and defaults**
 
   Add:
 
@@ -1195,7 +1195,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Include `appearance: { ...defaultBrandingAppearance }` in `createDefaultPublicBranding()`.
 
-- [ ] **Step 4: Implement deterministic CSS variables**
+- [x] **Step 4: Implement deterministic CSS variables**
 
   In `brandingCss.ts`, derive:
 
@@ -1231,7 +1231,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Keep existing `--portal-auth-background-image` sourced from `auth_background_image`.
 
-- [ ] **Step 5: Run frontend targeted tests**
+- [x] **Step 5: Run frontend targeted tests**
 
   Run:
 
@@ -1241,7 +1241,7 @@ user can approve or reject the layout before the larger implementation starts.
 
   Expected: PASS.
 
-- [ ] **Step 6: Commit frontend contract slice**
+- [x] **Step 6: Commit frontend contract slice**
 
   Commit:
 

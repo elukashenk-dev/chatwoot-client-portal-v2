@@ -6,6 +6,12 @@ import type { BrandingDraft } from '../../lib/brandingState'
 import { PortalPreviewFrame } from './PortalPreviewFrame'
 
 const draft = {
+  appearance: {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  },
   assets: {
     logo: {
       assetVersion: '11',

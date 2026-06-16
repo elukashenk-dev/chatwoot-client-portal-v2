@@ -25,12 +25,6 @@ export function TenantAuthShell(props: AuthShellProps) {
       brandLogoUrl={props.brandLogoUrl ?? branding.assets.logo?.publicUrl}
       brandMonogram={brandMonogram}
       brandName={brandName}
-      footerImageUrl={
-        props.footerImageUrl ?? branding.assets.auth_footer_image?.publicUrl
-      }
-      headerImageUrl={
-        props.headerImageUrl ?? branding.assets.auth_header_image?.publicUrl
-      }
     />
   )
 }
