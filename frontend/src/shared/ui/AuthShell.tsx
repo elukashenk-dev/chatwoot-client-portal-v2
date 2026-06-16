@@ -14,8 +14,6 @@ export type AuthShellProps = {
   children: ReactNode
   description: ReactNode
   descriptionClassName?: string
-  footerImageUrl?: string | null
-  headerImageUrl?: string | null
   title: string
 }
 

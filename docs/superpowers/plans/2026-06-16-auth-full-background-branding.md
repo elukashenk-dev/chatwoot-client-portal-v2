@@ -1269,7 +1269,7 @@ default visual output from Task 0. The purpose here is to harden the shell
 contract, remove temporary compatibility, and apply the approved baseline across
 the remaining auth pages.
 
-- [ ] **Step 1: Add failing shell/layout tests**
+- [x] **Step 1: Add failing shell/layout tests**
 
   In auth page tests, assert that rendered login markup has a single stacked auth shell matching the block structure from `docs/design/2026-06-16-provgroup-login-screen-figma-spec.md`:
 
@@ -1289,7 +1289,7 @@ the remaining auth pages.
 
   Expected before implementation: FAIL because the current shell still renders `.auth-header-shell`.
 
-- [ ] **Step 2: Refactor AuthFrame to stop owning the white auth surface**
+- [x] **Step 2: Refactor AuthFrame to stop owning the white auth surface**
 
   In `AuthFrame.tsx`, keep viewport locking and max mobile frame, but remove the inner hardcoded `bg-white` dependency:
 
@@ -1303,7 +1303,7 @@ the remaining auth pages.
   </main>
   ```
 
-- [ ] **Step 3: Refactor AuthShell into a single raised stack**
+- [x] **Step 3: Refactor AuthShell into a single raised stack**
 
   In `AuthShell.tsx`, remove `footerImageUrl` and `headerImageUrl` from `AuthShellProps`; remove `imageBackgroundStyle`, `auth-header-shell`, `auth-header-art`, `auth-header-fade` and `auth-footer-art` rendering. The only auth artwork is the full-screen `auth_background_image` applied by CSS to `.auth-canvas-background`.
 
@@ -1337,7 +1337,7 @@ the remaining auth pages.
 
   In `TenantAuthShell.tsx`, remove passing `branding.assets.auth_header_image` and `branding.assets.auth_footer_image` to `AuthShell`.
 
-- [ ] **Step 4: Update CSS for full-background auth**
+- [x] **Step 4: Update CSS for full-background auth**
 
   In `frontend/src/index.css`, make these responsibilities explicit:
 
@@ -1371,7 +1371,7 @@ the remaining auth pages.
 
   Keep `.portal-frame-background` independent from `--portal-auth-background-image`.
 
-- [ ] **Step 5: Tune the baseline mobile stack to the Figma spec**
+- [x] **Step 5: Tune the baseline mobile stack to the Figma spec**
 
   Use `docs/design/2026-06-16-provgroup-login-screen-figma-spec.md` as the source for the default `390px` mobile frame. Do not carry over the old large auth header layout or viewport-scaled title typography.
 
@@ -1440,7 +1440,7 @@ the remaining auth pages.
   the additional height as top/bottom breathing room, matching the larger-mobile
   section in `docs/design/2026-06-16-provgroup-login-screen-figma-spec.md`.
 
-- [ ] **Step 6: Update PageIntro and auth inputs to tokenized values**
+- [x] **Step 6: Update PageIntro and auth inputs to tokenized values**
 
   In `PageIntro.tsx`, use auth-specific classes instead of viewport-scaled title sizing:
 
@@ -1462,7 +1462,7 @@ the remaining auth pages.
 
   Make `inputClassName()` use the same `h-[50px]`, `rounded-[10px]`, tokenized border and focus variables.
 
-- [ ] **Step 7: Run targeted auth tests**
+- [x] **Step 7: Run targeted auth tests**
 
   Run:
 
@@ -1472,7 +1472,7 @@ the remaining auth pages.
 
   Expected: PASS.
 
-- [ ] **Step 8: Commit auth shell foundation**
+- [x] **Step 8: Commit auth shell foundation**
 
   Commit:
 

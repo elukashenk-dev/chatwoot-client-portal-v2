@@ -5,8 +5,19 @@ import {
   BrandingContext,
   type BrandingContextValue,
 } from '../../branding/lib/brandingContext'
+import type { AuthShellProps } from '../../../shared/ui/AuthShell'
 import { TenantIdentityContext } from '../lib/tenantIdentityContext'
 import { TenantAuthShell } from './TenantAuthShell'
+
+const unsupportedAuthShellProps = {
+  children: <div />,
+  description: 'Описание',
+  // @ts-expect-error AuthShell must not accept old auth section artwork props.
+  headerImageUrl: '/old-auth-header.png',
+  title: 'Вход',
+} satisfies AuthShellProps
+
+void unsupportedAuthShellProps
 
 const tenantContextValue = {
   errorMessage: null,

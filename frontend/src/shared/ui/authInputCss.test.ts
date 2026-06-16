@@ -23,9 +23,8 @@ describe('auth input CSS contract', () => {
     const filledRule = getCssRule(css, ".auth-input[data-filled='true']")
     const autofillRule = getCssRule(css, '.auth-input:-webkit-autofill {')
 
-    expect(filledRule).toContain('--portal-auth-control-background')
     expect(filledRule).toContain('--portal-auth-control-border-color')
-    expect(autofillRule).toContain('--portal-auth-control-background')
+    expect(autofillRule).toContain('--portal-auth-canvas-background-color')
     expect(autofillRule).toContain('--portal-auth-text-color')
 
     expect(filledRule).not.toContain('rgb(243 247 252 / 0.86)')
@@ -35,10 +34,15 @@ describe('auth input CSS contract', () => {
 
   it('keeps the mobile auth brand mark size and placement stable', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
-    const brandMarkRule = getCssRule(css, '.auth-brand-mark {')
-    const logoRule = getCssRule(css, '.auth-brand-mark .brand-mark-logo {')
+    const brandMarkRule = getCssRule(css, '.auth-brand-mark--in-flow {')
+    const logoRule = getCssRule(
+      css,
+      '.auth-brand-mark--in-flow .brand-mark-logo {',
+    )
 
-    expect(brandMarkRule).toContain('top: 52px')
+    expect(brandMarkRule).toContain('position: static')
+    expect(brandMarkRule).toContain('width: 63px')
+    expect(brandMarkRule).toContain('height: 63px')
     expect(logoRule).toContain('width: 63px')
     expect(logoRule).toContain('height: 63px')
   })
