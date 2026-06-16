@@ -16,6 +16,10 @@ import {
   ApiClientError,
   requestRegistrationVerification,
 } from '../api/authClient'
+import {
+  RegistrationLegalConsent,
+  type RegistrationLegalConsentValue,
+} from './RegistrationLegalConsent'
 import { saveRegistrationRequest } from '../lib/registrationFlow'
 import { validateRegisterRequestForm } from '../lib/registerRequestValidation'
 import type {
@@ -24,8 +28,10 @@ import type {
 } from '../types'
 
 const DEFAULT_VALUES: RegisterRequestFormValues = {
-  fullName: '',
   email: '',
+  fullName: '',
+  personalDataConsentAccepted: false,
+  termsAccepted: false,
 }
 
 const DEFAULT_REQUEST_ERROR_MESSAGE =
@@ -76,6 +82,9 @@ export function RegisterRequestForm() {
     : getVisibleFieldError(visibleEmailError)
   const nameHasError = Boolean(visibleNameError)
   const emailHasError = Boolean(visibleEmailError) && !suppressEmailFormatError
+  const hasAcceptedLegal =
+    values.termsAccepted && values.personalDataConsentAccepted
+  const isSubmitDisabled = isSubmitting || !hasAcceptedLegal
 
   const nameErrorId = 'register-name-error'
   const emailErrorId = 'register-email-error'
@@ -109,12 +118,20 @@ export function RegisterRequestForm() {
     }))
   }
 
+  function updateLegalConsent(nextValue: RegistrationLegalConsentValue) {
+    setValues((currentValues) => ({
+      ...currentValues,
+      ...nextValue,
+    }))
+    setGlobalError(null)
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setHasSubmitted(true)
     setGlobalError(null)
 
-    if (fieldErrors.fullName || fieldErrors.email) {
+    if (fieldErrors.fullName || fieldErrors.email || !hasAcceptedLegal) {
       return
     }
 
@@ -127,7 +144,9 @@ export function RegisterRequestForm() {
         email: response.email,
         expiresInSeconds: response.expiresInSeconds,
         fullName: values.fullName,
+        personalDataConsentAccepted: true,
         resendAvailableInSeconds: response.resendAvailableInSeconds,
+        termsAccepted: true,
       })
       setGlobalError(null)
       navigate(routePaths.auth.registerVerify)
@@ -201,10 +220,19 @@ export function RegisterRequestForm() {
         Введите email, указанный при создании вашего профиля.
       </p>
 
+      <RegistrationLegalConsent
+        disabled={isSubmitting}
+        onChange={updateLegalConsent}
+        value={{
+          personalDataConsentAccepted: values.personalDataConsentAccepted,
+          termsAccepted: values.termsAccepted,
+        }}
+      />
+
       <InlineAlert message={globalError} tone="error" />
 
       <PrimaryButton
-        disabled={isSubmitting}
+        disabled={isSubmitDisabled}
         loading={isSubmitting}
         loadingLabel="Проверка..."
         type="submit"

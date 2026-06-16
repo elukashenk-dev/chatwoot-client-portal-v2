@@ -5,13 +5,15 @@ import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import { portalPasswordSchema } from '../../lib/passwordPolicy.js'
 import type { RegistrationService } from './service.js'
 
-const registerRequestBodySchema = z.object({
+const registerRequestBodySchema = z.strictObject({
   email: z
     .string()
     .trim()
     .min(1, 'Введите email')
     .email('Проверьте формат email'),
   fullName: z.string().trim().min(1, 'Введите имя'),
+  personalDataConsentAccepted: z.literal(true),
+  termsAccepted: z.literal(true),
 })
 
 const registerVerifyBodySchema = z.object({
@@ -55,6 +57,12 @@ export function registerRegistrationRoutes(
     return createRegistrationService(request).requestVerification({
       email: body.email,
       fullName: body.fullName,
+      legalAcceptance: {
+        personalDataConsentAccepted: body.personalDataConsentAccepted,
+        requestIp: request.ip,
+        termsAccepted: body.termsAccepted,
+        userAgent: request.headers['user-agent'] ?? null,
+      },
     })
   })
 

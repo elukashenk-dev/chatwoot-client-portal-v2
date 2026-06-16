@@ -1842,7 +1842,7 @@ the remaining auth pages.
 - Test: `backend/src/modules/registration/service.test.ts`
 - Test: `backend/src/app.test.ts`
 
-- [ ] **Step 1: Add failing frontend tests for legal links and registration consent**
+- [x] **Step 1: Add failing frontend tests for legal links and registration consent**
 
   In `LoginPage.test.tsx`, assert the login legal text is informational and has real links:
 
@@ -1897,7 +1897,7 @@ the remaining auth pages.
   request consent fields are missing. Legal links should already pass if Task 0
   was approved.
 
-- [ ] **Step 2: Add failing backend tests for required consent**
+- [x] **Step 2: Add failing backend tests for required consent**
 
   In `backend/src/app.test.ts`, add a registration request case without legal flags:
 
@@ -1950,7 +1950,7 @@ the remaining auth pages.
   legal acceptance for the tenant and normalized email has `portalUserId` equal
   to the newly created portal user ID.
 
-- [ ] **Step 3: Verify public legal routes from Task 0**
+- [x] **Step 3: Verify public legal routes from Task 0**
 
   Task 0 creates the first frontend-only `/legal/terms` and `/legal/privacy`
   routes. In this task, verify that `routePaths.ts` still contains:
@@ -2066,7 +2066,7 @@ the remaining auth pages.
   })
   ```
 
-- [ ] **Step 4: Expand static legal document source**
+- [x] **Step 4: Expand static legal document source**
 
   Replace the short Task 0 preview copy in
   `frontend/src/features/legal/legalDocuments.ts` with the fuller first-run
@@ -2155,7 +2155,7 @@ the remaining auth pages.
   the registration API; backend audit versions come from
   `backend/src/modules/registration/legalDocuments.ts`.
 
-- [ ] **Step 5: Verify legal notice and create registration consent component**
+- [x] **Step 5: Verify legal notice and create registration consent component**
 
   Verify `AuthLegalNotice.tsx` keeps the login informational copy:
 
@@ -2241,7 +2241,7 @@ the remaining auth pages.
   }
   ```
 
-- [ ] **Step 6: Wire legal UX into login and registration**
+- [x] **Step 6: Wire legal UX into login and registration**
 
   In `LoginPage.tsx`, render `<AuthLegalNotice />` in the Figma legal text position before the submit button.
 
@@ -2275,7 +2275,7 @@ the remaining auth pages.
 
   Do not show legal checkbox on login.
 
-- [ ] **Step 7: Add backend legal acceptance persistence**
+- [x] **Step 7: Add backend legal acceptance persistence**
 
   In `backend/src/db/schema.ts`, add `boolean` to the Drizzle pg-core imports
   if it is not already imported, then add a table:
@@ -2335,7 +2335,7 @@ the remaining auth pages.
 
   Generate a migration after adding the table.
 
-- [ ] **Step 8: Enforce consent in registration API**
+- [x] **Step 8: Enforce consent in registration API**
 
   Create `backend/src/modules/registration/legalDocuments.ts`:
 
@@ -2426,7 +2426,7 @@ the remaining auth pages.
   termsVersion: z.string().trim().min(1),
   ```
 
-- [ ] **Step 9: Run targeted legal/registration tests**
+- [x] **Step 9: Run targeted legal/registration tests**
 
   Run:
 
@@ -2438,7 +2438,7 @@ the remaining auth pages.
 
   Expected: PASS.
 
-- [ ] **Step 10: Commit legal consent slice**
+- [x] **Step 10: Commit legal consent slice**
 
   Commit:
 

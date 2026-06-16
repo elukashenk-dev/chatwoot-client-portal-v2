@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
+  portalLegalAcceptances,
   portalUserContactLinks,
   portalUsers,
   verificationRecords,
@@ -38,6 +39,18 @@ type UpdatePendingVerificationInput = {
   resendNotBefore: Date
   status?: string
   updatedAt: Date
+}
+
+type CreateLegalAcceptanceInput = {
+  acceptedAt: Date
+  email: string
+  personalDataConsentAccepted: true
+  privacyPolicyVersion: string
+  purpose: 'registration'
+  requestIp: string | null
+  termsAccepted: true
+  termsVersion: string
+  userAgent: string | null
 }
 
 export type PendingVerificationRecord = {
@@ -197,6 +210,37 @@ export function createRegistrationRepository(
 
       if (!createdRecord) {
         throw new Error('Failed to create pending verification record.')
+      }
+
+      return createdRecord
+    },
+
+    async createLegalAcceptance(
+      input: CreateLegalAcceptanceInput,
+      executor: AppDatabase = db,
+    ) {
+      const normalizedEmail = normalizeEmail(input.email)
+
+      const [createdRecord] = await executor
+        .insert(portalLegalAcceptances)
+        .values({
+          acceptedAt: input.acceptedAt,
+          email: normalizedEmail,
+          personalDataConsentAccepted: input.personalDataConsentAccepted,
+          privacyPolicyVersion: input.privacyPolicyVersion,
+          purpose: input.purpose,
+          requestIp: input.requestIp,
+          tenantId,
+          termsAccepted: input.termsAccepted,
+          termsVersion: input.termsVersion,
+          userAgent: input.userAgent,
+        })
+        .returning({
+          id: portalLegalAcceptances.id,
+        })
+
+      if (!createdRecord) {
+        throw new Error('Failed to create legal acceptance record.')
       }
 
       return createdRecord
@@ -416,6 +460,57 @@ export function createRegistrationRepository(
       }
 
       return createdLink
+    },
+
+    async linkLatestRegistrationAcceptanceToUser(
+      {
+        email,
+        portalUserId,
+      }: {
+        email: string
+        portalUserId: number
+      },
+      executor: AppDatabase = db,
+    ) {
+      const normalizedEmail = normalizeEmail(email)
+      const [latestAcceptance] = await executor
+        .select({
+          id: portalLegalAcceptances.id,
+        })
+        .from(portalLegalAcceptances)
+        .where(
+          and(
+            eq(portalLegalAcceptances.tenantId, tenantId),
+            sql`lower(${portalLegalAcceptances.email}) = ${normalizedEmail}`,
+            eq(
+              portalLegalAcceptances.purpose,
+              REGISTRATION_VERIFICATION_PURPOSE,
+            ),
+          ),
+        )
+        .orderBy(
+          desc(portalLegalAcceptances.acceptedAt),
+          desc(portalLegalAcceptances.id),
+        )
+        .limit(1)
+        .for('update')
+
+      if (!latestAcceptance) {
+        return null
+      }
+
+      const [updatedRecord] = await executor
+        .update(portalLegalAcceptances)
+        .set({
+          portalUserId,
+        })
+        .where(eq(portalLegalAcceptances.id, latestAcceptance.id))
+        .returning({
+          id: portalLegalAcceptances.id,
+          portalUserId: portalLegalAcceptances.portalUserId,
+        })
+
+      return updatedRecord ?? null
     },
 
     async markVerificationDeliverySucceeded(

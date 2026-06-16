@@ -820,7 +820,39 @@ button:not(:disabled),
   text-decoration: none;
 }
 
+.auth-legal-consent {
+  display: grid;
+  gap: 12px;
+  margin-top: 2px;
+  color: #8a909b;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 18px;
+  text-align: left;
+}
+
+.auth-legal-consent label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.auth-legal-consent input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--portal-auth-link-color, #003a78);
+}
+
+.auth-legal-consent a {
+  color: var(--portal-auth-link-color, #003a78);
+  text-decoration: none;
+}
+
 .auth-legal-text a:hover,
+.auth-legal-consent a:hover,
 a.auth-secondary-link:hover,
 a.auth-support-phone:hover {
   text-decoration: underline;

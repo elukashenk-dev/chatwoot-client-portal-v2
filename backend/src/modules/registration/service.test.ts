@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 
 import type { DatabaseClient } from '../../db/client.js'
-import { portalUserContactLinks, verificationRecords } from '../../db/schema.js'
+import {
+  portalLegalAcceptances,
+  portalUserContactLinks,
+  verificationRecords,
+} from '../../db/schema.js'
 import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
 import {
   SmtpEmailDeliveryConfigurationError,
@@ -12,8 +16,16 @@ import { hashPassword } from '../../lib/password.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
+import { registrationLegalDocumentVersions } from './legalDocuments.js'
 import { createRegistrationRepository } from './repository.js'
 import { createRegistrationService } from './service.js'
+
+const acceptedRegistrationLegal = {
+  personalDataConsentAccepted: true,
+  requestIp: '203.0.113.10',
+  termsAccepted: true,
+  userAgent: 'Mozilla/5.0',
+} as const
 
 function extractVerificationCode(text: string) {
   const match = text.match(/\b\d{6}\b/)
@@ -112,6 +124,36 @@ async function findPortalUserContactLinks(
     .where(eq(portalUserContactLinks.tenantId, tenantId))
 }
 
+async function findLegalAcceptanceRecords(
+  database: DatabaseClient,
+  tenantId: number,
+  email = 'name@company.ru',
+) {
+  return database.db
+    .select({
+      email: portalLegalAcceptances.email,
+      id: portalLegalAcceptances.id,
+      personalDataConsentAccepted:
+        portalLegalAcceptances.personalDataConsentAccepted,
+      portalUserId: portalLegalAcceptances.portalUserId,
+      privacyPolicyVersion: portalLegalAcceptances.privacyPolicyVersion,
+      purpose: portalLegalAcceptances.purpose,
+      requestIp: portalLegalAcceptances.requestIp,
+      tenantId: portalLegalAcceptances.tenantId,
+      termsAccepted: portalLegalAcceptances.termsAccepted,
+      termsVersion: portalLegalAcceptances.termsVersion,
+      userAgent: portalLegalAcceptances.userAgent,
+    })
+    .from(portalLegalAcceptances)
+    .where(
+      and(
+        eq(portalLegalAcceptances.tenantId, tenantId),
+        eq(portalLegalAcceptances.email, email),
+      ),
+    )
+    .orderBy(desc(portalLegalAcceptances.id))
+}
+
 describe('registration service', () => {
   let database: DatabaseClient
   let tenantId: number
@@ -153,6 +195,7 @@ describe('registration service', () => {
       service.requestVerification({
         email: 'name@company.ru',
         fullName: 'Portal User',
+        legalAcceptance: acceptedRegistrationLegal,
       }),
     ).rejects.toMatchObject({
       code: 'REGISTRATION_CONTACT_NOT_FOUND',
@@ -184,6 +227,7 @@ describe('registration service', () => {
       service.requestVerification({
         email: 'name@company.ru',
         fullName: 'Portal User',
+        legalAcceptance: acceptedRegistrationLegal,
       }),
     ).rejects.toMatchObject({
       code: 'CHATWOOT_UNAVAILABLE',
@@ -224,6 +268,7 @@ describe('registration service', () => {
       service.requestVerification({
         email: 'name@company.ru',
         fullName: 'Portal User',
+        legalAcceptance: acceptedRegistrationLegal,
       }),
     ).rejects.toMatchObject({
       code: 'REGISTRATION_ACCOUNT_EXISTS',
@@ -255,6 +300,7 @@ describe('registration service', () => {
     const result = await service.requestVerification({
       email: ' Name@Company.RU ',
       fullName: '  Portal User  ',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     expect(result).toEqual({
@@ -287,6 +333,21 @@ describe('registration service', () => {
         to: 'name@company.ru',
       }),
     )
+    expect(await findLegalAcceptanceRecords(database, tenantId)).toEqual([
+      expect.objectContaining({
+        email: 'name@company.ru',
+        personalDataConsentAccepted: true,
+        portalUserId: null,
+        privacyPolicyVersion:
+          registrationLegalDocumentVersions.privacyPolicyVersion,
+        purpose: 'registration',
+        requestIp: '203.0.113.10',
+        tenantId,
+        termsAccepted: true,
+        termsVersion: registrationLegalDocumentVersions.termsVersion,
+        userAgent: 'Mozilla/5.0',
+      }),
+    ])
   })
 
   it('returns the active pending verification during cooldown without depending on Chatwoot', async () => {
@@ -319,6 +380,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     now = new Date('2026-04-21T12:00:30.000Z')
@@ -326,6 +388,11 @@ describe('registration service', () => {
     const result = await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: {
+        ...acceptedRegistrationLegal,
+        requestIp: '203.0.113.11',
+        userAgent: 'Mozilla/5.1',
+      },
     })
 
     expect(result).toEqual({
@@ -339,6 +406,16 @@ describe('registration service', () => {
     })
     expect(sendEmail).toHaveBeenCalledTimes(1)
     expect(findContactByEmail).toHaveBeenCalledTimes(1)
+    expect(await findLegalAcceptanceRecords(database, tenantId)).toEqual([
+      expect.objectContaining({
+        requestIp: '203.0.113.11',
+        userAgent: 'Mozilla/5.1',
+      }),
+      expect.objectContaining({
+        requestIp: '203.0.113.10',
+        userAgent: 'Mozilla/5.0',
+      }),
+    ])
   })
 
   it('serializes parallel registration requests to one active pending code', async () => {
@@ -367,6 +444,7 @@ describe('registration service', () => {
         service.requestVerification({
           email: 'name@company.ru',
           fullName: 'Portal User',
+          legalAcceptance: acceptedRegistrationLegal,
         }),
       ),
     )
@@ -411,6 +489,7 @@ describe('registration service', () => {
     const firstRequest = service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     await waitForMockCall(sendEmail)
@@ -419,6 +498,7 @@ describe('registration service', () => {
       service.requestVerification({
         email: 'name@company.ru',
         fullName: 'Portal User',
+        legalAcceptance: acceptedRegistrationLegal,
       }),
     ).rejects.toMatchObject({
       code: 'REGISTRATION_DELIVERY_IN_PROGRESS',
@@ -463,6 +543,7 @@ describe('registration service', () => {
       service.requestVerification({
         email: 'name@company.ru',
         fullName: 'Portal User',
+        legalAcceptance: acceptedRegistrationLegal,
       }),
     ).rejects.toMatchObject({
       code: 'REGISTRATION_UNAVAILABLE',
@@ -500,6 +581,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     const emailMessage = sendEmail.mock.calls[0]?.[0]
@@ -555,6 +637,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     await expect(
@@ -602,6 +685,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     for (let attempt = 1; attempt <= 5; attempt += 1) {
@@ -653,6 +737,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     const attempts = await Promise.allSettled(
@@ -711,6 +796,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     const emailMessage = sendEmail.mock.calls[0]?.[0]
@@ -748,6 +834,13 @@ describe('registration service', () => {
         chatwootContactId: 44,
         userId: createdUser?.id,
       },
+    ])
+    expect(await findLegalAcceptanceRecords(database, tenantId)).toEqual([
+      expect.objectContaining({
+        email: 'name@company.ru',
+        portalUserId: createdUser?.id,
+        purpose: 'registration',
+      }),
     ])
 
     const latestRecord =
@@ -824,6 +917,7 @@ describe('registration service', () => {
     await service.requestVerification({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      legalAcceptance: acceptedRegistrationLegal,
     })
 
     const emailMessage = sendEmail.mock.calls[0]?.[0]

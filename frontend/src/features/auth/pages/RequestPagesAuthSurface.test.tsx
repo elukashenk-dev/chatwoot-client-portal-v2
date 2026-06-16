@@ -71,7 +71,9 @@ describe('Auth flow pages surface contract', () => {
           email: 'name@company.ru',
           expiresInSeconds: 900,
           fullName: 'Portal User',
+          personalDataConsentAccepted: true,
           resendAvailableInSeconds: 60,
+          termsAccepted: true,
         })
       },
       heading: 'Подтверждение Email',
@@ -84,7 +86,9 @@ describe('Auth flow pages surface contract', () => {
           email: 'name@company.ru',
           expiresInSeconds: 900,
           fullName: 'Portal User',
+          personalDataConsentAccepted: true,
           resendAvailableInSeconds: 60,
+          termsAccepted: true,
         })
         saveRegistrationVerification({
           continuationExpiresInSeconds: 900,

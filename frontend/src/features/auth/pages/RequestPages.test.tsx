@@ -88,8 +88,22 @@ describe('Auth flow pages', () => {
     expect(
       screen.getByText('Введите email, указанный при создании вашего профиля.'),
     ).toHaveClass('auth-form-note')
+    const submit = screen.getByRole('button', { name: 'Продолжить' })
 
-    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+    expect(submit).toBeDisabled()
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю Пользовательское соглашение/i,
+      }),
+    )
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных/i,
+      }),
+    )
+    expect(submit).not.toBeDisabled()
+    await user.click(submit)
 
     expect(screen.queryByText('Введите имя')).not.toBeInTheDocument()
     expect(screen.queryByText('Введите email')).not.toBeInTheDocument()
@@ -130,7 +144,23 @@ describe('Auth flow pages', () => {
       'Portal User',
     )
     await user.type(screen.getByLabelText(/Email/), 'name@company.ru')
-    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+    const submit = screen.getByRole('button', { name: 'Продолжить' })
+
+    expect(submit).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю Пользовательское соглашение/i,
+      }),
+    )
+    expect(submit).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных/i,
+      }),
+    )
+    expect(submit).not.toBeDisabled()
+
+    await user.click(submit)
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/register/request',
@@ -146,6 +176,8 @@ describe('Auth flow pages', () => {
     expect(getJsonBodyForCall('/api/auth/register/request')).toEqual({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
+      termsAccepted: true,
     })
 
     expect(
@@ -196,6 +228,16 @@ describe('Auth flow pages', () => {
       'Portal User',
     )
     await user.type(screen.getByLabelText(/Email/), 'missing@company.ru')
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю Пользовательское соглашение/i,
+      }),
+    )
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных/i,
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -259,7 +301,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -326,7 +370,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -366,7 +412,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 0,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -391,6 +439,12 @@ describe('Auth flow pages', () => {
       await screen.findByRole('button', { name: 'Отправить код повторно' }),
     )
 
+    expect(getJsonBodyForCall('/api/auth/register/request')).toEqual({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      personalDataConsentAccepted: true,
+      termsAccepted: true,
+    })
     expect(
       await screen.findByText(
         'Используйте ранее отправленный код. Новый код можно будет запросить после таймера.',
@@ -405,7 +459,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
     saveRegistrationVerification({
       continuationToken: 'continuation-token',
@@ -494,7 +550,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
     saveRegistrationVerification({
       continuationToken: 'continuation-token',

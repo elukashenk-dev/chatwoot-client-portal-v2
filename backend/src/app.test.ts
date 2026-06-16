@@ -626,6 +626,56 @@ describe('buildApp', () => {
     })
   })
 
+  it('rejects registration requests without required legal consent flags', async () => {
+    const response = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        fullName: 'Portal User',
+      },
+      url: '/api/auth/register/request',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'INVALID_REQUEST',
+        }),
+      }),
+    )
+  })
+
+  it('rejects client-controlled registration legal document versions', async () => {
+    const response = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'name@company.ru',
+        fullName: 'Portal User',
+        personalDataConsentAccepted: true,
+        privacyPolicyVersion: 'attacker-controlled-version',
+        termsAccepted: true,
+        termsVersion: 'attacker-controlled-version',
+      },
+      url: '/api/auth/register/request',
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'INVALID_REQUEST',
+        }),
+      }),
+    )
+  })
+
   it('confirms a pending registration verification and returns a continuation token', async () => {
     await database.db.insert(verificationRecords).values({
       attemptsCount: 0,
