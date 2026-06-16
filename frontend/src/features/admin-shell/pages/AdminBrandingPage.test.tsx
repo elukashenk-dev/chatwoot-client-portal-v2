@@ -161,6 +161,22 @@ describe('AdminBrandingPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Оформление входа/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Цветовая схема/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Защита фона/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Стиль полей/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Стиль кнопки/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Вход: общий фон')).toBeInTheDocument()
     expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
   })
 
@@ -250,6 +266,10 @@ describe('AdminBrandingPage', () => {
     await user.clear(portalNameInput)
     await user.type(portalNameInput, 'Новый портал')
     await user.click(screen.getByRole('radio', { name: 'Справа' }))
+    await user.click(screen.getByRole('radio', { name: 'Темная' }))
+    await user.click(screen.getByRole('radio', { name: 'Темная дымка' }))
+    await user.click(screen.getByRole('radio', { name: 'Контур' }))
+    await user.click(screen.getByRole('radio', { name: 'Градиент' }))
     await user.click(
       screen.getByRole('button', { name: 'Сохранить настройки' }),
     )
@@ -257,6 +277,12 @@ describe('AdminBrandingPage', () => {
     await waitFor(() => {
       expect(updateAdminBrandingMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          appearance: expect.objectContaining({
+            authBackgroundOverlay: 'dark',
+            authButtonStyle: 'gradient',
+            authColorScheme: 'dark',
+            authFieldStyle: 'outline',
+          }),
           layout: {
             authBrandPlacement: 'right',
           },

@@ -2,12 +2,14 @@ import type { FormEvent } from 'react'
 
 import type {
   BrandingAssetKind,
+  BrandingAppearance,
   BrandingColors,
   BrandingCopy,
   BrandingLayout,
 } from '../api/adminBrandingClient'
 import { defaultBrandingColors } from '../../branding/lib/brandingDefaults'
 import type { BrandingDraft } from '../lib/brandingState'
+import { AuthAppearanceControls } from './AuthAppearanceControls'
 import { BrandingAssetControls } from './BrandingAssetControls'
 
 type AdminBrandingFormProps = {
@@ -375,6 +377,19 @@ export function AdminBrandingForm({
     })
   }
 
+  function updateAppearance<Key extends keyof BrandingAppearance>(
+    key: Key,
+    value: BrandingAppearance[Key],
+  ) {
+    onChange({
+      ...draft,
+      appearance: {
+        ...draft.appearance,
+        [key]: value,
+      },
+    })
+  }
+
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
       <section
@@ -502,6 +517,11 @@ export function AdminBrandingForm({
               updateLayout('authBrandPlacement', value)
             }}
             value={draft.layout.authBrandPlacement}
+          />
+          <AuthAppearanceControls
+            disabled={isSaving}
+            onChange={updateAppearance}
+            value={draft.appearance}
           />
           <TextField
             disabled={isSaving}

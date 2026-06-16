@@ -1490,7 +1490,7 @@ the remaining auth pages.
 - Create: `frontend/src/features/admin-branding/components/AuthAppearanceControls.tsx`
 - Test: `frontend/src/features/admin-shell/pages/AdminBrandingPage.test.tsx`
 
-- [ ] **Step 1: Add failing admin UI tests**
+- [x] **Step 1: Add failing admin UI tests**
 
   In `AdminBrandingPage.test.tsx`, assert:
 
@@ -1518,7 +1518,7 @@ the remaining auth pages.
 
   Expected before implementation: FAIL because controls and patch fields do not exist.
 
-- [ ] **Step 2: Create AuthAppearanceControls**
+- [x] **Step 2: Create AuthAppearanceControls**
 
   Implement `frontend/src/features/admin-branding/components/AuthAppearanceControls.tsx` with four segmented controls:
 
@@ -1548,7 +1548,7 @@ the remaining auth pages.
 
   Use radio inputs with visible labels and a shared segmented-control helper so keyboard navigation and labels remain native.
 
-- [ ] **Step 3: Wire appearance draft state**
+- [x] **Step 3: Wire appearance draft state**
 
   In `AdminBrandingForm.tsx`, add:
 
@@ -1569,7 +1569,7 @@ the remaining auth pages.
 
   Render `AuthAppearanceControls` in the `Экран входа` section before copy fields.
 
-- [ ] **Step 4: Reorganize asset controls around Full Background**
+- [x] **Step 4: Reorganize asset controls around Full Background**
 
   In `BrandingAssetControls.tsx`, remove old auth top/bottom upload slots and show only one auth artwork slot:
   - auth slot: `auth_background_image` titled `Вход: общий фон`;
@@ -1583,7 +1583,7 @@ the remaining auth pages.
   Основной способ оформления входа: подготовьте один фон под мобильный экран, оставив чистую центральную область под форму.
   ```
 
-- [ ] **Step 5: Run targeted admin UI tests**
+- [x] **Step 5: Run targeted admin UI tests**
 
   Run:
 
@@ -1593,7 +1593,7 @@ the remaining auth pages.
 
   Expected: PASS.
 
-- [ ] **Step 6: Commit admin UI slice**
+- [x] **Step 6: Commit admin UI slice**
 
   Commit:
 
