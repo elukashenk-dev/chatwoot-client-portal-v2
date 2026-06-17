@@ -255,7 +255,10 @@ describe('ChatPage', () => {
     expect(
       await screen.findByText('Здравствуйте, вижу ваше обращение.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('banner')).toHaveClass('chat-header-background')
+    expect(screen.getByRole('banner')).not.toHaveClass('chat-header-background')
+    expect(
+      screen.getByRole('banner').querySelector('.chat-floating-header-surface'),
+    ).not.toBeNull()
     expect(screen.getAllByText('Ольга Support').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Агент:/)).not.toBeInTheDocument()
     expect(

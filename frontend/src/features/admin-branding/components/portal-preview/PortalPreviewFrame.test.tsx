@@ -232,10 +232,21 @@ describe('PortalPreviewFrame', () => {
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-chat-outgoing': '#465a72',
       '--portal-chat-header-background-color': '#ffffff',
+      '--portal-chat-header-control-border': 'rgb(193 193 193 / 34%)',
+      '--portal-chat-header-control-surface': 'rgb(248 250 252 / 43%)',
       '--portal-chat-header-control-hover-text': '#112540',
       '--portal-chat-header-foreground': '#0f172a',
     })
-    expect(container.querySelector('header')).toHaveClass('chat-header-border')
+    expect(container.querySelector('header')).toHaveClass('app-safe-top')
+    expect(container.querySelector('header')).not.toHaveClass(
+      'chat-header-background',
+    )
+    expect(
+      container.querySelector('.chat-floating-header-surface'),
+    ).toBeInstanceOf(HTMLElement)
+    expect(
+      container.querySelector('.chat-floating-composer-surface'),
+    ).toBeInstanceOf(HTMLElement)
     expect(container.querySelector('.chat-header-icon-button')).toBeInstanceOf(
       HTMLElement,
     )

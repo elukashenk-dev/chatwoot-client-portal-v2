@@ -131,9 +131,11 @@ function CurrentPath() {
 
 function renderHeader({
   activeThread = privateThread,
+  brandingValue = brandingContextValue,
   connectionStatus = 'online',
 }: {
   activeThread?: ChatThreadListSummary
+  brandingValue?: BrandingContextValue
   connectionStatus?: 'connecting' | 'offline' | 'online'
 } = {}) {
   renderWithRouter(
@@ -151,7 +153,7 @@ function renderHeader({
       }}
     >
       <AuthSessionContext.Provider value={authSession}>
-        <BrandingContext.Provider value={brandingContextValue}>
+        <BrandingContext.Provider value={brandingValue}>
           <ChatHeader
             activeThread={activeThread}
             connectionStatus={connectionStatus}
@@ -174,12 +176,12 @@ function renderHeader({
 }
 
 describe('ChatHeader', () => {
-  it('renders the active thread avatar image in the header', () => {
+  it('renders the branded logo image in the header before thread avatar fallback', () => {
     renderHeader()
 
     expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
       'src',
-      '/api/tenant/icons/icon-192.png',
+      '/api/branding/assets/11?v=11',
     )
   })
 
@@ -199,6 +201,23 @@ describe('ChatHeader', () => {
     expect(screen.getByText('Поддержка ProvGroup')).toBeInTheDocument()
   })
 
+  it('falls back to the active thread avatar when branding logo is unavailable', () => {
+    renderHeader({
+      brandingValue: {
+        ...brandingContextValue,
+        branding: {
+          ...brandingContextValue.branding,
+          assets: {},
+        },
+      },
+    })
+
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/tenant/icons/icon-192.png',
+    )
+  })
+
   it('prioritizes offline connection status over the support subtitle on mobile', () => {
     renderHeader({ connectionStatus: 'offline' })
 
@@ -206,7 +225,7 @@ describe('ChatHeader', () => {
     const offlineStatus = screen.getByRole('status', { name: 'Нет связи' })
 
     expect(subtitle).toHaveClass('hidden', 'sm:inline')
-    expect(offlineStatus).toHaveClass('font-semibold', 'text-[#9f3141]')
+    expect(offlineStatus).toHaveClass('font-normal', 'text-[#9f3141]')
   })
 
   it('shows connecting status while cached chat is checking the backend', () => {
@@ -226,7 +245,11 @@ describe('ChatHeader', () => {
   it('uses semantic header control classes for light and dark branded headers', () => {
     renderHeader()
 
-    expect(screen.getByRole('banner')).toHaveClass('chat-header-border')
+    expect(screen.getByRole('banner')).toHaveClass('app-safe-top')
+    expect(screen.getByRole('banner')).not.toHaveClass('chat-header-background')
+    expect(
+      screen.getByRole('banner').querySelector('.chat-floating-header-surface'),
+    ).not.toBeNull()
     expect(
       screen.getByRole('button', { name: 'Открыть навигацию' }),
     ).toHaveClass('chat-header-icon-button')

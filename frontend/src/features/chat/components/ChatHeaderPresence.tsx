@@ -33,7 +33,7 @@ export function ChatHeaderPresence({
       <span
         aria-label={label}
         className={cn(
-          'shrink-0 font-semibold',
+          'shrink-0 font-normal',
           tone === 'offline'
             ? 'text-[#9f3141]'
             : tone === 'online'

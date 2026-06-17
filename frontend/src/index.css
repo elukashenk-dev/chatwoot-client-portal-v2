@@ -1271,40 +1271,59 @@ a.auth-support-phone:hover {
 
 .chat-outgoing-surface {
   background-color: var(--color-chat-outgoing);
-  background-image:
-    linear-gradient(
-      148deg,
-      #00000000 60%,
-      transparent 75%,
-      rgb(255 255 255 / 0.02) 50%,
-      transparent 100%
-    ),
-    linear-gradient(
-      40deg,
-      transparent 54%,
-      transparent 70%,
-      rgb(17 37 64 / 0.1) 67%,
-      transparent 100%
-    );
+  box-shadow: 0 8px 20px rgb(20 65 100 / 0.16);
 }
 
 .chat-incoming-surface {
-  background-color: var(--color-chat-incoming);
-  background-image:
-    linear-gradient(
-      148deg,
-      rgb(255 255 255 / 0) 58%,
-      transparent 74%,
-      rgb(255 255 255 / 0.58) 50%,
-      transparent 100%
-    ),
-    linear-gradient(
-      40deg,
-      transparent 54%,
-      transparent 70%,
-      rgb(15 23 42 / 0.035) 67%,
-      transparent 100%
-    );
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.88),
+    rgb(255 255 255 / 0.72)
+  );
+  box-shadow:
+    0 10px 26px rgb(20 65 100 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.76);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.chat-floating-header-surface,
+.chat-floating-composer-surface {
+  background-color: rgb(255 255 255 / 0.01);
+  background-image: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.64),
+    rgb(255 255 255 / 0.38)
+  );
+  border-color: rgb(255 255 255 / 0.2);
+  box-shadow:
+    0 14px 34px rgb(20 65 100 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.58);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(10px);
+}
+
+.chat-floating-header-surface {
+  color: var(--portal-chat-header-foreground, #0f172a);
+}
+
+.chat-floating-composer-surface {
+  color: var(--portal-chat-text-color, #334155);
+}
+
+.chat-send-control {
+  background-color: var(--portal-chat-outgoing-background-color, #465a72);
+  color: #ffffff;
+}
+
+.chat-send-control:not(:disabled):hover {
+  background-color: var(--color-brand-900);
+}
+
+.chat-send-control:disabled {
+  background-color: rgb(191 207 224 / 0.82);
+  color: rgb(255 255 255 / 0.92);
+  opacity: 1;
 }
 
 .chat-header-background {
@@ -1338,11 +1357,11 @@ a.auth-support-phone:hover {
 .chat-header-menu-button {
   background-color: var(
     --portal-chat-header-control-surface,
-    rgb(248 250 252 / 0.6)
+    rgb(248 250 252 / 43%)
   );
   border-color: var(
     --portal-chat-header-control-border,
-    rgb(226 232 240 / 0.6)
+    rgb(193 193 193 / 34%)
   );
   color: var(--portal-chat-header-control-text, #475569);
 }
@@ -1354,7 +1373,7 @@ a.auth-support-phone:hover {
   );
   border-color: var(
     --portal-chat-header-control-border,
-    rgb(226 232 240 / 0.6)
+    rgb(193 193 193 / 42%)
   );
   color: var(--portal-chat-header-control-hover-text, #112540);
 }

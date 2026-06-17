@@ -464,7 +464,7 @@ export function MessageBubble({
             className={
               isOutgoing
                 ? `${radiusClassName} chat-outgoing-surface flow-root break-words px-4 py-2.5 text-chat-message text-white`
-                : `${radiusClassName} chat-incoming-surface flow-root break-words border border-chat-incoming-border px-4 py-2.5 text-chat-message text-slate-700`
+                : `${radiusClassName} chat-incoming-surface flow-root break-words border border-white/35 px-4 py-2.5 text-chat-message text-slate-700`
             }
           >
             {message.replyTo ? (

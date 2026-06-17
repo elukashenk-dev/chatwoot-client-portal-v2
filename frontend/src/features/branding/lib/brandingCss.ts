@@ -31,10 +31,10 @@ const productionVisualDefaults = {
   darkHeaderControlSurface: 'rgb(255 255 255 / 0.1)',
   darkHeaderControlText: 'rgb(255 255 255 / 0.74)',
   lightHeaderBorder: 'rgb(226 232 240 / 0.9)',
-  lightHeaderControlBorder: 'rgb(226 232 240 / 0.6)',
+  lightHeaderControlBorder: 'rgb(193 193 193 / 34%)',
   lightHeaderControlHoverBackground: 'rgb(241 245 249 / 0.8)',
   lightHeaderControlHoverText: '#112540',
-  lightHeaderControlSurface: 'rgb(248 250 252 / 0.6)',
+  lightHeaderControlSurface: 'rgb(248 250 252 / 43%)',
   lightHeaderControlText: '#475569',
 } as const
 

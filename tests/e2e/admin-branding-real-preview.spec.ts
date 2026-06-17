@@ -186,7 +186,7 @@ async function mockAdminRealPreviewRoutes(page: Page) {
 
 test('admin real preview switches screens without customer runtime requests', async ({
   page,
-}) => {
+}, testInfo) => {
   const routes = await mockAdminRealPreviewRoutes(page)
   const initialPublicBrandingResponse = page.waitForResponse(
     (response) =>
@@ -194,6 +194,7 @@ test('admin real preview switches screens without customer runtime requests', as
       response.request().method() === 'GET',
   )
 
+  await page.setViewportSize({ height: 900, width: 1440 })
   await page.goto('/admin/branding')
   await expect((await initialPublicBrandingResponse).status()).toBe(200)
 
@@ -221,10 +222,7 @@ test('admin real preview switches screens without customer runtime requests', as
     )
     .toBe(false)
   await expect(loginButton).toHaveAttribute('aria-disabled', 'true')
-  await expect(loginButton).toHaveCSS(
-    'background-image',
-    /linear-gradient/,
-  )
+  await expect(loginButton).toHaveCSS('background-image', /linear-gradient/)
   await expect(phonePreview.locator('.auth-canvas-background')).toHaveCSS(
     'background-image',
     /\/api\/branding\/assets\/78\?v=78/,
@@ -236,6 +234,24 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect(
     phonePreview.getByRole('heading', { name: 'Личный чат' }),
   ).toBeVisible()
+  await expect(
+    phonePreview.locator('.chat-floating-header-surface'),
+  ).toBeVisible()
+  await expect(
+    phonePreview.locator('.chat-floating-composer-surface'),
+  ).toBeVisible()
+
+  const phonePreviewBox = await phonePreview.boundingBox()
+
+  if (!phonePreviewBox) {
+    throw new Error('Missing phone preview box.')
+  }
+
+  expect(phonePreviewBox.y + phonePreviewBox.height).toBeLessThanOrEqual(900)
+  await testInfo.attach('admin-chat-preview-shell', {
+    body: await phonePreview.screenshot(),
+    contentType: 'image/png',
+  })
 
   const previewScope = page
     .locator('[data-admin-branding-preview] .portal-branding-scope')

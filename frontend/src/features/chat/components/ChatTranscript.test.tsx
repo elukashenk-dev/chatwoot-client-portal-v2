@@ -137,6 +137,18 @@ describe('ChatTranscript', () => {
         'В этой переписке пока нет сообщений, доступных клиентскому порталу.',
       ),
     ).not.toBeInTheDocument()
+
+    const emptyCard = screen
+      .getByText('Напишите вопрос, мы ответим здесь.')
+      .closest('div')
+
+    expect(emptyCard).toHaveClass(
+      'border-white/65',
+      'bg-white/70',
+      'backdrop-blur-md',
+      'shadow-sm',
+    )
+    expect(emptyCard).not.toHaveClass('border-dashed', 'bg-slate-50/80')
   })
 
   it('groups outgoing bubbles and renders compact in-bubble metadata on every message', () => {
@@ -164,14 +176,19 @@ describe('ChatTranscript', () => {
 
     const dayDividerLabel = screen.getByText('21 апреля')
     expect(dayDividerLabel).toHaveClass(
-      'border-slate-200/80',
-      'bg-white/80',
-      'text-slate-500',
+      'border-white/45',
+      'bg-white/45',
+      'backdrop-blur-md',
     )
     expect(dayDividerLabel.parentElement).toHaveClass(
       'max-w-[500px]',
       'gap-2.5',
     )
+    expect(
+      Array.from(
+        dayDividerLabel.parentElement?.querySelectorAll('.h-px') ?? [],
+      ).every((line) => line.classList.contains('bg-slate-300/40')),
+    ).toBe(true)
 
     expect(container.querySelector('[data-author-avatar]')).toBeNull()
     expect(getBubble(container, 1)).toHaveClass('rounded-[0.7rem]')
@@ -272,7 +289,7 @@ describe('ChatTranscript', () => {
       'rounded-tl-[0.3rem]',
     )
     expect(getBubble(container, 1)).toHaveClass(
-      'border-chat-incoming-border',
+      'border-white/35',
       'chat-incoming-surface',
       'text-chat-message',
       'text-slate-700',

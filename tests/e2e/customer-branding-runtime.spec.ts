@@ -277,6 +277,22 @@ async function mockReadyEmptyChat(page: Page) {
   })
 }
 
+async function expectFloatingSurfaceWithinViewport(
+  page: Page,
+  selector: string,
+) {
+  const viewport = page.viewportSize()
+  const box = await page.locator(selector).boundingBox()
+
+  if (!viewport || !box) {
+    throw new Error(`Missing viewport or box for ${selector}`)
+  }
+
+  expect(box.x).toBeGreaterThan(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
+  expect(box.width).toBeLessThan(viewport.width)
+}
+
 test('applies public branding on the customer auth login screen', async ({
   page,
 }) => {
@@ -309,12 +325,14 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(page.locator('.brand-mark-logo')).toHaveClass(
     /brand-mark-logo--uploaded/,
   )
-  await expect(
-    page.getByRole('img', { name: 'Логотип ProvGroup' }),
-  ).toHaveCSS('max-width', 'min(180px, 100%)')
-  await expect(
-    page.getByRole('img', { name: 'Логотип ProvGroup' }),
-  ).toHaveCSS('max-height', '63px')
+  await expect(page.getByRole('img', { name: 'Логотип ProvGroup' })).toHaveCSS(
+    'max-width',
+    'min(180px, 100%)',
+  )
+  await expect(page.getByRole('img', { name: 'Логотип ProvGroup' })).toHaveCSS(
+    'max-height',
+    '63px',
+  )
   await expect(page.locator('.auth-header-art')).toHaveCount(0)
   await expect(page.locator('.auth-footer-art')).toHaveCount(0)
   await expect(page.locator('.auth-header-shell')).toHaveCount(0)
@@ -513,15 +531,16 @@ test('uses accent for auth links and volumetric primary gradient for auth button
 
 test('applies public branding on the customer chat and info surfaces', async ({
   page,
-}) => {
+}, testInfo) => {
   await mockTenantAndBranding(page)
   await mockAuthState(page, 'authenticated')
   await mockReadyEmptyChat(page)
 
+  await page.setViewportSize({ height: 844, width: 390 })
   await page.goto('/app/chat')
 
   await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
-  await expect(page.getByText('Поддержка ProvGroup')).toBeVisible()
+  await expect(page.getByText('Поддержка ProvGroup')).toHaveCount(1)
   await expect(page.getByText('Начните диалог')).toBeVisible()
   await expect(
     page.getByText('Напишите вопрос, мы ответим здесь.'),
@@ -547,6 +566,42 @@ test('applies public branding on the customer chat and info surfaces', async ({
     'style',
     /--portal-chat-header-background-image: url\("\/api\/branding\/assets\/16\?v=16"\)/,
   )
+  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-header-surface',
+  )
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-composer-surface',
+  )
+
+  const composerTextbox = page.getByRole('textbox', { name: 'Сообщение' })
+
+  await composerTextbox.focus()
+  await expect(composerTextbox).toBeFocused()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await testInfo.attach('customer-chat-390-shell', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
+
+  await page.setViewportSize({ height: 956, width: 440 })
+  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-header-surface',
+  )
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-composer-surface',
+  )
+  await testInfo.attach('customer-chat-440-shell', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
 
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
   await page.getByRole('menuitem', { name: 'Информация о чате' }).click()

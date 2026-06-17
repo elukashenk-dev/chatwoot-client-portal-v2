@@ -365,13 +365,13 @@ export function MessageComposer({
   return (
     <footer
       className={cn(
-        'border-t border-slate-200/70 bg-white px-4 pt-3 sm:px-6',
+        'relative z-20 bg-transparent px-3 pt-2 sm:px-6',
         isVisualKeyboardOpen
           ? 'pb-1.5'
           : 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
       )}
     >
-      <div className="mx-auto w-full max-w-[620px]">
+      <div className="chat-floating-composer-surface mx-auto w-full max-w-[620px] rounded-[10px] border px-3 py-2">
         {replyTarget ? (
           <ComposerReplyPreview
             disabled={isSending || isVoiceRecorderBusy}

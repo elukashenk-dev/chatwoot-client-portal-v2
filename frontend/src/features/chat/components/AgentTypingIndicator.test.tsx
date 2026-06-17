@@ -33,6 +33,12 @@ describe('AgentTypingIndicator', () => {
     expect(slot).toHaveClass('h-0', 'overflow-visible', 'bg-transparent')
     expect(dots).toHaveClass('w-fit', '-translate-y-6', 'bg-transparent')
     expect(dots).not.toHaveClass('w-full')
+    for (const dot of dots.querySelectorAll('span')) {
+      expect(dot).toHaveClass(
+        'bg-[color:var(--color-chat-outgoing,#465a72)]',
+        'opacity-70',
+      )
+    }
   })
 
   it('keeps instant hide behavior when animated presence is disabled', () => {

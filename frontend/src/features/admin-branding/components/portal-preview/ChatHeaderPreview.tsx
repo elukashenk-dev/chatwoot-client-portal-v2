@@ -14,8 +14,8 @@ export function ChatHeaderPreview() {
   )
 
   return (
-    <header className="app-safe-top chat-header-background chat-header-border relative z-30 border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm">
-      <div className="flex min-h-10 items-center gap-3">
+    <header className="app-safe-top relative z-30 bg-transparent px-3 pb-2 text-[color:var(--portal-chat-header-foreground,#0f172a)]">
+      <div className="chat-floating-header-surface mx-auto flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-2">
         <span
           aria-hidden="true"
           className="chat-header-icon-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control"
@@ -25,8 +25,8 @@ export function ChatHeaderPreview() {
 
         <ChatAvatar
           alt={previewThread.title}
-          avatarUrl={previewThread.avatarUrl ?? branding.assets.logo?.publicUrl}
-          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white"
+          avatarUrl={branding.assets.logo?.publicUrl ?? previewThread.avatarUrl}
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-brand-900 text-sm font-semibold tracking-wide text-white"
           title={previewThread.title}
         >
           {tenantMonogram}

@@ -109,6 +109,7 @@ describe('MessageComposer', () => {
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
 
     expect(textarea.closest('.rounded-chat-menu')).toBeNull()
+    expect(textarea.closest('.chat-floating-composer-surface')).not.toBeNull()
   })
 
   it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
@@ -143,10 +144,7 @@ describe('MessageComposer', () => {
       'disabled:text-slate-300',
     )
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'bg-chat-outgoing',
-    )
-    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'disabled:bg-slate-200',
+      'chat-send-control',
     )
 
     await user.type(textarea, 'П')
@@ -175,7 +173,7 @@ describe('MessageComposer', () => {
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'bg-chat-outgoing',
+      'chat-send-control',
     )
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
       'text-white',
