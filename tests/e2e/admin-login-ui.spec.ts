@@ -15,8 +15,20 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingResponse = {
   branding: {
+    appearance: defaultBrandingAppearance,
     assets: {},
     colors: defaultBrandingColors,
     copy: {
@@ -26,6 +38,7 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,

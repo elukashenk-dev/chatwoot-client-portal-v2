@@ -199,6 +199,20 @@ test('admin uploads and deletes a branding logo asset from the console', async (
   await expect(
     page.getByRole('img', { exact: true, name: 'Логотип' }),
   ).toHaveAttribute('src', '/api/branding/assets/77?v=77')
+  const phonePreview = page.getByRole('region', {
+    name: 'Телефонный предпросмотр портала',
+  })
+
+  await expect(phonePreview.locator('.auth-brand-mark--in-flow')).toHaveClass(
+    /brand-mark--uploaded/,
+  )
+  await expect(phonePreview.locator('.brand-mark-logo')).toHaveClass(
+    /brand-mark-logo--uploaded/,
+  )
+  await expect(phonePreview.locator('.brand-mark-logo')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  )
 
   await page.getByRole('button', { name: 'Удалить логотип' }).click()
 

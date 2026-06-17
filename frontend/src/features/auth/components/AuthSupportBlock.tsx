@@ -1,8 +1,6 @@
 import headsetIconUrl from '../../../assets/auth/headset.svg'
 import { PhoneFilledIcon } from '../../../shared/ui/icons'
-
-const defaultSupportPhone = '+7 (800) 000-00-00'
-const defaultSupportPhoneHref = 'tel:+78000000000'
+import { defaultSupportPhone, defaultSupportPhoneHref } from './supportContact'
 
 export function AuthSupportBlock({ preview = false }: { preview?: boolean }) {
   return (

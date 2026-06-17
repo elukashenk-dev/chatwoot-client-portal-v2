@@ -112,7 +112,10 @@ describe('PortalPreviewFrame', () => {
     expect(
       container.querySelectorAll('[data-portal-preview-device-nav-control]'),
     ).toHaveLength(3)
-    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    const loginButton = screen.getByRole('button', { name: 'Войти' })
+
+    expect(loginButton).not.toHaveAttribute('disabled')
+    expect(loginButton).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('renders only the first-slice preview screens', async () => {
@@ -299,7 +302,10 @@ describe('PortalPreviewFrame', () => {
     expect(emailInput).toHaveClass('auth-input')
     expect(passwordInput).toBeDisabled()
     expect(passwordInput).toHaveClass('auth-input')
-    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    const loginButton = screen.getByRole('button', { name: 'Войти' })
+
+    expect(loginButton).not.toHaveAttribute('disabled')
+    expect(loginButton).toHaveAttribute('aria-disabled', 'true')
     expect(
       document.querySelector('.auth-canvas-background'),
     ).toBeInTheDocument()
@@ -382,7 +388,9 @@ describe('PortalPreviewFrame', () => {
     )
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
-      '--portal-auth-control-border-color': '#7a93a4',
+      '--portal-auth-brand-mark-background': '#0f766e',
+      '--portal-auth-control-border-color': '#dddfe4',
+      '--portal-auth-divider-color': '#c4c9d2',
       '--portal-auth-text-color': '#15486b',
       '--portal-chat-header-background-color': '#164e63',
       '--portal-chat-header-foreground': '#f8fafc',

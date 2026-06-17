@@ -55,6 +55,11 @@ const authOverlayByMode = {
   none: 'rgb(0 0 0 / 0)',
 } as const
 
+const authNeutralColors = {
+  controlBorder: '#dddfe4',
+  divider: '#c4c9d2',
+} as const
+
 function parseHexColor(value: string): RgbColor | null {
   const normalized = value.trim()
 
@@ -249,19 +254,12 @@ export function createBrandingCssProperties(
     ),
     '--portal-auth-background-overlay':
       authOverlayByMode[branding.appearance.authBackgroundOverlay],
+    '--portal-auth-brand-mark-background': primaryColor,
     '--portal-auth-button-background': authButtonBackground,
     '--portal-auth-button-text-color': authButtonTextColor,
     '--portal-auth-canvas-background-color': authBackgroundColor,
-    '--portal-auth-control-border-color': createMutedTextColor(
-      authMutedTextColor,
-      authBackgroundColor,
-      '#cbd5e1',
-    ),
-    '--portal-auth-divider-color': createMutedTextColor(
-      authMutedTextColor,
-      authBackgroundColor,
-      '#c7cdd6',
-    ),
+    '--portal-auth-control-border-color': authNeutralColors.controlBorder,
+    '--portal-auth-divider-color': authNeutralColors.divider,
     '--portal-auth-field-style': branding.appearance.authFieldStyle,
     '--portal-auth-frame-background-color': isDefaultAuthBackground
       ? productionVisualDefaults.authFrameBackground

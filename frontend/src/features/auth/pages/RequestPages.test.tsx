@@ -181,7 +181,7 @@ describe('Auth flow pages', () => {
     })
 
     expect(
-      await screen.findByRole('heading', { name: 'Подтверждение Email' }),
+      await screen.findByRole('heading', { name: 'Подтверждение почты' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText('Код подтверждения отправлен на'),
@@ -674,7 +674,7 @@ describe('Auth flow pages', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Подтверждение Email' }),
+      await screen.findByRole('heading', { name: 'Подтверждение почты' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText('Если доступ активен, код восстановления отправлен на'),

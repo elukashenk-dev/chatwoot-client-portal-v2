@@ -43,11 +43,11 @@ const brandingContextValue: BrandingContextValue = {
       logo: {
         assetVersion: '11',
         contentType: 'image/png',
-        height: null,
+        height: 48,
         id: 11,
         kind: 'logo',
         publicUrl: '/api/branding/assets/11?v=11',
-        width: null,
+        width: 120,
       },
     },
     colors: {
@@ -110,8 +110,17 @@ describe('TenantAuthShell', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(
+      screen.getByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('width', '120')
+    expect(
+      screen.getByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('height', '48')
     expect(container.querySelector('.auth-brand-mark')).toHaveClass(
       'auth-brand-mark--right',
+    )
+    expect(container.querySelector('.auth-brand-mark')).toHaveClass(
+      'brand-mark--uploaded',
     )
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument()
     expect(screen.getByText('Описание страницы')).toBeInTheDocument()

@@ -213,9 +213,18 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect(
     phonePreview.getByRole('heading', { name: 'Вход в личный кабинет' }),
   ).toBeVisible()
-  await expect(
-    phonePreview.getByRole('button', { name: 'Войти' }),
-  ).toBeDisabled()
+  const loginButton = phonePreview.getByRole('button', { name: 'Войти' })
+
+  await expect
+    .poll(() =>
+      loginButton.evaluate((element) => element.hasAttribute('disabled')),
+    )
+    .toBe(false)
+  await expect(loginButton).toHaveAttribute('aria-disabled', 'true')
+  await expect(loginButton).toHaveCSS(
+    'background-image',
+    /linear-gradient/,
+  )
   await expect(phonePreview.locator('.auth-canvas-background')).toHaveCSS(
     'background-image',
     /\/api\/branding\/assets\/78\?v=78/,
@@ -461,11 +470,41 @@ for (const width of [1024, 1280, 1440] as const) {
         name: 'Экраны предпросмотра портала',
       }),
     ).toBeVisible()
-    await expect(
-      page.getByRole('region', {
-        name: 'Телефонный предпросмотр портала',
-      }),
-    ).toBeVisible()
+    const phonePreview = page.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    await expect(phonePreview).toBeVisible()
+
+    const deviceBox = await page
+      .locator('[data-portal-preview-device]')
+      .boundingBox()
+
+    if (!deviceBox) {
+      throw new Error('Missing portal preview device box.')
+    }
+
+    expect(deviceBox.y + deviceBox.height).toBeLessThanOrEqual(900)
+
+    if (width === 1440) {
+      await expect(
+        page.locator('[data-admin-branding-preview] .portal-preview-auth-fit'),
+      ).toHaveCSS('overflow-y', 'hidden')
+
+      const phonePreviewBox = await phonePreview.boundingBox()
+      const supportPhoneBox = await phonePreview
+        .getByText('+7 (800) 000-00-00')
+        .boundingBox()
+
+      if (!phonePreviewBox || !supportPhoneBox) {
+        throw new Error('Missing auth preview support phone geometry.')
+      }
+
+      expect(supportPhoneBox.y).toBeGreaterThanOrEqual(phonePreviewBox.y)
+      expect(supportPhoneBox.y + supportPhoneBox.height).toBeLessThanOrEqual(
+        phonePreviewBox.y + phonePreviewBox.height,
+      )
+    }
 
     await expect(
       waitForUnexpectedCustomerRuntimeRequest(page),

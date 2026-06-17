@@ -8,7 +8,9 @@ export type AuthBrandPlacement = 'center' | 'left' | 'right'
 
 export type AuthShellProps = {
   brandPlacement?: AuthBrandPlacement
+  brandLogoHeight?: number | null
   brandLogoUrl?: string | null
+  brandLogoWidth?: number | null
   brandMonogram?: string
   brandName?: string
   children: ReactNode
@@ -25,7 +27,9 @@ const brandPlacementClassMap: Record<AuthBrandPlacement, string> = {
 
 export function AuthShell({
   brandPlacement = 'center',
+  brandLogoHeight,
   brandLogoUrl,
+  brandLogoWidth,
   brandMonogram,
   brandName,
   children,
@@ -46,7 +50,9 @@ export function AuthShell({
             'auth-brand-mark auth-brand-mark--in-flow',
             brandPlacementClassMap[brandPlacement],
           )}
+          logoHeight={brandLogoHeight}
           logoUrl={brandLogoUrl}
+          logoWidth={brandLogoWidth}
           monogram={brandMonogram}
           name={brandName}
         />

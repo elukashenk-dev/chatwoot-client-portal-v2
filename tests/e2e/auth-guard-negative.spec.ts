@@ -75,7 +75,7 @@ test('shows a controlled registration verify guard when opened without request s
   await page.goto('/auth/register/verify')
 
   await expect(
-    page.getByRole('heading', { name: 'Подтверждение Email' }),
+    page.getByRole('heading', { name: 'Подтверждение почты' }),
   ).toBeVisible()
   await expect(
     page.getByText(
@@ -111,7 +111,7 @@ test('shows a controlled password reset verify guard when opened without request
   await page.goto('/auth/password-reset/verify')
 
   await expect(
-    page.getByRole('heading', { name: 'Подтверждение Email' }),
+    page.getByRole('heading', { name: 'Подтверждение почты' }),
   ).toBeVisible()
   await expect(
     page.getByText('Сначала запросите код восстановления пароля.'),
@@ -222,7 +222,7 @@ test('accepts password reset request for unknown email without sending reset mai
 
   await expect(page.getByText(email)).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Подтверждение Email' }),
+    page.getByRole('heading', { name: 'Подтверждение почты' }),
   ).toBeVisible()
 
   await expectNoMailpitMessage({

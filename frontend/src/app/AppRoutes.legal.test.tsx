@@ -1,6 +1,7 @@
-import { screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import App from './App'
 import { renderWithRouter } from '../test/renderWithRouter'
 import { AppRoutes } from './AppRoutes'
 
@@ -20,7 +21,35 @@ describe('legal routes', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    window.history.replaceState(null, '', '/')
     fetchMock.mockReset()
+  })
+
+  it('renders public legal pages from the full app without tenant bootstrap', async () => {
+    window.history.pushState(null, '', '/legal/terms')
+    fetchMock.mockResolvedValue(
+      createJsonResponse(
+        {
+          error: {
+            code: 'TENANT_NOT_FOUND',
+            message: 'Tenant not found.',
+          },
+        },
+        404,
+      ),
+    )
+
+    render(<App />)
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Пользовательское соглашение',
+      }),
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/tenant',
+      expect.anything(),
+    )
   })
 
   it.each([
@@ -35,6 +64,32 @@ describe('legal routes', () => {
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/auth/me',
       expect.anything(),
+    )
+  })
+
+  it('renders legal documents as an auth legal reader', async () => {
+    renderWithRouter(<AppRoutes />, { initialEntries: ['/legal/privacy'] })
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Политика обработки персональных данных',
+      }),
+    ).toHaveClass('legal-document-title')
+    expect(document.querySelector('.legal-document-canvas')).toHaveClass(
+      'auth-canvas-background',
+    )
+    expect(document.querySelector('.legal-document-reader')).toBeInTheDocument()
+    expect(document.querySelector('.legal-document-brand')).toHaveClass(
+      'auth-brand-mark',
+    )
+    expect(
+      screen.getByRole('link', { name: 'Вернуться ко входу' }),
+    ).toHaveClass('legal-document-back-link')
+    expect(screen.getByText(/Версия документа:/)).toHaveClass(
+      'legal-document-version',
+    )
+    expect(screen.getByLabelText('Помощь со входом')).toHaveClass(
+      'auth-flow-support',
     )
   })
 

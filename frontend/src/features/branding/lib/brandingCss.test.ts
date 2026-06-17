@@ -121,6 +121,7 @@ describe('createBrandingCssProperties', () => {
     )
 
     expect(styles).toMatchObject({
+      '--portal-auth-brand-mark-background': '#003a78',
       '--portal-auth-button-background': '#003a78',
       '--portal-auth-field-style': 'translucent',
       '--portal-auth-scheme': 'light',

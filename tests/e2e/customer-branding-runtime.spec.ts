@@ -49,11 +49,11 @@ const branding = {
       logo: {
         assetVersion: '11',
         contentType: 'image/png',
-        height: null,
+        height: 48,
         id: 11,
         kind: 'logo',
         publicUrl: '/api/branding/assets/11?v=11',
-        width: null,
+        width: 120,
       },
     },
     appearance: {
@@ -292,9 +292,29 @@ test('applies public branding on the customer auth login screen', async ({
     page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
   ).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(page.getByText('Войдите в кабинет ProvGroup.')).toBeVisible()
+  await expect(page.locator('.auth-subtitle--login')).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
+  await expect(page.locator('.auth-legal-text')).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
   await expect(
     page.getByRole('img', { name: 'Логотип ProvGroup' }),
   ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+  await expect(page.locator('.auth-brand-mark--in-flow')).toHaveClass(
+    /brand-mark--uploaded/,
+  )
+  await expect(page.locator('.brand-mark-logo')).toHaveClass(
+    /brand-mark-logo--uploaded/,
+  )
+  await expect(
+    page.getByRole('img', { name: 'Логотип ProvGroup' }),
+  ).toHaveCSS('max-width', 'min(180px, 100%)')
+  await expect(
+    page.getByRole('img', { name: 'Логотип ProvGroup' }),
+  ).toHaveCSS('max-height', '63px')
   await expect(page.locator('.auth-header-art')).toHaveCount(0)
   await expect(page.locator('.auth-footer-art')).toHaveCount(0)
   await expect(page.locator('.auth-header-shell')).toHaveCount(0)
@@ -321,6 +341,21 @@ test('applies public branding on the customer auth login screen', async ({
 
   const firstAuthInput = page.locator('.auth-input').first()
   await expect(firstAuthInput).toBeVisible()
+  await expect(page.locator('form .auth-muted-text').first()).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
+  await expect
+    .poll(() =>
+      firstAuthInput.evaluate((element) =>
+        getComputedStyle(element, '::placeholder').getPropertyValue('color'),
+      ),
+    )
+    .toBe('rgb(69, 97, 121)')
+  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
+    'background-color',
+    'rgb(196, 201, 210)',
+  )
   await firstAuthInput.fill('name@example.com')
   await expect(firstAuthInput).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(firstAuthInput).toHaveAttribute('data-filled', 'true')
@@ -336,6 +371,47 @@ test('applies public branding on the customer auth login screen', async ({
   await page.locator('#login-password').fill('correct horse battery staple')
   await page.getByRole('button', { name: 'Войти' }).click()
   await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
+})
+
+test('renders public legal documents without tenant bootstrap', async ({
+  page,
+}) => {
+  let tenantRequests = 0
+  const apiPaths: string[] = []
+
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+
+    if (url.pathname.startsWith('/api/')) {
+      apiPaths.push(url.pathname)
+    }
+  })
+
+  await page.route('**/api/tenant', async (route) => {
+    tenantRequests += 1
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        error: {
+          code: 'TENANT_NOT_FOUND',
+          message: 'Tenant not found.',
+        },
+      },
+      status: 404,
+    })
+  })
+
+  await page.setViewportSize({ height: 844, width: 390 })
+  await page.goto('/legal/terms')
+
+  await expect(
+    page.getByRole('heading', { name: 'Пользовательское соглашение' }),
+  ).toBeVisible()
+  await expect(page.locator('.legal-document-reader')).toBeVisible()
+  await expect(page.getByLabel('Помощь со входом')).toBeVisible()
+  await expect(page.getByText('Нужно подключение к интернету.')).toHaveCount(0)
+  expect(tenantRequests).toBe(0)
+  expect(apiPaths).not.toContain('/api/tenant')
 })
 
 test('uses accent for auth links and volumetric primary gradient for auth button', async ({
@@ -468,7 +544,14 @@ async function expectAuthLoginGeometry({
 test('keeps the auth login Figma baseline geometry on mobile viewports', async ({
   page,
 }) => {
-  await mockTenantAndBranding(page)
+  const { logo: _logo, ...assetsWithoutLogo } = branding.branding.assets
+
+  await mockTenantAndBranding(page, {
+    branding: {
+      ...branding.branding,
+      assets: assetsWithoutLogo,
+    },
+  })
   await mockAuthState(page, 'unauthenticated')
 
   await page.setViewportSize({ height: 844, width: 390 })

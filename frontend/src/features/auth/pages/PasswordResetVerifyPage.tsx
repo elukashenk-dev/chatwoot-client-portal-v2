@@ -17,7 +17,7 @@ export function PasswordResetVerifyPage() {
           </span>
         </>
       }
-      title="Подтверждение Email"
+      title="Подтверждение почты"
     >
       <PasswordResetVerifyForm />
     </TenantAuthShell>

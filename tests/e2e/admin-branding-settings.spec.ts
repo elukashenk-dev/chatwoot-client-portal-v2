@@ -295,6 +295,13 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(
     phonePreview.getByRole('button', { name: 'Войти' }),
   ).toBeDisabled()
+  await expect(
+    phonePreview.locator('.auth-brand-mark--in-flow .brand-mark-logo'),
+  ).toHaveCSS('background-color', 'rgb(15, 118, 110)')
+  await expect(phonePreview.getByRole('button', { name: 'Войти' })).toHaveCSS(
+    'background-color',
+    'rgb(15, 118, 110)',
+  )
   const previewScope = page.locator(
     '[data-admin-branding-preview] .portal-branding-scope',
   )

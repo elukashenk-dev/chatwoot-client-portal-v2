@@ -15,7 +15,7 @@ export function RegisterVerifyPage() {
           </span>
         </>
       }
-      title="Подтверждение Email"
+      title="Подтверждение почты"
     >
       <RegisterVerifyForm />
     </TenantAuthShell>
