@@ -32,6 +32,33 @@ describe('auth input CSS contract', () => {
     expect(autofillRule).not.toContain('rgb(243 247 252 / 0.86)')
   })
 
+  it('defines distinct visual surfaces for branded auth field styles', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
+    const solidRule = getCssRule(
+      css,
+      ".portal-branding-scope[data-auth-field-style='solid'] .auth-input:not([aria-invalid='true']) {",
+    )
+    const translucentRule = getCssRule(
+      css,
+      ".portal-branding-scope[data-auth-field-style='translucent'] .auth-input:not([aria-invalid='true']) {",
+    )
+    const outlineRule = getCssRule(
+      css,
+      ".portal-branding-scope[data-auth-field-style='outline'] .auth-input:not([aria-invalid='true']) {",
+    )
+
+    expect(solidRule).toContain('background-color: rgb(255 255 255 / 0.72)')
+    expect(solidRule).toContain('--portal-auth-control-border-color')
+    expect(solidRule).toContain('box-shadow: 0 10px 24px rgb(15 23 42 / 0.06)')
+    expect(translucentRule).toContain(
+      'background-color: rgb(255 255 255 / 0.34)',
+    )
+    expect(translucentRule).toContain('backdrop-filter: blur(8px)')
+    expect(translucentRule).toContain('box-shadow: none')
+    expect(outlineRule).toContain('background-color: transparent')
+    expect(outlineRule).toContain('box-shadow: none')
+  })
+
   it('keeps the mobile auth brand mark size and placement stable', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
     const brandMarkRule = getCssRule(css, '.auth-brand-mark--in-flow {')

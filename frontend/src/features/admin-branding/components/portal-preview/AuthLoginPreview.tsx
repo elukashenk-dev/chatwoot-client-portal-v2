@@ -24,7 +24,7 @@ export function AuthLoginPreview() {
             className="auth-login-form"
           >
             <label className="relative block">
-              <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+              <span className="auth-muted-text auth-field-icon pointer-events-none absolute left-5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
                 <MailIcon className={authFieldIconClassName} />
               </span>
               <input
@@ -37,7 +37,7 @@ export function AuthLoginPreview() {
             </label>
 
             <label className="relative block">
-              <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+              <span className="auth-muted-text auth-field-icon pointer-events-none absolute left-5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
                 <LockIcon className={authFieldIconClassName} />
               </span>
               <input
@@ -54,7 +54,7 @@ export function AuthLoginPreview() {
               <span className="auth-legal-preview-link">
                 Пользовательское соглашение
               </span>{' '}
-              и подтверждаете ознакомление с{' '}
+              и подтверждаете, что ознакомлены с{' '}
               <span className="auth-legal-preview-link">
                 Политикой обработки персональных данных
               </span>

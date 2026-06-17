@@ -373,6 +373,57 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
 })
 
+test('applies dark auth color scheme defaults when auth colors are unchanged', async ({
+  page,
+}) => {
+  const darkDefaultAuthBranding = {
+    branding: {
+      ...branding.branding,
+      appearance: {
+        ...branding.branding.appearance,
+        authBackgroundOverlay: 'none',
+        authColorScheme: 'dark',
+      },
+      assets: {},
+      colors: {
+        ...branding.branding.colors,
+        authBackground: '#f3f7fc',
+        authMutedText: '#64748b',
+        authText: '#15486b',
+      },
+    },
+  }
+
+  await mockTenantAndBranding(page, darkDefaultAuthBranding)
+  await mockAuthState(page, 'unauthenticated')
+
+  await page.goto('/auth/login')
+
+  await expect(page.locator('.auth-canvas-background')).toHaveCSS(
+    'background-color',
+    'rgb(11, 18, 32)',
+  )
+  await expect(
+    page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+  ).toHaveCSS('color', 'rgb(248, 250, 252)')
+  await expect(page.locator('.auth-subtitle--login')).toHaveCSS(
+    'color',
+    'rgba(226, 232, 240, 0.78)',
+  )
+  await expect(page.locator('.auth-legal-text')).toHaveCSS(
+    'color',
+    'rgba(226, 232, 240, 0.78)',
+  )
+  await expect(page.locator('.auth-input').first()).toHaveCSS(
+    'border-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.28)',
+  )
+})
+
 test('renders public legal documents without tenant bootstrap', async ({
   page,
 }) => {
@@ -453,7 +504,7 @@ test('uses accent for auth links and volumetric primary gradient for auth button
   await page.goto('/auth/register')
 
   const termsCheckbox = page.getByRole('checkbox', {
-    name: /Я принимаю Пользовательское соглашение/i,
+    name: /Я принимаю условия Пользовательского соглашения\./i,
   })
 
   await termsCheckbox.check()

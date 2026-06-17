@@ -31,8 +31,11 @@ export function RegistrationLegalConsent({
           type="checkbox"
         />
         <span>
-          Я принимаю{' '}
-          <Link to={routePaths.legal.terms}>Пользовательское соглашение</Link>
+          Я принимаю условия{' '}
+          <Link to={routePaths.legal.terms}>
+            Пользовательского соглашения
+          </Link>
+          .
         </span>
       </label>
 

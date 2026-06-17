@@ -352,6 +352,88 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(page.getByText('Настройки сохранены.')).not.toBeVisible()
 })
 
+test('auth color scheme updates the live login preview contrast tokens', async ({
+  page,
+}) => {
+  await mockAdminBrandingRoutes(page, async ({ route }) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createBrandingResponse(),
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+  await clickSegmentedRadio(page, 'Темная')
+
+  const scope = page.locator('.portal-preview-stage')
+
+  await expect
+    .poll(() =>
+      scope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-canvas-background-color')
+          .trim(),
+      ),
+    )
+    .toBe('#0b1220')
+  await expect
+    .poll(() =>
+      scope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-text-color')
+          .trim(),
+      ),
+    )
+    .toBe('#f8fafc')
+  await expect(scope.locator('.auth-canvas-background')).toHaveCSS(
+    'background-color',
+    'rgb(11, 18, 32)',
+  )
+  await expect(scope.locator('.auth-input').first()).toHaveCSS(
+    'border-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+})
+
+test('auth field style updates the live login preview input surface', async ({
+  page,
+}) => {
+  await mockAdminBrandingRoutes(page, async ({ route }) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createBrandingResponse(),
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+
+  const scope = page.locator('.portal-preview-stage')
+  const input = scope.locator('.auth-input').first()
+
+  await clickSegmentedRadio(page, 'Светлые')
+  await expect(input).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.72)',
+  )
+  await expect(input).toHaveCSS(
+    'box-shadow',
+    'rgba(15, 23, 42, 0.06) 0px 10px 24px 0px',
+  )
+
+  await clickSegmentedRadio(page, 'Полупрозрачные')
+  await expect(input).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+  await expect(input).toHaveCSS('box-shadow', 'none')
+
+  await clickSegmentedRadio(page, 'Контур')
+  await expect(input).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(input).toHaveCSS('box-shadow', 'none')
+})
+
 test('admin saves full background auth appearance settings after upload and reload', async ({
   page,
 }) => {

@@ -249,6 +249,9 @@ describe('LoginPage', () => {
     expect(
       screen.getByText(/Используя сервис, вы принимаете/i),
     ).toBeInTheDocument()
+    expect(document.querySelector('.auth-legal-text')).toHaveTextContent(
+      /Используя сервис, вы принимаете Пользовательское соглашение и подтверждаете, что ознакомлены с Политикой обработки персональных данных\./i,
+    )
     expect(
       screen.getByRole('link', { name: 'Пользовательское соглашение' }),
     ).toHaveAttribute('href', '/legal/terms')

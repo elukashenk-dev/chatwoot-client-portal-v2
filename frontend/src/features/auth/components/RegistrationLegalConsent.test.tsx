@@ -41,16 +41,16 @@ describe('RegistrationLegalConsent', () => {
 
     expect(
       screen.getByRole('checkbox', {
-        name: /Я принимаю Пользовательское соглашение/i,
+        name: /Я принимаю условия Пользовательского соглашения\./i,
       }),
     ).not.toBeChecked()
     expect(
       screen.getByRole('checkbox', {
-        name: /Я даю согласие на обработку персональных данных/i,
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
       }),
     ).not.toBeChecked()
     expect(
-      screen.getByRole('link', { name: 'Пользовательское соглашение' }),
+      screen.getByRole('link', { name: 'Пользовательского соглашения' }),
     ).toHaveAttribute('href', '/legal/terms')
     expect(
       screen.getByRole('link', {
@@ -71,12 +71,12 @@ describe('RegistrationLegalConsent', () => {
 
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я принимаю Пользовательское соглашение/i,
+        name: /Я принимаю условия Пользовательского соглашения\./i,
       }),
     )
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я даю согласие на обработку персональных данных/i,
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
       }),
     )
 
@@ -102,10 +102,10 @@ describe('RegistrationLegalConsent', () => {
     })
 
     const terms = screen.getByRole('checkbox', {
-      name: /Я принимаю Пользовательское соглашение/i,
+      name: /Я принимаю условия Пользовательского соглашения\./i,
     })
     const personalData = screen.getByRole('checkbox', {
-      name: /Я даю согласие на обработку персональных данных/i,
+      name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
     })
 
     expect(terms).toBeDisabled()

@@ -150,7 +150,11 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
 
   return (
     <BrandingContext.Provider value={state}>
-      <div className="portal-branding-scope" style={cssProperties}>
+      <div
+        className="portal-branding-scope"
+        data-auth-field-style={state.branding.appearance.authFieldStyle}
+        style={cssProperties}
+      >
         {children}
       </div>
     </BrandingContext.Provider>

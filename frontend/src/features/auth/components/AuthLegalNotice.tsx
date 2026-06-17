@@ -7,7 +7,7 @@ export function AuthLegalNotice() {
     <p className="auth-legal-text">
       Используя сервис, вы принимаете{' '}
       <Link to={routePaths.legal.terms}>Пользовательское соглашение</Link> и
-      подтверждаете ознакомление с{' '}
+      подтверждаете, что ознакомлены с{' '}
       <Link to={routePaths.legal.privacy}>
         Политикой обработки персональных данных
       </Link>

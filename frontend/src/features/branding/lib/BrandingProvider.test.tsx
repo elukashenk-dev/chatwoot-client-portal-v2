@@ -141,6 +141,7 @@ describe('BrandingProvider', () => {
 
     const scope = container.querySelector('.portal-branding-scope')
     expect(scope).not.toBeNull()
+    expect(scope).toHaveAttribute('data-auth-field-style', 'outline')
     expect(scope).toHaveStyle({
       '--portal-auth-background-color': '#ecfeff',
       '--portal-auth-background-overlay': 'rgb(0 0 0 / 0.48)',

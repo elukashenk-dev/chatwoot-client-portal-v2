@@ -533,6 +533,24 @@ button:not(:disabled),
 .auth-input[data-filled='true']:not([aria-invalid='true']),
 .auth-input[placeholder]:not(:placeholder-shown):not([aria-invalid='true']),
 .auth-input:-webkit-autofill:not([aria-invalid='true']) {
+  border-color: var(--portal-auth-control-border-color, #dddfe4);
+  box-shadow: none;
+}
+
+.portal-branding-scope[data-auth-field-style='solid'] .auth-input:not([aria-invalid='true']) {
+  background-color: rgb(255 255 255 / 0.72);
+  border-color: var(--portal-auth-control-border-color, #dddfe4);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 0.06);
+}
+
+.portal-branding-scope[data-auth-field-style='translucent'] .auth-input:not([aria-invalid='true']) {
+  background-color: rgb(255 255 255 / 0.34);
+  backdrop-filter: blur(8px);
+  border-color: var(--portal-auth-control-border-color, #dddfe4);
+  box-shadow: none;
+}
+
+.portal-branding-scope[data-auth-field-style='outline'] .auth-input:not([aria-invalid='true']) {
   background-color: transparent;
   border-color: var(--portal-auth-control-border-color, #dddfe4);
   box-shadow: none;

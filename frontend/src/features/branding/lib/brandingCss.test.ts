@@ -127,4 +127,52 @@ describe('createBrandingCssProperties', () => {
       '--portal-auth-scheme': 'light',
     })
   })
+
+  it('applies dark auth scheme defaults when auth colors are unchanged', () => {
+    const styles = createBrandingCssProperties(
+      createBranding({
+        appearance: {
+          authBackgroundOverlay: 'none',
+          authButtonStyle: 'solid',
+          authColorScheme: 'dark',
+          authFieldStyle: 'solid',
+        },
+      }),
+    )
+
+    expect(styles).toMatchObject({
+      '--portal-auth-canvas-background-color': '#0b1220',
+      '--portal-auth-control-border-color': 'rgb(255 255 255 / 0.34)',
+      '--portal-auth-divider-color': 'rgb(255 255 255 / 0.28)',
+      '--portal-auth-frame-background-color': '#0b1220',
+      '--portal-auth-muted-text-color': 'rgb(226 232 240 / 0.78)',
+      '--portal-auth-scheme': 'dark',
+      '--portal-auth-surface-background-color': '#0b1220',
+      '--portal-auth-text-color': '#f8fafc',
+    })
+  })
+
+  it('keeps explicit auth colors when dark auth scheme is selected', () => {
+    const styles = createBrandingCssProperties(
+      createBranding({
+        appearance: {
+          authBackgroundOverlay: 'none',
+          authButtonStyle: 'solid',
+          authColorScheme: 'dark',
+          authFieldStyle: 'solid',
+        },
+        colors: {
+          authBackground: '#101827',
+          authMutedText: '#99f6e4',
+          authText: '#fda4af',
+        },
+      }),
+    )
+
+    expect(styles).toMatchObject({
+      '--portal-auth-canvas-background-color': '#101827',
+      '--portal-auth-muted-text-color': '#99f6e4',
+      '--portal-auth-text-color': '#fda4af',
+    })
+  })
 })

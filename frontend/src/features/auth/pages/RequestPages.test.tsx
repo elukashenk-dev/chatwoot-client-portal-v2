@@ -94,12 +94,12 @@ describe('Auth flow pages', () => {
 
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я принимаю Пользовательское соглашение/i,
+        name: /Я принимаю условия Пользовательского соглашения\./i,
       }),
     )
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я даю согласие на обработку персональных данных/i,
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
       }),
     )
     expect(submit).not.toBeDisabled()
@@ -149,13 +149,13 @@ describe('Auth flow pages', () => {
     expect(submit).toBeDisabled()
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я принимаю Пользовательское соглашение/i,
+        name: /Я принимаю условия Пользовательского соглашения\./i,
       }),
     )
     expect(submit).toBeDisabled()
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я даю согласие на обработку персональных данных/i,
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
       }),
     )
     expect(submit).not.toBeDisabled()
@@ -230,12 +230,12 @@ describe('Auth flow pages', () => {
     await user.type(screen.getByLabelText(/Email/), 'missing@company.ru')
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я принимаю Пользовательское соглашение/i,
+        name: /Я принимаю условия Пользовательского соглашения\./i,
       }),
     )
     await user.click(
       screen.getByRole('checkbox', {
-        name: /Я даю согласие на обработку персональных данных/i,
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
       }),
     )
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))

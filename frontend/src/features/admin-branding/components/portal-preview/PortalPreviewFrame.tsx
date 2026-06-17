@@ -76,6 +76,7 @@ export function PortalPreviewFrame({ draft }: PortalPreviewFrameProps) {
         <TenantIdentityContext.Provider value={tenantIdentity}>
           <div
             className="portal-branding-scope portal-preview-stage rounded-[1.4rem] border border-slate-200 p-3 shadow-sm"
+            data-auth-field-style={branding.appearance.authFieldStyle}
             style={cssProperties}
           >
             <div className="portal-preview-device" data-portal-preview-device>

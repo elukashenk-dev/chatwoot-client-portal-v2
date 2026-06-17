@@ -297,11 +297,13 @@ describe('PortalPreviewFrame', () => {
     )
     const emailInput = screen.getByLabelText('Email')
     const passwordInput = screen.getByLabelText('Пароль')
+    const mailIcon = document.querySelector('.auth-field-icon')
 
     expect(emailInput).toBeDisabled()
     expect(emailInput).toHaveClass('auth-input')
     expect(passwordInput).toBeDisabled()
     expect(passwordInput).toHaveClass('auth-input')
+    expect(mailIcon).toHaveClass('z-10')
     const loginButton = screen.getByRole('button', { name: 'Войти' })
 
     expect(loginButton).not.toHaveAttribute('disabled')
@@ -316,6 +318,9 @@ describe('PortalPreviewFrame', () => {
     expect(document.querySelector('.auth-header-shell')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
+    expect(document.querySelector('.auth-legal-text')).toHaveTextContent(
+      /Используя сервис, вы принимаете Пользовательское соглашение и подтверждаете, что ознакомлены с Политикой обработки персональных данных\./i,
+    )
     expect(document.querySelector('.auth-support-block')).toBeInTheDocument()
     expect(
       within(phonePreview).getByText('Нет доступа к чату?'),
@@ -391,11 +396,16 @@ describe('PortalPreviewFrame', () => {
       '--portal-auth-brand-mark-background': '#0f766e',
       '--portal-auth-control-border-color': '#dddfe4',
       '--portal-auth-divider-color': '#c4c9d2',
+      '--portal-auth-field-style': 'outline',
       '--portal-auth-text-color': '#15486b',
       '--portal-chat-header-background-color': '#164e63',
       '--portal-chat-header-foreground': '#f8fafc',
       '--portal-chat-text-color': '#1f2937',
     })
+    expect(container.querySelector('.portal-branding-scope')).toHaveAttribute(
+      'data-auth-field-style',
+      'outline',
+    )
     expect(
       container.querySelector('.portal-branding-scope')?.getAttribute('style'),
     ).not.toContain('--portal-auth-content-surface')

@@ -13,13 +13,13 @@ export const authPrimaryLinkClassName =
 
 export function inputClassName(hasError: boolean, isFilled = false) {
   return cn(
-    'auth-input auth-text block h-[50px] w-full appearance-none rounded-[10px] border bg-transparent px-5 text-[15px] placeholder:text-[color:var(--portal-auth-muted-text-color,#B4BAC4)] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-[#DDDFE4] disabled:bg-transparent disabled:text-[color:var(--portal-auth-muted-text-color,#B4BAC4)]',
+    'auth-input auth-text block h-[50px] w-full appearance-none rounded-[10px] border bg-transparent px-5 text-[15px] placeholder:text-[color:var(--portal-auth-muted-text-color,#B4BAC4)] transition focus:outline-none focus-visible:outline-none disabled:cursor-not-allowed disabled:border-[color:var(--portal-auth-control-border-color,#DDDFE4)] disabled:bg-transparent disabled:text-[color:var(--portal-auth-muted-text-color,#B4BAC4)]',
     !hasError &&
       !isFilled &&
-      'border-[#DDDFE4] focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[color:var(--portal-auth-control-border-color,#DDDFE4)] focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     !hasError &&
       isFilled &&
-      'border-[#DDDFE4] shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
+      'border-[color:var(--portal-auth-control-border-color,#DDDFE4)] shadow-auth-filled focus:border-brand-700 focus:ring-4 focus:ring-brand-100',
     hasError &&
       'border-[color:var(--portal-auth-error-border-color,#d45163)] bg-[color:var(--portal-auth-error-background-color,rgb(255_247_248_/_0.78))] focus:border-[color:var(--portal-auth-error-border-color,#d45163)] focus:ring-4 focus:ring-[color:var(--portal-auth-error-ring-color,rgb(212_81_99_/_0.2))]',
   )
