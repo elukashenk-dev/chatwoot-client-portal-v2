@@ -165,7 +165,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Complete final verification/review for the accepted chat/auth visual polish
-  branch, merge it into `main`, and keep first-run legal document copy blocked
-  from production rollout until operator-approved legal texts replace the
-  current test templates.
+- Keep first-run legal document copy blocked from production rollout until
+  operator-approved legal texts replace the current test templates, then run the
+  accepted branding/chat visual baseline through production post-deploy smoke.

@@ -339,10 +339,13 @@ portal_tenants.chatwoot_admin_verification_token_ciphertext
 feature/phase-9-admin-token-spike
 ```
 
-Рекомендуемый первый файл плана:
+Исторический MT-9A execution plan для первого среза был закрыт и удален из
+`docs/superpowers/plans/` после внедрения. Итоговый source of truth теперь
+зафиксирован в `docs/roadmap/work-log.md`,
+`docs/architecture/overview.md` и `docs/architecture/decisions.md`.
 
 ```text
-docs/superpowers/plans/2026-06-06-mt-9-admin-token-spike.md
+MT-9A. Tenant admin verification token boundary - closed.
 ```
 
 Рекомендуемый первый файл исследования:

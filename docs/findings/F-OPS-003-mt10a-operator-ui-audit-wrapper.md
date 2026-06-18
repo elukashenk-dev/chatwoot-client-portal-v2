@@ -16,8 +16,8 @@
   - `docs/roadmap/implementation-plan.md` records that MT-10A operator CLI
     tenant lifecycle tooling exists, while broad shared SaaS rollout still has
     an optional operator UI gap.
-  - `docs/superpowers/plans/2026-06-11-mt-10a-operator-tenant-provisioning-review.md`
-    lists the first implementation as CLI/operator-only, not an admin UI.
+  - `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md` describes the
+    current lifecycle rehearsal as CLI/operator-only, not an admin UI.
   - `docs/architecture/multi-tenant-reference.md` says early platform
     operations can stay as CLI/scripts and UI is optional later.
   - Current MT-10A operation requires shell access and exact CLI arguments for
