@@ -75,6 +75,10 @@ const brandingContextValue: BrandingContextValue = {
       authBrandPlacement: 'left',
     },
     portalName: 'ProvGroup',
+    supportContact: {
+      phoneDisplay: '+7 (846) 211-11-11',
+      phoneHref: 'tel:+78462111111',
+    },
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
@@ -236,10 +240,10 @@ describe('LoginPage', () => {
     expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-form-slot')).toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
-    expect(screen.getByText('+7 (800) 000-00-00')).toBeInTheDocument()
+    expect(screen.getByText('+7 (846) 211-11-11')).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
-    ).toHaveAttribute('href', 'tel:+78000000000')
+      screen.getByRole('link', { name: '+7 (846) 211-11-11' }),
+    ).toHaveAttribute('href', 'tel:+78462111111')
     const supportIcon = document.querySelector('.auth-support-icon')
     expect(supportIcon?.tagName).toBe('IMG')
     expect(supportIcon).toHaveAttribute(
@@ -295,10 +299,10 @@ describe('LoginPage', () => {
     expect(
       screen.getByRole('link', { name: 'Создать аккаунт' }),
     ).toHaveAttribute('href', '/auth/register')
-    expect(screen.getByText('Нет доступа к чату?')).toBeInTheDocument()
+    expect(screen.queryByText('Нет доступа к чату?')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
-    ).toHaveAttribute('href', 'tel:+78000000000')
+      screen.queryByRole('link', { name: '+7 (846) 211-11-11' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText(/Используйте рабочий email/),
     ).not.toBeInTheDocument()

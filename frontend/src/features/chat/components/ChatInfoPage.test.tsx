@@ -108,6 +108,10 @@ const brandingContextValue: BrandingContextValue = {
       authBrandPlacement: 'left',
     },
     portalName: 'ProvGroup',
+    supportContact: {
+      phoneDisplay: null,
+      phoneHref: null,
+    },
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },

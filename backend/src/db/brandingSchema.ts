@@ -11,7 +11,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
 
-import { portalTenants } from './schema.js'
+import { portalTenants } from './tenantSchema.js'
 
 const timestampWithTimezone = {
   mode: 'date',
@@ -72,6 +72,7 @@ export const portalBrandingSettings = pgTable(
       }),
     portalName: text('portal_name'),
     supportLabel: text('support_label'),
+    supportPhoneDisplay: text('support_phone_display'),
     primaryColor: text('primary_color'),
     accentColor: text('accent_color'),
     authBackgroundColor: text('auth_background_color'),

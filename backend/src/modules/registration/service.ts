@@ -18,7 +18,15 @@ import { ApiError } from '../../lib/errors.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
 import { assertValidPortalPassword } from '../../lib/passwordPolicy.js'
 import type { PortalUsersRepository } from '../portal-users/repository.js'
-import { registrationLegalDocumentVersions } from './legalDocuments.js'
+import {
+  createContactNotFoundError,
+  type RegistrationSupportContactReader,
+} from './contactNotFoundError.js'
+import {
+  buildLegalAcceptanceRecord,
+  type RegistrationLegalDocumentVersions,
+  type RegistrationLegalAcceptanceInput,
+} from './legalAcceptance.js'
 import type { RegistrationRepository } from './repository.js'
 
 const REGISTRATION_VERIFICATION_CODE_LENGTH = 6
@@ -30,9 +38,13 @@ const REGISTRATION_PURPOSE = 'registration'
 type CreateRegistrationServiceOptions = {
   chatwootClient: Pick<ChatwootClient, 'findContactByEmail'>
   emailDelivery: Pick<SmtpEmailDelivery, 'send'>
+  legalDocumentsReader: {
+    getActiveVersionsForRegistration(): Promise<RegistrationLegalDocumentVersions>
+  }
   now?: () => Date
   portalUsersRepository: Pick<PortalUsersRepository, 'findByEmail'>
   registrationRepository: RegistrationRepository
+  supportContactReader: RegistrationSupportContactReader
   tenantId: number
 }
 
@@ -62,17 +74,10 @@ type RegistrationSetPasswordResult = {
   result: 'registration_completed'
 }
 
-type RegistrationLegalAcceptanceInput = {
-  personalDataConsentAccepted: true
-  requestIp: string | null
-  termsAccepted: true
-  userAgent: string | null
-}
-
 function createRegistrationVerificationCode() {
-  return String(
-    randomInt(0, 10 ** REGISTRATION_VERIFICATION_CODE_LENGTH),
-  ).padStart(REGISTRATION_VERIFICATION_CODE_LENGTH, '0')
+  const code = randomInt(0, 10 ** REGISTRATION_VERIFICATION_CODE_LENGTH)
+
+  return String(code).padStart(REGISTRATION_VERIFICATION_CODE_LENGTH, '0')
 }
 
 function createRegistrationContinuationToken() {
@@ -261,36 +266,14 @@ function isUniqueViolation(error: unknown) {
   )
 }
 
-function buildLegalAcceptanceRecord({
-  acceptedAt,
-  email,
-  legalAcceptance,
-}: {
-  acceptedAt: Date
-  email: string
-  legalAcceptance: RegistrationLegalAcceptanceInput
-}) {
-  return {
-    acceptedAt,
-    email,
-    personalDataConsentAccepted:
-      legalAcceptance.personalDataConsentAccepted,
-    privacyPolicyVersion:
-      registrationLegalDocumentVersions.privacyPolicyVersion,
-    purpose: REGISTRATION_PURPOSE,
-    requestIp: legalAcceptance.requestIp,
-    termsAccepted: legalAcceptance.termsAccepted,
-    termsVersion: registrationLegalDocumentVersions.termsVersion,
-    userAgent: legalAcceptance.userAgent,
-  } as const
-}
-
 export function createRegistrationService({
   chatwootClient,
   emailDelivery,
+  legalDocumentsReader,
   now = () => new Date(),
   portalUsersRepository,
   registrationRepository,
+  supportContactReader,
   tenantId,
 }: CreateRegistrationServiceOptions) {
   return {
@@ -306,11 +289,6 @@ export function createRegistrationService({
       const normalizedEmail = normalizeEmail(email)
       const normalizedFullName = fullName.trim()
       const requestedAt = now()
-      const legalAcceptanceRecord = buildLegalAcceptanceRecord({
-        acceptedAt: requestedAt,
-        email: normalizedEmail,
-        legalAcceptance,
-      })
 
       const existingPortalUser = await portalUsersRepository.findByEmail({
         email: normalizedEmail,
@@ -320,6 +298,15 @@ export function createRegistrationService({
       if (existingPortalUser) {
         throw createAccountExistsError()
       }
+
+      const legalVersions =
+        await legalDocumentsReader.getActiveVersionsForRegistration()
+      const legalAcceptanceRecord = buildLegalAcceptanceRecord({
+        acceptedAt: requestedAt,
+        email: normalizedEmail,
+        legalAcceptance,
+        legalVersions,
+      })
 
       const preflightResult =
         await registrationRepository.transactionWithScopedLock(
@@ -415,11 +402,7 @@ export function createRegistrationService({
       }
 
       if (!contact) {
-        throw new ApiError(
-          403,
-          'REGISTRATION_CONTACT_NOT_FOUND',
-          'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
-        )
+        throw await createContactNotFoundError(supportContactReader)
       }
 
       const verificationCode = createRegistrationVerificationCode()

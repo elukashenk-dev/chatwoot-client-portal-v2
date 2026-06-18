@@ -220,6 +220,23 @@
   Browser получает только portal admin session cookie, но не Chatwoot token или
   admin-verification token.
 
+## D-014C. Legal documents and support phone are tenant-owned portal data
+
+- дата: `2026-06-18`
+- решение:
+  пользовательское соглашение, политика обработки персональных данных и телефон
+  поддержки не являются frontend constants. Tenant admin загружает active legal
+  documents в portal через PDF/DOCX/TXT upload без inline-редактора. Backend
+  извлекает текст, хранит active version в `portal_legal_documents`, отдает
+  public legal reader routes and blocks registration until both active versions
+  exist. Телефон поддержки хранится в branding settings и отдается browser как
+  public `supportContact` metadata.
+- причина:
+  legal copy and support contact are operator-owned tenant configuration.
+  Browser не должен быть source of truth для legal versions or contact
+  fallbacks, а registration consent должен фиксировать actual active document
+  versions from backend authority.
+
 ## D-015. Feature boundaries не смешиваем в `shared`
 
 - дата: `2026-04-23`

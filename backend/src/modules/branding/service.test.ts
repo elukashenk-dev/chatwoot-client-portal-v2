@@ -51,6 +51,7 @@ function createRepository(settings: unknown = null) {
       portalName: null,
       primaryColor: null,
       supportLabel: null,
+      supportPhoneDisplay: null,
       updatedAt: new Date('2026-06-07T00:00:00Z'),
       version: 2,
       ...input,
@@ -86,6 +87,10 @@ describe('createBrandingService', () => {
           authBrandPlacement: 'center',
         },
         portalName: 'Бухфирма',
+        supportContact: {
+          phoneDisplay: null,
+          phoneHref: null,
+        },
         supportLabel: 'Команда Бухфирма',
       }),
     })
@@ -138,6 +143,7 @@ describe('createBrandingService', () => {
           },
           portalName: 'Новый портал',
           supportLabel: 'Поддержка',
+          supportPhoneDisplay: '+7 (846) 211-11-11',
         },
         requestIp: '127.0.0.1',
         userAgent: 'vitest',
@@ -162,6 +168,10 @@ describe('createBrandingService', () => {
           authBrandPlacement: 'right',
         },
         portalName: 'Новый портал',
+        supportContact: {
+          phoneDisplay: '+7 (846) 211-11-11',
+          phoneHref: 'tel:+78462111111',
+        },
         supportLabel: 'Поддержка',
       }),
     })
@@ -178,6 +188,7 @@ describe('createBrandingService', () => {
         portalName: 'Новый портал',
         primaryColor: '#123456',
         supportLabel: 'Поддержка',
+        supportPhoneDisplay: '+7 (846) 211-11-11',
       }),
     )
     expect(audit).toHaveBeenCalledWith(
@@ -248,6 +259,30 @@ describe('createBrandingService', () => {
           colors: {
             primary: 'javascript:alert(1)',
           },
+        },
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'BRANDING_SETTINGS_INVALID',
+      statusCode: 400,
+    })
+    expect(repository.upsertSettings).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid support phone before repository write', async () => {
+    const repository = createRepository()
+    const service = createBrandingService({
+      audit: vi.fn(),
+      repository,
+      tenant,
+    })
+
+    await expect(
+      service.updateAdminBranding({
+        admin,
+        input: {
+          supportPhoneDisplay: '846 211',
         },
         requestIp: null,
         userAgent: null,

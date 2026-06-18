@@ -9,6 +9,7 @@ import {
 } from './brandingDefaults.js'
 import { parseAdminBrandingPatch } from './brandingValidation.js'
 import type { BrandingRepository, BrandingSettingsPatch } from './repository.js'
+import { createSupportContact } from './supportPhone.js'
 
 type TenantPublicContext = Pick<
   TenantRequestContext,
@@ -176,6 +177,9 @@ async function buildBrandingResponse({
         resolvedSettings?.supportLabel,
         defaultCopy.supportLabel,
       ),
+      supportContact: createSupportContact(
+        resolvedSettings?.supportPhoneDisplay,
+      ),
       version: resolvedSettings?.version ?? 1,
     },
   }
@@ -271,6 +275,10 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
 
   if (parsedInput.supportLabel !== undefined) {
     patch.supportLabel = parsedInput.supportLabel
+  }
+
+  if (parsedInput.supportPhoneDisplay !== undefined) {
+    patch.supportPhoneDisplay = parsedInput.supportPhoneDisplay
   }
 
   return patch

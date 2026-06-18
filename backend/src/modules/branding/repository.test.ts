@@ -83,6 +83,7 @@ describe('createBrandingRepository', () => {
         portalName: 'Портал Альфа',
         primaryColor: '#112540',
         supportLabel: 'Поддержка Альфа',
+        supportPhoneDisplay: '  +7 (846) 211-11-11  ',
       })
 
       const settings = await repositoryA.findSettings()
@@ -103,6 +104,7 @@ describe('createBrandingRepository', () => {
         chatTextColor: '#344054',
         portalName: 'Портал Альфа',
         supportLabel: 'Поддержка Альфа',
+        supportPhoneDisplay: '+7 (846) 211-11-11',
         version: 1,
       })
       await expect(repositoryB.findSettings()).resolves.toBeNull()
@@ -125,16 +127,19 @@ describe('createBrandingRepository', () => {
         portalName: 'Портал Альфа',
         primaryColor: '#112540',
         supportLabel: 'Поддержка Альфа',
+        supportPhoneDisplay: '+7 (846) 211-11-11',
       })
       const updatedSettings = await brandingRepository.upsertSettings({
         portalName: '   ',
         supportLabel: null,
+        supportPhoneDisplay: '   ',
       })
 
       expect(updatedSettings).toMatchObject({
         portalName: null,
         primaryColor: '#112540',
         supportLabel: null,
+        supportPhoneDisplay: null,
         version: 2,
       })
     } finally {

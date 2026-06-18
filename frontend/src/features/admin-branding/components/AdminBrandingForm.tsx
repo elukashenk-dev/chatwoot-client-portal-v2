@@ -1,6 +1,8 @@
 import type { FormEvent } from 'react'
 
 import type {
+  AdminLegalDocumentSummary,
+  AdminLegalDocumentType,
   BrandingAssetKind,
   BrandingAppearance,
   BrandingCopy,
@@ -10,6 +12,7 @@ import { defaultBrandingColors } from '../../branding/lib/brandingDefaults'
 import type { BrandingDraft } from '../lib/brandingState'
 import { AuthAppearanceControls } from './AuthAppearanceControls'
 import { AuthBrandPlacementField } from './AuthBrandPlacementField'
+import { AdminLegalDocumentControls } from './AdminLegalDocumentControls'
 import { BrandingAssetControls } from './BrandingAssetControls'
 import { BrandingColorControls } from './BrandingColorControls'
 import { BrandingFormSection } from './BrandingFormSection'
@@ -17,7 +20,13 @@ import { BrandingTextField } from './BrandingTextField'
 
 type AdminBrandingFormProps = {
   areAssetActionsDisabled: boolean
+  areLegalDocumentActionsDisabled: boolean
   assetActionKind: BrandingAssetKind | null
+  legalDocumentActionType: AdminLegalDocumentType | null
+  legalDocuments: Record<
+    AdminLegalDocumentType,
+    AdminLegalDocumentSummary | null
+  >
   draft: BrandingDraft
   isSubmitDisabled: boolean
   isSaving: boolean
@@ -25,12 +34,20 @@ type AdminBrandingFormProps = {
   onAssetUpload: (kind: BrandingAssetKind, file: File) => void
   onAssetValidationError: (message: string) => void
   onChange: (draft: BrandingDraft) => void
+  onLegalDocumentUpload: (
+    documentType: AdminLegalDocumentType,
+    file: File,
+  ) => void
+  onLegalDocumentValidationError: (message: string) => void
   onSubmit: () => void
 }
 
 export function AdminBrandingForm({
   areAssetActionsDisabled,
+  areLegalDocumentActionsDisabled,
   assetActionKind,
+  legalDocumentActionType,
+  legalDocuments,
   draft,
   isSubmitDisabled,
   isSaving,
@@ -38,6 +55,8 @@ export function AdminBrandingForm({
   onAssetUpload,
   onAssetValidationError,
   onChange,
+  onLegalDocumentUpload,
+  onLegalDocumentValidationError,
   onSubmit,
 }: AdminBrandingFormProps) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -95,7 +114,7 @@ export function AdminBrandingForm({
         id="main"
         title="Основное"
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <BrandingTextField
             disabled={isSaving}
             label="Название портала"
@@ -114,7 +133,30 @@ export function AdminBrandingForm({
             }}
             value={draft.supportLabel}
           />
+          <BrandingTextField
+            disabled={isSaving}
+            label="Телефон поддержки"
+            name="supportPhoneDisplay"
+            onChange={(value) => {
+              onChange({ ...draft, supportPhoneDisplay: value })
+            }}
+            value={draft.supportPhoneDisplay}
+          />
         </div>
+      </BrandingFormSection>
+
+      <BrandingFormSection
+        description="Загрузите активные тексты документов. Редактирование текста выполняется вне портала."
+        id="legal-documents"
+        title="Юридические документы"
+      >
+        <AdminLegalDocumentControls
+          busyDocumentType={legalDocumentActionType}
+          disabled={areLegalDocumentActionsDisabled}
+          documents={legalDocuments}
+          onUpload={onLegalDocumentUpload}
+          onValidationError={onLegalDocumentValidationError}
+        />
       </BrandingFormSection>
 
       <BrandingFormSection

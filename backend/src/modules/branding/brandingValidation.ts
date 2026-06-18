@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { ApiError } from '../../lib/errors.js'
+import { isValidSupportPhoneDisplay } from './supportPhone.js'
 
 const colorSchema = z
   .string()
@@ -20,6 +21,22 @@ function optionalText(maxLength: number) {
         .string()
         .trim()
         .max(maxLength)
+        .transform((value) => value || null),
+      z.null(),
+    ])
+    .optional()
+}
+
+function optionalSupportPhone() {
+  return z
+    .union([
+      z
+        .string()
+        .trim()
+        .max(40)
+        .refine(isValidSupportPhoneDisplay, {
+          message: 'Введите телефон в международном формате.',
+        })
         .transform((value) => value || null),
       z.null(),
     ])
@@ -70,6 +87,7 @@ export const adminBrandingPatchSchema = z
       .optional(),
     portalName: optionalText(120),
     supportLabel: optionalText(120),
+    supportPhoneDisplay: optionalSupportPhone(),
   })
   .strict()
 

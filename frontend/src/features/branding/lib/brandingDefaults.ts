@@ -40,6 +40,10 @@ export function createDefaultPublicBranding(
     },
     layout: { ...defaultBrandingLayout },
     portalName: tenantDisplayName,
+    supportContact: {
+      phoneDisplay: null,
+      phoneHref: null,
+    },
     supportLabel: `Команда ${tenantDisplayName}`,
     version: 1,
   }

@@ -47,6 +47,7 @@ const draft = {
   },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
+  supportPhoneDisplay: '+7 (846) 211-11-11',
 } satisfies BrandingDraft
 
 const defaultDraft = {
@@ -345,7 +346,7 @@ describe('PortalPreviewFrame', () => {
       within(phonePreview).getByText('Нет доступа к чату?'),
     ).toBeInTheDocument()
     expect(
-      within(phonePreview).getByText('+7 (800) 000-00-00'),
+      within(phonePreview).getByText('+7 (846) 211-11-11'),
     ).toBeInTheDocument()
     expect(
       phonePreview.querySelector('.auth-link-separator'),
@@ -394,6 +395,7 @@ describe('PortalPreviewFrame', () => {
       },
       portalName: 'Портал Бухфирма',
       supportLabel: 'Поддержка 24/7',
+      supportPhoneDisplay: '+7 (846) 222-22-22',
     } satisfies BrandingDraft
 
     const { container, rerender } = render(<PortalPreviewFrame draft={draft} />)

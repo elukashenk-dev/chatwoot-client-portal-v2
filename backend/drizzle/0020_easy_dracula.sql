@@ -1,0 +1,1 @@
+ALTER TABLE "portal_branding_settings" ADD COLUMN "support_phone_display" text;

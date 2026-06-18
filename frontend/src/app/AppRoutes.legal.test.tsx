@@ -59,13 +59,51 @@ describe('legal routes', () => {
         authBrandPlacement: 'center',
       },
       portalName: 'ProvGroup',
+      supportContact: {
+        phoneDisplay: '+7 (846) 211-11-11',
+        phoneHref: 'tel:+78462111111',
+      },
       supportLabel: 'Поддержка ProvGroup',
       version: 3,
     },
   }
 
+  function createLegalDocumentResponse(documentType: 'privacy' | 'terms') {
+    const isTerms = documentType === 'terms'
+
+    return {
+      document: {
+        bodyText: isTerms
+          ? 'Текст пользовательского соглашения.\n\nВторой пункт соглашения.'
+          : 'Текст политики обработки персональных данных.\n\nВторой пункт политики.',
+        documentType,
+        title: isTerms
+          ? 'Пользовательское соглашение'
+          : 'Политика обработки персональных данных',
+        version: isTerms ? 'terms-upload-v7' : 'privacy-upload-v9',
+      },
+    }
+  }
+
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/branding') {
+        return createJsonResponse(brandingResponse, 200)
+      }
+
+      if (url === '/api/legal-documents/terms') {
+        return createJsonResponse(createLegalDocumentResponse('terms'), 200)
+      }
+
+      if (url === '/api/legal-documents/privacy') {
+        return createJsonResponse(createLegalDocumentResponse('privacy'), 200)
+      }
+
+      return createJsonResponse({}, 404)
+    })
   })
 
   afterEach(() => {
@@ -81,6 +119,10 @@ describe('legal routes', () => {
 
       if (url === '/api/branding') {
         return createJsonResponse(brandingResponse, 200)
+      }
+
+      if (url === '/api/legal-documents/terms') {
+        return createJsonResponse(createLegalDocumentResponse('terms'), 200)
       }
 
       if (url === '/api/tenant') {
@@ -105,10 +147,13 @@ describe('legal routes', () => {
         name: 'Пользовательское соглашение',
       }),
     ).toBeInTheDocument()
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      '/api/tenant',
-      expect.anything(),
+    expect(
+      await screen.findByText('Текст пользовательского соглашения.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Версия документа: terms-upload-v7')).toHaveClass(
+      'legal-document-version',
     )
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/tenant', expect.anything())
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/branding',
       expect.objectContaining({ method: 'GET' }),
@@ -127,6 +172,10 @@ describe('legal routes', () => {
     expect(
       await screen.findByRole('heading', { name: heading }),
     ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/legal-documents/${path.endsWith('terms') ? 'terms' : 'privacy'}`,
+      expect.objectContaining({ method: 'GET' }),
+    )
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/auth/me',
       expect.anything(),
@@ -141,6 +190,9 @@ describe('legal routes', () => {
         name: 'Политика обработки персональных данных',
       }),
     ).toHaveClass('legal-document-title')
+    expect(
+      screen.getByText('Текст политики обработки персональных данных.'),
+    ).toBeInTheDocument()
     expect(document.querySelector('.legal-document-canvas')).toHaveClass(
       'auth-canvas-background',
     )
@@ -148,15 +200,28 @@ describe('legal routes', () => {
     expect(document.querySelector('.legal-document-brand')).toHaveClass(
       'auth-brand-mark',
     )
-    expect(
-      screen.getByRole('link', { name: 'Назад' }),
-    ).toHaveClass('legal-document-back-link')
+    expect(screen.getByRole('link', { name: 'Назад' })).toHaveClass(
+      'legal-document-back-link',
+    )
     expect(screen.getByText(/Версия документа:/)).toHaveClass(
       'legal-document-version',
     )
-    expect(screen.getByLabelText('Помощь со входом')).toHaveClass(
-      'auth-flow-support',
-    )
+    expect(screen.queryByLabelText('Помощь со входом')).not.toBeInTheDocument()
+  })
+
+  it('keeps long legal document pages scrollable in the auth viewport', async () => {
+    renderWithRouter(<AppRoutes />, { initialEntries: ['/legal/privacy'] })
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Политика обработки персональных данных',
+      }),
+    ).toBeInTheDocument()
+
+    const canvas = document.querySelector('.legal-document-canvas')
+
+    expect(canvas).toHaveClass('shrink-0')
+    expect(canvas).not.toHaveClass('overflow-hidden')
   })
 
   it('returns to the previous page from the legal reader back link', async () => {
@@ -211,15 +276,25 @@ describe('legal routes', () => {
   })
 
   it('keeps legal pages reachable when a customer session exists', async () => {
-    fetchMock.mockResolvedValue(
-      createJsonResponse(
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/legal-documents/privacy') {
+        return createJsonResponse(createLegalDocumentResponse('privacy'), 200)
+      }
+
+      if (url === '/api/branding') {
+        return createJsonResponse(brandingResponse, 200)
+      }
+
+      return createJsonResponse(
         {
           tenant: { id: 'tenant-demo', name: 'Demo' },
           user: { email: 'user@example.com', id: 'user-demo', name: 'User' },
         },
         200,
-      ),
-    )
+      )
+    })
 
     renderWithRouter(<AppRoutes />, {
       initialEntries: ['/legal/privacy'],

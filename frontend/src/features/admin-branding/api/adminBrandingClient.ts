@@ -62,6 +62,11 @@ export type BrandingAsset = {
 
 export type BrandingAssets = Partial<Record<BrandingAssetKind, BrandingAsset>>
 
+export type SupportContact = {
+  phoneDisplay: string | null
+  phoneHref: string | null
+}
+
 export type AdminBrandingResponse = {
   branding: {
     appearance: BrandingAppearance
@@ -70,6 +75,7 @@ export type AdminBrandingResponse = {
     copy: BrandingCopy
     layout: BrandingLayout
     portalName: string
+    supportContact: SupportContact
     supportLabel: string
     version: number
   }
@@ -90,7 +96,29 @@ export type AdminBrandingPatch = Partial<{
   layout: Partial<BrandingLayout>
   portalName: string
   supportLabel: string
+  supportPhoneDisplay: string
 }>
+
+export type AdminLegalDocumentType = 'privacy' | 'terms'
+
+export type AdminLegalDocumentSummary = {
+  activatedAt: string
+  bodyCharacterCount: number
+  documentType: AdminLegalDocumentType
+  sourceContentType: string
+  sourceFileName: string
+  sourceSha256: string
+  title: string
+  version: string
+}
+
+export type AdminLegalDocumentsResponse = {
+  documents: Record<AdminLegalDocumentType, AdminLegalDocumentSummary | null>
+}
+
+export type AdminLegalDocumentUploadResponse = {
+  document: AdminLegalDocumentSummary
+}
 
 async function parseJsonBody(response: Response) {
   const contentType = response.headers.get('content-type')
@@ -169,6 +197,29 @@ export function deleteAdminBrandingAsset(kind: BrandingAssetKind) {
     `/admin/branding/assets/${kind}`,
     {
       method: 'DELETE',
+    },
+  )
+}
+
+export function getAdminLegalDocuments() {
+  return request<AdminLegalDocumentsResponse>('/admin/legal-documents', {
+    method: 'GET',
+  })
+}
+
+export function uploadAdminLegalDocument(
+  documentType: AdminLegalDocumentType,
+  file: File,
+) {
+  const formData = new FormData()
+
+  formData.set('document', file)
+
+  return request<AdminLegalDocumentUploadResponse>(
+    `/admin/legal-documents/${documentType}`,
+    {
+      body: formData,
+      method: 'POST',
     },
   )
 }

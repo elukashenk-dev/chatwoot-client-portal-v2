@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteAdminBrandingAsset,
   getAdminBranding,
+  getAdminLegalDocuments,
   updateAdminBranding,
   type AdminBrandingResponse,
   uploadAdminBrandingAsset,
+  uploadAdminLegalDocument,
 } from './adminBrandingClient'
 
 const brandingResponse = {
@@ -40,6 +42,10 @@ const brandingResponse = {
       authBrandPlacement: 'left',
     },
     portalName: 'Бухфирма',
+    supportContact: {
+      phoneDisplay: '+7 (846) 211-11-11',
+      phoneHref: 'tel:+78462111111',
+    },
     supportLabel: 'Команда Бухфирма',
     version: 1,
   },
@@ -123,6 +129,7 @@ describe('adminBrandingClient', () => {
       copy: { authTitle: 'Добро пожаловать' },
       layout: { authBrandPlacement: 'right' },
       portalName: 'Новый портал',
+      supportPhoneDisplay: '+7 (846) 211-11-11',
     })
 
     expect(fetch).toHaveBeenCalledWith(
@@ -141,6 +148,7 @@ describe('adminBrandingClient', () => {
           copy: { authTitle: 'Добро пожаловать' },
           layout: { authBrandPlacement: 'right' },
           portalName: 'Новый портал',
+          supportPhoneDisplay: '+7 (846) 211-11-11',
         }),
         credentials: 'include',
         method: 'PATCH',
@@ -154,8 +162,7 @@ describe('adminBrandingClient', () => {
           authButtonStyle: 'gradient',
           authColorScheme: 'dark',
         }),
-        colors: expect.objectContaining({
-        }),
+        colors: expect.objectContaining({}),
       }),
     )
   })
@@ -221,6 +228,90 @@ describe('adminBrandingClient', () => {
         method: 'DELETE',
       }),
     )
+  })
+
+  it('loads admin legal document summaries through the admin API', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue({
+          documents: {
+            privacy: null,
+            terms: {
+              activatedAt: '2026-06-18T10:00:00.000Z',
+              bodyCharacterCount: 1200,
+              documentType: 'terms',
+              sourceContentType: 'application/pdf',
+              sourceFileName: 'terms.pdf',
+              sourceSha256: 'abc',
+              title: 'Пользовательское соглашение',
+              version: '20260618-abc',
+            },
+          },
+        }),
+        ok: true,
+        status: 200,
+      }),
+    )
+
+    await expect(getAdminLegalDocuments()).resolves.toMatchObject({
+      documents: {
+        privacy: null,
+        terms: {
+          sourceFileName: 'terms.pdf',
+        },
+      },
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/legal-documents',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+  })
+
+  it('uploads a legal document as multipart form data', async () => {
+    const documentFile = new File(['legal text'], 'terms.pdf', {
+      type: 'application/pdf',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: vi.fn().mockResolvedValue({
+          document: {
+            activatedAt: '2026-06-18T10:00:00.000Z',
+            bodyCharacterCount: 1200,
+            documentType: 'terms',
+            sourceContentType: 'application/pdf',
+            sourceFileName: 'terms.pdf',
+            sourceSha256: 'abc',
+            title: 'Пользовательское соглашение',
+            version: '20260618-abc',
+          },
+        }),
+        ok: true,
+        status: 200,
+      }),
+    )
+
+    await uploadAdminLegalDocument('terms', documentFile)
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/admin/legal-documents/terms',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    const init = vi.mocked(fetch).mock.calls[0]?.[1]
+
+    expect(init?.body).toBeInstanceOf(FormData)
+    expect((init?.body as FormData).get('document')).toBe(documentFile)
+    expect(JSON.stringify(init)).not.toContain('content-type')
   })
 
   it('surfaces backend error payloads with code, message and status', async () => {
