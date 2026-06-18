@@ -14,6 +14,52 @@ function createJsonResponse(body: unknown, status: number) {
 
 describe('legal routes', () => {
   const fetchMock = vi.fn<typeof fetch>()
+  const brandingResponse = {
+    branding: {
+      appearance: {
+        authBackgroundOverlay: 'none',
+        authButtonStyle: 'solid',
+        authColorScheme: 'light',
+        authFieldStyle: 'solid',
+      },
+      assets: {
+        logo: {
+          assetVersion: '11',
+          contentType: 'image/png',
+          height: 48,
+          id: 11,
+          kind: 'logo',
+          publicUrl: '/api/branding/assets/11?v=11',
+          width: 120,
+        },
+      },
+      colors: {
+        accent: '#14b8a6',
+        authBackground: '#ecfeff',
+        authMutedText: '#456179',
+        authText: '#15486b',
+        chatBackground: '#f8fafc',
+        chatHeaderBackground: '#0f766e',
+        chatHeaderText: '#f8fafc',
+        chatMutedText: '#52637a',
+        chatText: '#1f2937',
+        primary: '#134e4a',
+      },
+      copy: {
+        authSubtitle: 'Войдите в кабинет ProvGroup.',
+        authTitle: 'Кабинет ProvGroup',
+        chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
+        chatEmptyTitle: 'Начните диалог',
+        chatInfoTitle: 'О диалоге',
+      },
+      layout: {
+        authBrandPlacement: 'center',
+      },
+      portalName: 'ProvGroup',
+      supportLabel: 'Поддержка ProvGroup',
+      version: 3,
+    },
+  }
 
   beforeEach(() => {
     vi.stubGlobal('fetch', fetchMock)
@@ -27,17 +73,27 @@ describe('legal routes', () => {
 
   it('renders public legal pages from the full app without tenant bootstrap', async () => {
     window.history.pushState(null, '', '/legal/terms')
-    fetchMock.mockResolvedValue(
-      createJsonResponse(
-        {
-          error: {
-            code: 'TENANT_NOT_FOUND',
-            message: 'Tenant not found.',
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/branding') {
+        return createJsonResponse(brandingResponse, 200)
+      }
+
+      if (url === '/api/tenant') {
+        return createJsonResponse(
+          {
+            error: {
+              code: 'TENANT_NOT_FOUND',
+              message: 'Tenant not found.',
+            },
           },
-        },
-        404,
-      ),
-    )
+          404,
+        )
+      }
+
+      return createJsonResponse({}, 404)
+    })
 
     render(<App />)
 
@@ -50,6 +106,13 @@ describe('legal routes', () => {
       '/api/tenant',
       expect.anything(),
     )
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/branding',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(
+      await screen.findByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
   })
 
   it.each([
@@ -83,7 +146,7 @@ describe('legal routes', () => {
       'auth-brand-mark',
     )
     expect(
-      screen.getByRole('link', { name: 'Вернуться ко входу' }),
+      screen.getByRole('link', { name: 'Назад' }),
     ).toHaveClass('legal-document-back-link')
     expect(screen.getByText(/Версия документа:/)).toHaveClass(
       'legal-document-version',

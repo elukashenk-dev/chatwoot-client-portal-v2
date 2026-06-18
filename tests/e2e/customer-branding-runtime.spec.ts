@@ -470,17 +470,41 @@ test('renders public legal documents without tenant bootstrap', async ({
     })
   })
 
+  await page.route('**/api/branding', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: branding,
+      status: 200,
+    })
+  })
+
+  await page.route('**/api/branding/assets/**', async (route) => {
+    await route.fulfill({
+      body: onePixelPng,
+      contentType: 'image/png',
+      status: 200,
+    })
+  })
+
   await page.setViewportSize({ height: 844, width: 390 })
   await page.goto('/legal/terms')
 
   await expect(
     page.getByRole('heading', { name: 'Пользовательское соглашение' }),
   ).toBeVisible()
+  await expect(
+    page.getByRole('img', { name: 'Логотип ProvGroup' }),
+  ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+  await expect(page.getByRole('link', { name: 'Назад' })).toHaveAttribute(
+    'href',
+    /\/auth\/login$/,
+  )
   await expect(page.locator('.legal-document-reader')).toBeVisible()
   await expect(page.getByLabel('Помощь со входом')).toBeVisible()
   await expect(page.getByText('Нужно подключение к интернету.')).toHaveCount(0)
   expect(tenantRequests).toBe(0)
   expect(apiPaths).not.toContain('/api/tenant')
+  expect(apiPaths).toContain('/api/branding')
 })
 
 test('uses accent for auth links and volumetric primary gradient for auth button', async ({

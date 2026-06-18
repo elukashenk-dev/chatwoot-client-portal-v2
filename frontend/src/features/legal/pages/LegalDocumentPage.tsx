@@ -30,7 +30,7 @@ export function LegalDocumentPage({
             className="legal-document-back-link"
             to={routePaths.auth.login}
           >
-            Вернуться ко входу
+            Назад
           </Link>
 
           <BrandMark

@@ -14,7 +14,7 @@ function isPublicLegalRoute(pathname: string) {
 
 function PublicLegalApp() {
   return (
-    <BrandingProvider>
+    <BrandingProvider loadWithoutTenant>
       <AppRoutes />
     </BrandingProvider>
   )
