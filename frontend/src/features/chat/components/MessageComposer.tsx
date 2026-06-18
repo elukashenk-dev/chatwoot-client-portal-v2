@@ -1,17 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
-import { MicrophoneIcon, PaperclipIcon } from '../../../shared/ui/icons'
 import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
 import {
   ComposerFeedback,
   TEXT_LENGTH_FEEDBACK_ID,
 } from './message-composer/ComposerFeedback'
+import { ComposerInputRow } from './message-composer/ComposerInputRow'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
-import { ComposerSendButton } from './message-composer/ComposerSendButton'
-import { ComposerSideButton } from './message-composer/ComposerSideButton'
-import { ComposerSideControl } from './message-composer/ComposerSideControl'
-import { ComposerTextarea } from './message-composer/ComposerTextarea'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
 import {
   getTextMessageLengthErrorMessage,
@@ -398,89 +394,42 @@ export function MessageComposer({
           status={voiceRecorderStatus}
         />
 
-        <div className="flex items-end gap-2">
-          <input
-            accept="image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z"
-            aria-label="Файл вложения"
-            className="sr-only"
-            disabled={isAttachmentControlDisabled}
-            onChange={(event) => {
-              selectAttachment(event.target.files?.[0] ?? null)
-            }}
-            ref={fileInputRef}
-            type="file"
-          />
-          <ComposerSideControl
-            control="attachment"
-            isCollapsed={shouldPrioritizeTextDraft}
-          >
-            <ComposerSideButton
-              ariaLabel="Прикрепить файл"
-              disabled={isAttachmentControlDisabled}
-              onClick={() => {
-                fileInputRef.current?.click()
-              }}
-              shape="control"
-              tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
-              title="Прикрепить файл"
-            >
-              <PaperclipIcon className="h-5 w-5" />
-            </ComposerSideButton>
-          </ComposerSideControl>
-
-          <ComposerTextarea
-            ariaDescribedBy={
-              textLengthErrorMessage || shouldShowTextLengthCounter
-                ? TEXT_LENGTH_FEEDBACK_ID
-                : undefined
-            }
-            disabled={disabled || isSending || isVoiceRecorderBusy}
-            draft={draft}
-            isInvalid={isTextDraftTooLong}
-            onDraftChange={updateDraft}
-            onSubmit={() => {
+        <ComposerInputRow
+          ariaDescribedBy={
+            textLengthErrorMessage || shouldShowTextLengthCounter
+              ? TEXT_LENGTH_FEEDBACK_ID
+              : undefined
+          }
+          canSend={canSend}
+          canStartVoiceRecording={canStartVoiceRecording}
+          disabled={disabled}
+          draft={draft}
+          fileInputRef={fileInputRef}
+          isAttachmentControlDisabled={isAttachmentControlDisabled}
+          isAttachmentSelected={selectedAttachment !== null}
+          isSending={isSending}
+          isTextDraftTooLong={isTextDraftTooLong}
+          isVoiceRecorderBusy={isVoiceRecorderBusy}
+          isVoiceRecorderStarting={voiceRecorderStatus === 'starting'}
+          onDraftChange={updateDraft}
+          onFileSelect={selectAttachment}
+          onSendButtonClick={() => {
+            if (!shouldSkipClickAfterTouchSend()) {
               void submitCurrentDraft()
-            }}
-            placeholder={disabled ? 'Чат временно недоступен' : 'Сообщение...'}
-            textareaRef={textareaRef}
-          />
-
-          <ComposerSideControl
-            control="voice"
-            isCollapsed={shouldPrioritizeTextDraft}
-          >
-            <ComposerSideButton
-              ariaLabel="Голосовое сообщение"
-              disabled={!canStartVoiceRecording}
-              onClick={() => {
-                void startVoiceRecording()
-              }}
-              shape="round"
-              tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
-              title="Записать голосовое"
-            >
-              <MicrophoneIcon
-                className={
-                  voiceRecorderStatus === 'starting'
-                    ? 'h-5 w-5 animate-pulse'
-                    : 'h-5 w-5'
-                }
-              />
-            </ComposerSideButton>
-          </ComposerSideControl>
-          <ComposerSendButton
-            canSend={canSend && !isVoiceRecorderBusy}
-            isAttachmentSelected={selectedAttachment !== null}
-            isSending={isSending}
-            onClick={() => {
-              if (!shouldSkipClickAfterTouchSend()) {
-                void submitCurrentDraft()
-              }
-            }}
-            onPointerDown={preserveTextareaFocusOnPointerDown}
-            sendButtonRef={sendButtonRef}
-          />
-        </div>
+            }
+          }}
+          onSendButtonPointerDown={preserveTextareaFocusOnPointerDown}
+          onStartVoiceRecording={() => {
+            void startVoiceRecording()
+          }}
+          onSubmit={() => {
+            void submitCurrentDraft()
+          }}
+          placeholder={disabled ? 'Чат временно недоступен' : 'Сообщение...'}
+          sendButtonRef={sendButtonRef}
+          shouldPrioritizeTextDraft={shouldPrioritizeTextDraft}
+          textareaRef={textareaRef}
+        />
 
         <ComposerFeedback
           errorMessage={composerErrorMessage}

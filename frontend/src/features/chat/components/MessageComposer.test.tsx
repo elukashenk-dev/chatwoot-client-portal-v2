@@ -105,7 +105,7 @@ describe('MessageComposer', () => {
   })
 
   it('renders the primary input row without an extra bordered surface wrapper', () => {
-    renderComposer()
+    const { container } = renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
     const composerSurface = textarea.closest(
       '[data-chat-floating-surface="composer"]',
@@ -113,6 +113,9 @@ describe('MessageComposer', () => {
 
     expect(textarea.closest('.rounded-chat-menu')).toBeNull()
     expect(composerSurface).not.toBeNull()
+    expect(container.querySelector('[data-composer-input-row]')).toBeInstanceOf(
+      HTMLElement,
+    )
   })
 
   it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
