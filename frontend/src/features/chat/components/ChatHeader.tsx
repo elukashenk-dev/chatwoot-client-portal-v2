@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { cn } from '../../../shared/lib/cn'
 import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getAuthRequestErrorMessage } from '../../auth/lib/authErrors'
@@ -12,9 +11,7 @@ import { useBranding } from '../../branding/lib/useBranding'
 import { getChatNotificationsStatus } from '../lib/notificationSettingsPresentation'
 import { getSupportAvailabilityPresentation } from '../lib/chatSupportAvailability'
 import {
-  formatUnreadCount,
   hasUnreadOutsideSelectedThread,
-  readThreadUnreadCount,
 } from '../lib/chatUnreadPresentation'
 import { resolveThreadIdentityAvatarUrl } from '../lib/threadIdentityAvatar'
 import type {
@@ -25,21 +22,10 @@ import type {
 } from '../types'
 import { type ChatHeaderPresenceTone } from './ChatHeaderPresence'
 import { ChatHeaderIdentity } from './ChatHeaderIdentity'
-import { ChatMenuItem } from './ChatMenuItem'
+import { ChatHeaderActionsMenu } from './chat-header/ChatHeaderActionsMenu'
+import { ChatHeaderNavigationMenu } from './chat-header/ChatHeaderNavigationMenu'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
-import {
-  BellIcon,
-  BellOffIcon,
-  CheckIcon,
-  ImageIcon,
-  InfoIcon,
-  LogOutIcon,
-  MenuIcon,
-  MoreHorizontalIcon,
-  SearchIcon,
-  SettingsIcon,
-  UserIcon,
-} from '../../../shared/ui/icons'
+import { MenuIcon, MoreHorizontalIcon } from '../../../shared/ui/icons'
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
@@ -307,156 +293,54 @@ export function ChatHeader({
         </div>
 
         {isNavMenuOpen ? (
-          <div
-            className="portal-menu-surface absolute left-3 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-chat-nav-menu border border-white/65 p-1.5 text-sm text-slate-700 shadow-chat-nav-menu sm:left-4"
+          <ChatHeaderNavigationMenu
+            availableThreads={availableThreads}
+            menuRef={navMenuPanelRef}
             onKeyDown={handleMenuKeyDown}
-            ref={navMenuPanelRef}
-            role="menu"
-            tabIndex={-1}
-          >
-            <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-              Чаты
-            </div>
-            {availableThreads.map((thread) => {
-              const isSelected = thread.id === selectedThreadId
-              const unreadCount = readThreadUnreadCount(thread)
-              const hasUnread = unreadCount > 0
-
-              return (
-                <button
-                  aria-current={isSelected ? 'page' : undefined}
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left transition',
-                    isSelected
-                      ? 'font-medium text-brand-800'
-                      : 'text-slate-600 hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100',
-                  )}
-                  disabled={isSelected}
-                  key={thread.id}
-                  onClick={() => {
-                    onSelectThread(thread.id)
-                    setIsNavMenuOpen(false)
-                  }}
-                  role="menuitem"
-                  type="button"
-                >
-                  {isSelected ? (
-                    <CheckIcon className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <span className="h-4 w-4 shrink-0" />
-                  )}
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="min-w-0 truncate">{thread.title}</span>
-                    {hasUnread ? (
-                      <span
-                        aria-label={`${thread.title}, ${unreadCount} непрочитанных`}
-                        className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
-                        data-testid={`thread-unread-badge-${thread.id}`}
-                      >
-                        {formatUnreadCount(unreadCount)}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-              )
-            })}
-            <button
-              className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-              onClick={() => {
-                setIsNavMenuOpen(false)
-                navigate(routePaths.app.settings)
-              }}
-              role="menuitem"
-              type="button"
-            >
-              <SettingsIcon className="h-4 w-4 shrink-0" />
-              <span>Настройки</span>
-            </button>
-          </div>
+            onOpenSettings={() => {
+              setIsNavMenuOpen(false)
+              navigate(routePaths.app.settings)
+            }}
+            onSelectThread={(threadId) => {
+              onSelectThread(threadId)
+              setIsNavMenuOpen(false)
+            }}
+            selectedThreadId={selectedThreadId}
+          />
         ) : null}
 
         {isChatMenuOpen ? (
-          <div
-            className="portal-menu-surface absolute right-3 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-chat-menu border border-white/65 p-2 text-slate-700 shadow-chat-menu sm:right-4"
+          <ChatHeaderActionsMenu
+            isLoggingOut={isLoggingOut}
+            menuRef={chatMenuPanelRef}
+            notificationsStatus={notificationsStatus}
             onKeyDown={handleMenuKeyDown}
-            ref={chatMenuPanelRef}
-            role="menu"
-            tabIndex={-1}
-          >
-              <div className="px-1 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
-                Аккаунт
-              </div>
-              <ChatMenuItem
-                icon={<UserIcon className="h-5 w-5" />}
-                label="Профиль"
-                onSelect={() => {
-                  closeMenus()
-                  navigate(routePaths.app.profile)
-                }}
-              />
-              <div className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
-                Чат
-              </div>
-              <ChatMenuItem
-                disabled={!selectedThreadId}
-                icon={<SearchIcon className="h-5 w-5" />}
-                label="Поиск по чату"
-                onSelect={() => {
-                  closeMenus()
-                  onOpenThreadSearch()
-                }}
-              />
-              <ChatMenuItem
-                disabled={!selectedThreadId}
-                icon={<ImageIcon className="h-5 w-5" />}
-                label="Медиа и файлы"
-                onSelect={() => {
-                  closeMenus()
-                  onOpenThreadMedia()
-                }}
-              />
-              <ChatMenuItem
-                disabled={!selectedThreadId}
-                icon={
-                  threadNotificationSettings?.effective.newMessagesEnabled ===
-                  false ? (
-                    <BellOffIcon className="h-5 w-5" />
-                  ) : (
-                    <BellIcon className="h-5 w-5" />
-                  )
-                }
-                label="Уведомления"
-                onSelect={() => {
-                  closeMenus()
-                  onOpenThreadNotifications()
-                }}
-                secondaryLabel={notificationsStatus}
-              />
-              <ChatMenuItem
-                disabled={!selectedThreadId}
-                icon={<InfoIcon className="h-5 w-5" />}
-                label="Информация о чате"
-                onSelect={() => {
-                  closeMenus()
-                  onOpenThreadInfo()
-                }}
-              />
-              <ChatMenuItem
-                destructive
-                disabled={isLoggingOut}
-                icon={
-                  <LogOutIcon
-                    className={
-                      isLoggingOut ? 'h-5 w-5 animate-pulse' : 'h-5 w-5'
-                    }
-                  />
-                }
-                label={isLoggingOut ? 'Завершаем...' : 'Завершить диалог'}
-                onSelect={() => {
-                  void handleLogout()
-                }}
-              />
-          </div>
+            onLogout={() => {
+              void handleLogout()
+            }}
+            onOpenProfile={() => {
+              closeMenus()
+              navigate(routePaths.app.profile)
+            }}
+            onOpenThreadInfo={() => {
+              closeMenus()
+              onOpenThreadInfo()
+            }}
+            onOpenThreadMedia={() => {
+              closeMenus()
+              onOpenThreadMedia()
+            }}
+            onOpenThreadNotifications={() => {
+              closeMenus()
+              onOpenThreadNotifications()
+            }}
+            onOpenThreadSearch={() => {
+              closeMenus()
+              onOpenThreadSearch()
+            }}
+            selectedThreadId={selectedThreadId}
+            threadNotificationSettings={threadNotificationSettings}
+          />
         ) : null}
       </div>
 

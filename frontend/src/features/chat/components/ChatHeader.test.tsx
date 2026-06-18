@@ -288,6 +288,7 @@ describe('ChatHeader', () => {
     const menu = screen.getByRole('menu')
 
     expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
+    expect(menu).toHaveAttribute('data-chat-header-menu', 'actions')
     expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/90')
     expect(screen.getByText('Аккаунт')).toBeInTheDocument()
@@ -314,6 +315,7 @@ describe('ChatHeader', () => {
     const menu = screen.getByRole('menu')
 
     expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
+    expect(menu).toHaveAttribute('data-chat-header-menu', 'navigation')
     expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/80')
     expect(screen.getByRole('menuitem', { name: 'Настройки' })).toHaveClass(
