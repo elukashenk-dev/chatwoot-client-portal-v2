@@ -281,6 +281,101 @@ describe('ChatPage thread selection', () => {
     )
   })
 
+  it('hides the composer while the selected thread transcript is loading', async () => {
+    const groupMessagesResponse = createDeferredResponse()
+    const groupSnapshot = createReadySnapshot({
+      activeThread: groupThread,
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Иван Петров',
+          authorRole: 'group_member',
+          content: 'Групповой чат загрузился.',
+          contentType: 'text',
+          createdAt: '2026-05-13T08:00:00.000Z',
+          direction: 'incoming',
+          id: 714,
+          status: 'sent',
+        },
+      ],
+    })
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/messages?threadId=group%3A154') {
+        return groupMessagesResponse.promise
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    const user = userEvent.setup()
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Здравствуйте, вижу ваше обращение.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
+    await user.click(screen.getByRole('menuitem', { name: /ООО "Ромашка"/i }))
+
+    try {
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/chat/messages?threadId=group%3A154',
+          expect.objectContaining({
+            credentials: 'include',
+            method: 'GET',
+          }),
+        )
+      })
+      await waitFor(() => {
+        expect(
+          screen.queryByText('Здравствуйте, вижу ваше обращение.'),
+        ).not.toBeInTheDocument()
+      })
+      expect(
+        screen.getByRole('region', { name: 'Загрузка чата' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('textbox', { name: 'Сообщение' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByPlaceholderText('Чат временно недоступен'),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByPlaceholderText('Сообщение...'),
+      ).not.toBeInTheDocument()
+    } finally {
+      groupMessagesResponse.resolve(createJsonResponse(groupSnapshot))
+    }
+
+    expect(
+      await screen.findByText('Групповой чат загрузился.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+    ).toBeInTheDocument()
+  })
+
   it('does not merge stale private history after switching to a group chat', async () => {
     const olderPrivateHistory = createDeferredResponse()
     const privateSnapshot = createReadySnapshot({

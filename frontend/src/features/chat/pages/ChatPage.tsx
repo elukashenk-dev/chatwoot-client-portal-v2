@@ -5,6 +5,7 @@ import { markChatThreadRead } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { AgentTypingIndicator } from '../components/AgentTypingIndicator'
 import { ChatHeader } from '../components/ChatHeader'
+import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
@@ -346,6 +347,7 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
+  const shouldRenderLoadingState = pageState.status === 'loading'
   const transcriptMessages = historyFragment?.messages ?? visibleMessages
   const handleCloseChatSearch = useCallback(() => {
     clearSearchResultOpenError()
@@ -452,6 +454,8 @@ export function ChatPage() {
           />
         ) : null}
 
+        {shouldRenderLoadingState ? <ChatLoadingState /> : null}
+
         {shouldRenderTranscript ? (
           <ChatTranscript
             activeThreadType={snapshot?.activeThread?.type ?? null}
@@ -483,17 +487,19 @@ export function ChatPage() {
           shouldAnimatePresence={isTranscriptAtLatestEdge}
         />
 
-        <ChatComposerDock
-          canSend={canSend}
-          handleSendAttachment={handleSendAttachment}
-          handleSendMessage={handleSendMessage}
-          isBrowserOnline={canUseBackend}
-          isSending={isSending}
-          onCancelReply={() => setReplyTarget(null)}
-          replyTarget={replyTarget}
-          sendErrorMessage={sendErrorMessage}
-          selectedThreadId={pageState.selectedThreadId}
-        />
+        {shouldRenderTranscript ? (
+          <ChatComposerDock
+            canSend={canSend}
+            handleSendAttachment={handleSendAttachment}
+            handleSendMessage={handleSendMessage}
+            isBrowserOnline={canUseBackend}
+            isSending={isSending}
+            onCancelReply={() => setReplyTarget(null)}
+            replyTarget={replyTarget}
+            sendErrorMessage={sendErrorMessage}
+            selectedThreadId={pageState.selectedThreadId}
+          />
+        ) : null}
       </div>
       <ChatAuxiliaryPages
         activeThread={headerThread}
