@@ -1,6 +1,5 @@
 import { MenuIcon, MoreHorizontalIcon } from '../../../../shared/ui/icons'
-import { ChatAvatar } from '../../../chat/components/ChatAvatar'
-import { ChatHeaderPresence } from '../../../chat/components/ChatHeaderPresence'
+import { ChatHeaderIdentity } from '../../../chat/components/ChatHeaderIdentity'
 import { createTenantMonogram } from '../../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../../tenant/lib/useTenantIdentity'
 import { useBranding } from '../../../branding/lib/useBranding'
@@ -23,25 +22,15 @@ export function ChatHeaderPreview() {
           <MenuIcon className="h-6 w-6" />
         </span>
 
-        <ChatAvatar
-          alt={previewThread.title}
+        <ChatHeaderIdentity
+          avatarFallback={tenantMonogram}
           avatarUrl={branding.assets.logo?.publicUrl ?? previewThread.avatarUrl}
-          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-brand-900 text-sm font-semibold tracking-wide text-white"
+          presenceLabel="На связи"
+          presenceTone="online"
+          subtitle={previewThread.subtitle}
           title={previewThread.title}
-        >
-          {tenantMonogram}
-        </ChatAvatar>
-
-        <div className="min-w-0 flex-1 py-0.5">
-          <h1 className="truncate text-[16px] font-semibold leading-tight text-[color:var(--portal-chat-header-foreground,#0f172a)]">
-            {previewThread.title}
-          </h1>
-          <ChatHeaderPresence
-            label="На связи"
-            subtitle={previewThread.subtitle}
-            tone="online"
-          />
-        </div>
+          useResponsiveTitle={false}
+        />
 
         <span
           aria-hidden="true"

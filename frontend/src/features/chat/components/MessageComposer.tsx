@@ -9,6 +9,7 @@ import {
 } from './message-composer/ComposerFeedback'
 import { ComposerReplyPreview } from './message-composer/ComposerReplyPreview'
 import { ComposerSendButton } from './message-composer/ComposerSendButton'
+import { ComposerSideButton } from './message-composer/ComposerSideButton'
 import { ComposerSideControl } from './message-composer/ComposerSideControl'
 import { ComposerTextarea } from './message-composer/ComposerTextarea'
 import { VoiceRecordingPanel } from './message-composer/VoiceRecordingPanel'
@@ -417,19 +418,18 @@ export function MessageComposer({
             control="attachment"
             isCollapsed={shouldPrioritizeTextDraft}
           >
-            <button
-              aria-label="Прикрепить файл"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+            <ComposerSideButton
+              ariaLabel="Прикрепить файл"
               disabled={isAttachmentControlDisabled}
               onClick={() => {
                 fileInputRef.current?.click()
               }}
+              shape="control"
               tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
               title="Прикрепить файл"
-              type="button"
             >
               <PaperclipIcon className="h-5 w-5" />
-            </button>
+            </ComposerSideButton>
           </ComposerSideControl>
 
           <ComposerTextarea
@@ -453,16 +453,15 @@ export function MessageComposer({
             control="voice"
             isCollapsed={shouldPrioritizeTextDraft}
           >
-            <button
-              aria-label="Голосовое сообщение"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+            <ComposerSideButton
+              ariaLabel="Голосовое сообщение"
               disabled={!canStartVoiceRecording}
               onClick={() => {
                 void startVoiceRecording()
               }}
+              shape="round"
               tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
               title="Записать голосовое"
-              type="button"
             >
               <MicrophoneIcon
                 className={
@@ -471,7 +470,7 @@ export function MessageComposer({
                     : 'h-5 w-5'
                 }
               />
-            </button>
+            </ComposerSideButton>
           </ComposerSideControl>
           <ComposerSendButton
             canSend={canSend && !isVoiceRecorderBusy}

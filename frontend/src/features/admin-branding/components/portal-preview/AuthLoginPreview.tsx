@@ -3,6 +3,7 @@ import {
   authFieldIconClassName,
   inputClassName,
 } from '../../../../shared/ui/inputStyles'
+import { AuthLegalNotice } from '../../../auth/components/AuthLegalNotice'
 import { AuthSecondaryLinks } from '../../../auth/components/AuthSecondaryLinks'
 import { AuthSupportBlock } from '../../../auth/components/AuthSupportBlock'
 import { useBranding } from '../../../branding/lib/useBranding'
@@ -49,18 +50,7 @@ export function AuthLoginPreview() {
               />
             </label>
 
-            <p className="auth-legal-text">
-              Используя сервис, вы принимаете{' '}
-              <span className="auth-legal-preview-link">
-                Пользовательское соглашение
-              </span>{' '}
-              и подтверждаете, что ознакомлены с{' '}
-              <span className="auth-legal-preview-link">
-                Политикой обработки персональных данных
-              </span>
-              .
-            </p>
-
+            <AuthLegalNotice preview />
             <button
               aria-disabled="true"
               className="auth-login-submit w-full bg-brand-900 text-white"

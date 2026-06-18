@@ -22,11 +22,8 @@ import type {
   ChatThreadListSummary,
   ChatThreadSummary,
 } from '../types'
-import {
-  ChatHeaderPresence,
-  type ChatHeaderPresenceTone,
-} from './ChatHeaderPresence'
-import { ChatAvatar } from './ChatAvatar'
+import { type ChatHeaderPresenceTone } from './ChatHeaderPresence'
+import { ChatHeaderIdentity } from './ChatHeaderIdentity'
 import { ChatMenuItem } from './ChatMenuItem'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
@@ -272,27 +269,14 @@ export function ChatHeader({
             </button>
           </div>
 
-          <ChatAvatar
-            alt={threadTitle}
-            avatarUrl={
-              branding.assets.logo?.publicUrl ?? activeThread?.avatarUrl
-            }
-            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-brand-900 text-sm font-semibold tracking-wide text-white"
+          <ChatHeaderIdentity
+            avatarFallback={tenantMonogram}
+            avatarUrl={branding.assets.logo?.publicUrl ?? activeThread?.avatarUrl}
+            presenceLabel={supportPresence.label}
+            presenceTone={supportPresence.tone}
+            subtitle={threadSubtitle}
             title={threadTitle}
-          >
-            {tenantMonogram}
-          </ChatAvatar>
-
-          <div className="min-w-0 flex-1 py-0.5">
-            <h1 className="truncate text-[16px] font-semibold leading-tight text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:text-[17px]">
-              {threadTitle}
-            </h1>
-            <ChatHeaderPresence
-              label={supportPresence.label}
-              subtitle={threadSubtitle}
-              tone={supportPresence.tone}
-            />
-          </div>
+          />
 
           <div className="relative shrink-0">
             <button
