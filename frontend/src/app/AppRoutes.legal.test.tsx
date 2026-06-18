@@ -164,7 +164,13 @@ describe('legal routes', () => {
 
     render(
       <MemoryRouter
-        initialEntries={['/auth/register', '/legal/privacy']}
+        initialEntries={[
+          '/auth/register',
+          {
+            pathname: '/legal/privacy',
+            state: { legalBackMode: 'history' },
+          },
+        ]}
         initialIndex={1}
       >
         <Routes>
@@ -182,6 +188,26 @@ describe('legal routes', () => {
 
     expect(screen.getByText('register page')).toBeInTheDocument()
     expect(screen.queryByText('login page')).not.toBeInTheDocument()
+  })
+
+  it('uses the login fallback when the legal reader is opened directly', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/legal/privacy']}>
+        <Routes>
+          <Route
+            element={<LegalDocumentPage document="privacy" />}
+            path="/legal/privacy"
+          />
+          <Route element={<p>login page</p>} path="/auth/login" />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('link', { name: 'Назад' }))
+
+    expect(screen.getByText('login page')).toBeInTheDocument()
   })
 
   it('keeps legal pages reachable when a customer session exists', async () => {

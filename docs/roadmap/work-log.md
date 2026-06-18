@@ -135,6 +135,11 @@ execution-plan детали здесь не хранятся.
   controls were removed from the active branding contract.
 - Auth legal UX has public terms/privacy pages, informational login legal links
   and explicit registration consent with backend persistence.
+- Accepted customer UI visual baseline now uses the branded full-background
+  auth/chat direction: Inter auth pages, logo alignment/size controls, explicit
+  registration consent, legal reader pages, translucent chat shell/composer,
+  glass secondary chat surfaces and runtime/admin preview parity over the
+  tenant-owned chat background asset.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
@@ -160,6 +165,7 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Review the default auth login and registration screens in browser, then
-  replace first-run legal document copy with operator-approved legal texts
-  before production rollout.
+- Complete final verification/review for the accepted chat/auth visual polish
+  branch, merge it into `main`, and keep first-run legal document copy blocked
+  from production rollout until operator-approved legal texts replace the
+  current test templates.

@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { MouseEvent } from 'react'
 
 import { AuthFrame } from '../../../app/layouts/AuthFrame'
@@ -9,6 +9,19 @@ import { createTenantMonogram } from '../../tenant/lib/tenantIdentityMetadata'
 import { legalDocuments, type LegalDocumentId } from '../legalDocuments'
 import { BrandMark } from '../../../shared/ui/BrandMark'
 
+type LegalDocumentLocationState = {
+  legalBackMode?: 'history'
+}
+
+function hasHistoryBackState(state: unknown): state is LegalDocumentLocationState {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    'legalBackMode' in state &&
+    (state as LegalDocumentLocationState).legalBackMode === 'history'
+  )
+}
+
 export function LegalDocumentPage({
   document,
 }: {
@@ -17,6 +30,7 @@ export function LegalDocumentPage({
   const content = legalDocuments[document]
   const { branding } = useBranding()
   const brandLogo = branding.assets.logo
+  const location = useLocation()
   const navigate = useNavigate()
 
   function handleBackClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -29,6 +43,10 @@ export function LegalDocumentPage({
       event.shiftKey ||
       event.currentTarget.target
     ) {
+      return
+    }
+
+    if (!hasHistoryBackState(location.state)) {
       return
     }
 

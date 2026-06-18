@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
 
+const legalHistoryBackState = { legalBackMode: 'history' } as const
+
 export type RegistrationLegalConsentValue = {
   personalDataConsentAccepted: boolean
   termsAccepted: boolean
@@ -32,7 +34,7 @@ export function RegistrationLegalConsent({
         />
         <span>
           Я принимаю условия{' '}
-          <Link to={routePaths.legal.terms}>
+          <Link state={legalHistoryBackState} to={routePaths.legal.terms}>
             Пользовательского соглашения
           </Link>
           .
@@ -54,7 +56,7 @@ export function RegistrationLegalConsent({
         <span>
           Я даю согласие на обработку персональных данных и подтверждаю, что
           ознакомлен с{' '}
-          <Link to={routePaths.legal.privacy}>
+          <Link state={legalHistoryBackState} to={routePaths.legal.privacy}>
             Политикой обработки персональных данных
           </Link>
         </span>
