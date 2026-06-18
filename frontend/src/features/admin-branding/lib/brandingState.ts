@@ -16,6 +16,7 @@ export type BrandingDraft = {
   layout: BrandingLayout
   portalName: string
   supportLabel: string
+  supportPhoneDisplay: string
 }
 
 export function createBrandingDraft(
@@ -29,6 +30,7 @@ export function createBrandingDraft(
     layout: response.branding.layout,
     portalName: response.branding.portalName,
     supportLabel: response.branding.supportLabel,
+    supportPhoneDisplay: response.branding.supportContact.phoneDisplay ?? '',
   }
 }
 
@@ -40,5 +42,6 @@ export function createBrandingPatch(draft: BrandingDraft): AdminBrandingPatch {
     layout: draft.layout,
     portalName: draft.portalName,
     supportLabel: draft.supportLabel,
+    supportPhoneDisplay: draft.supportPhoneDisplay,
   }
 }

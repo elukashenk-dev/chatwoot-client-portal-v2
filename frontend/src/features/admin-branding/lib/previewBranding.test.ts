@@ -48,6 +48,7 @@ const draft = {
   },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
+  supportPhoneDisplay: '+7 (846) 211-11-11',
 } satisfies BrandingDraft
 
 describe('previewBranding', () => {
@@ -59,6 +60,10 @@ describe('previewBranding', () => {
       copy: draft.copy,
       layout: draft.layout,
       portalName: 'ProvGroup',
+      supportContact: {
+        phoneDisplay: '+7 (846) 211-11-11',
+        phoneHref: 'tel:+78462111111',
+      },
       supportLabel: 'Поддержка ProvGroup',
       version: 1,
     })

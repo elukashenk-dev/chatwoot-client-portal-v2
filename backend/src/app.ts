@@ -22,7 +22,7 @@ import { createAuthService } from './modules/auth/service.js'
 import { createBrandingRepository } from './modules/branding/repository.js'
 import { registerBrandingRoutes } from './modules/branding/routes.js'
 import { createBrandingAssetService } from './modules/branding/assetService.js'
-import { createBrandingService } from './modules/branding/service.js'
+import { createBrandingServiceForTenantRequest } from './modules/branding/serviceFactory.js'
 import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
@@ -58,6 +58,8 @@ import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/rep
 import { registerChatwootWebhookRoutes } from './modules/chatwoot-webhooks/routes.js'
 import { createChatwootWebhookService } from './modules/chatwoot-webhooks/service.js'
 import { registerHealthRoutes } from './modules/health/routes.js'
+import { registerLegalDocumentRoutes } from './modules/legal-documents/routes.js'
+import { createLegalDocumentsServiceForTenantRequest } from './modules/legal-documents/serviceFactory.js'
 import { createPasswordResetRepository } from './modules/password-reset/repository.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
 import { createPasswordResetService } from './modules/password-reset/service.js'
@@ -323,15 +325,11 @@ export function buildApp({
       transport: pushTransport,
     })
   }
-  const createRegistrationServiceForRequest = (request: FastifyRequest) =>
-    createRegistrationService({
-      chatwootClient: createChatwootClientForRequest(request),
-      emailDelivery: createEmailDelivery(),
-      portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
-      }),
-      tenantId: requireTenantContext(request).id,
+  const createLegalDocumentsServiceForRequest = (request: FastifyRequest) =>
+    createLegalDocumentsServiceForTenantRequest({
+      database,
+      request,
+      ...(now ? { now } : {}),
     })
   const createPasswordResetServiceForRequest = (request: FastifyRequest) =>
     createPasswordResetService({
@@ -364,20 +362,20 @@ export function buildApp({
       ...(now ? { now } : {}),
     })
   }
-  const createBrandingServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
-    const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
-      tenantId: tenant.id,
-    })
-
-    return createBrandingService({
-      audit: createTenantAdminAuditLogger(adminAuthRepository),
-      repository: createBrandingRepository(database.db, {
-        tenantId: tenant.id,
+  const createBrandingServiceForRequest = (request: FastifyRequest) =>
+    createBrandingServiceForTenantRequest({ database, request })
+  const createRegistrationServiceForRequest = (request: FastifyRequest) =>
+    createRegistrationService({
+      chatwootClient: createChatwootClientForRequest(request),
+      emailDelivery: createEmailDelivery(),
+      legalDocumentsReader: createLegalDocumentsServiceForRequest(request),
+      portalUsersRepository: createPortalUsersRepository(database.db),
+      registrationRepository: createRegistrationRepository(database.db, {
+        tenantId: requireTenantContext(request).id,
       }),
-      tenant,
+      supportContactReader: createBrandingServiceForRequest(request),
+      tenantId: requireTenantContext(request).id,
     })
-  }
   const createBrandingAssetServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
     const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
@@ -435,6 +433,11 @@ export function buildApp({
   registerProfileRoutes(app, {
     authService,
     createProfileService: createProfileServiceForRequest,
+    env,
+  })
+  registerLegalDocumentRoutes(app, {
+    createLegalDocumentsService: createLegalDocumentsServiceForRequest,
+    createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
     env,
   })
   registerRegistrationRoutes(app, {

@@ -86,6 +86,10 @@ const publicBrandingResponse = {
       authBrandPlacement: 'left',
     },
     portalName: 'ProvGroup',
+    supportContact: {
+      phoneDisplay: '+7 (846) 211-11-11',
+      phoneHref: 'tel:+78462111111',
+    },
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },

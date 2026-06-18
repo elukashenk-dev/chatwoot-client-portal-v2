@@ -344,9 +344,10 @@ Tenant-aware PWA endpoints:
 - `portal_chat_notification_preferences`;
 - `portal_push_subscriptions`;
 - `portal_push_deliveries`;
-- `portal_chat_unread_messages`.
+- `portal_chat_unread_messages`;
 - `portal_branding_settings`;
-- `portal_branding_assets`.
+- `portal_branding_assets`;
+- `portal_legal_documents`.
 
 Принципиальные правила:
 
@@ -367,7 +368,8 @@ Tenant-aware PWA endpoints:
 API `v2` остается простым и явным:
 
 - `REST JSON` для большинства запросов;
-- `multipart/form-data` только для attachment upload;
+- `multipart/form-data` только для attachment/avatar/branding/legal document
+  uploads;
 - request/response contracts валидируются на backend;
 - frontend общается с backend same-origin.
 
@@ -391,12 +393,15 @@ API `v2` остается простым и явным:
 - `/api/profile/avatar`;
 - `/api/branding`;
 - `/api/branding/assets/:assetId`;
+- `/api/legal-documents/:documentType`;
 - `/api/admin/auth/request`;
 - `/api/admin/auth/verify`;
 - `/api/admin/auth/me`;
 - `/api/admin/auth/logout`;
 - `/api/admin/branding`;
 - `/api/admin/branding/assets/:kind`;
+- `/api/admin/legal-documents`;
+- `/api/admin/legal-documents/:documentType`;
 - `/api/chat/threads`;
 - `/api/chat/threads/:threadId/info`;
 - `/api/chat/messages`;
@@ -454,6 +459,8 @@ chatwoot-client-portal-v2/
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
 - `branding` - tenant-scoped public/admin branding settings read model,
   backend-owned asset upload/read/delete routes and admin update boundary;
+- `legal-documents` - tenant-scoped active legal document uploads, extracted
+  public text read model and registration version authority;
 - `portal-users` - portal user persistence helpers;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send, attachment proxy, media, search and send ledger;
@@ -474,9 +481,12 @@ chatwoot-client-portal-v2/
 - `auth` - registration, password reset, login/logout/me UI;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
 - `admin-branding` - admin branding API client, draft state, settings form,
-  asset upload controls and live preview components;
+  support phone/legal document/asset upload controls and live preview
+  components;
 - `admin-shell` - protected admin console shell and `/admin/branding` page wiring;
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
+- `legal` - public terms/privacy reader pages backed by portal legal document
+  API;
 - `profile` - protected read-only profile page and avatar upload flow;
 - `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
 - `settings` - user-level notification settings;
@@ -523,6 +533,11 @@ tenant-aware runtime.
   surfaces: цвета, тексты, logo, auth/chat фоновые изображения и chat header
   background идут через portal-owned runtime state; PWA manifest colors также
   берутся из tenant branding settings;
+- tenant support phone is part of branding settings and is exposed to browser
+  only as public contact metadata;
+- legal terms/privacy texts are tenant-owned portal data, uploaded by tenant
+  admin as PDF/DOCX/TXT and read by registration/legal pages through backend
+  routes;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;
 - Chatwoot permissions spike по `F-MT-004` закрыт в `MT-9A`;

@@ -162,9 +162,15 @@ execution-plan детали здесь не хранятся.
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
   cycles and verbose generated-output churn.
+- Tenant legal document and support contact baseline is implemented:
+  tenant admins upload active terms/privacy documents as PDF/DOCX/TXT without
+  inline editing, backend stores extracted active versions in portal DB,
+  registration consent records use those active versions, public legal pages
+  load document text from backend, and support phone is tenant branding contact
+  metadata instead of a frontend default.
 
 ## Recommended Next Step
 
-- Keep first-run legal document copy blocked from production rollout until
-  operator-approved legal texts replace the current test templates, then run the
-  accepted branding/chat visual baseline through production post-deploy smoke.
+- Run a manual admin upload/auth registration smoke with operator-approved
+  legal documents, then continue with production post-deploy branding/chat/PWA
+  smoke on the accepted visual baseline.

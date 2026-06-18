@@ -46,6 +46,7 @@ export type BrandingSettingsPatch = Partial<{
   primaryColor: string | null
   pwaIconAssetId: number | null
   supportLabel: string | null
+  supportPhoneDisplay: string | null
 }>
 
 export type CreateBrandingAssetMetadataInput = {
@@ -112,6 +113,7 @@ const settingsSelection = {
   primaryColor: portalBrandingSettings.primaryColor,
   pwaIconAssetId: portalBrandingSettings.pwaIconAssetId,
   supportLabel: portalBrandingSettings.supportLabel,
+  supportPhoneDisplay: portalBrandingSettings.supportPhoneDisplay,
   tenantId: portalBrandingSettings.tenantId,
   updatedAt: portalBrandingSettings.updatedAt,
   version: portalBrandingSettings.version,
@@ -180,6 +182,7 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     primaryColor: normalizeNullableText(input.primaryColor),
     pwaIconAssetId: normalizeAssetId(input.pwaIconAssetId),
     supportLabel: normalizeNullableText(input.supportLabel),
+    supportPhoneDisplay: normalizeNullableText(input.supportPhoneDisplay),
   })
 }
 

@@ -73,6 +73,10 @@ const brandingContextValue: BrandingContextValue = {
       authBrandPlacement: 'right',
     },
     portalName: 'ProvGroup',
+    supportContact: {
+      phoneDisplay: null,
+      phoneHref: null,
+    },
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
@@ -124,9 +128,7 @@ describe('TenantAuthShell', () => {
     )
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument()
     expect(screen.getByText('Описание страницы')).toBeInTheDocument()
-    expect(
-      container.querySelector('.auth-header-art'),
-    ).not.toBeInTheDocument()
+    expect(container.querySelector('.auth-header-art')).not.toBeInTheDocument()
     expect(container.querySelector('.auth-footer-art')).not.toBeInTheDocument()
   })
 })

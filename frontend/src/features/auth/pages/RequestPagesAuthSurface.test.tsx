@@ -181,7 +181,7 @@ describe('Auth flow pages surface contract', () => {
     },
     {
       actionLabel: 'Вернуться ко входу',
-      expectsCompactSupport: true,
+      expectsCompactSupport: false,
       heading: 'Восстановить пароль',
       path: '/auth/password-reset/request',
     },
@@ -197,7 +197,7 @@ describe('Auth flow pages surface contract', () => {
           termsAccepted: true,
         })
       },
-      expectsCompactSupport: true,
+      expectsCompactSupport: false,
       heading: 'Подтверждение почты',
       path: '/auth/register/verify',
       splitActions: true,
@@ -211,7 +211,7 @@ describe('Auth flow pages surface contract', () => {
           resendAvailableInSeconds: 60,
         })
       },
-      expectsCompactSupport: true,
+      expectsCompactSupport: false,
       heading: 'Подтверждение почты',
       path: '/auth/password-reset/verify',
       splitActions: true,

@@ -2,7 +2,10 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminBrandingResponse } from '../../admin-branding/api/adminBrandingClient'
+import type {
+  AdminBrandingResponse,
+  AdminLegalDocumentsResponse,
+} from '../../admin-branding/api/adminBrandingClient'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import {
   AdminSessionContext,
@@ -13,20 +16,26 @@ import { AdminBrandingPage } from './AdminBrandingPage'
 const {
   deleteAdminBrandingAssetMock,
   getAdminBrandingMock,
+  getAdminLegalDocumentsMock,
   updateAdminBrandingMock,
   uploadAdminBrandingAssetMock,
+  uploadAdminLegalDocumentMock,
 } = vi.hoisted(() => ({
   deleteAdminBrandingAssetMock: vi.fn(),
   getAdminBrandingMock: vi.fn(),
+  getAdminLegalDocumentsMock: vi.fn(),
   updateAdminBrandingMock: vi.fn(),
   uploadAdminBrandingAssetMock: vi.fn(),
+  uploadAdminLegalDocumentMock: vi.fn(),
 }))
 
 vi.mock('../../admin-branding/api/adminBrandingClient', () => ({
   deleteAdminBrandingAsset: deleteAdminBrandingAssetMock,
   getAdminBranding: getAdminBrandingMock,
+  getAdminLegalDocuments: getAdminLegalDocumentsMock,
   updateAdminBranding: updateAdminBrandingMock,
   uploadAdminBrandingAsset: uploadAdminBrandingAssetMock,
+  uploadAdminLegalDocument: uploadAdminLegalDocumentMock,
 }))
 
 const savedBrandingResponse = {
@@ -61,10 +70,30 @@ const savedBrandingResponse = {
       authBrandPlacement: 'left',
     },
     portalName: 'Бухфирма',
+    supportContact: {
+      phoneDisplay: '+7 (846) 211-11-11',
+      phoneHref: 'tel:+78462111111',
+    },
     supportLabel: 'Команда Бухфирма',
     version: 1,
   },
 } satisfies AdminBrandingResponse
+
+const legalDocumentsResponse = {
+  documents: {
+    privacy: null,
+    terms: {
+      activatedAt: '2026-06-18T10:00:00.000Z',
+      bodyCharacterCount: 1200,
+      documentType: 'terms',
+      sourceContentType: 'application/pdf',
+      sourceFileName: 'terms.pdf',
+      sourceSha256: 'abc',
+      title: 'Пользовательское соглашение',
+      version: '20260618-abc',
+    },
+  },
+} satisfies AdminLegalDocumentsResponse
 
 const logoAsset = {
   assetVersion: '77',
@@ -131,13 +160,19 @@ describe('AdminBrandingPage', () => {
   beforeEach(() => {
     deleteAdminBrandingAssetMock.mockReset()
     getAdminBrandingMock.mockReset()
+    getAdminLegalDocumentsMock.mockReset()
     updateAdminBrandingMock.mockReset()
     uploadAdminBrandingAssetMock.mockReset()
+    uploadAdminLegalDocumentMock.mockReset()
 
     deleteAdminBrandingAssetMock.mockResolvedValue({ deleted: true })
     getAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
+    getAdminLegalDocumentsMock.mockResolvedValue(legalDocumentsResponse)
     updateAdminBrandingMock.mockResolvedValue(savedBrandingResponse)
     uploadAdminBrandingAssetMock.mockResolvedValue({ asset: logoAsset })
+    uploadAdminLegalDocumentMock.mockResolvedValue({
+      document: legalDocumentsResponse.documents.terms,
+    })
   })
 
   it('loads and renders saved branding settings', async () => {
@@ -149,6 +184,8 @@ describe('AdminBrandingPage', () => {
 
     expect(await screen.findByDisplayValue('Бухфирма')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Команда Бухфирма')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('+7 (846) 211-11-11')).toBeInTheDocument()
+    expect(screen.getByText(/Файл: terms\.pdf/u)).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Предпросмотр портала' }),
     ).toBeInTheDocument()
@@ -174,14 +211,13 @@ describe('AdminBrandingPage', () => {
     expect(
       screen.getByRole('group', { name: /Стиль кнопки/i }),
     ).toBeInTheDocument()
-    expect(
-      screen.queryByLabelText('Фон формы входа'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Фон формы входа')).not.toBeInTheDocument()
     expect(
       screen.queryByLabelText('Непрозрачность формы входа, значение'),
     ).not.toBeInTheDocument()
     expect(screen.getByText('Вход: общий фон')).toBeInTheDocument()
     expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
+    expect(getAdminLegalDocumentsMock).toHaveBeenCalledTimes(1)
   })
 
   it('updates preview while editing portal name', async () => {
@@ -274,6 +310,11 @@ describe('AdminBrandingPage', () => {
     await user.click(screen.getByRole('radio', { name: 'Темная дымка' }))
     await user.click(screen.getByRole('radio', { name: 'Контур' }))
     await user.click(screen.getByRole('radio', { name: 'Градиент' }))
+    await user.clear(screen.getByLabelText('Телефон поддержки'))
+    await user.type(
+      screen.getByLabelText('Телефон поддержки'),
+      '+7 (846) 222-22-22',
+    )
     await user.click(
       screen.getByRole('button', { name: 'Сохранить настройки' }),
     )
@@ -291,6 +332,7 @@ describe('AdminBrandingPage', () => {
             authBrandPlacement: 'right',
           },
           portalName: 'Новый портал',
+          supportPhoneDisplay: '+7 (846) 222-22-22',
         }),
       )
     })
@@ -486,6 +528,56 @@ describe('AdminBrandingPage', () => {
     )
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Логотип загружен.',
+    )
+  })
+
+  it('refreshes legal document summaries without overwriting unsaved text edits', async () => {
+    const user = userEvent.setup()
+    const documentFile = new File(['legal text'], 'privacy.pdf', {
+      type: 'application/pdf',
+    })
+    const updatedLegalDocumentsResponse = {
+      documents: {
+        ...legalDocumentsResponse.documents,
+        privacy: {
+          activatedAt: '2026-06-18T11:00:00.000Z',
+          bodyCharacterCount: 1500,
+          documentType: 'privacy',
+          sourceContentType: 'application/pdf',
+          sourceFileName: 'privacy.pdf',
+          sourceSha256: 'def',
+          title: 'Политика обработки персональных данных',
+          version: '20260618-def',
+        },
+      },
+    } satisfies AdminLegalDocumentsResponse
+
+    getAdminLegalDocumentsMock
+      .mockResolvedValueOnce(legalDocumentsResponse)
+      .mockResolvedValueOnce(updatedLegalDocumentsResponse)
+
+    renderAdminBrandingPage()
+
+    const portalNameInput = await screen.findByLabelText('Название портала')
+    await user.clear(portalNameInput)
+    await user.type(portalNameInput, 'Несохраненное имя')
+    await user.upload(
+      screen.getByLabelText('Загрузить политику обработки персональных данных'),
+      documentFile,
+    )
+
+    await waitFor(() => {
+      expect(uploadAdminLegalDocumentMock).toHaveBeenCalledWith(
+        'privacy',
+        documentFile,
+      )
+    })
+    expect(screen.getByLabelText('Название портала')).toHaveValue(
+      'Несохраненное имя',
+    )
+    expect(await screen.findByText(/Файл: privacy\.pdf/u)).toBeInTheDocument()
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Политика обработки персональных данных загружена.',
     )
   })
 

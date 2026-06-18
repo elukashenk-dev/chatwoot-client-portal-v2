@@ -71,8 +71,21 @@ function createAdminBrandingResponse() {
         authBrandPlacement: 'left',
       },
       portalName: 'Бухфирма',
+      supportContact: {
+        phoneDisplay: '+7 (846) 211-11-11',
+        phoneHref: 'tel:+78462111111',
+      },
       supportLabel: 'Команда Бухфирма',
       version: 1,
+    },
+  })
+}
+
+function createAdminLegalDocumentsResponse() {
+  return createJsonResponse({
+    documents: {
+      privacy: null,
+      terms: null,
     },
   })
 }
@@ -134,6 +147,10 @@ describe('AppRoutes admin route separation', () => {
         return createAdminBrandingResponse()
       }
 
+      if (url === '/api/admin/legal-documents') {
+        return createAdminLegalDocumentsResponse()
+      }
+
       return createJsonResponse({}, 404)
     })
 
@@ -157,6 +174,10 @@ describe('AppRoutes admin route separation', () => {
 
       if (url === '/api/admin/branding') {
         return createAdminBrandingResponse()
+      }
+
+      if (url === '/api/admin/legal-documents') {
+        return createAdminLegalDocumentsResponse()
       }
 
       return createJsonResponse({}, 404)
@@ -229,6 +250,10 @@ describe('AppRoutes admin route separation', () => {
 
       if (url === '/api/admin/branding') {
         return createAdminBrandingResponse()
+      }
+
+      if (url === '/api/admin/legal-documents') {
+        return createAdminLegalDocumentsResponse()
       }
 
       if (url === '/api/auth/me') {

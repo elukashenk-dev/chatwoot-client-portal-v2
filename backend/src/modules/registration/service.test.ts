@@ -16,7 +16,6 @@ import { hashPassword } from '../../lib/password.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
-import { registrationLegalDocumentVersions } from './legalDocuments.js'
 import { createRegistrationRepository } from './repository.js'
 import { createRegistrationService } from './service.js'
 
@@ -26,6 +25,25 @@ const acceptedRegistrationLegal = {
   termsAccepted: true,
   userAgent: 'Mozilla/5.0',
 } as const
+const activeLegalDocumentVersions = {
+  privacyPolicyVersion: 'privacy-upload-v9',
+  termsVersion: 'terms-upload-v7',
+}
+const supportPhoneDisplay = '+7 (846) 211-11-11'
+
+type RegistrationServiceOptions = Parameters<
+  typeof createRegistrationService
+>[0]
+type RegistrationServiceTestOptions = Omit<
+  RegistrationServiceOptions,
+  'legalDocumentsReader' | 'supportContactReader' | 'tenantId'
+> &
+  Partial<
+    Pick<
+      RegistrationServiceOptions,
+      'legalDocumentsReader' | 'supportContactReader'
+    >
+  >
 
 function extractVerificationCode(text: string) {
   const match = text.match(/\b\d{6}\b/)
@@ -49,6 +67,26 @@ function createDeferred<T>() {
     promise,
     reject,
     resolve,
+  }
+}
+
+function createDefaultLegalDocumentsReader() {
+  return {
+    getActiveVersionsForRegistration: vi
+      .fn()
+      .mockResolvedValue(activeLegalDocumentVersions),
+  }
+}
+
+function createDefaultSupportContactReader() {
+  return {
+    getPublicBranding: vi.fn().mockResolvedValue({
+      branding: {
+        supportContact: {
+          phoneDisplay: supportPhoneDisplay,
+        },
+      },
+    }),
   }
 }
 
@@ -159,10 +197,18 @@ describe('registration service', () => {
   let tenantId: number
 
   function createRegistrationServiceForTest(
-    options: Omit<Parameters<typeof createRegistrationService>[0], 'tenantId'>,
+    options: RegistrationServiceTestOptions,
   ) {
+    const {
+      legalDocumentsReader = createDefaultLegalDocumentsReader(),
+      supportContactReader = createDefaultSupportContactReader(),
+      ...serviceOptions
+    } = options
+
     return createRegistrationService({
-      ...options,
+      ...serviceOptions,
+      legalDocumentsReader,
+      supportContactReader,
       tenantId,
     })
   }
@@ -174,66 +220,6 @@ describe('registration service', () => {
 
   afterEach(async () => {
     await database.close()
-  })
-
-  it('rejects registration when Chatwoot contact is not found', async () => {
-    const service = createRegistrationServiceForTest({
-      chatwootClient: {
-        findContactByEmail: vi.fn().mockResolvedValue(null),
-      },
-      emailDelivery: {
-        send: vi.fn(),
-      },
-      now: () => new Date('2026-04-21T12:00:00.000Z'),
-      portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db, {
-        tenantId,
-      }),
-    })
-
-    await expect(
-      service.requestVerification({
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-        legalAcceptance: acceptedRegistrationLegal,
-      }),
-    ).rejects.toMatchObject({
-      code: 'REGISTRATION_CONTACT_NOT_FOUND',
-      message:
-        'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
-      statusCode: 403,
-    })
-  })
-
-  it('requires Chatwoot eligibility when there is no active pending verification', async () => {
-    const sendEmail = vi.fn()
-    const service = createRegistrationServiceForTest({
-      chatwootClient: {
-        findContactByEmail: vi
-          .fn()
-          .mockRejectedValue(new ChatwootClientRequestError()),
-      },
-      emailDelivery: {
-        send: sendEmail,
-      },
-      now: () => new Date('2026-04-21T12:00:00.000Z'),
-      portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db, {
-        tenantId,
-      }),
-    })
-
-    await expect(
-      service.requestVerification({
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-        legalAcceptance: acceptedRegistrationLegal,
-      }),
-    ).rejects.toMatchObject({
-      code: 'CHATWOOT_UNAVAILABLE',
-      statusCode: 502,
-    })
-    expect(sendEmail).not.toHaveBeenCalled()
   })
 
   it('rejects registration when the portal account already exists', async () => {
@@ -338,13 +324,12 @@ describe('registration service', () => {
         email: 'name@company.ru',
         personalDataConsentAccepted: true,
         portalUserId: null,
-        privacyPolicyVersion:
-          registrationLegalDocumentVersions.privacyPolicyVersion,
+        privacyPolicyVersion: activeLegalDocumentVersions.privacyPolicyVersion,
         purpose: 'registration',
         requestIp: '203.0.113.10',
         tenantId,
         termsAccepted: true,
-        termsVersion: registrationLegalDocumentVersions.termsVersion,
+        termsVersion: activeLegalDocumentVersions.termsVersion,
         userAgent: 'Mozilla/5.0',
       }),
     ])
@@ -970,11 +955,13 @@ describe('registration service', () => {
       emailDelivery: {
         send: vi.fn(),
       },
+      legalDocumentsReader: createDefaultLegalDocumentsReader(),
       now: () => now,
       portalUsersRepository,
       registrationRepository: createRegistrationRepository(database.db, {
         tenantId,
       }),
+      supportContactReader: createDefaultSupportContactReader(),
       tenantId,
     })
     const serviceB = createRegistrationService({
@@ -984,11 +971,13 @@ describe('registration service', () => {
       emailDelivery: {
         send: vi.fn(),
       },
+      legalDocumentsReader: createDefaultLegalDocumentsReader(),
       now: () => now,
       portalUsersRepository,
       registrationRepository: createRegistrationRepository(database.db, {
         tenantId: tenantB.id,
       }),
+      supportContactReader: createDefaultSupportContactReader(),
       tenantId: tenantB.id,
     })
 

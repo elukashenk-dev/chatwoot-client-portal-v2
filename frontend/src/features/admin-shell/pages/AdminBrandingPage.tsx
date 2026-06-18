@@ -4,8 +4,12 @@ import { AdminBrandingForm } from '../../admin-branding/components/AdminBranding
 import {
   deleteAdminBrandingAsset,
   getAdminBranding,
+  getAdminLegalDocuments,
   updateAdminBranding,
   uploadAdminBrandingAsset,
+  uploadAdminLegalDocument,
+  type AdminLegalDocumentSummary,
+  type AdminLegalDocumentType,
   type BrandingAssetKind,
 } from '../../admin-branding/api/adminBrandingClient'
 import {
@@ -47,6 +51,11 @@ const brandingAssetMessages = {
   }
 >
 
+const legalDocumentMessages = {
+  privacy: 'Политика обработки персональных данных загружена.',
+  terms: 'Пользовательское соглашение загружено.',
+} satisfies Record<AdminLegalDocumentType, string>
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -56,6 +65,10 @@ function getErrorMessage(error: unknown) {
 export function AdminBrandingPage() {
   const { admin, signOut } = useAdminSession()
   const [draft, setDraft] = useState<BrandingDraft | null>(null)
+  const [legalDocuments, setLegalDocuments] = useState<Record<
+    AdminLegalDocumentType,
+    AdminLegalDocumentSummary | null
+  > | null>(null)
   const [brandingError, setBrandingError] = useState<string | null>(null)
   const [brandingSuccess, setBrandingSuccess] = useState<string | null>(null)
   const [brandingStatus, setBrandingStatus] = useState<
@@ -63,11 +76,16 @@ export function AdminBrandingPage() {
   >('loading')
   const [assetActionKind, setAssetActionKind] =
     useState<BrandingAssetKind | null>(null)
+  const [legalDocumentActionType, setLegalDocumentActionType] =
+    useState<AdminLegalDocumentType | null>(null)
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const isSaving = brandingStatus === 'saving'
-  const areAssetActionsDisabled = isSaving || assetActionKind !== null
-  const isSubmitDisabled = isSaving || assetActionKind !== null
+  const isFileActionInFlight =
+    assetActionKind !== null || legalDocumentActionType !== null
+  const areAssetActionsDisabled = isSaving || isFileActionInFlight
+  const areLegalDocumentActionsDisabled = isSaving || isFileActionInFlight
+  const isSubmitDisabled = isSaving || isFileActionInFlight
 
   useEffect(() => {
     let isCurrent = true
@@ -78,13 +96,17 @@ export function AdminBrandingPage() {
       setBrandingSuccess(null)
 
       try {
-        const response = await getAdminBranding()
+        const [brandingResponse, legalDocumentsResponse] = await Promise.all([
+          getAdminBranding(),
+          getAdminLegalDocuments(),
+        ])
 
         if (!isCurrent) {
           return
         }
 
-        setDraft(createBrandingDraft(response))
+        setDraft(createBrandingDraft(brandingResponse))
+        setLegalDocuments(legalDocumentsResponse.documents)
         setBrandingStatus('idle')
       } catch (error) {
         if (!isCurrent) {
@@ -159,7 +181,18 @@ export function AdminBrandingPage() {
     })
   }
 
+  async function refreshLegalDocuments() {
+    const response = await getAdminLegalDocuments()
+
+    setLegalDocuments(response.documents)
+  }
+
   function handleAssetValidationError(message: string) {
+    setBrandingError(message)
+    setBrandingSuccess(null)
+  }
+
+  function handleLegalDocumentValidationError(message: string) {
     setBrandingError(message)
     setBrandingSuccess(null)
   }
@@ -193,6 +226,25 @@ export function AdminBrandingPage() {
       setBrandingError(getErrorMessage(error))
     } finally {
       setAssetActionKind(null)
+    }
+  }
+
+  async function handleLegalDocumentUpload(
+    documentType: AdminLegalDocumentType,
+    file: File,
+  ) {
+    setLegalDocumentActionType(documentType)
+    setBrandingError(null)
+    setBrandingSuccess(null)
+
+    try {
+      await uploadAdminLegalDocument(documentType, file)
+      await refreshLegalDocuments()
+      setBrandingSuccess(legalDocumentMessages[documentType])
+    } catch (error) {
+      setBrandingError(getErrorMessage(error))
+    } finally {
+      setLegalDocumentActionType(null)
     }
   }
 
@@ -249,13 +301,16 @@ export function AdminBrandingPage() {
           <div className="rounded-[0.6rem] border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
             Загружаем настройки брендинга
           </div>
-        ) : draft ? (
+        ) : draft && legalDocuments ? (
           <AdminBrandingForm
             areAssetActionsDisabled={areAssetActionsDisabled}
+            areLegalDocumentActionsDisabled={areLegalDocumentActionsDisabled}
             assetActionKind={assetActionKind}
             draft={draft}
             isSubmitDisabled={isSubmitDisabled}
             isSaving={isSaving}
+            legalDocumentActionType={legalDocumentActionType}
+            legalDocuments={legalDocuments}
             onAssetDelete={(kind) => {
               void handleAssetDelete(kind)
             }}
@@ -264,6 +319,10 @@ export function AdminBrandingPage() {
             }}
             onAssetValidationError={handleAssetValidationError}
             onChange={handleDraftChange}
+            onLegalDocumentUpload={(documentType, file) => {
+              void handleLegalDocumentUpload(documentType, file)
+            }}
+            onLegalDocumentValidationError={handleLegalDocumentValidationError}
             onSubmit={() => {
               void handleSave()
             }}

@@ -419,6 +419,7 @@ describe('buildApp branding integration', () => {
           primary: '#123456',
         },
         portalName: 'Новый портал',
+        supportPhoneDisplay: '+7 (846) 211-11-11',
       },
       url: '/api/admin/branding',
     })
@@ -433,6 +434,10 @@ describe('buildApp branding integration', () => {
           primary: '#123456',
         }),
         portalName: 'Новый портал',
+        supportContact: {
+          phoneDisplay: '+7 (846) 211-11-11',
+          phoneHref: 'tel:+78462111111',
+        },
       }),
     })
 
@@ -451,6 +456,10 @@ describe('buildApp branding integration', () => {
           primary: '#123456',
         }),
         portalName: 'Новый портал',
+        supportContact: {
+          phoneDisplay: '+7 (846) 211-11-11',
+          phoneHref: 'tel:+78462111111',
+        },
       }),
     })
 

@@ -1,8 +1,15 @@
 import headsetIconUrl from '../../../assets/auth/headset.svg'
 import { PhoneFilledIcon } from '../../../shared/ui/icons'
-import { defaultSupportPhone, defaultSupportPhoneHref } from './supportContact'
+import { useBranding } from '../../branding/lib/useBranding'
 
 export function AuthSupportBlock({ preview = false }: { preview?: boolean }) {
+  const { branding } = useBranding()
+  const { phoneDisplay, phoneHref } = branding.supportContact
+
+  if (!phoneDisplay || !phoneHref) {
+    return null
+  }
+
   return (
     <aside className="auth-support-block">
       <div aria-hidden="true" className="auth-support-divider">
@@ -16,12 +23,12 @@ export function AuthSupportBlock({ preview = false }: { preview?: boolean }) {
       {preview ? (
         <p className="auth-support-phone">
           <PhoneFilledIcon className="auth-support-phone-icon" />
-          <span>{defaultSupportPhone}</span>
+          <span>{phoneDisplay}</span>
         </p>
       ) : (
-        <a className="auth-support-phone" href={defaultSupportPhoneHref}>
+        <a className="auth-support-phone" href={phoneHref}>
           <PhoneFilledIcon className="auth-support-phone-icon" />
-          <span>{defaultSupportPhone}</span>
+          <span>{phoneDisplay}</span>
         </a>
       )}
     </aside>

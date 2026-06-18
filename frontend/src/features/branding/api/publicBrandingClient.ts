@@ -62,6 +62,11 @@ export type PublicBrandingAssets = Partial<
   Record<BrandingAssetKind, PublicBrandingAsset>
 >
 
+export type SupportContact = {
+  phoneDisplay: string | null
+  phoneHref: string | null
+}
+
 export type PublicBranding = {
   appearance: BrandingAppearance
   assets: PublicBrandingAssets
@@ -69,6 +74,7 @@ export type PublicBranding = {
   copy: BrandingCopy
   layout: BrandingLayout
   portalName: string
+  supportContact: SupportContact
   supportLabel: string
   version: number
 }
