@@ -1,5 +1,6 @@
 import { MenuIcon, MoreHorizontalIcon } from '../../../../shared/ui/icons'
 import { ChatHeaderIdentity } from '../../../chat/components/ChatHeaderIdentity'
+import { resolveThreadIdentityAvatarUrl } from '../../../chat/lib/threadIdentityAvatar'
 import { createTenantMonogram } from '../../../tenant/lib/tenantIdentityMetadata'
 import { useTenantIdentity } from '../../../tenant/lib/useTenantIdentity'
 import { useBranding } from '../../../branding/lib/useBranding'
@@ -24,7 +25,10 @@ export function ChatHeaderPreview() {
 
         <ChatHeaderIdentity
           avatarFallback={tenantMonogram}
-          avatarUrl={branding.assets.logo?.publicUrl ?? previewThread.avatarUrl}
+          avatarUrl={resolveThreadIdentityAvatarUrl({
+            brandingLogoUrl: branding.assets.logo?.publicUrl,
+            threadAvatarUrl: previewThread.avatarUrl,
+          })}
           presenceLabel="На связи"
           presenceTone="online"
           subtitle={previewThread.subtitle}

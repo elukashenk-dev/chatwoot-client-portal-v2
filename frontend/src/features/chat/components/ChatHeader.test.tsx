@@ -185,6 +185,24 @@ describe('ChatHeader', () => {
     )
   })
 
+  it('keeps an explicit group thread avatar over the uploaded branding logo', () => {
+    renderHeader({
+      activeThread: {
+        avatarUrl: '/api/chat/threads/group%3A154/avatar',
+        id: 'group:154',
+        subtitle: 'Групповой чат',
+        title: 'ООО "Ромашка"',
+        type: 'group',
+        unreadCount: 0,
+      },
+    })
+
+    expect(screen.getByRole('img', { name: 'ООО "Ромашка"' })).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A154/avatar',
+    )
+  })
+
   it('uses public branding as header fallback when the thread has no avatar or subtitle', () => {
     renderHeader({
       activeThread: {

@@ -16,6 +16,7 @@ import {
   hasUnreadOutsideSelectedThread,
   readThreadUnreadCount,
 } from '../lib/chatUnreadPresentation'
+import { resolveThreadIdentityAvatarUrl } from '../lib/threadIdentityAvatar'
 import type {
   ChatNotificationSettings,
   ChatSupportAvailabilityResponse,
@@ -271,7 +272,10 @@ export function ChatHeader({
 
           <ChatHeaderIdentity
             avatarFallback={tenantMonogram}
-            avatarUrl={branding.assets.logo?.publicUrl ?? activeThread?.avatarUrl}
+            avatarUrl={resolveThreadIdentityAvatarUrl({
+              brandingLogoUrl: branding.assets.logo?.publicUrl,
+              threadAvatarUrl: activeThread?.avatarUrl,
+            })}
             presenceLabel={supportPresence.label}
             presenceTone={supportPresence.tone}
             subtitle={threadSubtitle}

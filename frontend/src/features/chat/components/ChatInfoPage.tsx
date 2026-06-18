@@ -11,10 +11,10 @@ import type {
   ChatThreadInfoResponse,
 } from '../types'
 import { ChatAvatar } from './ChatAvatar'
+import { resolveThreadIdentityAvatarUrl } from '../lib/threadIdentityAvatar'
 
 const GLASS_CARD_CLASS = 'chat-glass-card-surface'
 const GLASS_ROW_BORDER_CLASS = 'border-slate-300/45'
-const TENANT_DEFAULT_ICON_PREFIX = '/api/tenant/icons/'
 
 type ChatInfoPageProps = {
   info: ChatThreadInfoResponse | null
@@ -53,26 +53,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       </dd>
     </div>
   )
-}
-
-function resolveThreadIdentityAvatarUrl({
-  brandingLogoUrl,
-  threadAvatarUrl,
-}: {
-  brandingLogoUrl?: string | null
-  threadAvatarUrl?: string | null
-}) {
-  const trimmedThreadAvatarUrl = threadAvatarUrl?.trim()
-
-  if (!trimmedThreadAvatarUrl) {
-    return brandingLogoUrl
-  }
-
-  if (trimmedThreadAvatarUrl.startsWith(TENANT_DEFAULT_ICON_PREFIX)) {
-    return brandingLogoUrl ?? trimmedThreadAvatarUrl
-  }
-
-  return trimmedThreadAvatarUrl
 }
 
 function ParticipantAvatar({
