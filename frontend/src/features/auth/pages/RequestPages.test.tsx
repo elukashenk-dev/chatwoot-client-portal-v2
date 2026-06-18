@@ -214,7 +214,7 @@ describe('Auth flow pages', () => {
           error: {
             code: 'REGISTRATION_CONTACT_NOT_FOUND',
             message:
-              'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+              'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
           },
         },
         403,
@@ -241,11 +241,11 @@ describe('Auth flow pages', () => {
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+      'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
     )
     expect(
-      screen.getByRole('link', { name: '+7 (906) 12-955-12' }),
-    ).toHaveAttribute('href', 'tel:+79061295512')
+      screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
+    ).toHaveAttribute('href', 'tel:+78000000000')
   })
 
   it('renders the password reset request page and validates empty email softly', async () => {

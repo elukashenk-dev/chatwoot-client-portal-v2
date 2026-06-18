@@ -418,7 +418,7 @@ export function createRegistrationService({
         throw new ApiError(
           403,
           'REGISTRATION_CONTACT_NOT_FOUND',
-          'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+          'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
         )
       }
 

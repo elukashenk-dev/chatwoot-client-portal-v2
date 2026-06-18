@@ -200,7 +200,7 @@ describe('registration service', () => {
     ).rejects.toMatchObject({
       code: 'REGISTRATION_CONTACT_NOT_FOUND',
       message:
-        'Мы не нашли профиль с таким email. Позвоните по тел: +7 (906) 12-955-12.',
+        'Мы не нашли профиль с таким email. Позвоните по тел: +7 (800) 000-00-00.',
       statusCode: 403,
     })
   })
