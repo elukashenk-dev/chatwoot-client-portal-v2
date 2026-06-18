@@ -625,6 +625,11 @@ test('applies public branding on the customer chat and info surfaces', async ({
 
   await composerTextbox.focus()
   await expect(composerTextbox).toBeFocused()
+  await composerTextbox.fill('Нужна консультация')
+  await expect(page.getByRole('button', { name: 'Отправить' })).toHaveCSS(
+    'background-color',
+    'rgb(19, 78, 74)',
+  )
   await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
   await testInfo.attach('customer-chat-390-shell', {
     body: await page.screenshot(),

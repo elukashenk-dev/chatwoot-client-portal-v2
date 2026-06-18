@@ -46,6 +46,17 @@ describe('index.css', () => {
     expect(outgoingRule).not.toContain('linear-gradient')
   })
 
+  it('uses the outgoing chat brand token for the composer send control', () => {
+    const sendControlRule = getCssRule('.chat-send-control {')
+
+    expect(sendControlRule).toContain(
+      'background-color: var(--color-chat-outgoing);',
+    )
+    expect(sendControlRule).not.toContain(
+      '--portal-chat-outgoing-background-color',
+    )
+  })
+
   it('uses chat header branding tokens for the actual floating header surface', () => {
     const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
 

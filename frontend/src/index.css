@@ -1348,7 +1348,7 @@ a.auth-support-phone:hover {
 }
 
 .chat-send-control {
-  background-color: var(--portal-chat-outgoing-background-color, #465a72);
+  background-color: var(--color-chat-outgoing);
   color: #ffffff;
 }
 
