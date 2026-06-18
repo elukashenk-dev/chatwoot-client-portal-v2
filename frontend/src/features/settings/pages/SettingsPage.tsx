@@ -18,7 +18,7 @@ export function SettingsPage() {
     >
       <div className="mx-auto max-w-md">
         <button
-          className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-slate-200/90 bg-white px-4 py-3 text-left text-slate-900 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+          className="chat-glass-card-surface flex min-h-14 w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-slate-900 transition hover:border-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
           onClick={() => {
             navigate(routePaths.app.settingsNotifications)
           }}

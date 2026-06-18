@@ -93,9 +93,20 @@ describe('ChatNotificationsPage', () => {
     expect(screen.getByText('ИП Петров')).toBeInTheDocument()
     expect(screen.getByText('Групповой чат')).toBeInTheDocument()
     expect(screen.getByText('Используются общие настройки')).toBeInTheDocument()
+    expect(screen.getByText('Используются общие настройки')).toHaveClass(
+      'chat-glass-card-surface',
+    )
     expect(
       screen.getByRole('switch', { name: /Уведомления в этом чате/ }),
     ).toHaveAttribute('aria-checked', 'true')
+    expect(
+      screen
+        .getByRole('switch', { name: /Уведомления в этом чате/ })
+        .closest('div'),
+    ).toHaveClass('chat-glass-card-surface')
+    expect(
+      screen.getByRole('switch', { name: /Уведомления в этом чате/ }),
+    ).toHaveClass('border-slate-300/45')
     expect(screen.getByText('Push на этом устройстве')).toBeInTheDocument()
     expect(
       screen.queryByRole('switch', { name: /Push-уведомления/ }),
@@ -161,6 +172,9 @@ describe('ChatNotificationsPage', () => {
       screen.getByRole('button', { name: 'Сбросить к общим настройкам' }),
     )
 
+    expect(
+      screen.getByRole('button', { name: 'Сбросить к общим настройкам' }),
+    ).toHaveClass('chat-glass-card-surface')
     expect(onResetThreadOverrides).toHaveBeenCalled()
   })
 

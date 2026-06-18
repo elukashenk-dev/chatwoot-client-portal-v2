@@ -14,6 +14,8 @@ import {
 import { ChatFullScreenPanel } from './ChatFullScreenPanel'
 import type { ChatNotificationsPanelState } from '../pages/useChatNotificationsPanel'
 
+const GLASS_CARD_CLASS = 'chat-glass-card-surface'
+
 type ChatNotificationsPageProps = {
   activeThread: ChatThreadSummary | null
   onBack: () => void
@@ -77,7 +79,7 @@ export function ChatNotificationsPage({
             <p className="mt-1 truncate text-[13px] leading-5 text-slate-500">
               {activeThread?.type === 'group' ? 'Групповой чат' : 'Личный чат'}
             </p>
-            <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[12px] leading-5 text-slate-600">
+            <p className="chat-glass-card-surface mt-3 rounded-lg border px-3 py-2 text-[12px] leading-5 text-slate-600">
               {getInheritanceStatus(settings)}
             </p>
           </div>
@@ -133,7 +135,7 @@ export function ChatNotificationsPage({
 
           {hasChatNotificationOverrides(settings.overrides) ? (
             <button
-              className="mt-4 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`mt-4 flex min-h-11 w-full items-center justify-center rounded-lg border px-4 text-[13px] font-medium text-brand-800 transition hover:border-white/80 hover:bg-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60 ${GLASS_CARD_CLASS}`}
               disabled={state.isUpdating}
               onClick={onResetThreadOverrides}
               type="button"

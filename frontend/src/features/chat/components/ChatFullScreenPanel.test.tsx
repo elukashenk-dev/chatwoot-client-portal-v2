@@ -28,7 +28,16 @@ describe('ChatFullScreenPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Вернуться к чату' }))
     expect(onBack).toHaveBeenCalledTimes(1)
 
-    expect(container.querySelector('header')).toHaveClass('chat-header-border')
+    const header = container.querySelector('header')
+    const floatingHeader = header?.querySelector(
+      '.chat-floating-header-surface',
+    )
+
+    expect(header).toHaveClass('app-safe-top')
+    expect(header).not.toHaveClass('chat-header-background')
+    expect(header).not.toHaveClass('chat-header-border')
+    expect(floatingHeader).toBeInstanceOf(HTMLElement)
+    expect(floatingHeader).toHaveClass('py-[9px]')
     expect(
       screen.getByRole('button', { name: 'Вернуться к чату' }),
     ).toHaveClass('chat-header-icon-button')

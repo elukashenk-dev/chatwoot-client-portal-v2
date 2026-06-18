@@ -289,7 +289,7 @@ describe('ChatTranscript', () => {
       'rounded-tl-[0.3rem]',
     )
     expect(getBubble(container, 1)).toHaveClass(
-      'border-white/35',
+      'border-white/65',
       'chat-incoming-surface',
       'text-chat-message',
       'text-slate-700',

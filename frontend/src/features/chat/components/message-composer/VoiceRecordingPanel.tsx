@@ -20,7 +20,10 @@ export function VoiceRecordingPanel({
   }
 
   return (
-    <div className="mb-2 flex items-center gap-3 rounded-[0.8rem] border border-rose-100 bg-white px-3 py-2">
+    <div
+      className="mb-2 flex items-center gap-3 rounded-[0.8rem] border border-white/65 bg-white/60 px-3 py-2 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md"
+      data-composer-panel="voice"
+    >
       <span
         aria-hidden="true"
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] bg-rose-50 text-rose-600"
@@ -34,7 +37,7 @@ export function VoiceRecordingPanel({
       </span>
       <button
         aria-label="Отменить голосовое"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-white/55 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
         disabled={status !== 'recording'}
         onClick={onCancel}
         title="Отменить"
@@ -44,7 +47,7 @@ export function VoiceRecordingPanel({
       </button>
       <button
         aria-label="Отправить голосовое"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] bg-chat-outgoing text-white transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] bg-chat-outgoing text-white shadow-sm shadow-slate-900/10 transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200/80 disabled:text-white/80 disabled:shadow-none"
         disabled={status !== 'recording'}
         onClick={onSend}
         title="Отправить голосовое"

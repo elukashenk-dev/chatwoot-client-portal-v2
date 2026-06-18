@@ -8,7 +8,7 @@ const onePixelPng = Buffer.from(
 )
 
 const privateThread = {
-  avatarUrl: null,
+  avatarUrl: '/api/tenant/icons/icon-192.png',
   id: 'private:me',
   subtitle: '',
   title: 'Личный чат',
@@ -607,6 +607,38 @@ test('applies public branding on the customer chat and info surfaces', async ({
   await page.getByRole('menuitem', { name: 'Информация о чате' }).click()
 
   await expect(page.getByRole('heading', { name: 'О диалоге' })).toBeVisible()
+  const infoPanel = page.locator('section.chat-runtime-surface.z-40')
+
+  await expect(infoPanel.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+    'src',
+    '/api/branding/assets/11?v=11',
+  )
+
+  const infoGlassCard = infoPanel.locator('.chat-glass-card-surface').first()
+
+  await expect(infoGlassCard).toBeVisible()
+
+  const infoGlassCardStyles = await infoGlassCard.evaluate((element) => {
+    const computedStyle = getComputedStyle(element)
+
+    return {
+      backdropFilter: computedStyle.backdropFilter,
+      backgroundColor: computedStyle.backgroundColor,
+      backgroundImage: computedStyle.backgroundImage,
+    }
+  })
+
+  expect(infoGlassCardStyles.backgroundColor).toBe(
+    'rgba(255, 255, 255, 0.01)',
+  )
+  expect(infoGlassCardStyles.backgroundImage).toContain('linear-gradient')
+  expect(infoGlassCardStyles.backgroundImage).toContain(
+    'rgba(255, 255, 255, 0.28)',
+  )
+  expect(infoGlassCardStyles.backgroundImage).toContain(
+    'rgba(255, 255, 255, 0.34)',
+  )
+  expect(infoGlassCardStyles.backdropFilter).toContain('blur')
 })
 
 async function expectAuthLoginGeometry({
