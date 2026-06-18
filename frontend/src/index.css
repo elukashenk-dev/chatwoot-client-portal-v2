@@ -1000,6 +1000,7 @@ button:not(:disabled),
 
 .auth-legal-consent a {
   color: var(--portal-auth-link-color, #003a78);
+  font-weight: 600;
   text-decoration: none;
 }
 

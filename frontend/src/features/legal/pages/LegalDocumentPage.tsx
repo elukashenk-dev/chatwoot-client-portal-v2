@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import type { MouseEvent } from 'react'
 
 import { AuthFrame } from '../../../app/layouts/AuthFrame'
 import { routePaths } from '../../../app/routePaths'
@@ -16,6 +17,24 @@ export function LegalDocumentPage({
   const content = legalDocuments[document]
   const { branding } = useBranding()
   const brandLogo = branding.assets.logo
+  const navigate = useNavigate()
+
+  function handleBackClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.currentTarget.target
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    navigate(-1)
+  }
 
   return (
     <AuthFrame>
@@ -28,6 +47,7 @@ export function LegalDocumentPage({
         <article className="legal-document-reader relative z-10 mx-auto flex min-h-full w-full flex-col">
           <Link
             className="legal-document-back-link"
+            onClick={handleBackClick}
             to={routePaths.auth.login}
           >
             Назад

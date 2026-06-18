@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import App from './App'
 import { renderWithRouter } from '../test/renderWithRouter'
 import { AppRoutes } from './AppRoutes'
+import { LegalDocumentPage } from '../features/legal/pages/LegalDocumentPage'
 
 function createJsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -154,6 +157,31 @@ describe('legal routes', () => {
     expect(screen.getByLabelText('Помощь со входом')).toHaveClass(
       'auth-flow-support',
     )
+  })
+
+  it('returns to the previous page from the legal reader back link', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter
+        initialEntries={['/auth/register', '/legal/privacy']}
+        initialIndex={1}
+      >
+        <Routes>
+          <Route
+            element={<LegalDocumentPage document="privacy" />}
+            path="/legal/privacy"
+          />
+          <Route element={<p>register page</p>} path="/auth/register" />
+          <Route element={<p>login page</p>} path="/auth/login" />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('link', { name: 'Назад' }))
+
+    expect(screen.getByText('register page')).toBeInTheDocument()
+    expect(screen.queryByText('login page')).not.toBeInTheDocument()
   })
 
   it('keeps legal pages reachable when a customer session exists', async () => {

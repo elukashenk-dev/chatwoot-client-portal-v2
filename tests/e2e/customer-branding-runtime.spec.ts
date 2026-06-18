@@ -545,6 +545,15 @@ test('uses accent for auth links and volumetric primary gradient for auth button
 
   await page.goto('/auth/register')
 
+  await expect(
+    page.getByRole('link', { name: 'Пользовательского соглашения' }),
+  ).toHaveCSS('font-weight', '600')
+  await expect(
+    page.getByRole('link', {
+      name: 'Политикой обработки персональных данных',
+    }),
+  ).toHaveCSS('font-weight', '600')
+
   const termsCheckbox = page.getByRole('checkbox', {
     name: /Я принимаю условия Пользовательского соглашения\./i,
   })
