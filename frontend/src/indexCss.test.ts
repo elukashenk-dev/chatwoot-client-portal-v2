@@ -24,6 +24,28 @@ function getCssRule(selector: string) {
   return source.slice(selectorIndex, blockEnd + 1)
 }
 
+function getCssRuleBySelectors(selectors: string[]) {
+  const normalizedSelectors = selectors.map(normalizeCssSelector)
+  const rules = source.match(/[^{}]+{[^{}]*}/g) ?? []
+
+  for (const rule of rules) {
+    const selectorText = rule.slice(0, rule.indexOf('{'))
+    const ruleSelectors = selectorText.split(',').map(normalizeCssSelector)
+
+    if (
+      normalizedSelectors.every((selector) => ruleSelectors.includes(selector))
+    ) {
+      return rule
+    }
+  }
+
+  throw new Error(`Missing selector group: ${selectors.join(', ')}`)
+}
+
+function normalizeCssSelector(selector: string) {
+  return selector.replace(/\s+/g, ' ').trim()
+}
+
 describe('index.css', () => {
   it('aligns the initial document background with the cached chat surface', () => {
     expect(source).toContain('body {')
@@ -73,9 +95,10 @@ describe('index.css', () => {
   })
 
   it('keeps floating header and composer overlays lightly translucent', () => {
-    const sharedFloatingRule = getCssRule(
-      '.chat-floating-header-surface,\n.chat-floating-composer-surface {',
-    )
+    const sharedFloatingRule = getCssRuleBySelectors([
+      '.chat-floating-header-surface',
+      '.chat-floating-composer-surface',
+    ])
     const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
 
     expect(sharedFloatingRule).toContain('rgb(255 255 255 / 0.30)')

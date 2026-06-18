@@ -235,10 +235,10 @@ test('admin real preview switches screens without customer runtime requests', as
     phonePreview.getByRole('heading', { name: 'Личный чат' }),
   ).toBeVisible()
   await expect(
-    phonePreview.locator('.chat-floating-header-surface'),
+    phonePreview.locator('[data-chat-floating-surface="header"]'),
   ).toBeVisible()
   await expect(
-    phonePreview.locator('.chat-floating-composer-surface'),
+    phonePreview.locator('[data-chat-floating-surface="composer"]'),
   ).toBeVisible()
 
   const phonePreviewBox = await phonePreview.boundingBox()

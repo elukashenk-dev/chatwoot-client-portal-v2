@@ -33,7 +33,10 @@ export function ChatConversationPreview() {
       />
 
       <footer className="relative z-20 bg-transparent px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
-        <div className="chat-floating-composer-surface mx-auto w-full rounded-[10px] border px-3 py-[9px]">
+        <div
+          className="chat-floating-composer-surface mx-auto w-full rounded-[10px] border px-3 py-[9px]"
+          data-chat-floating-surface="composer"
+        >
           <div className="flex items-end gap-2">
             <ComposerSideControl control="attachment" isCollapsed={false}>
               <ComposerSideButton

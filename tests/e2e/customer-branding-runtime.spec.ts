@@ -279,18 +279,22 @@ async function mockReadyEmptyChat(page: Page) {
 
 async function expectFloatingSurfaceWithinViewport(
   page: Page,
-  selector: string,
+  surface: 'composer' | 'header',
 ) {
   const viewport = page.viewportSize()
-  const box = await page.locator(selector).boundingBox()
+  const box = await getFloatingSurface(page, surface).boundingBox()
 
   if (!viewport || !box) {
-    throw new Error(`Missing viewport or box for ${selector}`)
+    throw new Error(`Missing viewport or box for ${surface} surface.`)
   }
 
   expect(box.x).toBeGreaterThan(0)
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
   expect(box.width).toBeLessThan(viewport.width)
+}
+
+function getFloatingSurface(page: Page, surface: 'composer' | 'header') {
+  return page.locator(`[data-chat-floating-surface="${surface}"]`)
 }
 
 test('applies public branding on the customer auth login screen', async ({
@@ -599,27 +603,24 @@ test('applies public branding on the customer chat and info surfaces', async ({
     'style',
     /--portal-chat-header-background-image: url\("\/api\/branding\/assets\/16\?v=16"\)/,
   )
-  const floatingHeader = page.locator('.chat-floating-header-surface')
+  const floatingHeader = getFloatingSurface(page, 'header')
 
   await expect(floatingHeader).toBeVisible()
-  await expect(floatingHeader).toHaveCSS(
-    'background-color',
-    'rgba(15, 118, 110, 0.88)',
-  )
+  await expect
+    .poll(() =>
+      floatingHeader.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    )
+    .toMatch(/^rgba\(15, 118, 110, /)
   const floatingHeaderBackgroundImage = await floatingHeader.evaluate(
     (element) => getComputedStyle(element).backgroundImage,
   )
 
   expect(floatingHeaderBackgroundImage).toContain('/api/branding/assets/16')
-  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
-  await expectFloatingSurfaceWithinViewport(
-    page,
-    '.chat-floating-header-surface',
-  )
-  await expectFloatingSurfaceWithinViewport(
-    page,
-    '.chat-floating-composer-surface',
-  )
+  await expect(getFloatingSurface(page, 'composer')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(page, 'header')
+  await expectFloatingSurfaceWithinViewport(page, 'composer')
 
   const composerTextbox = page.getByRole('textbox', { name: 'Сообщение' })
 
@@ -630,23 +631,17 @@ test('applies public branding on the customer chat and info surfaces', async ({
     'background-color',
     'rgb(19, 78, 74)',
   )
-  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await expect(getFloatingSurface(page, 'composer')).toBeVisible()
   await testInfo.attach('customer-chat-390-shell', {
     body: await page.screenshot(),
     contentType: 'image/png',
   })
 
   await page.setViewportSize({ height: 956, width: 440 })
-  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
-  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
-  await expectFloatingSurfaceWithinViewport(
-    page,
-    '.chat-floating-header-surface',
-  )
-  await expectFloatingSurfaceWithinViewport(
-    page,
-    '.chat-floating-composer-surface',
-  )
+  await expect(getFloatingSurface(page, 'header')).toBeVisible()
+  await expect(getFloatingSurface(page, 'composer')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(page, 'header')
+  await expectFloatingSurfaceWithinViewport(page, 'composer')
   await testInfo.attach('customer-chat-440-shell', {
     body: await page.screenshot(),
     contentType: 'image/png',

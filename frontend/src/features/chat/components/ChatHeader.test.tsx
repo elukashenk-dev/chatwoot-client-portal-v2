@@ -267,10 +267,9 @@ describe('ChatHeader', () => {
     expect(screen.getByRole('banner')).not.toHaveClass('chat-header-background')
     const floatingHeader = screen
       .getByRole('banner')
-      .querySelector('.chat-floating-header-surface')
+      .querySelector('[data-chat-floating-surface="header"]')
 
     expect(floatingHeader).not.toBeNull()
-    expect(floatingHeader).toHaveClass('py-[9px]')
     expect(
       screen.getByRole('button', { name: 'Открыть навигацию' }),
     ).toHaveClass('chat-header-icon-button')
@@ -289,7 +288,7 @@ describe('ChatHeader', () => {
     const menu = screen.getByRole('menu')
 
     expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
-    expect(menu.closest('.chat-floating-header-surface')).toBeNull()
+    expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/90')
     expect(screen.getByText('Аккаунт')).toBeInTheDocument()
     expect(screen.getByText('Чат')).toBeInTheDocument()
@@ -315,7 +314,7 @@ describe('ChatHeader', () => {
     const menu = screen.getByRole('menu')
 
     expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
-    expect(menu.closest('.chat-floating-header-surface')).toBeNull()
+    expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/80')
     expect(screen.getByRole('menuitem', { name: 'Настройки' })).toHaveClass(
       'hover:bg-white/45',

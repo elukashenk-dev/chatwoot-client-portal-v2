@@ -242,7 +242,10 @@ export function ChatHeader({
   return (
     <header className="app-safe-top relative z-30 bg-transparent px-3 pb-2 text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:px-6 sm:pb-3">
       <div className="relative mx-auto w-full max-w-[620px]">
-        <div className="chat-floating-header-surface flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-[9px] sm:min-h-[3.75rem] sm:px-4">
+        <div
+          className="chat-floating-header-surface flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-[9px] sm:min-h-[3.75rem] sm:px-4"
+          data-chat-floating-surface="header"
+        >
           <div className="relative shrink-0">
             <button
               aria-expanded={isNavMenuOpen}

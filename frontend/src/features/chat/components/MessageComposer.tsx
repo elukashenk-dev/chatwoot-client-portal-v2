@@ -160,14 +160,7 @@ export function MessageComposer({
 
     shouldRestoreFocusRef.current = false
     focusTextarea()
-  }, [
-    disabled,
-    draft,
-    focusTextarea,
-    isSending,
-    replyTarget,
-    selectedAttachment,
-  ])
+  }, [disabled, draft, focusTextarea, isSending, replyTarget, selectedAttachment])
 
   function resetPendingTextSendIfPayloadChanged(
     nextDraft: string,
@@ -372,7 +365,10 @@ export function MessageComposer({
           : 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
       )}
     >
-      <div className="chat-floating-composer-surface mx-auto w-full max-w-[620px] rounded-[10px] border px-3 py-[9px]">
+      <div
+        className="chat-floating-composer-surface mx-auto w-full max-w-[620px] rounded-[10px] border px-3 py-[9px]"
+        data-chat-floating-surface="composer"
+      >
         {replyTarget ? (
           <ComposerReplyPreview
             disabled={isSending || isVoiceRecorderBusy}

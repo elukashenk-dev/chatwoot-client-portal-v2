@@ -15,7 +15,10 @@ export function ChatHeaderPreview() {
 
   return (
     <header className="app-safe-top relative z-30 bg-transparent px-3 pb-2 text-[color:var(--portal-chat-header-foreground,#0f172a)]">
-      <div className="chat-floating-header-surface mx-auto flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-[9px]">
+      <div
+        className="chat-floating-header-surface mx-auto flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-[9px]"
+        data-chat-floating-surface="header"
+      >
         <span
           aria-hidden="true"
           className="chat-header-icon-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control"

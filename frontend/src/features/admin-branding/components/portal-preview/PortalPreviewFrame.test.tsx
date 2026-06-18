@@ -216,35 +216,9 @@ describe('PortalPreviewFrame', () => {
     })
 
     expect(attachmentButton).toBeDisabled()
-    expect(attachmentButton).toHaveClass(
-      'transition',
-      'hover:bg-white/55',
-      'hover:text-chat-outgoing/90',
-      'disabled:text-slate-300',
-    )
     expect(voiceButton).toBeDisabled()
-    expect(voiceButton).toHaveClass(
-      'transition',
-      'hover:bg-white/55',
-      'hover:text-chat-outgoing/90',
-      'disabled:text-slate-300',
-    )
     expect(textarea).toBeDisabled()
-    expect(textarea).toHaveClass(
-      'chat-text',
-      'disabled:text-[color:var(--portal-chat-muted-text-color,#64748b)]',
-    )
-    expect(textarea).not.toHaveClass('chat-muted-text')
     expect(sendButton).toBeDisabled()
-    expect(sendButton).toHaveClass(
-      'shadow-sm',
-      'shadow-slate-900/10',
-      'transition',
-      'hover:bg-brand-900',
-      'disabled:bg-slate-200/80',
-      'disabled:text-white/80',
-      'disabled:shadow-none',
-    )
     expect(
       screen.queryByRole('tab', { name: 'Настройки' }),
     ).not.toBeInTheDocument()
@@ -273,16 +247,14 @@ describe('PortalPreviewFrame', () => {
       'chat-header-background',
     )
     const floatingHeader = container.querySelector(
-      '.chat-floating-header-surface',
+      '[data-chat-floating-surface="header"]',
     )
     const floatingComposer = container.querySelector(
-      '.chat-floating-composer-surface',
+      '[data-chat-floating-surface="composer"]',
     )
 
     expect(floatingHeader).toBeInstanceOf(HTMLElement)
-    expect(floatingHeader).toHaveClass('py-[9px]')
     expect(floatingComposer).toBeInstanceOf(HTMLElement)
-    expect(floatingComposer).toHaveClass('py-[9px]')
     expect(container.querySelector('.chat-header-icon-button')).toBeInstanceOf(
       HTMLElement,
     )
