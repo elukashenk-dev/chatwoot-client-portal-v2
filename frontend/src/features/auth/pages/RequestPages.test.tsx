@@ -85,8 +85,25 @@ describe('Auth flow pages', () => {
         'Укажите имя и рабочий email, чтобы получить код подтверждения.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Введите email, указанный при создании вашего профиля.'),
+    ).toHaveClass('auth-form-note')
+    const submit = screen.getByRole('button', { name: 'Продолжить' })
 
-    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+    expect(submit).toBeDisabled()
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю условия Пользовательского соглашения\./i,
+      }),
+    )
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
+      }),
+    )
+    expect(submit).not.toBeDisabled()
+    await user.click(submit)
 
     expect(screen.queryByText('Введите имя')).not.toBeInTheDocument()
     expect(screen.queryByText('Введите email')).not.toBeInTheDocument()
@@ -127,7 +144,23 @@ describe('Auth flow pages', () => {
       'Portal User',
     )
     await user.type(screen.getByLabelText(/Email/), 'name@company.ru')
-    await user.click(screen.getByRole('button', { name: 'Продолжить' }))
+    const submit = screen.getByRole('button', { name: 'Продолжить' })
+
+    expect(submit).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю условия Пользовательского соглашения\./i,
+      }),
+    )
+    expect(submit).toBeDisabled()
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
+      }),
+    )
+    expect(submit).not.toBeDisabled()
+
+    await user.click(submit)
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/register/request',
@@ -143,10 +176,12 @@ describe('Auth flow pages', () => {
     expect(getJsonBodyForCall('/api/auth/register/request')).toEqual({
       email: 'name@company.ru',
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
+      termsAccepted: true,
     })
 
     expect(
-      await screen.findByRole('heading', { name: 'Подтверждение Email' }),
+      await screen.findByRole('heading', { name: 'Подтверждение почты' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText('Код подтверждения отправлен на'),
@@ -156,7 +191,7 @@ describe('Auth flow pages', () => {
       screen.getByText(
         'Если письма нет, проверьте «Спам» или запросите новый код после таймера.',
       ),
-    ).toBeInTheDocument()
+    ).toHaveClass('auth-form-note')
     expect(
       screen.getByRole('button', { name: /Повторить через/ }),
     ).toBeDisabled()
@@ -193,6 +228,16 @@ describe('Auth flow pages', () => {
       'Portal User',
     )
     await user.type(screen.getByLabelText(/Email/), 'missing@company.ru')
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я принимаю условия Пользовательского соглашения\./i,
+      }),
+    )
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: /Я даю согласие на обработку персональных данных и подтверждаю, что ознакомлен с Политикой обработки персональных данных/i,
+      }),
+    )
     await user.click(screen.getByRole('button', { name: 'Продолжить' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -217,6 +262,9 @@ describe('Auth flow pages', () => {
         'Введите email. Если доступ активен, мы отправим код восстановления.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Введите email, указанный при создании вашего профиля.'),
+    ).toHaveClass('auth-form-note')
 
     const emailInput = screen.getByLabelText(/Email/)
 
@@ -253,7 +301,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -308,6 +358,9 @@ describe('Auth flow pages', () => {
       await screen.findByRole('heading', { name: 'Создание пароля' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/Требования к паролю/)).toBeInTheDocument()
+    expect(screen.getByTestId('password-rules-card')).toHaveClass(
+      'auth-password-rules',
+    )
   })
 
   it('shows the registration invalid-code backend error without opening set-password', async () => {
@@ -317,7 +370,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -357,7 +412,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 0,
+      termsAccepted: true,
     })
 
     mockUnauthenticatedSession()
@@ -382,6 +439,12 @@ describe('Auth flow pages', () => {
       await screen.findByRole('button', { name: 'Отправить код повторно' }),
     )
 
+    expect(getJsonBodyForCall('/api/auth/register/request')).toEqual({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      personalDataConsentAccepted: true,
+      termsAccepted: true,
+    })
     expect(
       await screen.findByText(
         'Используйте ранее отправленный код. Новый код можно будет запросить после таймера.',
@@ -396,7 +459,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
     saveRegistrationVerification({
       continuationToken: 'continuation-token',
@@ -426,7 +491,9 @@ describe('Auth flow pages', () => {
       screen.getByText('Создайте пароль, чтобы входить в Центр поддержки.'),
     ).toBeInTheDocument()
     expect(screen.getByTestId('password-setup-form')).toBeInTheDocument()
-    expect(screen.getByTestId('password-rules-card')).toBeInTheDocument()
+    expect(screen.getByTestId('password-rules-card')).toHaveClass(
+      'auth-password-rules',
+    )
     expect(
       screen.queryByRole('link', { name: 'Вернуться назад' }),
     ).not.toBeInTheDocument()
@@ -483,7 +550,9 @@ describe('Auth flow pages', () => {
       email: 'name@company.ru',
       expiresInSeconds: 900,
       fullName: 'Portal User',
+      personalDataConsentAccepted: true,
       resendAvailableInSeconds: 60,
+      termsAccepted: true,
     })
     saveRegistrationVerification({
       continuationToken: 'continuation-token',
@@ -605,7 +674,7 @@ describe('Auth flow pages', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Подтверждение Email' }),
+      await screen.findByRole('heading', { name: 'Подтверждение почты' }),
     ).toBeInTheDocument()
     expect(
       screen.getByText('Если доступ активен, код восстановления отправлен на'),
@@ -843,7 +912,9 @@ describe('Auth flow pages', () => {
       screen.getByText('Создайте новый пароль для входа в Центр поддержки.'),
     ).toBeInTheDocument()
     expect(screen.getByTestId('password-setup-form')).toBeInTheDocument()
-    expect(screen.getByTestId('password-rules-card')).toBeInTheDocument()
+    expect(screen.getByTestId('password-rules-card')).toHaveClass(
+      'auth-password-rules',
+    )
     expect(
       screen.queryByRole('link', { name: 'Вернуться назад' }),
     ).not.toBeInTheDocument()

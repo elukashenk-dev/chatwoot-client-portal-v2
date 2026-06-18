@@ -31,14 +31,18 @@ vi.mock('../../admin-branding/api/adminBrandingClient', () => ({
 
 const savedBrandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {},
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#64748b',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#ffffff',
       chatHeaderText: '#0f172a',
@@ -52,6 +56,9 @@ const savedBrandingResponse = {
       chatEmptyBody: 'Напишите нам, когда будет удобно.',
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
+    },
+    layout: {
+      authBrandPlacement: 'left',
     },
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
@@ -72,11 +79,15 @@ const logoAsset = {
 function createBrandingResponse(
   overrides: Partial<AdminBrandingResponse['branding']> = {},
 ) {
+  const branding = {
+    ...savedBrandingResponse.branding,
+    ...overrides,
+    appearance:
+      overrides.appearance ?? savedBrandingResponse.branding.appearance,
+  } satisfies AdminBrandingResponse['branding']
+
   return {
-    branding: {
-      ...savedBrandingResponse.branding,
-      ...overrides,
-    },
+    branding,
   } satisfies AdminBrandingResponse
 }
 
@@ -148,6 +159,28 @@ describe('AdminBrandingPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Вход в личный кабинет' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Оформление входа/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Цветовая схема/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Защита фона/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Стиль полей/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('group', { name: /Стиль кнопки/i }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Фон формы входа'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText('Непрозрачность формы входа, значение'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Вход: общий фон')).toBeInTheDocument()
     expect(getAdminBrandingMock).toHaveBeenCalledTimes(1)
   })
 
@@ -236,6 +269,11 @@ describe('AdminBrandingPage', () => {
     const portalNameInput = await screen.findByLabelText('Название портала')
     await user.clear(portalNameInput)
     await user.type(portalNameInput, 'Новый портал')
+    await user.click(screen.getByRole('radio', { name: 'Справа' }))
+    await user.click(screen.getByRole('radio', { name: 'Темная' }))
+    await user.click(screen.getByRole('radio', { name: 'Темная дымка' }))
+    await user.click(screen.getByRole('radio', { name: 'Контур' }))
+    await user.click(screen.getByRole('radio', { name: 'Градиент' }))
     await user.click(
       screen.getByRole('button', { name: 'Сохранить настройки' }),
     )
@@ -243,6 +281,15 @@ describe('AdminBrandingPage', () => {
     await waitFor(() => {
       expect(updateAdminBrandingMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          appearance: expect.objectContaining({
+            authBackgroundOverlay: 'dark',
+            authButtonStyle: 'gradient',
+            authColorScheme: 'dark',
+            authFieldStyle: 'outline',
+          }),
+          layout: {
+            authBrandPlacement: 'right',
+          },
           portalName: 'Новый портал',
         }),
       )
@@ -268,7 +315,7 @@ describe('AdminBrandingPage', () => {
       'Выбрать основной текст на входе',
     )
 
-    expect(authTextInput).toHaveValue('#0f172a')
+    expect(authTextInput).toHaveValue('#15486b')
 
     fireEvent.input(authTextPicker, { target: { value: '#445566' } })
 
@@ -304,31 +351,14 @@ describe('AdminBrandingPage', () => {
     fireEvent.input(screen.getByLabelText('Выбрать цвет текста чата'), {
       target: { value: '#778899' },
     })
-    fireEvent.input(screen.getByLabelText('Выбрать фон формы входа'), {
-      target: { value: '#eef2ff' },
-    })
-    fireEvent.change(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-      {
-        target: { value: '72' },
-      },
-    )
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#445566')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#778899')
-    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#eef2ff')
-    expect(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-    ).toHaveValue(72)
 
     await user.click(screen.getByRole('button', { name: 'Сбросить цвета' }))
 
     expect(screen.getByLabelText('Основной цвет')).toHaveValue('#112540')
     expect(screen.getByLabelText('Фон страницы входа')).toHaveValue('#f3f7fc')
-    expect(screen.getByLabelText('Фон формы входа')).toHaveValue('#ffffff')
-    expect(
-      screen.getByLabelText('Непрозрачность формы входа, значение'),
-    ).toHaveValue(100)
     expect(screen.getByLabelText('Фон шапки чата')).toHaveValue('#ffffff')
     expect(screen.getByLabelText('Цвет текста чата')).toHaveValue('#334155')
     expect(screen.getByLabelText('Цвет текста шапки чата')).toHaveValue(
@@ -345,8 +375,6 @@ describe('AdminBrandingPage', () => {
         expect.objectContaining({
           colors: expect.objectContaining({
             authBackground: '#f3f7fc',
-            authContentSurface: '#ffffff',
-            authContentSurfaceOpacity: 100,
             chatHeaderBackground: '#ffffff',
             chatHeaderText: '#0f172a',
             chatText: '#334155',

@@ -22,10 +22,11 @@ export type BrandingSettingsPatch = Partial<{
   accentColor: string | null
   authBackgroundColor: string | null
   authBackgroundImageAssetId: number | null
-  authContentSurfaceColor: string | null
-  authContentSurfaceOpacity: number | null
-  authFooterImageAssetId: number | null
-  authHeaderImageAssetId: number | null
+  authBackgroundOverlay: 'dark' | 'light' | 'none' | null
+  authButtonStyle: 'gradient' | 'solid' | null
+  authColorScheme: 'dark' | 'light' | null
+  authBrandPlacement: 'center' | 'left' | 'right' | null
+  authFieldStyle: 'outline' | 'solid' | 'translucent' | null
   authMutedTextColor: string | null
   authSubtitle: string | null
   authTextColor: string | null
@@ -61,8 +62,6 @@ export type CreateBrandingAssetMetadataInput = {
 
 type BrandingAssetReferenceField =
   | 'authBackgroundImageAssetId'
-  | 'authFooterImageAssetId'
-  | 'authHeaderImageAssetId'
   | 'chatBackgroundImageAssetId'
   | 'chatHeaderBackgroundImageAssetId'
   | 'logoAssetId'
@@ -73,8 +72,6 @@ const brandingAssetReferenceSlots: ReadonlyArray<{
   kind: BrandingAssetKind
 }> = [
   { field: 'logoAssetId', kind: 'logo' },
-  { field: 'authHeaderImageAssetId', kind: 'auth_header_image' },
-  { field: 'authFooterImageAssetId', kind: 'auth_footer_image' },
   { field: 'authBackgroundImageAssetId', kind: 'auth_background_image' },
   { field: 'chatBackgroundImageAssetId', kind: 'chat_background_image' },
   {
@@ -88,10 +85,11 @@ const settingsSelection = {
   accentColor: portalBrandingSettings.accentColor,
   authBackgroundColor: portalBrandingSettings.authBackgroundColor,
   authBackgroundImageAssetId: portalBrandingSettings.authBackgroundImageAssetId,
-  authContentSurfaceColor: portalBrandingSettings.authContentSurfaceColor,
-  authContentSurfaceOpacity: portalBrandingSettings.authContentSurfaceOpacity,
-  authFooterImageAssetId: portalBrandingSettings.authFooterImageAssetId,
-  authHeaderImageAssetId: portalBrandingSettings.authHeaderImageAssetId,
+  authBackgroundOverlay: portalBrandingSettings.authBackgroundOverlay,
+  authButtonStyle: portalBrandingSettings.authButtonStyle,
+  authColorScheme: portalBrandingSettings.authColorScheme,
+  authBrandPlacement: portalBrandingSettings.authBrandPlacement,
+  authFieldStyle: portalBrandingSettings.authFieldStyle,
   authMutedTextColor: portalBrandingSettings.authMutedTextColor,
   authSubtitle: portalBrandingSettings.authSubtitle,
   authTextColor: portalBrandingSettings.authTextColor,
@@ -152,12 +150,11 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
     authBackgroundImageAssetId: normalizeAssetId(
       input.authBackgroundImageAssetId,
     ),
-    authContentSurfaceColor: normalizeNullableText(
-      input.authContentSurfaceColor,
-    ),
-    authContentSurfaceOpacity: input.authContentSurfaceOpacity,
-    authFooterImageAssetId: normalizeAssetId(input.authFooterImageAssetId),
-    authHeaderImageAssetId: normalizeAssetId(input.authHeaderImageAssetId),
+    authBackgroundOverlay: input.authBackgroundOverlay,
+    authButtonStyle: input.authButtonStyle,
+    authColorScheme: input.authColorScheme,
+    authBrandPlacement: input.authBrandPlacement,
+    authFieldStyle: input.authFieldStyle,
     authMutedTextColor: normalizeNullableText(input.authMutedTextColor),
     authSubtitle: normalizeNullableText(input.authSubtitle),
     authTextColor: normalizeNullableText(input.authTextColor),
@@ -189,8 +186,6 @@ function normalizeSettingsPatch(input: BrandingSettingsPatch) {
 function collectActiveAssetIds(settings: BrandingSettingsRow) {
   return [
     ['logo', settings.logoAssetId],
-    ['auth_header_image', settings.authHeaderImageAssetId],
-    ['auth_footer_image', settings.authFooterImageAssetId],
     ['auth_background_image', settings.authBackgroundImageAssetId],
     ['chat_background_image', settings.chatBackgroundImageAssetId],
     ['chat_header_background_image', settings.chatHeaderBackgroundImageAssetId],
@@ -411,8 +406,6 @@ export function createBrandingRepository(
     async deactivateAssetKind(kind: BrandingAssetKind) {
       const patchByKind: Record<BrandingAssetKind, BrandingSettingsPatch> = {
         auth_background_image: { authBackgroundImageAssetId: null },
-        auth_footer_image: { authFooterImageAssetId: null },
-        auth_header_image: { authHeaderImageAssetId: null },
         chat_background_image: { chatBackgroundImageAssetId: null },
         chat_header_background_image: {
           chatHeaderBackgroundImageAssetId: null,

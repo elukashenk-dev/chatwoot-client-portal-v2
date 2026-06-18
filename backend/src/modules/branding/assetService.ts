@@ -47,12 +47,6 @@ const settingsPatchByKind = {
   auth_background_image: (assetId: number | null) => ({
     authBackgroundImageAssetId: assetId,
   }),
-  auth_footer_image: (assetId: number | null) => ({
-    authFooterImageAssetId: assetId,
-  }),
-  auth_header_image: (assetId: number | null) => ({
-    authHeaderImageAssetId: assetId,
-  }),
   chat_background_image: (assetId: number | null) => ({
     chatBackgroundImageAssetId: assetId,
   }),

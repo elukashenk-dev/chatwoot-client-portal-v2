@@ -111,10 +111,24 @@ describe('ChatSearchPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Поиск по чату' })).toBeVisible()
     expect(screen.getByLabelText('Поиск по чату')).toHaveValue('договор')
+    expect(screen.getByLabelText('Поиск по чату').parentElement).toHaveClass(
+      'chat-glass-card-surface',
+    )
+    expect(screen.getByLabelText('Поиск по чату').parentElement).not.toHaveClass(
+      'bg-white/70',
+    )
     expect(screen.getByText('Личный чат')).toBeVisible()
     expect(screen.getByText('Добрый день.')).toBeVisible()
     expect(screen.getByText('Спасибо, проверю сегодня.')).toBeVisible()
     expect(screen.getByText('Договор')).toHaveAttribute('data-search-match')
+    expect(
+      findParagraphByText('Договор готов к подписанию.')?.closest('article'),
+    ).toHaveClass('chat-glass-card-surface')
+    expect(screen.getByRole('button', { name: /Открыть место/ })).toHaveClass(
+      'border-white/65',
+      'bg-white/60',
+      'backdrop-blur-md',
+    )
 
     await user.click(screen.getByRole('button', { name: 'Показать ещё' }))
     expect(onLoadOlder).toHaveBeenCalledTimes(1)
@@ -140,6 +154,12 @@ describe('ChatSearchPage', () => {
     expect(
       screen.getByText('Введите запрос, чтобы найти сообщение'),
     ).toBeVisible()
+    expect(
+      screen.getByText('Введите запрос, чтобы найти сообщение'),
+    ).toHaveClass('chat-glass-card-surface')
+    expect(
+      screen.getByText('Введите запрос, чтобы найти сообщение'),
+    ).not.toHaveClass('bg-white/70')
 
     rerender(<ChatSearchPage {...props} query="д" />)
     expect(screen.getByText('Введите минимум 2 символа')).toBeVisible()
@@ -187,6 +207,11 @@ describe('ChatSearchPage', () => {
         'В загруженной части совпадений нет. Можно продолжить поиск глубже.',
       ),
     ).toBeVisible()
+    expect(
+      screen.getByText(
+        'В загруженной части совпадений нет. Можно продолжить поиск глубже.',
+      ),
+    ).not.toHaveClass('border-dashed')
     expect(screen.queryByText('По этому запросу ничего не найдено')).toBeNull()
 
     rerender(

@@ -105,6 +105,13 @@ describe('AdminLoginPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Вход в админ-консоль' }),
     ).toBeInTheDocument()
+    expect(document.body.querySelector('.auth-stack')).toBeInTheDocument()
+    expect(
+      document.body.querySelector('.auth-subtitle--login'),
+    ).not.toBeInTheDocument()
+    expect(
+      document.body.querySelector('.auth-header-shell'),
+    ).not.toBeInTheDocument()
 
     await user.type(
       screen.getByLabelText('Email администратора'),

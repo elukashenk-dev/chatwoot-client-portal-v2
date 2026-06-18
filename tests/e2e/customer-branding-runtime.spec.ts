@@ -8,7 +8,7 @@ const onePixelPng = Buffer.from(
 )
 
 const privateThread = {
-  avatarUrl: null,
+  avatarUrl: '/api/tenant/icons/icon-192.png',
   id: 'private:me',
   subtitle: '',
   title: 'Личный чат',
@@ -26,24 +26,6 @@ const branding = {
         id: 14,
         kind: 'auth_background_image',
         publicUrl: '/api/branding/assets/14?v=14',
-        width: null,
-      },
-      auth_footer_image: {
-        assetVersion: '13',
-        contentType: 'image/png',
-        height: null,
-        id: 13,
-        kind: 'auth_footer_image',
-        publicUrl: '/api/branding/assets/13?v=13',
-        width: null,
-      },
-      auth_header_image: {
-        assetVersion: '12',
-        contentType: 'image/png',
-        height: null,
-        id: 12,
-        kind: 'auth_header_image',
-        publicUrl: '/api/branding/assets/12?v=12',
         width: null,
       },
       chat_background_image: {
@@ -67,20 +49,24 @@ const branding = {
       logo: {
         assetVersion: '11',
         contentType: 'image/png',
-        height: null,
+        height: 48,
         id: 11,
         kind: 'logo',
         publicUrl: '/api/branding/assets/11?v=11',
-        width: null,
+        width: 120,
       },
+    },
+    appearance: {
+      authBackgroundOverlay: 'dark',
+      authButtonStyle: 'gradient',
+      authColorScheme: 'dark',
+      authFieldStyle: 'outline',
     },
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#f8fafc',
-      authContentSurfaceOpacity: 84,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#7c2d12',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -95,13 +81,19 @@ const branding = {
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
     },
+    layout: {
+      authBrandPlacement: 'center',
+    },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
 } as const
 
-async function mockTenantAndBranding(page: Page) {
+async function mockTenantAndBranding(
+  page: Page,
+  brandingResponse: unknown = branding,
+) {
   await page.route('**/api/tenant', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -120,7 +112,7 @@ async function mockTenantAndBranding(page: Page) {
   await page.route('**/api/branding', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      json: branding,
+      json: brandingResponse,
       status: 200,
     })
   })
@@ -130,6 +122,21 @@ async function mockTenantAndBranding(page: Page) {
       body: onePixelPng,
       contentType: 'image/png',
       status: 200,
+    })
+  })
+}
+
+async function mockLoginFailure(page: Page) {
+  await page.route('**/api/auth/login', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        error: {
+          code: 'INVALID_CREDENTIALS',
+          message: 'Тестовая ошибка входа.',
+        },
+      },
+      status: 401,
     })
   })
 }
@@ -270,6 +277,22 @@ async function mockReadyEmptyChat(page: Page) {
   })
 }
 
+async function expectFloatingSurfaceWithinViewport(
+  page: Page,
+  selector: string,
+) {
+  const viewport = page.viewportSize()
+  const box = await page.locator(selector).boundingBox()
+
+  if (!viewport || !box) {
+    throw new Error(`Missing viewport or box for ${selector}`)
+  }
+
+  expect(box.x).toBeGreaterThan(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)
+  expect(box.width).toBeLessThan(viewport.width)
+}
+
 test('applies public branding on the customer auth login screen', async ({
   page,
 }) => {
@@ -281,37 +304,78 @@ test('applies public branding on the customer auth login screen', async ({
   await expect(
     page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
   ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+  ).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(page.getByText('Войдите в кабинет ProvGroup.')).toBeVisible()
+  await expect(page.locator('.auth-subtitle--login')).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
+  await expect(page.locator('.auth-legal-text')).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
   await expect(
     page.getByRole('img', { name: 'Логотип ProvGroup' }),
   ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
-  await expect(page.locator('.auth-header-art')).toHaveAttribute(
-    'style',
-    /\/api\/branding\/assets\/12\?v=12/,
+  await expect(page.locator('.auth-brand-mark--in-flow')).toHaveClass(
+    /brand-mark--uploaded/,
   )
-  await expect(page.locator('.auth-footer-art')).toHaveAttribute(
-    'style',
-    /\/api\/branding\/assets\/13\?v=13/,
+  await expect(page.locator('.brand-mark-logo')).toHaveClass(
+    /brand-mark-logo--uploaded/,
   )
+  await expect(page.getByRole('img', { name: 'Логотип ProvGroup' })).toHaveCSS(
+    'max-width',
+    'min(180px, 100%)',
+  )
+  await expect(page.getByRole('img', { name: 'Логотип ProvGroup' })).toHaveCSS(
+    'max-height',
+    '63px',
+  )
+  await expect(page.locator('.auth-header-art')).toHaveCount(0)
+  await expect(page.locator('.auth-footer-art')).toHaveCount(0)
+  await expect(page.locator('.auth-header-shell')).toHaveCount(0)
+  await expect(page.locator('.auth-support-card')).toHaveCount(0)
   await expect(page.locator('.portal-branding-scope')).toHaveAttribute(
     'style',
     /--portal-auth-background-image: url\("\/api\/branding\/assets\/14\?v=14"\)/,
   )
+  await expect(page.locator('.auth-canvas-background')).toHaveCSS(
+    'background-image',
+    /\/api\/branding\/assets\/14\?v=14/,
+  )
+  await expect(page.locator('.auth-background-overlay')).toBeVisible()
   const authScope = page.locator('.portal-branding-scope')
   await expect
     .poll(() =>
       authScope.evaluate((element) =>
         getComputedStyle(element)
-          .getPropertyValue('--portal-auth-content-surface-color')
+          .getPropertyValue('--portal-auth-background-color')
           .trim(),
       ),
     )
-    .toBe('#f8fafc')
-  await expect(page.locator('.auth-content-veil')).toBeVisible()
+    .toBe('#ecfeff')
 
   const firstAuthInput = page.locator('.auth-input').first()
   await expect(firstAuthInput).toBeVisible()
+  await expect(page.locator('form .auth-muted-text').first()).toHaveCSS(
+    'color',
+    'rgb(69, 97, 121)',
+  )
+  await expect
+    .poll(() =>
+      firstAuthInput.evaluate((element) =>
+        getComputedStyle(element, '::placeholder').getPropertyValue('color'),
+      ),
+    )
+    .toBe('rgb(69, 97, 121)')
+  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
+    'background-color',
+    'rgb(196, 201, 210)',
+  )
   await firstAuthInput.fill('name@example.com')
+  await expect(firstAuthInput).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(firstAuthInput).toHaveAttribute('data-filled', 'true')
   await expect
     .poll(() =>
@@ -319,20 +383,197 @@ test('applies public branding on the customer auth login screen', async ({
         getComputedStyle(element).getPropertyValue('background-color'),
       ),
     )
-    .toBe('rgba(248, 250, 252, 0.84)')
+    .toBe('rgba(0, 0, 0, 0)')
+
+  await mockLoginFailure(page)
+  await page.locator('#login-password').fill('correct horse battery staple')
+  await page.getByRole('button', { name: 'Войти' }).click()
+  await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
+})
+
+test('applies dark auth color scheme defaults when auth colors are unchanged', async ({
+  page,
+}) => {
+  const darkDefaultAuthBranding = {
+    branding: {
+      ...branding.branding,
+      appearance: {
+        ...branding.branding.appearance,
+        authBackgroundOverlay: 'none',
+        authColorScheme: 'dark',
+      },
+      assets: {},
+      colors: {
+        ...branding.branding.colors,
+        authBackground: '#f3f7fc',
+        authMutedText: '#64748b',
+        authText: '#15486b',
+      },
+    },
+  }
+
+  await mockTenantAndBranding(page, darkDefaultAuthBranding)
+  await mockAuthState(page, 'unauthenticated')
+
+  await page.goto('/auth/login')
+
+  await expect(page.locator('.auth-canvas-background')).toHaveCSS(
+    'background-color',
+    'rgb(11, 18, 32)',
+  )
+  await expect(
+    page.getByRole('heading', { name: 'Кабинет ProvGroup' }),
+  ).toHaveCSS('color', 'rgb(248, 250, 252)')
+  await expect(page.locator('.auth-subtitle--login')).toHaveCSS(
+    'color',
+    'rgba(226, 232, 240, 0.78)',
+  )
+  await expect(page.locator('.auth-legal-text')).toHaveCSS(
+    'color',
+    'rgba(226, 232, 240, 0.78)',
+  )
+  await expect(page.locator('.auth-input').first()).toHaveCSS(
+    'border-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.28)',
+  )
+})
+
+test('renders public legal documents without tenant bootstrap', async ({
+  page,
+}) => {
+  let tenantRequests = 0
+  const apiPaths: string[] = []
+
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+
+    if (url.pathname.startsWith('/api/')) {
+      apiPaths.push(url.pathname)
+    }
+  })
+
+  await page.route('**/api/tenant', async (route) => {
+    tenantRequests += 1
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        error: {
+          code: 'TENANT_NOT_FOUND',
+          message: 'Tenant not found.',
+        },
+      },
+      status: 404,
+    })
+  })
+
+  await page.route('**/api/branding', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: branding,
+      status: 200,
+    })
+  })
+
+  await page.route('**/api/branding/assets/**', async (route) => {
+    await route.fulfill({
+      body: onePixelPng,
+      contentType: 'image/png',
+      status: 200,
+    })
+  })
+
+  await page.setViewportSize({ height: 844, width: 390 })
+  await page.goto('/legal/terms')
+
+  await expect(
+    page.getByRole('heading', { name: 'Пользовательское соглашение' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('img', { name: 'Логотип ProvGroup' }),
+  ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+  await expect(page.getByRole('link', { name: 'Назад' })).toHaveAttribute(
+    'href',
+    /\/auth\/login$/,
+  )
+  await expect(page.locator('.legal-document-reader')).toBeVisible()
+  await expect(page.getByLabel('Помощь со входом')).toBeVisible()
+  await expect(page.getByText('Нужно подключение к интернету.')).toHaveCount(0)
+  expect(tenantRequests).toBe(0)
+  expect(apiPaths).not.toContain('/api/tenant')
+  expect(apiPaths).toContain('/api/branding')
+})
+
+test('uses accent for auth links and volumetric primary gradient for auth button', async ({
+  page,
+}) => {
+  const redAccentBranding = {
+    branding: {
+      ...branding.branding,
+      appearance: {
+        ...branding.branding.appearance,
+        authButtonStyle: 'gradient',
+      },
+      colors: {
+        ...branding.branding.colors,
+        accent: '#ff0050',
+        primary: '#10284a',
+      },
+    },
+  }
+
+  await mockTenantAndBranding(page, redAccentBranding)
+  await mockAuthState(page, 'unauthenticated')
+
+  await page.goto('/auth/login')
+
+  const submitButton = page.getByRole('button', { name: 'Войти' })
+  const submitBackgroundImage = await submitButton.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(submitBackgroundImage).toContain('linear-gradient')
+  expect(submitBackgroundImage).toContain('rgb(16, 40, 74)')
+  expect(submitBackgroundImage).not.toContain('rgb(255, 0, 80)')
+  await expect(page.getByRole('link', { name: 'Создать аккаунт' })).toHaveCSS(
+    'color',
+    'rgb(255, 0, 80)',
+  )
+
+  await page.goto('/auth/register')
+
+  await expect(
+    page.getByRole('link', { name: 'Пользовательского соглашения' }),
+  ).toHaveCSS('font-weight', '600')
+  await expect(
+    page.getByRole('link', {
+      name: 'Политикой обработки персональных данных',
+    }),
+  ).toHaveCSS('font-weight', '600')
+
+  const termsCheckbox = page.getByRole('checkbox', {
+    name: /Я принимаю условия Пользовательского соглашения\./i,
+  })
+
+  await termsCheckbox.check()
+  await expect(termsCheckbox).toHaveCSS('color', 'rgb(255, 0, 80)')
 })
 
 test('applies public branding on the customer chat and info surfaces', async ({
   page,
-}) => {
+}, testInfo) => {
   await mockTenantAndBranding(page)
   await mockAuthState(page, 'authenticated')
   await mockReadyEmptyChat(page)
 
+  await page.setViewportSize({ height: 844, width: 390 })
   await page.goto('/app/chat')
 
   await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
-  await expect(page.getByText('Поддержка ProvGroup')).toBeVisible()
+  await expect(page.getByText('Поддержка ProvGroup')).toHaveCount(1)
   await expect(page.getByText('Начните диалог')).toBeVisible()
   await expect(
     page.getByText('Напишите вопрос, мы ответим здесь.'),
@@ -345,13 +586,158 @@ test('applies public branding on the customer chat and info surfaces', async ({
     'style',
     /--portal-chat-background-image: url\("\/api\/branding\/assets\/15\?v=15"\)/,
   )
+  await expect(page.locator('.app-runtime-background')).toHaveCSS(
+    'background-image',
+    /\/api\/branding\/assets\/15\?v=15/,
+  )
+  const appRuntimeBackgroundImage = await page
+    .locator('.app-runtime-background')
+    .evaluate((element) => getComputedStyle(element).backgroundImage)
+
+  expect(appRuntimeBackgroundImage).not.toContain('/api/branding/assets/14')
   await expect(page.locator('.portal-branding-scope')).toHaveAttribute(
     'style',
     /--portal-chat-header-background-image: url\("\/api\/branding\/assets\/16\?v=16"\)/,
   )
+  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-header-surface',
+  )
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-composer-surface',
+  )
+
+  const composerTextbox = page.getByRole('textbox', { name: 'Сообщение' })
+
+  await composerTextbox.focus()
+  await expect(composerTextbox).toBeFocused()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await testInfo.attach('customer-chat-390-shell', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
+
+  await page.setViewportSize({ height: 956, width: 440 })
+  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
+  await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-header-surface',
+  )
+  await expectFloatingSurfaceWithinViewport(
+    page,
+    '.chat-floating-composer-surface',
+  )
+  await testInfo.attach('customer-chat-440-shell', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
 
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
   await page.getByRole('menuitem', { name: 'Информация о чате' }).click()
 
   await expect(page.getByRole('heading', { name: 'О диалоге' })).toBeVisible()
+  const infoPanel = page.locator('section.chat-runtime-surface.z-40')
+
+  await expect(infoPanel.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+    'src',
+    '/api/branding/assets/11?v=11',
+  )
+
+  const infoGlassCard = infoPanel.locator('.chat-glass-card-surface').first()
+
+  await expect(infoGlassCard).toBeVisible()
+
+  const infoGlassCardStyles = await infoGlassCard.evaluate((element) => {
+    const computedStyle = getComputedStyle(element)
+
+    return {
+      backdropFilter: computedStyle.backdropFilter,
+      backgroundColor: computedStyle.backgroundColor,
+      backgroundImage: computedStyle.backgroundImage,
+    }
+  })
+
+  expect(infoGlassCardStyles.backgroundColor).toBe(
+    'rgba(255, 255, 255, 0.01)',
+  )
+  expect(infoGlassCardStyles.backgroundImage).toContain('linear-gradient')
+  expect(infoGlassCardStyles.backgroundImage).toContain(
+    'rgba(255, 255, 255, 0.28)',
+  )
+  expect(infoGlassCardStyles.backgroundImage).toContain(
+    'rgba(255, 255, 255, 0.34)',
+  )
+  expect(infoGlassCardStyles.backdropFilter).toContain('blur')
+})
+
+async function expectAuthLoginGeometry({
+  logoYMax,
+  logoYMin,
+  page,
+}: {
+  logoYMax: number
+  logoYMin: number
+  page: Page
+}) {
+  const logo = page.locator('.auth-brand-mark--in-flow')
+  const email = page.getByLabel('Email')
+  const password = page.locator('#login-password')
+  const submit = page.getByRole('button', { name: 'Войти' })
+
+  await expect(logo).toHaveCSS('width', '63px')
+  await expect(logo).toHaveCSS('height', '63px')
+  await expect(email).toHaveCSS('height', '50px')
+  await expect(password).toHaveCSS('height', '50px')
+  await expect(submit).toHaveCSS('height', '47px')
+  await expect(page.locator('.auth-support-block')).toBeVisible()
+  await expect(page.getByText('+7 (800) 000-00-00')).toBeVisible()
+
+  const logoBox = await logo.boundingBox()
+  const emailBox = await email.boundingBox()
+  const submitBox = await submit.boundingBox()
+
+  if (!logoBox || !emailBox || !submitBox) {
+    throw new Error('Missing auth geometry boxes.')
+  }
+
+  expect(logoBox.y).toBeGreaterThanOrEqual(logoYMin)
+  expect(logoBox.y).toBeLessThanOrEqual(logoYMax)
+  expect(emailBox.width).toBeGreaterThanOrEqual(296)
+  expect(emailBox.width).toBeLessThanOrEqual(304)
+  expect(submitBox.width).toBeGreaterThanOrEqual(296)
+  expect(submitBox.width).toBeLessThanOrEqual(304)
+}
+
+test('keeps the auth login Figma baseline geometry on mobile viewports', async ({
+  page,
+}) => {
+  const { logo: _logo, ...assetsWithoutLogo } = branding.branding.assets
+
+  await mockTenantAndBranding(page, {
+    branding: {
+      ...branding.branding,
+      assets: assetsWithoutLogo,
+    },
+  })
+  await mockAuthState(page, 'unauthenticated')
+
+  await page.setViewportSize({ height: 844, width: 390 })
+  await page.goto('/auth/login')
+  await expectAuthLoginGeometry({
+    logoYMax: 60,
+    logoYMin: 44,
+    page,
+  })
+
+  await page.setViewportSize({ height: 956, width: 440 })
+  await page.goto('/auth/login')
+  await expectAuthLoginGeometry({
+    logoYMax: 76,
+    logoYMin: 64,
+    page,
+  })
 })

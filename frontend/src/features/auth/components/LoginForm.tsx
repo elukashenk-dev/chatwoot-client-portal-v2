@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -23,6 +23,10 @@ const DEFAULT_VALUES: LoginFormValues = {
   password: '',
 }
 
+type LoginFormProps = {
+  legalNotice?: ReactNode
+}
+
 function getVisibleFieldError(error?: string) {
   if (error === 'Введите email' || error === 'Введите пароль') {
     return undefined
@@ -31,7 +35,7 @@ function getVisibleFieldError(error?: string) {
   return error
 }
 
-export function LoginForm() {
+export function LoginForm({ legalNotice }: LoginFormProps = {}) {
   const location = useLocation()
   const navigate = useNavigate()
   const { errorMessage, signIn, status } = useAuthSession()
@@ -148,7 +152,7 @@ export function LoginForm() {
   }
 
   return (
-    <form className="space-y-4" noValidate onSubmit={handleSubmit}>
+    <form className="auth-login-form" noValidate onSubmit={handleSubmit}>
       <FormField
         error={visibleEmailErrorMessage}
         errorId={emailErrorId}
@@ -207,8 +211,10 @@ export function LoginForm() {
 
       <InlineAlert message={visibleGlobalError} tone="error" />
 
+      {legalNotice}
+
       <PrimaryButton
-        className="min-h-14 rounded-[0.6rem] bg-brand-900 text-base hover:bg-brand-800"
+        className="auth-login-submit bg-brand-900 hover:bg-brand-800"
         disabled={isSubmitting}
         loading={isSubmitting}
         loadingLabel="Вход..."

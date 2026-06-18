@@ -31,7 +31,12 @@ export function TextField({
 
   return (
     <div className="relative">
-      <span className="auth-muted-text pointer-events-none absolute left-5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+      <span
+        className={cn(
+          'auth-muted-text auth-field-icon pointer-events-none absolute left-5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center',
+          hasError && 'auth-field-icon--error',
+        )}
+      >
         {leadingIcon}
       </span>
 

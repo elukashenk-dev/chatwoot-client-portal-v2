@@ -16,6 +16,9 @@ const black: RgbColor = { b: 0, g: 0, r: 0 }
 const white: RgbColor = { b: 255, g: 255, r: 255 }
 
 const productionVisualDefaults = {
+  authDarkSchemeBackground: '#0b1220',
+  authDarkSchemeMutedText: 'rgb(226 232 240 / 0.78)',
+  authDarkSchemeText: '#f8fafc',
   authFrameBackground: '#e2e8f0',
   authSurfaceBackground: '#ffffff',
   chatAppBackground: '#e2e8f0',
@@ -28,10 +31,10 @@ const productionVisualDefaults = {
   darkHeaderControlSurface: 'rgb(255 255 255 / 0.1)',
   darkHeaderControlText: 'rgb(255 255 255 / 0.74)',
   lightHeaderBorder: 'rgb(226 232 240 / 0.9)',
-  lightHeaderControlBorder: 'rgb(226 232 240 / 0.6)',
+  lightHeaderControlBorder: 'rgb(193 193 193 / 34%)',
   lightHeaderControlHoverBackground: 'rgb(241 245 249 / 0.8)',
   lightHeaderControlHoverText: '#112540',
-  lightHeaderControlSurface: 'rgb(248 250 252 / 0.6)',
+  lightHeaderControlSurface: 'rgb(248 250 252 / 43%)',
   lightHeaderControlText: '#475569',
 } as const
 
@@ -47,6 +50,19 @@ const legacyBrandColorVariables = {
   '--color-brand-800': '#173258',
   '--color-brand-900': '#112540',
   '--color-chat-outgoing': productionVisualDefaults.chatOutgoing,
+} as const
+
+const authOverlayByMode = {
+  dark: 'rgb(0 0 0 / 0.48)',
+  light: 'rgb(255 255 255 / 0.58)',
+  none: 'rgb(0 0 0 / 0)',
+} as const
+
+const authNeutralColors = {
+  controlBorder: '#dddfe4',
+  divider: '#c4c9d2',
+  darkControlBorder: 'rgb(255 255 255 / 0.34)',
+  darkDivider: 'rgb(255 255 255 / 0.28)',
 } as const
 
 function parseHexColor(value: string): RgbColor | null {
@@ -77,25 +93,6 @@ function toHexColor({ b, g, r }: RgbColor) {
       Math.round(channel).toString(16).padStart(2, '0').slice(0, 2),
     )
     .join('')}`
-}
-
-function clampPercentage(value: number, fallback: number) {
-  if (!Number.isFinite(value)) {
-    return fallback
-  }
-
-  return Math.min(100, Math.max(0, Math.round(value)))
-}
-
-function toCssRgb({ b, g, r }: RgbColor) {
-  return `${Math.round(r)} ${Math.round(g)} ${Math.round(b)}`
-}
-
-function toCssRgbAlpha(color: string, opacityPercent: number) {
-  const parsed = parseHexColor(color) ?? parseHexColor('#ffffff')!
-  const alpha = clampPercentage(opacityPercent, 100) / 100
-
-  return `rgb(${toCssRgb(parsed)} / ${alpha})`
 }
 
 function mixColor(color: RgbColor, target: RgbColor, targetWeight: number) {
@@ -189,6 +186,16 @@ function createBrandColorVariables(primaryColor: string, accentColor: string) {
   }
 }
 
+function createAuthButtonGradient(primaryColor: string) {
+  const primary = parseHexColor(primaryColor) ?? parseHexColor('#112540')!
+
+  return `linear-gradient(180deg, ${toHexColor(
+    mixColor(primary, white, 0.18),
+  )} 0%, ${toHexColor(primary)} 56%, ${toHexColor(
+    mixColor(primary, black, 0.18),
+  )} 100%)`
+}
+
 export function createBrandingCssProperties(
   branding: PublicBranding,
 ): BrandingCssProperties {
@@ -204,15 +211,6 @@ export function createBrandingCssProperties(
     branding.colors.authBackground,
     defaultBrandingColors.authBackground,
   )
-  const authContentSurfaceColor = normalizeHexColor(
-    branding.colors.authContentSurface,
-    defaultBrandingColors.authContentSurface,
-  )
-  const authContentSurfaceOpacity = clampPercentage(
-    branding.colors.authContentSurfaceOpacity,
-    defaultBrandingColors.authContentSurfaceOpacity,
-  )
-  const authContentSurfaceAlpha = String(authContentSurfaceOpacity / 100)
   const authMutedTextColor = normalizeHexColor(
     branding.colors.authMutedText,
     defaultBrandingColors.authMutedText,
@@ -242,42 +240,71 @@ export function createBrandingCssProperties(
     defaultBrandingColors.chatText,
   )
   const { mutedForeground } = getReadableForeground(chatHeaderBackgroundColor)
+  const authButtonBackground =
+    branding.appearance.authButtonStyle === 'gradient'
+      ? createAuthButtonGradient(primaryColor)
+      : primaryColor
+  const authButtonTextColor = getReadableForeground(primaryColor).foreground
+  const isDarkAuthScheme = branding.appearance.authColorScheme === 'dark'
   const isDefaultAuthBackground =
     authBackgroundColor.toLowerCase() === defaultBrandingColors.authBackground
+  const isDefaultAuthMutedText =
+    authMutedTextColor.toLowerCase() === defaultBrandingColors.authMutedText
+  const isDefaultAuthText =
+    authTextColor.toLowerCase() === defaultBrandingColors.authText
   const isDefaultChatBackground =
     chatBackgroundColor.toLowerCase() === defaultBrandingColors.chatBackground
   const isDarkHeader = isDarkColor(chatHeaderBackgroundColor)
+  const resolvedAuthBackgroundColor =
+    isDarkAuthScheme && isDefaultAuthBackground
+      ? productionVisualDefaults.authDarkSchemeBackground
+      : authBackgroundColor
+  const isDarkAuthSurface = isDarkColor(resolvedAuthBackgroundColor)
+  const resolvedAuthMutedTextColor =
+    isDarkAuthSurface && isDefaultAuthMutedText
+      ? productionVisualDefaults.authDarkSchemeMutedText
+      : authMutedTextColor
+  const resolvedAuthTextColor =
+    isDarkAuthSurface && isDefaultAuthText
+      ? productionVisualDefaults.authDarkSchemeText
+      : authTextColor
+  const resolvedAuthControlBorderColor = isDarkAuthSurface
+    ? authNeutralColors.darkControlBorder
+    : authNeutralColors.controlBorder
+  const resolvedAuthDividerColor = isDarkAuthSurface
+    ? authNeutralColors.darkDivider
+    : authNeutralColors.divider
+  const resolvedAuthFrameBackgroundColor =
+    isDefaultAuthBackground && !isDarkAuthScheme
+      ? productionVisualDefaults.authFrameBackground
+      : resolvedAuthBackgroundColor
+  const resolvedAuthSurfaceBackgroundColor =
+    isDefaultAuthBackground && !isDarkAuthScheme
+      ? productionVisualDefaults.authSurfaceBackground
+      : resolvedAuthBackgroundColor
 
   return {
     ...createBrandColorVariables(primaryColor, accentColor),
-    '--portal-auth-background-color': authBackgroundColor,
+    '--portal-auth-background-color': resolvedAuthBackgroundColor,
     '--portal-auth-background-image': cssUrlValue(
       branding.assets.auth_background_image?.publicUrl,
     ),
-    '--portal-auth-canvas-background-color': authBackgroundColor,
-    '--portal-auth-content-surface-background': toCssRgbAlpha(
-      authContentSurfaceColor,
-      authContentSurfaceOpacity,
-    ),
-    '--portal-auth-content-surface-color': authContentSurfaceColor,
-    '--portal-auth-content-surface-opacity': authContentSurfaceAlpha,
-    '--portal-auth-control-background': toCssRgbAlpha(
-      authContentSurfaceColor,
-      Math.max(82, authContentSurfaceOpacity),
-    ),
-    '--portal-auth-control-border-color': createMutedTextColor(
-      authMutedTextColor,
-      authContentSurfaceColor,
-      '#cbd5e1',
-    ),
-    '--portal-auth-frame-background-color': isDefaultAuthBackground
-      ? productionVisualDefaults.authFrameBackground
-      : authBackgroundColor,
-    '--portal-auth-muted-text-color': authMutedTextColor,
-    '--portal-auth-surface-background-color': isDefaultAuthBackground
-      ? productionVisualDefaults.authSurfaceBackground
-      : authBackgroundColor,
-    '--portal-auth-text-color': authTextColor,
+    '--portal-auth-background-overlay':
+      authOverlayByMode[branding.appearance.authBackgroundOverlay],
+    '--portal-auth-brand-mark-background': primaryColor,
+    '--portal-auth-button-background': authButtonBackground,
+    '--portal-auth-button-text-color': authButtonTextColor,
+    '--portal-auth-canvas-background-color': resolvedAuthBackgroundColor,
+    '--portal-auth-control-border-color': resolvedAuthControlBorderColor,
+    '--portal-auth-divider-color': resolvedAuthDividerColor,
+    '--portal-auth-field-style': branding.appearance.authFieldStyle,
+    '--portal-auth-frame-background-color': resolvedAuthFrameBackgroundColor,
+    '--portal-auth-icon-color': accentColor,
+    '--portal-auth-link-color': accentColor,
+    '--portal-auth-muted-text-color': resolvedAuthMutedTextColor,
+    '--portal-auth-scheme': branding.appearance.authColorScheme,
+    '--portal-auth-surface-background-color': resolvedAuthSurfaceBackgroundColor,
+    '--portal-auth-text-color': resolvedAuthTextColor,
     '--portal-chat-app-background-color': isDefaultChatBackground
       ? productionVisualDefaults.chatAppBackground
       : chatBackgroundColor,

@@ -19,7 +19,7 @@ export function ComposerFeedback({
     <>
       {errorMessage ? (
         <div
-          className="mt-2 rounded-[0.8rem] border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] leading-5 text-rose-700"
+          className="mt-2 rounded-[0.8rem] border border-rose-200/70 bg-rose-50/80 px-3 py-2 text-[12px] leading-5 text-rose-700 shadow-sm shadow-rose-900/[0.04] backdrop-blur-md"
           id={textLengthErrorMessage ? TEXT_LENGTH_FEEDBACK_ID : undefined}
         >
           {errorMessage}

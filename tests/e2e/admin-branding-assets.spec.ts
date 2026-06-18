@@ -19,10 +19,8 @@ const logoAsset = {
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
-  authContentSurface: '#ffffff',
-  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
-  authText: '#0f172a',
+  authText: '#15486b',
   chatBackground: '#ffffff',
   chatHeaderBackground: '#ffffff',
   chatHeaderText: '#0f172a',
@@ -31,8 +29,20 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingBase = {
   branding: {
+    appearance: defaultBrandingAppearance,
     assets: {},
     colors: defaultBrandingColors,
     copy: {
@@ -42,6 +52,7 @@ const brandingBase = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -188,6 +199,20 @@ test('admin uploads and deletes a branding logo asset from the console', async (
   await expect(
     page.getByRole('img', { exact: true, name: 'Логотип' }),
   ).toHaveAttribute('src', '/api/branding/assets/77?v=77')
+  const phonePreview = page.getByRole('region', {
+    name: 'Телефонный предпросмотр портала',
+  })
+
+  await expect(phonePreview.locator('.auth-brand-mark--in-flow')).toHaveClass(
+    /brand-mark--uploaded/,
+  )
+  await expect(phonePreview.locator('.brand-mark-logo')).toHaveClass(
+    /brand-mark-logo--uploaded/,
+  )
+  await expect(phonePreview.locator('.brand-mark-logo')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  )
 
   await page.getByRole('button', { name: 'Удалить логотип' }).click()
 

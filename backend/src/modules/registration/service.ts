@@ -18,6 +18,7 @@ import { ApiError } from '../../lib/errors.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
 import { assertValidPortalPassword } from '../../lib/passwordPolicy.js'
 import type { PortalUsersRepository } from '../portal-users/repository.js'
+import { registrationLegalDocumentVersions } from './legalDocuments.js'
 import type { RegistrationRepository } from './repository.js'
 
 const REGISTRATION_VERIFICATION_CODE_LENGTH = 6
@@ -59,6 +60,13 @@ type RegistrationSetPasswordResult = {
   nextStep: 'login'
   purpose: 'registration'
   result: 'registration_completed'
+}
+
+type RegistrationLegalAcceptanceInput = {
+  personalDataConsentAccepted: true
+  requestIp: string | null
+  termsAccepted: true
+  userAgent: string | null
 }
 
 function createRegistrationVerificationCode() {
@@ -253,6 +261,30 @@ function isUniqueViolation(error: unknown) {
   )
 }
 
+function buildLegalAcceptanceRecord({
+  acceptedAt,
+  email,
+  legalAcceptance,
+}: {
+  acceptedAt: Date
+  email: string
+  legalAcceptance: RegistrationLegalAcceptanceInput
+}) {
+  return {
+    acceptedAt,
+    email,
+    personalDataConsentAccepted:
+      legalAcceptance.personalDataConsentAccepted,
+    privacyPolicyVersion:
+      registrationLegalDocumentVersions.privacyPolicyVersion,
+    purpose: REGISTRATION_PURPOSE,
+    requestIp: legalAcceptance.requestIp,
+    termsAccepted: legalAcceptance.termsAccepted,
+    termsVersion: registrationLegalDocumentVersions.termsVersion,
+    userAgent: legalAcceptance.userAgent,
+  } as const
+}
+
 export function createRegistrationService({
   chatwootClient,
   emailDelivery,
@@ -265,13 +297,20 @@ export function createRegistrationService({
     async requestVerification({
       email,
       fullName,
+      legalAcceptance,
     }: {
       email: string
       fullName: string
+      legalAcceptance: RegistrationLegalAcceptanceInput
     }): Promise<RegistrationVerificationRequestResult> {
       const normalizedEmail = normalizeEmail(email)
       const normalizedFullName = fullName.trim()
       const requestedAt = now()
+      const legalAcceptanceRecord = buildLegalAcceptanceRecord({
+        acceptedAt: requestedAt,
+        email: normalizedEmail,
+        legalAcceptance,
+      })
 
       const existingPortalUser = await portalUsersRepository.findByEmail({
         email: normalizedEmail,
@@ -325,6 +364,11 @@ export function createRegistrationService({
               requestedAt.getTime()
 
             if (isResendLocked) {
+              await registrationRepository.createLegalAcceptance(
+                legalAcceptanceRecord,
+                tx,
+              )
+
               return {
                 outcome: 'pending_resend_locked' as const,
                 response: buildVerificationRequestedResponse(
@@ -428,6 +472,11 @@ export function createRegistrationService({
                   requestedAt.getTime()
 
                 if (isResendLocked) {
+                  await registrationRepository.createLegalAcceptance(
+                    legalAcceptanceRecord,
+                    tx,
+                  )
+
                   return {
                     outcome: 'pending_resend_locked' as const,
                     response: buildVerificationRequestedResponse(
@@ -571,12 +620,18 @@ export function createRegistrationService({
       const deliveredVerification =
         await registrationRepository.transactionWithScopedLock(
           normalizedEmail,
-          async (tx) =>
-            registrationRepository.markVerificationDeliverySucceeded(
+          async (tx) => {
+            await registrationRepository.createLegalAcceptance(
+              legalAcceptanceRecord,
+              tx,
+            )
+
+            return registrationRepository.markVerificationDeliverySucceeded(
               requestResult.pendingVerification.id,
               requestedAt,
               tx,
-            ),
+            )
+          },
         )
 
       if (!deliveredVerification) {
@@ -852,6 +907,13 @@ export function createRegistrationService({
                 {
                   chatwootContactId: verifiedRecord.chatwootContactId,
                   userId: createdUser.id,
+                },
+                tx,
+              )
+              await registrationRepository.linkLatestRegistrationAcceptanceToUser(
+                {
+                  email: normalizedEmail,
+                  portalUserId: createdUser.id,
                 },
                 tx,
               )

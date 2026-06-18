@@ -7,6 +7,12 @@ import {
 } from './previewBranding'
 
 const draft = {
+  appearance: {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  },
   assets: {
     logo: {
       assetVersion: '11',
@@ -21,10 +27,8 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
-    authContentSurface: '#ffffff',
-    authContentSurfaceOpacity: 100,
     authMutedText: '#456179',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#f8fafc',
     chatHeaderBackground: '#0f766e',
     chatHeaderText: '#f8fafc',
@@ -39,6 +43,9 @@ const draft = {
     chatEmptyTitle: 'Начните диалог',
     chatInfoTitle: 'О диалоге',
   },
+  layout: {
+    authBrandPlacement: 'right',
+  },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
 } satisfies BrandingDraft
@@ -46,9 +53,11 @@ const draft = {
 describe('previewBranding', () => {
   it('creates public branding from an unsaved admin draft', () => {
     expect(createPreviewPublicBranding(draft)).toEqual({
+      appearance: draft.appearance,
       assets: draft.assets,
       colors: draft.colors,
       copy: draft.copy,
+      layout: draft.layout,
       portalName: 'ProvGroup',
       supportLabel: 'Поддержка ProvGroup',
       version: 1,

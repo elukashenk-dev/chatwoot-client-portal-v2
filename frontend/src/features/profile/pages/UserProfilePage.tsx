@@ -16,6 +16,7 @@ import {
 
 const PROFILE_AVATAR_MAX_BYTES = 15 * 1024 * 1024
 const allowedAvatarTypes = new Set(['image/gif', 'image/jpeg', 'image/png'])
+const GLASS_ROW_BORDER_CLASS = 'border-slate-300/45'
 
 function getProfileErrorMessage(error: unknown) {
   if (error instanceof ProfileApiClientError) {
@@ -27,7 +28,9 @@ function getProfileErrorMessage(error: unknown) {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-12 items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 last:border-b-0">
+    <div
+      className={`flex min-h-12 items-center justify-between gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3 last:border-b-0`}
+    >
       <dt className="shrink-0 text-[13px] leading-5 text-slate-500">{label}</dt>
       <dd className="min-w-0 max-w-[65%] break-words text-right text-[13px] font-medium leading-5 text-slate-900">
         {value}
@@ -183,8 +186,10 @@ export function UserProfilePage() {
     >
       {profile ? (
         <div className="mx-auto max-w-md">
-          <section className="overflow-hidden rounded-lg border border-slate-200/90 bg-white">
-            <div className="flex items-center gap-4 border-b border-slate-200/80 px-4 py-4">
+          <section className="chat-glass-card-surface overflow-hidden rounded-lg border">
+            <div
+              className={`flex items-center gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-4`}
+            >
               <ChatAvatar
                 alt={profile.fullName}
                 avatarUrl={profile.avatarUrl}
@@ -199,7 +204,7 @@ export function UserProfilePage() {
                 </h2>
                 <label
                   className={[
-                    'mt-2 inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 transition hover:border-brand-200 hover:text-brand-900 focus-within:outline-none focus-within:ring-4 focus-within:ring-brand-100',
+                    'mt-2 inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-white/65 bg-white/60 px-3 text-[13px] font-medium text-slate-700 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md transition hover:border-white/80 hover:bg-white/80 hover:text-brand-900 focus-within:outline-none focus-within:ring-4 focus-within:ring-brand-100',
                     isUploading ? 'pointer-events-none opacity-70' : '',
                   ].join(' ')}
                 >

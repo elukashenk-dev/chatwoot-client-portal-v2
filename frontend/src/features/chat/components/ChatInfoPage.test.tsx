@@ -68,6 +68,12 @@ const supportAvailability = {
 
 const brandingContextValue: BrandingContextValue = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {
       logo: {
         assetVersion: '11',
@@ -82,10 +88,8 @@ const brandingContextValue: BrandingContextValue = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -99,6 +103,9 @@ const brandingContextValue: BrandingContextValue = {
       chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
+    },
+    layout: {
+      authBrandPlacement: 'left',
     },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
@@ -141,6 +148,58 @@ describe('ChatInfoPage', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('replaces the default private thread icon with the uploaded branding logo', () => {
+    render(
+      <BrandingContext.Provider value={brandingContextValue}>
+        <ChatInfoPage
+          info={privateInfo}
+          isLoading={false}
+          isSupportAvailabilityLoading={false}
+          onBack={vi.fn()}
+          onRetry={vi.fn()}
+          supportAvailability={null}
+        />
+      </BrandingContext.Provider>,
+    )
+
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/branding/assets/11?v=11',
+    )
+  })
+
+  it('keeps an explicit group thread avatar over the uploaded branding logo', () => {
+    render(
+      <BrandingContext.Provider value={brandingContextValue}>
+        <ChatInfoPage
+          info={{
+            ...privateInfo,
+            activeThread: {
+              avatarUrl: '/api/chat/threads/group%3A154/avatar',
+              id: 'group:154',
+              subtitle: 'Групповой чат',
+              title: 'ООО "Ромашка"',
+              type: 'group',
+            },
+            accessLabel: 'Участники группы и поддержка',
+            participants: [],
+            threadTypeLabel: 'Групповой',
+          }}
+          isLoading={false}
+          isSupportAvailabilityLoading={false}
+          onBack={vi.fn()}
+          onRetry={vi.fn()}
+          supportAvailability={null}
+        />
+      </BrandingContext.Provider>,
+    )
+
+    expect(screen.getByRole('img', { name: 'ООО "Ромашка"' })).toHaveAttribute(
+      'src',
+      '/api/chat/threads/group%3A154/avatar',
+    )
+  })
+
   it('renders private chat details without participants', () => {
     render(
       <ChatInfoPage
@@ -165,6 +224,18 @@ describe('ChatInfoPage', () => {
     expect(screen.getByText('Личный')).toBeInTheDocument()
     expect(screen.getByText('Ваш куратор')).toBeInTheDocument()
     expect(screen.getByText('Анна Маттина')).toBeInTheDocument()
+    expect(screen.getByText('Тип чата').closest('dl')).toHaveClass(
+      'chat-glass-card-surface',
+    )
+    expect(screen.getByText('Тип чата').closest('dl')).not.toHaveClass(
+      'bg-white/70',
+    )
+    expect(screen.getByText('Тип чата').closest('div')).toHaveClass(
+      'border-slate-300/45',
+    )
+    expect(screen.getByText('Тип чата').closest('div')).not.toHaveClass(
+      'border-white/55',
+    )
     expect(screen.queryByText('Участники портала')).not.toBeInTheDocument()
   })
 
@@ -305,6 +376,19 @@ describe('ChatInfoPage', () => {
     expect(screen.getByText('Выходной')).toBeInTheDocument()
     expect(screen.getByText('Часовой пояс: Europe/Samara')).toBeInTheDocument()
     expect(screen.getByText('Ответим в рабочее время.')).toBeInTheDocument()
+    expect(screen.getByText('Часы работы').closest('section')).toHaveClass(
+      'chat-glass-card-surface',
+    )
+    expect(screen.getByText('Часы работы').closest('section')).not.toHaveClass(
+      'bg-white/70',
+    )
+    expect(screen.getByText('Часы работы').parentElement).toHaveClass(
+      'border-slate-300/45',
+    )
+    expect(screen.getByText('Ответим в рабочее время.')).toHaveClass(
+      'bg-amber-50',
+      'text-amber-800',
+    )
   })
 
   it('renders working-hours loading state without a failure message', () => {

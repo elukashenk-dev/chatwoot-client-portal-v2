@@ -1,14 +1,28 @@
+import { Buffer } from 'node:buffer'
+
 import { expect, type Page, type Route, test } from '@playwright/test'
 
 const adminEmail = 'cbr@provgroup.com'
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGSc9h4NwAAAABJRU5ErkJggg==',
+  'base64',
+)
+
+const authBackgroundAsset = {
+  assetVersion: '88',
+  contentType: 'image/png',
+  height: null,
+  id: 88,
+  kind: 'auth_background_image',
+  publicUrl: '/api/branding/assets/88?v=88',
+  width: null,
+} as const
 
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
-  authContentSurface: '#ffffff',
-  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
-  authText: '#0f172a',
+  authText: '#15486b',
   chatBackground: '#ffffff',
   chatHeaderBackground: '#ffffff',
   chatHeaderText: '#0f172a',
@@ -17,9 +31,23 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'none',
+  authButtonStyle: 'solid',
+  authColorScheme: 'light',
+  authFieldStyle: 'solid',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingResponse = {
   branding: {
-    assets: {},
+    appearance: defaultBrandingAppearance,
+    assets: {} as Partial<
+      Record<'auth_background_image', typeof authBackgroundAsset>
+    >,
     colors: defaultBrandingColors,
     copy: {
       authSubtitle: 'Введите email и пароль, чтобы продолжить.',
@@ -28,6 +56,7 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -37,10 +66,12 @@ const brandingResponse = {
 type BrandingResponseBody = typeof brandingResponse.branding
 type BrandingResponseOverrides = Omit<
   Partial<BrandingResponseBody>,
-  'colors' | 'copy'
+  'appearance' | 'colors' | 'copy' | 'layout'
 > & {
+  appearance?: Partial<BrandingResponseBody['appearance']>
   colors?: Partial<BrandingResponseBody['colors']>
   copy?: Partial<BrandingResponseBody['copy']>
+  layout?: Partial<BrandingResponseBody['layout']>
 }
 type BrandingPatchRouteHandler = (params: {
   payload: unknown
@@ -52,6 +83,10 @@ function createBrandingResponse(overrides: BrandingResponseOverrides = {}) {
     branding: {
       ...brandingResponse.branding,
       ...overrides,
+      appearance: {
+        ...brandingResponse.branding.appearance,
+        ...overrides.appearance,
+      },
       colors: {
         ...brandingResponse.branding.colors,
         ...overrides.colors,
@@ -59,6 +94,10 @@ function createBrandingResponse(overrides: BrandingResponseOverrides = {}) {
       copy: {
         ...brandingResponse.branding.copy,
         ...overrides.copy,
+      },
+      layout: {
+        ...brandingResponse.branding.layout,
+        ...overrides.layout,
       },
     },
   }
@@ -86,6 +125,7 @@ async function mockPublicBrandingRoute(page: Page) {
 async function mockAdminBrandingRoutes(
   page: Page,
   onPatch: BrandingPatchRouteHandler,
+  getBrandingResponse = () => brandingResponse,
 ) {
   await mockPublicBrandingRoute(page)
 
@@ -121,7 +161,7 @@ async function mockAdminBrandingRoutes(
     if (route.request().method() === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
-        json: brandingResponse,
+        json: getBrandingResponse(),
       })
       return
     }
@@ -148,6 +188,15 @@ async function gotoAdminBrandingPage(page: Page) {
   await expect(page.getByLabel('Название портала')).toBeVisible()
 }
 
+async function clickSegmentedRadio(page: Page, name: string) {
+  await page
+    .locator('label')
+    .filter({
+      has: page.getByRole('radio', { exact: true, name }),
+    })
+    .click()
+}
+
 function createDeferred() {
   let resolve!: () => void
   const promise = new Promise<void>((nextResolve) => {
@@ -163,8 +212,6 @@ test('admin can edit all branding setting groups and see preview update', async 
   const updatedBranding = {
     colors: {
       authBackground: '#eefcf8',
-      authContentSurface: '#f8fafc',
-      authContentSurfaceOpacity: 84,
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#164e63',
       chatHeaderText: '#ffffff',
@@ -209,12 +256,12 @@ test('admin can edit all branding setting groups and see preview update', async 
   await page
     .getByLabel('Фон страницы входа', { exact: true })
     .fill(updatedBranding.colors.authBackground)
-  await page
-    .getByLabel('Фон формы входа', { exact: true })
-    .fill(updatedBranding.colors.authContentSurface)
-  await page
-    .getByLabel('Непрозрачность формы входа, значение', { exact: true })
-    .fill(String(updatedBranding.colors.authContentSurfaceOpacity))
+  await expect(
+    page.getByLabel('Фон формы входа', { exact: true }),
+  ).toHaveCount(0)
+  await expect(
+    page.getByLabel('Непрозрачность формы входа, значение', { exact: true }),
+  ).toHaveCount(0)
   await page
     .getByLabel('Фон чата', { exact: true })
     .fill(updatedBranding.colors.chatBackground)
@@ -236,7 +283,7 @@ test('admin can edit all branding setting groups and see preview update', async 
   })
 
   await expect(phonePreview).toContainText(updatedBranding.portalName)
-  await expect(phonePreview).toContainText(updatedBranding.supportLabel)
+  await expect(phonePreview).toContainText('+7 (800) 000-00-00')
   await expect(
     phonePreview.getByRole('heading', {
       name: updatedBranding.copy.authTitle,
@@ -248,6 +295,13 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(
     phonePreview.getByRole('button', { name: 'Войти' }),
   ).toBeDisabled()
+  await expect(
+    phonePreview.locator('.auth-brand-mark--in-flow .brand-mark-logo'),
+  ).toHaveCSS('background-color', 'rgb(15, 118, 110)')
+  await expect(phonePreview.getByRole('button', { name: 'Войти' })).toHaveCSS(
+    'background-color',
+    'rgb(15, 118, 110)',
+  )
   const previewScope = page.locator(
     '[data-admin-branding-preview] .portal-branding-scope',
   )
@@ -255,11 +309,11 @@ test('admin can edit all branding setting groups and see preview update', async 
     .poll(() =>
       previewScope.evaluate((element) =>
         getComputedStyle(element)
-          .getPropertyValue('--portal-auth-content-surface-color')
+          .getPropertyValue('--portal-auth-background-color')
           .trim(),
       ),
     )
-    .toBe('#f8fafc')
+    .toBe(updatedBranding.colors.authBackground)
 
   await page.getByRole('tab', { name: 'Чат' }).click()
   await expect(
@@ -298,6 +352,200 @@ test('admin can edit all branding setting groups and see preview update', async 
   await expect(page.getByText('Настройки сохранены.')).not.toBeVisible()
 })
 
+test('auth color scheme updates the live login preview contrast tokens', async ({
+  page,
+}) => {
+  await mockAdminBrandingRoutes(page, async ({ route }) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createBrandingResponse(),
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+  await clickSegmentedRadio(page, 'Темная')
+
+  const scope = page.locator('.portal-preview-stage')
+
+  await expect
+    .poll(() =>
+      scope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-canvas-background-color')
+          .trim(),
+      ),
+    )
+    .toBe('#0b1220')
+  await expect
+    .poll(() =>
+      scope.evaluate((element) =>
+        getComputedStyle(element)
+          .getPropertyValue('--portal-auth-text-color')
+          .trim(),
+      ),
+    )
+    .toBe('#f8fafc')
+  await expect(scope.locator('.auth-canvas-background')).toHaveCSS(
+    'background-color',
+    'rgb(11, 18, 32)',
+  )
+  await expect(scope.locator('.auth-input').first()).toHaveCSS(
+    'border-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+})
+
+test('auth field style updates the live login preview input surface', async ({
+  page,
+}) => {
+  await mockAdminBrandingRoutes(page, async ({ route }) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createBrandingResponse(),
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+
+  const scope = page.locator('.portal-preview-stage')
+  const input = scope.locator('.auth-input').first()
+
+  await clickSegmentedRadio(page, 'Светлые')
+  await expect(input).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.72)',
+  )
+  await expect(input).toHaveCSS(
+    'box-shadow',
+    'rgba(15, 23, 42, 0.06) 0px 10px 24px 0px',
+  )
+
+  await clickSegmentedRadio(page, 'Полупрозрачные')
+  await expect(input).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.34)',
+  )
+  await expect(input).toHaveCSS('box-shadow', 'none')
+
+  await clickSegmentedRadio(page, 'Контур')
+  await expect(input).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(input).toHaveCSS('box-shadow', 'none')
+})
+
+test('admin saves full background auth appearance settings after upload and reload', async ({
+  page,
+}) => {
+  const expectedAppearance = {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  } as const
+  let currentBranding = createBrandingResponse()
+
+  await mockAdminBrandingRoutes(
+    page,
+    async ({ payload, route }) => {
+      await expect(payload).toMatchObject({
+        appearance: expectedAppearance,
+      })
+
+      currentBranding = createBrandingResponse({
+        ...currentBranding.branding,
+        appearance: expectedAppearance,
+        version: 2,
+      })
+
+      await route.fulfill({
+        contentType: 'application/json',
+        json: currentBranding,
+        status: 200,
+      })
+    },
+    () => currentBranding,
+  )
+
+  await page.route(
+    '**/api/admin/branding/assets/auth_background_image',
+    async (route) => {
+      expect(route.request().method()).toBe('POST')
+      expect(route.request().headers()['content-type']).toContain(
+        'multipart/form-data',
+      )
+      currentBranding = createBrandingResponse({
+        ...currentBranding.branding,
+        assets: {
+          ...currentBranding.branding.assets,
+          auth_background_image: authBackgroundAsset,
+        },
+      })
+
+      await route.fulfill({
+        contentType: 'application/json',
+        json: { asset: authBackgroundAsset },
+        status: 200,
+      })
+    },
+  )
+  await page.route('**/api/branding/assets/88**', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({
+      body: onePixelPng,
+      contentType: 'image/png',
+      status: 200,
+    })
+  })
+
+  await gotoAdminBrandingPage(page)
+
+  await page.getByRole('link', { name: 'Изображения' }).click()
+  await page.getByLabel('Загрузить общий фон экрана входа').setInputFiles({
+    buffer: onePixelPng,
+    mimeType: 'image/png',
+    name: 'auth-background.png',
+  })
+  await expect(page.getByRole('status')).toContainText(
+    'Общий фон экрана входа загружен.',
+  )
+  await expect(
+    page.getByLabel('Заменить общий фон экрана входа'),
+  ).toBeAttached()
+
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+  await clickSegmentedRadio(page, 'Темная')
+  await clickSegmentedRadio(page, 'Темная дымка')
+  await clickSegmentedRadio(page, 'Контур')
+  await clickSegmentedRadio(page, 'Градиент')
+
+  const patchResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes('/api/admin/branding') &&
+      response.request().method() === 'PATCH',
+  )
+
+  await page.getByRole('button', { name: 'Сохранить настройки' }).click()
+  await expect((await patchResponsePromise).status()).toBe(200)
+  await expect(page.getByRole('status')).toContainText('Настройки сохранены.')
+
+  await page.reload()
+  await expect(page.getByLabel('Название портала')).toBeVisible()
+  await page.getByRole('link', { name: 'Экран входа' }).click()
+
+  await expect(
+    page.getByRole('radio', { exact: true, name: 'Темная' }),
+  ).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Темная дымка' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Контур' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Градиент' })).toBeChecked()
+
+  await page.getByRole('link', { name: 'Изображения' }).click()
+  await expect(
+    page.getByLabel('Заменить общий фон экрана входа'),
+  ).toBeAttached()
+})
+
 test('admin reset colors restores production-like default color contract', async ({
   page,
 }) => {
@@ -319,10 +567,6 @@ test('admin reset colors restores production-like default color contract', async
 
   await page.getByLabel('Фон шапки чата', { exact: true }).fill('#164e63')
   await page.getByLabel('Фон страницы входа', { exact: true }).fill('#eefcf8')
-  await page.getByLabel('Фон формы входа', { exact: true }).fill('#eef2ff')
-  await page
-    .getByLabel('Непрозрачность формы входа, значение', { exact: true })
-    .fill('72')
   await page
     .getByLabel('Цвет текста шапки чата', { exact: true })
     .fill('#f8fafc')
@@ -345,12 +589,9 @@ test('admin reset colors restores production-like default color contract', async
   await expect(
     page.getByLabel('Фон страницы входа', { exact: true }),
   ).toHaveValue('#f3f7fc')
-  await expect(page.getByLabel('Фон формы входа', { exact: true })).toHaveValue(
-    '#ffffff',
-  )
   await expect(
-    page.getByLabel('Непрозрачность формы входа, значение', { exact: true }),
-  ).toHaveValue('100')
+    page.getByLabel('Фон формы входа', { exact: true }),
+  ).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Сохранить настройки' }).click()
   await expect(page.getByRole('status')).toContainText('Настройки сохранены.')

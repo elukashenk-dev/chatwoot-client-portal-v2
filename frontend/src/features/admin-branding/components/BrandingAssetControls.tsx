@@ -22,17 +22,9 @@ const brandingAssetSlots = [
     title: 'Иконка приложения',
   },
   {
-    actionName: 'верхнее изображение экрана входа',
-    kind: 'auth_header_image',
-    title: 'Вход: верхнее изображение',
-  },
-  {
-    actionName: 'нижнее изображение экрана входа',
-    kind: 'auth_footer_image',
-    title: 'Вход: нижнее изображение',
-  },
-  {
     actionName: 'общий фон экрана входа',
+    description:
+      'Основной способ оформления входа: подготовьте один фон под мобильный экран, оставив чистую центральную область под форму.',
     kind: 'auth_background_image',
     title: 'Вход: общий фон',
   },
@@ -48,6 +40,7 @@ const brandingAssetSlots = [
   },
 ] satisfies Array<{
   actionName: string
+  description?: string
   kind: BrandingAssetKind
   title: string
 }>
@@ -174,6 +167,11 @@ export function BrandingAssetControls({
                       ? `Загружен ${formatAssetDetails(asset)}`
                       : 'Файл еще не загружен.'}
                   </p>
+                  {slot.description ? (
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      {slot.description}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

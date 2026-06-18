@@ -36,6 +36,12 @@ describe('ComposerTextarea', () => {
 
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
 
+    expect(textarea).toHaveClass(
+      'bg-transparent',
+      'border-0',
+      'placeholder:text-[color:var(--portal-chat-muted-text-color,#64748b)]',
+    )
+
     await user.type(textarea, 'Привет')
     await user.keyboard('{Shift>}{Enter}{/Shift}')
 

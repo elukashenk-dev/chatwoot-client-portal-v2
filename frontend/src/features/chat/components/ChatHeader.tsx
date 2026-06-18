@@ -82,10 +82,8 @@ export function ChatHeader({
   const { tenant } = useTenantIdentity()
   const chatMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const chatMenuPanelRef = useRef<HTMLDivElement | null>(null)
-  const chatMenuRef = useRef<HTMLDivElement | null>(null)
   const navMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const navMenuPanelRef = useRef<HTMLDivElement | null>(null)
-  const navMenuRef = useRef<HTMLDivElement | null>(null)
   const [isChatMenuOpen, setIsChatMenuOpen] = useState(false)
   const [isNavMenuOpen, setIsNavMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -128,8 +126,10 @@ export function ChatHeader({
       }
 
       if (
-        chatMenuRef.current?.contains(target) ||
-        navMenuRef.current?.contains(target)
+        chatMenuButtonRef.current?.contains(target) ||
+        chatMenuPanelRef.current?.contains(target) ||
+        navMenuButtonRef.current?.contains(target) ||
+        navMenuPanelRef.current?.contains(target)
       ) {
         return
       }
@@ -242,151 +242,156 @@ export function ChatHeader({
   )
 
   return (
-    <header className="app-safe-top chat-header-background chat-header-border relative z-30 border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
-      <div className="flex min-h-10 items-center gap-3">
-        <div className="relative shrink-0" ref={navMenuRef}>
-          <button
-            aria-expanded={isNavMenuOpen}
-            aria-haspopup="menu"
-            aria-label={
-              isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
-            }
-            className="chat-header-icon-button inline-flex h-10 w-10 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-            onClick={() => {
-              setIsNavMenuOpen((currentValue) => !currentValue)
-              setIsChatMenuOpen(false)
-            }}
-            ref={navMenuButtonRef}
-            title="Меню"
-            type="button"
-          >
-            <MenuIcon className="h-6 w-6" />
-            {hasOtherThreadUnread ? (
-              <span
-                aria-hidden="true"
-                className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_2px_rgb(239_68_68_/_0.18)]"
-                data-testid="chat-menu-unread-dot"
-              />
-            ) : null}
-          </button>
-
-          {isNavMenuOpen ? (
-            <div
-              className="portal-menu-surface absolute left-0 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-chat-nav-menu border border-slate-200/80 p-1.5 text-sm text-slate-700 shadow-chat-nav-menu"
-              onKeyDown={handleMenuKeyDown}
-              ref={navMenuPanelRef}
-              role="menu"
-              tabIndex={-1}
+    <header className="app-safe-top relative z-30 bg-transparent px-3 pb-2 text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:px-6 sm:pb-3">
+      <div className="relative mx-auto w-full max-w-[620px]">
+        <div className="chat-floating-header-surface flex min-h-14 w-full items-center gap-3 rounded-[10px] border px-3 py-[9px] sm:min-h-[3.75rem] sm:px-4">
+          <div className="relative shrink-0">
+            <button
+              aria-expanded={isNavMenuOpen}
+              aria-haspopup="menu"
+              aria-label={
+                isNavMenuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'
+              }
+              className="chat-header-icon-button inline-flex h-10 w-10 items-center justify-center rounded-chat-control transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+              onClick={() => {
+                setIsNavMenuOpen((currentValue) => !currentValue)
+                setIsChatMenuOpen(false)
+              }}
+              ref={navMenuButtonRef}
+              title="Меню"
+              type="button"
             >
-              <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-                Чаты
-              </div>
-              {availableThreads.map((thread) => {
-                const isSelected = thread.id === selectedThreadId
-                const unreadCount = readThreadUnreadCount(thread)
-                const hasUnread = unreadCount > 0
+              <MenuIcon className="h-6 w-6" />
+              {hasOtherThreadUnread ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_2px_rgb(239_68_68_/_0.18)]"
+                  data-testid="chat-menu-unread-dot"
+                />
+              ) : null}
+            </button>
+          </div>
 
-                return (
-                  <button
-                    aria-current={isSelected ? 'page' : undefined}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left transition',
-                      isSelected
-                        ? 'font-medium text-brand-800'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100',
-                    )}
-                    disabled={isSelected}
-                    key={thread.id}
-                    onClick={() => {
-                      onSelectThread(thread.id)
-                      setIsNavMenuOpen(false)
-                    }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    {isSelected ? (
-                      <CheckIcon className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <span className="h-4 w-4 shrink-0" />
-                    )}
-                    <span className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="min-w-0 truncate">{thread.title}</span>
-                      {hasUnread ? (
-                        <span
-                          aria-label={`${thread.title}, ${unreadCount} непрочитанных`}
-                          className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
-                          data-testid={`thread-unread-badge-${thread.id}`}
-                        >
-                          {formatUnreadCount(unreadCount)}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                )
-              })}
-              <button
-                className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-slate-100 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-                onClick={() => {
-                  setIsNavMenuOpen(false)
-                  navigate(routePaths.app.settings)
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <SettingsIcon className="h-4 w-4 shrink-0" />
-                <span>Настройки</span>
-              </button>
+          <ChatAvatar
+            alt={threadTitle}
+            avatarUrl={
+              branding.assets.logo?.publicUrl ?? activeThread?.avatarUrl
+            }
+            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-brand-900 text-sm font-semibold tracking-wide text-white"
+            title={threadTitle}
+          >
+            {tenantMonogram}
+          </ChatAvatar>
+
+          <div className="min-w-0 flex-1 py-0.5">
+            <h1 className="truncate text-[16px] font-semibold leading-tight text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:text-[17px]">
+              {threadTitle}
+            </h1>
+            <ChatHeaderPresence
+              label={supportPresence.label}
+              subtitle={threadSubtitle}
+              tone={supportPresence.tone}
+            />
+          </div>
+
+          <div className="relative shrink-0">
+            <button
+              aria-expanded={isChatMenuOpen}
+              aria-haspopup="menu"
+              aria-label={
+                isChatMenuOpen ? 'Закрыть меню чата' : 'Открыть меню чата'
+              }
+              className="chat-header-menu-button inline-flex h-10 w-10 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+              onClick={() => {
+                setIsChatMenuOpen((currentValue) => !currentValue)
+                setIsNavMenuOpen(false)
+              }}
+              ref={chatMenuButtonRef}
+              title="Меню чата"
+              type="button"
+            >
+              <MoreHorizontalIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {isNavMenuOpen ? (
+          <div
+            className="portal-menu-surface absolute left-3 top-[calc(100%+0.5rem)] z-50 w-52 overflow-hidden rounded-chat-nav-menu border border-white/65 p-1.5 text-sm text-slate-700 shadow-chat-nav-menu sm:left-4"
+            onKeyDown={handleMenuKeyDown}
+            ref={navMenuPanelRef}
+            role="menu"
+            tabIndex={-1}
+          >
+            <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+              Чаты
             </div>
-          ) : null}
-        </div>
+            {availableThreads.map((thread) => {
+              const isSelected = thread.id === selectedThreadId
+              const unreadCount = readThreadUnreadCount(thread)
+              const hasUnread = unreadCount > 0
 
-        <ChatAvatar
-          alt={threadTitle}
-          avatarUrl={activeThread?.avatarUrl ?? branding.assets.logo?.publicUrl}
-          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.85rem] bg-brand-900 text-sm font-semibold tracking-wide text-white"
-          title={threadTitle}
-        >
-          {tenantMonogram}
-        </ChatAvatar>
-
-        <div className="min-w-0 flex-1 py-0.5">
-          <h1 className="truncate text-[16px] font-semibold leading-tight text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:text-[17px]">
-            {threadTitle}
-          </h1>
-          <ChatHeaderPresence
-            label={supportPresence.label}
-            subtitle={threadSubtitle}
-            tone={supportPresence.tone}
-          />
-        </div>
-
-        <div className="relative shrink-0" ref={chatMenuRef}>
-          <button
-            aria-expanded={isChatMenuOpen}
-            aria-haspopup="menu"
-            aria-label={
-              isChatMenuOpen ? 'Закрыть меню чата' : 'Открыть меню чата'
-            }
-            className="chat-header-menu-button inline-flex h-10 w-10 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-            onClick={() => {
-              setIsChatMenuOpen((currentValue) => !currentValue)
-              setIsNavMenuOpen(false)
-            }}
-            ref={chatMenuButtonRef}
-            title="Меню чата"
-            type="button"
-          >
-            <MoreHorizontalIcon className="h-5 w-5" />
-          </button>
-
-          {isChatMenuOpen ? (
-            <div
-              className="portal-menu-surface absolute right-0 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-chat-menu border border-slate-200/90 p-2 text-slate-700 shadow-chat-menu"
-              onKeyDown={handleMenuKeyDown}
-              ref={chatMenuPanelRef}
-              role="menu"
-              tabIndex={-1}
+              return (
+                <button
+                  aria-current={isSelected ? 'page' : undefined}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left transition',
+                    isSelected
+                      ? 'font-medium text-brand-800'
+                      : 'text-slate-600 hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100',
+                  )}
+                  disabled={isSelected}
+                  key={thread.id}
+                  onClick={() => {
+                    onSelectThread(thread.id)
+                    setIsNavMenuOpen(false)
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  {isSelected ? (
+                    <CheckIcon className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <span className="h-4 w-4 shrink-0" />
+                  )}
+                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="min-w-0 truncate">{thread.title}</span>
+                    {hasUnread ? (
+                      <span
+                        aria-label={`${thread.title}, ${unreadCount} непрочитанных`}
+                        className="ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
+                        data-testid={`thread-unread-badge-${thread.id}`}
+                      >
+                        {formatUnreadCount(unreadCount)}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              )
+            })}
+            <button
+              className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+              onClick={() => {
+                setIsNavMenuOpen(false)
+                navigate(routePaths.app.settings)
+              }}
+              role="menuitem"
+              type="button"
             >
+              <SettingsIcon className="h-4 w-4 shrink-0" />
+              <span>Настройки</span>
+            </button>
+          </div>
+        ) : null}
+
+        {isChatMenuOpen ? (
+          <div
+            className="portal-menu-surface absolute right-3 top-[calc(100%+0.5rem)] z-50 w-max max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-chat-menu border border-white/65 p-2 text-slate-700 shadow-chat-menu sm:right-4"
+            onKeyDown={handleMenuKeyDown}
+            ref={chatMenuPanelRef}
+            role="menu"
+            tabIndex={-1}
+          >
               <div className="px-1 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
                 Аккаунт
               </div>
@@ -460,13 +465,12 @@ export function ChatHeader({
                   void handleLogout()
                 }}
               />
-            </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {logoutError ? (
-        <div className="mt-2 sm:mt-3">
+        <div className="mx-auto mt-2 w-full max-w-[620px] sm:mt-3">
           <InlineAlert message={logoutError} tone="error" />
         </div>
       ) : null}

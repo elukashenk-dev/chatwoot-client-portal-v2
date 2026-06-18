@@ -57,6 +57,40 @@ export function PhoneIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function PhoneFilledIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path d="M6.63 10.79a15.1 15.1 0 0 0 6.58 6.58l2.2-2.2a1.5 1.5 0 0 1 1.54-.36 10.5 10.5 0 0 0 3.3.53A1.75 1.75 0 0 1 22 17.09v3.49a1.75 1.75 0 0 1-1.75 1.75A18.58 18.58 0 0 1 1.67 3.75 1.75 1.75 0 0 1 3.42 2h3.5a1.75 1.75 0 0 1 1.74 1.75 10.5 10.5 0 0 0 .53 3.3 1.5 1.5 0 0 1-.36 1.54l-2.2 2.2Z" />
+    </svg>
+  )
+}
+
+export function HeadphonesIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+      <path d="M4 14.5A2.5 2.5 0 0 1 6.5 12H8v7H6.5A2.5 2.5 0 0 1 4 16.5v-2Z" />
+      <path d="M20 14.5A2.5 2.5 0 0 0 17.5 12H16v7h1.5a2.5 2.5 0 0 0 2.5-2.5v-2Z" />
+      <path d="M20 17v1.5A2.5 2.5 0 0 1 17.5 21H12" />
+      <path d="M12 21h-3" />
+    </svg>
+  )
+}
+
 export function EyeOpenIcon() {
   return (
     <svg

@@ -1,8 +1,12 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { authPrimaryLinkClassName } from '../../../shared/ui/inputStyles'
 import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
+import { AuthCompactSupport } from '../components/AuthCompactSupport'
+import {
+  AuthFlowActions,
+  authFlowActionLinkClassName,
+} from '../components/AuthFlowActions'
 import { PasswordResetRequestForm } from '../components/PasswordResetRequestForm'
 
 export function PasswordResetRequestPage() {
@@ -13,11 +17,12 @@ export function PasswordResetRequestPage() {
     >
       <PasswordResetRequestForm />
 
-      <div className="mt-4 text-center text-sm text-slate-500 sm:text-[15px]">
-        <Link className={authPrimaryLinkClassName} to={routePaths.auth.login}>
+      <AuthFlowActions>
+        <Link className={authFlowActionLinkClassName} to={routePaths.auth.login}>
           Вернуться ко входу
         </Link>
-      </div>
+      </AuthFlowActions>
+      <AuthCompactSupport />
     </TenantAuthShell>
   )
 }

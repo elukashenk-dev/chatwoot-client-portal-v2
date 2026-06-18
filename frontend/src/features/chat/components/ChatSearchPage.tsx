@@ -32,6 +32,8 @@ const searchFilters: Array<{ key: ChatSearchAuthorFilter; label: string }> = [
   { key: 'support', label: 'Поддержка' },
 ]
 
+const GLASS_CARD_CLASS = 'chat-glass-card-surface'
+
 const SEARCH_DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   hour: '2-digit',
@@ -105,7 +107,7 @@ function FilterTabs({
   return (
     <div
       aria-label="Фильтр авторов"
-      className="mb-4 grid grid-cols-3 rounded-lg bg-slate-100 p-1"
+      className="mb-4 grid grid-cols-3 rounded-lg border border-white/65 bg-white/45 p-1 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md"
       role="group"
     >
       {searchFilters.map((filter) => {
@@ -116,8 +118,8 @@ function FilterTabs({
             aria-pressed={isActive}
             className={`min-h-10 rounded-md px-2 text-[12px] font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${
               isActive
-                ? 'bg-white text-brand-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-white/80 text-brand-900 shadow-sm'
+                : 'text-slate-500 hover:bg-white/45 hover:text-slate-800'
             }`}
             key={filter.key}
             onClick={() => {
@@ -143,7 +145,9 @@ function SearchInput({
   return (
     <label className="mb-4 block">
       <span className="sr-only">Поиск по чату</span>
-      <span className="flex min-h-12 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 text-slate-500 shadow-sm shadow-slate-900/[0.03] focus-within:border-brand-200 focus-within:ring-4 focus-within:ring-brand-100">
+      <span
+        className={`flex min-h-12 items-center gap-3 rounded-lg border px-3 text-slate-500 focus-within:border-brand-200 focus-within:ring-4 focus-within:ring-brand-100 ${GLASS_CARD_CLASS}`}
+      >
         <SearchIcon className="h-5 w-5 shrink-0" />
         <input
           aria-label="Поиск по чату"
@@ -184,7 +188,9 @@ function SearchEmptyState({
             : 'По этому запросу ничего не найдено'
 
   return (
-    <div className="mt-14 rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-[13px] leading-5 text-slate-500">
+    <div
+      className={`mt-14 rounded-lg border px-4 py-8 text-center text-[13px] leading-5 text-slate-500 ${GLASS_CARD_CLASS}`}
+    >
       {message}
     </div>
   )
@@ -207,7 +213,9 @@ function SearchOlderError({ message }: { message: string | null }) {
 
 function SearchLoadingState() {
   return (
-    <div className="mt-10 rounded-lg border border-slate-200 bg-white px-4 py-6 text-center text-[13px] leading-5 text-slate-500 shadow-sm shadow-slate-900/[0.03]">
+    <div
+      className={`mt-10 rounded-lg border px-4 py-6 text-center text-[13px] leading-5 text-slate-500 ${GLASS_CARD_CLASS}`}
+    >
       Ищем сообщения.
     </div>
   )
@@ -225,7 +233,7 @@ function ContextSnippet({
   }
 
   return (
-    <div className="rounded-md bg-slate-50 px-3 py-2">
+    <div className="rounded-md border border-white/50 bg-white/45 px-3 py-2 backdrop-blur-md">
       <div className="text-[11px] font-medium uppercase tracking-normal text-slate-400">
         {label}
       </div>
@@ -244,7 +252,7 @@ function SearchResultCard({
   onSelect: (result: ChatSearchResult) => void
 }) {
   return (
-    <article className="rounded-lg border border-slate-200/90 bg-white p-3 shadow-sm shadow-slate-900/[0.03]">
+    <article className={`rounded-lg border p-3 ${GLASS_CARD_CLASS}`}>
       <div className="flex min-w-0 items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[12px] font-semibold text-brand-800">
           {item.authorName.trim().slice(0, 2).toLocaleUpperCase('ru-RU')}
@@ -272,7 +280,7 @@ function SearchResultCard({
       ) : null}
 
       <button
-        className="mt-3 flex min-h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+        className="mt-3 flex min-h-10 w-full items-center justify-center rounded-lg border border-white/65 bg-white/60 px-3 text-[13px] font-medium text-brand-800 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md transition hover:border-white/80 hover:bg-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
         onClick={() => {
           onSelect(item)
         }}
@@ -359,7 +367,7 @@ export function ChatSearchPage({
 
         {canLoadMore ? (
           <button
-            className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border px-4 text-[13px] font-medium text-slate-700 transition hover:bg-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60 ${GLASS_CARD_CLASS}`}
             disabled={isLoadingOlder}
             onClick={onLoadOlder}
             type="button"

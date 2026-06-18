@@ -5,8 +5,19 @@ import {
   BrandingContext,
   type BrandingContextValue,
 } from '../../branding/lib/brandingContext'
+import type { AuthShellProps } from '../../../shared/ui/AuthShell'
 import { TenantIdentityContext } from '../lib/tenantIdentityContext'
 import { TenantAuthShell } from './TenantAuthShell'
+
+const unsupportedAuthShellProps = {
+  children: <div />,
+  description: 'Описание',
+  // @ts-expect-error AuthShell must not accept old auth section artwork props.
+  headerImageUrl: '/old-auth-header.png',
+  title: 'Вход',
+} satisfies AuthShellProps
+
+void unsupportedAuthShellProps
 
 const tenantContextValue = {
   errorMessage: null,
@@ -22,42 +33,28 @@ const tenantContextValue = {
 
 const brandingContextValue: BrandingContextValue = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {
-      auth_footer_image: {
-        assetVersion: '13',
-        contentType: 'image/png',
-        height: null,
-        id: 13,
-        kind: 'auth_footer_image',
-        publicUrl: '/api/branding/assets/13?v=13',
-        width: null,
-      },
-      auth_header_image: {
-        assetVersion: '12',
-        contentType: 'image/png',
-        height: null,
-        id: 12,
-        kind: 'auth_header_image',
-        publicUrl: '/api/branding/assets/12?v=12',
-        width: null,
-      },
       logo: {
         assetVersion: '11',
         contentType: 'image/png',
-        height: null,
+        height: 48,
         id: 11,
         kind: 'logo',
         publicUrl: '/api/branding/assets/11?v=11',
-        width: null,
+        width: 120,
       },
     },
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -71,6 +68,9 @@ const brandingContextValue: BrandingContextValue = {
       chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
+    },
+    layout: {
+      authBrandPlacement: 'right',
     },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
@@ -95,7 +95,7 @@ describe('TenantAuthShell', () => {
     expect(screen.queryByText('Клиентский портал')).not.toBeInTheDocument()
   })
 
-  it('uses public branding logo and auth images while keeping page copy explicit', () => {
+  it('uses public branding logo while keeping page copy explicit', () => {
     const { container } = render(
       <TenantIdentityContext.Provider value={tenantContextValue}>
         <BrandingContext.Provider value={brandingContextValue}>
@@ -110,13 +110,23 @@ describe('TenantAuthShell', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(
+      screen.getByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('width', '120')
+    expect(
+      screen.getByRole('img', { name: 'Логотип ProvGroup' }),
+    ).toHaveAttribute('height', '48')
+    expect(container.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--right',
+    )
+    expect(container.querySelector('.auth-brand-mark')).toHaveClass(
+      'brand-mark--uploaded',
+    )
     expect(screen.getByRole('heading', { name: 'Вход' })).toBeInTheDocument()
     expect(screen.getByText('Описание страницы')).toBeInTheDocument()
     expect(
-      container.querySelector('.auth-header-art')?.getAttribute('style'),
-    ).toContain('url("/api/branding/assets/12?v=12")')
-    expect(
-      container.querySelector('.auth-footer-art')?.getAttribute('style'),
-    ).toContain('url("/api/branding/assets/13?v=13")')
+      container.querySelector('.auth-header-art'),
+    ).not.toBeInTheDocument()
+    expect(container.querySelector('.auth-footer-art')).not.toBeInTheDocument()
   })
 })

@@ -12,8 +12,6 @@ type ApiErrorResponse = {
 export type BrandingColors = {
   accent: string
   authBackground: string
-  authContentSurface: string
-  authContentSurfaceOpacity: number
   authMutedText: string
   authText: string
   chatBackground: string
@@ -32,11 +30,20 @@ export type BrandingCopy = {
   chatInfoTitle: string
 }
 
+export type BrandingLayout = {
+  authBrandPlacement: 'center' | 'left' | 'right'
+}
+
+export type BrandingAppearance = {
+  authBackgroundOverlay: 'dark' | 'light' | 'none'
+  authButtonStyle: 'gradient' | 'solid'
+  authColorScheme: 'dark' | 'light'
+  authFieldStyle: 'outline' | 'solid' | 'translucent'
+}
+
 export type BrandingAssetKind =
   | 'logo'
   | 'pwa_icon'
-  | 'auth_header_image'
-  | 'auth_footer_image'
   | 'auth_background_image'
   | 'chat_background_image'
   | 'chat_header_background_image'
@@ -56,9 +63,11 @@ export type PublicBrandingAssets = Partial<
 >
 
 export type PublicBranding = {
+  appearance: BrandingAppearance
   assets: PublicBrandingAssets
   colors: BrandingColors
   copy: BrandingCopy
+  layout: BrandingLayout
   portalName: string
   supportLabel: string
   version: number

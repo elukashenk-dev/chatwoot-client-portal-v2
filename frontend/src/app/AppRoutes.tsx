@@ -77,6 +77,11 @@ const AdminBrandingPage = lazyRouteComponent(() =>
     (module) => module.AdminBrandingPage,
   ),
 )
+const LegalDocumentPage = lazyRouteComponent(() =>
+  import('../features/legal/pages/LegalDocumentPage').then(
+    (module) => module.LegalDocumentPage,
+  ),
+)
 
 function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>
@@ -88,6 +93,23 @@ export function AppRoutes() {
       <Route
         path={routePaths.root}
         element={<Navigate replace to={routePaths.auth.login} />}
+      />
+
+      <Route
+        path={routePaths.legal.terms}
+        element={
+          <LazyRoute>
+            <LegalDocumentPage document="terms" />
+          </LazyRoute>
+        }
+      />
+      <Route
+        path={routePaths.legal.privacy}
+        element={
+          <LazyRoute>
+            <LegalDocumentPage document="privacy" />
+          </LazyRoute>
+        }
       />
 
       <Route element={<CustomerAuthBoundary />}>

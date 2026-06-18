@@ -21,10 +21,10 @@ export function ChatMenuItem({
     <button
       aria-disabled={isDisabled ? true : undefined}
       className={[
-        'flex min-h-10 w-full items-center gap-3 whitespace-nowrap border-b border-slate-200/80 px-1 py-2 text-left text-[15px] leading-5 transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60',
+        'flex min-h-10 w-full items-center gap-3 whitespace-nowrap border-b border-slate-300/45 px-1 py-2 text-left text-[15px] leading-5 transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60',
         destructive
-          ? 'text-red-600 hover:text-red-700'
-          : 'text-slate-700 hover:text-brand-800',
+          ? 'text-red-600 hover:bg-red-50/75 hover:text-red-700'
+          : 'text-slate-700 hover:bg-white/45 hover:text-brand-800',
       ].join(' ')}
       disabled={isDisabled}
       onClick={onSelect}

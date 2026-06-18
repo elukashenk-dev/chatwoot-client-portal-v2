@@ -33,6 +33,9 @@ const mediaFilters: Array<{ key: MediaFilter; label: string }> = [
   { key: 'file', label: 'Файлы' },
 ]
 
+const GLASS_CARD_CLASS = 'chat-glass-card-surface'
+const GLASS_ROW_BORDER_CLASS = 'border-slate-300/45'
+
 const MEDIA_DATE_FORMATTER = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
   hour: '2-digit',
@@ -92,7 +95,7 @@ function FilterTabs({
   return (
     <div
       aria-label="Фильтр медиа"
-      className="mb-5 grid grid-cols-5 rounded-lg bg-slate-100 p-1"
+      className="mb-5 grid grid-cols-5 rounded-lg border border-white/65 bg-white/45 p-1 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md"
       role="group"
     >
       {mediaFilters.map((filter) => {
@@ -103,8 +106,8 @@ function FilterTabs({
             aria-pressed={isActive}
             className={`min-h-10 rounded-md px-1.5 text-[12px] font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${
               isActive
-                ? 'bg-white text-brand-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-white/80 text-brand-900 shadow-sm'
+                : 'text-slate-500 hover:bg-white/45 hover:text-slate-800'
             }`}
             key={filter.key}
             onClick={() => {
@@ -157,7 +160,7 @@ function MediaLink({
 function VisualMediaCard({ item }: { item: ChatMediaItem }) {
   return (
     <MediaLink
-      className="block min-w-0 rounded-lg border border-slate-200/90 bg-white p-2 text-left transition hover:border-brand-200 hover:shadow-sm"
+      className={`block min-w-0 rounded-lg border p-2 text-left transition hover:bg-white/80 hover:border-white/80 ${GLASS_CARD_CLASS}`}
       item={item}
     >
       <span className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-slate-100 text-slate-500">
@@ -185,7 +188,7 @@ function VisualMediaCard({ item }: { item: ChatMediaItem }) {
 function FileMediaRow({ item }: { item: ChatMediaItem }) {
   return (
     <MediaLink
-      className="flex min-h-14 min-w-0 items-center gap-3 border-b border-slate-200/80 bg-white px-3 py-2.5 text-left transition last:border-b-0 hover:bg-slate-50"
+      className={`flex min-h-14 min-w-0 items-center gap-3 border-b ${GLASS_ROW_BORDER_CLASS} px-3 py-2.5 text-left transition last:border-b-0 hover:bg-white/45`}
       item={item}
     >
       <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-brand-800">
@@ -231,7 +234,9 @@ function MediaSections({ items }: { items: ChatMediaItem[] }) {
           <h2 className="px-1 text-[12px] font-semibold uppercase tracking-normal text-slate-500">
             Аудио и файлы
           </h2>
-          <div className="mt-2 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+          <div
+            className={`mt-2 overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}
+          >
             {fileItems.map((item) => (
               <FileMediaRow item={item} key={item.id} />
             ))}
@@ -275,14 +280,16 @@ export function ChatMediaPage({
           {items.length > 0 ? (
             <MediaSections items={items} />
           ) : (
-            <div className="mt-14 rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-[13px] leading-5 text-slate-500">
+            <div
+              className={`mt-14 rounded-lg border px-4 py-8 text-center text-[13px] leading-5 text-slate-500 ${GLASS_CARD_CLASS}`}
+            >
               В этом чате пока нет файлов
             </div>
           )}
 
           {media.hasMoreOlder ? (
             <button
-              className="mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-medium text-slate-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className={`mt-5 flex min-h-11 w-full items-center justify-center rounded-lg border px-4 text-[13px] font-medium text-slate-700 transition hover:bg-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60 ${GLASS_CARD_CLASS}`}
               disabled={isLoadingOlder}
               onClick={onLoadOlder}
               type="button"

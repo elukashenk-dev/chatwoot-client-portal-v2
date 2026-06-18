@@ -14,7 +14,10 @@ export function ComposerAttachmentPreview({
   onRemove,
 }: ComposerAttachmentPreviewProps) {
   return (
-    <div className="mb-2 flex items-center gap-3 rounded-[0.8rem] border border-slate-200 bg-white px-3 py-2">
+    <div
+      className="mb-2 flex items-center gap-3 rounded-[0.8rem] border border-white/65 bg-white/60 px-3 py-2 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md"
+      data-composer-panel="attachment"
+    >
       <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] bg-brand-50 text-brand-800">
         <FileTextIcon className="h-4 w-4" />
       </span>
@@ -28,7 +31,7 @@ export function ComposerAttachmentPreview({
       </span>
       <button
         aria-label="Убрать файл"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.65rem] text-slate-400 transition hover:bg-white/55 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
         disabled={disabled}
         onClick={onRemove}
         title="Убрать файл"

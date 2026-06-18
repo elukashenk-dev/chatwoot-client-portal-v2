@@ -41,14 +41,18 @@ function createAdminSessionResponse() {
 function createAdminBrandingResponse() {
   return createJsonResponse({
     branding: {
+      appearance: {
+        authBackgroundOverlay: 'none',
+        authButtonStyle: 'solid',
+        authColorScheme: 'light',
+        authFieldStyle: 'solid',
+      },
       assets: {},
       colors: {
         accent: '#4676b4',
         authBackground: '#f3f7fc',
-        authContentSurface: '#ffffff',
-        authContentSurfaceOpacity: 100,
         authMutedText: '#64748b',
-        authText: '#0f172a',
+        authText: '#15486b',
         chatBackground: '#ffffff',
         chatHeaderBackground: '#112540',
         chatHeaderText: '#ffffff',
@@ -62,6 +66,9 @@ function createAdminBrandingResponse() {
         chatEmptyBody: 'Напишите нам, когда будет удобно.',
         chatEmptyTitle: 'Мы на связи',
         chatInfoTitle: 'Информация о чате',
+      },
+      layout: {
+        authBrandPlacement: 'left',
       },
       portalName: 'Бухфирма',
       supportLabel: 'Команда Бухфирма',
@@ -260,7 +267,7 @@ describe('AppRoutes admin route separation', () => {
     renderRoute('/app/chat')
 
     expect(
-      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
+      await screen.findByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
     ).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/admin/auth/me',
@@ -274,7 +281,7 @@ describe('AppRoutes admin route separation', () => {
     renderRoute('/auth/login')
 
     expect(
-      await screen.findByRole('heading', { name: 'Вход в личный кабинет' }),
+      await screen.findByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
     ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/me',

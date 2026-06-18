@@ -113,7 +113,7 @@ export function PasswordResetRequestForm() {
   }
 
   return (
-    <form className="space-y-4" noValidate onSubmit={handleSubmit}>
+    <form className="auth-flow-form" noValidate onSubmit={handleSubmit}>
       <FormField
         error={visibleEmailErrorMessage}
         errorId={emailErrorId}
@@ -143,9 +143,9 @@ export function PasswordResetRequestForm() {
         />
       </FormField>
 
-      <div className="rounded-[0.6rem] bg-slate-100/80 px-3.5 py-3 text-sm leading-5 text-slate-500 shadow-sm">
+      <p className="auth-form-note">
         Введите email, указанный при создании вашего профиля.
-      </div>
+      </p>
 
       <InlineAlert message={globalError} tone="error" />
 

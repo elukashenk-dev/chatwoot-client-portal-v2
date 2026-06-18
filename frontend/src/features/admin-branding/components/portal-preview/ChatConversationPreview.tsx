@@ -27,42 +27,44 @@ export function ChatConversationPreview() {
         onRetryTextMessage={noop}
       />
 
-      <footer className="border-t border-slate-200/70 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
-        <div className="flex items-end gap-2">
-          <button
-            aria-label="Прикрепить файл"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing disabled:cursor-not-allowed disabled:text-slate-300"
-            disabled
-            type="button"
-          >
-            <PaperclipIcon className="h-5 w-5" />
-          </button>
+      <footer className="relative z-20 bg-transparent px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
+        <div className="chat-floating-composer-surface mx-auto w-full rounded-[10px] border px-3 py-[9px]">
+          <div className="flex items-end gap-2">
+            <button
+              aria-label="Прикрепить файл"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled
+              type="button"
+            >
+              <PaperclipIcon className="h-5 w-5" />
+            </button>
 
-          <textarea
-            aria-label="Сообщение"
-            className="chat-muted-text max-h-32 min-h-10 min-w-0 flex-1 resize-none appearance-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 shadow-none outline-none placeholder:text-[color:var(--portal-chat-muted-text-color,#64748b)] focus:outline-none focus:ring-0 focus-visible:outline-none disabled:opacity-100"
-            disabled
-            placeholder="Сообщение..."
-            rows={1}
-          />
+            <textarea
+              aria-label="Сообщение"
+              className="chat-text max-h-32 min-h-10 min-w-0 flex-1 resize-none appearance-none overflow-hidden border-0 bg-transparent px-2 py-2 text-[15px] leading-6 shadow-none outline-none placeholder:text-[color:var(--portal-chat-muted-text-color,#64748b)] focus:border-transparent focus:outline-none focus:ring-0 focus-visible:outline-none disabled:text-[color:var(--portal-chat-muted-text-color,#64748b)]"
+              disabled
+              placeholder="Сообщение..."
+              rows={1}
+            />
 
-          <button
-            aria-label="Голосовое сообщение"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing disabled:cursor-not-allowed disabled:text-slate-300"
-            disabled
-            type="button"
-          >
-            <MicrophoneIcon className="h-5 w-5" />
-          </button>
+            <button
+              aria-label="Голосовое сообщение"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              disabled
+              type="button"
+            >
+              <MicrophoneIcon className="h-5 w-5" />
+            </button>
 
-          <button
-            aria-label="Отправить"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control bg-slate-200 text-white disabled:cursor-not-allowed"
-            disabled
-            type="button"
-          >
-            <SendIcon className="h-[18px] w-[18px]" />
-          </button>
+            <button
+              aria-label="Отправить"
+              className="chat-send-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-chat-control text-white shadow-sm shadow-slate-900/10 transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-200/80 disabled:text-white/80 disabled:shadow-none"
+              disabled
+              type="button"
+            >
+              <SendIcon className="h-[18px] w-[18px]" />
+            </button>
+          </div>
         </div>
       </footer>
     </div>

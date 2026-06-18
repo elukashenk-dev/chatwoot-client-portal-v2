@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
-import { authPrimaryLinkClassName } from '../../../shared/ui/inputStyles'
 import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
+import {
+  AuthFlowActions,
+  authFlowActionLinkClassName,
+} from '../components/AuthFlowActions'
 import { RegisterRequestForm } from '../components/RegisterRequestForm'
 
 export function RegisterRequestPage() {
@@ -13,12 +16,12 @@ export function RegisterRequestPage() {
     >
       <RegisterRequestForm />
 
-      <div className="mt-4 text-center text-sm text-slate-500 sm:text-[15px]">
+      <AuthFlowActions>
         Уже есть аккаунт?{' '}
-        <Link className={authPrimaryLinkClassName} to={routePaths.auth.login}>
+        <Link className={authFlowActionLinkClassName} to={routePaths.auth.login}>
           Войти
         </Link>
-      </div>
+      </AuthFlowActions>
     </TenantAuthShell>
   )
 }

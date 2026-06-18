@@ -84,6 +84,57 @@ export const portalUsers = pgTable(
   ],
 )
 
+export const portalLegalAcceptances = pgTable(
+  'portal_legal_acceptances',
+  {
+    id: serial('id').primaryKey(),
+    tenantId: integer('tenant_id')
+      .notNull()
+      .references(() => portalTenants.id, { onDelete: 'restrict' }),
+    portalUserId: integer('portal_user_id').references(() => portalUsers.id, {
+      onDelete: 'set null',
+    }),
+    email: text('email').notNull(),
+    purpose: text('purpose').notNull(),
+    termsAccepted: boolean('terms_accepted').notNull(),
+    personalDataConsentAccepted: boolean(
+      'personal_data_consent_accepted',
+    ).notNull(),
+    termsVersion: text('terms_version').notNull(),
+    privacyPolicyVersion: text('privacy_policy_version').notNull(),
+    acceptedAt: timestamp('accepted_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+    requestIp: text('request_ip'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', timestampWithTimezone)
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('portal_legal_acceptances_tenant_email_idx').on(
+      table.tenantId,
+      table.email,
+    ),
+    index('portal_legal_acceptances_tenant_user_idx').on(
+      table.tenantId,
+      table.portalUserId,
+    ),
+    check(
+      'portal_legal_acceptances_purpose_check',
+      sql`${table.purpose} in ('registration')`,
+    ),
+    check(
+      'portal_legal_acceptances_terms_accepted_check',
+      sql`${table.termsAccepted} = true`,
+    ),
+    check(
+      'portal_legal_acceptances_personal_data_consent_check',
+      sql`${table.personalDataConsentAccepted} = true`,
+    ),
+  ],
+)
+
 export const portalSessions = pgTable(
   'portal_sessions',
   {

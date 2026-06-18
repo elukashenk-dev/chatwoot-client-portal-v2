@@ -14,11 +14,11 @@ export function DayDivider({
         className,
       )}
     >
-      <div className="h-px flex-1 bg-slate-100" />
-      <span className="chat-muted-text rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-0.5 text-[11px] font-normal text-slate-500 shadow-sm shadow-slate-900/[0.03]">
+      <div className="h-px flex-1 bg-slate-300/40" />
+      <span className="chat-muted-text rounded-full border border-white/45 bg-white/45 px-3 py-1 text-[11px] font-normal shadow-sm shadow-slate-900/[0.04] backdrop-blur-md">
         {label}
       </span>
-      <div className="h-px flex-1 bg-slate-100" />
+      <div className="h-px flex-1 bg-slate-300/40" />
     </div>
   )
 }

@@ -365,13 +365,13 @@ export function MessageComposer({
   return (
     <footer
       className={cn(
-        'border-t border-slate-200/70 bg-white px-4 pt-3 sm:px-6',
+        'relative z-20 bg-transparent px-3 pt-2 sm:px-6',
         isVisualKeyboardOpen
           ? 'pb-1.5'
           : 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]',
       )}
     >
-      <div className="mx-auto w-full max-w-[620px]">
+      <div className="chat-floating-composer-surface mx-auto w-full max-w-[620px] rounded-[10px] border px-3 py-[9px]">
         {replyTarget ? (
           <ComposerReplyPreview
             disabled={isSending || isVoiceRecorderBusy}
@@ -419,7 +419,7 @@ export function MessageComposer({
           >
             <button
               aria-label="Прикрепить файл"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-chat-control text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
               disabled={isAttachmentControlDisabled}
               onClick={() => {
                 fileInputRef.current?.click()
@@ -455,7 +455,7 @@ export function MessageComposer({
           >
             <button
               aria-label="Голосовое сообщение"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing transition hover:bg-slate-100 hover:text-chat-outgoing/80 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300"
               disabled={!canStartVoiceRecording}
               onClick={() => {
                 void startVoiceRecording()

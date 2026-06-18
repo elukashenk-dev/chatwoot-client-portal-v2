@@ -13,6 +13,7 @@ import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 
 type BrandingProviderProps = {
   children: ReactNode
+  loadWithoutTenant?: boolean
 }
 
 type RemoteBrandingState = {
@@ -43,9 +44,15 @@ function applyBrandingDocumentMetadata(
   setMetaContent('theme-color', branding.colors.primary)
 }
 
-export function BrandingProvider({ children }: BrandingProviderProps) {
+const TENANTLESS_BRANDING_SCOPE = '__tenantless_public__'
+
+export function BrandingProvider({
+  children,
+  loadWithoutTenant = false,
+}: BrandingProviderProps) {
   const { status: tenantStatus, tenant } = useTenantIdentity()
-  const tenantSlug = tenant?.slug ?? null
+  const brandingScopeKey =
+    tenant?.slug ?? (loadWithoutTenant ? TENANTLESS_BRANDING_SCOPE : null)
   const fallbackBranding = useMemo(
     () => createDefaultPublicBranding(tenant?.displayName),
     [tenant?.displayName],
@@ -58,10 +65,11 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
   })
 
   useEffect(() => {
-    if (
-      !tenant ||
-      (tenantStatus !== 'ready' && tenantStatus !== 'ready_cached')
-    ) {
+    const canLoadTenantBranding =
+      tenant && (tenantStatus === 'ready' || tenantStatus === 'ready_cached')
+    const canLoadTenantlessBranding = loadWithoutTenant && !tenant
+
+    if (!canLoadTenantBranding && !canLoadTenantlessBranding) {
       return
     }
 
@@ -73,7 +81,7 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
           branding,
           errorMessage: null,
           status: 'ready',
-          tenantSlug: tenant.slug,
+          tenantSlug: brandingScopeKey,
         })
       })
       .catch((error: unknown) => {
@@ -88,19 +96,19 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
               ? error.message
               : 'Оформление временно недоступно.',
           status: 'fallback',
-          tenantSlug: tenant.slug,
+          tenantSlug: brandingScopeKey,
         })
       })
 
     return () => {
       abortController.abort()
     }
-  }, [tenant, tenantStatus])
+  }, [brandingScopeKey, loadWithoutTenant, tenant, tenantStatus])
 
   const state = useMemo<BrandingContextValue>(() => {
-    const remoteMatchesTenant = remoteState.tenantSlug === tenantSlug
+    const remoteMatchesScope = remoteState.tenantSlug === brandingScopeKey
 
-    if (!tenant) {
+    if (!tenant && !loadWithoutTenant) {
       return {
         branding: fallbackBranding,
         errorMessage: null,
@@ -109,7 +117,7 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
     }
 
     if (
-      remoteMatchesTenant &&
+      remoteMatchesScope &&
       remoteState.status === 'ready' &&
       remoteState.branding
     ) {
@@ -120,7 +128,7 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
       }
     }
 
-    if (remoteMatchesTenant && remoteState.status === 'fallback') {
+    if (remoteMatchesScope && remoteState.status === 'fallback') {
       return {
         branding: fallbackBranding,
         errorMessage: remoteState.errorMessage,
@@ -133,15 +141,15 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
       errorMessage: null,
       status: 'loading',
     }
-  }, [fallbackBranding, remoteState, tenant, tenantSlug])
+  }, [brandingScopeKey, fallbackBranding, loadWithoutTenant, remoteState, tenant])
 
   useEffect(() => {
-    if (!tenant) {
+    if (!tenant && !loadWithoutTenant) {
       return
     }
 
     applyBrandingDocumentMetadata(state.branding)
-  }, [state.branding, tenant])
+  }, [loadWithoutTenant, state.branding, tenant])
 
   const cssProperties = useMemo(
     () => createBrandingCssProperties(state.branding),
@@ -150,7 +158,11 @@ export function BrandingProvider({ children }: BrandingProviderProps) {
 
   return (
     <BrandingContext.Provider value={state}>
-      <div className="portal-branding-scope" style={cssProperties}>
+      <div
+        className="portal-branding-scope"
+        data-auth-field-style={state.branding.appearance.authFieldStyle}
+        style={cssProperties}
+      >
         {children}
       </div>
     </BrandingContext.Provider>

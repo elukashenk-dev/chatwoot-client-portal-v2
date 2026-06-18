@@ -8,13 +8,13 @@ type InlineAlertProps = {
 }
 
 const toneClassMap: Record<InlineAlertTone, string> = {
-  error: 'border-[#f1d2d8] bg-[#fff9f9]/90 text-[#8f4350]',
-  info: 'border-brand-200 bg-brand-50 text-brand-900',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  warning: 'border-[#f0c6ce] bg-[#fff6f7]/95 text-[#80313d]',
+  error: 'auth-form-message--error',
+  info: 'auth-form-message--info',
+  success: 'auth-form-message--success',
+  warning: 'auth-form-message--warning',
 }
 
-const phonePattern = /\+7\s*\(\d{3}\)\s*\d{2}-\d{3}-\d{2}/g
+const phonePattern = /\+7\s*\(\d{3}\)\s*\d{2,3}(?:-\d{2,3}){1,2}/g
 
 function getPhoneHref(phoneText: string) {
   const digits = phoneText.replace(/\D/g, '')
@@ -73,12 +73,42 @@ export function InlineAlert({ message, tone = 'error' }: InlineAlertProps) {
   return (
     <div
       className={cn(
-        'inline-alert-enter rounded-[0.6rem] border px-4 py-3 text-sm leading-6',
+        'inline-alert-enter auth-form-message',
         toneClassMap[tone],
       )}
       role={tone === 'error' ? 'alert' : 'status'}
     >
-      {renderMessage(message)}
+      <span aria-hidden="true" className="auth-form-message__icon">
+        {tone === 'success' ? (
+          <svg fill="none" viewBox="0 0 16 16">
+            <path
+              d="m3.25 8.25 3 3 6.5-6.5"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.6"
+            />
+          </svg>
+        ) : (
+          <svg fill="none" viewBox="0 0 16 16">
+            <circle
+              cx="8"
+              cy="8"
+              r="6"
+              stroke="currentColor"
+              strokeWidth="1.4"
+            />
+            <path
+              d="M8 7.25v4"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="1.4"
+            />
+            <circle cx="8" cy="4.7" fill="currentColor" r="0.75" />
+          </svg>
+        )}
+      </span>
+      <span className="auth-form-message__body">{renderMessage(message)}</span>
     </div>
   )
 }

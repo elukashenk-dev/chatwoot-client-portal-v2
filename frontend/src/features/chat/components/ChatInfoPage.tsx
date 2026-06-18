@@ -12,6 +12,10 @@ import type {
 } from '../types'
 import { ChatAvatar } from './ChatAvatar'
 
+const GLASS_CARD_CLASS = 'chat-glass-card-surface'
+const GLASS_ROW_BORDER_CLASS = 'border-slate-300/45'
+const TENANT_DEFAULT_ICON_PREFIX = '/api/tenant/icons/'
+
 type ChatInfoPageProps = {
   info: ChatThreadInfoResponse | null
   isBackActionReadOnly?: boolean
@@ -38,7 +42,9 @@ function formatDateTime(value: string | null) {
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-11 items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 last:border-b-0">
+    <div
+      className={`flex min-h-11 items-center justify-between gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3 last:border-b-0`}
+    >
       <dt className="chat-muted-text shrink-0 text-[13px] leading-5">
         {label}
       </dt>
@@ -47,6 +53,26 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       </dd>
     </div>
   )
+}
+
+function resolveThreadIdentityAvatarUrl({
+  brandingLogoUrl,
+  threadAvatarUrl,
+}: {
+  brandingLogoUrl?: string | null
+  threadAvatarUrl?: string | null
+}) {
+  const trimmedThreadAvatarUrl = threadAvatarUrl?.trim()
+
+  if (!trimmedThreadAvatarUrl) {
+    return brandingLogoUrl
+  }
+
+  if (trimmedThreadAvatarUrl.startsWith(TENANT_DEFAULT_ICON_PREFIX)) {
+    return brandingLogoUrl ?? trimmedThreadAvatarUrl
+  }
+
+  return trimmedThreadAvatarUrl
 }
 
 function ParticipantAvatar({
@@ -81,8 +107,12 @@ function WorkingHoursSection({
 
   if (isLoading || isUnavailable) {
     return (
-      <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
-        <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
+      <section
+        className={`mt-5 overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}
+      >
+        <div
+          className={`flex min-h-11 items-center justify-between gap-3 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3`}
+        >
           <h2 className="chat-text text-[13px] font-semibold">Часы работы</h2>
           <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500">
             Проверяем
@@ -105,8 +135,12 @@ function WorkingHoursSection({
     supportAvailability.outOfOfficeMessage
 
   return (
-    <section className="mt-5 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3">
+    <section
+      className={`mt-5 overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}
+    >
+      <div
+        className={`flex min-h-11 items-center justify-between gap-3 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3`}
+      >
         <h2 className="chat-text text-[13px] font-semibold">Часы работы</h2>
         <span
           className={[
@@ -187,9 +221,10 @@ export function ChatInfoPage({
           <div className="flex flex-col items-center text-center">
             <ChatAvatar
               alt={threadTitle}
-              avatarUrl={
-                info.activeThread?.avatarUrl ?? branding.assets.logo?.publicUrl
-              }
+              avatarUrl={resolveThreadIdentityAvatarUrl({
+                brandingLogoUrl: branding.assets.logo?.publicUrl,
+                threadAvatarUrl: info.activeThread?.avatarUrl,
+              })}
               className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-brand-900 text-base font-semibold text-white"
               title={threadTitle}
             >
@@ -203,7 +238,9 @@ export function ChatInfoPage({
             </p>
           </div>
 
-          <dl className="mt-6 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+          <dl
+            className={`mt-6 overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}
+          >
             {info.threadTypeLabel ? (
               <DetailRow label="Тип чата" value={info.threadTypeLabel} />
             ) : null}
@@ -228,10 +265,12 @@ export function ChatInfoPage({
               <h2 className="chat-muted-text px-1 text-[12px] font-semibold uppercase tracking-normal">
                 Участники портала
               </h2>
-              <div className="mt-2 overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+              <div
+                className={`mt-2 overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}
+              >
                 {info.participants.map((participant) => (
                   <div
-                    className="flex min-h-12 items-center gap-3 border-b border-slate-200/80 px-4 py-2.5 last:border-b-0"
+                    className={`flex min-h-12 items-center gap-3 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-2.5 last:border-b-0`}
                     key={participant.id}
                   >
                     <ParticipantAvatar

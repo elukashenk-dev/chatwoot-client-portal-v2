@@ -63,7 +63,7 @@ export function PasswordSetupFormLayout({
 }: PasswordSetupFormLayoutProps) {
   return (
     <form
-      className="space-y-4"
+      className="auth-flow-form"
       data-testid="password-setup-form"
       noValidate
       onSubmit={onSubmit}

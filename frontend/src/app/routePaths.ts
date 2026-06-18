@@ -21,4 +21,8 @@ export const routePaths = {
     passwordResetSetPassword: '/auth/password-reset/set-password',
     passwordResetVerify: '/auth/password-reset/verify',
   },
+  legal: {
+    privacy: '/legal/privacy',
+    terms: '/legal/terms',
+  },
 } as const

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { PublicBranding } from '../api/publicBrandingClient'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { BrandingProvider } from './BrandingProvider'
 import { createDefaultPublicBranding } from './brandingDefaults'
@@ -27,6 +28,12 @@ const tenantContextValue = {
 
 const publicBrandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'dark',
+      authButtonStyle: 'gradient',
+      authColorScheme: 'dark',
+      authFieldStyle: 'outline',
+    },
     assets: {
       auth_background_image: {
         assetVersion: '12',
@@ -59,10 +66,8 @@ const publicBrandingResponse = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#f8fafc',
-      authContentSurfaceOpacity: 84,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -77,11 +82,14 @@ const publicBrandingResponse = {
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
-}
+} satisfies { branding: PublicBranding }
 
 function BrandingProbe() {
   const { branding, status } = useBranding()
@@ -133,16 +141,20 @@ describe('BrandingProvider', () => {
 
     const scope = container.querySelector('.portal-branding-scope')
     expect(scope).not.toBeNull()
+    expect(scope).toHaveAttribute('data-auth-field-style', 'outline')
     expect(scope).toHaveStyle({
       '--portal-auth-background-color': '#ecfeff',
+      '--portal-auth-background-overlay': 'rgb(0 0 0 / 0.48)',
+      '--portal-auth-brand-mark-background': '#134e4a',
+      '--portal-auth-button-background':
+        'linear-gradient(180deg, #3d6e6b 0%, #134e4a 56%, #10403d 100%)',
       '--portal-auth-canvas-background-color': '#ecfeff',
-      '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
-      '--portal-auth-content-surface-color': '#f8fafc',
-      '--portal-auth-content-surface-opacity': '0.84',
-      '--portal-auth-control-background': 'rgb(248 250 252 / 0.84)',
-      '--portal-auth-control-border-color': '#7e92a3',
+      '--portal-auth-control-border-color': '#dddfe4',
+      '--portal-auth-divider-color': '#c4c9d2',
+      '--portal-auth-field-style': 'outline',
       '--portal-auth-muted-text-color': '#456179',
-      '--portal-auth-text-color': '#0f172a',
+      '--portal-auth-scheme': 'dark',
+      '--portal-auth-text-color': '#15486b',
       '--portal-chat-background-color': '#f8fafc',
       '--portal-chat-header-background-color': '#0f766e',
       '--portal-chat-header-foreground': '#f8fafc',
@@ -151,6 +163,9 @@ describe('BrandingProvider', () => {
     })
     expect(scope?.getAttribute('style')).toContain(
       '--portal-auth-background-image: url("/api/branding/assets/12?v=12")',
+    )
+    expect(scope?.getAttribute('style')).not.toContain(
+      '--portal-auth-content-surface',
     )
     expect(scope?.getAttribute('style')).toContain(
       '--portal-chat-background-image: url("/api/branding/assets/13?v=13")',
@@ -191,13 +206,12 @@ describe('BrandingProvider', () => {
       '--color-brand-800': '#173258',
       '--color-brand-900': '#112540',
       '--color-chat-outgoing': '#465a72',
+      '--portal-auth-brand-mark-background': '#112540',
       '--portal-auth-canvas-background-color': '#f3f7fc',
-      '--portal-auth-content-surface-background': 'rgb(255 255 255 / 1)',
-      '--portal-auth-content-surface-color': '#ffffff',
-      '--portal-auth-content-surface-opacity': '1',
-      '--portal-auth-control-background': 'rgb(255 255 255 / 1)',
-      '--portal-auth-control-border-color': '#96a0b0',
+      '--portal-auth-control-border-color': '#dddfe4',
+      '--portal-auth-divider-color': '#c4c9d2',
       '--portal-auth-frame-background-color': '#e2e8f0',
+      '--portal-auth-scheme': 'light',
       '--portal-auth-surface-background-color': '#ffffff',
       '--portal-chat-app-background-color': '#e2e8f0',
       '--portal-chat-header-background-color': '#ffffff',

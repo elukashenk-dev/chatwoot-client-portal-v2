@@ -2,11 +2,14 @@ import type { FormEvent } from 'react'
 
 import type {
   BrandingAssetKind,
+  BrandingAppearance,
   BrandingColors,
   BrandingCopy,
+  BrandingLayout,
 } from '../api/adminBrandingClient'
 import { defaultBrandingColors } from '../../branding/lib/brandingDefaults'
 import type { BrandingDraft } from '../lib/brandingState'
+import { AuthAppearanceControls } from './AuthAppearanceControls'
 import { BrandingAssetControls } from './BrandingAssetControls'
 
 type AdminBrandingFormProps = {
@@ -41,6 +44,15 @@ type ColorFieldConfig = {
   label: string
 }
 
+const authBrandPlacementOptions = [
+  { label: 'Слева', value: 'left' },
+  { label: 'Центр', value: 'center' },
+  { label: 'Справа', value: 'right' },
+] satisfies Array<{
+  label: string
+  value: BrandingLayout['authBrandPlacement']
+}>
+
 const validHexColorPattern = /^#[0-9a-fA-F]{6}$/u
 
 type RgbColor = {
@@ -60,7 +72,6 @@ const colorFieldGroups = [
   {
     fields: [
       { key: 'authBackground', label: 'Фон страницы входа' },
-      { key: 'authContentSurface', label: 'Фон формы входа' },
       { key: 'authText', label: 'Основной текст на входе' },
       {
         key: 'authMutedText',
@@ -199,53 +210,49 @@ function ColorField({
   )
 }
 
-function OpacityField({
+function AuthBrandPlacementField({
   disabled,
-  label,
-  name,
   onChange,
   value,
 }: {
   disabled: boolean
-  label: string
-  name: string
-  onChange: (value: number) => void
-  value: number
+  onChange: (value: BrandingLayout['authBrandPlacement']) => void
+  value: BrandingLayout['authBrandPlacement']
 }) {
   return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <span className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-3">
-        <input
-          aria-label={label}
-          className="h-2 w-full accent-brand-800 disabled:cursor-not-allowed"
-          disabled={disabled}
-          max={100}
-          min={0}
-          name={name}
-          onChange={(event) => {
-            onChange(Number(event.currentTarget.value))
-          }}
-          type="range"
-          value={value}
-        />
-        <input
-          aria-label={`${label}, значение`}
-          className="h-10 rounded-[0.55rem] border border-slate-200 bg-white px-2 text-sm text-slate-950 shadow-sm focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          disabled={disabled}
-          max={100}
-          min={0}
-          onChange={(event) => {
-            onChange(Number(event.currentTarget.value))
-          }}
-          type="number"
-          value={value}
-        />
-      </span>
-      <span className="mt-1 block text-xs leading-5 text-slate-500">
-        100 - плотный фон, 0 - прозрачный.
-      </span>
-    </label>
+    <fieldset className="block">
+      <legend className="text-sm font-medium text-slate-700">
+        Положение логотипа
+      </legend>
+      <div className="mt-2 grid grid-cols-3 rounded-[0.6rem] border border-slate-200 bg-slate-50 p-1">
+        {authBrandPlacementOptions.map((option) => (
+          <label
+            className={[
+              'relative flex min-h-9 items-center justify-center rounded-[0.45rem] px-2 text-center text-sm font-semibold transition',
+              'has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-100',
+              disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              value === option.value
+                ? 'bg-white text-brand-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900',
+            ].join(' ')}
+            key={option.value}
+          >
+            <input
+              checked={value === option.value}
+              className="sr-only"
+              disabled={disabled}
+              name="layout.authBrandPlacement"
+              onChange={() => {
+                onChange(option.value)
+              }}
+              type="radio"
+              value={option.value}
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
@@ -301,6 +308,32 @@ export function AdminBrandingForm({
       ...draft,
       copy: {
         ...draft.copy,
+        [key]: value,
+      },
+    })
+  }
+
+  function updateLayout<Key extends keyof BrandingLayout>(
+    key: Key,
+    value: BrandingLayout[Key],
+  ) {
+    onChange({
+      ...draft,
+      layout: {
+        ...draft.layout,
+        [key]: value,
+      },
+    })
+  }
+
+  function updateAppearance<Key extends keyof BrandingAppearance>(
+    key: Key,
+    value: BrandingAppearance[Key],
+  ) {
+    onChange({
+      ...draft,
+      appearance: {
+        ...draft.appearance,
         [key]: value,
       },
     })
@@ -380,17 +413,6 @@ export function AdminBrandingForm({
                   />
                 ))}
               </div>
-              {group.title === 'Экран входа' ? (
-                <OpacityField
-                  disabled={isSaving}
-                  label="Непрозрачность формы входа"
-                  name="colors.authContentSurfaceOpacity"
-                  onChange={(value) => {
-                    updateColor('authContentSurfaceOpacity', value)
-                  }}
-                  value={draft.colors.authContentSurfaceOpacity}
-                />
-              ) : null}
             </fieldset>
           ))}
         </div>
@@ -427,6 +449,18 @@ export function AdminBrandingForm({
           </p>
         </div>
         <div className="grid gap-4">
+          <AuthBrandPlacementField
+            disabled={isSaving}
+            onChange={(value) => {
+              updateLayout('authBrandPlacement', value)
+            }}
+            value={draft.layout.authBrandPlacement}
+          />
+          <AuthAppearanceControls
+            disabled={isSaving}
+            onChange={updateAppearance}
+            value={draft.appearance}
+          />
           <TextField
             disabled={isSaving}
             label="Заголовок входа"

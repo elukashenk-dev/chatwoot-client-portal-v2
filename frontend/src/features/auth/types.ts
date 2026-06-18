@@ -25,6 +25,8 @@ export type AuthenticatedPortalSession = {
 export type RegisterRequestFormValues = {
   email: string
   fullName: string
+  personalDataConsentAccepted: boolean
+  termsAccepted: boolean
 }
 
 export type RegisterRequestFormErrors = Partial<
@@ -32,7 +34,7 @@ export type RegisterRequestFormErrors = Partial<
 >
 
 export type TouchedRegisterRequestFields = Record<
-  keyof RegisterRequestFormValues,
+  'email' | 'fullName',
   boolean
 >
 

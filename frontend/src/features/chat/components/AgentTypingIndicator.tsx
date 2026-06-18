@@ -41,17 +41,17 @@ export function AgentTypingIndicator({
         >
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-chat-outgoing,#465a72)] opacity-70 motion-safe:animate-bounce"
             style={{ animationDelay: '-0.2s' }}
           />
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-chat-outgoing,#465a72)] opacity-70 motion-safe:animate-bounce"
             style={{ animationDelay: '-0.1s' }}
           />
           <span
             aria-hidden="true"
-            className="h-1.5 w-1.5 rounded-full bg-slate-400 motion-safe:animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-chat-outgoing,#465a72)] opacity-70 motion-safe:animate-bounce"
           />
         </div>
       </div>

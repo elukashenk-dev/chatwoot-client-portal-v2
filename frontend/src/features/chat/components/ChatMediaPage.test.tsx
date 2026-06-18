@@ -103,11 +103,20 @@ describe('ChatMediaPage', () => {
     expect(
       within(visualSection).getByText('walkthrough.mp4'),
     ).toBeInTheDocument()
+    expect(
+      within(visualSection).getByText('receipt.png').closest('a'),
+    ).toHaveClass('chat-glass-card-surface')
+    expect(
+      within(visualSection).getByText('receipt.png').closest('a'),
+    ).not.toHaveClass('bg-white/70')
 
     const fileSection = screen.getByRole('region', { name: 'Аудио и файлы' })
     expect(
       within(fileSection).getByText('voice-message.webm'),
     ).toBeInTheDocument()
+    expect(
+      within(fileSection).getByText('voice-message.webm').closest('a'),
+    ).toHaveClass('border-slate-300/45')
     expect(within(fileSection).getByText('contract.pdf')).toBeInTheDocument()
     expect(screen.getByText(/12 КБ/)).toBeInTheDocument()
   })
@@ -153,6 +162,18 @@ describe('ChatMediaPage', () => {
     )
 
     expect(screen.getByText('В этом чате пока нет файлов')).toBeInTheDocument()
+    expect(screen.getByText('В этом чате пока нет файлов')).toHaveClass(
+      'chat-glass-card-surface',
+    )
+    expect(screen.getByText('В этом чате пока нет файлов')).not.toHaveClass(
+      'bg-white/70',
+    )
+    expect(screen.getByText('В этом чате пока нет файлов')).not.toHaveClass(
+      'border-dashed',
+    )
+    expect(screen.getByRole('button', { name: 'Показать ещё' })).toHaveClass(
+      'chat-glass-card-surface',
+    )
     await user.click(screen.getByRole('button', { name: 'Показать ещё' }))
     expect(onLoadOlder).toHaveBeenCalledTimes(1)
   })

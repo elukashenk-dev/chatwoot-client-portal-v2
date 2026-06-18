@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getPublicBranding } from './publicBrandingClient'
+import { getPublicBranding, type PublicBranding } from './publicBrandingClient'
 
 const brandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'dark',
+      authButtonStyle: 'gradient',
+      authColorScheme: 'dark',
+      authFieldStyle: 'outline',
+    },
     assets: {
       logo: {
         assetVersion: '11',
@@ -18,10 +24,8 @@ const brandingResponse = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -36,11 +40,14 @@ const brandingResponse = {
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
-}
+} satisfies { branding: PublicBranding }
 
 describe('publicBrandingClient', () => {
   const fetchMock = vi.fn<typeof fetch>()

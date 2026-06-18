@@ -137,7 +137,45 @@ test('opens profile from the right chat menu and uploads an avatar through porta
   await expect(
     page.getByText('Здравствуйте, вижу ваше обращение.'),
   ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  const navMenu = page.getByRole('menu')
+
+  await expect(navMenu).toBeVisible()
+  await expect(navMenu).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.22)',
+  )
+  await expect(navMenu).toHaveCSS('border-color', /0\.65\)/)
+  await expect(navMenu).toHaveCSS('backdrop-filter', /blur\(32px\)/)
+
+  const navMenuBackground = await navMenu.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(navMenuBackground).toContain('linear-gradient')
+  expect(navMenuBackground).toContain('rgba(255, 255, 255, 0.74)')
+  expect(navMenuBackground).toContain('rgba(255, 255, 255, 0.62)')
+  await page.getByRole('button', { name: 'Закрыть навигацию' }).click()
+
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
+  const chatMenu = page.getByRole('menu')
+
+  await expect(chatMenu).toBeVisible()
+  await expect(chatMenu).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.22)',
+  )
+  await expect(chatMenu).toHaveCSS('border-color', /0\.65\)/)
+  await expect(chatMenu).toHaveCSS('backdrop-filter', /blur\(32px\)/)
+
+  const chatMenuBackground = await chatMenu.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(chatMenuBackground).toContain('linear-gradient')
+  expect(chatMenuBackground).toContain('rgba(255, 255, 255, 0.74)')
+  expect(chatMenuBackground).toContain('rgba(255, 255, 255, 0.62)')
   await expect(page.getByText('Аккаунт', { exact: true })).toBeVisible()
   await expect(page.getByText('Чат', { exact: true })).toBeVisible()
   await page.getByRole('menuitem', { name: 'Профиль' }).click()
@@ -153,6 +191,21 @@ test('opens profile from the right chat menu and uploads an avatar through porta
   await expect(profilePage.getByText(E2E_PORTAL_USER.email)).toBeVisible()
   await expect(profilePage.getByText('+79991234567')).toBeVisible()
   await expect(profilePage.getByRole('textbox')).toHaveCount(0)
+  const profileGlassCard = profilePage.locator('.chat-glass-card-surface')
+
+  await expect(profileGlassCard).toBeVisible()
+  await expect(profileGlassCard).toHaveCSS(
+    'background-color',
+    'rgba(255, 255, 255, 0.01)',
+  )
+
+  const profileGlassCardBackground = await profileGlassCard.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(profileGlassCardBackground).toContain('linear-gradient')
+  expect(profileGlassCardBackground).toContain('rgba(255, 255, 255, 0.28)')
+  expect(profileGlassCardBackground).toContain('rgba(255, 255, 255, 0.34)')
 
   await profilePage.getByLabel('Загрузить аватар').setInputFiles({
     buffer: Buffer.from('avatar-bytes'),

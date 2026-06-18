@@ -14,8 +14,6 @@ type ApiErrorResponse = {
 export type BrandingColors = {
   accent: string
   authBackground: string
-  authContentSurface: string
-  authContentSurfaceOpacity: number
   authMutedText: string
   authText: string
   chatBackground: string
@@ -34,11 +32,20 @@ export type BrandingCopy = {
   chatInfoTitle: string
 }
 
+export type BrandingLayout = {
+  authBrandPlacement: 'center' | 'left' | 'right'
+}
+
+export type BrandingAppearance = {
+  authBackgroundOverlay: 'dark' | 'light' | 'none'
+  authButtonStyle: 'gradient' | 'solid'
+  authColorScheme: 'dark' | 'light'
+  authFieldStyle: 'outline' | 'solid' | 'translucent'
+}
+
 export type BrandingAssetKind =
   | 'logo'
   | 'pwa_icon'
-  | 'auth_header_image'
-  | 'auth_footer_image'
   | 'auth_background_image'
   | 'chat_background_image'
   | 'chat_header_background_image'
@@ -57,9 +64,11 @@ export type BrandingAssets = Partial<Record<BrandingAssetKind, BrandingAsset>>
 
 export type AdminBrandingResponse = {
   branding: {
+    appearance: BrandingAppearance
     assets: BrandingAssets
     colors: BrandingColors
     copy: BrandingCopy
+    layout: BrandingLayout
     portalName: string
     supportLabel: string
     version: number
@@ -75,8 +84,10 @@ export type AdminBrandingAssetDeleteResponse = {
 }
 
 export type AdminBrandingPatch = Partial<{
+  appearance: Partial<BrandingAppearance>
   colors: Partial<BrandingColors>
   copy: Partial<BrandingCopy>
+  layout: Partial<BrandingLayout>
   portalName: string
   supportLabel: string
 }>

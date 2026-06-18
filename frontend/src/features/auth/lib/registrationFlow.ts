@@ -2,8 +2,10 @@ type StoredRegistrationRequest = {
   email: string
   expiresInSeconds: number
   fullName: string
+  personalDataConsentAccepted: true
   requestedAt: number
   resendAvailableInSeconds: number
+  termsAccepted: true
 }
 
 type StoredRegistrationVerification = {
@@ -105,6 +107,8 @@ export function getStoredRegistrationRequest() {
   if (
     !isFinitePositiveNumber(request.requestedAt) ||
     !isFinitePositiveNumber(request.expiresInSeconds) ||
+    request.personalDataConsentAccepted !== true ||
+    request.termsAccepted !== true ||
     hasExpired(request.requestedAt, request.expiresInSeconds)
   ) {
     clearRegistrationFlow()
@@ -152,20 +156,26 @@ export function saveRegistrationRequest({
   email,
   expiresInSeconds,
   fullName,
+  personalDataConsentAccepted,
   resendAvailableInSeconds,
+  termsAccepted,
 }: {
   email: string
   expiresInSeconds: number
   fullName: string
+  personalDataConsentAccepted: true
   resendAvailableInSeconds: number
+  termsAccepted: true
 }) {
   writeRegistrationFlowState({
     request: {
       email: normalizeEmail(email),
       expiresInSeconds,
       fullName: fullName.trim(),
+      personalDataConsentAccepted,
       requestedAt: Date.now(),
       resendAvailableInSeconds,
+      termsAccepted,
     },
     verification: null,
   })

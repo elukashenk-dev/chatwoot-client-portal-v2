@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
+    "@fontsource/inter": "^5.2.8",
     "idb": "^8.0.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

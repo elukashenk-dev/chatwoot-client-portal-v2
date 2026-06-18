@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
 import { BrandMark } from './BrandMark'
@@ -8,13 +8,14 @@ export type AuthBrandPlacement = 'center' | 'left' | 'right'
 
 export type AuthShellProps = {
   brandPlacement?: AuthBrandPlacement
+  brandLogoHeight?: number | null
   brandLogoUrl?: string | null
+  brandLogoWidth?: number | null
   brandMonogram?: string
   brandName?: string
   children: ReactNode
   description: ReactNode
-  footerImageUrl?: string | null
-  headerImageUrl?: string | null
+  descriptionClassName?: string
   title: string
 }
 
@@ -24,69 +25,47 @@ const brandPlacementClassMap: Record<AuthBrandPlacement, string> = {
   right: 'auth-brand-mark--right',
 }
 
-function imageBackgroundStyle(
-  imageUrl?: string | null,
-): CSSProperties | undefined {
-  return imageUrl ? { backgroundImage: `url("${imageUrl}")` } : undefined
-}
-
 export function AuthShell({
-  brandPlacement = 'left',
+  brandPlacement = 'center',
+  brandLogoHeight,
   brandLogoUrl,
+  brandLogoWidth,
   brandMonogram,
   brandName,
   children,
   description,
-  footerImageUrl,
-  headerImageUrl,
+  descriptionClassName,
   title,
 }: AuthShellProps) {
   return (
-    <section className="auth-canvas-background relative flex min-h-full w-full flex-col">
+    <section className="auth-canvas-background relative flex min-h-full w-full overflow-hidden">
       <div
         aria-hidden="true"
-        className={cn(
-          'auth-footer-art absolute inset-x-0 bottom-0 z-0 h-44',
-          !footerImageUrl && 'auth-footer-art--fallback',
-        )}
-        style={imageBackgroundStyle(footerImageUrl)}
+        className="auth-background-overlay absolute inset-0 z-0"
       />
 
-      <header className="auth-header-shell relative z-10 shrink-0 overflow-hidden">
-        <div
-          aria-hidden="true"
-          className={cn(
-            'auth-header-art absolute inset-0',
-            !headerImageUrl && 'auth-header-art--fallback',
-          )}
-          style={imageBackgroundStyle(headerImageUrl)}
-        />
-
-        <div
-          aria-hidden="true"
-          className="auth-header-fade absolute inset-x-0 bottom-0"
-        />
-
+      <div className="auth-stack relative z-10 mx-auto flex min-h-full w-full max-w-[390px] flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
         <BrandMark
           className={cn(
-            'auth-brand-mark absolute',
+            'auth-brand-mark auth-brand-mark--in-flow',
             brandPlacementClassMap[brandPlacement],
           )}
+          logoHeight={brandLogoHeight}
           logoUrl={brandLogoUrl}
+          logoWidth={brandLogoWidth}
           monogram={brandMonogram}
           name={brandName}
         />
-      </header>
 
-      <div className="auth-content-layer relative z-10 flex flex-1 flex-col px-7 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:px-10 sm:pb-6">
-        <div aria-hidden="true" className="auth-content-veil" />
-        <div className="auth-content-body relative z-10 flex min-h-full flex-1 flex-col">
-          <div className="text-center">
-            <PageIntro description={description} title={title} />
-          </div>
-
-          <div className="mt-7 flex flex-1 flex-col">{children}</div>
+        <div className="auth-intro text-center">
+          <PageIntro
+            description={description}
+            descriptionClassName={descriptionClassName}
+            title={title}
+          />
         </div>
+
+        <div className="auth-form-slot flex flex-1 flex-col">{children}</div>
       </div>
     </section>
   )

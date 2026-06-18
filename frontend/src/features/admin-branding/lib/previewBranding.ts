@@ -6,9 +6,11 @@ export function createPreviewPublicBranding(
   draft: BrandingDraft,
 ): PublicBranding {
   return {
+    appearance: draft.appearance,
     assets: draft.assets,
     colors: draft.colors,
     copy: draft.copy,
+    layout: draft.layout,
     portalName: draft.portalName,
     supportLabel: draft.supportLabel,
     version: 1,

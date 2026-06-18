@@ -10,6 +10,9 @@ type NotificationSwitchProps = {
   onChange: (checked: boolean) => void
 }
 
+const GLASS_CARD_CLASS = 'chat-glass-card-surface'
+const GLASS_ROW_BORDER_CLASS = 'border-slate-300/45'
+
 export function NotificationSwitch({
   checked,
   description,
@@ -20,7 +23,7 @@ export function NotificationSwitch({
   return (
     <button
       aria-checked={checked}
-      className="flex min-h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 text-left transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+      className={`flex min-h-16 w-full items-center justify-between gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3 text-left transition last:border-b-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60`}
       disabled={disabled}
       onClick={() => {
         onChange(!checked)
@@ -71,7 +74,9 @@ export function NotificationActionRow({
   onAction,
 }: NotificationActionRowProps) {
   return (
-    <div className="flex min-h-16 w-full items-center justify-between gap-4 border-b border-slate-200/80 px-4 py-3 last:border-b-0">
+    <div
+      className={`flex min-h-16 w-full items-center justify-between gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-3 last:border-b-0`}
+    >
       <span className="min-w-0">
         <span className="block text-[14px] font-medium leading-5 text-slate-900">
           {label}
@@ -84,7 +89,7 @@ export function NotificationActionRow({
       </span>
       {actionLabel && onAction ? (
         <button
-          className="shrink-0 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-brand-800 transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 rounded-md border border-white/65 bg-white/60 px-3 py-1.5 text-[13px] font-medium text-brand-800 shadow-sm shadow-slate-900/[0.04] backdrop-blur-md transition hover:border-white/80 hover:bg-white/80 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={disabled}
           onClick={onAction}
           type="button"
@@ -98,7 +103,7 @@ export function NotificationActionRow({
 
 export function NotificationCard({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200/90 bg-white">
+    <div className={`overflow-hidden rounded-lg border ${GLASS_CARD_CLASS}`}>
       {children}
     </div>
   )

@@ -30,8 +30,8 @@ export function ChatFullScreenPanel({
 
   return (
     <section className="chat-runtime-surface chat-text absolute inset-0 z-40 flex min-h-0 flex-col bg-white">
-      <header className="app-safe-top chat-header-background chat-header-border border-b px-4 pb-2.5 text-[color:var(--portal-chat-header-foreground,#0f172a)] shadow-sm sm:px-6 sm:pb-3">
-        <div className="flex min-h-10 items-center gap-3">
+      <header className="app-safe-top relative z-30 bg-transparent px-3 pb-2 text-[color:var(--portal-chat-header-foreground,#0f172a)] sm:px-6 sm:pb-3">
+        <div className="chat-floating-header-surface mx-auto flex min-h-14 w-full max-w-[620px] items-center gap-3 rounded-[10px] border px-3 py-[9px] sm:px-4">
           {isBackActionReadOnly ? (
             <span
               aria-hidden="true"

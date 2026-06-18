@@ -128,9 +128,18 @@ execution-plan детали здесь не хранятся.
 - Branding reset/default visual parity is corrected: no-assets color reset
   restores production-like auth/chat/info defaults, keeps PWA manifest defaults
   and keeps chat header text readable when only header background changes.
-- Auth branding middle-surface customization is implemented with tenant-owned
-  `authContentSurface` and `authContentSurfaceOpacity` fields, preserving
-  default visual parity and keeping chat runtime layout unchanged.
+- Auth branding now uses the approved Full Background design model: tenant
+  admins can style login screens through a prepared full-screen auth
+  background, light/dark appearance presets, overlay protection, field/button
+  style presets and real runtime preview parity. Separate auth form background
+  controls were removed from the active branding contract.
+- Auth legal UX has public terms/privacy pages, informational login legal links
+  and explicit registration consent with backend persistence.
+- Accepted customer UI visual baseline now uses the branded full-background
+  auth/chat direction: Inter auth pages, logo alignment/size controls, explicit
+  registration consent, legal reader pages, translucent chat shell/composer,
+  glass secondary chat surfaces and runtime/admin preview parity over the
+  tenant-owned chat background asset.
 - Branding asset storage is packaged as portal-owned production infrastructure:
   the default one-VM production stack runs internal object storage, while
   browser access stays through portal-owned asset URLs.
@@ -156,6 +165,7 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Run an end-to-end MT-10A tenant lifecycle rehearsal against the intended
-  Chatwoot/domain mode, including `/api/tenant`, Chatwoot verification, webhook
-  configuration and archive/deprovision dry run before exposing an operator UI.
+- Complete final verification/review for the accepted chat/auth visual polish
+  branch, merge it into `main`, and keep first-run legal document copy blocked
+  from production rollout until operator-approved legal texts replace the
+  current test templates.

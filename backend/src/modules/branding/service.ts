@@ -3,7 +3,9 @@ import type { PublicTenantAdmin } from '../tenant-admin/adminAuthService.js'
 import { ApiError } from '../../lib/errors.js'
 import {
   createDefaultBrandingCopy,
+  defaultBrandingAppearance,
   defaultBrandingColors,
+  defaultBrandingLayout,
 } from './brandingDefaults.js'
 import { parseAdminBrandingPatch } from './brandingValidation.js'
 import type { BrandingRepository, BrandingSettingsPatch } from './repository.js'
@@ -78,14 +80,6 @@ async function buildBrandingResponse({
     resolvedSettings?.authBackgroundColor,
     defaultBrandingColors.authBackground,
   )
-  const authContentSurfaceColor = coalesce(
-    resolvedSettings?.authContentSurfaceColor,
-    defaultBrandingColors.authContentSurface,
-  )
-  const authContentSurfaceOpacity = coalesce(
-    resolvedSettings?.authContentSurfaceOpacity,
-    defaultBrandingColors.authContentSurfaceOpacity,
-  )
   const authMutedTextColor = coalesce(
     resolvedSettings?.authMutedTextColor,
     defaultBrandingColors.authMutedText,
@@ -121,12 +115,28 @@ async function buildBrandingResponse({
 
   return {
     branding: {
+      appearance: {
+        authBackgroundOverlay: coalesce(
+          resolvedSettings?.authBackgroundOverlay,
+          defaultBrandingAppearance.authBackgroundOverlay,
+        ),
+        authButtonStyle: coalesce(
+          resolvedSettings?.authButtonStyle,
+          defaultBrandingAppearance.authButtonStyle,
+        ),
+        authColorScheme: coalesce(
+          resolvedSettings?.authColorScheme,
+          defaultBrandingAppearance.authColorScheme,
+        ),
+        authFieldStyle: coalesce(
+          resolvedSettings?.authFieldStyle,
+          defaultBrandingAppearance.authFieldStyle,
+        ),
+      },
       assets,
       colors: {
         accent: accentColor,
         authBackground: authBackgroundColor,
-        authContentSurface: authContentSurfaceColor,
-        authContentSurfaceOpacity,
         authMutedText: authMutedTextColor,
         authText: authTextColor,
         chatBackground: chatBackgroundColor,
@@ -155,6 +165,12 @@ async function buildBrandingResponse({
           defaultCopy.chatInfoTitle,
         ),
       },
+      layout: {
+        authBrandPlacement: coalesce(
+          resolvedSettings?.authBrandPlacement,
+          defaultBrandingLayout.authBrandPlacement,
+        ),
+      },
       portalName: coalesce(resolvedSettings?.portalName, tenant.displayName),
       supportLabel: coalesce(
         resolvedSettings?.supportLabel,
@@ -169,21 +185,28 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
   const parsedInput = parseAdminBrandingPatch(input)
   const patch: BrandingSettingsPatch = {}
 
+  if (parsedInput.appearance?.authBackgroundOverlay !== undefined) {
+    patch.authBackgroundOverlay = parsedInput.appearance.authBackgroundOverlay
+  }
+
+  if (parsedInput.appearance?.authButtonStyle !== undefined) {
+    patch.authButtonStyle = parsedInput.appearance.authButtonStyle
+  }
+
+  if (parsedInput.appearance?.authColorScheme !== undefined) {
+    patch.authColorScheme = parsedInput.appearance.authColorScheme
+  }
+
+  if (parsedInput.appearance?.authFieldStyle !== undefined) {
+    patch.authFieldStyle = parsedInput.appearance.authFieldStyle
+  }
+
   if (parsedInput.colors?.accent !== undefined) {
     patch.accentColor = parsedInput.colors.accent
   }
 
   if (parsedInput.colors?.authBackground !== undefined) {
     patch.authBackgroundColor = parsedInput.colors.authBackground
-  }
-
-  if (parsedInput.colors?.authContentSurface !== undefined) {
-    patch.authContentSurfaceColor = parsedInput.colors.authContentSurface
-  }
-
-  if (parsedInput.colors?.authContentSurfaceOpacity !== undefined) {
-    patch.authContentSurfaceOpacity =
-      parsedInput.colors.authContentSurfaceOpacity
   }
 
   if (parsedInput.colors?.authMutedText !== undefined) {
@@ -200,6 +223,10 @@ function toSettingsPatch(input: unknown): BrandingSettingsPatch {
 
   if (parsedInput.copy?.authTitle !== undefined) {
     patch.authTitle = parsedInput.copy.authTitle
+  }
+
+  if (parsedInput.layout?.authBrandPlacement !== undefined) {
+    patch.authBrandPlacement = parsedInput.layout.authBrandPlacement
   }
 
   if (parsedInput.colors?.chatBackground !== undefined) {

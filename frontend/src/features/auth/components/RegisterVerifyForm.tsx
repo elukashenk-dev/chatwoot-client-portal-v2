@@ -139,13 +139,19 @@ export function RegisterVerifyForm() {
       const response = await requestRegistrationVerification({
         email: registrationRequest.email,
         fullName: registrationRequest.fullName,
+        personalDataConsentAccepted:
+          registrationRequest.personalDataConsentAccepted,
+        termsAccepted: registrationRequest.termsAccepted,
       })
 
       saveRegistrationRequest({
         email: response.email,
         expiresInSeconds: response.expiresInSeconds,
         fullName: registrationRequest.fullName,
+        personalDataConsentAccepted:
+          registrationRequest.personalDataConsentAccepted,
         resendAvailableInSeconds: response.resendAvailableInSeconds,
+        termsAccepted: registrationRequest.termsAccepted,
       })
 
       setRegistrationRequest(getStoredRegistrationRequest())

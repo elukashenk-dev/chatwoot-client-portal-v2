@@ -16,13 +16,21 @@ const logoAsset = {
   width: null,
 } as const
 
+const authBackgroundAsset = {
+  assetVersion: '78',
+  contentType: 'image/png',
+  height: null,
+  id: 78,
+  kind: 'auth_background_image',
+  publicUrl: '/api/branding/assets/78?v=78',
+  width: null,
+} as const
+
 const defaultBrandingColors = {
   accent: '#4676b4',
   authBackground: '#f3f7fc',
-  authContentSurface: '#ffffff',
-  authContentSurfaceOpacity: 100,
   authMutedText: '#64748b',
-  authText: '#0f172a',
+  authText: '#15486b',
   chatBackground: '#ffffff',
   chatHeaderBackground: '#ffffff',
   chatHeaderText: '#0f172a',
@@ -31,9 +39,22 @@ const defaultBrandingColors = {
   primary: '#112540',
 } as const
 
+const defaultBrandingAppearance = {
+  authBackgroundOverlay: 'dark',
+  authButtonStyle: 'gradient',
+  authColorScheme: 'dark',
+  authFieldStyle: 'outline',
+} as const
+
+const defaultBrandingLayout = {
+  authBrandPlacement: 'center',
+} as const
+
 const brandingResponse = {
   branding: {
+    appearance: defaultBrandingAppearance,
     assets: {
+      auth_background_image: authBackgroundAsset,
       logo: logoAsset,
     },
     colors: defaultBrandingColors,
@@ -44,6 +65,7 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: defaultBrandingLayout,
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
@@ -164,7 +186,7 @@ async function mockAdminRealPreviewRoutes(page: Page) {
 
 test('admin real preview switches screens without customer runtime requests', async ({
   page,
-}) => {
+}, testInfo) => {
   const routes = await mockAdminRealPreviewRoutes(page)
   const initialPublicBrandingResponse = page.waitForResponse(
     (response) =>
@@ -172,6 +194,7 @@ test('admin real preview switches screens without customer runtime requests', as
       response.request().method() === 'GET',
   )
 
+  await page.setViewportSize({ height: 900, width: 1440 })
   await page.goto('/admin/branding')
   await expect((await initialPublicBrandingResponse).status()).toBe(200)
 
@@ -191,14 +214,44 @@ test('admin real preview switches screens without customer runtime requests', as
   await expect(
     phonePreview.getByRole('heading', { name: 'Вход в личный кабинет' }),
   ).toBeVisible()
-  await expect(
-    phonePreview.getByRole('button', { name: 'Войти' }),
-  ).toBeDisabled()
+  const loginButton = phonePreview.getByRole('button', { name: 'Войти' })
+
+  await expect
+    .poll(() =>
+      loginButton.evaluate((element) => element.hasAttribute('disabled')),
+    )
+    .toBe(false)
+  await expect(loginButton).toHaveAttribute('aria-disabled', 'true')
+  await expect(loginButton).toHaveCSS('background-image', /linear-gradient/)
+  await expect(phonePreview.locator('.auth-canvas-background')).toHaveCSS(
+    'background-image',
+    /\/api\/branding\/assets\/78\?v=78/,
+  )
+  await expect(phonePreview.locator('.auth-background-overlay')).toBeVisible()
+  await expect(phonePreview.getByText('+7 (800) 000-00-00')).toBeVisible()
 
   await page.getByRole('tab', { name: 'Чат' }).click()
   await expect(
     phonePreview.getByRole('heading', { name: 'Личный чат' }),
   ).toBeVisible()
+  await expect(
+    phonePreview.locator('.chat-floating-header-surface'),
+  ).toBeVisible()
+  await expect(
+    phonePreview.locator('.chat-floating-composer-surface'),
+  ).toBeVisible()
+
+  const phonePreviewBox = await phonePreview.boundingBox()
+
+  if (!phonePreviewBox) {
+    throw new Error('Missing phone preview box.')
+  }
+
+  expect(phonePreviewBox.y + phonePreviewBox.height).toBeLessThanOrEqual(900)
+  await testInfo.attach('admin-chat-preview-shell', {
+    body: await phonePreview.screenshot(),
+    contentType: 'image/png',
+  })
 
   const previewScope = page
     .locator('[data-admin-branding-preview] .portal-branding-scope')
@@ -433,11 +486,41 @@ for (const width of [1024, 1280, 1440] as const) {
         name: 'Экраны предпросмотра портала',
       }),
     ).toBeVisible()
-    await expect(
-      page.getByRole('region', {
-        name: 'Телефонный предпросмотр портала',
-      }),
-    ).toBeVisible()
+    const phonePreview = page.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    await expect(phonePreview).toBeVisible()
+
+    const deviceBox = await page
+      .locator('[data-portal-preview-device]')
+      .boundingBox()
+
+    if (!deviceBox) {
+      throw new Error('Missing portal preview device box.')
+    }
+
+    expect(deviceBox.y + deviceBox.height).toBeLessThanOrEqual(900)
+
+    if (width === 1440) {
+      await expect(
+        page.locator('[data-admin-branding-preview] .portal-preview-auth-fit'),
+      ).toHaveCSS('overflow-y', 'hidden')
+
+      const phonePreviewBox = await phonePreview.boundingBox()
+      const supportPhoneBox = await phonePreview
+        .getByText('+7 (800) 000-00-00')
+        .boundingBox()
+
+      if (!phonePreviewBox || !supportPhoneBox) {
+        throw new Error('Missing auth preview support phone geometry.')
+      }
+
+      expect(supportPhoneBox.y).toBeGreaterThanOrEqual(phonePreviewBox.y)
+      expect(supportPhoneBox.y + supportPhoneBox.height).toBeLessThanOrEqual(
+        phonePreviewBox.y + phonePreviewBox.height,
+      )
+    }
 
     await expect(
       waitForUnexpectedCustomerRuntimeRequest(page),

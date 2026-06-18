@@ -6,6 +6,12 @@ import type { BrandingDraft } from '../../lib/brandingState'
 import { PortalPreviewFrame } from './PortalPreviewFrame'
 
 const draft = {
+  appearance: {
+    authBackgroundOverlay: 'dark',
+    authButtonStyle: 'gradient',
+    authColorScheme: 'dark',
+    authFieldStyle: 'outline',
+  },
   assets: {
     logo: {
       assetVersion: '11',
@@ -20,10 +26,8 @@ const draft = {
   colors: {
     accent: '#14b8a6',
     authBackground: '#ecfeff',
-    authContentSurface: '#f8fafc',
-    authContentSurfaceOpacity: 84,
     authMutedText: '#456179',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#f8fafc',
     chatHeaderBackground: '#0f766e',
     chatHeaderText: '#f8fafc',
@@ -38,6 +42,9 @@ const draft = {
     chatEmptyTitle: 'Начните диалог',
     chatInfoTitle: 'О диалоге',
   },
+  layout: {
+    authBrandPlacement: 'left',
+  },
   portalName: 'ProvGroup',
   supportLabel: 'Поддержка ProvGroup',
 } satisfies BrandingDraft
@@ -47,10 +54,8 @@ const defaultDraft = {
   colors: {
     accent: '#4676b4',
     authBackground: '#f3f7fc',
-    authContentSurface: '#ffffff',
-    authContentSurfaceOpacity: 100,
     authMutedText: '#64748b',
-    authText: '#0f172a',
+    authText: '#15486b',
     chatBackground: '#ffffff',
     chatHeaderBackground: '#ffffff',
     chatHeaderText: '#0f172a',
@@ -107,7 +112,10 @@ describe('PortalPreviewFrame', () => {
     expect(
       container.querySelectorAll('[data-portal-preview-device-nav-control]'),
     ).toHaveLength(3)
-    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    const loginButton = screen.getByRole('button', { name: 'Войти' })
+
+    expect(loginButton).not.toHaveAttribute('disabled')
+    expect(loginButton).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('renders only the first-slice preview screens', async () => {
@@ -196,16 +204,47 @@ describe('PortalPreviewFrame', () => {
     ).not.toBeInTheDocument()
     expect(within(phonePreview).queryByRole('menu')).not.toBeInTheDocument()
     expect(within(phonePreview).queryByRole('link')).not.toBeInTheDocument()
-    expect(
-      within(phonePreview).getByRole('button', { name: 'Прикрепить файл' }),
-    ).toBeDisabled()
-    expect(
-      within(phonePreview).getByRole('button', { name: 'Голосовое сообщение' }),
-    ).toBeDisabled()
-    expect(within(phonePreview).getByLabelText('Сообщение')).toBeDisabled()
-    expect(
-      within(phonePreview).getByRole('button', { name: 'Отправить' }),
-    ).toBeDisabled()
+    const attachmentButton = within(phonePreview).getByRole('button', {
+      name: 'Прикрепить файл',
+    })
+    const voiceButton = within(phonePreview).getByRole('button', {
+      name: 'Голосовое сообщение',
+    })
+    const textarea = within(phonePreview).getByLabelText('Сообщение')
+    const sendButton = within(phonePreview).getByRole('button', {
+      name: 'Отправить',
+    })
+
+    expect(attachmentButton).toBeDisabled()
+    expect(attachmentButton).toHaveClass(
+      'transition',
+      'hover:bg-white/55',
+      'hover:text-chat-outgoing/90',
+      'disabled:text-slate-300',
+    )
+    expect(voiceButton).toBeDisabled()
+    expect(voiceButton).toHaveClass(
+      'transition',
+      'hover:bg-white/55',
+      'hover:text-chat-outgoing/90',
+      'disabled:text-slate-300',
+    )
+    expect(textarea).toBeDisabled()
+    expect(textarea).toHaveClass(
+      'chat-text',
+      'disabled:text-[color:var(--portal-chat-muted-text-color,#64748b)]',
+    )
+    expect(textarea).not.toHaveClass('chat-muted-text')
+    expect(sendButton).toBeDisabled()
+    expect(sendButton).toHaveClass(
+      'shadow-sm',
+      'shadow-slate-900/10',
+      'transition',
+      'hover:bg-brand-900',
+      'disabled:bg-slate-200/80',
+      'disabled:text-white/80',
+      'disabled:shadow-none',
+    )
     expect(
       screen.queryByRole('tab', { name: 'Настройки' }),
     ).not.toBeInTheDocument()
@@ -224,10 +263,26 @@ describe('PortalPreviewFrame', () => {
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-chat-outgoing': '#465a72',
       '--portal-chat-header-background-color': '#ffffff',
+      '--portal-chat-header-control-border': 'rgb(193 193 193 / 34%)',
+      '--portal-chat-header-control-surface': 'rgb(248 250 252 / 43%)',
       '--portal-chat-header-control-hover-text': '#112540',
       '--portal-chat-header-foreground': '#0f172a',
     })
-    expect(container.querySelector('header')).toHaveClass('chat-header-border')
+    expect(container.querySelector('header')).toHaveClass('app-safe-top')
+    expect(container.querySelector('header')).not.toHaveClass(
+      'chat-header-background',
+    )
+    const floatingHeader = container.querySelector(
+      '.chat-floating-header-surface',
+    )
+    const floatingComposer = container.querySelector(
+      '.chat-floating-composer-surface',
+    )
+
+    expect(floatingHeader).toBeInstanceOf(HTMLElement)
+    expect(floatingHeader).toHaveClass('py-[9px]')
+    expect(floatingComposer).toBeInstanceOf(HTMLElement)
+    expect(floatingComposer).toHaveClass('py-[9px]')
     expect(container.querySelector('.chat-header-icon-button')).toBeInstanceOf(
       HTMLElement,
     )
@@ -272,9 +327,11 @@ describe('PortalPreviewFrame', () => {
 
     render(<PortalPreviewFrame draft={draft} />)
 
-    expect(
-      screen.getByRole('region', { name: 'Телефонный предпросмотр портала' }),
-    ).toBeInTheDocument()
+    const phonePreview = screen.getByRole('region', {
+      name: 'Телефонный предпросмотр портала',
+    })
+
+    expect(phonePreview).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Кабинет ProvGroup' }),
     ).toBeInTheDocument()
@@ -282,20 +339,49 @@ describe('PortalPreviewFrame', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип ProvGroup' }),
     ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
+    expect(document.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--left',
+    )
     const emailInput = screen.getByLabelText('Email')
     const passwordInput = screen.getByLabelText('Пароль')
+    const mailIcon = document.querySelector('.auth-field-icon')
 
     expect(emailInput).toBeDisabled()
     expect(emailInput).toHaveClass('auth-input')
     expect(passwordInput).toBeDisabled()
     expect(passwordInput).toHaveClass('auth-input')
-    expect(screen.getByRole('button', { name: 'Войти' })).toBeDisabled()
+    expect(mailIcon).toHaveClass('z-10')
+    const loginButton = screen.getByRole('button', { name: 'Войти' })
+
+    expect(loginButton).not.toHaveAttribute('disabled')
+    expect(loginButton).toHaveAttribute('aria-disabled', 'true')
     expect(
       document.querySelector('.auth-canvas-background'),
     ).toBeInTheDocument()
-    expect(document.querySelector('.auth-content-veil')).toBeInTheDocument()
+    expect(document.querySelector('.auth-stack')).toBeInTheDocument()
+    expect(
+      document.querySelector('.auth-brand-mark--in-flow'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-header-shell')).not.toBeInTheDocument()
+    expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
     expect(document.querySelector('.auth-input')).toBeInTheDocument()
-    expect(document.querySelector('.auth-support-card')).toBeInTheDocument()
+    expect(document.querySelector('.auth-legal-text')).toHaveTextContent(
+      /Используя сервис, вы принимаете Пользовательское соглашение и подтверждаете, что ознакомлены с Политикой обработки персональных данных\./i,
+    )
+    expect(document.querySelector('.auth-support-block')).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('Нет доступа к чату?'),
+    ).toBeInTheDocument()
+    expect(
+      within(phonePreview).getByText('+7 (800) 000-00-00'),
+    ).toBeInTheDocument()
+    expect(
+      phonePreview.querySelector('.auth-link-separator'),
+    ).toBeInTheDocument()
+    expect(
+      phonePreview.querySelector('.auth-support-divider .auth-support-icon'),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-support-card')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Забыли пароль?' }),
     ).not.toBeInTheDocument()
@@ -331,6 +417,9 @@ describe('PortalPreviewFrame', () => {
         authSubtitle: 'Используйте рабочий email.',
         authTitle: 'Вход для клиентов',
       },
+      layout: {
+        authBrandPlacement: 'right',
+      },
       portalName: 'Портал Бухфирма',
       supportLabel: 'Поддержка 24/7',
     } satisfies BrandingDraft
@@ -346,15 +435,26 @@ describe('PortalPreviewFrame', () => {
     expect(
       screen.getByRole('img', { name: 'Логотип Портал Бухфирма' }),
     ).toHaveAttribute('src', '/api/branding/assets/12?v=12')
+    expect(document.querySelector('.auth-brand-mark')).toHaveClass(
+      'auth-brand-mark--right',
+    )
     expect(container.querySelector('.portal-branding-scope')).toHaveStyle({
       '--color-brand-800': '#0f766e',
-      '--portal-auth-content-surface-background': 'rgb(248 250 252 / 0.84)',
-      '--portal-auth-content-surface-color': '#f8fafc',
-      '--portal-auth-content-surface-opacity': '0.84',
-      '--portal-auth-text-color': '#0f172a',
+      '--portal-auth-brand-mark-background': '#0f766e',
+      '--portal-auth-control-border-color': '#dddfe4',
+      '--portal-auth-divider-color': '#c4c9d2',
+      '--portal-auth-field-style': 'outline',
+      '--portal-auth-text-color': '#15486b',
       '--portal-chat-header-background-color': '#164e63',
       '--portal-chat-header-foreground': '#f8fafc',
       '--portal-chat-text-color': '#1f2937',
     })
+    expect(container.querySelector('.portal-branding-scope')).toHaveAttribute(
+      'data-auth-field-style',
+      'outline',
+    )
+    expect(
+      container.querySelector('.portal-branding-scope')?.getAttribute('style'),
+    ).not.toContain('--portal-auth-content-surface')
   })
 })

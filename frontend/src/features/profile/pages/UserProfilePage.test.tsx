@@ -59,6 +59,20 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('ivan@example.com')).toBeInTheDocument()
     expect(screen.getByText('+79991234567')).toBeInTheDocument()
     expect(screen.getByLabelText('Заменить аватар')).toBeInTheDocument()
+    expect(screen.getByText('Аватар').closest('section')).toHaveClass(
+      'chat-glass-card-surface',
+    )
+    expect(screen.getByText('Аватар').parentElement?.parentElement).toHaveClass(
+      'border-slate-300/45',
+    )
+    expect(screen.getByText('Имя').closest('div')).toHaveClass(
+      'border-slate-300/45',
+    )
+    expect(screen.getByLabelText('Заменить аватар').closest('label')).toHaveClass(
+      'border-white/65',
+      'bg-white/60',
+      'backdrop-blur-md',
+    )
   })
 
   it('uploads an avatar and switches to the replace action', async () => {

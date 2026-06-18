@@ -195,6 +195,38 @@ describe('createBrandingAssetService', () => {
     )
   })
 
+  it('uploads and activates the full auth background image slot', async () => {
+    const repository = createRepository()
+    const storage = createStorage()
+    const service = createBrandingAssetService({
+      audit: vi.fn(),
+      repository,
+      storage,
+      tenantId: 7,
+    })
+
+    const response = await service.uploadAsset({
+      admin,
+      requestIp: null,
+      upload: {
+        data: validPngBytes,
+        fileName: 'auth-background.png',
+        kind: 'auth_background_image',
+        mimeType: 'image/png',
+      },
+      userAgent: null,
+    })
+
+    expect(repository.upsertSettings).toHaveBeenCalledWith({
+      authBackgroundImageAssetId: response.asset.id,
+    })
+    expect(response.asset).toEqual(
+      expect.objectContaining({
+        kind: 'auth_background_image',
+      }),
+    )
+  })
+
   it('uses a new object key when replacing the same file with the same bytes and filename', async () => {
     const contentHash = getContentHash(validPngBytes)
     const previousObjectKey = `tenants/7/branding/logo/${contentHash}/logo.png`

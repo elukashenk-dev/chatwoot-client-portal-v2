@@ -15,19 +15,19 @@ export function TenantAuthShell(props: AuthShellProps) {
   const brandMonogram =
     props.brandMonogram ??
     (brandName ? createTenantMonogram(brandName) : undefined)
+  const brandingLogo = branding.assets.logo
 
   return (
     <AuthShell
       {...props}
-      brandLogoUrl={props.brandLogoUrl ?? branding.assets.logo?.publicUrl}
+      brandPlacement={
+        props.brandPlacement ?? branding.layout.authBrandPlacement
+      }
+      brandLogoHeight={props.brandLogoHeight ?? brandingLogo?.height}
+      brandLogoUrl={props.brandLogoUrl ?? brandingLogo?.publicUrl}
+      brandLogoWidth={props.brandLogoWidth ?? brandingLogo?.width}
       brandMonogram={brandMonogram}
       brandName={brandName}
-      footerImageUrl={
-        props.footerImageUrl ?? branding.assets.auth_footer_image?.publicUrl
-      }
-      headerImageUrl={
-        props.headerImageUrl ?? branding.assets.auth_header_image?.publicUrl
-      }
     />
   )
 }

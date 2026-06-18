@@ -4,19 +4,24 @@ import {
   deleteAdminBrandingAsset,
   getAdminBranding,
   updateAdminBranding,
+  type AdminBrandingResponse,
   uploadAdminBrandingAsset,
 } from './adminBrandingClient'
 
 const brandingResponse = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {},
     colors: {
       accent: '#4676b4',
       authBackground: '#f3f7fc',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#64748b',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#ffffff',
       chatHeaderBackground: '#ffffff',
       chatHeaderText: '#0f172a',
@@ -31,11 +36,14 @@ const brandingResponse = {
       chatEmptyTitle: 'Мы на связи',
       chatInfoTitle: 'Информация о чате',
     },
+    layout: {
+      authBrandPlacement: 'left',
+    },
     portalName: 'Бухфирма',
     supportLabel: 'Команда Бухфирма',
     version: 1,
   },
-}
+} satisfies AdminBrandingResponse
 
 describe('adminBrandingClient', () => {
   afterEach(() => {
@@ -76,6 +84,12 @@ describe('adminBrandingClient', () => {
         json: vi.fn().mockResolvedValue({
           branding: {
             ...brandingResponse.branding,
+            appearance: {
+              authBackgroundOverlay: 'dark',
+              authButtonStyle: 'gradient',
+              authColorScheme: 'dark',
+              authFieldStyle: 'outline',
+            },
             colors: {
               ...brandingResponse.branding.colors,
               primary: '#123456',
@@ -83,6 +97,9 @@ describe('adminBrandingClient', () => {
             copy: {
               ...brandingResponse.branding.copy,
               authTitle: 'Добро пожаловать',
+            },
+            layout: {
+              authBrandPlacement: 'right',
             },
             portalName: 'Новый портал',
             version: 2,
@@ -94,12 +111,17 @@ describe('adminBrandingClient', () => {
     )
 
     await updateAdminBranding({
+      appearance: {
+        authBackgroundOverlay: 'dark',
+        authButtonStyle: 'gradient',
+        authColorScheme: 'dark',
+        authFieldStyle: 'outline',
+      },
       colors: {
-        authContentSurface: '#f8fafc',
-        authContentSurfaceOpacity: 84,
         primary: '#123456',
       },
       copy: { authTitle: 'Добро пожаловать' },
+      layout: { authBrandPlacement: 'right' },
       portalName: 'Новый портал',
     })
 
@@ -107,12 +129,17 @@ describe('adminBrandingClient', () => {
       '/api/admin/branding',
       expect.objectContaining({
         body: JSON.stringify({
+          appearance: {
+            authBackgroundOverlay: 'dark',
+            authButtonStyle: 'gradient',
+            authColorScheme: 'dark',
+            authFieldStyle: 'outline',
+          },
           colors: {
-            authContentSurface: '#f8fafc',
-            authContentSurfaceOpacity: 84,
             primary: '#123456',
           },
           copy: { authTitle: 'Добро пожаловать' },
+          layout: { authBrandPlacement: 'right' },
           portalName: 'Новый портал',
         }),
         credentials: 'include',
@@ -123,9 +150,11 @@ describe('adminBrandingClient', () => {
 
     expect(JSON.parse(String(init?.body))).toEqual(
       expect.objectContaining({
+        appearance: expect.objectContaining({
+          authButtonStyle: 'gradient',
+          authColorScheme: 'dark',
+        }),
         colors: expect.objectContaining({
-          authContentSurface: '#f8fafc',
-          authContentSurfaceOpacity: 84,
         }),
       }),
     )

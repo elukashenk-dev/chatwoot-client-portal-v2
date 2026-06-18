@@ -1,0 +1,2 @@
+ALTER TABLE "portal_branding_settings" ADD COLUMN "auth_brand_placement" text;--> statement-breakpoint
+ALTER TABLE "portal_branding_settings" ADD CONSTRAINT "portal_branding_settings_auth_brand_placement_check" CHECK ("portal_branding_settings"."auth_brand_placement" is null or "portal_branding_settings"."auth_brand_placement" in ('left', 'center', 'right'));

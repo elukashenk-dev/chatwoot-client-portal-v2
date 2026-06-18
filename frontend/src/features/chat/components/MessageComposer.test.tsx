@@ -107,8 +107,11 @@ describe('MessageComposer', () => {
   it('renders the primary input row without an extra bordered surface wrapper', () => {
     renderComposer()
     const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const composerSurface = textarea.closest('.chat-floating-composer-surface')
 
     expect(textarea.closest('.rounded-chat-menu')).toBeNull()
+    expect(composerSurface).not.toBeNull()
+    expect(composerSurface).toHaveClass('py-[9px]')
   })
 
   it('renders no emoji controls and collapses attachment/voice while a text draft is active', async () => {
@@ -132,21 +135,25 @@ describe('MessageComposer', () => {
     expect(voiceControl).toHaveClass('w-10', 'opacity-100')
     expect(screen.getByRole('button', { name: 'Прикрепить файл' })).toHaveClass(
       'text-chat-outgoing',
-      'hover:text-chat-outgoing/80',
+      'hover:bg-white/55',
+      'hover:text-chat-outgoing/90',
       'disabled:text-slate-300',
     )
     expect(
       screen.getByRole('button', { name: 'Голосовое сообщение' }),
     ).toHaveClass(
       'text-chat-outgoing',
-      'hover:text-chat-outgoing/80',
+      'hover:bg-white/55',
+      'hover:text-chat-outgoing/90',
       'disabled:text-slate-300',
     )
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'bg-chat-outgoing',
-    )
-    expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'disabled:bg-slate-200',
+      'chat-send-control',
+      'shadow-sm',
+      'shadow-slate-900/10',
+      'disabled:bg-slate-200/80',
+      'disabled:text-white/80',
+      'disabled:shadow-none',
     )
 
     await user.type(textarea, 'П')
@@ -175,7 +182,7 @@ describe('MessageComposer', () => {
     ).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
-      'bg-chat-outgoing',
+      'chat-send-control',
     )
     expect(screen.getByRole('button', { name: 'Отправить' })).toHaveClass(
       'text-white',
@@ -270,6 +277,15 @@ describe('MessageComposer', () => {
         'Сообщение слишком длинное: 4005 из 4000. Сократите на 5 символов или отправьте частями.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Сообщение слишком длинное: 4005 из 4000. Сократите на 5 символов или отправьте частями.',
+      ),
+    ).toHaveClass(
+      'border-rose-200/70',
+      'bg-rose-50/80',
+      'backdrop-blur-md',
+    )
 
     fireEvent.click(sendButton)
 
@@ -324,6 +340,11 @@ describe('MessageComposer', () => {
       'Offline',
     )
     expect(screen.getByText('Предыдущее сообщение')).toBeInTheDocument()
+    expect(
+      screen.getByText('Предыдущее сообщение').closest(
+        '[data-composer-panel="reply"]',
+      ),
+    ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
     expect(onCancelReply).not.toHaveBeenCalled()
   })
 
@@ -443,6 +464,11 @@ describe('MessageComposer', () => {
 
     await user.upload(screen.getByLabelText('Файл вложения'), attachment)
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
+    expect(
+      screen.getByText('invoice.pdf').closest(
+        '[data-composer-panel="attachment"]',
+      ),
+    ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
 
     rerender(
       <MessageComposer
@@ -461,6 +487,11 @@ describe('MessageComposer', () => {
 
     expect(onSendAttachment).not.toHaveBeenCalled()
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
+    expect(
+      screen.getByText('invoice.pdf').closest(
+        '[data-composer-panel="attachment"]',
+      ),
+    ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
 
   it('does not submit a pending voice recording after voice send is disabled', async () => {
@@ -513,5 +544,10 @@ describe('MessageComposer', () => {
 
     expect(onSendAttachment).not.toHaveBeenCalled()
     expect(screen.getByText('Голосом нельзя без сети')).toBeInTheDocument()
+    expect(
+      screen.getByText('Запись 00:00').closest(
+        '[data-composer-panel="voice"]',
+      ),
+    ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
 })

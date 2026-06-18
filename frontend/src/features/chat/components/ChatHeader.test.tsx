@@ -60,6 +60,12 @@ const supportAvailability: ChatSupportAvailabilityResponse = {
 
 const brandingContextValue: BrandingContextValue = {
   branding: {
+    appearance: {
+      authBackgroundOverlay: 'none',
+      authButtonStyle: 'solid',
+      authColorScheme: 'light',
+      authFieldStyle: 'solid',
+    },
     assets: {
       logo: {
         assetVersion: '11',
@@ -74,10 +80,8 @@ const brandingContextValue: BrandingContextValue = {
     colors: {
       accent: '#14b8a6',
       authBackground: '#ecfeff',
-      authContentSurface: '#ffffff',
-      authContentSurfaceOpacity: 100,
       authMutedText: '#456179',
-      authText: '#0f172a',
+      authText: '#15486b',
       chatBackground: '#f8fafc',
       chatHeaderBackground: '#0f766e',
       chatHeaderText: '#f8fafc',
@@ -91,6 +95,9 @@ const brandingContextValue: BrandingContextValue = {
       chatEmptyBody: 'Напишите вопрос, мы ответим здесь.',
       chatEmptyTitle: 'Начните диалог',
       chatInfoTitle: 'О диалоге',
+    },
+    layout: {
+      authBrandPlacement: 'left',
     },
     portalName: 'ProvGroup',
     supportLabel: 'Поддержка ProvGroup',
@@ -124,9 +131,11 @@ function CurrentPath() {
 
 function renderHeader({
   activeThread = privateThread,
+  brandingValue = brandingContextValue,
   connectionStatus = 'online',
 }: {
   activeThread?: ChatThreadListSummary
+  brandingValue?: BrandingContextValue
   connectionStatus?: 'connecting' | 'offline' | 'online'
 } = {}) {
   renderWithRouter(
@@ -144,7 +153,7 @@ function renderHeader({
       }}
     >
       <AuthSessionContext.Provider value={authSession}>
-        <BrandingContext.Provider value={brandingContextValue}>
+        <BrandingContext.Provider value={brandingValue}>
           <ChatHeader
             activeThread={activeThread}
             connectionStatus={connectionStatus}
@@ -167,12 +176,12 @@ function renderHeader({
 }
 
 describe('ChatHeader', () => {
-  it('renders the active thread avatar image in the header', () => {
+  it('renders the branded logo image in the header before thread avatar fallback', () => {
     renderHeader()
 
     expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
       'src',
-      '/api/tenant/icons/icon-192.png',
+      '/api/branding/assets/11?v=11',
     )
   })
 
@@ -192,6 +201,23 @@ describe('ChatHeader', () => {
     expect(screen.getByText('Поддержка ProvGroup')).toBeInTheDocument()
   })
 
+  it('falls back to the active thread avatar when branding logo is unavailable', () => {
+    renderHeader({
+      brandingValue: {
+        ...brandingContextValue,
+        branding: {
+          ...brandingContextValue.branding,
+          assets: {},
+        },
+      },
+    })
+
+    expect(screen.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
+      'src',
+      '/api/tenant/icons/icon-192.png',
+    )
+  })
+
   it('prioritizes offline connection status over the support subtitle on mobile', () => {
     renderHeader({ connectionStatus: 'offline' })
 
@@ -199,7 +225,7 @@ describe('ChatHeader', () => {
     const offlineStatus = screen.getByRole('status', { name: 'Нет связи' })
 
     expect(subtitle).toHaveClass('hidden', 'sm:inline')
-    expect(offlineStatus).toHaveClass('font-semibold', 'text-[#9f3141]')
+    expect(offlineStatus).toHaveClass('font-normal', 'text-[#9f3141]')
   })
 
   it('shows connecting status while cached chat is checking the backend', () => {
@@ -219,7 +245,14 @@ describe('ChatHeader', () => {
   it('uses semantic header control classes for light and dark branded headers', () => {
     renderHeader()
 
-    expect(screen.getByRole('banner')).toHaveClass('chat-header-border')
+    expect(screen.getByRole('banner')).toHaveClass('app-safe-top')
+    expect(screen.getByRole('banner')).not.toHaveClass('chat-header-background')
+    const floatingHeader = screen
+      .getByRole('banner')
+      .querySelector('.chat-floating-header-surface')
+
+    expect(floatingHeader).not.toBeNull()
+    expect(floatingHeader).toHaveClass('py-[9px]')
     expect(
       screen.getByRole('button', { name: 'Открыть навигацию' }),
     ).toHaveClass('chat-header-icon-button')
@@ -235,13 +268,39 @@ describe('ChatHeader', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
 
+    const menu = screen.getByRole('menu')
+
+    expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
+    expect(menu.closest('.chat-floating-header-surface')).toBeNull()
+    expect(menu).not.toHaveClass('border-slate-200/90')
     expect(screen.getByText('Аккаунт')).toBeInTheDocument()
     expect(screen.getByText('Чат')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Профиль' })).toHaveClass(
+      'border-slate-300/45',
+      'hover:bg-white/45',
+    )
 
     await user.click(screen.getByRole('menuitem', { name: 'Профиль' }))
 
     expect(screen.getByLabelText('current path')).toHaveTextContent(
       '/app/profile',
+    )
+  })
+
+  it('uses a glass surface for the navigation menu', async () => {
+    const user = userEvent.setup()
+
+    renderHeader()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть навигацию' }))
+
+    const menu = screen.getByRole('menu')
+
+    expect(menu).toHaveClass('portal-menu-surface', 'border-white/65')
+    expect(menu.closest('.chat-floating-header-surface')).toBeNull()
+    expect(menu).not.toHaveClass('border-slate-200/80')
+    expect(screen.getByRole('menuitem', { name: 'Настройки' })).toHaveClass(
+      'hover:bg-white/45',
     )
   })
 })
