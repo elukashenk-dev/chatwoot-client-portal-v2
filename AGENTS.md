@@ -189,6 +189,20 @@
     targeted checks достаточны, если нет архитектурных изменений;
   - low-risk: docs-only, copy, локальные UI polish fixes - локальная проверка и
     targeted checks обычно достаточны.
+- Для small UI/CSS/copy fixes агент должен использовать lightweight closure
+  flow, если изменение не затрагивает auth/session/runtime boundaries,
+  shared providers, routing contracts или persistence:
+  - сначала локально определить точный impacted surface и не расширять scope;
+  - покрыть измененный компонент/поведение targeted unit test, если есть
+    логика или branching;
+  - запускать targeted Playwright только когда проверяется browser-only
+    поведение: computed CSS, history navigation, layout, focus/autofill или
+    responsive state;
+  - перед commit/closure выполнить targeted checks, `pnpm lint`,
+    `pnpm build` и `git diff --check`;
+  - полный frontend test suite запускать только для shared
+    provider/router/auth/session/runtime changes, широких UI slices,
+    final merge/checkpoint или если targeted checks выявили неожиданный риск.
 - Subagent prompt должен быть коротким и точным: ссылка на plan/task section,
   write scope, acceptance criteria и hard boundaries. Не копировать весь
   большой plan в prompt, если subagent может прочитать нужный файл сам.
