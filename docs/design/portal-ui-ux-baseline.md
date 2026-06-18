@@ -82,8 +82,13 @@ Brandable:
 - `brand.display_name`;
 - `brand.logo` или fallback monogram;
 - `brand.auth_brand_position`: left, center, right;
-- `brand.auth_header_image` shared across auth screens with default fallback;
-- `brand.auth_footer_image` shared across auth screens with default fallback;
+- `brand.auth_background_image` full-screen auth background shared across
+  auth screens;
+- `brand.chat_background_image` shared chat background;
+- `brand.chat_header_background_image` used by the floating chat header
+  surface;
+- `brand.auth_appearance`: auth color scheme, background overlay, field style
+  and button style;
 - `brand.auth_title`;
 - `brand.primary_color`;
 - `brand.accent_color` optional; used only for narrow decorative highlights
