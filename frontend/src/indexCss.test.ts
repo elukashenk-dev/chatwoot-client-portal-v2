@@ -45,4 +45,31 @@ describe('index.css', () => {
     expect(outgoingRule).not.toContain('background-image')
     expect(outgoingRule).not.toContain('linear-gradient')
   })
+
+  it('uses chat header branding tokens for the actual floating header surface', () => {
+    const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
+
+    expect(floatingHeaderRule).toContain(
+      '--portal-chat-header-surface-background-color',
+    )
+    expect(floatingHeaderRule).toContain(
+      '--portal-chat-header-surface-background-image',
+    )
+    expect(floatingHeaderRule).toContain('--portal-chat-header-border-color')
+    expect(floatingHeaderRule).toContain(
+      'color: var(--portal-chat-header-foreground, #0f172a);',
+    )
+  })
+
+  it('keeps floating header and composer overlays lightly translucent', () => {
+    const sharedFloatingRule = getCssRule(
+      '.chat-floating-header-surface,\n.chat-floating-composer-surface {',
+    )
+    const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
+
+    expect(sharedFloatingRule).toContain('rgb(255 255 255 / 0.30)')
+    expect(sharedFloatingRule).toContain('rgb(255 255 255 / 0.15)')
+    expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.30)')
+    expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.15)')
+  })
 })

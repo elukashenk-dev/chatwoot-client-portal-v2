@@ -175,4 +175,34 @@ describe('createBrandingCssProperties', () => {
       '--portal-auth-text-color': '#fda4af',
     })
   })
+
+  it('uses chat header background as the actual floating header surface source', () => {
+    const styles = createBrandingCssProperties(
+      createBranding({
+        colors: {
+          chatHeaderBackground: '#164e63',
+          chatHeaderText: '#f8fafc',
+        },
+      }),
+    )
+
+    expect(styles).toMatchObject({
+      '--portal-chat-header-background-color': '#164e63',
+      '--portal-chat-header-control-text': 'rgb(255 255 255 / 0.74)',
+      '--portal-chat-header-foreground': '#f8fafc',
+      '--portal-chat-header-surface-background-color':
+        'rgb(22 78 99 / 0.88)',
+      '--portal-chat-header-surface-background-image':
+        'linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05))',
+    })
+  })
+
+  it('keeps the default floating header overlay lightly translucent', () => {
+    const styles = createBrandingCssProperties(createBranding())
+
+    expect(styles).toMatchObject({
+      '--portal-chat-header-surface-background-image':
+        'linear-gradient(180deg, rgb(255 255 255 / 0.30), rgb(255 255 255 / 0.15))',
+    })
+  })
 })

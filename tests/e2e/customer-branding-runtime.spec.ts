@@ -599,7 +599,18 @@ test('applies public branding on the customer chat and info surfaces', async ({
     'style',
     /--portal-chat-header-background-image: url\("\/api\/branding\/assets\/16\?v=16"\)/,
   )
-  await expect(page.locator('.chat-floating-header-surface')).toBeVisible()
+  const floatingHeader = page.locator('.chat-floating-header-surface')
+
+  await expect(floatingHeader).toBeVisible()
+  await expect(floatingHeader).toHaveCSS(
+    'background-color',
+    'rgba(15, 118, 110, 0.88)',
+  )
+  const floatingHeaderBackgroundImage = await floatingHeader.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  )
+
+  expect(floatingHeaderBackgroundImage).toContain('/api/branding/assets/16')
   await expect(page.locator('.chat-floating-composer-surface')).toBeVisible()
   await expectFloatingSurfaceWithinViewport(
     page,

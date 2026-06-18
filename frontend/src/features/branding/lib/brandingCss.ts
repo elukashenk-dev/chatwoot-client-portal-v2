@@ -30,12 +30,16 @@ const productionVisualDefaults = {
   darkHeaderControlHoverText: '#ffffff',
   darkHeaderControlSurface: 'rgb(255 255 255 / 0.1)',
   darkHeaderControlText: 'rgb(255 255 255 / 0.74)',
+  darkHeaderSurfaceBackgroundImage:
+    'linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.05))',
   lightHeaderBorder: 'rgb(226 232 240 / 0.9)',
   lightHeaderControlBorder: 'rgb(193 193 193 / 34%)',
   lightHeaderControlHoverBackground: 'rgb(241 245 249 / 0.8)',
   lightHeaderControlHoverText: '#112540',
   lightHeaderControlSurface: 'rgb(248 250 252 / 43%)',
   lightHeaderControlText: '#475569',
+  lightHeaderSurfaceBackgroundImage:
+    'linear-gradient(180deg, rgb(255 255 255 / 0.30), rgb(255 255 255 / 0.15))',
 } as const
 
 const legacyBrandColorVariables = {
@@ -152,12 +156,38 @@ function createMutedTextColor(
   return toHexColor(mixColor(text, surface, 0.32))
 }
 
+function createAlphaColor(value: string, alpha: number) {
+  const color = parseHexColor(value)
+
+  if (!color) {
+    return `rgb(255 255 255 / ${alpha})`
+  }
+
+  return `rgb(${color.r} ${color.g} ${color.b} / ${alpha})`
+}
+
 function cssUrlValue(imageUrl?: string | null) {
   if (!imageUrl) {
     return 'none'
   }
 
   return `url("${imageUrl.replaceAll('\\', '\\\\').replaceAll('"', '%22')}")`
+}
+
+function createChatHeaderSurfaceBackgroundImage(
+  imageUrl: string | null | undefined,
+  isDarkHeader: boolean,
+) {
+  const overlay = isDarkHeader
+    ? productionVisualDefaults.darkHeaderSurfaceBackgroundImage
+    : productionVisualDefaults.lightHeaderSurfaceBackgroundImage
+  const image = cssUrlValue(imageUrl)
+
+  if (image === 'none') {
+    return overlay
+  }
+
+  return `${overlay}, ${image}`
 }
 
 function createBrandColorVariables(primaryColor: string, accentColor: string) {
@@ -316,6 +346,15 @@ export function createBrandingCssProperties(
     '--portal-chat-header-background-image': cssUrlValue(
       branding.assets.chat_header_background_image?.publicUrl,
     ),
+    '--portal-chat-header-surface-background-color': createAlphaColor(
+      chatHeaderBackgroundColor,
+      isDarkHeader ? 0.88 : 0.01,
+    ),
+    '--portal-chat-header-surface-background-image':
+      createChatHeaderSurfaceBackgroundImage(
+        branding.assets.chat_header_background_image?.publicUrl,
+        isDarkHeader,
+      ),
     '--portal-chat-header-border-color': isDarkHeader
       ? productionVisualDefaults.darkHeaderBorder
       : productionVisualDefaults.lightHeaderBorder,
