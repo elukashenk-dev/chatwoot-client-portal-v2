@@ -11,7 +11,7 @@ const TINY_AUTH_FRAME_OVERFLOW_THRESHOLD_PX = 8
 function setTinyOverflowAttribute(scrollArea: HTMLElement) {
   const overflow = scrollArea.scrollHeight - scrollArea.clientHeight
 
-  if (overflow > 0 && overflow <= TINY_AUTH_FRAME_OVERFLOW_THRESHOLD_PX) {
+  if (overflow <= TINY_AUTH_FRAME_OVERFLOW_THRESHOLD_PX) {
     scrollArea.dataset.tinyOverflow = 'true'
     return
   }
