@@ -29,6 +29,7 @@ function mockScrollMetrics({
 describe('AuthFrame', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    window.history.replaceState(null, '', '/')
   })
 
   it('hides zero-overflow auth pages so they do not become mobile scroll targets', async () => {
@@ -68,5 +69,30 @@ describe('AuthFrame', () => {
     const scrollArea = container.querySelector('.auth-frame-scroll-area')
 
     expect(scrollArea).not.toHaveAttribute('data-tiny-overflow')
+  })
+
+  it('does not render viewport diagnostics in the normal auth flow', async () => {
+    mockScrollMetrics({ clientHeight: 800, scrollHeight: 800 })
+
+    const { queryByLabelText } = render(
+      <AuthFrame>
+        <span>auth content</span>
+      </AuthFrame>,
+    )
+
+    expect(queryByLabelText('Viewport debug')).not.toBeInTheDocument()
+  })
+
+  it('renders viewport diagnostics only when explicitly requested', async () => {
+    mockScrollMetrics({ clientHeight: 800, scrollHeight: 800 })
+    window.history.pushState(null, '', '/auth/login?viewport-debug=1')
+
+    const { getByLabelText } = render(
+      <AuthFrame>
+        <span>auth content</span>
+      </AuthFrame>,
+    )
+
+    expect(getByLabelText('Viewport debug')).toHaveTextContent('viewport:')
   })
 })
