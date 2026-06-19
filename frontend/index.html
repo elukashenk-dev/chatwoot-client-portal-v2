@@ -19,12 +19,32 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <script>
+      ;(function () {
+        var path = window.location.pathname
+
+        if (
+          path === '/' ||
+          path.indexOf('/auth') === 0 ||
+          path.indexOf('/admin') === 0 ||
+          path.indexOf('/legal') === 0
+        ) {
+          document.documentElement.dataset.portalStartupSurface = 'auth'
+        }
+      })()
+    </script>
     <style>
       html,
       body {
         background: #fff;
         margin: 0;
         min-height: 100%;
+      }
+
+      html[data-portal-startup-surface='auth'],
+      html[data-portal-startup-surface='auth'] body,
+      html[data-portal-startup-surface='auth'] #root {
+        background: #f3f7fc;
       }
     </style>
     <title>Клиентский портал</title>

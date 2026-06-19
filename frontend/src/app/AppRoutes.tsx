@@ -5,6 +5,7 @@ import { AdminProtectedRoute } from './layouts/AdminProtectedRoute'
 import { AdminPublicRoute } from './layouts/AdminPublicRoute'
 import { AdminSessionBoundary } from './layouts/AdminSessionBoundary'
 import { AppShellLayout } from './layouts/AppShellLayout'
+import { AuthStartupCanvas } from './layouts/AuthStartupSurface'
 import { CustomerAuthBoundary } from './layouts/CustomerAuthBoundary'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
@@ -83,8 +84,14 @@ const LegalDocumentPage = lazyRouteComponent(() =>
   ),
 )
 
-function LazyRoute({ children }: { children: ReactNode }) {
-  return <Suspense fallback={null}>{children}</Suspense>
+function LazyRoute({
+  children,
+  fallback = null,
+}: {
+  children: ReactNode
+  fallback?: ReactNode
+}) {
+  return <Suspense fallback={fallback}>{children}</Suspense>
 }
 
 export function AppRoutes() {
@@ -117,7 +124,7 @@ export function AppRoutes() {
           <Route
             path="login"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <LoginPage />
               </LazyRoute>
             }
@@ -125,7 +132,7 @@ export function AppRoutes() {
           <Route
             path="register"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <RegisterRequestPage />
               </LazyRoute>
             }
@@ -133,7 +140,7 @@ export function AppRoutes() {
           <Route
             path="register/verify"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <RegisterVerifyPage />
               </LazyRoute>
             }
@@ -141,7 +148,7 @@ export function AppRoutes() {
           <Route
             path="register/set-password"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <RegisterSetPasswordPage />
               </LazyRoute>
             }
@@ -149,7 +156,7 @@ export function AppRoutes() {
           <Route
             path="password-reset/request"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <PasswordResetRequestPage />
               </LazyRoute>
             }
@@ -157,7 +164,7 @@ export function AppRoutes() {
           <Route
             path="password-reset/verify"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <PasswordResetVerifyPage />
               </LazyRoute>
             }
@@ -165,7 +172,7 @@ export function AppRoutes() {
           <Route
             path="password-reset/set-password"
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas />}>
                 <PasswordResetSetPasswordPage />
               </LazyRoute>
             }
@@ -212,7 +219,7 @@ export function AppRoutes() {
           <Route
             path={routePaths.admin.login}
             element={
-              <LazyRoute>
+              <LazyRoute fallback={<AuthStartupCanvas fillViewport />}>
                 <AdminLoginPage />
               </LazyRoute>
             }

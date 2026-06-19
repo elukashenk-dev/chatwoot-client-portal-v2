@@ -526,6 +526,17 @@ describe('LoginPage', () => {
     expect(screen.queryByText('Проверяем сессию')).not.toBeInTheDocument()
   })
 
+  it('keeps the auth startup canvas mounted while checking public auth session', () => {
+    vi.useFakeTimers()
+    fetchMock.mockReturnValueOnce(new Promise(() => {}))
+
+    renderAuthRoutes(['/auth/login'])
+
+    expect(document.querySelector('.auth-frame-background')).toBeInTheDocument()
+    expect(document.querySelector('.auth-canvas-background')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument()
+  })
+
   it.each([
     ['/auth/register', 'Создать аккаунт'],
     ['/auth/password-reset/request', 'Восстановление пароля'],
