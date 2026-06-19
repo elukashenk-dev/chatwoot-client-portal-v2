@@ -125,6 +125,14 @@ describe('index.css', () => {
     expect(mobileBlock).not.toContain('--auth-stack-top')
   })
 
+  it('hides auth frame tiny overflow without disabling real auth scrolling', () => {
+    const tinyOverflowRule = getCssRule(
+      ".auth-frame-scroll-area[data-tiny-overflow='true'] {",
+    )
+
+    expect(tinyOverflowRule).toContain('overflow-y: hidden;')
+  })
+
   it('tightens auth vertical rhythm only on short mobile viewports', () => {
     const mediaStart = source.indexOf(
       '@media (max-width: 430px) and (max-height: 780px) {',
