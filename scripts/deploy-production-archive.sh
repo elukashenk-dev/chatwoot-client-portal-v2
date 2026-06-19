@@ -350,6 +350,7 @@ if [[ ! -f "$app_path/.env.production" ]]; then
   exit 1
 fi
 
+cd "$app_path"
 scripts/ensure-production-object-storage-env.sh --env-file .env.production
 
 docker_cmd=(docker)
@@ -362,7 +363,6 @@ if ! docker info >/dev/null 2>&1; then
   fi
 fi
 
-cd "$app_path"
 "${docker_cmd[@]}" compose --env-file .env.production -f infra/production/compose.yaml up -d --build
 "${docker_cmd[@]}" compose --env-file .env.production -f infra/production/compose.yaml ps
 
