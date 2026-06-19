@@ -45,6 +45,7 @@ Notes:
   - Dirty working tree deploys are blocked unless --allow-dirty-preview and --preview-label are provided.
   - Every archive includes DEPLOY_SOURCE.txt with branch, commit, dirty status, preview label and git status.
   - The VM update preserves .env.production, .install, logs, backups, and any local .git directory.
+  - Before activation, older .env.production files are upgraded with missing portal object-storage keys.
   - Use this helper for feature-slice validation on an already bootstrapped tenant-aware VM.
 EOF
 }
@@ -348,6 +349,8 @@ if [[ ! -f "$app_path/.env.production" ]]; then
   echo "Missing $app_path/.env.production. Run scripts/install-production.sh --install on the VM first." >&2
   exit 1
 fi
+
+scripts/ensure-production-object-storage-env.sh --env-file .env.production
 
 docker_cmd=(docker)
 if ! docker info >/dev/null 2>&1; then

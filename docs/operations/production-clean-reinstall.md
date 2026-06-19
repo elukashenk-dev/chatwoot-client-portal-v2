@@ -88,6 +88,7 @@ DEFAULT_TENANT_CHATWOOT_BASE_URL=https://chat.provgroup.ru
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=<production Chatwoot account id>
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=<production Chatwoot Channel::Api inbox id>
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=<dedicated production Chatwoot API token>
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN=<separate production Chatwoot admin verification API token>
 SMTP_HOST=<smtp host>
 SMTP_PORT=<smtp port>
 SMTP_SECURE=<true|false>
@@ -281,6 +282,12 @@ If `/opt/chatwoot-client-portal-v2` no longer exists after cleanup, the deploy
 helper creates it on the VM and assigns it to the SSH user. This requires `sudo`
 on the VM.
 
+When `--activate` is used, the deploy helper preserves `.env.production` but
+runs `scripts/ensure-production-object-storage-env.sh` before compose startup.
+This upgrades older production env files with missing portal object-storage
+keys, preserves existing values and writes a timestamped env backup before the
+first change.
+
 On the VM:
 
 ```bash
@@ -344,6 +351,7 @@ DEFAULT_TENANT_CHATWOOT_BASE_URL=https://chat.provgroup.ru
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=...
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=...
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=...
+DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN=...
 DEFAULT_TENANT_CHATWOOT_WEBHOOK_SECRET=...
 ```
 
