@@ -588,7 +588,7 @@ collect_env() {
   DEFAULT_TENANT_CHATWOOT_BASE_URL="$(strip_trailing_slash "$DEFAULT_TENANT_CHATWOOT_BASE_URL")"
   prompt_value DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID "Default tenant Chatwoot account ID" "$(env_value DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID)"
   prompt_secret DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN "Default tenant Chatwoot API access token" "$(env_value DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN)"
-  prompt_secret DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN "Optional separate Chatwoot admin verification token" "$(env_value DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN)" optional
+  prompt_secret DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN "Default tenant Chatwoot admin verification token" "$(env_value DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN)"
   prompt_value DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID "Default tenant Chatwoot API Channel inbox ID" "$(env_value DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID)"
 
   local existing_tenant_webhook_secret

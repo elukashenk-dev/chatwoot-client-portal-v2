@@ -4,6 +4,8 @@ set -Eeuo pipefail
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)"
 HELPER="$REPO_ROOT/scripts/ensure-production-object-storage-env.sh"
 DEPLOY_SCRIPT="$REPO_ROOT/scripts/deploy-production-archive.sh"
+ENV_PRODUCTION_EXAMPLE="$REPO_ROOT/.env.production.example"
+INSTALL_SCRIPT="$REPO_ROOT/scripts/install-production.sh"
 COMPOSE_FILE="$REPO_ROOT/infra/production/compose.yaml"
 TMP_DIR="$(mktemp -d)"
 
@@ -23,6 +25,15 @@ assert_contains() {
 
   if ! grep -Fq "$needle" "$path"; then
     fail "expected $path to contain: $needle"
+  fi
+}
+
+assert_not_contains() {
+  local path="$1"
+  local needle="$2"
+
+  if grep -Fq "$needle" "$path"; then
+    fail "expected $path not to contain: $needle"
   fi
 }
 
@@ -68,6 +79,12 @@ fi
 
 assert_contains "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production"
 assert_contains "$COMPOSE_FILE" "DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN:"
+assert_contains "$INSTALL_SCRIPT" "Default tenant Chatwoot admin verification token"
+assert_not_contains "$INSTALL_SCRIPT" "Optional separate Chatwoot admin verification token"
+assert_env_value \
+  "$ENV_PRODUCTION_EXAMPLE" \
+  DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN \
+  "replace-with-dedicated-chatwoot-admin-verification-token"
 
 deploy_cd_line="$(line_number_of "$DEPLOY_SCRIPT" 'cd "$app_path"')"
 deploy_helper_line="$(line_number_of "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production")"

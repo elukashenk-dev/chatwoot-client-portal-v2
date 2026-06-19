@@ -38,7 +38,8 @@ function createBootstrapEnv(
 > {
   return {
     DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID: 1,
-    DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN: undefined,
+    DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN:
+      'chatwoot-admin-verification-token',
     DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN: 'chatwoot-api-token',
     DEFAULT_TENANT_CHATWOOT_BASE_URL: 'https://chatwoot.example.com',
     DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID: 5,
@@ -63,7 +64,7 @@ describe('bootstrapDefaultTenant', () => {
     await database.close()
   })
 
-  it('creates a default tenant with encrypted Chatwoot runtime secrets', async () => {
+  it('creates a default tenant with encrypted Chatwoot runtime and admin verification secrets', async () => {
     const result = await bootstrapDefaultTenant({
       db: database.db,
       env: createBootstrapEnv(),
@@ -86,18 +87,26 @@ describe('bootstrapDefaultTenant', () => {
     expect(
       decryptTenantSecret(result.tenant.chatwootWebhookSecretCiphertext, key),
     ).toBe('chatwoot-webhook-secret')
-    expect(result.tenant.chatwootAdminVerificationTokenCiphertext).toBeNull()
+    expect(
+      decryptTenantSecret(
+        result.tenant.chatwootAdminVerificationTokenCiphertext ?? '',
+        key,
+      ),
+    ).toBe('chatwoot-admin-verification-token')
 
     const report = createSafeDefaultTenantBootstrapReport(result)
 
     expect(JSON.stringify(report)).not.toContain('chatwoot-api-token')
     expect(JSON.stringify(report)).not.toContain('chatwoot-webhook-secret')
+    expect(JSON.stringify(report)).not.toContain(
+      'chatwoot-admin-verification-token',
+    )
     expect(report.tenant.hasChatwootAdminVerificationTokenCiphertext).toBe(
-      false,
+      true,
     )
   })
 
-  it('stores an optional encrypted Chatwoot admin verification token', async () => {
+  it('stores an encrypted Chatwoot admin verification token', async () => {
     const result = await bootstrapDefaultTenant({
       db: database.db,
       env: createBootstrapEnv({
@@ -120,6 +129,17 @@ describe('bootstrapDefaultTenant', () => {
       'chatwoot-admin-verification-token',
     )
     expect(report.tenant.hasChatwootAdminVerificationTokenCiphertext).toBe(true)
+  })
+
+  it('requires a Chatwoot admin verification token when creating the default tenant', async () => {
+    await expect(
+      bootstrapDefaultTenant({
+        db: database.db,
+        env: createBootstrapEnv({
+          DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN: undefined,
+        }),
+      }),
+    ).rejects.toThrow(DefaultTenantBootstrapConfigError)
   })
 
   it('updates the same default tenant when bootstrap is rerun', async () => {
@@ -147,7 +167,7 @@ describe('bootstrapDefaultTenant', () => {
     })
   })
 
-  it('preserves an existing admin verification token when bootstrap reruns without the optional env value', async () => {
+  it('preserves an existing admin verification token when bootstrap reruns without the env value', async () => {
     await bootstrapDefaultTenant({
       db: database.db,
       env: createBootstrapEnv({
