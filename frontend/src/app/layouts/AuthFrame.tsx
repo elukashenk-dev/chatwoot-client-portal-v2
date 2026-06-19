@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 
-import { AuthViewportDebugOverlay } from './AuthViewportDebugOverlay'
 import { useAppViewportLock } from './useAppViewportLock'
 
 type AuthFrameProps = {
@@ -8,13 +7,6 @@ type AuthFrameProps = {
 }
 
 const TINY_AUTH_FRAME_OVERFLOW_THRESHOLD_PX = 8
-const VIEWPORT_DEBUG_QUERY_PARAM = 'viewport-debug'
-
-function shouldShowViewportDebug() {
-  return new URLSearchParams(window.location.search).get(
-    VIEWPORT_DEBUG_QUERY_PARAM,
-  )
-}
 
 function setTinyOverflowAttribute(scrollArea: HTMLElement) {
   const overflow = scrollArea.scrollHeight - scrollArea.clientHeight
@@ -119,7 +111,6 @@ export function AuthFrame({ children }: AuthFrameProps) {
           {children}
         </div>
       </div>
-      {shouldShowViewportDebug() ? <AuthViewportDebugOverlay /> : null}
     </main>
   )
 }
