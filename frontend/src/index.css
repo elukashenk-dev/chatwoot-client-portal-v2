@@ -519,6 +519,10 @@ body.app-shell-scroll-lock {
   min-height: 100dvh;
 }
 
+.auth-frame-scroll-area[data-tiny-overflow='true'] {
+  overflow-y: hidden;
+}
+
 .app-safe-top {
   padding-top: calc(1rem + env(safe-area-inset-top));
 }
