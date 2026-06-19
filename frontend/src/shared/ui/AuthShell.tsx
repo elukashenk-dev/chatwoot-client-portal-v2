@@ -38,7 +38,7 @@ export function AuthShell({
   title,
 }: AuthShellProps) {
   return (
-    <section className="auth-canvas-background relative flex min-h-full w-full overflow-hidden">
+    <section className="auth-canvas-background relative flex min-h-full w-full shrink-0">
       <div
         aria-hidden="true"
         className="auth-background-overlay absolute inset-0 z-0"
