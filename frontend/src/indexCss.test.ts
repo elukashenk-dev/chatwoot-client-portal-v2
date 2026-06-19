@@ -155,4 +155,23 @@ describe('index.css', () => {
     expect(compactBlock).not.toContain('height: 40px')
     expect(compactBlock).not.toContain('width: 48px')
   })
+
+  it('uses a smaller auth bottom inset on very short PWA mobile viewports', () => {
+    const mediaStart = source.indexOf(
+      '@media (max-width: 430px) and (max-height: 720px) {',
+    )
+
+    expect(mediaStart).toBeGreaterThanOrEqual(0)
+
+    const nextMediaStart = source.indexOf('@media', mediaStart + 1)
+    const pwaBlock = source.slice(
+      mediaStart,
+      nextMediaStart === -1 ? source.length : nextMediaStart,
+    )
+
+    expect(pwaBlock).toContain('.auth-stack {')
+    expect(pwaBlock).toContain(
+      'padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));',
+    )
+  })
 })
