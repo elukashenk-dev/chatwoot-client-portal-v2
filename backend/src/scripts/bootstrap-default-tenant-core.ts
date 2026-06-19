@@ -78,6 +78,16 @@ export async function bootstrapDefaultTenant({
   const tenantSecretKey = decodeTenantSecretKey(
     requireString(env, 'PORTAL_TENANT_SECRET_KEY'),
   )
+
+  if (
+    env.DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN === undefined &&
+    !existingTenant?.chatwootAdminVerificationTokenCiphertext
+  ) {
+    throw new DefaultTenantBootstrapConfigError(
+      'DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN is required.',
+    )
+  }
+
   const adminVerificationTokenPatch =
     env.DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN === undefined
       ? {}

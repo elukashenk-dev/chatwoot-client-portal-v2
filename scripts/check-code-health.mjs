@@ -251,7 +251,40 @@ async function checkProductionObjectStorageConfig(failures) {
     failures.push({
       relativePath: composePath,
       message:
-        'production backend must receive optional tenant admin verification token for bootstrap',
+        'production backend must receive tenant admin verification token for bootstrap',
+    })
+  }
+
+  const installScriptPath = 'scripts/install-production.sh'
+  const installScript = await readFile(
+    path.join(repoRoot, installScriptPath),
+    'utf8',
+  )
+
+  if (
+    !installScript.includes(
+      'Default tenant Chatwoot admin verification token',
+    )
+  ) {
+    failures.push({
+      relativePath: installScriptPath,
+      message:
+        'production installer must prompt for the default tenant admin verification token',
+    })
+  }
+
+  if (
+    installScript.includes(
+      'DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN',
+    ) &&
+    installScript.includes(
+      'Optional separate Chatwoot admin verification token',
+    )
+  ) {
+    failures.push({
+      relativePath: installScriptPath,
+      message:
+        'production installer must require the default tenant admin verification token',
     })
   }
 }

@@ -94,6 +94,9 @@ After archive deploy:
 - `cat DEPLOY_SOURCE.txt` matches the intended clean commit;
 - `curl -fsS https://lk.provgroup.ru/api/health` returns `status: ok`;
 - `curl -fsS https://lk.provgroup.ru/api/tenant` returns `provgroup`;
+- the default tenant admin verification token came from a confirmed Chatwoot
+  administrator's Profile Settings / Personal Access Token. It is separate from
+  the customer chat runtime token and is required for `/admin/login`;
 - default tenant has a configured admin verification token before testing
   `/admin/login`:
 
