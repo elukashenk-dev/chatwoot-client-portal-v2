@@ -13,10 +13,7 @@ const source = readFileSync(
 
 describe('index.html', () => {
   it('marks auth-like routes with a startup surface before React loads', () => {
-    expect(source).toContain('portalStartupSurface')
-    expect(source).toContain("path.indexOf('/auth') === 0")
-    expect(source).toContain("path.indexOf('/admin') === 0")
-    expect(source).toContain("path.indexOf('/legal') === 0")
+    expect(source).toContain('<script src="/startup-surface.js"></script>')
     expect(source).toContain('background: #f3f7fc;')
   })
 
