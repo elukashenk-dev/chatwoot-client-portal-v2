@@ -52,6 +52,16 @@ describe('index.css', () => {
     expect(source).toContain('background: #fff;')
   })
 
+  it('uses the auth canvas fallback for auth-like startup routes', () => {
+    const startupRule = getCssRuleBySelectors([
+      "html[data-portal-startup-surface='auth']",
+      "html[data-portal-startup-surface='auth'] body",
+      "html[data-portal-startup-surface='auth'] #root",
+    ])
+
+    expect(startupRule).toContain('background: #f3f7fc;')
+  })
+
   it('hides the chat transcript scrollbar on mobile viewports', () => {
     expect(source).toMatch(
       /@media\s*\(\s*max-width:\s*640px\s*\)\s*{[\s\S]*\.chat-scroll\s*{[\s\S]*scrollbar-width:\s*none;[\s\S]*-ms-overflow-style:\s*none;[\s\S]*\.chat-scroll::-webkit-scrollbar\s*{[\s\S]*display:\s*none;[\s\S]*width:\s*0;[\s\S]*height:\s*0;/,

@@ -4,12 +4,13 @@ import { routePaths } from '../routePaths'
 import { useAdminSession } from '../../features/admin-auth/lib/adminSessionContext'
 import { InlineAlert } from '../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../shared/ui/PrimaryButton'
+import { AuthStartupCanvas } from './AuthStartupSurface'
 
 export function AdminPublicRoute() {
   const { errorMessage, refreshSession, status } = useAdminSession()
 
   if (status === 'checking') {
-    return null
+    return <AuthStartupCanvas fillViewport />
   }
 
   if (status === 'error') {

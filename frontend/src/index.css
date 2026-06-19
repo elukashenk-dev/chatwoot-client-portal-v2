@@ -161,6 +161,12 @@ body {
   margin: 0;
 }
 
+html[data-portal-startup-surface='auth'],
+html[data-portal-startup-surface='auth'] body,
+html[data-portal-startup-surface='auth'] #root {
+  background: #f3f7fc;
+}
+
 .portal-branding-scope {
   min-height: 100%;
 }
