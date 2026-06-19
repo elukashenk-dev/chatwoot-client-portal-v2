@@ -109,7 +109,7 @@ describe('index.css', () => {
 
   it('tightens auth vertical rhythm only on short mobile viewports', () => {
     const mediaStart = source.indexOf(
-      '@media (max-width: 430px) and (max-height: 760px) {',
+      '@media (max-width: 430px) and (max-height: 780px) {',
     )
 
     expect(mediaStart).toBeGreaterThanOrEqual(0)
