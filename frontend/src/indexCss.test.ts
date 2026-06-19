@@ -107,6 +107,24 @@ describe('index.css', () => {
     expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.15)')
   })
 
+  it('keeps auth mobile bottom inset from creating a false scrollbar', () => {
+    const mediaStart = source.indexOf('@media (max-width: 430px) {')
+
+    expect(mediaStart).toBeGreaterThanOrEqual(0)
+
+    const nextMediaStart = source.indexOf('@media', mediaStart + 1)
+    const mobileBlock = source.slice(
+      mediaStart,
+      nextMediaStart === -1 ? source.length : nextMediaStart,
+    )
+
+    expect(mobileBlock).toContain('.auth-stack {')
+    expect(mobileBlock).toContain(
+      'padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));',
+    )
+    expect(mobileBlock).not.toContain('--auth-stack-top')
+  })
+
   it('tightens auth vertical rhythm only on short mobile viewports', () => {
     const mediaStart = source.indexOf(
       '@media (max-width: 430px) and (max-height: 780px) {',
@@ -121,9 +139,6 @@ describe('index.css', () => {
     )
 
     expect(compactBlock).toContain('--auth-stack-top: 36px;')
-    expect(compactBlock).toContain(
-      'padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));',
-    )
     expect(compactBlock).toContain('margin-top: 30px;')
     expect(compactBlock).toContain('margin-top: 31px;')
     expect(compactBlock).toContain('margin-top: 18px;')
