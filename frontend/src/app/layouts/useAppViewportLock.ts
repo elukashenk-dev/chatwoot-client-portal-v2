@@ -5,34 +5,69 @@ const APP_VIEWPORT_WIDTH_VAR = '--portal-app-viewport-width'
 const APP_VIEWPORT_OFFSET_LEFT_VAR = '--portal-app-viewport-offset-left'
 const APP_VIEWPORT_OFFSET_TOP_VAR = '--portal-app-viewport-offset-top'
 const APP_SHELL_SCROLL_LOCK_CLASS = 'app-shell-scroll-lock'
+const VIEWPORT_JITTER_THRESHOLD_PX = 8
+
+type ViewportMetrics = {
+  height: number
+  offsetLeft: number
+  offsetTop: number
+  width: number
+}
+
+function hasMeaningfulViewportChange(
+  previous: ViewportMetrics | null,
+  next: ViewportMetrics,
+) {
+  if (!previous) {
+    return true
+  }
+
+  return (
+    Math.abs(next.height - previous.height) >= VIEWPORT_JITTER_THRESHOLD_PX ||
+    Math.abs(next.width - previous.width) >= VIEWPORT_JITTER_THRESHOLD_PX ||
+    Math.abs(next.offsetLeft - previous.offsetLeft) >=
+      VIEWPORT_JITTER_THRESHOLD_PX ||
+    Math.abs(next.offsetTop - previous.offsetTop) >=
+      VIEWPORT_JITTER_THRESHOLD_PX
+  )
+}
 
 export function useAppViewportLock() {
   useLayoutEffect(() => {
     const rootElement = document.documentElement
     const bodyElement = document.body
     const visualViewport = window.visualViewport
+    let activeMetrics: ViewportMetrics | null = null
 
     function syncViewportMetrics() {
-      const viewportHeight = visualViewport?.height ?? window.innerHeight
-      const viewportWidth = visualViewport?.width ?? window.innerWidth
-      const viewportOffsetLeft = visualViewport?.offsetLeft ?? 0
-      const viewportOffsetTop = visualViewport?.offsetTop ?? 0
+      const nextMetrics = {
+        height: visualViewport?.height ?? window.innerHeight,
+        offsetLeft: visualViewport?.offsetLeft ?? 0,
+        offsetTop: visualViewport?.offsetTop ?? 0,
+        width: visualViewport?.width ?? window.innerWidth,
+      }
+
+      if (!hasMeaningfulViewportChange(activeMetrics, nextMetrics)) {
+        return
+      }
+
+      activeMetrics = nextMetrics
 
       rootElement.style.setProperty(
         APP_VIEWPORT_HEIGHT_VAR,
-        `${viewportHeight}px`,
+        `${nextMetrics.height}px`,
       )
       rootElement.style.setProperty(
         APP_VIEWPORT_WIDTH_VAR,
-        `${viewportWidth}px`,
+        `${nextMetrics.width}px`,
       )
       rootElement.style.setProperty(
         APP_VIEWPORT_OFFSET_LEFT_VAR,
-        `${viewportOffsetLeft}px`,
+        `${nextMetrics.offsetLeft}px`,
       )
       rootElement.style.setProperty(
         APP_VIEWPORT_OFFSET_TOP_VAR,
-        `${viewportOffsetTop}px`,
+        `${nextMetrics.offsetTop}px`,
       )
     }
 

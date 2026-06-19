@@ -158,4 +158,47 @@ describe('useAppViewportLock', () => {
       ),
     ).toBe('390px')
   })
+
+  it('ignores tiny visual viewport jitter while preserving real viewport changes', () => {
+    const viewport = installVisualViewport({
+      height: 800,
+      offsetTop: 0,
+      width: 390,
+    })
+
+    render(<AppViewportLockProbe />)
+
+    viewport.setMetrics({ height: 796, offsetTop: 4, width: 389 })
+    viewport.fire('resize')
+
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--portal-app-viewport-height',
+      ),
+    ).toBe('800px')
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--portal-app-viewport-width',
+      ),
+    ).toBe('390px')
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--portal-app-viewport-offset-top',
+      ),
+    ).toBe('0px')
+
+    viewport.setMetrics({ height: 520, offsetTop: 0, width: 390 })
+    viewport.fire('resize')
+
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--portal-app-viewport-height',
+      ),
+    ).toBe('520px')
+    expect(
+      document.documentElement.style.getPropertyValue(
+        '--portal-app-viewport-offset-top',
+      ),
+    ).toBe('0px')
+  })
 })
