@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+ENV_FILE="$REPO_ROOT/.env.production"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/ensure-production-object-storage-env.sh [--env-file=<path>]
+
+Adds missing portal object-storage variables to an existing production env file.
+Existing values are preserved. Missing secrets are generated locally.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  arg="$1"
+  case "$arg" in
+    --env-file=*)
+      ENV_FILE="${arg#*=}"
+      shift
+      ;;
+    --env-file)
+      if [[ $# -lt 2 ]]; then
+        echo "--env-file requires a path." >&2
+        exit 2
+      fi
+      ENV_FILE="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "Env file is missing: $ENV_FILE" >&2
+  exit 1
+fi
+
+has_key() {
+  local key="$1"
+
+  grep -Eq "^${key}=" "$ENV_FILE"
+}
+
+append_env_line() {
+  local key="$1"
+  local value="$2"
+
+  if has_key "$key"; then
+    return
+  fi
+
+  if [[ "$WROTE_ANY" != "true" ]]; then
+    cp "$ENV_FILE" "${ENV_FILE}.backup.$(date -u +%Y%m%dT%H%M%SZ)"
+    WROTE_ANY="true"
+  fi
+
+  printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE"
+  APPENDED_KEYS+=("$key")
+}
+
+random_hex_secret() {
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "openssl is required to generate missing production object-storage secrets." >&2
+    exit 1
+  fi
+
+  openssl rand -hex 32
+}
+
+WROTE_ANY="false"
+APPENDED_KEYS=()
+
+append_env_line PORTAL_OBJECT_STORAGE_IMAGE "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
+append_env_line PORTAL_OBJECT_STORAGE_MC_IMAGE "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+append_env_line PORTAL_OBJECT_STORAGE_ROOT_USER "portal_v2_minio_root"
+if ! has_key PORTAL_OBJECT_STORAGE_ROOT_PASSWORD; then
+  append_env_line PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "$(random_hex_secret)"
+fi
+
+append_env_line BRANDING_ASSET_STORAGE_ENDPOINT "http://portal-object-storage:9000"
+append_env_line BRANDING_ASSET_STORAGE_REGION "us-east-1"
+append_env_line BRANDING_ASSET_STORAGE_BUCKET "portal-branding-assets"
+append_env_line BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "portal_v2_branding_assets"
+if ! has_key BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY; then
+  append_env_line BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "$(random_hex_secret)"
+fi
+append_env_line BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "true"
+
+chmod 600 "$ENV_FILE"
+
+if [[ "$WROTE_ANY" == "true" ]]; then
+  echo "Production env upgraded with missing portal object-storage keys:"
+  printf '  %s\n' "${APPENDED_KEYS[@]}"
+else
+  echo "Production env already has portal object-storage keys."
+fi

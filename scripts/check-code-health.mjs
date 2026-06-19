@@ -242,6 +242,18 @@ async function checkProductionObjectStorageConfig(failures) {
       message: 'backend must depend on object-storage init service',
     })
   }
+
+  if (
+    !backendBlockBeforeWeb.includes(
+      'DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN:',
+    )
+  ) {
+    failures.push({
+      relativePath: composePath,
+      message:
+        'production backend must receive optional tenant admin verification token for bootstrap',
+    })
+  }
 }
 
 async function main() {

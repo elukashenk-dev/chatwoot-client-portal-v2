@@ -11,6 +11,12 @@ scripts/deploy-production-archive.sh \
   --activate
 ```
 
+During activation, the archive helper preserves `.env.production` but upgrades
+older env files with missing portal-owned object-storage keys before running
+`docker compose up -d --build`. Existing values are preserved, missing secrets
+are generated on the VM, and a timestamped `.env.production.backup.*` file is
+written before the first change.
+
 Use the tenant-aware clean reinstall runbook only when the portal-owned
 production stack must be recreated or reconfigured:
 
@@ -76,7 +82,9 @@ Before archive deploy:
 - `origin/main` contains the reviewed commit;
 - targeted checks for the current slice passed;
 - `pnpm build`, `pnpm lint` and `git diff --check` pass or a blocker is
-  explicitly recorded.
+  explicitly recorded;
+- `pnpm test:ops` passes when deploy scripts or production env upgrade behavior
+  changed.
 
 After archive deploy:
 
@@ -86,6 +94,14 @@ After archive deploy:
 - `cat DEPLOY_SOURCE.txt` matches the intended clean commit;
 - `curl -fsS https://lk.provgroup.ru/api/health` returns `status: ok`;
 - `curl -fsS https://lk.provgroup.ru/api/tenant` returns `provgroup`;
+- default tenant has a configured admin verification token before testing
+  `/admin/login`:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select chatwoot_admin_verification_token_ciphertext is not null from portal_tenants where slug = '"'"'provgroup'"'"';"'
+```
+
 - tenant Chatwoot connection verification passes:
 
 ```bash
