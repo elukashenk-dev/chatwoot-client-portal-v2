@@ -122,6 +122,7 @@ describe('auth input CSS contract', () => {
     expect(legalTextRule).toContain('margin: 24px auto 0')
     expect(legalTextRule).toContain('font-size: 12px')
     expect(legalTextRule).toContain('line-height: 18px')
+    expect(legalTextRule).toContain('hyphens: auto')
     expect(legalLinkRule).toContain('font-weight: 600')
   })
 

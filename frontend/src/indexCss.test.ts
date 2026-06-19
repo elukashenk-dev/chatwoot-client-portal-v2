@@ -106,4 +106,30 @@ describe('index.css', () => {
     expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.30)')
     expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.15)')
   })
+
+  it('tightens auth vertical rhythm only on short mobile viewports', () => {
+    const mediaStart = source.indexOf(
+      '@media (max-width: 430px) and (max-height: 760px) {',
+    )
+
+    expect(mediaStart).toBeGreaterThanOrEqual(0)
+
+    const nextMediaStart = source.indexOf('@media', mediaStart + 1)
+    const compactBlock = source.slice(
+      mediaStart,
+      nextMediaStart === -1 ? source.length : nextMediaStart,
+    )
+
+    expect(compactBlock).toContain('--auth-stack-top: 36px;')
+    expect(compactBlock).toContain(
+      'padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));',
+    )
+    expect(compactBlock).toContain('margin-top: 30px;')
+    expect(compactBlock).toContain('margin-top: 31px;')
+    expect(compactBlock).toContain('margin-top: 18px;')
+    expect(compactBlock).toContain('margin-top: 22px;')
+    expect(compactBlock).toContain('grid-template-columns: 1fr 56px 1fr;')
+    expect(compactBlock).not.toContain('height: 40px')
+    expect(compactBlock).not.toContain('width: 48px')
+  })
 })
