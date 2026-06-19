@@ -31,6 +31,19 @@ describe('AuthFrame', () => {
     vi.restoreAllMocks()
   })
 
+  it('hides zero-overflow auth pages so they do not become mobile scroll targets', async () => {
+    mockScrollMetrics({ clientHeight: 800, scrollHeight: 800 })
+
+    const { container } = render(
+      <AuthFrame>
+        <span>auth content</span>
+      </AuthFrame>,
+    )
+    const scrollArea = container.querySelector('.auth-frame-scroll-area')
+
+    expect(scrollArea).toHaveAttribute('data-tiny-overflow', 'true')
+  })
+
   it('hides tiny internal overflow that only creates mobile scroll jitter', async () => {
     mockScrollMetrics({ clientHeight: 800, scrollHeight: 805 })
 
