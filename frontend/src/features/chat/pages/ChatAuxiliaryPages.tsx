@@ -1,7 +1,5 @@
-import { ChatInfoPage } from '../components/ChatInfoPage'
-import { ChatMediaPage } from '../components/ChatMediaPage'
-import { ChatNotificationsPage } from '../components/ChatNotificationsPage'
-import { ChatSearchPage } from '../components/ChatSearchPage'
+import { lazy, Suspense, type ComponentType } from 'react'
+
 import type {
   ChatSearchResult,
   ChatSupportAvailabilityResponse,
@@ -11,6 +9,29 @@ import type { useChatInfoPanel } from './useChatInfoPanel'
 import type { useChatMediaPanel } from './useChatMediaPanel'
 import type { useChatNotificationsPanel } from './useChatNotificationsPanel'
 import type { useChatSearchPanel } from './useChatSearchPanel'
+
+function lazyPanel<TProps extends object>(
+  loadComponent: () => Promise<ComponentType<TProps>>,
+) {
+  return lazy(async () => ({
+    default: await loadComponent(),
+  }))
+}
+
+const ChatInfoPage = lazyPanel(() =>
+  import('../components/ChatInfoPage').then((module) => module.ChatInfoPage),
+)
+const ChatMediaPage = lazyPanel(() =>
+  import('../components/ChatMediaPage').then((module) => module.ChatMediaPage),
+)
+const ChatNotificationsPage = lazyPanel(() =>
+  import('../components/ChatNotificationsPage').then(
+    (module) => module.ChatNotificationsPage,
+  ),
+)
+const ChatSearchPage = lazyPanel(() =>
+  import('../components/ChatSearchPage').then((module) => module.ChatSearchPage),
+)
 
 type ChatAuxiliaryPagesProps = {
   activeThread: ChatThreadSummary | null
@@ -40,7 +61,7 @@ export function ChatAuxiliaryPages({
   supportAvailabilityIsLoading,
 }: ChatAuxiliaryPagesProps) {
   return (
-    <>
+    <Suspense fallback={null}>
       {chatInfoPanel.state.isOpen ? (
         <ChatInfoPage
           info={chatInfoPanel.state.info}
@@ -111,6 +132,6 @@ export function ChatAuxiliaryPages({
           search={chatSearchPanel.state.search}
         />
       ) : null}
-    </>
+    </Suspense>
   )
 }
