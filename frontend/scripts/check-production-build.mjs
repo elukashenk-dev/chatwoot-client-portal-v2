@@ -6,6 +6,24 @@ import { fileURLToPath } from 'node:url'
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url))
 const manifestPath = join(distDir, 'asset-manifest.json')
 const chatRouteImport = 'src/features/chat/pages/ChatPage.tsx'
+const chatAuxiliaryPanelImports = [
+  {
+    label: 'ChatInfoPage',
+    source: 'src/features/chat/components/ChatInfoPage.tsx',
+  },
+  {
+    label: 'ChatMediaPage',
+    source: 'src/features/chat/components/ChatMediaPage.tsx',
+  },
+  {
+    label: 'ChatNotificationsPage',
+    source: 'src/features/chat/components/ChatNotificationsPage.tsx',
+  },
+  {
+    label: 'ChatSearchPage',
+    source: 'src/features/chat/components/ChatSearchPage.tsx',
+  },
+]
 const maxStartupEntryBytes = 300 * 1024
 const maxStartupEntryGzipBytes = 90 * 1024
 const devBundleMarkers = [
@@ -76,6 +94,55 @@ function assertChatRouteIsLazy(manifest) {
   return startupEntry
 }
 
+function findManifestEntryBySourceOrName(manifest, { label, source }) {
+  const result = Object.entries(manifest).find(([key, entry]) => {
+    return key === source || entry.src === source || entry.name === label
+  })
+
+  if (!result) {
+    throw new Error(
+      `Vite asset manifest did not contain the lazy ${label} chunk.`,
+    )
+  }
+
+  const [key, entry] = result
+
+  assertManifestEntry(entry, `the lazy ${label} chunk`)
+
+  return { entry, key }
+}
+
+function assertChatAuxiliaryPanelsAreLazy(manifest) {
+  const chatEntry = manifest[chatRouteImport]
+
+  assertManifestEntry(chatEntry, 'the lazy chat route entry')
+
+  for (const panelImport of chatAuxiliaryPanelImports) {
+    const { key } = findManifestEntryBySourceOrName(manifest, panelImport)
+    const importReferences = [panelImport.source, key]
+
+    if (
+      !Array.isArray(chatEntry.dynamicImports) ||
+      !importReferences.some((reference) =>
+        chatEntry.dynamicImports.includes(reference),
+      )
+    ) {
+      throw new Error(
+        `ChatPage does not lazy-load the ${panelImport.label} auxiliary panel.`,
+      )
+    }
+
+    if (
+      Array.isArray(chatEntry.imports) &&
+      importReferences.some((reference) => chatEntry.imports.includes(reference))
+    ) {
+      throw new Error(
+        `ChatPage statically imports the ${panelImport.label} auxiliary panel.`,
+      )
+    }
+  }
+}
+
 function assertStartupEntryBudget(startupEntry) {
   const startupEntryBytes = readAsset(startupEntry.file)
   const gzipBytes = gzipSync(startupEntryBytes).byteLength
@@ -126,6 +193,7 @@ function assertDistHasAssets() {
 const manifest = readManifest()
 const startupEntry = assertChatRouteIsLazy(manifest)
 
+assertChatAuxiliaryPanelsAreLazy(manifest)
 assertStartupEntryBudget(startupEntry)
 assertNoDevelopmentReactMarkers()
 assertDistHasAssets()
