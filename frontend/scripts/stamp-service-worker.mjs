@@ -59,20 +59,25 @@ function assertRequiredBuildAssets({ assetUrls, manifest }) {
     )
   }
 
-  if (
-    Array.isArray(startupEntry.dynamicImports) &&
-    startupEntry.dynamicImports.includes(chatRouteImport)
-  ) {
+  if (!isManifestEntry(chatEntry)) {
     throw new Error(
-      `Vite asset manifest at ${manifestPath} still treated the chat route as a lazy startup dependency.`,
+      `Vite asset manifest at ${manifestPath} did not contain the lazy chat route entry.`,
     )
   }
 
-  const requiredEntries = [['startup entry', startupEntry.file]]
-
-  if (isManifestEntry(chatEntry)) {
-    requiredEntries.push(['chat route entry', chatEntry.file])
+  if (
+    !Array.isArray(startupEntry.dynamicImports) ||
+    !startupEntry.dynamicImports.includes(chatRouteImport)
+  ) {
+    throw new Error(
+      `Vite asset manifest at ${manifestPath} did not treat the chat route as a lazy route dependency.`,
+    )
   }
+
+  const requiredEntries = [
+    ['startup entry', startupEntry.file],
+    ['chat route entry', chatEntry.file],
+  ]
 
   for (const [label, assetPath] of requiredEntries) {
     if (!assetUrls.includes(`/${assetPath}`)) {

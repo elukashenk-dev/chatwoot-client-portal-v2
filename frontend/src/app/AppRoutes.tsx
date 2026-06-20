@@ -10,7 +10,6 @@ import { CustomerAuthBoundary } from './layouts/CustomerAuthBoundary'
 import { ProtectedRoute } from './layouts/ProtectedRoute'
 import { PublicAuthRoute } from './layouts/PublicAuthRoute'
 import { routePaths } from './routePaths'
-import { ChatPage } from '../features/chat/pages/ChatPage'
 
 function lazyRouteComponent<TProps extends object>(
   loadComponent: () => Promise<ComponentType<TProps>>,
@@ -52,6 +51,9 @@ const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
   import('../features/auth/pages/PasswordResetSetPasswordPage').then(
     (module) => module.PasswordResetSetPasswordPage,
   ),
+)
+const ChatPage = lazyRouteComponent(() =>
+  import('../features/chat/pages/ChatPage').then((module) => module.ChatPage),
 )
 const SettingsPage = lazyRouteComponent(() =>
   import('../features/settings/pages/SettingsPage').then(
@@ -185,7 +187,14 @@ export function AppRoutes() {
               index
               element={<Navigate replace to={routePaths.app.chat} />}
             />
-            <Route path="chat" element={<ChatPage />} />
+            <Route
+              path="chat"
+              element={
+                <LazyRoute>
+                  <ChatPage />
+                </LazyRoute>
+              }
+            />
             <Route
               path="profile"
               element={
