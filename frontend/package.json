@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_ENV=production tsc -b && NODE_ENV=production vite build && NODE_ENV=production node ./scripts/stamp-service-worker.mjs",
+    "build": "NODE_ENV=production tsc -b && NODE_ENV=production vite build && NODE_ENV=production node ./scripts/stamp-service-worker.mjs && NODE_ENV=production node ./scripts/check-production-build.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
