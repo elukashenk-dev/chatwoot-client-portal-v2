@@ -85,6 +85,10 @@ const branding = {
       authBrandPlacement: 'center',
     },
     portalName: 'ProvGroup',
+    supportContact: {
+      phoneDisplay: '+7 (846) 211-11-11',
+      phoneHref: 'tel:+78462111111',
+    },
     supportLabel: 'Поддержка ProvGroup',
     version: 3,
   },
@@ -653,10 +657,9 @@ test('applies public branding on the customer chat and info surfaces', async ({
   await expect(page.getByRole('heading', { name: 'О диалоге' })).toBeVisible()
   const infoPanel = page.locator('section.chat-runtime-surface.z-40')
 
-  await expect(infoPanel.getByRole('img', { name: 'Личный чат' })).toHaveAttribute(
-    'src',
-    '/api/branding/assets/11?v=11',
-  )
+  await expect(
+    infoPanel.getByRole('img', { name: 'Личный чат' }),
+  ).toHaveAttribute('src', '/api/branding/assets/11?v=11')
 
   const infoGlassCard = infoPanel.locator('.chat-glass-card-surface').first()
 
@@ -672,9 +675,7 @@ test('applies public branding on the customer chat and info surfaces', async ({
     }
   })
 
-  expect(infoGlassCardStyles.backgroundColor).toBe(
-    'rgba(255, 255, 255, 0.01)',
-  )
+  expect(infoGlassCardStyles.backgroundColor).toBe('rgba(255, 255, 255, 0.01)')
   expect(infoGlassCardStyles.backgroundImage).toContain('linear-gradient')
   expect(infoGlassCardStyles.backgroundImage).toContain(
     'rgba(255, 255, 255, 0.28)',
