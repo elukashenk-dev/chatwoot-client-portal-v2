@@ -21,13 +21,20 @@ docs/operations/production-clean-reinstall.md
 
 ## Домены
 
-Основной сайт:
+Основной product/landing domain:
 
 ```text
-provgroup.ru
+lancora.ru
 ```
 
-Production Chatwoot:
+Primary production Chatwoot admin:
+
+```text
+app.lancora.ru
+```
+
+Legacy Chatwoot domain kept as fallback and for existing tenant runtime until a
+separate tenant runtime base URL migration is performed:
 
 ```text
 chat.provgroup.ru
@@ -38,6 +45,12 @@ Production portal:
 
 ```text
 lk.provgroup.ru
+```
+
+Next customer portal domain:
+
+```text
+lk.pronalogi.pro
 ```
 
 Дополнительный DNS, который может указывать на ту же VM:
@@ -87,11 +100,13 @@ Enabled Nginx sites:
 ```text
 /etc/nginx/sites-enabled/default
 /etc/nginx/sites-enabled/nginx_chatwoot.conf
+/etc/nginx/sites-enabled/nginx_chatwoot_app_lancora.conf
 ```
 
-Chatwoot Nginx config использует:
+Chatwoot Nginx configs use:
 
 ```text
+app.lancora.ru
 chat.provgroup.ru
 www.chat.provgroup.ru
 ```
@@ -147,7 +162,8 @@ clean reviewed commit. Clean reinstall нужен только для перес
 
 Clean reinstall коротко:
 
-1. Проверить, что Chatwoot работает на `chat.provgroup.ru`.
+1. Проверить, что Chatwoot работает на `app.lancora.ru` и legacy fallback
+   `chat.provgroup.ru`.
 2. Подготовить clean portal-owned runtime path.
 3. Залить актуальный `v2`.
 4. Запустить tenant-aware installer.

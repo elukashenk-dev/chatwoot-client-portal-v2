@@ -75,6 +75,9 @@ execution-plan детали здесь не хранятся.
 
 - Production Chatwoot CE is `v4.15.1`; portal webhook signing uses the tenant
   API Channel `channel_api.secret`.
+- Primary production Chatwoot admin URL is `https://app.lancora.ru`; legacy
+  `https://chat.provgroup.ru` remains available as fallback and for existing
+  tenant runtime until a separate runtime base URL migration is performed.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
   one-tenant install for `provgroup`.
 - Production deploy source tracking is explicit: clean deploys come from
@@ -171,6 +174,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Start the controlled provider-domain transition to `app.lancora.ru`, then
-  connect the first customer tenant domain `lk.pronalogi.pro` after ingress and
-  runtime health checks are green.
+- Configure and verify `lk.pronalogi.pro` as the first customer portal domain
+  before touching `provgroup` tenant runtime domain settings.
