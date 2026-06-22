@@ -5,6 +5,7 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd
 HELPER="$REPO_ROOT/scripts/ensure-production-object-storage-env.sh"
 DEPLOY_SCRIPT="$REPO_ROOT/scripts/deploy-production-archive.sh"
 ENV_PRODUCTION_EXAMPLE="$REPO_ROOT/.env.production.example"
+INGRESS_SCRIPT="$REPO_ROOT/scripts/configure-tenant-domain-ingress.sh"
 INSTALL_SCRIPT="$REPO_ROOT/scripts/install-production.sh"
 COMPOSE_FILE="$REPO_ROOT/infra/production/compose.yaml"
 TMP_DIR="$(mktemp -d)"
@@ -75,6 +76,10 @@ assert_env_key_once() {
 
 if [[ ! -x "$HELPER" ]]; then
   fail "missing executable helper: $HELPER"
+fi
+
+if [[ ! -x "$INGRESS_SCRIPT" ]]; then
+  fail "missing executable ingress helper: $INGRESS_SCRIPT"
 fi
 
 assert_contains "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production"
@@ -154,5 +159,233 @@ assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "custom-acce
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "custom-secret"
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "false"
 assert_env_value "$custom_env" PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "existing-root-secret"
+
+fake_bin="$TMP_DIR/fake-bin"
+sites_available="$TMP_DIR/sites-available"
+sites_enabled="$TMP_DIR/sites-enabled"
+backup_root="$TMP_DIR/domain-ingress-backups"
+command_log="$TMP_DIR/domain-ingress-commands.log"
+mkdir -p "$fake_bin" "$sites_available" "$sites_enabled" "$backup_root"
+
+cat >"$fake_bin/getent" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" != "ahostsv4" ]]; then
+  exit 2
+fi
+printf '93.77.166.238 STREAM %s\n' "${2:-}"
+printf '93.77.166.238 DGRAM %s\n' "${2:-}"
+SH
+chmod +x "$fake_bin/getent"
+
+cat >"$fake_bin/nginx" <<SH
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'nginx %s\n' "\$*" >>"$command_log"
+exit 0
+SH
+chmod +x "$fake_bin/nginx"
+
+"$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --skip-certbot \
+  --skip-nginx-reload \
+  --skip-public-verify
+
+ingress_conf="$sites_available/chatwoot-client-portal-lk-example-com.conf"
+enabled_conf="$sites_enabled/chatwoot-client-portal-lk-example-com.conf"
+
+if [[ ! -f "$ingress_conf" ]]; then
+  fail "expected ingress config to be written: $ingress_conf"
+fi
+
+if [[ ! -L "$enabled_conf" ]]; then
+  fail "expected enabled ingress symlink: $enabled_conf"
+fi
+
+assert_contains "$ingress_conf" "server_name lk.example.com;"
+assert_contains "$ingress_conf" "proxy_pass http://127.0.0.1:8088;"
+assert_contains "$ingress_conf" 'proxy_set_header Host $host;'
+assert_contains "$ingress_conf" 'proxy_set_header X-Forwarded-Proto $scheme;'
+assert_contains "$ingress_conf" "proxy_read_timeout 3600s;"
+assert_contains "$ingress_conf" "client_max_body_size 50m;"
+
+first_backup_count="$(find "$backup_root" -type f | wc -l | tr -d ' ')"
+if [[ "$first_backup_count" != "0" ]]; then
+  fail "expected first ingress run to avoid backups, got $first_backup_count"
+fi
+
+"$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --skip-certbot \
+  --skip-nginx-reload \
+  --skip-public-verify
+
+second_backup_count="$(find "$backup_root" -type f | wc -l | tr -d ' ')"
+if [[ "$second_backup_count" != "0" ]]; then
+  fail "expected idempotent ingress run to avoid backups, got $second_backup_count"
+fi
+
+printf '# drift\n' >>"$ingress_conf"
+
+"$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --skip-certbot \
+  --skip-nginx-reload \
+  --skip-public-verify
+
+changed_backup_count="$(find "$backup_root" -type f -name '*.conf' | wc -l | tr -d ' ')"
+if [[ "$changed_backup_count" != "1" ]]; then
+  fail "expected changed ingress config to be backed up once, got $changed_backup_count"
+fi
+
+if "$INGRESS_SCRIPT" \
+  --domain=https://lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --skip-certbot \
+  --skip-nginx-reload \
+  --skip-public-verify >/dev/null 2>&1; then
+  fail "expected URL-shaped ingress domain to be rejected"
+fi
+
+cert_live_dir="$TMP_DIR/letsencrypt-live"
+mkdir -p "$cert_live_dir/lk.example.com"
+touch "$cert_live_dir/lk.example.com/fullchain.pem"
+touch "$cert_live_dir/lk.example.com/privkey.pem"
+
+cat >"$fake_bin/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+output_path=""
+url=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output_path="${2:-}"
+      shift 2
+      ;;
+    -w)
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$output_path" ]]; then
+  output_path="/dev/null"
+fi
+
+case "$url" in
+  http://lk.example.com/api/tenant)
+    printf '' >"$output_path"
+    printf '301 https://lk.example.com/api/tenant'
+    ;;
+  https://lk.example.com/api/tenant)
+    if [[ -n "${PRESENT_TENANT_SLUG:-}" ]]; then
+      printf '{"tenant":{"slug":"%s","displayName":"Example Tenant"}}' "$PRESENT_TENANT_SLUG" >"$output_path"
+      printf '200'
+    else
+      printf '{"code":"TENANT_NOT_FOUND"}' >"$output_path"
+      printf '404'
+    fi
+    ;;
+  *)
+    printf 'unexpected URL: %s\n' "$url" >&2
+    exit 2
+    ;;
+esac
+SH
+chmod +x "$fake_bin/curl"
+
+cat >"$fake_bin/openssl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+  s_client)
+    printf 'fake certificate\n'
+    ;;
+  x509)
+    cat >/dev/null
+    printf 'X509v3 Subject Alternative Name:\n    DNS:lk.example.com\n'
+    ;;
+  *)
+    printf 'unexpected openssl command: %s\n' "$*" >&2
+    exit 2
+    ;;
+esac
+SH
+chmod +x "$fake_bin/openssl"
+
+"$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --letsencrypt-live-dir="$cert_live_dir" \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --curl-bin="$fake_bin/curl" \
+  --openssl-bin="$fake_bin/openssl" \
+  --skip-certbot \
+  --skip-nginx-reload
+
+PRESENT_TENANT_SLUG="example" "$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --expected-tenant-slug=example \
+  --tenant-state=present \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --letsencrypt-live-dir="$cert_live_dir" \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --curl-bin="$fake_bin/curl" \
+  --openssl-bin="$fake_bin/openssl" \
+  --skip-certbot \
+  --skip-nginx-reload
 
 echo "production env upgrade checks passed"

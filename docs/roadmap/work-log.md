@@ -90,6 +90,10 @@ execution-plan детали здесь не хранятся.
 - Production service mail sender is `Lancora <no-reply@lancora.ru>` through
   Yandex 360 SMTP for both portal verification emails and Chatwoot service
   mail.
+- Custom client-domain ingress/cert automation is available through
+  `scripts/configure-tenant-domain-ingress.sh`: it verifies DNS, prepares a
+  dedicated host Nginx portal site, backs up changed files, issues/verifies
+  Let’s Encrypt TLS and checks `/api/tenant` before and after `tenant:create`.
 - Production deploy source tracking is explicit: clean deploys come from
   reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
   branch, commit and dirty status.
@@ -184,5 +188,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Address `F-OPS-004` to automate custom-domain ingress/cert before repeated
-  customer onboarding.
+- Continue the one-customer-at-a-time MT-10 rollout by planning the next
+  `provgroup` tenant/runtime migration step against `https://app.lancora.ru`
+  after explicit operator approval.

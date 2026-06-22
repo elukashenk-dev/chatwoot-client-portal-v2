@@ -8,6 +8,7 @@
 ```text
 docs/operations/production-deployment.md
 docs/operations/production-clean-reinstall.md
+docs/operations/mt-10-deployment-runbooks.md
 ```
 
 ## Текущее Production Окружение
@@ -109,6 +110,27 @@ Enabled Nginx sites:
 /etc/nginx/sites-enabled/nginx_chatwoot_app_lancora.conf
 /etc/nginx/sites-enabled/chatwoot-client-portal-pronalogi.conf
 ```
+
+New custom client portal domains should use the repository helper instead of
+hand-editing host Nginx files:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+sudo scripts/configure-tenant-domain-ingress.sh \
+  --domain=lk.<client-domain> \
+  --letsencrypt-email=no-reply@lancora.ru \
+  --expected-ip=93.77.166.238
+```
+
+Changed Nginx files are backed up under:
+
+```text
+/home/ubuntu/domain-ingress-backups
+```
+
+`lk.pronalogi.pro` was created manually before this helper existed; do not
+rename or rewrite that site during routine onboarding unless a separate
+maintenance step requires it.
 
 Chatwoot Nginx configs use:
 

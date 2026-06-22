@@ -172,8 +172,9 @@ Status:
   acceptance checklist;
 - MT-10A operator CLI tenant lifecycle tooling exists for custom-domain and
   provider-owned subdomain tenants: create, reconcile and archive/deprovision.
-  Shared SaaS still needs production rehearsal, DNS/cert/proxy automation and
-  optional operator UI before broad rollout.
+  Custom-domain host ingress/cert preparation is automated; broad shared SaaS
+  still needs provider DNS/provider-subdomain ingress rehearsal and optional
+  operator UI before rollout.
 
 Цель:
 
@@ -203,7 +204,7 @@ Exit criteria:
 - tenant Chatwoot verification, webhook setup and secret rotation have clear
   operator guidance;
 - shared SaaS install is explained with the explicit gap that broad rollout
-  still needs production rehearsal, DNS/cert/proxy automation and optional
+  still needs provider DNS/provider-subdomain ingress rehearsal and optional
   operator UI around the existing CLI tooling.
 
 ## Deferred Backlog

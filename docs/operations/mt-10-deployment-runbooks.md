@@ -23,17 +23,20 @@ runbooks instead of duplicating every low-level command.
 - tenant Chatwoot account reconciliation for drift detection;
 - tenant Chatwoot API Channel verification and webhook configuration;
 - portal-owned object storage for branding assets;
+- custom client-domain host ingress/cert preparation after DNS points to the
+  production VM;
 - production smoke checklist for portal auth, chat, admin branding and PWA.
 
 ### Ready As Operator CLI, Not Yet Self-Service
 
 The runtime model is tenant-aware and shared SaaS tenant creation now has an
 operator CLI path. It is not yet a self-service client signup flow and does not
-automate provider DNS/cert/proxy changes.
+automate provider DNS changes.
 
 Current executable provisioning paths:
 
 ```bash
+scripts/configure-tenant-domain-ingress.sh --domain=<host> ...
 pnpm --dir backend tenant:bootstrap-default
 pnpm --dir backend tenant:create -- --slug=<slug> ...
 pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
@@ -45,7 +48,8 @@ pnpm --dir backend tenant:chatwoot:webhook:configure -- --tenant=<slug>
 Before broad shared SaaS rollout, the remaining operations gap is rehearsal and
 automation around:
 
-- production DNS/certificate/proxy provisioning;
+- provider DNS setup and provider-subdomain wildcard ingress/certificate
+  provisioning;
 - provider-domain `/api/tenant` smoke before client handoff, using
   `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`;
 - operator UX/audit wrapper if CLI is not enough for day-to-day operations,
@@ -73,6 +77,8 @@ automation around:
   `docs/operations/chatwoot-4-13-upgrade-notes.md`
 - MT-10A tenant lifecycle production rehearsal:
   `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`
+- Custom client-domain ingress/cert helper:
+  `scripts/configure-tenant-domain-ingress.sh`
 - Architecture boundaries:
   `docs/architecture/overview.md`
 - Tenant model and platform operations:
@@ -302,6 +308,26 @@ PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX
 hard-coded provider brand. Examples below use `portal.example.com`; production
 must use the provider-owned suffix chosen for that deployment.
 
+Custom-domain host ingress/cert preparation on the production VM, before
+`tenant:create`:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+sudo scripts/configure-tenant-domain-ingress.sh \
+  --domain=lk.<client-domain> \
+  --letsencrypt-email=no-reply@lancora.ru \
+  --expected-ip=93.77.166.238
+```
+
+Expected pre-tenant result:
+
+- DNS for `lk.<client-domain>` includes the expected production VM IPv4;
+- host Nginx has a dedicated portal site for that host;
+- changed Nginx files are backed up before rewrite;
+- Certbot has issued a certificate for that host;
+- `https://lk.<client-domain>/api/tenant` reaches the portal and returns
+  `TENANT_NOT_FOUND` until `tenant:create` creates the tenant.
+
 Custom-domain tenant creation:
 
 ```bash
@@ -313,6 +339,19 @@ pnpm --dir backend tenant:create -- \
   --chatwoot-base-url=https://example.ru \
   --client-admin-email=admin@buhfirma.ru \
   --client-admin-name="Иван Админ"
+```
+
+After `tenant:create`, re-run the ingress helper as a public route check:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+sudo scripts/configure-tenant-domain-ingress.sh \
+  --domain=lk.<client-domain> \
+  --letsencrypt-email=no-reply@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --tenant-state=present \
+  --expected-tenant-slug=<slug> \
+  --skip-certbot
 ```
 
 Provider-subdomain tenant creation:
@@ -352,7 +391,9 @@ Expected result from `tenant:create`:
 Minimum acceptance before production shared SaaS:
 
 - operator creates a tenant without editing DB rows manually;
-- provider DNS/cert/proxy route the tenant host to the portal;
+- provider DNS points the tenant host to the portal reverse proxy;
+- custom-domain tenants use the ingress helper above, or provider-subdomain
+  tenants have equivalent wildcard DNS/cert/proxy routing;
 - `/api/tenant` returns the intended tenant on the new host;
 - tenant Chatwoot connection verification passes;
 - tenant API Channel webhook configuration passes;
@@ -386,10 +427,13 @@ For each custom-domain tenant:
 
 - B2B client or provider creates DNS for `lk.<client-domain>` pointing to the
   portal reverse proxy VM;
+- provider runs `scripts/configure-tenant-domain-ingress.sh` on the production
+  VM before `tenant:create`;
 - `DEFAULT_TENANT_PRIMARY_DOMAIN` or tenant `primary_domain` equals that host;
 - `DEFAULT_TENANT_PUBLIC_BASE_URL` or tenant `public_base_url` equals
   `https://lk.<client-domain>`;
-- portal reverse proxy routes that host to the portal web container;
+- portal reverse proxy routes that host to the portal web container and
+  preserves the original `Host`;
 - backend tenant resolution uses the request Host through the trusted proxy
   boundary;
 - unknown hosts fail closed and must not resolve to the default tenant.
