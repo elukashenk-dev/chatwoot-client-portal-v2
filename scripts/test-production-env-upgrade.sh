@@ -173,6 +173,11 @@ set -euo pipefail
 if [[ "${1:-}" != "ahostsv4" ]]; then
   exit 2
 fi
+if [[ "${2:-}" == "lk.mixed.example.com" ]]; then
+  printf '93.77.166.238 STREAM %s\n' "${2:-}"
+  printf '203.0.113.10 STREAM %s\n' "${2:-}"
+  exit 0
+fi
 printf '93.77.166.238 STREAM %s\n' "${2:-}"
 printf '93.77.166.238 DGRAM %s\n' "${2:-}"
 SH
@@ -186,7 +191,7 @@ exit 0
 SH
 chmod +x "$fake_bin/nginx"
 
-"$INGRESS_SCRIPT" \
+PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
   --domain=lk.example.com \
   --letsencrypt-email=ops@lancora.ru \
   --expected-ip=93.77.166.238 \
@@ -223,7 +228,7 @@ if [[ "$first_backup_count" != "0" ]]; then
   fail "expected first ingress run to avoid backups, got $first_backup_count"
 fi
 
-"$INGRESS_SCRIPT" \
+PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
   --domain=lk.example.com \
   --letsencrypt-email=ops@lancora.ru \
   --expected-ip=93.77.166.238 \
@@ -244,7 +249,7 @@ fi
 
 printf '# drift\n' >>"$ingress_conf"
 
-"$INGRESS_SCRIPT" \
+PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
   --domain=lk.example.com \
   --letsencrypt-email=ops@lancora.ru \
   --expected-ip=93.77.166.238 \
@@ -278,6 +283,21 @@ if "$INGRESS_SCRIPT" \
   fail "expected URL-shaped ingress domain to be rejected"
 fi
 
+if "$INGRESS_SCRIPT" \
+  --domain=lk.mixed.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --skip-certbot \
+  --skip-nginx-reload \
+  --skip-public-verify >/dev/null 2>&1; then
+  fail "expected mixed DNS records to be rejected"
+fi
+
 cert_live_dir="$TMP_DIR/letsencrypt-live"
 mkdir -p "$cert_live_dir/lk.example.com"
 touch "$cert_live_dir/lk.example.com/fullchain.pem"
@@ -289,8 +309,18 @@ set -euo pipefail
 
 output_path=""
 url=""
+has_connect_timeout="false"
+has_max_time="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --connect-timeout)
+      has_connect_timeout="true"
+      shift 2
+      ;;
+    --max-time)
+      has_max_time="true"
+      shift 2
+      ;;
     -o)
       output_path="${2:-}"
       shift 2
@@ -310,6 +340,11 @@ done
 
 if [[ -z "$output_path" ]]; then
   output_path="/dev/null"
+fi
+
+if [[ "$has_connect_timeout" != "true" || "$has_max_time" != "true" ]]; then
+  printf 'curl public checks must include --connect-timeout and --max-time\n' >&2
+  exit 2
 fi
 
 case "$url" in
@@ -334,6 +369,16 @@ esac
 SH
 chmod +x "$fake_bin/curl"
 
+cat >"$fake_bin/timeout" <<SH
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'timeout %s\n' "\$*" >>"$command_log"
+duration="\${1:-}"
+shift
+"\$@"
+SH
+chmod +x "$fake_bin/timeout"
+
 cat >"$fake_bin/openssl" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -344,7 +389,27 @@ case "${1:-}" in
     ;;
   x509)
     cat >/dev/null
-    printf 'X509v3 Subject Alternative Name:\n    DNS:lk.example.com\n'
+    check_host=""
+    previous=""
+    for arg in "$@"; do
+      if [[ "$previous" == "-checkhost" ]]; then
+        check_host="$arg"
+        break
+      fi
+      previous="$arg"
+    done
+
+    cert_san="${CERT_SAN:-lk.example.com}"
+    if [[ -n "$check_host" ]]; then
+      if [[ "$cert_san" == "$check_host" ]]; then
+        printf 'Hostname %s does match certificate\n' "$check_host"
+        exit 0
+      fi
+      printf 'Hostname %s does NOT match certificate\n' "$check_host" >&2
+      exit 1
+    fi
+
+    printf 'X509v3 Subject Alternative Name:\n    DNS:%s\n' "$cert_san"
     ;;
   *)
     printf 'unexpected openssl command: %s\n' "$*" >&2
@@ -354,7 +419,7 @@ esac
 SH
 chmod +x "$fake_bin/openssl"
 
-"$INGRESS_SCRIPT" \
+PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
   --domain=lk.example.com \
   --letsencrypt-email=ops@lancora.ru \
   --expected-ip=93.77.166.238 \
@@ -370,7 +435,27 @@ chmod +x "$fake_bin/openssl"
   --skip-certbot \
   --skip-nginx-reload
 
-PRESENT_TENANT_SLUG="example" "$INGRESS_SCRIPT" \
+assert_contains "$command_log" "timeout 15s $fake_bin/openssl s_client"
+
+if CERT_SAN="lk.example.com.evil" PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
+  --domain=lk.example.com \
+  --letsencrypt-email=ops@lancora.ru \
+  --expected-ip=93.77.166.238 \
+  --sites-available="$sites_available" \
+  --sites-enabled="$sites_enabled" \
+  --backup-root="$backup_root" \
+  --portal-upstream=http://127.0.0.1:8088 \
+  --letsencrypt-live-dir="$cert_live_dir" \
+  --getent-bin="$fake_bin/getent" \
+  --nginx-bin="$fake_bin/nginx" \
+  --curl-bin="$fake_bin/curl" \
+  --openssl-bin="$fake_bin/openssl" \
+  --skip-certbot \
+  --skip-nginx-reload >/dev/null 2>&1; then
+  fail "expected SAN prefix mismatch to be rejected"
+fi
+
+PRESENT_TENANT_SLUG="example" PATH="$fake_bin:$PATH" "$INGRESS_SCRIPT" \
   --domain=lk.example.com \
   --letsencrypt-email=ops@lancora.ru \
   --expected-ip=93.77.166.238 \

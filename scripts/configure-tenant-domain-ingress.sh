@@ -17,6 +17,9 @@ NGINX_BIN="nginx"
 CERTBOT_BIN="certbot"
 CURL_BIN="curl"
 OPENSSL_BIN="openssl"
+CURL_CONNECT_TIMEOUT_SEC="5"
+CURL_MAX_TIME_SEC="20"
+OPENSSL_CONNECT_TIMEOUT_SEC="15"
 
 SKIP_CERTBOT="false"
 SKIP_NGINX_RELOAD="false"
@@ -237,10 +240,11 @@ fi
 if [[ "$SKIP_PUBLIC_VERIFY" != "true" ]]; then
   ensure_command "$CURL_BIN" curl
   ensure_command "$OPENSSL_BIN" openssl
+  ensure_command timeout timeout
 fi
 
 verify_dns() {
-  local resolved_ips
+  local resolved_ips unexpected_ips
 
   resolved_ips="$("$GETENT_BIN" ahostsv4 "$DOMAIN" | awk '{print $1}' | sort -u)"
 
@@ -249,10 +253,16 @@ verify_dns() {
     exit 1
   fi
 
-  if ! grep -Fxq "$EXPECTED_IP" <<<"$resolved_ips"; then
-    echo "DNS for $DOMAIN does not include expected IP $EXPECTED_IP." >&2
+  unexpected_ips="$(grep -Fxv "$EXPECTED_IP" <<<"$resolved_ips" || true)"
+  if [[ -n "$unexpected_ips" ]]; then
+    echo "DNS for $DOMAIN includes IPs other than expected $EXPECTED_IP." >&2
     echo "Resolved IPs:" >&2
     printf '%s\n' "$resolved_ips" >&2
+    exit 1
+  fi
+
+  if ! grep -Fxq "$EXPECTED_IP" <<<"$resolved_ips"; then
+    echo "DNS for $DOMAIN does not include expected IP $EXPECTED_IP." >&2
     exit 1
   fi
 }
@@ -404,10 +414,9 @@ verify_cert() {
     return
   fi
 
-  if ! "$OPENSSL_BIN" s_client -servername "$DOMAIN" -connect "$DOMAIN:443" </dev/null 2>/dev/null |
-    "$OPENSSL_BIN" x509 -noout -ext subjectAltName |
-    grep -Fq "DNS:$DOMAIN"; then
-    echo "HTTPS certificate for $DOMAIN does not include the requested SAN." >&2
+  if ! timeout "${OPENSSL_CONNECT_TIMEOUT_SEC}s" "$OPENSSL_BIN" s_client -servername "$DOMAIN" -connect "$DOMAIN:443" </dev/null 2>/dev/null |
+    "$OPENSSL_BIN" x509 -noout -checkhost "$DOMAIN" >/dev/null; then
+    echo "HTTPS certificate for $DOMAIN does not match the requested host." >&2
     exit 1
   fi
 }
@@ -421,7 +430,15 @@ verify_tenant_endpoint() {
   fi
 
   body_file="$(mktemp)"
-  status="$("$CURL_BIN" -sS -o "$body_file" -w '%{http_code}' "$url")"
+  status="$(
+    "$CURL_BIN" \
+      --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" \
+      --max-time "$CURL_MAX_TIME_SEC" \
+      -sS \
+      -o "$body_file" \
+      -w '%{http_code}' \
+      "$url"
+  )"
   body="$(cat "$body_file")"
   rm -f "$body_file"
 
@@ -475,7 +492,15 @@ verify_http_redirect_to_https() {
   fi
 
   body_file="$(mktemp)"
-  output="$("$CURL_BIN" -sS -o "$body_file" -w '%{http_code} %{redirect_url}' "$url")"
+  output="$(
+    "$CURL_BIN" \
+      --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" \
+      --max-time "$CURL_MAX_TIME_SEC" \
+      -sS \
+      -o "$body_file" \
+      -w '%{http_code} %{redirect_url}' \
+      "$url"
+  )"
   rm -f "$body_file"
 
   status="${output%% *}"
