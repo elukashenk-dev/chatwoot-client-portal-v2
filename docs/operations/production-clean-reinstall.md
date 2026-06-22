@@ -37,8 +37,8 @@ configuration step for the tenant:
 - Do not touch the Chatwoot PostgreSQL database.
 - Do not touch Chatwoot uploads/storage.
 - Do not edit Chatwoot Nginx sites unless the explicit task is domain routing.
-- Legacy `chat.provgroup.ru` should remain a redirect to `app.lancora.ru`, not
-  a portal tenant runtime base URL.
+- Do not keep a legacy Chatwoot host as active Nginx/certbot fallback or
+  redirect; production Chatwoot admin/runtime is `https://app.lancora.ru`.
 - Do not edit production Chatwoot outside the tenant API Channel configuration
   explicitly listed above.
 - Do not reuse disposable portal database data.
@@ -62,7 +62,6 @@ ssh ubuntu@93.77.166.238
 
 hostname
 curl -fsS https://app.lancora.ru/api
-curl -sS -o /dev/null -D - https://chat.provgroup.ru/api | sed -n '1,8p'
 systemctl is-active chatwoot-web.1.service chatwoot-worker.1.service redis-server postgresql nginx
 docker version
 docker compose version

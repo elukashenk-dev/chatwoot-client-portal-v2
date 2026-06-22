@@ -4,12 +4,10 @@
 
 Сервер: `ubuntu@93.77.166.238`
 
-Historical production domain during this operation:
-`https://chat.provgroup.ru`
-
-Current domain baseline: primary production Chatwoot admin/runtime URL is
-`https://app.lancora.ru`; `https://chat.provgroup.ru` is a legacy redirect
-only. Commands below preserve the original `2026-05-07` operation context.
+Historical operation note: the public Chatwoot host used during this operation
+has since been retired from the active production baseline. Current domain
+baseline: primary production Chatwoot admin/runtime URL is
+`https://app.lancora.ru`.
 
 Upgrade path: Chatwoot CE `v4.12.1` -> `v4.13.0`
 
@@ -51,7 +49,7 @@ Upgrade path: Chatwoot CE `v4.12.1` -> `v4.13.0`
 ```bash
 ssh ubuntu@93.77.166.238
 
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 sudo cwctl --version
 systemctl is-active chatwoot-web.1.service chatwoot-worker.1.service redis-server postgresql nginx
 df -h /
@@ -207,7 +205,7 @@ app/javascript/widget/components/layouts/ViewWithHeader.vue
 на старом коде `v4.12.1`. После такого обязательно проверить:
 
 ```bash
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 sudo -u chatwoot bash -lc '
   cd /home/chatwoot/chatwoot
   git describe --tags --always --dirty
@@ -338,7 +336,7 @@ BackfillEditedOnCaptainAssistantResponses
 Проверить публичный health:
 
 ```bash
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 ```
 
 Ожидаемый результат:

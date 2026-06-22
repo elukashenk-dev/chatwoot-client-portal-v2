@@ -34,13 +34,7 @@ Primary production Chatwoot admin:
 app.lancora.ru
 ```
 
-Legacy Chatwoot domain now redirects to `app.lancora.ru` and is not a portal
-tenant runtime base URL:
-
-```text
-chat.provgroup.ru
-www.chat.provgroup.ru
-```
+No legacy Chatwoot host is part of the active production runtime baseline.
 
 Production portal:
 
@@ -112,7 +106,6 @@ Enabled Nginx sites:
 
 ```text
 /etc/nginx/sites-enabled/default
-/etc/nginx/sites-enabled/nginx_chatwoot.conf
 /etc/nginx/sites-enabled/nginx_chatwoot_app_lancora.conf
 /etc/nginx/sites-enabled/chatwoot-client-portal-pronalogi.conf
 ```
@@ -142,7 +135,6 @@ Chatwoot Nginx configs use:
 
 ```text
 app.lancora.ru
-chat.provgroup.ru -> 301 redirect to app.lancora.ru
 ```
 
 Предпочтительный подход для portal deploy рядом с Chatwoot:
@@ -196,8 +188,8 @@ clean reviewed commit. Clean reinstall нужен только для перес
 
 Clean reinstall коротко:
 
-1. Проверить, что Chatwoot работает на `app.lancora.ru`, а
-   `chat.provgroup.ru` отдает 301 redirect на `app.lancora.ru`.
+1. Проверить, что Chatwoot работает на `app.lancora.ru`, и что legacy
+   Chatwoot host не настроен как active Nginx/certbot surface.
 2. Подготовить clean portal-owned runtime path.
 3. Залить актуальный `v2`.
 4. Запустить tenant-aware installer.

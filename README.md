@@ -44,8 +44,7 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
   сохраняются;
 - primary production Chatwoot admin/runtime URL:
   `https://app.lancora.ru`;
-- legacy `https://chat.provgroup.ru` redirects to `app.lancora.ru` and is not
-  a portal tenant runtime base URL;
+- no legacy Chatwoot host is part of the active production runtime baseline;
 - production portal tenants include `https://lk.provgroup.ru` and
   `https://lk.pronalogi.pro`.
 

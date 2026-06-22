@@ -90,8 +90,8 @@ automation around:
   deploys.
 - Do not touch Chatwoot PostgreSQL, uploads or services as part of portal
   deploys.
-- The legacy `chat.provgroup.ru` Nginx site is not a Chatwoot runtime surface;
-  it should remain a redirect to `https://app.lancora.ru`.
+- Production Chatwoot admin/runtime must use only `https://app.lancora.ru`;
+  do not keep a legacy Chatwoot Nginx site as fallback or redirect.
 - Do not use global `CHATWOOT_*` env as portal runtime authority.
 - Do not expose portal backend, portal Postgres or object storage publicly.
 - Do not commit `.env`, secrets, deploy logs, `node_modules`, `dist`,

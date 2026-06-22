@@ -4,7 +4,7 @@
 
 **Goal:** Verify and normalize the repository so `https://app.lancora.ru` is the current primary Chatwoot admin/runtime URL everywhere current production guidance depends on it.
 
-**Architecture:** This is a docs/runtime-baseline audit, not a tenant-domain migration. `chat.provgroup.ru` is allowed only as a documented legacy redirect or historical upgrade note, while `lk.provgroup.ru` remains allowed as the real `provgroup` tenant portal domain. Tests may keep `lk.provgroup.ru` as a tenant host fixture when they are not documenting the primary Chatwoot admin URL.
+**Architecture:** This was a docs/runtime-baseline audit, not a tenant-domain migration. It has been superseded by the stricter baseline that no legacy Chatwoot host is part of the active production runtime. `lk.provgroup.ru` remains allowed as the real `provgroup` tenant portal domain. Tests may keep `lk.provgroup.ru` as a tenant host fixture when they are not documenting the primary Chatwoot admin URL.
 
 **Tech Stack:** Markdown operations docs, shell scripts, TypeScript test fixtures, ripgrep inventory, `pnpm test:ops`, `git diff --check`.
 
@@ -47,7 +47,7 @@ Expected: every occurrence can be classified into one of these buckets:
 
 ```text
 current_chatwoot_admin_runtime: must say https://app.lancora.ru
-legacy_chatwoot_redirect: may mention https://chat.provgroup.ru only as redirect/history
+legacy_chatwoot_host: must not be part of current runtime docs or active config
 tenant_domain: may mention lk.provgroup.ru as provgroup tenant portal domain
 service_mail: should use Lancora/no-reply@lancora.ru for production service mail
 historical_note: may preserve old facts when clearly dated or scoped as historical
@@ -78,13 +78,15 @@ Ensure current operations docs state this rule in plain language:
 
 ```text
 Primary production Chatwoot admin/runtime URL: https://app.lancora.ru.
-Legacy https://chat.provgroup.ru is only a redirect/history surface.
+No legacy Chatwoot host is part of the active production runtime baseline.
 Tenant portal domains such as https://lk.provgroup.ru and https://lk.pronalogi.pro are customer portal hosts, not Chatwoot admin hosts.
 ```
 
 - [x] **Step 2: Preserve historical upgrade notes**
 
-If `docs/operations/chatwoot-4-13-upgrade-notes.md` still mentions `https://chat.provgroup.ru`, keep it only as a historical production domain for that upgrade note. Add a short current-status note instead of rewriting the historical commands.
+If `docs/operations/chatwoot-4-13-upgrade-notes.md` mentions a retired Chatwoot
+host, keep the operation history but make current checks use
+`https://app.lancora.ru`.
 
 - [x] **Step 3: Avoid tenant-domain churn**
 
@@ -110,7 +112,7 @@ Run:
 rg -n "chat\.provgroup\.ru|cbr@provgroup\.ru|DEFAULT_TENANT_CHATWOOT_BASE_URL|APP_ORIGIN|PORTAL_DOMAIN" scripts
 ```
 
-Expected: no script implies `chat.provgroup.ru` is the current Chatwoot base URL. Tenant-domain fixtures may remain when the script is testing tenant ingress behavior.
+Expected: no script implies a legacy Chatwoot host is the current Chatwoot base URL. Tenant-domain fixtures may remain when the script is testing tenant ingress behavior.
 
 - [x] **Step 2: Check tests for fixture intent**
 
@@ -152,7 +154,7 @@ rg -n "chat\.provgroup\.ru|app\.lancora\.ru|provgroup\.ru|lancora\.ru" . \
   --glob '!test-results'
 ```
 
-Expected: all remaining `chat.provgroup.ru` references are explicitly legacy/historical, all current Chatwoot admin/runtime references point to `https://app.lancora.ru`, and `lk.provgroup.ru` references are tenant-domain examples or fixtures.
+Expected: all current Chatwoot admin/runtime references point to `https://app.lancora.ru`, no legacy Chatwoot host is part of the active baseline, and `lk.provgroup.ru` references are tenant-domain examples or fixtures.
 
 - [x] **Step 2: Run operations tests**
 
