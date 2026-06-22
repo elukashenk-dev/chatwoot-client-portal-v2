@@ -132,6 +132,30 @@ sudo du -sh "$BACKUP_DIR"
 
 ## Что Пошло Не По Happy Path
 
+### Принятое Решение Для Следующих Chatwoot Upgrade
+
+Chatwoot upgrade выполнять как отдельное maintenance window, а не как live
+операцию рядом с работающим web/worker.
+
+Причина: `assets:precompile` и Vite build могут надолго занять CPU/RAM. На
+маленькой VM это уже приводило к swap pressure и timeout'ам публичного API.
+Во время upgrade `v4.13.0` -> `v4.15.1` live build на старом размере VM был
+остановлен, после чего VM временно увеличили и повторили upgrade в
+maintenance window.
+
+Принятый production-подход:
+
+- перед upgrade делать проверенный backup Chatwoot DB, storage и `.env`;
+- заранее временно увеличить VM resources, если текущий размер может не
+  выдержать asset build;
+- на время build/migrations остановить только Chatwoot `web` и `worker`;
+- Postgres, Redis и Nginx оставлять поднятыми, если нет отдельной причины их
+  останавливать;
+- после build/migrations обновить systemd units, запустить Chatwoot и
+  проверить `/api`, dashboard assets, portal health и tenant Chatwoot verify;
+- уменьшать VM обратно только отдельным шагом после стабильного post-upgrade
+  наблюдения.
+
 ### 1. `cwctl --upgrade` Не Обновил Код
 
 Команда:
