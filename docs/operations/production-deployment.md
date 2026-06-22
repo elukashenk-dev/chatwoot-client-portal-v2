@@ -39,7 +39,7 @@ This file keeps only guardrails. The runbook is the executable checklist.
 - Do not rely on global `CHATWOOT_*` env as production runtime authority.
 - Do not reuse disposable portal test data.
 - Do not modify production Chatwoot core, database, uploads, services or
-  `chat.provgroup.ru` Nginx config as part of portal work.
+  Chatwoot Nginx sites as part of routine portal deploy work.
 - Do not expose portal backend or portal Postgres publicly.
 
 Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:

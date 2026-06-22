@@ -88,8 +88,10 @@ automation around:
 
 - Do not stop, reset, migrate or edit production Chatwoot as part of portal
   deploys.
-- Do not touch Chatwoot PostgreSQL, uploads, services or
-  `chat.provgroup.ru` Nginx config.
+- Do not touch Chatwoot PostgreSQL, uploads or services as part of portal
+  deploys.
+- The legacy `chat.provgroup.ru` Nginx site is not a Chatwoot runtime surface;
+  it should remain a redirect to `https://app.lancora.ru`.
 - Do not use global `CHATWOOT_*` env as portal runtime authority.
 - Do not expose portal backend, portal Postgres or object storage publicly.
 - Do not commit `.env`, secrets, deploy logs, `node_modules`, `dist`,
@@ -624,4 +626,4 @@ After deploy:
 - public branding asset route returns `200` and image content type;
 - tenant PWA manifest title/colors/icons are correct;
 - installed PWA smoke is run on real device when available;
-- production Chatwoot remains healthy on `chat.provgroup.ru`.
+- production Chatwoot remains healthy on `app.lancora.ru`.

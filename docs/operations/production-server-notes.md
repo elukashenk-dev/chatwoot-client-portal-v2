@@ -34,8 +34,8 @@ Primary production Chatwoot admin:
 app.lancora.ru
 ```
 
-Legacy Chatwoot domain kept as fallback and for existing tenant runtime until a
-separate tenant runtime base URL migration is performed:
+Legacy Chatwoot domain now redirects to `app.lancora.ru` and is not a portal
+tenant runtime base URL:
 
 ```text
 chat.provgroup.ru
@@ -55,10 +55,16 @@ lk.provgroup.ru
 lk.pronalogi.pro
 ```
 
+Both active production tenants use Chatwoot base URL
+`https://app.lancora.ru`:
+
+```text
+provgroup -> Chatwoot account 1, API Channel inbox 5
+pronalogi -> Chatwoot account 2, API Channel inbox 6
+```
+
 `lk.pronalogi.pro` has host Nginx ingress, a Let’s Encrypt certificate and an
-active `pronalogi` portal tenant. The tenant uses Chatwoot account `2`,
-Chatwoot API Channel inbox `6` and Chatwoot base URL
-`https://app.lancora.ru`.
+active `pronalogi` portal tenant.
 
 Дополнительный DNS, который может указывать на ту же VM:
 
@@ -136,8 +142,7 @@ Chatwoot Nginx configs use:
 
 ```text
 app.lancora.ru
-chat.provgroup.ru
-www.chat.provgroup.ru
+chat.provgroup.ru -> 301 redirect to app.lancora.ru
 ```
 
 Предпочтительный подход для portal deploy рядом с Chatwoot:
@@ -191,8 +196,8 @@ clean reviewed commit. Clean reinstall нужен только для перес
 
 Clean reinstall коротко:
 
-1. Проверить, что Chatwoot работает на `app.lancora.ru` и legacy fallback
-   `chat.provgroup.ru`.
+1. Проверить, что Chatwoot работает на `app.lancora.ru`, а
+   `chat.provgroup.ru` отдает 301 redirect на `app.lancora.ru`.
 2. Подготовить clean portal-owned runtime path.
 3. Залить актуальный `v2`.
 4. Запустить tenant-aware installer.

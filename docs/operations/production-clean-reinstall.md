@@ -5,7 +5,7 @@ operator checklist for future portal-only clean redeploys.
 
 Target VM: `ubuntu@93.77.166.238`
 
-Chatwoot domain: `https://chat.provgroup.ru`
+Chatwoot domain: `https://app.lancora.ru`
 
 Portal domain: `https://lk.provgroup.ru`
 
@@ -17,9 +17,9 @@ Cleanly replace any existing portal-owned runtime with the current
 `chatwoot-client-portal-v2` production stack as a tenant-aware one-tenant
 deployment.
 
-This runbook does not modify production Chatwoot core, database, services,
-uploads or Nginx site. Chatwoot CE was already upgraded separately to `v4.13.0`,
-and it is the external system of record for chat data.
+This runbook does not modify production Chatwoot core, database, services or
+uploads. Chatwoot CE is upgraded separately and is the external system of
+record for chat data.
 
 The portal installer intentionally performs a narrow Chatwoot API Channel
 configuration step for the tenant:
@@ -36,7 +36,9 @@ configuration step for the tenant:
 - Do not stop, remove, migrate or reset production Chatwoot.
 - Do not touch the Chatwoot PostgreSQL database.
 - Do not touch Chatwoot uploads/storage.
-- Do not edit the existing `chat.provgroup.ru` Nginx site.
+- Do not edit Chatwoot Nginx sites unless the explicit task is domain routing.
+- Legacy `chat.provgroup.ru` should remain a redirect to `app.lancora.ru`, not
+  a portal tenant runtime base URL.
 - Do not edit production Chatwoot outside the tenant API Channel configuration
   explicitly listed above.
 - Do not reuse disposable portal database data.
@@ -59,7 +61,8 @@ Before executing, verify all of these:
 ssh ubuntu@93.77.166.238
 
 hostname
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
+curl -sS -o /dev/null -D - https://chat.provgroup.ru/api | sed -n '1,8p'
 systemctl is-active chatwoot-web.1.service chatwoot-worker.1.service redis-server postgresql nginx
 docker version
 docker compose version
@@ -70,7 +73,7 @@ free -h
 Expected Chatwoot health:
 
 ```json
-{ "version": "4.13.0", "queue_services": "ok", "data_services": "ok" }
+{ "version": "4.15.1", "queue_services": "ok", "data_services": "ok" }
 ```
 
 ## Required Inputs
@@ -84,7 +87,7 @@ DEFAULT_TENANT_SLUG=provgroup
 DEFAULT_TENANT_DISPLAY_NAME=PROVGROUP
 DEFAULT_TENANT_PRIMARY_DOMAIN=lk.provgroup.ru
 DEFAULT_TENANT_PUBLIC_BASE_URL=https://lk.provgroup.ru
-DEFAULT_TENANT_CHATWOOT_BASE_URL=https://chat.provgroup.ru
+DEFAULT_TENANT_CHATWOOT_BASE_URL=https://app.lancora.ru
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=<production Chatwoot account id>
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=<production Chatwoot Channel::Api inbox id>
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=<dedicated production Chatwoot API token>
@@ -139,7 +142,7 @@ sudo nginx -T 2>/dev/null \
 ## Step 2. Confirm Chatwoot Is Healthy Before Portal Work
 
 ```bash
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 systemctl is-active chatwoot-web.1.service chatwoot-worker.1.service postgresql redis-server nginx
 ```
 
@@ -203,7 +206,7 @@ sudo systemctl reload nginx
 Check that Chatwoot is still healthy:
 
 ```bash
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 ```
 
 ### Destructive Portal Data Reset
@@ -316,7 +319,7 @@ Default tenant slug: provgroup
 Default tenant display name: PROVGROUP
 Default tenant primary domain: lk.provgroup.ru
 Default tenant public base URL: https://lk.provgroup.ru
-Default tenant Chatwoot base URL: https://chat.provgroup.ru
+Default tenant Chatwoot base URL: https://app.lancora.ru
 ```
 
 The installer now performs the tenant-aware flow:
@@ -347,7 +350,7 @@ DEFAULT_TENANT_SLUG=provgroup
 DEFAULT_TENANT_DISPLAY_NAME=PROVGROUP
 DEFAULT_TENANT_PRIMARY_DOMAIN=lk.provgroup.ru
 DEFAULT_TENANT_PUBLIC_BASE_URL=https://lk.provgroup.ru
-DEFAULT_TENANT_CHATWOOT_BASE_URL=https://chat.provgroup.ru
+DEFAULT_TENANT_CHATWOOT_BASE_URL=https://app.lancora.ru
 DEFAULT_TENANT_CHATWOOT_ACCOUNT_ID=...
 DEFAULT_TENANT_CHATWOOT_PORTAL_INBOX_ID=...
 DEFAULT_TENANT_CHATWOOT_API_ACCESS_TOKEN=...
@@ -549,7 +552,7 @@ sudo systemctl reload nginx
 Then verify Chatwoot remains healthy:
 
 ```bash
-curl -fsS https://chat.provgroup.ru/api
+curl -fsS https://app.lancora.ru/api
 ```
 
 Do not rollback or reset Chatwoot as part of portal rollback.
@@ -583,4 +586,4 @@ The clean reinstall is complete when:
   routes;
 - chat transcript and send flow work;
 - Chatwoot reply reaches portal through signed webhook/realtime;
-- production Chatwoot remains healthy on `chat.provgroup.ru`.
+- production Chatwoot remains healthy on `app.lancora.ru`.

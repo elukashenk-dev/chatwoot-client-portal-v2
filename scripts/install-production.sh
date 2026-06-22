@@ -870,7 +870,7 @@ approve_chatwoot_api_channel_changes() {
   echo "  - set the API Channel webhook URL to the portal callback URL;"
   echo "  - store Chatwoot's returned Channel::Api.secret encrypted in the portal tenant record."
   echo
-  echo "The installer will not stop, restart, migrate or edit Chatwoot core, database, uploads, services, or the chat.provgroup.ru Nginx site."
+  echo "The installer will not stop, restart, migrate or edit Chatwoot core, database, uploads, services, or Chatwoot Nginx sites."
 
   if ! confirm "Approve these tenant API Channel configuration changes?" yes; then
     echo "Tenant Chatwoot API Channel configuration was not approved." >&2

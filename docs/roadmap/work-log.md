@@ -76,10 +76,11 @@ execution-plan детали здесь не хранятся.
 - Production Chatwoot CE is `v4.15.1`; portal webhook signing uses the tenant
   API Channel `channel_api.secret`.
 - Primary production Chatwoot admin URL is `https://app.lancora.ru`; legacy
-  `https://chat.provgroup.ru` remains available as fallback and for existing
-  tenant runtime until a separate runtime base URL migration is performed.
+  `https://chat.provgroup.ru` now redirects to `app.lancora.ru` and is not a
+  portal tenant runtime base URL.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
-  one-tenant install for `provgroup`.
+  tenant-aware install for `provgroup`, using Chatwoot base URL
+  `https://app.lancora.ru`.
 - `https://lk.pronalogi.pro` is provisioned as the first customer tenant:
   portal tenant `pronalogi` is active, uses Chatwoot account `2`, API Channel
   inbox `6`, Chatwoot base URL `https://app.lancora.ru`, and has its tenant
@@ -188,6 +189,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Continue the one-customer-at-a-time MT-10 rollout by planning the next
-  `provgroup` tenant/runtime migration step against `https://app.lancora.ru`
-  after explicit operator approval.
+- Push the updated `main`, then deploy the repo update to the production VM so
+  the documented ingress helper is available under
+  `/opt/chatwoot-client-portal-v2`.
