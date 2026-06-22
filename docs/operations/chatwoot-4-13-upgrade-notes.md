@@ -4,7 +4,12 @@
 
 Сервер: `ubuntu@93.77.166.238`
 
-Production domain: `https://chat.provgroup.ru`
+Historical production domain during this operation:
+`https://chat.provgroup.ru`
+
+Current domain baseline: primary production Chatwoot admin/runtime URL is
+`https://app.lancora.ru`; `https://chat.provgroup.ru` is a legacy redirect
+only. Commands below preserve the original `2026-05-07` operation context.
 
 Upgrade path: Chatwoot CE `v4.12.1` -> `v4.13.0`
 

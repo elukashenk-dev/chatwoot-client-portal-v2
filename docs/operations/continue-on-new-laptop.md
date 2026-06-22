@@ -9,7 +9,11 @@
 - Main branch: `main`
 - Последний залитый baseline на момент создания файла:
   `55e263a34cd4072ba592a93ba6aa67fb28983ae6`
+- Production Chatwoot admin/runtime: `https://app.lancora.ru`
+- Legacy Chatwoot domain: `https://chat.provgroup.ru` redirects to
+  `app.lancora.ru`
 - Production portal: `https://lk.provgroup.ru`
+- First customer tenant portal: `https://lk.pronalogi.pro`
 - Production app path: `/opt/chatwoot-client-portal-v2`
 - Production VM SSH target: `ubuntu@93.77.166.238`
 
@@ -24,8 +28,9 @@ git log --oneline --decorate -5
 ## Hard Boundaries
 
 - Работать только в `chatwoot-client-portal-v2`.
-- Chatwoot core, Chatwoot DB, uploads, services and `chat.provgroup.ru` Nginx
-  config не трогать без отдельного explicit Chatwoot maintenance plan.
+- Chatwoot core, Chatwoot DB, uploads, services and Chatwoot domain routing
+  configs for `app.lancora.ru` / legacy `chat.provgroup.ru` не трогать без
+  отдельного explicit Chatwoot maintenance plan.
 - Browser не получает direct Chatwoot authority.
 - Portal backend остается authority для auth, session, send, realtime и
   branding assets.

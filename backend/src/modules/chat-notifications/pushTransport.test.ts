@@ -19,7 +19,7 @@ describe('push transport', () => {
       privateKey: 'private-key',
       publicKey: 'public-key',
       publicKeyFingerprint: 'sha256-public-key',
-      subject: 'mailto:cbr@provgroup.ru',
+      subject: 'mailto:no-reply@lancora.ru',
     })
 
     await expect(
@@ -38,7 +38,7 @@ describe('push transport', () => {
     })
 
     expect(webPushMock.setVapidDetails).toHaveBeenCalledWith(
-      'mailto:cbr@provgroup.ru',
+      'mailto:no-reply@lancora.ru',
       'public-key',
       'private-key',
     )

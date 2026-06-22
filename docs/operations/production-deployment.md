@@ -92,6 +92,8 @@ After archive deploy:
   shows `portal-db`, `portal-object-storage` and `portal-backend` healthy,
   `portal-object-storage-init` completed successfully and `portal-web` running;
 - `cat DEPLOY_SOURCE.txt` matches the intended clean commit;
+- `curl -fsS https://app.lancora.ru/api` returns Chatwoot health with
+  `queue_services: ok` and `data_services: ok`;
 - `curl -fsS https://lk.provgroup.ru/api/health` returns `status: ok`;
 - `curl -fsS https://lk.provgroup.ru/api/tenant` returns `provgroup`;
 - the default tenant admin verification token came from a confirmed Chatwoot

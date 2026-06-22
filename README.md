@@ -42,12 +42,17 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
   support blocks in group transcript;
 - destructive clean-schema reset: old portal users и old chat mappings не
   сохраняются;
-- production clean deploy on `lk.provgroup.ru` from `main`.
+- primary production Chatwoot admin/runtime URL:
+  `https://app.lancora.ru`;
+- legacy `https://chat.provgroup.ru` redirects to `app.lancora.ru` and is not
+  a portal tenant runtime base URL;
+- production portal tenants include `https://lk.provgroup.ru` and
+  `https://lk.pronalogi.pro`.
 
-Следующий активный scope:
+Текущий active operations scope:
 
 ```text
-MT-9 Tenant Admin And Branding Rebuild
+MT-10 Deployment And Runbook Update
 ```
 
 ## Карта документации
