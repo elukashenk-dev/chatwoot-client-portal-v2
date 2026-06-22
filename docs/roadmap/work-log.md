@@ -80,8 +80,10 @@ execution-plan детали здесь не хранятся.
   tenant runtime until a separate runtime base URL migration is performed.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
   one-tenant install for `provgroup`.
-- `https://lk.pronalogi.pro` has production Nginx/TLS ingress ready and reaches
-  the portal runtime; tenant provisioning remains the next step.
+- `https://lk.pronalogi.pro` is provisioned as the first customer tenant:
+  portal tenant `pronalogi` is active, uses Chatwoot account `2`, API Channel
+  inbox `6`, Chatwoot base URL `https://app.lancora.ru`, and has its tenant
+  webhook configured.
 - Production deploy source tracking is explicit: clean deploys come from
   reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
   branch, commit and dirty status.
@@ -176,5 +178,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Provision and verify the `pronalogi` tenant for `lk.pronalogi.pro`, then
-  configure its Chatwoot API Channel webhook.
+- Run manual `lk.pronalogi.pro` tenant smoke: public tenant load, admin login
+  eligibility, registration/login email flow and first chat message.

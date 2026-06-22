@@ -47,15 +47,17 @@ Production portal:
 lk.provgroup.ru
 ```
 
-Next customer portal domain:
+Customer portal domains:
 
 ```text
+lk.provgroup.ru
 lk.pronalogi.pro
 ```
 
-`lk.pronalogi.pro` already has host Nginx ingress and a Let’s Encrypt
-certificate on the production VM. Until the `pronalogi` tenant is provisioned,
-`/api/tenant` must return `TENANT_NOT_FOUND`.
+`lk.pronalogi.pro` has host Nginx ingress, a Let’s Encrypt certificate and an
+active `pronalogi` portal tenant. The tenant uses Chatwoot account `2`,
+Chatwoot API Channel inbox `6` and Chatwoot base URL
+`https://app.lancora.ru`.
 
 Дополнительный DNS, который может указывать на ту же VM:
 
