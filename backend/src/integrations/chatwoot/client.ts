@@ -1,5 +1,6 @@
 import { normalizeEmail } from '../../lib/email.js'
 import { findChatwootContactById } from './contactLookup.js'
+import { createChatwootCustomAttributesClient } from './customAttributesClient.js'
 import {
   ChatwootClientConfigurationError,
   ChatwootClientRequestError,
@@ -39,6 +40,10 @@ export type {
   ChatwootMessagesPage,
 } from './messagePayload.js'
 export type { ChatwootContact } from './contactLookup.js'
+export type {
+  ChatwootPortalContactCustomAttributeDefinitionsResult,
+  ChatwootPortalContactCustomAttributeKey,
+} from './customAttributesClient.js'
 export type {
   ChatwootCreatedApiInbox,
   ChatwootInboxSummary,
@@ -899,6 +904,10 @@ export function createChatwootClient({
     assertConfigured,
     fetchChatwoot,
   })
+  const customAttributesClient = createChatwootCustomAttributesClient({
+    assertAccountConfigured,
+    requestJson,
+  })
 
   return {
     async createPortalApiInbox({
@@ -1535,6 +1544,7 @@ export function createChatwootClient({
       })
     },
 
+    ...customAttributesClient,
     ...messageClient,
   }
 }

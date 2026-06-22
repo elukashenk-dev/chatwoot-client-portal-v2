@@ -2,6 +2,7 @@ import {
   type ChatwootClientConfig,
   type ChatwootCreatedApiInbox,
   type ChatwootInboxSummary,
+  type ChatwootPortalContactCustomAttributeDefinitionsResult,
   type ChatwootPortalInboxRouting,
   type ChatwootPortalInboxWebhook,
 } from '../../integrations/chatwoot/client.js'
@@ -53,6 +54,7 @@ export type TenantProvisioningChatwootAccountClient = {
   createPortalApiInbox(input: {
     name: string
   }): Promise<ChatwootCreatedApiInbox>
+  ensurePortalContactCustomAttributeDefinitions(): Promise<ChatwootPortalContactCustomAttributeDefinitionsResult>
   ensurePortalInboxSingleConversationRouting(): Promise<
     ChatwootPortalInboxRouting & { updated: boolean }
   >
@@ -286,6 +288,7 @@ export async function provisionTenant({
       baseUrl: normalizedInput.chatwootBaseUrl,
       portalInboxId: chatwootPortalInboxId,
     })
+    await portalAccountClient.ensurePortalContactCustomAttributeDefinitions()
     const webhook = await portalAccountClient.configurePortalInboxWebhook({
       url: `${normalizedInput.publicBaseUrl}/api/chatwoot/webhooks`,
     })

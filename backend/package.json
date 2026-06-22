@@ -12,6 +12,7 @@
     "tenant:deprovision": "tsx src/scripts/deprovision-tenant.ts",
     "tenant:chatwoot:reconcile": "tsx src/scripts/reconcile-tenants.ts",
     "tenant:chatwoot:ensure-portal-inbox": "tsx src/scripts/verify-tenant-chatwoot-connection.ts",
+    "tenant:chatwoot:ensure-portal-attributes": "tsx src/scripts/ensure-tenant-portal-attributes.ts",
     "tenant:chatwoot:webhook:configure": "tsx src/scripts/configure-tenant-chatwoot-webhook.ts",
     "tenant:chatwoot:verify": "tsx src/scripts/verify-tenant-chatwoot-connection.ts",
     "maintenance:cleanup": "tsx src/scripts/cleanup-maintenance-data.ts",

@@ -175,6 +175,11 @@ execution-plan детали здесь не хранятся.
   `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`, reconciliation detects
   Chatwoot account drift, and deprovisioning supports explicit-confirmation
   archive or Chatwoot account delete request.
+- `MT-10A` tenant provisioning now reconciles the required Chatwoot contact
+  custom attribute definitions for portal operation:
+  `portal_enabled`, `portal_contact_type`, `portal_client_group_contact_ids`
+  and `curator_name`. Existing tenants can be repaired with the operator
+  `tenant:chatwoot:ensure-portal-attributes` command.
 - Agent execution governance now uses risk-based efficiency rules: full review
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
@@ -188,6 +193,8 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- After this branch is merged and pushed, remove any external DNS record for
-  the retired Chatwoot host if it still exists, then continue the next `MT-10`
-  production onboarding step.
+- After this branch is merged, pushed and deployed, run
+  `pnpm --dir backend tenant:chatwoot:ensure-portal-attributes -- --tenant=pronalogi`
+  on the production VM, verify the four contact custom attributes in the
+  `pronalogi` Chatwoot account UI, then continue the next `MT-10` production
+  onboarding step.

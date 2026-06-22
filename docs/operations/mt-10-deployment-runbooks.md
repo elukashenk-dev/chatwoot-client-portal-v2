@@ -372,10 +372,13 @@ Lifecycle checks:
 
 ```bash
 pnpm --dir backend tenant:chatwoot:reconcile -- --dry-run
+pnpm --dir backend tenant:chatwoot:ensure-portal-attributes -- --tenant=<slug>
 pnpm --dir backend tenant:deprovision -- --tenant=buhfirma --archive-only --confirm=buhfirma
 ```
 
 Use `tenant:chatwoot:reconcile -- --apply` only after reviewing dry-run output.
+Use `tenant:chatwoot:ensure-portal-attributes -- --tenant=<slug>` to repair or
+verify Chatwoot contact custom attribute definitions for an existing tenant.
 Use
 `tenant:deprovision -- --tenant=<slug> --delete-chatwoot-account --confirm=<slug>`
 only when the operator explicitly intends to suspend the portal tenant and
@@ -387,6 +390,9 @@ Expected result from `tenant:create`:
 - client admin user exists and is an administrator in that account;
 - portal runtime and admin-verification service users exist;
 - tenant API Channel inbox exists and is configured for the tenant webhook URL;
+- Chatwoot contact custom attribute definitions exist for
+  `portal_enabled`, `portal_contact_type`, `portal_client_group_contact_ids`
+  and `curator_name`;
 - portal tenant row exists with encrypted runtime/admin/webhook secrets;
 - rerunning the same command is idempotent for the same tenant/domain inputs.
 

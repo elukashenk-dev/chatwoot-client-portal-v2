@@ -424,8 +424,9 @@
   production portal tenant creation is owned by the provider/operator, not by
   public Chatwoot signup. The `tenant:create` CLI creates or reuses the
   Chatwoot account, client admin, portal service users and API Channel inbox
-  through Chatwoot Platform/account APIs, configures the webhook, and writes the
-  portal tenant with encrypted runtime/admin/webhook secrets. Domain mode is
+  through Chatwoot Platform/account APIs, configures the webhook, ensures the
+  portal contact custom attribute definitions in the Chatwoot account, and
+  writes the portal tenant with encrypted runtime/admin/webhook secrets. Domain mode is
   explicit: custom-domain inputs provide `primary_domain` and `public_base_url`,
   while provider-subdomain inputs derive
   `<tenant-slug>.<PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX>`. Safe lifecycle tooling

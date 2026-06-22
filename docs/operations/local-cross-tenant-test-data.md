@@ -146,7 +146,10 @@ Mailpit, а не во внешний SMTP.
 
 ## Manual Chatwoot Admin Setup
 
-Этот путь полезен, когда нужно глазами проверить Chatwoot admin UI.
+Этот путь полезен, когда нужно глазами проверить Chatwoot admin UI. Production
+`tenant:create` создает эти contact custom attribute definitions автоматически;
+ручной setup нужен только для локальных/ручных Chatwoot accounts или для
+ремонта старого account до запуска ensure-команды.
 
 ### 1. Ensure Contact Custom Attributes Exist
 
@@ -155,13 +158,15 @@ Mailpit, а не во внешний SMTP.
 
 - `portal_enabled`;
 - `portal_contact_type`;
-- `portal_client_group_contact_ids`.
+- `portal_client_group_contact_ids`;
+- `curator_name`.
 
 Если Chatwoot UI предлагает тип поля:
 
 - `portal_enabled` делать checkbox/boolean;
 - `portal_contact_type` делать text/list;
-- `portal_client_group_contact_ids` делать text.
+- `portal_client_group_contact_ids` делать text;
+- `curator_name` делать text.
 
 Если custom attribute definitions не созданы, contact-level JSON через Rails/API
 все равно работает локально, но в UI редактировать такие поля неудобно.

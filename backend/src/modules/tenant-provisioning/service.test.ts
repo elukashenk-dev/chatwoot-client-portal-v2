@@ -172,6 +172,16 @@ function createChatwootAccountClient() {
         webhookSecret: null,
         webhookUrl: null,
       }),
+    ensurePortalContactCustomAttributeDefinitions: vi.fn().mockResolvedValue({
+      created: [
+        'portal_enabled',
+        'portal_contact_type',
+        'portal_client_group_contact_ids',
+        'curator_name',
+      ],
+      unchanged: [],
+      updated: [],
+    }),
     ensurePortalInboxSingleConversationRouting: vi
       .fn<() => Promise<ChatwootPortalInboxRouting & { updated: boolean }>>()
       .mockResolvedValue({
@@ -275,6 +285,9 @@ describe('provisionTenant', () => {
     ).toHaveBeenCalledWith({
       url: 'https://lk.buhfirma.ru/api/chatwoot/webhooks',
     })
+    expect(
+      harness.chatwootAccountClient.ensurePortalContactCustomAttributeDefinitions,
+    ).toHaveBeenCalledTimes(1)
     expect(harness.chatwootAccountClientConfigs[0]).not.toHaveProperty(
       'portalInboxId',
     )
