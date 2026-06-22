@@ -73,7 +73,7 @@ execution-plan детали здесь не хранятся.
 
 ## Production Baseline
 
-- Production Chatwoot CE is `v4.13.0`; portal webhook signing uses the tenant
+- Production Chatwoot CE is `v4.15.1`; portal webhook signing uses the tenant
   API Channel `channel_api.secret`.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
   one-tenant install for `provgroup`.
@@ -171,6 +171,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Run a manual admin upload/auth registration smoke with operator-approved
-  legal documents, then continue with production post-deploy branding/chat/PWA
-  smoke on the accepted visual baseline.
+- Start the controlled provider-domain transition to `app.lancora.ru`, then
+  connect the first customer tenant domain `lk.pronalogi.pro` after ingress and
+  runtime health checks are green.
