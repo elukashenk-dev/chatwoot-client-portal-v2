@@ -179,4 +179,6 @@ execution-plan детали здесь не хранятся.
 ## Recommended Next Step
 
 - Run manual `lk.pronalogi.pro` tenant smoke: public tenant load, admin login
-  eligibility, registration/login email flow and first chat message.
+  eligibility, registration/login email flow and first chat message. Then
+  address `F-OPS-004` to automate custom-domain ingress/cert before repeated
+  customer onboarding.
