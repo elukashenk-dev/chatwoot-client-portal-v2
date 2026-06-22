@@ -100,6 +100,9 @@ automation around:
   names or object keys.
 - Do not use `provgroup.ru` mailboxes as the production service sender for
   Lancora or customer tenants.
+- Do not use broad Docker cleanup commands such as `docker system prune` or
+  volume prune as routine maintenance. Docker build cache cleanup is allowed
+  only with `docker builder prune -af` after checking disk usage.
 
 Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
 
@@ -164,6 +167,40 @@ Manual acceptance:
 - Chatwoot password reset for a tenant admin arrives from
   `no-reply@lancora.ru`;
 - Chatwoot worker logs do not show `SMTPAuthenticationError` after the change.
+
+## Disk And Docker Build Cache Hygiene
+
+The production VM may accumulate Docker BuildKit cache after portal image builds.
+This cache is disposable and exists only to speed up future Docker builds. It is
+not Chatwoot data, not portal tenant data, not object storage and not part of
+rollback.
+
+Before Chatwoot backup/upgrade, portal clean reinstall/reconfigure, or any
+maintenance window where free disk matters, run:
+
+```bash
+df -h /
+docker system df
+```
+
+If Docker reports large reclaimable `Build Cache`, clean only that cache:
+
+```bash
+docker builder prune -af
+```
+
+After cleanup, verify:
+
+```bash
+df -h /
+docker system df
+docker compose --env-file .env.production -f infra/production/compose.yaml ps
+curl -fsS https://lk.provgroup.ru/api/health
+curl -fsS https://app.lancora.ru/api
+```
+
+Do not delete Docker volumes, Chatwoot storage, Chatwoot PostgreSQL data, portal
+PostgreSQL data or portal object-storage data as part of cache cleanup.
 
 ## Routine Dedicated Deploy
 

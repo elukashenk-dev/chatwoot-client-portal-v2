@@ -180,6 +180,38 @@ Allowed `MT-10` Chatwoot-side change is limited to tenant API Channel setup:
 - Backups must include both `portal-db-data` and
   `portal-object-storage-data`.
 
+## Docker Build Cache
+
+Docker BuildKit cache on the production VM is disposable build acceleration
+state. It is created by `docker build` / `docker compose build` during portal
+image builds and may grow after future deploys.
+
+This cache is not runtime state and is not a backup source:
+
+- it does not contain Chatwoot PostgreSQL data, Chatwoot uploads, portal DB data
+  or portal object-storage data;
+- it is not required for rollback;
+- deleting it only makes the next local Docker image build slower.
+
+Before large maintenance operations such as Chatwoot backup/upgrade, portal
+clean reinstall or disk-pressure troubleshooting, check disk and Docker usage:
+
+```bash
+df -h /
+docker system df
+```
+
+If `/` is near or above `75-80%` used, it is acceptable to clean only Docker
+build cache:
+
+```bash
+docker builder prune -af
+```
+
+Do not use broader cleanup commands such as `docker system prune` or volume
+prune as routine maintenance. Those require a separate operator decision and a
+verified backup/restore plan.
+
 ## План Развертывания
 
 Обычный feature deploy идет через `scripts/deploy-production-archive.sh` из
