@@ -90,6 +90,8 @@ automation around:
   `playwright-report`, `test-results` or runtime artifacts.
 - Browser never receives Chatwoot tokens, object-storage credentials, bucket
   names or object keys.
+- Do not use `provgroup.ru` mailboxes as the production service sender for
+  Lancora or customer tenants.
 
 Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
 
@@ -99,6 +101,61 @@ Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
 - set the portal webhook URL;
 - read the returned Chatwoot `Channel::Api.secret`;
 - store that secret encrypted in the portal tenant record.
+
+## Production Mail Sender
+
+Production service mail is sent from `Lancora <no-reply@lancora.ru>` through
+Yandex 360 SMTP.
+
+This sender is shared by:
+
+- portal backend verification emails for `lk.*` tenants;
+- Chatwoot service emails such as password reset and invitations from
+  `app.lancora.ru`.
+
+Current target settings:
+
+```text
+SMTP host: smtp.yandex.ru
+SMTP port: 465
+SMTP mode: SSL
+SMTP username: no-reply@lancora.ru
+SMTP from: Lancora <no-reply@lancora.ru>
+```
+
+Runtime locations:
+
+```text
+/opt/chatwoot-client-portal-v2/.env.production
+/home/chatwoot/chatwoot/.env
+```
+
+Never paste the Yandex app password into chat or commit it. Read it from an
+interactive terminal prompt and write it only to the runtime `.env` files.
+
+After changing mail settings:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+docker compose --env-file .env.production -f infra/production/compose.yaml config --quiet
+docker compose --env-file .env.production -f infra/production/compose.yaml up -d --no-deps --force-recreate portal-backend
+
+sudo systemctl restart chatwoot-web.1.service chatwoot-worker.1.service
+```
+
+Verify:
+
+```bash
+curl -fsS https://lk.pronalogi.pro/api/health
+curl -fsS https://app.lancora.ru/api
+```
+
+Manual acceptance:
+
+- portal registration code arrives from `no-reply@lancora.ru`;
+- Chatwoot password reset for a tenant admin arrives from
+  `no-reply@lancora.ru`;
+- Chatwoot worker logs do not show `SMTPAuthenticationError` after the change.
 
 ## Routine Dedicated Deploy
 

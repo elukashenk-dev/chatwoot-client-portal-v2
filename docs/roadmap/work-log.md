@@ -84,6 +84,12 @@ execution-plan детали здесь не хранятся.
   portal tenant `pronalogi` is active, uses Chatwoot account `2`, API Channel
   inbox `6`, Chatwoot base URL `https://app.lancora.ru`, and has its tenant
   webhook configured.
+- `lk.pronalogi.pro` first-customer production smoke is complete: public tenant
+  load, tenant admin login/branding save, customer registration/login, Chatwoot
+  tenant admin password reset and customer-agent chat roundtrip were validated.
+- Production service mail sender is `Lancora <no-reply@lancora.ru>` through
+  Yandex 360 SMTP for both portal verification emails and Chatwoot service
+  mail.
 - Production deploy source tracking is explicit: clean deploys come from
   reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
   branch, commit and dirty status.
@@ -178,7 +184,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Run manual `lk.pronalogi.pro` tenant smoke: public tenant load, admin login
-  eligibility, registration/login email flow and first chat message. Then
-  address `F-OPS-004` to automate custom-domain ingress/cert before repeated
+- Address `F-OPS-004` to automate custom-domain ingress/cert before repeated
   customer onboarding.
