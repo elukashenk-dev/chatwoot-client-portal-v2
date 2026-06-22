@@ -53,6 +53,10 @@ Next customer portal domain:
 lk.pronalogi.pro
 ```
 
+`lk.pronalogi.pro` already has host Nginx ingress and a Let’s Encrypt
+certificate on the production VM. Until the `pronalogi` tenant is provisioned,
+`/api/tenant` must return `TENANT_NOT_FOUND`.
+
 Дополнительный DNS, который может указывать на ту же VM:
 
 ```text
@@ -101,6 +105,7 @@ Enabled Nginx sites:
 /etc/nginx/sites-enabled/default
 /etc/nginx/sites-enabled/nginx_chatwoot.conf
 /etc/nginx/sites-enabled/nginx_chatwoot_app_lancora.conf
+/etc/nginx/sites-enabled/chatwoot-client-portal-pronalogi.conf
 ```
 
 Chatwoot Nginx configs use:
