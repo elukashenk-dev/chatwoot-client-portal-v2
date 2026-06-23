@@ -164,7 +164,10 @@ describe('chat attachment proxy routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.payload).toBe('avatar-bytes')
       expect(response.headers['content-type']).toBe('image/png')
-      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(response.headers['cache-control']).toBe(
+        'private, max-age=86400, stale-while-revalidate=604800',
+      )
+      expect(response.headers.vary).toBe('Cookie')
       expect(response.headers['set-cookie']).toBeUndefined()
       expect(getCurrentUserChatMessageAvatar).toHaveBeenCalledWith({
         messageId: 502,
@@ -192,7 +195,10 @@ describe('chat attachment proxy routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.payload).toBe('thread-avatar-bytes')
       expect(response.headers['content-type']).toBe('image/png')
-      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(response.headers['cache-control']).toBe(
+        'private, max-age=86400, stale-while-revalidate=604800',
+      )
+      expect(response.headers.vary).toBe('Cookie')
       expect(getCurrentUserThreadAvatar).toHaveBeenCalledWith({
         threadId: 'group:154',
         userId: 7,
@@ -218,7 +224,10 @@ describe('chat attachment proxy routes', () => {
       expect(response.statusCode).toBe(200)
       expect(response.payload).toBe('participant-avatar-bytes')
       expect(response.headers['content-type']).toBe('image/png')
-      expect(response.headers['cache-control']).toBe('private, no-store')
+      expect(response.headers['cache-control']).toBe(
+        'private, max-age=86400, stale-while-revalidate=604800',
+      )
+      expect(response.headers.vary).toBe('Cookie')
       expect(getCurrentUserGroupParticipantAvatar).toHaveBeenCalledWith({
         participantUserId: 8,
         threadId: 'group:154',

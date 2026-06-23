@@ -8,7 +8,8 @@ import type { AppEnv } from '../../config/env.js'
 import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
 import {
-  ATTACHMENT_PROXY_CACHE_CONTROL,
+  CHAT_AVATAR_PROXY_CACHE_CONTROL,
+  CHAT_AVATAR_PROXY_VARY,
   copyAttachmentProxyHeaders,
 } from './attachmentProxyHeaders.js'
 import type {
@@ -51,7 +52,8 @@ async function sendAvatarProxy({
     headers: avatar.headers,
     reply,
   })
-  reply.header('cache-control', ATTACHMENT_PROXY_CACHE_CONTROL)
+  reply.header('cache-control', CHAT_AVATAR_PROXY_CACHE_CONTROL)
+  reply.header('vary', CHAT_AVATAR_PROXY_VARY)
   reply.code(avatar.status)
 
   if (!avatar.body) {

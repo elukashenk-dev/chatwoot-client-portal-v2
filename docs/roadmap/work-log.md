@@ -195,8 +195,12 @@ execution-plan детали здесь не хранятся.
 - PWA offline launch regression baseline is added: installed-app cold launch
   from `/` while offline is covered after online chat cache warmup, and
   foreground badge clearing no longer depends on worker-side platform badging.
+- Chat avatar proxy cacheability is enabled for offline-first reads: chat
+  avatar routes use private cookie-varying cache headers, service worker
+  handles only chat avatar proxy images from `/api`, and attachment/API routes
+  stay outside the service-worker cache boundary.
 
 ## Recommended Next Step
 
-- Fix `F-PWA-001` so chat avatars are cacheable for offline-first chat reads
-  without giving the browser direct Chatwoot authority.
+- Fix `F-PWA-002` by defining and testing the offline read-only auth window
+  separately from backend authority for send/freshness.

@@ -182,6 +182,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  if (isChatAvatarProxyRequest(requestUrl.pathname)) {
+    event.respondWith(handleStaticRequest(request))
+    return
+  }
+
   if (
     requestUrl.pathname.startsWith('/api/') ||
     isTenantDynamicMetadataRequest(requestUrl.pathname)
@@ -236,6 +241,14 @@ function isTenantDynamicMetadataRequest(pathname) {
     pathname === '/api/tenant/manifest.webmanifest' ||
     pathname === '/api/tenant/apple-touch-icon.png' ||
     pathname.startsWith('/api/tenant/icons/')
+  )
+}
+
+function isChatAvatarProxyRequest(pathname) {
+  return (
+    /^\/api\/chat\/threads\/[^/]+\/avatar$/.test(pathname) ||
+    /^\/api\/chat\/threads\/[^/]+\/messages\/\d+\/avatar$/.test(pathname) ||
+    /^\/api\/chat\/threads\/[^/]+\/participants\/\d+\/avatar$/.test(pathname)
   )
 }
 

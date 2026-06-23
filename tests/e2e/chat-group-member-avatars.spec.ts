@@ -11,6 +11,13 @@ const groupThread = {
   type: 'group',
 } as const
 
+const tenant = {
+  displayName: 'Бухфирма',
+  primaryDomain: '127.0.0.1',
+  publicBaseUrl: 'http://127.0.0.1:4173',
+  slug: 'buhfirma',
+}
+
 const avatarPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGSc9h4NwAAAABJRU5ErkJggg==',
   'base64',
@@ -21,6 +28,83 @@ async function fillLoginForm(page: Page) {
   await page
     .getByRole('textbox', { name: 'Пароль' })
     .fill(E2E_PORTAL_USER.password)
+}
+
+async function routeAuthBootstrap(page: Page) {
+  let isAuthenticated = false
+
+  await page.route('**/api/tenant', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: { tenant },
+      status: 200,
+    })
+  })
+  await page.route('**/api/branding', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {},
+      status: 200,
+    })
+  })
+  await page.route('**/api/auth/me', async (route) => {
+    if (!isAuthenticated) {
+      await route.fulfill({
+        contentType: 'application/json',
+        json: {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Требуется вход.',
+          },
+        },
+        status: 401,
+      })
+      return
+    }
+
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        session: {
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+        user: {
+          email: E2E_PORTAL_USER.email,
+          fullName: E2E_PORTAL_USER.fullName,
+          id: 7,
+        },
+      },
+      status: 200,
+    })
+  })
+  await page.route('**/api/auth/login', async (route) => {
+    isAuthenticated = true
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        session: {
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        },
+        user: {
+          email: E2E_PORTAL_USER.email,
+          fullName: E2E_PORTAL_USER.fullName,
+          id: 7,
+        },
+      },
+      status: 200,
+    })
+  })
+  await page.route('**/api/notifications/settings', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        newMessagesEnabled: true,
+        pushEnabled: false,
+        soundEnabled: true,
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
 }
 
 async function routeChatShell(page: Page) {
@@ -160,6 +244,7 @@ async function routeChatInfo(page: Page) {
 test('shows group participant avatars through portal URLs', async ({
   page,
 }) => {
+  await routeAuthBootstrap(page)
   await routeChatShell(page)
   await routeChatInfo(page)
 

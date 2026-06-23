@@ -11,6 +11,9 @@ const ATTACHMENT_PROXY_RESPONSE_HEADERS = [
 ] as const
 
 export const ATTACHMENT_PROXY_CACHE_CONTROL = 'private, no-store'
+export const CHAT_AVATAR_PROXY_CACHE_CONTROL =
+  'private, max-age=86400, stale-while-revalidate=604800'
+export const CHAT_AVATAR_PROXY_VARY = 'Cookie'
 
 export function copyAttachmentProxyHeaders({
   headers,

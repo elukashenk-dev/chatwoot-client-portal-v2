@@ -669,10 +669,94 @@ describe('service worker push notifications', () => {
     )
   })
 
-  it('keeps API routes out of service worker fetch handling', async () => {
-    const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+  it('keeps non-avatar API routes out of service worker fetch handling', () => {
+    const { listeners } = loadServiceWorker()
+    const fetchListener = listeners.get('fetch')?.[0]
+    const request = {
+      destination: '',
+      method: 'GET',
+      mode: 'cors',
+      url: 'https://lk.provgroup.ru/api/chat/messages',
+    } as unknown as Request
+    const respondWith = vi.fn()
 
-    expect(source).toContain("requestUrl.pathname.startsWith('/api/')")
+    expect(fetchListener).toBeDefined()
+
+    fetchListener!({
+      request,
+      respondWith,
+      waitUntil: vi.fn(),
+    })
+
+    expect(respondWith).not.toHaveBeenCalled()
+  })
+
+  it('keeps attachment API routes out of service worker fetch handling', () => {
+    const { listeners } = loadServiceWorker()
+    const fetchListener = listeners.get('fetch')?.[0]
+    const request = {
+      destination: 'image',
+      method: 'GET',
+      mode: 'no-cors',
+      url: 'https://lk.provgroup.ru/api/chat/threads/group%3A154/attachments/501/91',
+    } as unknown as Request
+    const respondWith = vi.fn()
+
+    expect(fetchListener).toBeDefined()
+
+    fetchListener!({
+      request,
+      respondWith,
+      waitUntil: vi.fn(),
+    })
+
+    expect(respondWith).not.toHaveBeenCalled()
+  })
+
+  it('serves cached chat avatar proxy images when the network hangs', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      () => new Promise<Response>(() => {}),
+    )
+    const cachedAvatar = new Response('cached-avatar-bytes', {
+      headers: {
+        'Cache-Control': 'private, max-age=86400',
+        'Content-Type': 'image/png',
+      },
+      status: 200,
+    })
+    const cache = createCacheWithResponses({
+      '/api/chat/threads/group%3A154/participants/8/avatar': cachedAvatar,
+    })
+    const { listeners } = loadServiceWorker({
+      cacheStorage: {
+        open: vi.fn(async () => cache as unknown as Cache),
+      },
+      fetch,
+    })
+    const fetchListener = listeners.get('fetch')?.[0]
+    const request = {
+      destination: 'image',
+      method: 'GET',
+      mode: 'no-cors',
+      url: 'https://lk.provgroup.ru/api/chat/threads/group%3A154/participants/8/avatar',
+    } as unknown as Request
+    let responsePromise: Promise<Response> | null = null
+
+    expect(fetchListener).toBeDefined()
+
+    fetchListener!({
+      request,
+      respondWith: (response) => {
+        responsePromise = Promise.resolve(response)
+      },
+      waitUntil: vi.fn(),
+    })
+
+    expect(responsePromise).not.toBeNull()
+    await expect(waitForTextOrTimeout(responsePromise!)).resolves.toBe(
+      'cached-avatar-bytes',
+    )
+    expect(fetch).toHaveBeenCalledWith(request)
   })
 
   it('serves the cached app shell immediately when navigation network hangs', async () => {
