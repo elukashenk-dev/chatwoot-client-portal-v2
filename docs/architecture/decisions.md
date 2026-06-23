@@ -355,8 +355,11 @@
   Chatwoot access и final delivery status. Service worker кэширует app
   shell/assets и не перехватывает `/api/*`.
 - граница:
-  attachments/voice остаются online-only. Background Sync используется только
-  как progressive enhancement для text outbox drain; foreground drain on app
+  read-only cached auth/chat open offline only until backend `sessionExpiresAt`.
+  A legacy `offlineAccessUntil` field may exist in browser storage for
+  validation, but it is not a separate 24 hour access policy. attachments/voice
+  остаются online-only. Background Sync используется только как progressive
+  enhancement для text outbox drain; foreground drain on app
   open/online/visibility остается primary path, особенно для iOS/iPadOS.
 - причина:
   offline-first нужен для устойчивого UX при плохой связи, но выдача Chatwoot

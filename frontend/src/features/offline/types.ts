@@ -8,7 +8,6 @@ import type { PublicTenantContext } from '../tenant/api/tenantClient'
 
 export const OFFLINE_DATABASE_NAME = 'portal-offline'
 export const OFFLINE_DATABASE_VERSION = 2
-export const OFFLINE_AUTH_GRACE_MS = 24 * 60 * 60 * 1000
 export const OFFLINE_LOW_QUOTA_USAGE_RATIO = 0.9
 export const OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
 

@@ -1253,8 +1253,8 @@ Preconditions:
 MCP steps:
 
 1. Open chat online and confirm transcript is cached.
-2. Age cached auth metadata past `offlineAccessUntil`, or use a staging fixture
-   with expired offline access.
+2. Age cached auth metadata past backend `sessionExpiresAt`, or use a staging
+   fixture with expired backend session metadata.
 3. Switch browser context offline or hang `/api/auth/me`.
 4. Reload `${TENANT_URL}/app/chat`.
 5. Snapshot first meaningful surface.
@@ -1263,7 +1263,7 @@ Expected:
 
 - Expired cached session does not open authenticated chat indefinitely.
 - App shows controlled re-auth/sign-in-needed UI.
-- Cached transcript is not exposed after the offline access window expires.
+- Cached transcript is not exposed after backend session expiry.
 
 Evidence:
 
@@ -1274,7 +1274,7 @@ FAIL:
 
 - Expired cached session opens chat as authenticated.
 - App loops between login/chat/startup surfaces.
-- Cached chat remains readable after the configured offline auth expiry.
+- Cached chat remains readable after backend session expiry.
 
 Cleanup:
 

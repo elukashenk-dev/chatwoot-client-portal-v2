@@ -4,10 +4,7 @@ import {
   offlineStore,
 } from '../../offline/offlineStore'
 import { saveStartupAuthSession } from '../../offline/startupCache'
-import {
-  OFFLINE_AUTH_GRACE_MS,
-  type OfflineAuthSnapshotRecord,
-} from '../../offline/types'
+import type { OfflineAuthSnapshotRecord } from '../../offline/types'
 import { ApiClientError, logout } from '../api/authClient'
 import type { AuthenticatedPortalSession } from '../types'
 
@@ -31,18 +28,11 @@ export type CachedAuthSessionReadResult =
 const OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS = 5 * 60 * 1000
 
 export function calculateOfflineAccessUntil({
-  now,
   sessionExpiresAt,
 }: {
-  now: Date
   sessionExpiresAt: string
 }) {
-  return new Date(
-    Math.min(
-      new Date(sessionExpiresAt).getTime(),
-      now.getTime() + OFFLINE_AUTH_GRACE_MS,
-    ),
-  ).toISOString()
+  return new Date(sessionExpiresAt).toISOString()
 }
 
 function authScopeFromRecord(record: OfflineAuthScope): OfflineAuthScope {
@@ -63,6 +53,27 @@ function isDeviceClockTrustedForSnapshot(
   return (
     lastVerifiedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS &&
     savedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS
+  )
+}
+
+function parseFiniteTime(value: string) {
+  const time = new Date(value).getTime()
+
+  return Number.isFinite(time) ? time : null
+}
+
+function isOfflineAuthSnapshotReadable(
+  snapshot: OfflineAuthSnapshotRecord,
+  nowMs = Date.now(),
+) {
+  const offlineAccessUntilMs = parseFiniteTime(snapshot.offlineAccessUntil)
+  const sessionExpiresAtMs = parseFiniteTime(snapshot.sessionExpiresAt)
+
+  return (
+    offlineAccessUntilMs !== null &&
+    sessionExpiresAtMs !== null &&
+    isDeviceClockTrustedForSnapshot(snapshot, nowMs) &&
+    sessionExpiresAtMs > nowMs
   )
 }
 
@@ -144,8 +155,7 @@ export async function readCachedAuthSession({
 
     if (
       !snapshot ||
-      !isDeviceClockTrustedForSnapshot(snapshot) ||
-      new Date(snapshot.offlineAccessUntil).getTime() <= Date.now()
+      !isOfflineAuthSnapshotReadable(snapshot)
     ) {
       return {
         scope,
@@ -184,7 +194,6 @@ export async function saveOnlineAuthSnapshot({
   const snapshot = {
     lastVerifiedAt: now.toISOString(),
     offlineAccessUntil: calculateOfflineAccessUntil({
-      now,
       sessionExpiresAt: currentSession.session.expiresAt,
     }),
     savedAt: now.toISOString(),

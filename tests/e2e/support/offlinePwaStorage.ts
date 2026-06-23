@@ -266,6 +266,98 @@ export async function seedOutboxRecord(
   }, record)
 }
 
+export async function expireLegacyOfflineAuthWindow(
+  page: Page,
+  identity: BrowserLastActiveIdentity,
+) {
+  await openOfflineDatabase(page)
+
+  await page.evaluate(async (userIdentity) => {
+    const expiredOfflineAccessUntil = new Date(
+      Date.now() - 24 * 60 * 60 * 1000,
+    ).toISOString()
+    const authSnapshotKey = `${userIdentity.tenantSlug}:${userIdentity.userId}`
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('portal-offline', 2)
+
+      request.onsuccess = () => {
+        resolve(request.result)
+      }
+      request.onerror = () => {
+        reject(request.error)
+      }
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('auth_snapshots', 'readwrite')
+      const store = transaction.objectStore('auth_snapshots')
+      const request = store.get(authSnapshotKey)
+
+      request.onsuccess = () => {
+        const record = request.result as
+          | { offlineAccessUntil?: string }
+          | undefined
+
+        if (!record) {
+          reject(new Error('Missing auth snapshot to age offline window.'))
+          return
+        }
+
+        store.put(
+          {
+            ...record,
+            offlineAccessUntil: expiredOfflineAccessUntil,
+          },
+          authSnapshotKey,
+        )
+      }
+      request.onerror = () => {
+        reject(request.error)
+      }
+      transaction.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        database.close()
+        reject(transaction.error)
+      }
+      transaction.onabort = () => {
+        database.close()
+        reject(transaction.error)
+      }
+    })
+
+    for (const key of Object.keys(window.localStorage)) {
+      if (!key.startsWith('portal.startup.auth:')) {
+        continue
+      }
+
+      const envelope = JSON.parse(window.localStorage.getItem(key) ?? 'null') as
+        | {
+            record?: {
+              snapshot?: {
+                offlineAccessUntil?: string
+                tenantSlug?: string
+                userId?: number
+              }
+            }
+          }
+        | null
+
+      if (
+        envelope?.record?.snapshot?.tenantSlug !== userIdentity.tenantSlug ||
+        envelope.record.snapshot.userId !== userIdentity.userId
+      ) {
+        continue
+      }
+
+      envelope.record.snapshot.offlineAccessUntil = expiredOfflineAccessUntil
+      window.localStorage.setItem(key, JSON.stringify(envelope))
+    }
+  }, identity)
+}
+
 export function createSeededOutboxRecord(
   identity: BrowserLastActiveIdentity,
   overrides: Partial<BrowserOutboxRecord>,

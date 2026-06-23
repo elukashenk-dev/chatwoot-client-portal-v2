@@ -199,8 +199,11 @@ execution-plan детали здесь не хранятся.
   avatar routes use private cookie-varying cache headers, service worker
   handles only chat avatar proxy images from `/api`, and attachment/API routes
   stay outside the service-worker cache boundary.
+- Offline read-only auth window follows backend `sessionExpiresAt`, not a
+  separate 24 hour browser grace; expired backend sessions and explicit local
+  sign-out still require online/session-check before exposing cached chat.
 
 ## Recommended Next Step
 
-- Fix `F-PWA-002` by defining and testing the offline read-only auth window
-  separately from backend authority for send/freshness.
+- Continue PWA offline-first review with lazy-loaded chat/history cache
+  coverage, then fix the next confirmed finding.

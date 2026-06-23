@@ -290,6 +290,10 @@ export function readStartupAuthSession({
   const offlineAccessUntilMs = record
     ? parseFiniteTime(record.snapshot.offlineAccessUntil)
     : null
+  const sessionExpiresAtMs = record
+    ? parseFiniteTime(record.snapshot.sessionExpiresAt)
+    : null
+  const nowMs = Date.now()
 
   if (
     !record ||
@@ -299,8 +303,9 @@ export function readStartupAuthSession({
     record.snapshot.userId !== record.userId ||
     record.snapshot.user.id !== record.userId ||
     offlineAccessUntilMs === null ||
-    !isDeviceClockTrustedForStartupSnapshot(record.snapshot) ||
-    offlineAccessUntilMs <= Date.now()
+    sessionExpiresAtMs === null ||
+    !isDeviceClockTrustedForStartupSnapshot(record.snapshot, nowMs) ||
+    sessionExpiresAtMs <= nowMs
   ) {
     return null
   }
