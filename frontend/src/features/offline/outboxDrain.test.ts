@@ -348,12 +348,14 @@ it('sends queued records with the original clientMessageKey, deletes them and em
     userId: 7,
   })
 
-  expect(sendChatMessageMock).toHaveBeenCalledWith({
-    clientMessageKey: 'portal-send:abc',
-    content: 'Queued text',
-    replyToMessageId: null,
-    threadId: 'private:me',
-  })
+  expect(sendChatMessageMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      clientMessageKey: 'portal-send:abc',
+      content: 'Queued text',
+      replyToMessageId: null,
+      threadId: 'private:me',
+    }),
+  )
   await expect(offlineOutboxStore.readOutboxRecord(record)).resolves.toBeNull()
   expect(onSendSucceeded).toHaveBeenCalledWith({
     record: expect.objectContaining({
@@ -525,6 +527,57 @@ it('returns network failures to queued with exponential backoff', async () => {
     nextAttemptAt: '2026-05-27T10:00:03.000Z',
     status: 'queued',
   })
+})
+
+it('aborts hanging text sends and returns them to queued retry', async () => {
+  const record = createQueuedOutboxRecord({ attemptCount: 1 })
+  let abortObserved = false
+  const onDrainOutcome = vi.fn()
+
+  await offlineOutboxStore.saveOutboxRecord(record)
+  sendChatMessageMock.mockImplementationOnce(
+    ({
+      signal,
+    }: Parameters<typeof sendChatMessage>[0] & {
+      signal?: AbortSignal
+    }) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => {
+            abortObserved = true
+            reject(createChatApiError({ statusCode: 0 }))
+          },
+          { once: true },
+        )
+      }),
+  )
+
+  const drainPromise = drainOfflineTextOutbox({
+    now: () => new Date('2026-05-27T10:00:01.000Z'),
+    onDrainOutcome,
+    sendChatMessage: sendChatMessageMock,
+    sendTimeoutMs: 1,
+    tenantSlug: 'buhfirma',
+    userId: 7,
+  })
+
+  await expect(drainPromise).resolves.toBe('drained')
+  expect(abortObserved).toBe(true)
+  await expect(
+    offlineOutboxStore.readOutboxRecord(record),
+  ).resolves.toMatchObject({
+    attemptCount: 2,
+    errorMessage: 'Send failed.',
+    nextAttemptAt: '2026-05-27T10:00:03.000Z',
+    status: 'queued',
+  })
+  expect(onDrainOutcome).toHaveBeenCalledWith(
+    expect.objectContaining({
+      category: 'network_retry',
+      statusCode: 0,
+    }),
+  )
 })
 
 it('stops drain on 401 and keeps record queued for reauth', async () => {

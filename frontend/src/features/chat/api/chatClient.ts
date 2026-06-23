@@ -366,11 +366,13 @@ export async function sendChatMessage({
   clientMessageKey,
   content,
   replyToMessageId,
+  signal,
   threadId,
 }: {
   clientMessageKey: string
   content: string
   replyToMessageId?: number | null
+  signal?: AbortSignal
   threadId: string
 }) {
   return request<ChatSendResult>('/chat/messages', {
@@ -386,6 +388,7 @@ export async function sendChatMessage({
     },
     method: 'POST',
     networkErrorMessage: 'Не удалось отправить сообщение. Попробуйте еще раз.',
+    signal,
   })
 }
 

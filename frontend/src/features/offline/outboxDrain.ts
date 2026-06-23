@@ -8,11 +8,16 @@ import {
   releaseOutboxDrainLease,
   tryAcquireOutboxDrainLease,
 } from './offlineOutboxStore'
+import {
+  BOOT_REQUEST_TIMEOUT_MS,
+  createRequestTimeout,
+} from './bootCoordinator'
 import { classifyTextOutboxSendError } from './outboxErrorClassification'
 import type { OfflineTextOutboxRecord } from './types'
 
 const SEND_LEASE_MS = 30_000
 const DRAIN_LEASE_MS = 30_000
+const TEXT_OUTBOX_SEND_TIMEOUT_MS = BOOT_REQUEST_TIMEOUT_MS
 const SEND_IN_PROGRESS_RETRY_MS = 5_000
 const GENERIC_SEND_ERROR_MESSAGE = 'Не удалось отправить сообщение.'
 
@@ -171,6 +176,7 @@ export async function drainOfflineTextOutbox({
   onDrainOutcome,
   onSendSucceeded,
   sendChatMessage,
+  sendTimeoutMs = TEXT_OUTBOX_SEND_TIMEOUT_MS,
   tenantSlug,
   userId,
 }: {
@@ -178,6 +184,7 @@ export async function drainOfflineTextOutbox({
   onDrainOutcome?: (event: DrainOutcomeEvent) => void | Promise<void>
   onSendSucceeded?: (event: DrainSendSucceededEvent) => void | Promise<void>
   sendChatMessage: SendChatMessage
+  sendTimeoutMs?: number
   tenantSlug: string
   userId: number
 }): Promise<DrainResult> {
@@ -196,12 +203,14 @@ export async function drainOfflineTextOutbox({
       attemptAt,
       SEND_LEASE_MS,
     )
+    const sendTimeout = createRequestTimeout(sendTimeoutMs)
 
     try {
       const result = await sendChatMessage({
         clientMessageKey: record.clientMessageKey,
         content: record.content,
         replyToMessageId: record.replyToMessageId,
+        signal: sendTimeout.signal,
         threadId: record.threadId,
       })
       const controlledResultError = getControlledSendResultErrorDetails(result)
@@ -358,6 +367,8 @@ export async function drainOfflineTextOutbox({
         threadId: sendingRecord.threadId,
         userId,
       })
+    } finally {
+      sendTimeout.cancel()
     }
   }
 

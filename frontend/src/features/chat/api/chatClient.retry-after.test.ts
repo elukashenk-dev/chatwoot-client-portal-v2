@@ -36,6 +36,48 @@ function createRateLimitedResponse(retryAfter: string | null) {
   )
 }
 
+function createSendSuccessResponse() {
+  return new Response(
+    JSON.stringify({
+      activeThread: {
+        id: 'private:me',
+        subtitle: 'Вы и поддержка',
+        title: 'Личный чат',
+        type: 'private',
+      },
+      reason: 'none',
+      result: 'ready',
+      sentMessage: null,
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      status: 200,
+    },
+  )
+}
+
+it('passes an abort signal to the chat send fetch request', async () => {
+  const abortController = new AbortController()
+  fetchMock.mockResolvedValueOnce(createSendSuccessResponse())
+
+  await sendChatMessage({
+    clientMessageKey: 'portal-send:abort-signal',
+    content: 'Queued text',
+    replyToMessageId: null,
+    signal: abortController.signal,
+    threadId: 'private:me',
+  })
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({
+      signal: abortController.signal,
+    }),
+  )
+})
+
 it('exposes numeric retry-after seconds for chat send rate limits', async () => {
   fetchMock.mockResolvedValueOnce(createRateLimitedResponse('7'))
 
