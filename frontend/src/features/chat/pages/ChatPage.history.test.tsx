@@ -9,6 +9,7 @@ import {
   renderChatRoute,
   setupOfflineChatTestEnvironment,
 } from '../../../test/chatPageTestHarness'
+import { offlineStore } from '../../offline/offlineStore'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -260,6 +261,119 @@ describe('ChatPage history loading', () => {
         'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('loads cached older messages when an online older history request goes offline', async () => {
+    const user = userEvent.setup()
+
+    await offlineStore.saveMessagePage({
+      pageCursor: 'before:205',
+      savedAt: '2026-05-27T10:00:00.000Z',
+      snapshot: createReadySnapshot({
+        hasMoreOlder: false,
+        messages: [
+          {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            content: 'Сохраненная старая страница.',
+            contentType: 'text',
+            createdAt: '2026-04-20T08:00:00.000Z',
+            direction: 'outgoing',
+            id: 120,
+            status: 'sent',
+          },
+        ],
+        nextOlderCursor: null,
+      }),
+      tenantSlug: 'buhfirma',
+      threadId: privateThread.id,
+      userId: 7,
+    })
+    const latestSnapshot = createReadySnapshot({
+      hasMoreOlder: true,
+      messages: [
+        {
+          attachments: [],
+          authorName: 'Вы',
+          authorRole: 'current_user',
+          content: 'Последнее сообщение перед offline.',
+          contentType: 'text',
+          createdAt: '2026-04-21T10:00:00.000Z',
+          direction: 'outgoing',
+          id: 205,
+          status: 'sent',
+        },
+      ],
+      nextOlderCursor: 205,
+    })
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(latestSnapshot)
+      }
+
+      if (
+        url === '/api/chat/messages?threadId=private%3Ame&beforeMessageId=205'
+      ) {
+        throw new TypeError('network down')
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/read') {
+        return createReadSyncResponse()
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByText(
+        'Последнее сообщение перед offline.',
+        {},
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    await user.click(
+      await screen.findByRole(
+        'button',
+        {
+          name: 'Загрузить более ранние сообщения',
+        },
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    )
+
+    expect(
+      await screen.findByText('Сохраненная старая страница.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Последнее сообщение перед offline.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',
+      ),
+    ).not.toBeInTheDocument()
   })
 
   it('does not merge a non-ready older history response into the ready transcript', async () => {

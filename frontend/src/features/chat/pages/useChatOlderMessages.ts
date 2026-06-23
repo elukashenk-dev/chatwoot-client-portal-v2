@@ -59,28 +59,20 @@ export function useChatOlderMessages({
     const beforeMessageId = pageState.snapshot.nextOlderCursor
     const pageCursor = `before:${beforeMessageId}` as const
     const threadId = pageState.selectedThreadId
-
-    if (!isBrowserOnline) {
-      const cachedOlderSnapshot =
-        tenantSlug && userId !== null
-          ? await readOfflineOlderMessagePage({
-              pageCursor,
-              tenantSlug,
-              threadId,
-              userId,
-            })
-          : null
-
-      if (!isMountedRef.current) {
-        return
-      }
-
+    const readCachedOlderSnapshot = () =>
+      tenantSlug && userId !== null
+        ? readOfflineOlderMessagePage({
+            pageCursor,
+            tenantSlug,
+            threadId,
+            userId,
+          })
+        : null
+    const mergeCachedOlderSnapshot = (
+      cachedOlderSnapshot: Awaited<ReturnType<typeof readCachedOlderSnapshot>>,
+    ) => {
       if (!cachedOlderSnapshot) {
-        setHistoryErrorMessage(
-          'Более ранние сообщения не сохранены на этом устройстве.',
-        )
-        setIsLoadingOlder(false)
-        return
+        return false
       }
 
       setPageState((currentState) => {
@@ -100,6 +92,25 @@ export function useChatOlderMessages({
           ),
         }
       })
+
+      return true
+    }
+
+    if (!isBrowserOnline) {
+      const cachedOlderSnapshot = await readCachedOlderSnapshot()
+
+      if (!isMountedRef.current) {
+        return
+      }
+
+      if (!mergeCachedOlderSnapshot(cachedOlderSnapshot)) {
+        setHistoryErrorMessage(
+          'Более ранние сообщения не сохранены на этом устройстве.',
+        )
+        setIsLoadingOlder(false)
+        return
+      }
+
       setIsLoadingOlder(false)
       return
     }
@@ -159,7 +170,22 @@ export function useChatOlderMessages({
         return
       }
 
-      handleConnectionUnavailableError(error)
+      if (handleConnectionUnavailableError(error)) {
+        const cachedOlderSnapshot = await readCachedOlderSnapshot()
+
+        if (!isMountedRef.current) {
+          return
+        }
+
+        if (mergeCachedOlderSnapshot(cachedOlderSnapshot)) {
+          return
+        }
+
+        setHistoryErrorMessage(
+          'Более ранние сообщения не сохранены на этом устройстве.',
+        )
+        return
+      }
 
       setHistoryErrorMessage(
         'Не удалось загрузить более ранние сообщения. Попробуйте еще раз.',

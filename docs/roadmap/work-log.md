@@ -202,8 +202,11 @@ execution-plan детали здесь не хранятся.
 - Offline read-only auth window follows backend `sessionExpiresAt`, not a
   separate 24 hour browser grace; expired backend sessions and explicit local
   sign-out still require online/session-check before exposing cached chat.
+- Lazy-loaded older chat history reuses scoped IndexedDB older-page cache when
+  an online history request falls to connection-unavailable, so warmed older
+  pages can still render during degraded/offline PWA sessions.
 
 ## Recommended Next Step
 
-- Continue PWA offline-first review with lazy-loaded chat/history cache
-  coverage, then fix the next confirmed finding.
+- Publish the reviewed PWA offline-first checkpoint, then run real-device
+  installed-PWA smoke against production.
