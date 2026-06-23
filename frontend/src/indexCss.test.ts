@@ -68,14 +68,27 @@ describe('index.css', () => {
     )
   })
 
-  it('keeps outgoing chat bubbles flat without gradient overlays', () => {
+  it('keeps outgoing chat bubbles flat without shadows or gradient overlays', () => {
     const outgoingRule = getCssRule('.chat-outgoing-surface {')
 
     expect(outgoingRule).toContain(
       'background-color: var(--color-chat-outgoing);',
     )
+    expect(outgoingRule).toContain('box-shadow: none;')
     expect(outgoingRule).not.toContain('background-image')
     expect(outgoingRule).not.toContain('linear-gradient')
+  })
+
+  it('keeps incoming chat bubbles light, flat, and softly outlined', () => {
+    const incomingRule = getCssRuleBySelectors(['.chat-incoming-surface'])
+
+    expect(incomingRule).toContain('background: #f7f7f7;')
+    expect(incomingRule).toContain(
+      'border-color: rgb(203 213 225 / 0.4);',
+    )
+    expect(incomingRule).toContain('box-shadow: none;')
+    expect(incomingRule).not.toContain('linear-gradient')
+    expect(incomingRule).not.toContain('backdrop-filter')
   })
 
   it('uses the outgoing chat brand token for the composer send control', () => {
