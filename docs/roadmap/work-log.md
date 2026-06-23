@@ -78,15 +78,17 @@ execution-plan детали здесь не хранятся.
 - Primary production Chatwoot admin/runtime URL is `https://app.lancora.ru`;
   no legacy Chatwoot host is part of the active production runtime baseline.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
-  tenant-aware install for `provgroup`, using Chatwoot base URL
-  `https://app.lancora.ru`.
+  install for `provgroup`, using Chatwoot base URL `https://app.lancora.ru`.
 - `https://lk.pronalogi.pro` is provisioned as the first customer tenant:
   portal tenant `pronalogi` is active, uses Chatwoot account `2`, API Channel
   inbox `6`, Chatwoot base URL `https://app.lancora.ru`, and has its tenant
   webhook configured.
-- `lk.pronalogi.pro` first-customer production smoke is complete: public tenant
-  load, tenant admin login/branding save, customer registration/login, Chatwoot
-  tenant admin password reset and customer-agent chat roundtrip were validated.
+- `MT-10` production tenant smoke is complete for the first two customer
+  tenants: `pronalogi` (`https://lk.pronalogi.pro`, Chatwoot account `2`, API
+  inbox `6`) and `provgroup` (`https://lk.provgroup.ru`, Chatwoot account `1`,
+  API inbox `5`) both resolve by tenant host, pass Chatwoot connection
+  verification and support customer login plus portal-to-Chatwoot messaging
+  through `https://app.lancora.ru`.
 - Production service mail sender is `Lancora <no-reply@lancora.ru>` through
   Yandex 360 SMTP for both portal verification emails and Chatwoot service
   mail.
@@ -97,8 +99,8 @@ execution-plan детали здесь не хранятся.
 - Production deploy source tracking is explicit: clean deploys come from
   reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
   branch, commit and dirty status.
-- Current production source is `main` commit `43f52e9` with profile avatar,
-  group member avatars and group support badge slices deployed.
+- Current production code source is `main` commit `2b287d2` with `MT-10A`
+  Chatwoot contact custom attribute provisioning deployed.
 
 ## Current Baseline
 
@@ -193,8 +195,7 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- After this branch is merged, pushed and deployed, run
-  `pnpm --dir backend tenant:chatwoot:ensure-portal-attributes -- --tenant=pronalogi`
-  on the production VM, verify the four contact custom attributes in the
-  `pronalogi` Chatwoot account UI, then continue the next `MT-10` production
-  onboarding step.
+- Continue the next `MT-10` production hardening/onboarding step from the
+  operations runbook, keeping `pronalogi` and `provgroup` as the accepted
+  production tenant smoke baseline and `https://app.lancora.ru` as the central
+  Chatwoot admin/runtime URL.

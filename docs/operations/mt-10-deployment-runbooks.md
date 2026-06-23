@@ -411,6 +411,19 @@ Minimum acceptance before production shared SaaS:
 - per-tenant smoke covers auth, chat, admin branding, webhook delivery and PWA
   manifest.
 
+### Current Accepted Production Smoke Baseline
+
+As of 2026-06-23, the central Chatwoot admin/runtime URL is
+`https://app.lancora.ru`.
+
+- `pronalogi`: `https://lk.pronalogi.pro`, Chatwoot account `2`, API Channel
+  inbox `6`; tenant host resolution, Chatwoot connection verification,
+  customer login/code, portal-to-Chatwoot messaging and required portal contact
+  custom attribute definitions were confirmed.
+- `provgroup`: `https://lk.provgroup.ru`, Chatwoot account `1`, API Channel
+  inbox `5`; tenant host resolution, Chatwoot connection verification,
+  customer login/code and portal-to-Chatwoot messaging were confirmed.
+
 ## Domain And DNS Runbook
 
 Production supports two tenant domain modes.
