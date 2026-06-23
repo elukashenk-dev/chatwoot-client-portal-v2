@@ -107,6 +107,7 @@ export function isAuthSnapshotRecord(
 ): value is OfflineAuthSnapshotRecord {
   return (
     isObject(value) &&
+    isString(value.lastClockSeenAt) &&
     isString(value.lastVerifiedAt) &&
     isString(value.savedAt) &&
     isString(value.sessionExpiresAt) &&

@@ -183,7 +183,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isChatAvatarProxyRequest(requestUrl.pathname)) {
-    event.respondWith(handleStaticRequest(request))
+    event.respondWith(handleChatAvatarProxyRequest(request))
     return
   }
 
@@ -252,6 +252,50 @@ function isChatAvatarProxyRequest(pathname) {
   )
 }
 
+async function handleChatAvatarProxyRequest(request) {
+  const identity = await readCurrentAvatarCacheIdentity()
+
+  if (!identity) {
+    return fetch(request)
+  }
+
+  return handleStaticRequest(
+    request,
+    createChatAvatarCacheRequest(request, identity),
+  )
+}
+
+async function readCurrentAvatarCacheIdentity() {
+  const host = getServiceWorkerHost()
+
+  if (!host) {
+    return null
+  }
+
+  try {
+    const identity = await readLastActiveIdentityForHost(host)
+
+    if (!identity || (await hasLocalDeviceSignout(host, identity))) {
+      return null
+    }
+
+    return identity
+  } catch {
+    return null
+  }
+}
+
+function createChatAvatarCacheRequest(request, identity) {
+  const cacheUrl = new URL(request.url)
+
+  cacheUrl.searchParams.set('__portal_cache_tenant', identity.tenantSlug)
+  cacheUrl.searchParams.set('__portal_cache_user', String(identity.userId))
+
+  return new Request(cacheUrl.toString(), {
+    method: 'GET',
+  })
+}
+
 async function handleNavigationRequest(request) {
   const cache = await caches.open(STATIC_CACHE)
   const cachedResponse =
@@ -288,23 +332,23 @@ async function fetchAndCacheNavigationRequest(request, cache) {
   return response
 }
 
-async function handleStaticRequest(request) {
+async function handleStaticRequest(request, cacheRequest = request) {
   const cache = await caches.open(STATIC_CACHE)
-  const cachedResponse = await cache.match(request)
+  const cachedResponse = await cache.match(cacheRequest)
 
   if (cachedResponse) {
-    void updateCache(request, cache)
+    void updateCache(request, cache, cacheRequest)
     return cachedResponse
   }
 
-  return updateCache(request, cache)
+  return updateCache(request, cache, cacheRequest)
 }
 
-async function updateCache(request, cache) {
+async function updateCache(request, cache, cacheRequest = request) {
   const response = await fetch(request)
 
   if (shouldCacheResponse(response)) {
-    await cache.put(request, response.clone())
+    await cache.put(cacheRequest, response.clone())
   }
 
   return response

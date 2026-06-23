@@ -36,13 +36,26 @@ function authScopeFromRecord(record: OfflineAuthScope): OfflineAuthScope {
 }
 
 function isDeviceClockTrustedForSnapshot(
-  snapshot: Pick<OfflineAuthSnapshotRecord, 'lastVerifiedAt' | 'savedAt'>,
+  snapshot: Pick<
+    OfflineAuthSnapshotRecord,
+    'lastClockSeenAt' | 'lastVerifiedAt' | 'savedAt'
+  >,
   nowMs = Date.now(),
 ) {
-  const lastVerifiedAtMs = new Date(snapshot.lastVerifiedAt).getTime()
-  const savedAtMs = new Date(snapshot.savedAt).getTime()
+  const lastClockSeenAtMs = parseFiniteTime(snapshot.lastClockSeenAt)
+  const lastVerifiedAtMs = parseFiniteTime(snapshot.lastVerifiedAt)
+  const savedAtMs = parseFiniteTime(snapshot.savedAt)
+
+  if (
+    lastClockSeenAtMs === null ||
+    lastVerifiedAtMs === null ||
+    savedAtMs === null
+  ) {
+    return false
+  }
 
   return (
+    lastClockSeenAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS &&
     lastVerifiedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS &&
     savedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS
   )
@@ -65,6 +78,22 @@ function isOfflineAuthSnapshotReadable(
     isDeviceClockTrustedForSnapshot(snapshot, nowMs) &&
     sessionExpiresAtMs > nowMs
   )
+}
+
+function snapshotWithClockObservation(
+  snapshot: OfflineAuthSnapshotRecord,
+  nowMs: number,
+) {
+  const lastClockSeenAtMs = parseFiniteTime(snapshot.lastClockSeenAt)
+
+  if (lastClockSeenAtMs !== null && lastClockSeenAtMs >= nowMs) {
+    return snapshot
+  }
+
+  return {
+    ...snapshot,
+    lastClockSeenAt: new Date(nowMs).toISOString(),
+  }
 }
 
 export function isStartupNetworkFailure(error: unknown) {
@@ -142,8 +171,26 @@ export async function readCachedAuthSession({
       scope.tenantSlug,
       scope.userId,
     )
+    const nowMs = Date.now()
 
-    if (!snapshot || !isOfflineAuthSnapshotReadable(snapshot)) {
+    if (!snapshot) {
+      return {
+        scope,
+        status: 'session_check_required',
+      }
+    }
+
+    const observedSnapshot = snapshotWithClockObservation(snapshot, nowMs)
+
+    if (observedSnapshot !== snapshot) {
+      await offlineStore.saveAuthSnapshot(observedSnapshot)
+      saveStartupAuthSession({
+        host,
+        snapshot: observedSnapshot,
+      })
+    }
+
+    if (!isOfflineAuthSnapshotReadable(observedSnapshot, nowMs)) {
       return {
         scope,
         status: 'session_check_required',
@@ -152,7 +199,7 @@ export async function readCachedAuthSession({
 
     return {
       scope,
-      snapshot,
+      snapshot: observedSnapshot,
       status: 'authenticated',
     }
   } catch {
@@ -179,6 +226,7 @@ export async function saveOnlineAuthSnapshot({
     userId: currentSession.user.id,
   }
   const snapshot = {
+    lastClockSeenAt: now.toISOString(),
     lastVerifiedAt: now.toISOString(),
     savedAt: now.toISOString(),
     sessionExpiresAt: currentSession.session.expiresAt,

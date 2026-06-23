@@ -99,8 +99,9 @@ execution-plan детали здесь не хранятся.
 - Production deploy source tracking is explicit: clean deploys come from
   reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
   branch, commit and dirty status.
-- Current production code source is `main` commit `2b287d2` with `MT-10A`
-  Chatwoot contact custom attribute provisioning deployed.
+- Current production code source is tracked on the VM in
+  `/opt/chatwoot-client-portal-v2/DEPLOY_SOURCE.txt` after each clean archive
+  deploy from reviewed `origin/main`.
 
 ## Current Baseline
 
@@ -201,11 +202,14 @@ execution-plan детали здесь не хранятся.
   foreground badge clearing no longer depends on worker-side platform badging.
 - Chat avatar proxy cacheability is enabled for offline-first reads: chat
   avatar routes use private cookie-varying cache headers, service worker
-  handles only chat avatar proxy images from `/api`, and attachment/API routes
-  stay outside the service-worker cache boundary.
+  handles only chat avatar proxy images from `/api`, cached avatar entries are
+  scoped by current tenant/user identity, and attachment/API routes stay outside
+  the service-worker cache boundary.
 - Offline read-only auth window follows backend `sessionExpiresAt`, not a
   separate 24 hour browser grace; expired backend sessions and explicit local
-  sign-out still require online/session-check before exposing cached chat.
+  sign-out still require online/session-check before exposing cached chat, and
+  cached auth records remember the latest observed client clock to reject later
+  rollback behind that observation.
 - Lazy-loaded older chat history reuses scoped IndexedDB older-page cache when
   an online history request falls to connection-unavailable, so warmed older
   pages can still render during degraded/offline PWA sessions.

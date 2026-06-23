@@ -107,6 +107,7 @@ function isAuthSnapshotRecord(
 ): value is OfflineAuthSnapshotRecord {
   return (
     isObject(value) &&
+    isString(value.lastClockSeenAt) &&
     isString(value.lastVerifiedAt) &&
     isString(value.savedAt) &&
     isString(value.sessionExpiresAt) &&
@@ -160,17 +161,26 @@ function isStartupChatRecord(value: unknown): value is StartupChatRecord {
 }
 
 function isDeviceClockTrustedForStartupSnapshot(
-  snapshot: Pick<OfflineAuthSnapshotRecord, 'lastVerifiedAt' | 'savedAt'>,
+  snapshot: Pick<
+    OfflineAuthSnapshotRecord,
+    'lastClockSeenAt' | 'lastVerifiedAt' | 'savedAt'
+  >,
   nowMs = Date.now(),
 ) {
+  const lastClockSeenAtMs = parseFiniteTime(snapshot.lastClockSeenAt)
   const lastVerifiedAtMs = parseFiniteTime(snapshot.lastVerifiedAt)
   const savedAtMs = parseFiniteTime(snapshot.savedAt)
 
-  if (lastVerifiedAtMs === null || savedAtMs === null) {
+  if (
+    lastClockSeenAtMs === null ||
+    lastVerifiedAtMs === null ||
+    savedAtMs === null
+  ) {
     return false
   }
 
   return (
+    lastClockSeenAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS &&
     lastVerifiedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS &&
     savedAtMs <= nowMs + OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS
   )
@@ -230,6 +240,25 @@ function writeStartupRecord<TRecord>(key: string, record: TRecord) {
   }
 }
 
+function startupAuthRecordWithClockObservation(
+  record: StartupAuthRecord,
+  nowMs: number,
+) {
+  const lastClockSeenAtMs = parseFiniteTime(record.snapshot.lastClockSeenAt)
+
+  if (lastClockSeenAtMs !== null && lastClockSeenAtMs >= nowMs) {
+    return record
+  }
+
+  return {
+    ...record,
+    snapshot: {
+      ...record.snapshot,
+      lastClockSeenAt: new Date(nowMs).toISOString(),
+    },
+  }
+}
+
 function deleteStartupRecord(key: string) {
   const storage = getStorage()
 
@@ -285,11 +314,18 @@ export function readStartupAuthSession({
     return null
   }
 
-  const record = readStartupRecord(authKey(host), isStartupAuthRecord)
+  const cachedRecord = readStartupRecord(authKey(host), isStartupAuthRecord)
+  const nowMs = Date.now()
+  const record = cachedRecord
+    ? startupAuthRecordWithClockObservation(cachedRecord, nowMs)
+    : null
   const sessionExpiresAtMs = record
     ? parseFiniteTime(record.snapshot.sessionExpiresAt)
     : null
-  const nowMs = Date.now()
+
+  if (cachedRecord && record !== cachedRecord) {
+    writeStartupRecord(authKey(host), record)
+  }
 
   if (
     !record ||

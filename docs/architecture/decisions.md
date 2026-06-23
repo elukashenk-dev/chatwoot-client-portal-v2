@@ -353,7 +353,9 @@
   Browser storage scoped by tenant/user/thread помогает UX, но не становится
   source of truth: backend остается authority для session, send, freshness,
   Chatwoot access и final delivery status. Service worker кэширует app
-  shell/assets и не перехватывает `/api/*`.
+  shell/assets и имеет только узкое исключение для scoped chat avatar proxy
+  image routes из `/api`; остальные `/api/*`, attachments и authority routes
+  не перехватываются service-worker cache boundary.
 - граница:
   read-only cached auth/chat open offline only until backend `sessionExpiresAt`.
   Old browser auth cache fields/formats are not a compatibility contract and

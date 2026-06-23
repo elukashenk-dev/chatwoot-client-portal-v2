@@ -148,6 +148,7 @@ describe('offline store database', () => {
       },
     })
     await offlineStore.saveAuthSnapshot({
+      lastClockSeenAt: '2026-05-27T10:00:00.000Z',
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
@@ -210,6 +211,7 @@ describe('offline store database', () => {
       },
     })
     await putRawRecord('auth_snapshots', 'buhfirma:7', {
+      lastClockSeenAt: '2026-05-27T10:00:00.000Z',
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
@@ -248,6 +250,7 @@ describe('offline store database', () => {
       userId: 7,
     })
     await offlineStore.saveAuthSnapshot({
+      lastClockSeenAt: '2026-05-27T10:00:00.000Z',
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
@@ -260,6 +263,7 @@ describe('offline store database', () => {
       userId: 7,
     })
     await offlineStore.saveAuthSnapshot({
+      lastClockSeenAt: '2026-05-27T10:00:00.000Z',
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
@@ -426,6 +430,7 @@ describe('offline store database', () => {
       userId: 7,
     })
     await offlineStore.saveAuthSnapshot({
+      lastClockSeenAt: '2026-05-27T10:00:00.000Z',
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',

@@ -101,8 +101,10 @@ function useBootFakeTimers() {
 }
 
 async function saveTenantAndCachedAuth({
+  lastClockSeenAt = '2026-05-27T09:55:00.000Z',
   sessionExpiresAt = VALID_SESSION_EXPIRES_AT,
 }: {
+  lastClockSeenAt?: string
   sessionExpiresAt?: string
 } = {}) {
   await offlineStore.saveTenantContext({
@@ -117,6 +119,7 @@ async function saveTenantAndCachedAuth({
     userId: 7,
   })
   await offlineStore.saveAuthSnapshot({
+    lastClockSeenAt,
     lastVerifiedAt: '2026-05-27T09:55:00.000Z',
     savedAt: '2026-05-27T09:55:00.000Z',
     sessionExpiresAt,
@@ -131,8 +134,10 @@ async function saveTenantAndCachedAuth({
 }
 
 function saveStartupAuthSnapshot({
+  lastClockSeenAt = '2026-05-27T09:55:00.000Z',
   sessionExpiresAt = VALID_SESSION_EXPIRES_AT,
 }: {
+  lastClockSeenAt?: string
   sessionExpiresAt?: string
 } = {}) {
   window.localStorage.setItem(
@@ -141,6 +146,7 @@ function saveStartupAuthSnapshot({
       record: {
         host: window.location.host,
         snapshot: {
+          lastClockSeenAt,
           lastVerifiedAt: '2026-05-27T09:55:00.000Z',
           savedAt: '2026-05-27T09:55:00.000Z',
           sessionExpiresAt,
@@ -180,7 +186,7 @@ function AuthProbe() {
 }
 
 function renderAuthProbe() {
-  render(
+  return render(
     <TenantIdentityContext.Provider value={tenantContextValue}>
       <AuthSessionProvider>
         <AuthProbe />
@@ -190,7 +196,7 @@ function renderAuthProbe() {
 }
 
 function renderProtectedRoute() {
-  render(
+  return render(
     <TenantIdentityContext.Provider value={tenantContextValue}>
       <AuthSessionProvider>
         <MemoryRouter initialEntries={['/app/chat']}>
@@ -366,6 +372,52 @@ describe('AuthSessionProvider offline startup', () => {
     await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
 
     expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+  })
+
+  it('keeps cached auth blocked after an expired clock observation is rolled back', async () => {
+    await saveTenantAndCachedAuth({
+      sessionExpiresAt: '2026-05-27T10:30:00.000Z',
+    })
+    vi.useFakeTimers()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+    vi.setSystemTime(new Date('2026-05-27T10:35:00.000Z'))
+
+    const expiredRender = renderProtectedRoute()
+
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+
+    expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+
+    expiredRender.unmount()
+    vi.setSystemTime(new Date('2026-05-27T10:05:00.000Z'))
+
+    renderProtectedRoute()
+
+    await advanceBootTimers(BOOT_ONLINE_REQUIRED_MS)
+
+    expect(screen.getByText('Нужно проверить сессию.')).toBeInTheDocument()
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+  })
+
+  it('keeps startup auth blocked after an expired clock observation is rolled back', async () => {
+    saveStartupAuthSnapshot({
+      sessionExpiresAt: '2026-05-27T10:30:00.000Z',
+    })
+    vi.useFakeTimers()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+    vi.setSystemTime(new Date('2026-05-27T10:35:00.000Z'))
+
+    const expiredRender = renderProtectedRoute()
+
+    expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
+
+    expiredRender.unmount()
+    vi.setSystemTime(new Date('2026-05-27T10:05:00.000Z'))
+
+    renderProtectedRoute()
+
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
   })
 

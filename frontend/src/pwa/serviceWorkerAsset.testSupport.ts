@@ -26,12 +26,20 @@ type IndexedDbPutCall = {
 export function createServiceWorkerIndexedDbFake({
   failOpen = false,
   failPut = false,
+  records = {},
 }: {
   failOpen?: boolean
   failPut?: boolean
+  records?: Record<string, Record<string, unknown>>
 } = {}) {
   const putCalls: IndexedDbPutCall[] = []
   const createdStores = new Set<string>()
+  const storeRecords = new Map(
+    Object.entries(records).map(([storeName, values]) => [
+      storeName,
+      new Map(Object.entries(values)),
+    ]),
+  )
   const indexedDB = {
     open: vi.fn(() => {
       const database = {
@@ -43,11 +51,34 @@ export function createServiceWorkerIndexedDbFake({
           contains: (storeName: string) => createdStores.has(storeName),
         },
         transaction: vi.fn((storeName: string) => {
+          const recordsForStore =
+            storeRecords.get(storeName) ?? new Map<string, unknown>()
+          storeRecords.set(storeName, recordsForStore)
+
           const transaction = {
             error: null as Error | null,
             objectStore: () => ({
+              get: (key: IDBValidKey) => {
+                const request = {
+                  error: null as Error | null,
+                  result: undefined as unknown,
+                  onerror: null as (() => void) | null,
+                  onsuccess: null as (() => void) | null,
+                }
+
+                queueMicrotask(() => {
+                  request.result = recordsForStore.get(String(key))
+                  request.onsuccess?.()
+                  setTimeout(() => {
+                    transaction.oncomplete?.()
+                  }, 0)
+                })
+
+                return request
+              },
               put: (value: unknown, key: IDBValidKey) => {
                 putCalls.push({ key, storeName, value })
+                recordsForStore.set(String(key), value)
                 queueMicrotask(() => {
                   if (failPut) {
                     transaction.error = new Error('put failed')
@@ -186,14 +217,18 @@ export function loadServiceWorker({
 
 function normalizeCacheRequestKey(request: RequestInfo | URL) {
   if (typeof request === 'string') {
-    return new URL(request, 'https://lk.provgroup.ru').pathname
+    const url = new URL(request, 'https://lk.provgroup.ru')
+
+    return `${url.pathname}${url.search}`
   }
 
   if (request instanceof URL) {
-    return request.pathname
+    return `${request.pathname}${request.search}`
   }
 
-  return new URL(request.url).pathname
+  const url = new URL(request.url)
+
+  return `${url.pathname}${url.search}`
 }
 
 export function createCacheWithResponses(records: Record<string, Response>) {

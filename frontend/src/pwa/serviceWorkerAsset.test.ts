@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAppBadgeDatabase,
   createCacheWithResponses,
+  createServiceWorkerIndexedDbFake,
   dispatchPush,
   loadServiceWorker,
   markClientPushReady,
@@ -717,6 +718,18 @@ describe('service worker push notifications', () => {
     const fetch = vi.fn<typeof globalThis.fetch>(
       () => new Promise<Response>(() => {}),
     )
+    const { indexedDB } = createServiceWorkerIndexedDbFake({
+      records: {
+        last_active_identities: {
+          'lk.provgroup.ru': {
+            host: 'lk.provgroup.ru',
+            savedAt: '2026-06-23T10:00:00.000Z',
+            tenantSlug: 'default',
+            userId: 7,
+          },
+        },
+      },
+    })
     const cachedAvatar = new Response('cached-avatar-bytes', {
       headers: {
         'Cache-Control': 'private, max-age=86400',
@@ -725,13 +738,15 @@ describe('service worker push notifications', () => {
       status: 200,
     })
     const cache = createCacheWithResponses({
-      '/api/chat/threads/group%3A154/participants/8/avatar': cachedAvatar,
+      '/api/chat/threads/group%3A154/participants/8/avatar?__portal_cache_tenant=default&__portal_cache_user=7':
+        cachedAvatar,
     })
     const { listeners } = loadServiceWorker({
       cacheStorage: {
         open: vi.fn(async () => cache as unknown as Cache),
       },
       fetch,
+      indexedDB,
     })
     const fetchListener = listeners.get('fetch')?.[0]
     const request = {
@@ -755,6 +770,65 @@ describe('service worker push notifications', () => {
     expect(responsePromise).not.toBeNull()
     await expect(waitForTextOrTimeout(responsePromise!)).resolves.toBe(
       'cached-avatar-bytes',
+    )
+    expect(fetch).toHaveBeenCalledWith(request)
+  })
+
+  it('does not serve unscoped cached chat avatar bytes after the active identity changes', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      () => new Promise<Response>(() => {}),
+    )
+    const { indexedDB } = createServiceWorkerIndexedDbFake({
+      records: {
+        last_active_identities: {
+          'lk.provgroup.ru': {
+            host: 'lk.provgroup.ru',
+            savedAt: '2026-06-23T10:05:00.000Z',
+            tenantSlug: 'default',
+            userId: 8,
+          },
+        },
+      },
+    })
+    const oldUnscopedAvatar = new Response('old-user-avatar-bytes', {
+      headers: {
+        'Cache-Control': 'private, max-age=86400',
+        'Content-Type': 'image/png',
+      },
+      status: 200,
+    })
+    const cache = createCacheWithResponses({
+      '/api/chat/threads/group%3A154/participants/8/avatar': oldUnscopedAvatar,
+    })
+    const { listeners } = loadServiceWorker({
+      cacheStorage: {
+        open: vi.fn(async () => cache as unknown as Cache),
+      },
+      fetch,
+      indexedDB,
+    })
+    const fetchListener = listeners.get('fetch')?.[0]
+    const request = {
+      destination: 'image',
+      method: 'GET',
+      mode: 'no-cors',
+      url: 'https://lk.provgroup.ru/api/chat/threads/group%3A154/participants/8/avatar',
+    } as unknown as Request
+    let responsePromise: Promise<Response> | null = null
+
+    expect(fetchListener).toBeDefined()
+
+    fetchListener!({
+      request,
+      respondWith: (response) => {
+        responsePromise = Promise.resolve(response)
+      },
+      waitUntil: vi.fn(),
+    })
+
+    expect(responsePromise).not.toBeNull()
+    await expect(waitForTextOrTimeout(responsePromise!)).resolves.toBe(
+      'timeout',
     )
     expect(fetch).toHaveBeenCalledWith(request)
   })

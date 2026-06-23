@@ -34,6 +34,7 @@ export type OfflineLocalDeviceSignoutRecord = {
 }
 
 export type OfflineAuthSnapshotRecord = {
+  lastClockSeenAt: string
   lastVerifiedAt: string
   savedAt: string
   sessionExpiresAt: string
