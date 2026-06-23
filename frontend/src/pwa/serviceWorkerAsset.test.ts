@@ -142,7 +142,7 @@ describe('service worker push notifications', () => {
 
     expect(setAppBadge).toHaveBeenNthCalledWith(1, 1)
     expect(setAppBadge).toHaveBeenNthCalledWith(2, 1)
-    expect(clearAppBadge).toHaveBeenCalledTimes(1)
+    expect(clearAppBadge).not.toHaveBeenCalled()
   })
 
   it('closes pending portal chat notifications after a clear message', async () => {

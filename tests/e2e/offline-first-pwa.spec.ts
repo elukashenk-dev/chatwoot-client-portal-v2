@@ -2,6 +2,17 @@ import { expect, type BrowserContext, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 import { expectControlledStorageLossState } from './support/controlledStorageLoss.ts'
+import {
+  countPostsForClientMessageKey,
+  createSeededOutboxRecord,
+  deleteOfflineSavedData,
+  expectStartupChatFallbackSaved,
+  readLastActiveIdentity,
+  readOutboxRecord,
+  readOutboxRecordByContent,
+  seedOutboxRecord,
+  type BrowserOutboxRecord,
+} from './support/offlinePwaStorage.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -23,60 +34,13 @@ const portalUser = {
   id: 7,
 }
 
-const portalSession = {
-  expiresAt: '2026-06-10T10:00:00.000Z',
-}
-
-const OFFLINE_STORE_NAMES = [
-  'tenant_contexts',
-  'last_active_identities',
-  'local_device_signouts',
-  'auth_snapshots',
-  'chat_thread_lists',
-  'chat_message_snapshots',
-  'chat_text_outbox',
-  'sync_leases',
-  'push_stale_markers',
-] as const
+const E2E_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000
 
 const OFFLINE_SAVED_CHAT_NOTICE = 'Нет связи. Показываем сохраненные сообщения.'
 const OFFLINE_QUEUED_TEXT_NOTICE =
   'Нет связи. 1 сообщение в очереди. Отправим, когда связь восстановится.'
 const RETIRED_COMPOSER_OFFLINE_NOTICE =
   'Нет соединения. Сообщения будут отправлены, когда соединение восстановится.'
-
-type BrowserLastActiveIdentity = {
-  tenantSlug: string
-  userId: number
-}
-
-type BrowserOutboxKey = {
-  clientMessageKey: string
-  tenantSlug: string
-  threadId: string
-  userId: number
-}
-
-type BrowserOutboxRecord = {
-  attemptCount: number
-  clientMessageKey: string
-  content: string
-  createdAt: string
-  errorCode: string | null
-  errorMessage: string | null
-  lastAttemptAt: string | null
-  nextAttemptAt: string | null
-  replyTo: null
-  replyToMessageId: null
-  sendOwnerId: string | null
-  sendingLeaseExpiresAt: string | null
-  sendingStartedAt: string | null
-  status: 'queued' | 'sending'
-  tenantSlug: string
-  threadId: string
-  updatedAt: string
-  userId: number
-}
 
 type ChatPostBody = {
   clientMessageKey?: string
@@ -112,6 +76,12 @@ type BrowserServiceWorkerStatusResult =
       reason: 'no_active_worker' | 'timeout' | 'unsupported'
       status: 'unavailable'
     }
+
+function createPortalSession() {
+  return {
+    expiresAt: new Date(Date.now() + E2E_SESSION_TTL_MS).toISOString(),
+  }
+}
 
 function createReadySnapshot({
   content = 'Cached online message',
@@ -198,7 +168,7 @@ async function routePortalApi(
       if (path === '/api/auth/login' && request.method === 'POST') {
         isAuthenticated = true
         return {
-          body: { session: portalSession, user: portalUser },
+          body: { session: createPortalSession(), user: portalUser },
           status: 200,
         }
       }
@@ -217,7 +187,7 @@ async function routePortalApi(
         }
 
         return {
-          body: { session: portalSession, user: portalUser },
+          body: { session: createPortalSession(), user: portalUser },
           status: 200,
         }
       }
@@ -233,7 +203,8 @@ async function routePortalApi(
         return {
           body: {
             activeThreadId: privateThread.id,
-            threads: [privateThread],
+            threads: [{ ...privateThread, unreadCount: 0 }],
+            totalUnreadCount: 0,
           },
           status: 200,
         }
@@ -260,6 +231,12 @@ async function routePortalApi(
             },
           },
           status: 200,
+        }
+      }
+
+      if (path.endsWith('/read') && request.method === 'POST') {
+        return {
+          status: 204,
         }
       }
 
@@ -533,275 +510,6 @@ async function queryActiveServiceWorkerStatus(
   })
 }
 
-async function openOfflineDatabase(page: Page) {
-  return page.evaluate(
-    async ({ storeNames }) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('portal-offline', 1)
-
-        request.onupgradeneeded = () => {
-          const database = request.result
-
-          for (const storeName of storeNames) {
-            if (!database.objectStoreNames.contains(storeName)) {
-              database.createObjectStore(storeName)
-            }
-          }
-        }
-        request.onsuccess = () => {
-          resolve(request.result)
-        }
-        request.onerror = () => {
-          reject(request.error)
-        }
-      })
-
-      database.close()
-    },
-    { storeNames: OFFLINE_STORE_NAMES },
-  )
-}
-
-async function readLastActiveIdentity(page: Page) {
-  await openOfflineDatabase(page)
-
-  return page.evaluate(async () => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 1)
-
-      request.onsuccess = () => {
-        resolve(request.result)
-      }
-      request.onerror = () => {
-        reject(request.error)
-      }
-    })
-
-    return new Promise<BrowserLastActiveIdentity>((resolve, reject) => {
-      const transaction = database.transaction(
-        'last_active_identities',
-        'readonly',
-      )
-      const cursorRequest = transaction
-        .objectStore('last_active_identities')
-        .openCursor()
-
-      cursorRequest.onsuccess = () => {
-        const cursor = cursorRequest.result
-
-        if (!cursor) {
-          reject(new Error('Missing last active offline identity.'))
-          return
-        }
-
-        const value = cursor.value as BrowserLastActiveIdentity
-        resolve({
-          tenantSlug: value.tenantSlug,
-          userId: value.userId,
-        })
-      }
-      cursorRequest.onerror = () => {
-        reject(cursorRequest.error)
-      }
-      transaction.oncomplete = () => {
-        database.close()
-      }
-      transaction.onabort = () => {
-        database.close()
-      }
-    })
-  })
-}
-
-async function readOutboxRecord(page: Page, record: BrowserOutboxKey) {
-  await openOfflineDatabase(page)
-
-  return page.evaluate(async (outboxRecord) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 1)
-
-      request.onsuccess = () => {
-        resolve(request.result)
-      }
-      request.onerror = () => {
-        reject(request.error)
-      }
-    })
-
-    return new Promise<BrowserOutboxRecord | null>((resolve, reject) => {
-      const transaction = database.transaction('chat_text_outbox', 'readonly')
-      const key = `${outboxRecord.tenantSlug}:${outboxRecord.userId}:${outboxRecord.threadId}:${outboxRecord.clientMessageKey}`
-      const request = transaction.objectStore('chat_text_outbox').get(key)
-
-      request.onsuccess = () => {
-        resolve((request.result as BrowserOutboxRecord | undefined) ?? null)
-      }
-      request.onerror = () => {
-        reject(request.error)
-      }
-      transaction.oncomplete = () => {
-        database.close()
-      }
-      transaction.onerror = () => {
-        database.close()
-        reject(transaction.error)
-      }
-      transaction.onabort = () => {
-        database.close()
-        reject(transaction.error)
-      }
-    })
-  }, record)
-}
-
-async function readOutboxRecordByContent(
-  page: Page,
-  identity: BrowserLastActiveIdentity,
-  content: string,
-) {
-  await openOfflineDatabase(page)
-
-  return page.evaluate(
-    async ({ expectedContent, userIdentity }) => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('portal-offline', 1)
-
-        request.onsuccess = () => {
-          resolve(request.result)
-        }
-        request.onerror = () => {
-          reject(request.error)
-        }
-      })
-
-      return new Promise<BrowserOutboxRecord | null>((resolve, reject) => {
-        const transaction = database.transaction('chat_text_outbox', 'readonly')
-        const request = transaction.objectStore('chat_text_outbox').getAll()
-
-        request.onsuccess = () => {
-          const records = request.result as BrowserOutboxRecord[]
-          const record =
-            records.find(
-              (record) =>
-                record.tenantSlug === userIdentity.tenantSlug &&
-                record.userId === userIdentity.userId &&
-                record.threadId === 'private:me' &&
-                record.content === expectedContent,
-            ) ?? null
-
-          resolve(record)
-        }
-        request.onerror = () => {
-          reject(request.error)
-        }
-        transaction.oncomplete = () => {
-          database.close()
-        }
-        transaction.onerror = () => {
-          database.close()
-          reject(transaction.error)
-        }
-        transaction.onabort = () => {
-          database.close()
-          reject(transaction.error)
-        }
-      })
-    },
-    {
-      expectedContent: content,
-      userIdentity: identity,
-    },
-  )
-}
-
-async function seedOutboxRecord(page: Page, record: BrowserOutboxRecord) {
-  await openOfflineDatabase(page)
-
-  await page.evaluate(async (outboxRecord) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 1)
-
-      request.onsuccess = () => {
-        resolve(request.result)
-      }
-      request.onerror = () => {
-        reject(request.error)
-      }
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction('chat_text_outbox', 'readwrite')
-      const key = `${outboxRecord.tenantSlug}:${outboxRecord.userId}:${outboxRecord.threadId}:${outboxRecord.clientMessageKey}`
-
-      transaction.objectStore('chat_text_outbox').put(outboxRecord, key)
-      transaction.oncomplete = () => {
-        database.close()
-        resolve()
-      }
-      transaction.onerror = () => {
-        database.close()
-        reject(transaction.error)
-      }
-      transaction.onabort = () => {
-        database.close()
-        reject(transaction.error)
-      }
-    })
-  }, record)
-}
-
-function createSeededOutboxRecord(
-  identity: BrowserLastActiveIdentity,
-  overrides: Partial<BrowserOutboxRecord>,
-): BrowserOutboxRecord {
-  const now = new Date().toISOString()
-
-  return {
-    attemptCount: 0,
-    clientMessageKey: 'portal-send:e2e-seeded',
-    content: 'Seeded offline text',
-    createdAt: now,
-    errorCode: null,
-    errorMessage: null,
-    lastAttemptAt: null,
-    nextAttemptAt: null,
-    replyTo: null,
-    replyToMessageId: null,
-    sendOwnerId: null,
-    sendingLeaseExpiresAt: null,
-    sendingStartedAt: null,
-    status: 'queued',
-    tenantSlug: identity.tenantSlug,
-    threadId: 'private:me',
-    updatedAt: now,
-    userId: identity.userId,
-    ...overrides,
-  }
-}
-
-function countPostsForClientMessageKey(
-  postBodies: ChatPostBody[],
-  clientMessageKey: string,
-) {
-  return postBodies.filter((body) => body.clientMessageKey === clientMessageKey)
-    .length
-}
-
-async function deleteOfflineDatabase(page: Page) {
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve, reject) => {
-        const request = indexedDB.deleteDatabase('portal-offline')
-
-        request.onsuccess = () => resolve()
-        request.onerror = () =>
-          reject(request.error ?? new Error('Failed to delete offline DB.'))
-        request.onblocked = () =>
-          reject(new Error('Offline DB deletion was blocked.'))
-      }),
-  )
-}
-
 test('opens saved chat during slow startup and queues offline text', async ({
   context,
   page,
@@ -816,7 +524,10 @@ test('opens saved chat during slow startup and queues offline text', async ({
   apiRoutes.hang('/api/chat/threads')
   await page.reload()
   await expect(page.getByText('Личный чат')).toBeVisible()
-  await expect(page.getByText(OFFLINE_SAVED_CHAT_NOTICE)).toBeVisible()
+  await expect(
+    page.getByRole('status', { name: 'Соединение...' }),
+  ).toBeVisible()
+  await expect(page.getByText(OFFLINE_SAVED_CHAT_NOTICE)).toHaveCount(0)
   await expect(page.getByText('Cached online message')).toBeVisible()
   apiRoutes.unhang('/api/chat/threads')
 
@@ -827,8 +538,9 @@ test('opens saved chat during slow startup and queues offline text', async ({
 
   await expect(
     page.getByText('Связь отвечает медленно. Проверяем сохраненные данные.'),
-  ).toBeVisible()
+  ).toHaveCount(0)
   await expect(page.getByText('Личный чат')).toBeVisible()
+  await expect(page.getByRole('status', { name: 'На связи' })).toBeVisible()
   await expect(page.getByText('Cached online message')).toBeVisible()
 
   await context.setOffline(true)
@@ -890,6 +602,51 @@ test('opens saved chat during slow startup and queues offline text', async ({
     .poll(() => postBodies.some((body) => body.content === 'Тест offline'))
     .toBe(true)
   await expect(page.getByLabel('В очереди')).toHaveCount(0)
+})
+
+test('opens saved chat from installed PWA start url after cold offline launch', async ({
+  context,
+  page,
+}) => {
+  const postBodies: ChatPostBody[] = []
+  const apiRoutes = await routePortalApi(context, postBodies)
+
+  await loginPortalUser(page)
+  await ensureServiceWorkerControlsPage(page)
+  await expect(page.getByText('Cached online message')).toBeVisible()
+  await expectStartupChatFallbackSaved(page)
+
+  const identity = await readLastActiveIdentity(page)
+
+  await page.close()
+  apiRoutes.setApiOffline(true)
+  await context.setOffline(true)
+
+  const offlinePage = await context.newPage()
+
+  await offlinePage.goto('/')
+  await expect(offlinePage).toHaveURL(/\/app\/chat/)
+  await expect(offlinePage.getByText('Личный чат')).toBeVisible()
+  await expect(offlinePage.getByText(OFFLINE_SAVED_CHAT_NOTICE)).toBeVisible()
+  await expect(offlinePage.getByText('Cached online message')).toBeVisible()
+
+  await offlinePage
+    .getByRole('textbox', { name: 'Сообщение' })
+    .fill('Cold launch offline')
+  await offlinePage.getByRole('button', { name: 'Отправить' }).click()
+  await expect(offlinePage.getByText(OFFLINE_QUEUED_TEXT_NOTICE)).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        (
+          await readOutboxRecordByContent(
+            offlinePage,
+            identity,
+            'Cold launch offline',
+          )
+        )?.status ?? null,
+    )
+    .toBe('queued')
 })
 
 test('drains one queued text once across two tabs', async ({ context }) => {
@@ -990,7 +747,7 @@ test('leaves splash when app shell opens but saved data was removed', async ({
   apiRoutes.hang('/api/auth/me')
   apiRoutes.setApiOffline(true)
   await context.setOffline(true)
-  await deleteOfflineDatabase(page)
+  await deleteOfflineSavedData(page)
   await page.reload()
 
   await expectControlledStorageLossState(page)

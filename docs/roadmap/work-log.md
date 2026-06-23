@@ -192,10 +192,11 @@ execution-plan детали здесь не хранятся.
   registration consent records use those active versions, public legal pages
   load document text from backend, and support phone is tenant branding contact
   metadata instead of a frontend default.
+- PWA offline launch regression baseline is added: installed-app cold launch
+  from `/` while offline is covered after online chat cache warmup, and
+  foreground badge clearing no longer depends on worker-side platform badging.
 
 ## Recommended Next Step
 
-- Continue the next `MT-10` production hardening/onboarding step from the
-  operations runbook, keeping `pronalogi` and `provgroup` as the accepted
-  production tenant smoke baseline and `https://app.lancora.ru` as the central
-  Chatwoot admin/runtime URL.
+- Fix `F-PWA-001` so chat avatars are cacheable for offline-first chat reads
+  without giving the browser direct Chatwoot authority.

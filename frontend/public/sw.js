@@ -1116,24 +1116,15 @@ async function setExactAppIconBadge(count) {
 }
 
 async function resetAppIconBadge() {
-  // Clear both the platform badge and the persisted fallback count. Some mobile
-  // launchers keep the badge set by service worker push until the worker clears it.
+  // Foreground pages already call Navigator.clearAppBadge() before posting this
+  // message. The worker still clears fallback badge state and stale chat
+  // notifications without touching WorkerNavigator.clearAppBadge(), which is not
+  // reliable in every service-worker runtime.
   await runAppBadgeMutation(async () => {
     try {
       await writePersistedAppBadgeCount(0)
     } catch {
       // IndexedDB can be unavailable in some browser/service-worker states.
-    }
-
-    try {
-      if (
-        typeof navigator !== 'undefined' &&
-        typeof navigator.clearAppBadge === 'function'
-      ) {
-        await navigator.clearAppBadge()
-      }
-    } catch {
-      // App badge support and permission behavior differs by browser/platform.
     }
 
     await closePortalChatNotifications()
