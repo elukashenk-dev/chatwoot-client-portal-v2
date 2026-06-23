@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make only the existing chat message bubbles flatter: remove bubble shadows, keep current bubble geometry/markup, use a `#F7F7F7` incoming bubble with a soft `0.4` opacity border.
+**Goal:** Make only the existing chat message bubbles flatter: remove bubble shadows, keep current bubble geometry/markup, use a `#F7F7F7` incoming bubble with a soft `0.3` opacity border.
 
 **Architecture:** This is a frontend-only CSS polish slice. The existing `MessageBubble` markup, grouping radii, widths, metadata placement, avatars, reply/menu behavior, transcript spacing, header, composer, admin preview components, backend APIs and persistence stay unchanged. The change is limited to semantic bubble surface classes in `frontend/src/index.css` and CSS regression coverage in `frontend/src/indexCss.test.ts`.
 
@@ -35,7 +35,7 @@ Accepted visual target:
 - outgoing bubble has no shadow and no gradient;
 - incoming bubble uses `background: #f7f7f7` in CSS, matching the accepted
   `#F7F7F7` color;
-- incoming bubble uses `border-color: rgb(203 213 225 / 0.4)`;
+- incoming bubble uses `border-color: rgb(203 213 225 / 0.3)`;
 - incoming bubble has no shadow, no gradient and no glass blur.
 
 ## File Structure
@@ -112,7 +112,7 @@ Immediately after the outgoing bubble test, add:
 
     expect(incomingRule).toContain('background: #f7f7f7;')
     expect(incomingRule).toContain(
-      'border-color: rgb(203 213 225 / 0.4);',
+      'border-color: rgb(203 213 225 / 0.3);',
     )
     expect(incomingRule).toContain('box-shadow: none;')
     expect(incomingRule).not.toContain('linear-gradient')
@@ -183,7 +183,7 @@ with:
 ```css
 .chat-incoming-surface {
   background: #f7f7f7;
-  border-color: rgb(203 213 225 / 0.4);
+  border-color: rgb(203 213 225 / 0.3);
   box-shadow: none;
 }
 ```
@@ -229,7 +229,7 @@ Acceptance:
 - outgoing bubble color remains the current `--color-chat-outgoing` value;
 - incoming bubble uses `#F7F7F7`;
 - incoming bubble has a visible but soft border equivalent to
-  `rgb(203 213 225 / 0.4)`;
+  `rgb(203 213 225 / 0.3)`;
 - current bubble radii/grouping are unchanged;
 - header, composer, transcript spacing, date divider, avatars, action menu,
   reply gesture and layout were not changed by this slice.
@@ -243,7 +243,7 @@ Acceptance:
 
 - admin branding chat preview bubbles match the customer runtime bubble surface:
   outgoing has no shadow, incoming uses `#F7F7F7`, incoming border is
-  `rgb(203 213 225 / 0.4)`, and current bubble radii/grouping remain unchanged;
+  `rgb(203 213 225 / 0.3)`, and current bubble radii/grouping remain unchanged;
 - admin preview header, composer, preview frame layout, controls and branding
   form are not changed by this slice;
 - if admin preview does not pick up the shared CSS change, stop and revise the
@@ -348,7 +348,7 @@ Expected: one focused commit containing only the bubble CSS and CSS regression t
 ## Self-Review
 
 - Spec coverage: the plan implements only the accepted bubble design target:
-  no shadows, `#F7F7F7` incoming bubble, `0.4` border opacity, existing
+  no shadows, `#F7F7F7` incoming bubble, `0.3` border opacity, existing
   markup/radii.
 - Placeholder scan: no `TBD`, `TODO`, unspecified tests or broad “handle edge
   cases” steps remain.

@@ -84,7 +84,7 @@ describe('index.css', () => {
 
     expect(incomingRule).toContain('background: #f7f7f7;')
     expect(incomingRule).toContain(
-      'border-color: rgb(203 213 225 / 0.4);',
+      'border-color: rgb(203 213 225 / 0.3);',
     )
     expect(incomingRule).toContain('box-shadow: none;')
     expect(incomingRule).not.toContain('linear-gradient')
