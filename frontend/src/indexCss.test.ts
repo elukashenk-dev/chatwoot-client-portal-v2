@@ -102,7 +102,7 @@ describe('index.css', () => {
     )
   })
 
-  it('uses chat header branding tokens for the actual floating header surface', () => {
+  it('uses chat header background branding tokens for the actual floating header surface', () => {
     const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
 
     expect(floatingHeaderRule).toContain(
@@ -111,7 +111,6 @@ describe('index.css', () => {
     expect(floatingHeaderRule).toContain(
       '--portal-chat-header-surface-background-image',
     )
-    expect(floatingHeaderRule).toContain('--portal-chat-header-border-color')
     expect(floatingHeaderRule).toContain(
       'color: var(--portal-chat-header-foreground, #0f172a);',
     )
@@ -123,11 +122,21 @@ describe('index.css', () => {
       '.chat-floating-composer-surface',
     ])
     const floatingHeaderRule = getCssRule('.chat-floating-header-surface {')
+    const composerRule = getCssRule('.chat-floating-composer-surface {')
 
     expect(sharedFloatingRule).toContain('rgb(255 255 255 / 0.30)')
     expect(sharedFloatingRule).toContain('rgb(255 255 255 / 0.15)')
+    expect(sharedFloatingRule).toContain(
+      'border-color: rgb(203 213 225 / 0.3);',
+    )
     expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.30)')
     expect(floatingHeaderRule).toContain('rgb(255 255 255 / 0.15)')
+    expect(floatingHeaderRule).toContain(
+      'border-color: rgb(203 213 225 / 0.3);',
+    )
+    expect(composerRule).toContain(
+      'border-color: rgb(203 213 225 / 0.3);',
+    )
   })
 
   it('keeps auth mobile bottom inset from creating a false scrollbar', () => {

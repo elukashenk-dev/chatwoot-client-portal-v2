@@ -1365,7 +1365,7 @@ a.auth-support-phone:hover {
     rgb(255 255 255 / 0.30),
     rgb(255 255 255 / 0.15)
   );
-  border-color: rgb(255 255 255 / 0.2);
+  border-color: rgb(203 213 225 / 0.3);
   box-shadow:
     0 14px 34px rgb(20 65 100 / 0.1),
     inset 0 1px 0 rgb(255 255 255 / 0.58);
@@ -1385,7 +1385,7 @@ a.auth-support-phone:hover {
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  border-color: var(--portal-chat-header-border-color, rgb(226 232 240 / 0.9));
+  border-color: rgb(203 213 225 / 0.3);
   color: var(--portal-chat-header-foreground, #0f172a);
 }
 
