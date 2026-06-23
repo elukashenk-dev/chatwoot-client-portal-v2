@@ -186,6 +186,10 @@ execution-plan детали здесь не хранятся.
   flow remains mandatory for high-risk auth/security/migration/runtime work,
   while low-risk docs/UI-polish work should avoid duplicate subagent/review
   cycles and verbose generated-output churn.
+- Portal-owned backward compatibility is not preserved before a separate
+  real-customer data decision: old portal cache/data/API/env/UI contracts are
+  removed in the same scope when replaced, unless the user explicitly approves a
+  temporary compatibility shim with a removal trigger.
 - Tenant legal document and support contact baseline is implemented:
   tenant admins upload active terms/privacy documents as PDF/DOCX/TXT without
   inline editing, backend stores extracted active versions in portal DB,

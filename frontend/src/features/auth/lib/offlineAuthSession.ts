@@ -27,14 +27,6 @@ export type CachedAuthSessionReadResult =
 
 const OFFLINE_CLOCK_ROLLBACK_TOLERANCE_MS = 5 * 60 * 1000
 
-export function calculateOfflineAccessUntil({
-  sessionExpiresAt,
-}: {
-  sessionExpiresAt: string
-}) {
-  return new Date(sessionExpiresAt).toISOString()
-}
-
 function authScopeFromRecord(record: OfflineAuthScope): OfflineAuthScope {
   return {
     host: record.host,
@@ -66,11 +58,9 @@ function isOfflineAuthSnapshotReadable(
   snapshot: OfflineAuthSnapshotRecord,
   nowMs = Date.now(),
 ) {
-  const offlineAccessUntilMs = parseFiniteTime(snapshot.offlineAccessUntil)
   const sessionExpiresAtMs = parseFiniteTime(snapshot.sessionExpiresAt)
 
   return (
-    offlineAccessUntilMs !== null &&
     sessionExpiresAtMs !== null &&
     isDeviceClockTrustedForSnapshot(snapshot, nowMs) &&
     sessionExpiresAtMs > nowMs
@@ -153,10 +143,7 @@ export async function readCachedAuthSession({
       scope.userId,
     )
 
-    if (
-      !snapshot ||
-      !isOfflineAuthSnapshotReadable(snapshot)
-    ) {
+    if (!snapshot || !isOfflineAuthSnapshotReadable(snapshot)) {
       return {
         scope,
         status: 'session_check_required',
@@ -193,9 +180,6 @@ export async function saveOnlineAuthSnapshot({
   }
   const snapshot = {
     lastVerifiedAt: now.toISOString(),
-    offlineAccessUntil: calculateOfflineAccessUntil({
-      sessionExpiresAt: currentSession.session.expiresAt,
-    }),
     savedAt: now.toISOString(),
     sessionExpiresAt: currentSession.session.expiresAt,
     tenantSlug,

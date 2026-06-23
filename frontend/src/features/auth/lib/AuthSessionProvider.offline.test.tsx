@@ -13,11 +13,9 @@ import {
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
 import { AuthSessionProvider } from './AuthSessionProvider'
 import { useAuthSession } from './authSessionContext'
-import { calculateOfflineAccessUntil } from './offlineAuthSession'
 
 const VALID_SESSION_EXPIRES_AT = '2099-06-10T10:00:00.000Z'
 const EXPIRED_SESSION_EXPIRES_AT = '2026-05-26T10:00:00.000Z'
-const EXPIRED_OFFLINE_ACCESS_UNTIL = '2026-05-26T10:00:00.000Z'
 
 const tenantContextValue = {
   errorMessage: null,
@@ -103,10 +101,8 @@ function useBootFakeTimers() {
 }
 
 async function saveTenantAndCachedAuth({
-  offlineAccessUntil = '2026-05-28T10:00:00.000Z',
   sessionExpiresAt = VALID_SESSION_EXPIRES_AT,
 }: {
-  offlineAccessUntil?: string
   sessionExpiresAt?: string
 } = {}) {
   await offlineStore.saveTenantContext({
@@ -122,7 +118,6 @@ async function saveTenantAndCachedAuth({
   })
   await offlineStore.saveAuthSnapshot({
     lastVerifiedAt: '2026-05-27T09:55:00.000Z',
-    offlineAccessUntil,
     savedAt: '2026-05-27T09:55:00.000Z',
     sessionExpiresAt,
     tenantSlug: 'buhfirma',
@@ -136,10 +131,8 @@ async function saveTenantAndCachedAuth({
 }
 
 function saveStartupAuthSnapshot({
-  offlineAccessUntil = '2099-05-28T10:00:00.000Z',
   sessionExpiresAt = VALID_SESSION_EXPIRES_AT,
 }: {
-  offlineAccessUntil?: string
   sessionExpiresAt?: string
 } = {}) {
   window.localStorage.setItem(
@@ -149,7 +142,6 @@ function saveStartupAuthSnapshot({
         host: window.location.host,
         snapshot: {
           lastVerifiedAt: '2026-05-27T09:55:00.000Z',
-          offlineAccessUntil,
           savedAt: '2026-05-27T09:55:00.000Z',
           sessionExpiresAt,
           tenantSlug: 'buhfirma',
@@ -235,9 +227,18 @@ describe('AuthSessionProvider offline startup', () => {
   })
 
   it('opens protected auth from cached snapshot when /auth/me is slow', async () => {
-    await saveTenantAndCachedAuth({
-      offlineAccessUntil: '2099-05-28T10:00:00.000Z',
-    })
+    await saveTenantAndCachedAuth()
+    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
+
+    renderAuthProbe()
+
+    expect(await screen.findByText('authenticated')).toBeInTheDocument()
+    expect(screen.getByText('cached')).toBeInTheDocument()
+    expect(screen.getByText('name@company.ru')).toBeInTheDocument()
+  })
+
+  it('opens protected auth from cached snapshot without obsolete offline auth window field', async () => {
+    await saveTenantAndCachedAuth()
     fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
 
     renderAuthProbe()
@@ -260,9 +261,9 @@ describe('AuthSessionProvider offline startup', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('does not open protected auth from an invalid startup auth expiry', () => {
+  it('does not open protected auth from an invalid startup session expiry', () => {
     saveStartupAuthSnapshot({
-      offlineAccessUntil: 'not-a-date',
+      sessionExpiresAt: 'not-a-date',
     })
     fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
 
@@ -274,7 +275,6 @@ describe('AuthSessionProvider offline startup', () => {
 
   it('does not open protected auth from startup cache after backend session expiry', () => {
     saveStartupAuthSnapshot({
-      offlineAccessUntil: '2099-05-28T10:00:00.000Z',
       sessionExpiresAt: EXPIRED_SESSION_EXPIRES_AT,
     })
     useBootFakeTimers()
@@ -340,23 +340,8 @@ describe('AuthSessionProvider offline startup', () => {
     expect(screen.queryByText('Protected chat')).not.toBeInTheDocument()
   })
 
-  it('opens cached auth when only legacy offlineAccessUntil is expired', async () => {
-    await saveTenantAndCachedAuth({
-      offlineAccessUntil: EXPIRED_OFFLINE_ACCESS_UNTIL,
-    })
-    fetchMock.mockReturnValue(new Promise<Response>(() => undefined))
-
-    renderProtectedRoute()
-
-    expect(await screen.findByText('Protected chat')).toBeInTheDocument()
-    expect(
-      screen.queryByText('Нужно проверить сессию.'),
-    ).not.toBeInTheDocument()
-  })
-
   it('requires online session check when cached backend session is expired', async () => {
     await saveTenantAndCachedAuth({
-      offlineAccessUntil: '2099-05-28T10:00:00.000Z',
       sessionExpiresAt: EXPIRED_SESSION_EXPIRES_AT,
     })
     useBootFakeTimers()
@@ -557,6 +542,7 @@ describe('AuthSessionProvider offline startup', () => {
     renderAuthProbe()
 
     expect(await screen.findByText('authenticated')).toBeInTheDocument()
+    expect(await screen.findByText('online')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
 
     await waitFor(() => {
@@ -670,21 +656,16 @@ describe('AuthSessionProvider offline startup', () => {
 
     expect(await screen.findByText('authenticated')).toBeInTheDocument()
     expect(screen.getByText('online')).toBeInTheDocument()
-    await expect(
-      offlineStore.readAuthSnapshot('buhfirma', 7),
-    ).resolves.toMatchObject({
+    const cachedSnapshot = await offlineStore.readAuthSnapshot('buhfirma', 7)
+
+    expect(cachedSnapshot).toMatchObject({
       sessionExpiresAt: VALID_SESSION_EXPIRES_AT,
       user: {
         id: 7,
       },
     })
-  })
-
-  it('keeps offline read-only access available until backend session expiry', () => {
-    expect(
-      calculateOfflineAccessUntil({
-        sessionExpiresAt: '2026-06-10T10:00:00.000Z',
-      }),
-    ).toBe('2026-06-10T10:00:00.000Z')
+    expect(Object.keys(cachedSnapshot ?? {})).not.toContain(
+      'offline' + 'AccessUntil',
+    )
   })
 })

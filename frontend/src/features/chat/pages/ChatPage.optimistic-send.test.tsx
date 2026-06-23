@@ -927,7 +927,6 @@ describe('ChatPage optimistic text send', () => {
     })
     await offlineStore.saveAuthSnapshot({
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',

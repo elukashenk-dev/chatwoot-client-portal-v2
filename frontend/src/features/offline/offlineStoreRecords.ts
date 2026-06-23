@@ -108,7 +108,6 @@ export function isAuthSnapshotRecord(
   return (
     isObject(value) &&
     isString(value.lastVerifiedAt) &&
-    isString(value.offlineAccessUntil) &&
     isString(value.savedAt) &&
     isString(value.sessionExpiresAt) &&
     isString(value.tenantSlug) &&

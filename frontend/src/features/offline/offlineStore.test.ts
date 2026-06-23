@@ -149,7 +149,6 @@ describe('offline store database', () => {
     })
     await offlineStore.saveAuthSnapshot({
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',
@@ -183,7 +182,6 @@ describe('offline store database', () => {
       tenant: null,
     })
     await putRawRecord('auth_snapshots', 'buhfirma:7', {
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       tenantSlug: 'buhfirma',
       user: {
         email: 'name@company.ru',
@@ -213,7 +211,6 @@ describe('offline store database', () => {
     })
     await putRawRecord('auth_snapshots', 'buhfirma:7', {
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',
@@ -252,7 +249,6 @@ describe('offline store database', () => {
     })
     await offlineStore.saveAuthSnapshot({
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',
@@ -265,7 +261,6 @@ describe('offline store database', () => {
     })
     await offlineStore.saveAuthSnapshot({
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',
@@ -432,7 +427,6 @@ describe('offline store database', () => {
     })
     await offlineStore.saveAuthSnapshot({
       lastVerifiedAt: '2026-05-27T10:00:00.000Z',
-      offlineAccessUntil: '2026-05-28T10:00:00.000Z',
       savedAt: '2026-05-27T10:00:00.000Z',
       sessionExpiresAt: '2026-06-10T10:00:00.000Z',
       tenantSlug: 'buhfirma',

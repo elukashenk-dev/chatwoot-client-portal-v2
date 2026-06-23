@@ -35,7 +35,6 @@ export type OfflineLocalDeviceSignoutRecord = {
 
 export type OfflineAuthSnapshotRecord = {
   lastVerifiedAt: string
-  offlineAccessUntil: string
   savedAt: string
   sessionExpiresAt: string
   tenantSlug: string

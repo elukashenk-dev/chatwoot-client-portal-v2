@@ -108,7 +108,6 @@ function isAuthSnapshotRecord(
   return (
     isObject(value) &&
     isString(value.lastVerifiedAt) &&
-    isString(value.offlineAccessUntil) &&
     isString(value.savedAt) &&
     isString(value.sessionExpiresAt) &&
     isString(value.tenantSlug) &&
@@ -287,9 +286,6 @@ export function readStartupAuthSession({
   }
 
   const record = readStartupRecord(authKey(host), isStartupAuthRecord)
-  const offlineAccessUntilMs = record
-    ? parseFiniteTime(record.snapshot.offlineAccessUntil)
-    : null
   const sessionExpiresAtMs = record
     ? parseFiniteTime(record.snapshot.sessionExpiresAt)
     : null
@@ -302,7 +298,6 @@ export function readStartupAuthSession({
     record.snapshot.tenantSlug !== tenantSlug ||
     record.snapshot.userId !== record.userId ||
     record.snapshot.user.id !== record.userId ||
-    offlineAccessUntilMs === null ||
     sessionExpiresAtMs === null ||
     !isDeviceClockTrustedForStartupSnapshot(record.snapshot, nowMs) ||
     sessionExpiresAtMs <= nowMs

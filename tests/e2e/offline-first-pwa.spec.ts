@@ -6,7 +6,6 @@ import {
   countPostsForClientMessageKey,
   createSeededOutboxRecord,
   deleteOfflineSavedData,
-  expireLegacyOfflineAuthWindow,
   expectStartupChatFallbackSaved,
   readLastActiveIdentity,
   readOutboxRecord,
@@ -616,9 +615,7 @@ test('opens saved chat from installed PWA start url after cold offline launch', 
   await ensureServiceWorkerControlsPage(page)
   await expect(page.getByText('Cached online message')).toBeVisible()
   await expectStartupChatFallbackSaved(page)
-
   const identity = await readLastActiveIdentity(page)
-  await expireLegacyOfflineAuthWindow(page, identity)
 
   await page.close()
   apiRoutes.setApiOffline(true)

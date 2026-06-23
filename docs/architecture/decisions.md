@@ -356,8 +356,8 @@
   shell/assets и не перехватывает `/api/*`.
 - граница:
   read-only cached auth/chat open offline only until backend `sessionExpiresAt`.
-  A legacy `offlineAccessUntil` field may exist in browser storage for
-  validation, but it is not a separate 24 hour access policy. attachments/voice
+  Old browser auth cache fields/formats are not a compatibility contract and
+  may be discarded when the offline auth shape changes. attachments/voice
   остаются online-only. Background Sync используется только как progressive
   enhancement для text outbox drain; foreground drain on app
   open/online/visibility остается primary path, особенно для iOS/iPadOS.
@@ -441,3 +441,28 @@
   runtime/admin tokens or signed webhook secret. Provider-owned provisioning
   keeps Chatwoot core untouched while preserving portal backend authority,
   encrypted tenant secrets and Host-based tenant resolution.
+
+## D-027. Portal-owned compatibility is not preserved before real-customer data
+
+- дата: `2026-06-23`
+- решение:
+  `chatwoot-client-portal-v2` is still a new product. Portal-owned users,
+  browser caches, local storage, IndexedDB records, portal database rows,
+  tenant fixtures, API contracts, env names, frontend components and CSS hooks
+  are not backward-compatibility obligations until a separate architecture
+  decision explicitly marks real customer data/runtime compatibility as
+  required. When a portal-owned contract or data shape changes, the old field,
+  reader, writer, fallback, fixture, test and documentation must be removed in
+  the same scope. Old portal-owned cache/data may be discarded and recreated by
+  the new online/bootstrap flow.
+- граница:
+  A temporary compatibility shim is allowed only after explicit user approval,
+  with a documented reason, removal trigger and follow-up/finding. This decision
+  does not allow destructive changes to Chatwoot-owned production data:
+  Chatwoot remains an external system of record and is changed only by separate
+  explicit decision.
+- причина:
+  The project is still before real customer-data compatibility commitments.
+  Keeping legacy layers for test-only portal data makes the runtime harder to
+  reason about, hides obsolete assumptions and conflicts with the clean-baseline
+  approach already used for portal schema and tenant runtime.

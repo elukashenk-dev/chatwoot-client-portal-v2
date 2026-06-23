@@ -108,6 +108,25 @@
   in-service инициализацию: создать БД, прогнать миграции, наполнить
   минимальные данные, запустить тесты и локальные проверки.
 
+## No Backward Compatibility Rule
+
+- `chatwoot-client-portal-v2` сейчас разрабатывается как новый продукт. Все
+  portal users, portal-owned browser caches, local storage, IndexedDB records,
+  portal database rows and tenant data считаются тестовыми, пока отдельное
+  архитектурное решение явно не объявит их реальными клиентскими данными.
+- Проект не поддерживает старые версии portal runtime, старые browser storage
+  formats, старые API/contracts, старые env names, старые frontend components,
+  старые CSS hooks или старые portal-owned DB rows ради обратной совместимости.
+- Если меняется contract или storage/data shape, старое поле, reader, writer,
+  fallback, test fixture и документацию нужно удалить в этом же scope. Старый
+  cache/data можно отбросить и пересоздать через новый online/bootstrap flow.
+- Временный compatibility shim допустим только по явному решению пользователя.
+  Он должен быть time-boxed: с documented reason, removal trigger и отдельным
+  follow-up/finding, чтобы не остаться постоянным legacy layer.
+- Это правило не дает права менять или удалять Chatwoot-owned production data:
+  Chatwoot остается внешним system of record и трогается только по отдельному
+  явному решению.
+
 ## External Source Of Truth
 
 Когда возникают вопросы по Chatwoot:
