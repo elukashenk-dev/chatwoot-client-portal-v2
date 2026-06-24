@@ -219,8 +219,14 @@ execution-plan детали здесь не хранятся.
   after proven recovery, and treats network failure from any same-user text
   outbox thread as a tenant-level offline signal without rewriting another
   thread's transcript.
+- Chat recovery requests are bounded for degraded/half-open networks:
+  non-startup snapshot, unread, stale-marker, older-history, support
+  availability, attachment send and service-worker background text-send paths
+  now abort into controlled retry/error handling, and background text recovery
+  has a real same-origin service-worker network smoke.
 
 ## Recommended Next Step
 
-- Close `F-CHAT-009` by adding bounded timeouts for the remaining non-startup
-  recovery requests, then run the targeted PWA recovery suite again.
+- Pick the next active finding as a separate scope; do not mix remaining chat
+  UI, unread indicator, auth rate-limit or operations findings into this
+  recovery checkpoint.

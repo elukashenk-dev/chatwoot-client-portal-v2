@@ -10,7 +10,7 @@
 
 ---
 
-## Current State After `6b2be52`
+## Current State After Closure
 
 Restored and preserved behavior:
 
@@ -21,12 +21,15 @@ Restored and preserved behavior:
 - The existing realtime-stale snapshot fallback still exists in `frontend/src/features/chat/pages/useChatRealtimeHealthFallback.ts`.
 - Same-user, same-tenant outbox network failures from non-selected threads now mark chat offline without hydrating those non-selected messages into the selected transcript. This closes `F-CHAT-010`.
 - The port did not bring back the broad old branch changes from `7d9046f`; it restored the narrow idea: "retry recovery based on real backend reachability, not only `window.online`."
+- `F-CHAT-009` is closed: non-startup chat recovery requests, attachment sends
+  and service-worker background text sends now use bounded abort signals.
+- `F-CHAT-011` is closed: service-worker background text recovery now has a
+  deterministic real-network e2e smoke with a real same-origin network failure.
 
-What this does not fix yet:
+What remains outside this scope:
 
-- `F-CHAT-009` remains open because several recovery requests can still hang without a timeout.
-- `F-CHAT-011` remains open because real service-worker/background-sync recovery is still not covered by a real-network e2e or equivalent deterministic smoke.
-- Attachment send remains online-only and is outside the restored text outbox probe.
+- Attachment send remains online-only and outside the restored text outbox
+  probe.
 - Avatar/media cacheability is a separate PWA finding and must not be mixed into this task.
 
 ---
@@ -54,7 +57,8 @@ Regression check from the port:
 - `useChatSnapshotRefresh` now returns `Promise<boolean>` instead of `Promise<void>`, but current consumers either await it for truthy recovery or ignore the return value safely.
 - `useChatReconnectProbe` is isolated in a new hook, so `ChatPage.tsx` only wires dependencies and keeps prior flows intact.
 - `useChatOutboxDrainIntegration` now marks browser offline for network failures before the selected-thread hydration filter. This is intentional because network reachability is tenant/user-level state, while optimistic transcript hydration is selected-thread state.
-- The main residual risk is that the new probe currently depends on `refreshChatSnapshot()` completing. Until `F-CHAT-009` is fixed, a half-open request can still leave the probe waiting.
+- The residual `F-CHAT-009` risk was closed by adding bounded timeouts to the
+  remaining non-startup recovery requests that can feed the reconnect probe.
 - `ChatPage.tsx` is at the current code-health line-count allowlist. Future code additions should avoid growing that file further.
 
 ---
@@ -96,9 +100,9 @@ Primary tests:
 - `frontend/src/features/chat/pages/ChatPage.test.tsx`
 - `frontend/src/features/chat/pages/ChatPage.media.test.tsx`
 - `frontend/src/pwa/serviceWorkerBackgroundSync.test.ts`
-- `tests/e2e/offline-first-pwa.spec.ts` or a new focused e2e file under `tests/e2e/`
+- `tests/e2e/chat-background-sync-real-network.spec.ts`
 
-Open findings that define acceptance:
+Closed findings that defined acceptance:
 
 - `docs/findings/F-CHAT-009-recovery-requests-without-timeout.md`
 - `docs/findings/F-CHAT-011-background-sync-real-network-e2e-gap.md`
@@ -139,7 +143,10 @@ Test Files  1 passed
 Implementation target:
 
 ```ts
-import { BOOT_REQUEST_TIMEOUT_MS, createRequestTimeout } from '../../offline/bootCoordinator'
+import {
+  BOOT_REQUEST_TIMEOUT_MS,
+  createRequestTimeout,
+} from '../../offline/bootCoordinator'
 
 export const CHAT_RECOVERY_REQUEST_TIMEOUT_MS = BOOT_REQUEST_TIMEOUT_MS
 
@@ -315,7 +322,10 @@ const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 10000
 
 async function withBackgroundSendTimeout(operation) {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS)
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS,
+  )
 
   try {
     return await operation(controller.signal)
@@ -348,16 +358,23 @@ Test Files  1 passed
 
 ## Task 7: Close The Real-Network Background Sync E2E Gap
 
-- [ ] Inspect the current Playwright PWA harness in `tests/e2e/offline-first-pwa.spec.ts` and `tests/e2e/support/offlinePwaStorage.ts`.
-- [ ] Add a focused real-network background-sync scenario either in `tests/e2e/offline-first-pwa.spec.ts` or a new `tests/e2e/chat-background-sync-real-network.spec.ts`.
-- [ ] The scenario must not rely only on `window.fetch` mocks, because those do not prove service-worker fetch behavior.
-- [ ] The scenario must make the service worker experience a real same-origin API network failure or controlled server unavailability.
-- [ ] If current local infrastructure cannot deterministically toggle the same-origin API for the service worker, add an explicit documented blocker to `docs/findings/F-CHAT-011-background-sync-real-network-e2e-gap.md` and do not delete the finding.
-- [ ] If deterministic infrastructure exists or is added in this task, verify that:
+- [x] Inspect the current Playwright PWA harness in `tests/e2e/offline-first-pwa.spec.ts` and `tests/e2e/support/offlinePwaStorage.ts`.
+- [x] Add a focused real-network background-sync scenario either in `tests/e2e/offline-first-pwa.spec.ts` or a new `tests/e2e/chat-background-sync-real-network.spec.ts`.
+- [x] The scenario must not rely only on `window.fetch` mocks, because those do not prove service-worker fetch behavior.
+- [x] The scenario must make the service worker experience a real same-origin API network failure or controlled server unavailability.
+- [x] Deterministic same-origin API toggling exists in the new smoke, so no blocker was added to `docs/findings/F-CHAT-011-background-sync-real-network-e2e-gap.md`.
+- [x] If deterministic infrastructure exists or is added in this task, verify that:
   - queued text remains durable after service-worker background send fails;
   - no page-level online event is required for the next recovery attempt;
   - once backend reachability returns, background or foreground recovery sends the queued text;
   - the message appears in the selected chat without duplicate optimistic records.
+
+Implemented as `tests/e2e/chat-background-sync-real-network.spec.ts`. The smoke
+serves the production build from `frontend/dist`, uses a local same-origin
+runtime server with a deterministic `/api/chat/messages` network gate, closes
+visible portal clients, triggers the real service worker drain path from the
+service worker context, and verifies queued durability plus one successful send
+after the gate reopens.
 
 Verification command when implemented:
 
@@ -381,12 +398,12 @@ Expected result:
 
 ## Task 8: Findings Cleanup And Full Verification
 
-- [ ] Delete `docs/findings/F-CHAT-009-recovery-requests-without-timeout.md` only after Tasks 1-6 are implemented and targeted tests pass.
-- [ ] Delete `docs/findings/F-CHAT-011-background-sync-real-network-e2e-gap.md` only after Task 7 has a deterministic real-network e2e or equivalent approved runtime smoke and it passes.
-- [ ] Update `docs/roadmap/work-log.md` only if the completed work changes the stable chat recovery baseline.
-- [ ] Keep a single `Recommended Next Step` block at the end of `docs/roadmap/work-log.md`.
-- [ ] Run targeted tests from Tasks 1-7.
-- [ ] Run the required closure commands.
+- [x] Delete `docs/findings/F-CHAT-009-recovery-requests-without-timeout.md` only after Tasks 1-6 are implemented and targeted tests pass.
+- [x] Delete `docs/findings/F-CHAT-011-background-sync-real-network-e2e-gap.md` only after Task 7 has a deterministic real-network e2e or equivalent approved runtime smoke and it passes.
+- [x] Update `docs/roadmap/work-log.md` only if the completed work changes the stable chat recovery baseline.
+- [x] Keep a single `Recommended Next Step` block at the end of `docs/roadmap/work-log.md`.
+- [x] Run targeted tests from Tasks 1-7.
+- [x] Run the required closure commands.
 
 Closure commands:
 
