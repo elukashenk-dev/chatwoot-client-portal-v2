@@ -634,18 +634,18 @@ Test Files  2 passed
 - Modify: `.env.example`
 - Modify: `.env.production.example`
 
-- [ ] Write tests for valid config, missing required config, invalid URLs, invalid positive integers, and empty secret strings.
-- [ ] Implement `loadTelegramBridgeEnv()` with Zod and local `.env` loading behavior consistent with `backend/src/config/env.ts`.
-- [ ] Normalize base URLs by stripping trailing slash.
-- [ ] Require bridge-specific env names from the Environment Variables section.
-- [ ] Assert that removed single-tenant env names are not part of bridge config:
+- [x] Write tests for valid config, missing required config, invalid URLs, invalid positive integers, and empty secret strings.
+- [x] Implement `loadTelegramBridgeEnv()` with Zod and local `.env` loading behavior consistent with `backend/src/config/env.ts`.
+- [x] Normalize base URLs by stripping trailing slash.
+- [x] Require bridge-specific env names from the Environment Variables section.
+- [x] Assert that removed single-tenant env names are not part of bridge config:
   - `TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN`
   - `TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID`
   - `TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN`
   - `TELEGRAM_BRIDGE_CHATWOOT_TELEGRAM_INBOX_ID`
-- [ ] Add bridge env entries to `.env.example` with safe local placeholder values.
-- [ ] Add bridge env entries to `.env.production.example` with empty secret values and explanatory comments only where that file already uses comments.
-- [ ] Run targeted test:
+- [x] Add bridge env entries to `.env.example` with safe local placeholder values.
+- [x] Add bridge env entries to `.env.production.example` with empty secret values and explanatory comments only where that file already uses comments.
+- [x] Run targeted test:
 
 ```bash
 pnpm --dir backend exec vitest run src/telegram-bridge/env.test.ts
