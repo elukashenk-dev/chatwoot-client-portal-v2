@@ -878,10 +878,36 @@ describe('service worker push notifications', () => {
     expect(fetch).toHaveBeenCalledWith(request)
   })
 
+  it('pre-caches the blocking startup surface during install', async () => {
+    const addAll = vi.fn(async () => undefined)
+    const { listeners } = loadServiceWorker({
+      cacheStorage: {
+        open: vi.fn(async () => ({ addAll }) as unknown as Cache),
+      },
+    })
+    const installListener = listeners.get('install')?.[0]
+    const pendingPromises: Promise<unknown>[] = []
+
+    expect(installListener).toBeDefined()
+
+    installListener!({
+      waitUntil: (promise) => {
+        pendingPromises.push(promise)
+      },
+    })
+
+    await Promise.all(pendingPromises)
+
+    expect(addAll).toHaveBeenCalledWith(
+      expect.arrayContaining(['/startup-surface.js']),
+    )
+  })
+
   it('declares stamped build assets and default branding images in the app shell', () => {
     const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
 
     expect(source).toContain('__PORTAL_SERVICE_WORKER_ASSETS_JSON__')
+    expect(source).toContain('/startup-surface.js')
     expect(source).toContain('/default-branding/auth-header.png')
     expect(source).toContain('/default-branding/auth-footer.png')
   })

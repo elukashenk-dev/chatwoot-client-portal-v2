@@ -49,6 +49,7 @@ const BUILD_ASSET_URLS = parseBuildAssetUrls(
 )
 const APP_SHELL_URLS = [
   '/',
+  '/startup-surface.js',
   '/default-branding/auth-header.png',
   '/default-branding/auth-footer.png',
   '/favicon.svg',

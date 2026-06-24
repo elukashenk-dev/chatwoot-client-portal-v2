@@ -200,6 +200,9 @@ execution-plan детали здесь не хранятся.
 - PWA offline launch regression baseline is added: installed-app cold launch
   from `/` while offline is covered after online chat cache warmup, and
   foreground badge clearing no longer depends on worker-side platform badging.
+- Installed PWA startup shell now pre-caches the blocking startup surface
+  script, so VPN-like half-open launches can leave the native splash and reach
+  cached chat state instead of waiting on a network fetch before first paint.
 - Chat avatar proxy cacheability is enabled for offline-first reads: chat
   avatar routes use private cookie-varying cache headers, service worker
   handles only chat avatar proxy images from `/api`, cached avatar entries are

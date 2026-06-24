@@ -648,6 +648,35 @@ test('opens saved chat from installed PWA start url after cold offline launch', 
     .toBe('queued')
 })
 
+test('opens saved chat from installed PWA start url when startup APIs hang', async ({
+  context,
+  page,
+}) => {
+  const postBodies: ChatPostBody[] = []
+  const apiRoutes = await routePortalApi(context, postBodies)
+
+  await loginPortalUser(page)
+  await ensureServiceWorkerControlsPage(page)
+  await expect(page.getByText('Cached online message')).toBeVisible()
+  await expectStartupChatFallbackSaved(page)
+
+  await page.close()
+  apiRoutes.hang('/api/tenant')
+  apiRoutes.hang('/api/auth/me')
+  apiRoutes.hang('/api/chat/threads')
+  apiRoutes.hang('/api/chat/messages')
+
+  const vpnLikePage = await context.newPage()
+
+  await vpnLikePage.goto('/')
+  await expect(vpnLikePage).toHaveURL(/\/app\/chat/)
+  await expect(vpnLikePage.getByText('Личный чат')).toBeVisible()
+  await expect(vpnLikePage.getByText('Cached online message')).toBeVisible()
+  await expect(
+    vpnLikePage.getByText('Связь отвечает медленно. Проверяем сохраненные данные.'),
+  ).toHaveCount(0)
+})
+
 test('drains one queued text once across two tabs', async ({ context }) => {
   const first = await context.newPage()
   const second = await context.newPage()
