@@ -12,7 +12,7 @@ type UseChatPageNotificationsOptions = {
   chatNotificationsPanel: ReturnType<typeof useChatNotificationsPanel>
   messages: ChatMessage[]
   onOtherThreadPush: (payload: PortalPushMessagePayload) => void
-  refreshChatSnapshot: () => Promise<void>
+  refreshChatSnapshot: () => Promise<unknown>
   selectedThreadId: string | null
 }
 

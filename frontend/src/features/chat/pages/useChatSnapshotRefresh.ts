@@ -44,7 +44,7 @@ export function useChatSnapshotRefresh({
       })
 
       if (!isMountedRef.current) {
-        return
+        return false
       }
 
       markBrowserOnline()
@@ -92,13 +92,14 @@ export function useChatSnapshotRefresh({
             : currentState.threads,
         }
       })
+      return true
     } catch (error) {
       if (await handleUnauthorizedChatError(error)) {
-        return
+        return false
       }
 
       if (handleConnectionUnavailableError(error)) {
-        return
+        return false
       }
 
       throw error

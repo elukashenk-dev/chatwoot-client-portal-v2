@@ -4,7 +4,7 @@ type UseChatResumeResyncInput = {
   canAttemptResync: boolean
   forceFullReloadOnResync?: boolean
   loadInitialChat: () => Promise<void>
-  refreshChatSnapshot: () => Promise<void>
+  refreshChatSnapshot: () => Promise<unknown>
   snapshotExists: boolean
 }
 

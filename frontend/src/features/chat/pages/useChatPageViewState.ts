@@ -15,7 +15,7 @@ type UseChatPageViewStateOptions = {
   historyFragmentIsOpen: boolean
   optimisticTextSends: OptimisticTextSend[]
   pageState: ChatPageState
-  refreshChatSnapshot: () => Promise<void>
+  refreshChatSnapshot: () => Promise<unknown>
   tenantSlug: string | null
   userId: number | null
 }

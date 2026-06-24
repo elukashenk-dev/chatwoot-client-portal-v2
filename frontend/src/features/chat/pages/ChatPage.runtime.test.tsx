@@ -107,6 +107,15 @@ function createThreadsResponse() {
   }
 }
 
+function createGroupThread(threadId = 'group:42') {
+  return {
+    id: threadId,
+    subtitle: 'Команда',
+    title: 'Рабочий чат',
+    type: 'group',
+  } as const
+}
+
 function createUnauthorizedSessionResponse() {
   return createJsonResponse(
     {
@@ -518,6 +527,184 @@ describe('ChatPage runtime hardening', () => {
       screen.getByRole('textbox', { name: 'Сообщение' }),
     ).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled()
+  })
+
+  it('recovers request-detected offline and drains queued text without an online event', async () => {
+    const user = userEvent.setup()
+    let postRequestCount = 0
+
+    fetchMock.mockImplementation(async (input, options) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/messages' && options?.method === 'POST') {
+        postRequestCount += 1
+
+        if (postRequestCount === 1) {
+          throw new TypeError('Failed to fetch')
+        }
+
+        const requestBody = JSON.parse(String(options.body)) as {
+          clientMessageKey: string
+          content: string
+        }
+
+        return createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: requestBody.content,
+            contentType: 'text',
+            createdAt: '2026-05-27T10:00:01.000Z',
+            direction: 'outgoing',
+            id: 602,
+            status: 'sent',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Вернется без online event',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    await screen.findByText(OFFLINE_QUEUED_MESSAGE_NOTICE)
+    await waitFor(
+      () => {
+        expect(postRequestCount).toBe(2)
+      },
+      { timeout: 4000 },
+    )
+    await waitFor(() => {
+      expect(
+        screen.queryByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
+      ).not.toBeInTheDocument()
+    })
+  })
+
+  it('marks the chat offline when another thread outbox send hits a network failure', async () => {
+    const groupThread = createGroupThread()
+
+    fetchMock.mockImplementation(async (input, options) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse({
+          activeThreadId: privateThread.id,
+          threads: [
+            { ...privateThread, unreadCount: 0 },
+            { ...groupThread, unreadCount: 0 },
+          ],
+          totalUnreadCount: 0,
+        })
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/messages' && options?.method === 'POST') {
+        const requestBody = JSON.parse(String(options.body)) as {
+          threadId: string
+        }
+
+        if (requestBody.threadId === groupThread.id) {
+          throw new TypeError('Failed to fetch')
+        }
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    const { offlineOutboxStore } = await import(
+      '../../offline/offlineOutboxStore'
+    )
+
+    await offlineOutboxStore.saveOutboxRecord({
+      attemptCount: 0,
+      clientMessageKey: 'portal-send:other-thread',
+      content: 'Queued in another thread',
+      createdAt: new Date().toISOString(),
+      errorCode: null,
+      errorMessage: null,
+      lastAttemptAt: null,
+      nextAttemptAt: null,
+      replyTo: null,
+      replyToMessageId: null,
+      sendOwnerId: null,
+      sendingLeaseExpiresAt: null,
+      sendingStartedAt: null,
+      status: 'queued',
+      tenantSlug: 'buhfirma',
+      threadId: groupThread.id,
+      updatedAt: new Date().toISOString(),
+      userId: 7,
+    })
+
+    act(() => {
+      window.dispatchEvent(new Event('online'))
+    })
+
+    expect(
+      await screen.findByText(OFFLINE_SAVED_MESSAGES_NOTICE),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Нет связи')).toBeInTheDocument()
   })
 
   it('clears request-detected offline state when realtime receives a fresh snapshot', async () => {

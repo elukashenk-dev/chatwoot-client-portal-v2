@@ -213,8 +213,14 @@ execution-plan детали здесь не хранятся.
 - Lazy-loaded older chat history reuses scoped IndexedDB older-page cache when
   an online history request falls to connection-unavailable, so warmed older
   pages can still render during degraded/offline PWA sessions.
+- Chat recovery no longer depends only on a fresh browser `online` event after
+  request-detected offline: the open chat now probes backend snapshot recovery
+  while the browser hint says online or local text is queued, drains queued text
+  after proven recovery, and treats network failure from any same-user text
+  outbox thread as a tenant-level offline signal without rewriting another
+  thread's transcript.
 
 ## Recommended Next Step
 
-- Publish the reviewed PWA offline-first checkpoint, then run real-device
-  installed-PWA smoke against production.
+- Close `F-CHAT-009` by adding bounded timeouts for the remaining non-startup
+  recovery requests, then run the targeted PWA recovery suite again.

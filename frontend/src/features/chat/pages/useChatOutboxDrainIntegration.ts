@@ -123,14 +123,17 @@ export function useChatOutboxDrainIntegration({
         tenantSlug === null ||
         userId === null ||
         event.tenantSlug !== tenantSlug ||
-        event.userId !== userId ||
-        event.threadId !== pageState.selectedThreadId
+        event.userId !== userId
       ) {
         return
       }
 
       if (event.category === 'network_retry' && event.statusCode === 0) {
         markBrowserOffline()
+      }
+
+      if (event.threadId !== pageState.selectedThreadId) {
+        return
       }
 
       try {

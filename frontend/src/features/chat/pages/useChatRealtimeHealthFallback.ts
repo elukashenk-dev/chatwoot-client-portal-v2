@@ -8,7 +8,7 @@ type UseChatRealtimeHealthFallbackInput = {
   canUseBackend: boolean
   isRealtimeSupported: boolean
   realtimeThreadId: string | null
-  refreshChatSnapshot: () => Promise<void>
+  refreshChatSnapshot: () => Promise<unknown>
   snapshotExists: boolean
 }
 

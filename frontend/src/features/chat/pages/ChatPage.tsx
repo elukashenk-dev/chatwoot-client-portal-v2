@@ -42,6 +42,7 @@ import {
 } from './useChatPageViewState'
 import { useChatPushStaleMarkerRefresh } from './useChatPushStaleMarkerRefresh'
 import { useChatReachabilityState } from './useChatReachabilityState'
+import { useChatReconnectProbe } from './useChatReconnectProbe'
 import { useChatRealtimeHealthFallback } from './useChatRealtimeHealthFallback'
 import { useChatSearchNavigation } from './useChatSearchNavigation'
 import { useChatSearchPanel } from './useChatSearchPanel'
@@ -346,6 +347,10 @@ export function ChatPage() {
     refreshChatSnapshot,
     tenantSlug,
     userId,
+  })
+  useChatReconnectProbe({
+    enabled: connectionStatus === 'offline' && pageState.status === 'ready',
+    navigatorHintIsOnline, queuedSendCount, refreshChatSnapshot, requestOutboxDrain,
   })
   const shouldRenderLoadingState = pageState.status === 'loading'
   const transcriptMessages = historyFragment?.messages ?? visibleMessages

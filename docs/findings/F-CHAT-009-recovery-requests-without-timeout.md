@@ -26,13 +26,23 @@ area: frontend chat recovery, foreground refresh, attachment/background send
     fallback refresh.
   - `frontend/src/features/chat/pages/useChatForegroundUnreadRefresh.ts` calls
     `getChatThreads()` for focus/visibility/interval unread refresh.
+  - `frontend/src/features/chat/pages/useChatPushStaleMarkerRefresh.ts` calls
+    `getChatMessages({ threadId })` while consuming selected-thread stale push
+    markers.
+  - `frontend/src/features/chat/pages/useChatOlderMessages.ts` calls
+    `getChatMessages({ beforeMessageId, threadId })` while loading older
+    history from an already-open chat.
+  - `frontend/src/features/chat/pages/useChatSupportAvailability.ts` polls
+    `getChatSupportAvailability()` while the chat is ready and considered
+    online.
   - `frontend/src/features/chat/pages/useChatAttachmentSend.ts` calls
     `sendChatAttachment` without a request timeout.
   - `frontend/public/sw.js` background outbox sync calls
     `fetch('/api/chat/messages')` without a request timeout when no visible
     portal client is handling sends.
 - Existing tests cover hanging startup requests, offline startup, reconnect
-  after explicit offline/online events, stale sending lease recovery, and
+  after explicit offline/online events, request-detected offline recovery
+  without a new browser `online` event, stale sending lease recovery, and
   realtime health fallback. They do not cover a half-open recovery request that
   never resolves after the app is already open.
 
@@ -45,6 +55,12 @@ instead of quickly becoming a controlled network failure:
   data longer than intended;
 - foreground unread refresh can skip later refreshes while `isRefreshingRef`
   remains true;
+- selected-thread stale-marker refresh can keep markers pending while the
+  refresh promise is stuck;
+- older-history loading can leave the history loader spinning instead of
+  falling back to cached older pages;
+- support availability polling can leave loading state stale and keep later
+  polls racing against an unresolved request;
 - attachment send can leave the composer in sending state for an unbounded time;
 - background sync can keep a service worker sync event waiting on a half-open
   send instead of quickly returning the record to retry.
@@ -53,8 +69,9 @@ instead of quickly becoming a controlled network failure:
 
 Introduce bounded request timeouts for non-startup recovery operations. Keep
 startup deadlines separate, but ensure snapshot refresh, unread refresh,
+selected stale-marker refresh, older-history load, support availability polling,
 background text outbox sends and attachment sends either complete or convert to
-the existing network retry path within a defined window.
+the existing controlled failure/retry path within a defined window.
 
 ## acceptance
 
@@ -62,6 +79,12 @@ the existing network retry path within a defined window.
   the app exits the in-flight recovery state.
 - Tests cover a never-resolving foreground unread refresh and verify later
   refresh attempts are not permanently blocked.
+- Tests cover a never-resolving selected-thread stale-marker refresh and verify
+  the marker remains retryable without blocking later recovery.
+- Tests cover a never-resolving older-history request and verify cached older
+  pages or a controlled error state replaces the spinner.
+- Tests cover a never-resolving support availability poll and verify later polls
+  are not permanently blocked.
 - Tests cover a never-resolving attachment send and verify the composer leaves
   sending state with a controlled error/offline state.
 - Tests cover a never-resolving background text outbox send and verify the
