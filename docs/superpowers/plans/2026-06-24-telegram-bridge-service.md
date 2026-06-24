@@ -711,7 +711,7 @@ Test Files  1 passed
 - Create: `backend/src/telegram-bridge/telegramPayload.ts`
 - Test: `backend/src/telegram-bridge/telegramPayload.test.ts`
 
-- [ ] Write tests for:
+- [x] Write tests for:
   - private text message passes unchanged;
   - private attachment before authorization is identified as needing phone prompt;
   - Telegram contact card is accepted only when `message.contact.user_id === message.from.id`;
@@ -724,14 +724,14 @@ Test Files  1 passed
   - group attachment without text/caption gets a clear author placeholder text;
   - group contact identity is group title, not the first author;
   - `edited_message` is ignored.
-- [ ] Implement `extractSupportedMessage(update)`.
-- [ ] Implement `getTelegramChatType(message)`.
-- [ ] Implement `buildAuthorName(message.from)`.
-- [ ] Implement `buildGroupSourceId(chatId): string` returning `tg_group:<id>`.
-- [ ] Implement `transformGroupUpdate(update)` using the Runtime Flow section.
-- [ ] Implement `shouldIgnoreMessage(message)`.
-- [ ] Implement `isSelfTelegramContact(message)` in `telegramPayload.ts`, using the shared phone helper only for phone normalization and keeping Telegram-specific contact-card validation inside the Telegram module.
-- [ ] Run targeted test:
+- [x] Implement `extractSupportedMessage(update)`.
+- [x] Implement `getTelegramChatType(message)`.
+- [x] Implement `buildAuthorName(message.from)`.
+- [x] Implement `buildGroupSourceId(chatId): string` returning `tg_group:<id>`.
+- [x] Implement `transformGroupUpdate(update)` using the Runtime Flow section.
+- [x] Implement `shouldIgnoreMessage(message)`.
+- [x] Implement `isSelfTelegramContact(message)` in `telegramPayload.ts`, using the shared phone helper only for phone normalization and keeping Telegram-specific contact-card validation inside the Telegram module.
+- [x] Run targeted test:
 
 ```bash
 pnpm --dir backend exec vitest run src/telegram-bridge/telegramPayload.test.ts
