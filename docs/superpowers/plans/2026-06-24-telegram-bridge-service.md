@@ -798,7 +798,7 @@ Test Files  1 passed
 - Test: `backend/src/telegram-bridge/secrets.test.ts`
 - Modify: `backend/package.json`
 
-- [ ] Write tests for:
+- [x] Write tests for:
   - phone prompt message body includes `request_contact: true`;
   - linked/denied messages use configured text;
   - bridge config creation stores bot token, path secret and Telegram header secret encrypted;
@@ -818,12 +818,12 @@ Test Files  1 passed
   - `drop_pending_updates` defaults to `false`.
   - `getWebhookInfo` masks the bot token and returns Telegram webhook status for one bridge key.
   - pre-configuration `getWebhookInfo` can read a bot token from stdin or file without storing it and without exposing it in argv.
-- [ ] Implement `sendPhonePrompt(chatId)`.
-- [ ] Implement `sendPhoneLinked(chatId)`.
-- [ ] Implement `sendPhoneNotFound(chatId)`.
-- [ ] Implement `getTelegramBotIdentity(botToken)` using Telegram `getMe`, returning non-secret `id` and `username`.
-- [ ] Implement `classifyTelegramWebhookOwner(webhookInfo)` returning `empty`, `chatwoot-native`, `telegram-bridge`, or `unknown`.
-- [ ] Implement `createBridgeConfig` CLI with required arguments:
+- [x] Implement `sendPhonePrompt(chatId)`.
+- [x] Implement `sendPhoneLinked(chatId)`.
+- [x] Implement `sendPhoneNotFound(chatId)`.
+- [x] Implement `getTelegramBotIdentity(botToken)` using Telegram `getMe`, returning non-secret `id` and `username`.
+- [x] Implement `classifyTelegramWebhookOwner(webhookInfo)` returning `empty`, `chatwoot-native`, `telegram-bridge`, or `unknown`.
+- [x] Implement `createBridgeConfig` CLI with required arguments:
 
 ```text
 --tenant=<tenant-slug>
@@ -833,14 +833,14 @@ Test Files  1 passed
 --telegram-bot-token-file=<path>
 ```
 
-- [ ] Also support `--telegram-bot-token-stdin` for automation that pipes the bot token without putting it in argv.
-- [ ] Generate `webhookPathSecret` and Telegram `secret_token` by default.
-- [ ] For explicit secret rotation, support only `--webhook-path-secret-file=<path>` and `--telegram-secret-token-file=<path>`.
-- [ ] During config creation, call Chatwoot Account API with the tenant runtime token and verify the requested inbox id belongs to the tenant account and is a Telegram channel inbox.
-- [ ] During config creation, compare Telegram `getMe.result.username` with the Chatwoot inbox `bot_name` returned by Chatwoot. Reject mismatch before storing or configuring webhook.
-- [ ] During config creation, store Telegram bot id and username as non-secret metadata.
-- [ ] During config creation, reject a Telegram bot id already used by another non-archived bridge config, including configs owned by another tenant.
-- [ ] Implement `configureTelegramWebhook()` using:
+- [x] Also support `--telegram-bot-token-stdin` for automation that pipes the bot token without putting it in argv.
+- [x] Generate `webhookPathSecret` and Telegram `secret_token` by default.
+- [x] For explicit secret rotation, support only `--webhook-path-secret-file=<path>` and `--telegram-secret-token-file=<path>`.
+- [x] During config creation, call Chatwoot Account API with the tenant runtime token and verify the requested inbox id belongs to the tenant account and is a Telegram channel inbox.
+- [x] During config creation, compare Telegram `getMe.result.username` with the Chatwoot inbox `bot_name` returned by Chatwoot. Reject mismatch before storing or configuring webhook.
+- [x] During config creation, store Telegram bot id and username as non-secret metadata.
+- [x] During config creation, reject a Telegram bot id already used by another non-archived bridge config, including configs owned by another tenant.
+- [x] Implement `configureTelegramWebhook()` using:
 
 ```json
 {
@@ -850,16 +850,16 @@ Test Files  1 passed
   "drop_pending_updates": false
 }
 ```
-- [ ] Implement `getWebhookInfo()` using the decrypted bot token from one bridge config and log only masked/safe fields.
-- [ ] Make `configureTelegramWebhook()` run `getWebhookInfo()` before `setWebhook`, store only safe current owner metadata, and reject `unknown` owner unless an explicit operator override is passed.
-- [ ] Make `configureTelegramWebhook()` run `getWebhookInfo()` after `setWebhook` and confirm the returned URL matches the expected bridge URL.
-- [ ] Add pre-configuration webhook info support for cutover checks:
+- [x] Implement `getWebhookInfo()` using the decrypted bot token from one bridge config and log only masked/safe fields.
+- [x] Make `configureTelegramWebhook()` run `getWebhookInfo()` before `setWebhook`, store only safe current owner metadata, and reject `unknown` owner unless an explicit operator override is passed.
+- [x] Make `configureTelegramWebhook()` run `getWebhookInfo()` after `setWebhook` and confirm the returned URL matches the expected bridge URL.
+- [x] Add pre-configuration webhook info support for cutover checks:
   - `--telegram-bot-token-file=<path>`;
   - `--telegram-bot-token-stdin`;
   - no config row is created;
   - stdout masks the token-bearing URL.
 
-- [ ] Add package scripts:
+- [x] Add package scripts:
 
 ```json
 {
@@ -871,7 +871,7 @@ Test Files  1 passed
 }
 ```
 
-- [ ] Run targeted tests:
+- [x] Run targeted tests:
 
 ```bash
 pnpm --dir backend exec vitest run src/telegram-bridge/secrets.test.ts src/telegram-bridge/createBridgeConfig.test.ts src/telegram-bridge/configureWebhook.test.ts src/telegram-bridge/getWebhookInfo.test.ts
