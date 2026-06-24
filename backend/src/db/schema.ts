@@ -281,6 +281,7 @@ export * from './brandingSchema.js'
 export * from './legalDocumentSchema.js'
 export * from './notificationSchema.js'
 export * from './provisioningSchema.js'
+export * from './telegramBridgeSchema.js'
 export const portalRateLimitBuckets = pgTable(
   'portal_rate_limit_buckets',
   {

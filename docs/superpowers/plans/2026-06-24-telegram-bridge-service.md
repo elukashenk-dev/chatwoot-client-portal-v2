@@ -542,15 +542,15 @@ Dedupe rules:
 - Read: `docs/roadmap/implementation-plan.md`
 - Read: `docs/architecture/decisions.md`
 
-- [ ] Confirm user approval to implement this plan.
-- [ ] Record current dirty files with `git status --short --branch`.
-- [ ] Do not stage or modify existing unrelated files:
+- [x] Confirm user approval to implement this plan.
+- [x] Record current dirty files with `git status --short --branch`.
+- [x] Do not stage or modify existing unrelated files:
   - `docs/operations/installed-pwa-smoke.md`
   - `docs/operations/production-mcp-playwright-test-cycle.md`
   - `docs/operations/production-chat-recovery-manual-test-cases.md`
   - `tmp/`
-- [ ] Switch to latest `main`.
-- [ ] Create implementation branch:
+- [x] Switch to latest `main`.
+- [x] Create implementation branch:
 
 ```bash
 git checkout main
@@ -578,7 +578,7 @@ Switched to a new branch 'feature/telegram-bridge-service'
 - Test: `backend/src/telegram-bridge/updateDedupeRepository.test.ts`
 - Generate: `backend/drizzle/*.sql`
 
-- [ ] Write config repository tests for:
+- [x] Write config repository tests for:
   - active bridge config resolves by `public_key`;
   - wrong path secret is rejected;
   - disabled bridge config is rejected;
@@ -590,7 +590,7 @@ Switched to a new branch 'feature/telegram-bridge-service'
   - tenant Chatwoot runtime config is decrypted from `portal_tenants`;
   - bridge-specific Telegram secrets are decrypted from `telegram_bridge_configs`;
   - bridge config for tenant A cannot return tenant B Chatwoot config.
-- [ ] Write delivery repository tests for:
+- [x] Write delivery repository tests for:
   - first update starts processing;
   - duplicate processed update is skipped;
   - duplicate recent processing update is retryable and does not forward again;
@@ -599,19 +599,19 @@ Switched to a new branch 'feature/telegram-bridge-service'
   - failed update is retried;
   - successful update is marked processed;
   - failed delivery row stores sanitized bounded error text without bot token, path secret, Telegram header secret or full phone number.
-- [ ] Implement `telegramBridgeConfigs` and `telegramBridgeDeliveries` Drizzle tables with the fields and constraints from the Data Model section.
-- [ ] Export `telegramBridgeConfigs` and `telegramBridgeDeliveries` from `backend/src/db/schema.ts`.
-- [ ] Implement `findActiveBridgeConfigByPublicKey`.
-- [ ] Implement decrypted tenant runtime resolution using `PORTAL_TENANT_SECRET_KEY` and existing tenant secret helpers.
-- [ ] Implement `startUpdateProcessing`, `markUpdateProcessed`, and `markUpdateFailed`.
-- [ ] Implement shared redaction before persisting any `error_message`.
-- [ ] Generate migration:
+- [x] Implement `telegramBridgeConfigs` and `telegramBridgeDeliveries` Drizzle tables with the fields and constraints from the Data Model section.
+- [x] Export `telegramBridgeConfigs` and `telegramBridgeDeliveries` from `backend/src/db/schema.ts`.
+- [x] Implement `findActiveBridgeConfigByPublicKey`.
+- [x] Implement decrypted tenant runtime resolution using `PORTAL_TENANT_SECRET_KEY` and existing tenant secret helpers.
+- [x] Implement `startUpdateProcessing`, `markUpdateProcessed`, and `markUpdateFailed`.
+- [x] Implement shared redaction before persisting any `error_message`.
+- [x] Generate migration:
 
 ```bash
 pnpm --dir backend db:generate
 ```
 
-- [ ] Run targeted test:
+- [x] Run targeted test:
 
 ```bash
 pnpm --dir backend exec vitest run src/telegram-bridge/configRepository.test.ts src/telegram-bridge/updateDedupeRepository.test.ts

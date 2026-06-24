@@ -148,6 +148,13 @@
       "when": 1781814390733,
       "tag": "0020_easy_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782339954840,
+      "tag": "0021_normal_killer_shrike",
+      "breakpoints": true
     }
   ]
 }
