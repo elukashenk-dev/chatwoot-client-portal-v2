@@ -1,6 +1,7 @@
 import { ChatwootClientRequestError } from './errors.js'
 import type { createChatwootFetch } from './request.js'
 import { readChatwootJson } from './request.js'
+import { normalizePhoneToE164 } from '../../lib/phone.js'
 
 export type ChatwootContact = {
   avatarUrl?: string | null
@@ -21,6 +22,12 @@ type ChatwootContactLookupOptions = {
   config: ChatwootContactLookupConfig
   contactId: number
   fetchChatwoot: ReturnType<typeof createChatwootFetch>
+}
+
+type ChatwootContactPhoneLookupOptions = {
+  config: ChatwootContactLookupConfig
+  fetchChatwoot: ReturnType<typeof createChatwootFetch>
+  phone: string
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -63,6 +70,16 @@ function parseContactDetailsResponse(payload: unknown) {
   return payload.payload
 }
 
+function parseContactFilterResponse(payload: unknown) {
+  if (!isPlainObject(payload) || !Array.isArray(payload.payload)) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact phone lookup returned an unexpected response shape.',
+    )
+  }
+
+  return payload.payload
+}
+
 function mapContact(payload: unknown, baseUrl: string): ChatwootContact {
   if (!isPlainObject(payload)) {
     throw new ChatwootClientRequestError(
@@ -92,6 +109,14 @@ function mapContact(payload: unknown, baseUrl: string): ChatwootContact {
     name: readString(payload.name),
     phoneNumber: readString(payload.phone_number),
   }
+}
+
+function mapPhoneFilterCandidate(payload: unknown, baseUrl: string) {
+  if (!isPlainObject(payload) || readInteger(payload.id) === null) {
+    return null
+  }
+
+  return mapContact(payload, baseUrl)
 }
 
 export async function findChatwootContactById({
@@ -140,6 +165,79 @@ export async function findChatwootContactById({
     })
 
     return mapContact(parseContactDetailsResponse(payload), config.baseUrl)
+  } finally {
+    request.clearTimeout()
+  }
+}
+
+export async function findChatwootContactsByPhone({
+  config,
+  fetchChatwoot,
+  phone,
+}: ChatwootContactPhoneLookupOptions): Promise<ChatwootContact[]> {
+  const normalizedPhone = normalizePhoneToE164(phone)
+
+  if (!normalizedPhone) {
+    throw new ChatwootClientRequestError(
+      'Chatwoot contact phone lookup requires a valid phone number.',
+    )
+  }
+
+  const requestUrl = new URL(
+    `/api/v1/accounts/${config.accountId}/contacts/filter`,
+    config.baseUrl,
+  )
+  const request = await fetchChatwoot(
+    requestUrl,
+    'Chatwoot contact phone lookup is unavailable.',
+    {
+      body: JSON.stringify({
+        payload: [
+          {
+            attribute_key: 'phone_number',
+            attribute_model: 'standard',
+            custom_attribute_type: '',
+            filter_operator: 'equal_to',
+            values: [normalizedPhone],
+          },
+        ],
+      }),
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        api_access_token: config.apiAccessToken,
+      },
+      method: 'POST',
+    },
+  )
+  const { response } = request
+
+  try {
+    if (response.status === 404) {
+      return []
+    }
+
+    if (!response.ok) {
+      throw new ChatwootClientRequestError(
+        `Chatwoot contact phone lookup failed with status ${response.status}.`,
+      )
+    }
+
+    const payload = await readChatwootJson({
+      invalidJsonMessage: 'Chatwoot contact phone lookup returned invalid JSON.',
+      request,
+      unavailableMessage: 'Chatwoot contact phone lookup is unavailable.',
+    })
+
+    return parseContactFilterResponse(payload)
+      .map((candidate) =>
+        mapPhoneFilterCandidate(candidate, config.baseUrl),
+      )
+      .filter((contact): contact is ChatwootContact => contact !== null)
+      .filter(
+        (contact) =>
+          normalizePhoneToE164(contact.phoneNumber) === normalizedPhone,
+      )
   } finally {
     request.clearTimeout()
   }

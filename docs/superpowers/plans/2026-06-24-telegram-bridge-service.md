@@ -668,17 +668,17 @@ Test Files  2 passed
 - Modify: `backend/src/integrations/chatwoot/contactLookup.ts`
 - Modify: `backend/src/integrations/chatwoot/contactLookup.test.ts`
 
-- [ ] Write tests for:
+- [x] Write tests for:
   - `89161234567` -> `+79161234567`;
   - `79161234567` -> `+79161234567`;
   - `+79161234567` -> `+79161234567`;
   - explicit non-Russian international numbers with `+`;
   - empty/invalid values;
   - phone masking does not expose the full number.
-- [ ] Implement `normalizePhoneToE164(value: unknown): string | null`.
-- [ ] Implement `normalizeRussianPhoneToE164(value: unknown): string | null` as a narrow wrapper for future SMS fallback.
-- [ ] Implement `maskPhoneForLogs(value: unknown): string`.
-- [ ] Add `findChatwootContactsByPhone` tests:
+- [x] Implement `normalizePhoneToE164(value: unknown): string | null`.
+- [x] Implement `normalizeRussianPhoneToE164(value: unknown): string | null` as a narrow wrapper for future SMS fallback.
+- [x] Implement `maskPhoneForLogs(value: unknown): string`.
+- [x] Add `findChatwootContactsByPhone` tests:
   - calls `POST /api/v1/accounts/:accountId/contacts/filter`;
   - body exactly uses `payload[0].attribute_key = "phone_number"`, `filter_operator = "equal_to"`, `values = [normalizedPhone]`, `attribute_model = "standard"` and `custom_attribute_type = ""`;
   - URL uses the tenant-scoped `accountId` supplied by the caller;
@@ -687,9 +687,9 @@ Test Files  2 passed
   - no exact normalized match returns `[]`;
   - Chatwoot 404 or empty payload returns `[]`;
   - invalid response shape throws `ChatwootClientRequestError`.
-- [ ] Implement `findChatwootContactsByPhone` in `contactLookup.ts` using caller-provided tenant Chatwoot config.
-- [ ] Do not add SMS fallback module files in this Telegram scope; the shared helper is the only SMS-facing preparation.
-- [ ] Run targeted test:
+- [x] Implement `findChatwootContactsByPhone` in `contactLookup.ts` using caller-provided tenant Chatwoot config.
+- [x] Do not add SMS fallback module files in this Telegram scope; the shared helper is the only SMS-facing preparation.
+- [x] Run targeted test:
 
 ```bash
 pnpm --dir backend exec vitest run src/lib/phone.test.ts src/integrations/chatwoot/contactLookup.test.ts
