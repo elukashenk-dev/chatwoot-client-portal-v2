@@ -9,6 +9,7 @@ import {
   renderChatRoute,
   setupOfflineChatTestEnvironment,
 } from '../../../test/chatPageTestHarness'
+import { offlineOutboxStore } from '../../offline/offlineOutboxStore'
 
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
@@ -667,6 +668,88 @@ describe('ChatPage', () => {
     expect(formData.get('threadId')).toBe('private:me')
     expect(attachment.name).toBe('signed-act.pdf')
     expect(attachment.type).toBe('application/pdf')
+  })
+
+  it('times out a hanging attachment send without queueing it in the text outbox', async () => {
+    const user = userEvent.setup()
+    let attachmentSignal: AbortSignal | undefined
+
+    fetchMock.mockImplementation(async (input, options) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (
+        url === '/api/chat/messages/attachment' &&
+        options?.method === 'POST'
+      ) {
+        attachmentSignal = options.signal ?? undefined
+
+        return new Promise<Response>((_resolve, reject) => {
+          attachmentSignal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Request timed out.', 'AbortError')),
+            { once: true },
+          )
+        })
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    const file = new File(['pdf-content'], 'timeout.pdf', {
+      type: 'application/pdf',
+    })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+
+    expect(attachmentSignal?.aborted).toBe(true)
+    vi.useRealTimers()
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Отправляем' }),
+      ).not.toBeInTheDocument()
+    })
+    expect(
+      await offlineOutboxStore.listUserOutboxRecords({
+        tenantSlug: 'buhfirma',
+        userId: 7,
+      }),
+    ).toEqual([])
   })
 
   it('records and sends a microphone voice message through the attachment pipeline', async () => {

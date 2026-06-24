@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 
 import { getChatSupportAvailability } from '../api/chatClient'
 import type { ChatSupportAvailabilityResponse } from '../types'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 
 const SUPPORT_AVAILABILITY_POLL_MS = 30_000
 
@@ -64,7 +65,9 @@ export function useChatSupportAvailability({
       requestSequenceRef.current === requestId
 
     try {
-      const availability = await getChatSupportAvailability()
+      const availability = await withChatRecoveryRequestTimeout((signal) =>
+        getChatSupportAvailability({ signal }),
+      )
 
       if (!isCurrentRequest()) {
         return

@@ -117,6 +117,7 @@ describe('ChatPage history loading', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     fetchMock.mockReset()

@@ -12,6 +12,7 @@ import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   type ChatPageState,
 } from './chatPageState'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 
 type UseChatAttachmentSendOptions = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -70,13 +71,16 @@ export function useChatAttachmentSend({
       setSendErrorMessage(null)
 
       try {
-        const sendResult = await sendChatAttachment({
-          clientMessageKey,
-          content,
-          file,
-          replyToMessageId,
-          threadId,
-        })
+        const sendResult = await withChatRecoveryRequestTimeout((signal) =>
+          sendChatAttachment({
+            clientMessageKey,
+            content,
+            file,
+            replyToMessageId,
+            signal,
+            threadId,
+          }),
+        )
 
         if (!isMountedRef.current) {
           return false

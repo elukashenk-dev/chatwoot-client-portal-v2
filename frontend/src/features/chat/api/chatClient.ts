@@ -179,8 +179,12 @@ export async function getChatThreads({
   return request<ChatThreadsResponse>('/chat/threads', { signal })
 }
 
-export async function getChatSupportAvailability() {
-  return request<ChatSupportAvailabilityResponse>('/chat/support-availability')
+export async function getChatSupportAvailability({
+  signal,
+}: { signal?: AbortSignal } = {}) {
+  return request<ChatSupportAvailabilityResponse>('/chat/support-availability', {
+    signal,
+  })
 }
 
 export async function getUserNotificationSettings() {
@@ -397,12 +401,14 @@ export async function sendChatAttachment({
   content,
   file,
   replyToMessageId,
+  signal,
   threadId,
 }: {
   clientMessageKey: string
   content?: string | null
   file: File
   replyToMessageId?: number | null
+  signal?: AbortSignal
   threadId: string
 }) {
   const formData = new FormData()
@@ -426,5 +432,6 @@ export async function sendChatAttachment({
     formData,
     method: 'POST',
     networkErrorMessage: 'Не удалось отправить файл. Попробуйте еще раз.',
+    signal,
   })
 }

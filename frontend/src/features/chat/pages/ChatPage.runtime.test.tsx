@@ -236,6 +236,7 @@ describe('ChatPage runtime hardening', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     fetchMock.mockReset()
     window.localStorage.clear()
@@ -616,6 +617,148 @@ describe('ChatPage runtime hardening', () => {
         screen.queryByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
       ).not.toBeInTheDocument()
     })
+
+    const messagePostCalls = fetchMock.mock.calls.filter(
+      ([input, options]) =>
+        String(input) === '/api/chat/messages' && options?.method === 'POST',
+    )
+    const [, retryRequestOptions] = messagePostCalls[1] ?? []
+    const retryRequestBody = JSON.parse(String(retryRequestOptions?.body)) as {
+      clientMessageKey: string
+      content: string
+      threadId: string
+    }
+
+    expect(retryRequestBody.content).toBe('Вернется без online event')
+    expect(retryRequestBody.threadId).toBe('private:me')
+
+    const { offlineOutboxStore } = await import(
+      '../../offline/offlineOutboxStore'
+    )
+
+    await expect(
+      offlineOutboxStore.readOutboxRecord({
+        clientMessageKey: retryRequestBody.clientMessageKey,
+        tenantSlug: 'buhfirma',
+        threadId: retryRequestBody.threadId,
+        userId: 7,
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('keeps reconnect probing after a hanging snapshot refresh times out', async () => {
+    const user = userEvent.setup()
+    let messageRequestCount = 0
+    let postRequestCount = 0
+
+    fetchMock.mockImplementation(async (input, options) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createAuthenticatedUserResponse()
+      }
+
+      if (url === '/api/chat/threads') {
+        return createJsonResponse(createThreadsResponse())
+      }
+
+      if (url === '/api/chat/messages?threadId=private%3Ame') {
+        messageRequestCount += 1
+
+        if (messageRequestCount === 2) {
+          return new Promise<Response>((_resolve, reject) => {
+            const signal = options?.signal
+
+            signal?.addEventListener(
+              'abort',
+              () =>
+                reject(new DOMException('Request timed out.', 'AbortError')),
+              { once: true },
+            )
+          })
+        }
+
+        return createJsonResponse(createReadySnapshot())
+      }
+
+      if (url === '/api/chat/threads/private%3Ame/notification-settings') {
+        return createNotificationSettingsResponse()
+      }
+
+      if (url === '/api/chat/support-availability') {
+        return createSupportAvailabilityResponse()
+      }
+
+      if (url === '/api/chat/messages' && options?.method === 'POST') {
+        postRequestCount += 1
+
+        if (postRequestCount === 1) {
+          throw new TypeError('Failed to fetch')
+        }
+
+        const requestBody = JSON.parse(String(options.body)) as {
+          clientMessageKey: string
+          content: string
+        }
+
+        return createJsonResponse({
+          activeThread: privateThread,
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: requestBody.content,
+            contentType: 'text',
+            createdAt: '2026-05-27T10:00:01.000Z',
+            direction: 'outgoing',
+            id: 603,
+            status: 'sent',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected request: ${url}`)
+    })
+
+    renderChatRoute()
+
+    await screen.findByText(
+      'Здравствуйте, вижу ваше обращение.',
+      {},
+      CHAT_PAGE_LOAD_TIMEOUT,
+    )
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Вернется после зависшего probe',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    await screen.findByText(OFFLINE_QUEUED_MESSAGE_NOTICE)
+    await act(async () => undefined)
+
+    vi.useFakeTimers()
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(13_000)
+    })
+
+    expect(messageRequestCount).toBeGreaterThanOrEqual(3)
+    await act(async () => undefined)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+
+    expect(postRequestCount).toBe(2)
+    expect(
+      screen.queryByText(OFFLINE_QUEUED_MESSAGE_NOTICE),
+    ).not.toBeInTheDocument()
   })
 
   it('marks the chat offline when another thread outbox send hits a network failure', async () => {

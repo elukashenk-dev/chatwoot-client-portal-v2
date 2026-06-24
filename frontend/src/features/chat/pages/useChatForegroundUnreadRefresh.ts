@@ -11,6 +11,7 @@ import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import type { PortalPushMessagePayload } from '../../../pwa/serviceWorkerRuntime'
 import { getChatThreads } from '../api/chatClient'
 import { applyPushUnreadCounts, type ChatPageState } from './chatPageState'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 
 const FOREGROUND_UNREAD_REFRESH_INTERVAL_MS = 30_000
 
@@ -45,7 +46,9 @@ export function useChatForegroundUnreadRefresh({
     isRefreshingRef.current = true
 
     try {
-      const threadsResponse = await getChatThreads()
+      const threadsResponse = await withChatRecoveryRequestTimeout((signal) =>
+        getChatThreads({ signal }),
+      )
 
       if (!isMountedRef.current) {
         return

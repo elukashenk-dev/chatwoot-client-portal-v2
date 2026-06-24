@@ -10,6 +10,7 @@ import {
   clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 import { consumePushStaleMarkersForKnownThreads } from './offlineChatCache'
 
 type UseChatPushStaleMarkerRefreshInput = {
@@ -49,7 +50,10 @@ export function useChatPushStaleMarkerRefresh({
     let isCurrent = true
 
     consumePushStaleMarkersForKnownThreads({
-      refreshThread: (threadId) => getChatMessages({ threadId }),
+      refreshThread: (threadId) =>
+        withChatRecoveryRequestTimeout((signal) =>
+          getChatMessages({ signal, threadId }),
+        ),
       tenantSlug,
       threads: [selectedThread],
       userId,

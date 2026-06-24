@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAppIconBadgeCount } from '../../../pwa/serviceWorkerRuntime'
 import { getChatThreads } from '../api/chatClient'
@@ -60,6 +60,10 @@ describe('useChatForegroundUnreadRefresh', () => {
     setAppIconBadgeCountMock.mockClear()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('refreshes visible thread unread counts from the backend when the app returns to foreground', async () => {
     getChatThreadsMock.mockResolvedValue({
       activeThreadId: 'private:me',
@@ -112,5 +116,70 @@ describe('useChatForegroundUnreadRefresh', () => {
         expect.objectContaining({ id: 'group:154', unreadCount: 2 }),
       ],
     })
+  })
+
+  it('times out a hanging foreground refresh so later refreshes can run', async () => {
+    vi.useFakeTimers()
+
+    let firstRefreshSignal: AbortSignal | undefined
+
+    getChatThreadsMock
+      .mockImplementationOnce(
+        (options?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            firstRefreshSignal = options?.signal
+            firstRefreshSignal?.addEventListener(
+              'abort',
+              () =>
+                reject(new DOMException('Request timed out.', 'AbortError')),
+              { once: true },
+            )
+          }),
+      )
+      .mockResolvedValueOnce({
+        activeThreadId: 'private:me',
+        threads: [privateThread, { ...groupThread, unreadCount: 3 }],
+        totalUnreadCount: 3,
+      })
+
+    const setPageState = vi.fn()
+
+    renderHook(() =>
+      useChatForegroundUnreadRefresh({
+        handleConnectionUnavailableError: vi.fn(() => true),
+        handleUnauthorizedChatError: vi.fn(async () => false),
+        isBrowserOnline: true,
+        isMountedRef: { current: true },
+        markBrowserOnline: vi.fn(),
+        setPageState,
+      }),
+    )
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    })
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    expect(getChatThreadsMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+
+    expect(firstRefreshSignal?.aborted).toBe(true)
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    await act(async () => undefined)
+
+    expect(getChatThreadsMock).toHaveBeenCalledTimes(2)
+    expect(setAppIconBadgeCountMock).toHaveBeenCalledWith(3)
+    expect(setPageState).toHaveBeenCalledTimes(1)
   })
 })

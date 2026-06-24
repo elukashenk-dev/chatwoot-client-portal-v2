@@ -17,6 +17,7 @@ import {
   clearThreadUnreadCount,
   type ChatPageState,
 } from './chatPageState'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 
 type UseChatSnapshotRefreshOptions = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -39,9 +40,12 @@ export function useChatSnapshotRefresh({
     const threadId = selectedThreadId ?? PRIVATE_CHAT_THREAD_ID
 
     try {
-      const latestSnapshot = await getChatMessages({
-        threadId,
-      })
+      const latestSnapshot = await withChatRecoveryRequestTimeout((signal) =>
+        getChatMessages({
+          signal,
+          threadId,
+        }),
+      )
 
       if (!isMountedRef.current) {
         return false

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { IDBFactory } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
 const PORTAL_OFFLINE_DATABASE_VERSION = 2
@@ -51,6 +51,7 @@ function loadServiceWorker({
   clientsList = [],
   fetch = vi.fn(),
   indexedDB = testIndexedDB,
+  sourceTransform,
 }: {
   clientsList?: Array<{
     id: string
@@ -59,8 +60,12 @@ function loadServiceWorker({
   }>
   fetch?: typeof globalThis.fetch
   indexedDB?: unknown
+  sourceTransform?: (source: string) => string
 } = {}) {
-  const source = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+  const originalSource = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8')
+  const source = sourceTransform
+    ? sourceTransform(originalSource)
+    : originalSource
   const listeners = new Map<string, Listener[]>()
   const serviceWorkerScope = {
     addEventListener: vi.fn((eventName: string, listener: Listener) => {
@@ -249,6 +254,10 @@ describe('service worker background outbox sync', () => {
     testIndexedDB = new IDBFactory()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('drains queued text outbox records from background sync when no portal client is visible', async () => {
     const fetch = vi.fn(async () =>
       Response.json({
@@ -381,7 +390,14 @@ describe('service worker background outbox sync', () => {
         { status: 409 },
       ),
     )
-    const { listeners } = loadServiceWorker({ fetch })
+    const { listeners } = loadServiceWorker({
+      fetch,
+      sourceTransform: (source) =>
+        source.replace(
+          'const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 10_000',
+          'const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 25',
+        ),
+    })
     const syncListener = listeners.get('sync')?.[0]
 
     expect(syncListener).toBeDefined()
@@ -400,6 +416,62 @@ describe('service worker background outbox sync', () => {
       errorCode: 'unexpected_backend_rejection',
       errorMessage: 'Background send failed.',
       status: 'failed',
+    })
+  })
+
+  it('times out a hanging background text send and keeps the record retryable', async () => {
+    let backgroundSendSignal: AbortSignal | undefined
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, options?: RequestInit) => {
+        backgroundSendSignal = options?.signal ?? undefined
+
+        return new Promise<Response>((_resolve, reject) => {
+          backgroundSendSignal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Request timed out.', 'AbortError')),
+            { once: true },
+          )
+        })
+      },
+    )
+    const { listeners } = loadServiceWorker({
+      fetch,
+      sourceTransform: (source) =>
+        source.replace(
+          'const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 10_000',
+          'const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 25',
+        ),
+    })
+    const syncListener = listeners.get('sync')?.[0]
+
+    expect(syncListener).toBeDefined()
+
+    await saveQueuedTextOutboxRecord()
+    await saveLastActiveIdentity()
+
+    const syncPromise = dispatchSync(syncListener!, 'portal-text-outbox-drain')
+
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1)
+    })
+    await vi.waitFor(() => {
+      expect(backgroundSendSignal?.aborted).toBe(true)
+    })
+    await syncPromise
+
+    await expect(
+      readPortalOfflineRecord(
+        'chat_text_outbox',
+        'provgroup:7:private:me:portal-send:bg-sync',
+      ),
+    ).resolves.toMatchObject({
+      errorCode: null,
+      errorMessage: 'Не удалось отправить сообщение.',
+      nextAttemptAt: expect.any(String),
+      sendOwnerId: null,
+      sendingLeaseExpiresAt: null,
+      sendingStartedAt: null,
+      status: 'queued',
     })
   })
 })

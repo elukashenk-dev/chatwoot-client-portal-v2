@@ -12,6 +12,7 @@ const TEXT_OUTBOX_BACKGROUND_SYNC_TAG = 'portal-text-outbox-drain'
 const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
 const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
 const TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS = 5_000
+const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 10_000
 const TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE = 'Не удалось отправить сообщение.'
 const PERMANENT_TEXT_OUTBOX_SEND_ERROR_CODES = new Set([
   'INVALID_REQUEST',
@@ -566,6 +567,19 @@ function isPermanentTextOutboxSendError(error) {
   return classifyTextOutboxSendError(error) === 'permanent'
 }
 
+async function withBackgroundSendTimeout(operation) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => {
+    controller.abort()
+  }, TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS)
+
+  try {
+    return await operation(controller.signal)
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
 async function sendBackgroundTextMessage(record) {
   const body = {
     clientMessageKey: record.clientMessageKey,
@@ -580,14 +594,17 @@ async function sendBackgroundTextMessage(record) {
   let response
 
   try {
-    response = await fetch('/api/chat/messages', {
-      body: JSON.stringify(body),
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    })
+    response = await withBackgroundSendTimeout((signal) =>
+      fetch('/api/chat/messages', {
+        body: JSON.stringify(body),
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+        signal,
+      }),
+    )
   } catch {
     throw {
       code: null,

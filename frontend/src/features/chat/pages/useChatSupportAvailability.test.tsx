@@ -141,4 +141,56 @@ describe('useChatSupportAvailability', () => {
     })
     expect(getChatSupportAvailabilityMock).toHaveBeenCalledTimes(2)
   })
+
+  it('times out a hanging support availability poll so later polls can run', async () => {
+    vi.useFakeTimers()
+
+    let firstPollSignal: AbortSignal | undefined
+    const handleConnectionUnavailableError = vi.fn(() => true)
+
+    getChatSupportAvailabilityMock
+      .mockImplementationOnce(
+        (options?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            firstPollSignal = options?.signal
+            firstPollSignal?.addEventListener(
+              'abort',
+              () =>
+                reject(new DOMException('Request timed out.', 'AbortError')),
+              { once: true },
+            )
+          }),
+      )
+      .mockResolvedValueOnce(createAvailability('online'))
+
+    const { result } = renderHook(() =>
+      useChatSupportAvailability({
+        handleConnectionUnavailableError,
+        handleUnauthorizedChatError: vi.fn(async () => false),
+        isBrowserOnline: true,
+        isMountedRef: { current: true },
+        markBrowserOnline: vi.fn(),
+      }),
+    )
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(getChatSupportAvailabilityMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+
+    expect(firstPollSignal?.aborted).toBe(true)
+    expect(handleConnectionUnavailableError).toHaveBeenCalledTimes(1)
+    expect(result.current.state.isLoading).toBe(false)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000)
+    })
+
+    expect(getChatSupportAvailabilityMock).toHaveBeenCalledTimes(2)
+    expect(result.current.state.availability?.currentStatus).toBe('online')
+  })
 })

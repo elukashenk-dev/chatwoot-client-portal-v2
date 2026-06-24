@@ -12,6 +12,7 @@ import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   type ChatPageState,
 } from './chatPageState'
+import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
 import {
   readOfflineOlderMessagePage,
   saveOfflineOlderMessagePage,
@@ -116,10 +117,13 @@ export function useChatOlderMessages({
     }
 
     try {
-      const olderSnapshot = await getChatMessages({
-        beforeMessageId,
-        threadId,
-      })
+      const olderSnapshot = await withChatRecoveryRequestTimeout((signal) =>
+        getChatMessages({
+          beforeMessageId,
+          signal,
+          threadId,
+        }),
+      )
 
       if (!isMountedRef.current) {
         return
