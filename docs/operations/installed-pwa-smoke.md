@@ -6,6 +6,10 @@ Chrome installed PWA и iOS/iPadOS Home Screen PWA имеют отдельные
 поведения: install identity, standalone запуск, IndexedDB retention, service
 worker lifecycle и offline reopen.
 
+Для целевой production-проверки chat recovery после изменений в reconnect
+probe, предупреждениях о связи и text outbox drain использовать
+[`production-chat-recovery-manual-test-cases.md`](production-chat-recovery-manual-test-cases.md).
+
 ## Когда Запускать
 
 - после изменения service worker, manifest, icons, tenant metadata, offline

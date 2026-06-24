@@ -2,6 +2,9 @@
 
 ## Production / Staging Scenarios
 
+Целевой ручной production smoke для chat reconnect/offline recovery находится в
+[`production-chat-recovery-manual-test-cases.md`](production-chat-recovery-manual-test-cases.md).
+
 ### S-01. Public Tenant Identity And App Shell
 
 Type: Read-only
