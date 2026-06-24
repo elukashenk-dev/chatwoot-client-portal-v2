@@ -752,7 +752,7 @@ Test Files  1 passed
 - Create: `backend/src/telegram-bridge/chatwootBridgeClient.ts`
 - Test: `backend/src/telegram-bridge/chatwootBridgeClient.test.ts`
 
-- [ ] Write tests for:
+- [x] Write tests for:
   - `contact_inboxes/filter` 404 is treated as missing link;
   - `contact_inboxes/filter` 200 returns existing link;
   - bridge client delegates phone lookup to shared `findChatwootContactsByPhone`;
@@ -763,13 +763,13 @@ Test Files  1 passed
   - stale/mismatched contact inbox is not accepted when inbox id or source id differs;
   - Chatwoot webhook forward sends the exact original/transformed Telegram payload;
   - token-bearing Chatwoot webhook URL is masked in errors/log metadata.
-- [ ] Implement `findContactInboxBySourceId(sourceId)`.
-- [ ] Implement `findSingleContactByPhone(phone)` using the shared lookup from Task 3.
-- [ ] Implement `createContactInbox(contactId, sourceId)`.
-- [ ] Implement `forwardTelegramUpdateToChatwoot(payload)`.
-- [ ] Use the resolved tenant `chatwoot.baseUrl`, `chatwoot.accountId`, decrypted tenant runtime token and bridge-specific `chatwootTelegramInboxId`; never read Chatwoot config from bridge process env.
-- [ ] Use `api_access_token` header only for Account API calls, not for the Chatwoot Telegram webhook.
-- [ ] Run targeted test:
+- [x] Implement `findContactInboxBySourceId(sourceId)`.
+- [x] Implement `findSingleContactByPhone(phone)` using the shared lookup from Task 3.
+- [x] Implement `createContactInbox(contactId, sourceId)`.
+- [x] Implement `forwardTelegramUpdateToChatwoot(payload)`.
+- [x] Use the resolved tenant `chatwoot.baseUrl`, `chatwoot.accountId`, decrypted tenant runtime token and bridge-specific `chatwootTelegramInboxId`; never read Chatwoot config from bridge process env.
+- [x] Use `api_access_token` header only for Account API calls, not for the Chatwoot Telegram webhook.
+- [x] Run targeted test:
 
 ```bash
 pnpm --dir backend exec vitest run src/telegram-bridge/chatwootBridgeClient.test.ts
