@@ -127,7 +127,10 @@ Run commands from the production app path:
 cd /opt/chatwoot-client-portal-v2
 ```
 
-Create or update one tenant-owned bridge config with a token file:
+Create one new tenant-owned bridge config with a token file. This CLI fallback
+is create-only: it rejects existing non-archived bot/config conflicts. For
+normal reconfiguration, use the portal admin UI; for bot replacement, create a
+new bridge or use a dedicated reviewed rotation flow.
 
 ```bash
 pnpm --dir backend telegram-bridge:config:create \

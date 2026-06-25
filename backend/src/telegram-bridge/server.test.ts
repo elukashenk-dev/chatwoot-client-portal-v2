@@ -218,6 +218,42 @@ describe('buildTelegramBridgeApp', () => {
     })
   })
 
+  it('redacts webhook route secrets from request logs', async () => {
+    const logs: string[] = []
+    const loggedApp = buildTelegramBridgeApp({
+      handleTelegramUpdate,
+      logger: {
+        stream: {
+          write(chunk: string) {
+            logs.push(chunk)
+          },
+        },
+      },
+      maxBodyBytes: 128,
+    })
+
+    try {
+      await loggedApp.ready()
+
+      const response = await loggedApp.inject({
+        headers: {
+          [telegramSecretHeader]: 'header-secret',
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+        payload: telegramUpdate(1010),
+        url: '/telegram-bridge/tenant-a-support/path-secret',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(logs.join('')).toContain('/telegram-bridge/[redacted]')
+      expect(logs.join('')).not.toContain('tenant-a-support')
+      expect(logs.join('')).not.toContain('path-secret')
+    } finally {
+      await loggedApp.close()
+    }
+  })
+
   it('maps ignored and duplicate updates to 200', async () => {
     handleTelegramUpdate
       .mockResolvedValueOnce({

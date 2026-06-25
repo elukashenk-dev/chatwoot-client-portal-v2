@@ -12,7 +12,7 @@ RUN pnpm install --frozen-lockfile --filter @chatwoot-client-portal-v2/backend..
 FROM deps AS build
 
 COPY backend backend
-RUN pnpm --dir backend build
+RUN pnpm --dir backend build:prod
 
 FROM node:24-alpine AS runtime
 

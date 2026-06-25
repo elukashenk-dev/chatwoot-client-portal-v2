@@ -8,6 +8,8 @@ import {
   portalPushSubscriptions,
   portalRateLimitBuckets,
   portalSessions,
+  telegramBridgeConfigs,
+  telegramBridgeDeliveries,
   verificationRecords,
 } from '../../db/schema.js'
 
@@ -18,6 +20,7 @@ export type PortalMaintenanceRetention = {
   pushSubscriptionInactiveDays: number
   rateLimitExpiredHours: number
   sessionExpiredDays: number
+  telegramBridgeDeliveryDays: number
   verificationRecordExpiredDays: number
   webhookDeliveryDays: number
 }
@@ -36,6 +39,7 @@ export type CleanupPortalMaintenanceDataResult = {
   pushSubscriptionsDeleted: number
   rateLimitBucketsDeleted: number
   sessionsDeleted: number
+  telegramBridgeDeliveriesDeleted: number
   verificationRecordsDeleted: number
   webhookDeliveriesDeleted: number
 }
@@ -47,6 +51,7 @@ export const DEFAULT_PORTAL_MAINTENANCE_RETENTION = {
   pushSubscriptionInactiveDays: 30,
   rateLimitExpiredHours: 24,
   sessionExpiredDays: 7,
+  telegramBridgeDeliveryDays: 30,
   verificationRecordExpiredDays: 30,
   webhookDeliveryDays: 30,
 } satisfies PortalMaintenanceRetention
@@ -200,6 +205,28 @@ async function deleteVerificationRecords(
   return candidates
 }
 
+async function countTelegramBridgeDeliveries(
+  db: AppDatabase,
+  where: SQL | undefined,
+) {
+  const [result] = await db
+    .select({ value: count() })
+    .from(telegramBridgeDeliveries)
+    .where(where)
+
+  return result?.value ?? 0
+}
+
+async function deleteTelegramBridgeDeliveries(
+  db: AppDatabase,
+  where: SQL | undefined,
+) {
+  const candidates = await countTelegramBridgeDeliveries(db, where)
+  await db.delete(telegramBridgeDeliveries).where(where)
+
+  return candidates
+}
+
 export async function cleanupPortalMaintenanceData(
   db: AppDatabase,
   {
@@ -285,6 +312,21 @@ export async function cleanupPortalMaintenanceData(
       daysBefore(now, retention.verificationRecordExpiredDays),
     ),
   )
+  const telegramBridgeDeliveryWhere = and(
+    tenantId === undefined
+      ? undefined
+      : sql`exists (
+        select 1
+        from ${telegramBridgeConfigs}
+        where ${telegramBridgeConfigs.id} = ${telegramBridgeDeliveries.telegramBridgeConfigId}
+          and ${telegramBridgeConfigs.tenantId} = ${tenantId}
+      )`,
+    inArray(telegramBridgeDeliveries.status, ['processed', 'failed']),
+    lt(
+      telegramBridgeDeliveries.updatedAt,
+      daysBefore(now, retention.telegramBridgeDeliveryDays),
+    ),
+  )
 
   if (dryRun) {
     return {
@@ -303,6 +345,10 @@ export async function cleanupPortalMaintenanceData(
         rateLimitBucketWhere,
       ),
       sessionsDeleted: await countSessions(db, sessionWhere),
+      telegramBridgeDeliveriesDeleted: await countTelegramBridgeDeliveries(
+        db,
+        telegramBridgeDeliveryWhere,
+      ),
       verificationRecordsDeleted: await countVerificationRecords(
         db,
         verificationRecordWhere,
@@ -330,6 +376,10 @@ export async function cleanupPortalMaintenanceData(
       rateLimitBucketWhere,
     ),
     sessionsDeleted: await deleteSessions(db, sessionWhere),
+    telegramBridgeDeliveriesDeleted: await deleteTelegramBridgeDeliveries(
+      db,
+      telegramBridgeDeliveryWhere,
+    ),
     verificationRecordsDeleted: await deleteVerificationRecords(
       db,
       verificationRecordWhere,

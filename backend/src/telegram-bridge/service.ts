@@ -301,16 +301,40 @@ export function createTelegramBridgeService({
       }
 
       try {
+        const markUpdateProcessedInput = {
+          attemptCount: delivery.delivery.attemptCount,
+          bridgeConfigId: config.id,
+          now: currentTime,
+          updateId,
+        }
+        const markUpdateProcessed = () =>
+          dedupeRepository.markUpdateProcessed(markUpdateProcessedInput)
+        const markUpdateProcessedAfterExternalSideEffect = async () => {
+          try {
+            const processedDelivery = await markUpdateProcessed()
+
+            if (!processedDelivery) {
+              logger?.warn?.({
+                bridgeConfigId: config.id,
+                reason: 'processed_mark_failed_after_external_side_effect',
+                updateId,
+              })
+            }
+          } catch (error) {
+            logger?.warn?.({
+              bridgeConfigId: config.id,
+              error: error instanceof Error ? error.message : String(error),
+              reason: 'processed_mark_failed_after_external_side_effect',
+              updateId,
+            })
+          }
+        }
+
         if (
           !supportedMessage ||
           shouldIgnoreMessage(supportedMessage.message)
         ) {
-          await dedupeRepository.markUpdateProcessed({
-            attemptCount: delivery.delivery.attemptCount,
-            bridgeConfigId: config.id,
-            now: currentTime,
-            updateId,
-          })
+          await markUpdateProcessed()
 
           return {
             kind: 'accepted',
@@ -321,27 +345,32 @@ export function createTelegramBridgeService({
         const chatType = getTelegramChatType(message)
 
         if (chatType === 'private') {
-          const chatwootClient = createChatwootClient(config)
           const sourceId = buildTelegramSourceId(message)
+          const authorization =
+            classifyPrivateAuthorizationMessage(message)
+
+          if (authorization.kind === 'foreign_contact') {
+            const telegramClient = createTelegramClient(config)
+
+            await telegramClient.sendPhonePrompt(
+              message.chat.id,
+              resolvedTexts.ownPhonePrompt,
+            )
+            await markUpdateProcessedAfterExternalSideEffect()
+
+            return {
+              kind: 'accepted',
+            }
+          }
+
+          const chatwootClient = createChatwootClient(config)
           const existingContactInbox =
             await chatwootClient.findContactInboxBySourceId(sourceId)
 
-          if (!existingContactInbox) {
+          if (authorization.kind === 'self_contact') {
             const telegramClient = createTelegramClient(config)
-            const authorization =
-              classifyPrivateAuthorizationMessage(message)
 
-            if (authorization.kind === 'needs_phone_prompt') {
-              await telegramClient.sendPhonePrompt(
-                message.chat.id,
-                resolvedTexts.phonePrompt,
-              )
-            } else if (authorization.kind === 'foreign_contact') {
-              await telegramClient.sendPhonePrompt(
-                message.chat.id,
-                resolvedTexts.ownPhonePrompt,
-              )
-            } else {
+            if (!existingContactInbox) {
               const contactLookup =
                 await chatwootClient.findSingleContactByPhone(
                   authorization.phone,
@@ -362,14 +391,28 @@ export function createTelegramBridgeService({
                   resolvedTexts.phoneNotFound,
                 )
               }
+            } else {
+              await telegramClient.sendPhoneLinked(
+                message.chat.id,
+                resolvedTexts.phoneLinked,
+              )
             }
 
-            await dedupeRepository.markUpdateProcessed({
-              attemptCount: delivery.delivery.attemptCount,
-              bridgeConfigId: config.id,
-              now: currentTime,
-              updateId,
-            })
+            await markUpdateProcessedAfterExternalSideEffect()
+
+            return {
+              kind: 'accepted',
+            }
+          }
+
+          if (!existingContactInbox) {
+            const telegramClient = createTelegramClient(config)
+
+            await telegramClient.sendPhonePrompt(
+              message.chat.id,
+              resolvedTexts.phonePrompt,
+            )
+            await markUpdateProcessedAfterExternalSideEffect()
 
             return {
               kind: 'accepted',
@@ -377,20 +420,25 @@ export function createTelegramBridgeService({
           }
 
           await chatwootClient.forwardTelegramUpdateToChatwoot(update)
+          await markUpdateProcessedAfterExternalSideEffect()
+
+          return {
+            kind: 'accepted',
+          }
         } else if (chatType === 'group' || chatType === 'supergroup') {
           const chatwootClient = createChatwootClient(config)
 
           await chatwootClient.forwardTelegramUpdateToChatwoot(
             transformGroupUpdate(update),
           )
+          await markUpdateProcessedAfterExternalSideEffect()
+
+          return {
+            kind: 'accepted',
+          }
         }
 
-        await dedupeRepository.markUpdateProcessed({
-          attemptCount: delivery.delivery.attemptCount,
-          bridgeConfigId: config.id,
-          now: currentTime,
-          updateId,
-        })
+        await markUpdateProcessed()
 
         return {
           kind: 'accepted',

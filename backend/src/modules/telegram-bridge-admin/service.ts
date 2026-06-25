@@ -138,6 +138,26 @@ async function assertBotIdAvailable({
   }
 }
 
+function assertExistingConfigBotUnchanged({
+  botId,
+  existingConfig,
+}: {
+  botId: string
+  existingConfig: ExistingBridgeConfig | null
+}) {
+  if (!existingConfig || existingConfig.telegramBotId === botId) {
+    return
+  }
+
+  throw new TelegramBridgeAdminSetupError(
+    'Replacing a Telegram bot for an existing bridge is not supported. Create a new bridge or rotate the existing bridge through a dedicated replacement flow.',
+    {
+      code: 'TELEGRAM_BRIDGE_BOT_REPLACEMENT_CONFLICT',
+      statusCode: 409,
+    },
+  )
+}
+
 async function insertRotatingConfig({
   botIdentity,
   db,
@@ -249,6 +269,10 @@ export function createTenantTelegramBridgeSetupService({
         await assertBotIdAvailable({
           botId: botIdentity.id,
           db,
+          existingConfig,
+        })
+        assertExistingConfigBotUnchanged({
+          botId: botIdentity.id,
           existingConfig,
         })
 
