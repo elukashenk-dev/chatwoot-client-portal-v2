@@ -18,11 +18,6 @@ import { requireTenantContext } from '../tenants/routes.js'
 import type { TenantRequestContext } from '../tenants/service.js'
 import { createTenantTelegramBridgeSetupService } from './service.js'
 
-type TelegramBridgePublicBaseUrlEnv = Pick<
-  AppEnv,
-  'TELEGRAM_BRIDGE_PUBLIC_BASE_URL'
->
-
 type BridgeHealthVerifierOptions = {
   fetchFn?: typeof fetch
   publicBaseUrl: string
@@ -60,18 +55,6 @@ function normalizePublicBaseUrl(value: string) {
 
 function setupUnavailable(message: string) {
   return new ApiError(502, 'TELEGRAM_BRIDGE_UPSTREAM_FAILED', message)
-}
-
-export function requireTelegramBridgePublicBaseUrl(
-  env: TelegramBridgePublicBaseUrlEnv,
-) {
-  const publicBaseUrl = env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL?.trim()
-
-  if (!publicBaseUrl) {
-    throw setupUnavailable('Telegram bridge public URL is not configured.')
-  }
-
-  return normalizePublicBaseUrl(publicBaseUrl)
 }
 
 function readBotName(payload: Record<string, unknown>) {
@@ -240,7 +223,7 @@ export function createTelegramBridgeSetupServiceForTenantRequest({
   telegramFetchFn,
 }: CreateTelegramBridgeSetupServiceForTenantRequestOptions) {
   const tenant = requireTenantContext(request)
-  const publicBaseUrl = requireTelegramBridgePublicBaseUrl(env)
+  const publicBaseUrl = tenant.publicBaseUrl
   const requestTimeoutMs = env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS
   const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
     tenantId: tenant.id,
@@ -255,7 +238,6 @@ export function createTelegramBridgeSetupServiceForTenantRequest({
     db: database.db,
     getTelegramBotIdentity: (botToken) =>
       getTelegramBotIdentity(botToken, telegramClientOptions),
-    publicBaseUrl,
     readChatwootTelegramInbox: createChatwootTelegramInboxReader({
       ...(chatwootFetchFn ? { fetchFn: chatwootFetchFn } : {}),
       requestTimeoutMs: normalizeChatwootRequestTimeoutMs(

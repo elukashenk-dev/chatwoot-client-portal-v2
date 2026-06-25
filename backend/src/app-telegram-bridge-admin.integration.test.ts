@@ -18,10 +18,7 @@ describe('Telegram bridge admin app routes', () => {
     await seedDefaultTenant(database)
     app = buildApp({
       database,
-      env: {
-        ...testEnv,
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://app.lancora.ru',
-      },
+      env: testEnv,
     })
   })
 

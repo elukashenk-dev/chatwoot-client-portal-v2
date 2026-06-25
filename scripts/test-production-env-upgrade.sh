@@ -88,7 +88,6 @@ assert_contains "$COMPOSE_FILE" "DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKE
 assert_contains "$COMPOSE_FILE" "telegram-bridge:"
 assert_contains "$COMPOSE_FILE" 'command: ["node", "backend/dist/telegram-bridge/server.js"]'
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT:"
-assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_MAX_BODY_BYTES:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PROCESSING_STALE_MS:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:"
@@ -96,6 +95,7 @@ assert_contains "$COMPOSE_FILE" "portal-backend:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: \${TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS:-10000}"
 assert_contains "$COMPOSE_FILE" 'http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health'
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT: \${TELEGRAM_BRIDGE_PORT:-3401}"
+assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL"
 assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN"
 assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID"
 assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN"
@@ -144,7 +144,6 @@ required_keys=(
   BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY
   BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE
   TELEGRAM_BRIDGE_PORT
-  TELEGRAM_BRIDGE_PUBLIC_BASE_URL
   TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS
   TELEGRAM_BRIDGE_MAX_BODY_BYTES
   TELEGRAM_BRIDGE_PROCESSING_STALE_MS
@@ -163,7 +162,7 @@ assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_BUCKET "portal-branding-as
 assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "portal_v2_branding_assets"
 assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "true"
 assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PORT "3401"
-assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PUBLIC_BASE_URL "https://lk.provgroup.ru"
+assert_not_contains "$legacy_env" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL="
 assert_env_value "$legacy_env" TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS "10000"
 assert_env_value "$legacy_env" TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
 assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
@@ -195,7 +194,7 @@ assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "custom-acce
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "custom-secret"
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "false"
 assert_env_value "$custom_env" PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "existing-root-secret"
-assert_env_value "$custom_env" TELEGRAM_BRIDGE_PUBLIC_BASE_URL "https://bridge.example.test"
+assert_not_contains "$custom_env" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL="
 assert_env_value "$custom_env" TELEGRAM_BRIDGE_PORT "3401"
 
 fake_bin="$TMP_DIR/fake-bin"

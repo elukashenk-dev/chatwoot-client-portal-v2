@@ -15,7 +15,7 @@ for emergency repair and automation only.
 Telegram sends updates to:
 
 ```text
-<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/<bridge-key>/<path-secret>
+<tenant.publicBaseUrl>/telegram-bridge/<bridge-key>/<path-secret>
 ```
 
 The public reverse proxy must route `/telegram-bridge/*` to the
@@ -35,7 +35,6 @@ Secrets:
 Public or operational values:
 
 - `TELEGRAM_BRIDGE_PORT=3401`
-- `TELEGRAM_BRIDGE_PUBLIC_BASE_URL=https://lk.example.com`
 - `TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS=10000`
 - `TELEGRAM_BRIDGE_MAX_BODY_BYTES=1048576`
 - `TELEGRAM_BRIDGE_PROCESSING_STALE_MS=600000`
@@ -165,18 +164,21 @@ pnpm --dir backend telegram-bridge:webhook:info --bridge-key=<public-key>
 Verify current Telegram webhook before a bridge config exists:
 
 ```bash
-pnpm --dir backend telegram-bridge:webhook:info --telegram-bot-token-file=/secure/path/to/bot-token
+pnpm --dir backend telegram-bridge:webhook:info \
+  --telegram-bot-token-file=/secure/path/to/bot-token \
+  --public-base-url=https://tenant.example.com
 ```
 
 ## Public Proxy
 
 ### Repo Caddy Host
 
-If `TELEGRAM_BRIDGE_PUBLIC_BASE_URL` is a host served by this repo's production
-Caddyfile, no host Nginx change is required. Verify Caddy reaches the bridge:
+If the tenant `publicBaseUrl` host is served by this repo's production
+Caddyfile, no host Nginx change is required. Verify that host reaches the
+bridge:
 
 ```bash
-curl -fsS "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/health"
+curl -fsS "<tenant.publicBaseUrl>/telegram-bridge/health"
 ```
 
 Expected response:
@@ -187,8 +189,9 @@ Expected response:
 
 ### External Chatwoot Host
 
-If `TELEGRAM_BRIDGE_PUBLIC_BASE_URL=https://app.lancora.ru`, the public host is
-owned by host Nginx outside this repo's Caddyfile. Current known production
+If a tenant uses a public host owned by host Nginx outside this repo's
+Caddyfile, for example `tenant.publicBaseUrl=https://app.lancora.ru`, add the
+same `/telegram-bridge/` proxy route on that host. Current known production
 Nginx site from `docs/operations/production-server-notes.md`:
 
 ```text
@@ -265,7 +268,9 @@ Run after setup or webhook repair:
 Before cutover, record previous webhook info:
 
 ```bash
-pnpm --dir backend telegram-bridge:webhook:info --telegram-bot-token-file=/secure/path/to/bot-token
+pnpm --dir backend telegram-bridge:webhook:info \
+  --telegram-bot-token-file=/secure/path/to/bot-token \
+  --public-base-url=https://tenant.example.com
 ```
 
 Rollback steps:

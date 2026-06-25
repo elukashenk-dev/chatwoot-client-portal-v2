@@ -118,7 +118,7 @@ function createServiceDependencies(database: DatabaseClient) {
         url: 'https://app.lancora.ru/webhooks/telegram/old-token',
       })
       .mockResolvedValueOnce({
-        url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+        url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
       }),
     setWebhook: vi.fn().mockResolvedValue(undefined),
   }
@@ -151,7 +151,6 @@ function createServiceDependencies(database: DatabaseClient) {
         username: 'support_bot',
       }),
       now: () => now,
-      publicBaseUrl: 'https://app.lancora.ru',
       readChatwootTelegramInbox: vi.fn().mockResolvedValue({
         botName: 'support_bot',
         id: 17,
@@ -213,7 +212,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
           url: 'https://app.lancora.ru/webhooks/telegram/old-token',
         })
         .mockResolvedValueOnce({
-          url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+          url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
         }),
       setWebhook: vi.fn().mockResolvedValue(undefined),
     }
@@ -228,7 +227,6 @@ describe('createTenantTelegramBridgeSetupService', () => {
         .mockReturnValueOnce('header-secret'),
       getTelegramBotIdentity,
       now: () => now,
-      publicBaseUrl: 'https://app.lancora.ru',
       readChatwootTelegramInbox,
       telegramClientFactory,
       tenant: createTenantContext(),
@@ -264,7 +262,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
       allowed_updates: ['message'],
       drop_pending_updates: false,
       secret_token: 'header-secret',
-      url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+      url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
     })
     expect(telegramClientFactory).toHaveBeenCalledWith(
       '1234567890:AAExampleTelegramBotTokenSecretValue',
@@ -366,7 +364,6 @@ describe('createTenantTelegramBridgeSetupService', () => {
         username: 'support_bot',
       }),
       now: () => now,
-      publicBaseUrl: 'https://app.lancora.ru',
       readChatwootTelegramInbox: vi.fn().mockResolvedValue({
         botName: 'support_bot',
         id: 17,
@@ -400,10 +397,10 @@ describe('createTenantTelegramBridgeSetupService', () => {
       getWebhookInfo: vi
         .fn()
         .mockResolvedValueOnce({
-          url: 'https://app.lancora.ru/telegram-bridge/old-support-1-17/old-path',
+          url: 'https://default.example.test/telegram-bridge/old-support-1-17/old-path',
         })
         .mockResolvedValueOnce({
-          url: 'https://app.lancora.ru/telegram-bridge/old-support-1-17/old-path',
+          url: 'https://default.example.test/telegram-bridge/old-support-1-17/old-path',
         }),
       setWebhook: vi.fn().mockResolvedValue(undefined),
     }
@@ -420,7 +417,6 @@ describe('createTenantTelegramBridgeSetupService', () => {
         username: 'support_bot',
       }),
       now: () => now,
-      publicBaseUrl: 'https://app.lancora.ru',
       readChatwootTelegramInbox: vi.fn().mockResolvedValue({
         botName: 'support_bot',
         id: 17,
@@ -446,7 +442,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
       allowed_updates: ['message'],
       drop_pending_updates: false,
       secret_token: 'old-header',
-      url: 'https://app.lancora.ru/telegram-bridge/old-support-1-17/old-path',
+      url: 'https://default.example.test/telegram-bridge/old-support-1-17/old-path',
     })
     expect(result).toMatchObject({
       publicKey: 'old-support-1-17',
@@ -501,7 +497,6 @@ describe('createTenantTelegramBridgeSetupService', () => {
         username: 'support_bot',
       }),
       now: () => now,
-      publicBaseUrl: 'https://app.lancora.ru',
       readChatwootTelegramInbox: vi.fn().mockResolvedValue({
         botName: 'support_bot',
         id: 17,

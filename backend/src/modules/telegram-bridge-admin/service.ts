@@ -62,7 +62,6 @@ type CreateTenantTelegramBridgeSetupServiceOptions = {
     botToken: string,
   ) => Promise<{ id: string; username: string }>
   now?: () => Date
-  publicBaseUrl: string
   readChatwootTelegramInbox: (input: {
     inboxId: number
     tenant: TenantRequestContext
@@ -193,7 +192,6 @@ export function createTenantTelegramBridgeSetupService({
   generateSecret = generateBridgeSecret,
   getTelegramBotIdentity,
   now = () => new Date(),
-  publicBaseUrl,
   readChatwootTelegramInbox,
   telegramClientFactory,
   tenant,
@@ -201,7 +199,7 @@ export function createTenantTelegramBridgeSetupService({
   verifyBridgeHealth,
 }: CreateTenantTelegramBridgeSetupServiceOptions) {
   const key = normalizeTenantSecretKey(tenantSecretKey)
-  const normalizedPublicBaseUrl = normalizePublicBaseUrl(publicBaseUrl)
+  const normalizedPublicBaseUrl = normalizePublicBaseUrl(tenant.publicBaseUrl)
 
   return {
     async setupTelegramBridge({

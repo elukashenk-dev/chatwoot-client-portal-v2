@@ -58,23 +58,6 @@ const optionalPositiveIntWithDefault = (
     return value
   }, requiredPositiveInt(fieldName).default(defaultValue))
 
-const httpUrlWithoutTrailingSlash = (fieldName: string) =>
-  z.preprocess(
-    (value) => (typeof value === 'string' ? value.trim() : value),
-    z
-      .string()
-      .refine((value) => {
-        try {
-          return ['http:', 'https:'].includes(new URL(value).protocol)
-        } catch {
-          return false
-        }
-      }, {
-        message: `${fieldName} must be a valid http or https URL`,
-      })
-      .transform((value) => value.replace(/\/+$/, '')),
-  )
-
 const telegramBridgeEnvSchema = z.object({
   DATABASE_URL: trimmedRequiredString('DATABASE_URL'),
   PORTAL_TENANT_SECRET_KEY: trimmedRequiredString('PORTAL_TENANT_SECRET_KEY'),
@@ -96,9 +79,6 @@ const telegramBridgeEnvSchema = z.object({
     'TELEGRAM_BRIDGE_PROCESSING_STALE_MS',
     600_000,
   ),
-  TELEGRAM_BRIDGE_PUBLIC_BASE_URL: httpUrlWithoutTrailingSlash(
-    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL',
-  ),
   TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: optionalPositiveIntWithDefault(
     'TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS',
     10_000,
@@ -108,7 +88,6 @@ const telegramBridgeEnvSchema = z.object({
 export type TelegramBridgeEnv = z.infer<typeof telegramBridgeEnvSchema>
 
 const telegramBridgeWebhookInfoEnvSchema = telegramBridgeEnvSchema.pick({
-  TELEGRAM_BRIDGE_PUBLIC_BASE_URL: true,
   TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: true,
 })
 

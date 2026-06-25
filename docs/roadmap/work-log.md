@@ -233,11 +233,14 @@ execution-plan детали здесь не хранятся.
   with encrypted tenant config, webhook owner preflight, path/header secrets,
   Postgres update dedupe, Chatwoot exact phone lookup, group message
   transformation and production operations runbook.
+- Telegram bridge webhook URLs are tenant-owned: admin setup and operator
+  webhook configure/info now derive `/telegram-bridge/*` public URLs from
+  `tenant.publicBaseUrl`, and the old global
+  `TELEGRAM_BRIDGE_PUBLIC_BASE_URL` env contract is removed from runtime,
+  Compose, env upgrade helpers and current operations docs.
 
 ## Recommended Next Step
 
-- Run the Telegram bridge production cutover from
-  `docs/operations/telegram-bridge.md`: verify Compose config on the server,
-  deploy the bridge service, configure the second bot through the admin UI and
-  complete private/group smoke checks while confirming the first bot webhook is
-  unchanged.
+- Deploy the Telegram bridge tenant-webhook contract with the normal production
+  deploy flow because Compose/env contracts changed, then configure the next
+  tenant bot through the admin UI and complete private/group smoke checks.

@@ -201,7 +201,7 @@ describe('configureTelegramWebhook', () => {
         })
         .mockResolvedValueOnce({
           pendingUpdateCount: 0,
-          url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+          url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
         }),
       setWebhook: vi.fn().mockResolvedValue(undefined),
     }
@@ -209,14 +209,13 @@ describe('configureTelegramWebhook', () => {
     await expect(
       configureTelegramWebhook({
         db: database.db,
-        publicBaseUrl: 'https://app.lancora.ru/',
         publicKey: 'provgroup-support',
         telegramClient,
         tenantSecretKey,
       }),
     ).resolves.toMatchObject({
       status: 'active',
-      webhookUrlHost: 'app.lancora.ru',
+      webhookUrlHost: 'default.example.test',
     })
 
     expect(
@@ -226,7 +225,7 @@ describe('configureTelegramWebhook', () => {
       allowed_updates: ['message'],
       drop_pending_updates: false,
       secret_token: 'header-secret',
-      url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+      url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
     })
 
     const [row] = await database.db
@@ -252,7 +251,6 @@ describe('configureTelegramWebhook', () => {
     await expect(
       configureTelegramWebhook({
         db: database.db,
-        publicBaseUrl: 'https://app.lancora.ru',
         publicKey: 'provgroup-support',
         telegramClient,
         tenantSecretKey,
@@ -266,14 +264,13 @@ describe('configureTelegramWebhook', () => {
         url: 'https://unknown.example.test/hook',
       })
       .mockResolvedValueOnce({
-        url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+        url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
       })
 
     await expect(
       configureTelegramWebhook({
         allowUnknownOwner: true,
         db: database.db,
-        publicBaseUrl: 'https://app.lancora.ru',
         publicKey: 'provgroup-support',
         telegramClient,
         tenantSecretKey,
@@ -288,14 +285,13 @@ describe('configureTelegramWebhook', () => {
 
     const result = await configureTelegramWebhook({
       db: database.db,
-      publicBaseUrl: 'https://app.lancora.ru',
       publicKey: 'provgroup-support',
       telegramClient: {
         getWebhookInfo: vi
           .fn()
           .mockResolvedValueOnce({ url: '' })
           .mockResolvedValueOnce({
-            url: 'https://app.lancora.ru/telegram-bridge/provgroup-support/path-secret',
+            url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret',
           }),
         setWebhook: vi.fn(),
       },

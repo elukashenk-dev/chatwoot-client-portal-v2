@@ -300,7 +300,6 @@ async function checkProductionTelegramBridgeConfig(failures) {
     'telegram-bridge:',
     'command: ["node", "backend/dist/telegram-bridge/server.js"]',
     'TELEGRAM_BRIDGE_PORT:',
-    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL:',
     'TELEGRAM_BRIDGE_MAX_BODY_BYTES:',
     'TELEGRAM_BRIDGE_PROCESSING_STALE_MS:',
     'TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:',
@@ -309,6 +308,7 @@ async function checkProductionTelegramBridgeConfig(failures) {
     "http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health",
   ]
   const forbiddenComposeSnippets = [
+    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL',
     'TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN',
     'TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID',
     'TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN',
@@ -316,7 +316,6 @@ async function checkProductionTelegramBridgeConfig(failures) {
   ]
   const requiredEnvNames = [
     'TELEGRAM_BRIDGE_PORT',
-    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL',
     'TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS',
     'TELEGRAM_BRIDGE_MAX_BODY_BYTES',
     'TELEGRAM_BRIDGE_PROCESSING_STALE_MS',

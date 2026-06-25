@@ -10,8 +10,9 @@ usage() {
 Usage:
   scripts/ensure-production-object-storage-env.sh [--env-file=<path>]
 
-Adds missing portal object-storage and Telegram bridge variables to an existing production env file.
-Existing values are preserved. Missing secrets are generated locally.
+Adds missing portal object-storage and Telegram bridge runtime variables to an existing production env file.
+Existing supported values are preserved. Deprecated Telegram bridge public URL env is removed.
+Missing secrets are generated locally.
 EOF
 }
 
@@ -53,12 +54,6 @@ has_key() {
   grep -Eq "^${key}=" "$ENV_FILE"
 }
 
-read_env_value() {
-  local key="$1"
-
-  grep -E "^${key}=" "$ENV_FILE" | tail -n1 | cut -d= -f2- || true
-}
-
 append_env_line() {
   local key="$1"
   local value="$2"
@@ -67,13 +62,30 @@ append_env_line() {
     return
   fi
 
+  ensure_backup
+
+  printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE"
+  APPENDED_KEYS+=("$key")
+}
+
+ensure_backup() {
   if [[ "$WROTE_ANY" != "true" ]]; then
     cp "$ENV_FILE" "${ENV_FILE}.backup.$(date -u +%Y%m%dT%H%M%SZ)"
     WROTE_ANY="true"
   fi
+}
 
-  printf '%s=%s\n' "$key" "$value" >>"$ENV_FILE"
-  APPENDED_KEYS+=("$key")
+remove_env_key() {
+  local key="$1"
+
+  if ! has_key "$key"; then
+    return
+  fi
+
+  ensure_backup
+  grep -Ev "^${key}=" "$ENV_FILE" >"${ENV_FILE}.tmp" || true
+  mv "${ENV_FILE}.tmp" "$ENV_FILE"
+  REMOVED_KEYS+=("$key")
 }
 
 random_hex_secret() {
@@ -87,6 +99,9 @@ random_hex_secret() {
 
 WROTE_ANY="false"
 APPENDED_KEYS=()
+REMOVED_KEYS=()
+
+remove_env_key TELEGRAM_BRIDGE_PUBLIC_BASE_URL
 
 append_env_line PORTAL_OBJECT_STORAGE_IMAGE "quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z"
 append_env_line PORTAL_OBJECT_STORAGE_MC_IMAGE "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
@@ -104,15 +119,7 @@ if ! has_key BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY; then
 fi
 append_env_line BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "true"
 
-bridge_public_base_url="$(read_env_value APP_ORIGIN)"
-if [[ -z "$bridge_public_base_url" ]]; then
-  bridge_public_base_url="$(read_env_value DEFAULT_TENANT_PUBLIC_BASE_URL)"
-fi
-
 append_env_line TELEGRAM_BRIDGE_PORT "3401"
-if [[ -n "$bridge_public_base_url" ]]; then
-  append_env_line TELEGRAM_BRIDGE_PUBLIC_BASE_URL "$bridge_public_base_url"
-fi
 append_env_line TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS "10000"
 append_env_line TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
 append_env_line TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
@@ -123,8 +130,15 @@ append_env_line TELEGRAM_BRIDGE_PHONE_LINKED_TEXT "Спасибо, контак�
 chmod 600 "$ENV_FILE"
 
 if [[ "$WROTE_ANY" == "true" ]]; then
-  echo "Production env upgraded with missing portal object-storage keys:"
-  printf '  %s\n' "${APPENDED_KEYS[@]}"
+  echo "Production env upgraded:"
+  if [[ "${#APPENDED_KEYS[@]}" -gt 0 ]]; then
+    echo "  appended:"
+    printf '    %s\n' "${APPENDED_KEYS[@]}"
+  fi
+  if [[ "${#REMOVED_KEYS[@]}" -gt 0 ]]; then
+    echo "  removed:"
+    printf '    %s\n' "${REMOVED_KEYS[@]}"
+  fi
 else
   echo "Production env already has portal object-storage keys."
 fi

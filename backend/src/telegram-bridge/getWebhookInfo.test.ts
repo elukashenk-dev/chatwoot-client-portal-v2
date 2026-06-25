@@ -79,16 +79,26 @@ describe('parseGetWebhookInfoArgs', () => {
       bridgeKey: 'provgroup-support',
     })
     expect(
-      parseGetWebhookInfoArgs(['--telegram-bot-token-file=/run/secrets/token']),
+      parseGetWebhookInfoArgs([
+        '--telegram-bot-token-file=/run/secrets/token',
+        '--public-base-url=https://tenant.example.test',
+      ]),
     ).toEqual({
+      publicBaseUrl: 'https://tenant.example.test',
       telegramBotTokenFile: '/run/secrets/token',
     })
-    expect(parseGetWebhookInfoArgs(['--telegram-bot-token-stdin'])).toEqual({
+    expect(
+      parseGetWebhookInfoArgs([
+        '--telegram-bot-token-stdin',
+        '--public-base-url=https://tenant.example.test',
+      ]),
+    ).toEqual({
+      publicBaseUrl: 'https://tenant.example.test',
       telegramBotTokenStdin: true,
     })
   })
 
-  it('rejects raw token argv values and conflicting token sources', () => {
+  it('rejects raw token argv values, missing public URL and conflicting token sources', () => {
     const rawTelegramBotToken =
       '1234567890:AAExampleTelegramBotTokenSecretValue'
 
@@ -108,8 +118,12 @@ describe('parseGetWebhookInfoArgs', () => {
       parseGetWebhookInfoArgs([
         '--bridge-key=provgroup-support',
         '--telegram-bot-token-stdin',
+        '--public-base-url=https://tenant.example.test',
       ]),
     ).toThrow(/either --bridge-key or one token source/)
+    expect(() =>
+      parseGetWebhookInfoArgs(['--telegram-bot-token-stdin']),
+    ).toThrow(/--public-base-url/)
   })
 })
 
@@ -129,15 +143,14 @@ describe('getSafeTelegramWebhookInfo', () => {
     const telegramClientFactory = vi.fn().mockReturnValue({
       getWebhookInfo: vi.fn().mockResolvedValue({
         last_error_message:
-          'Failed https://app.example.test/webhooks/telegram/1234567890:AAExampleTelegramBotTokenSecretValue',
+          'Failed https://default.example.test/telegram-bridge/provgroup-support/path-secret?token=1234567890:AAExampleTelegramBotTokenSecretValue',
         pending_update_count: 4,
-        url: 'https://app.example.test/webhooks/telegram/1234567890:AAExampleTelegramBotTokenSecretValue',
+        url: 'https://default.example.test/telegram-bridge/provgroup-support/path-secret?token=1234567890:AAExampleTelegramBotTokenSecretValue',
       }),
     })
 
     const result = await getSafeTelegramWebhookInfo({
       db: database.db,
-      publicBaseUrl: 'https://app.example.test',
       publicKey: 'provgroup-support',
       telegramClientFactory,
       tenantSecretKey,
@@ -145,10 +158,10 @@ describe('getSafeTelegramWebhookInfo', () => {
 
     expect(result).toEqual({
       lastErrorMessage:
-        'Failed https://app.example.test/webhooks/telegram/[redacted]',
-      owner: 'chatwoot-native',
+        'Failed https://default.example.test/telegram-bridge/[redacted]?token=[redacted]',
+      owner: 'telegram-bridge',
       pendingUpdateCount: 4,
-      url: 'https://app.example.test/webhooks/telegram/[redacted]',
+      url: 'https://default.example.test/telegram-bridge/[redacted]?token=[redacted]',
     })
     expect(telegramClientFactory).toHaveBeenCalledWith(
       '1234567890:AAExampleTelegramBotTokenSecretValue',
@@ -221,14 +234,18 @@ describe('runGetWebhookInfoCli', () => {
     const writeOutput = vi.fn()
 
     await expect(
-      runGetWebhookInfoCli([`--telegram-bot-token-file=${tokenPath}`], {
+      runGetWebhookInfoCli(
+        [
+          `--telegram-bot-token-file=${tokenPath}`,
+          '--public-base-url=https://app.example.test',
+        ],
+        {
         createDatabaseClient,
         getSafeTelegramWebhookInfo: getSafeWebhookInfo,
-        rawEnv: {
-          TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://app.example.test',
-        },
+        rawEnv: {},
         writeOutput,
-      }),
+        },
+      ),
     ).resolves.toEqual({
       owner: 'empty',
       pendingUpdateCount: 0,

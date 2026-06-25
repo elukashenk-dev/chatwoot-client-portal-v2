@@ -23,6 +23,7 @@ import {
 
 export type OperatorBridgeConfig = {
   id: string
+  publicBaseUrl: string
   publicKey: string
   telegram: {
     botToken: string
@@ -49,7 +50,6 @@ type TelegramWebhookConfigurator = {
 type ConfigureTelegramWebhookInput = {
   allowUnknownOwner?: boolean
   db: AppDatabase
-  publicBaseUrl: string
   publicKey: string
   telegramClient: TelegramWebhookConfigurator
   tenantSecretKey: Buffer | string
@@ -165,6 +165,7 @@ export async function loadOperatorBridgeConfig({
     .select({
       botTokenCiphertext: telegramBridgeConfigs.telegramBotTokenCiphertext,
       id: telegramBridgeConfigs.id,
+      publicBaseUrl: portalTenants.publicBaseUrl,
       publicKey: telegramBridgeConfigs.publicKey,
       secretTokenCiphertext: telegramBridgeConfigs.telegramSecretTokenCiphertext,
       status: telegramBridgeConfigs.status,
@@ -196,6 +197,7 @@ export async function loadOperatorBridgeConfig({
 
   return {
     id: row.id,
+    publicBaseUrl: normalizePublicBaseUrl(row.publicBaseUrl),
     publicKey: row.publicKey,
     telegram: {
       botToken: decryptTenantSecret(row.botTokenCiphertext, key),
@@ -242,7 +244,6 @@ export function classifyTelegramWebhookOwner({
 export async function configureTelegramWebhook({
   allowUnknownOwner = false,
   db,
-  publicBaseUrl,
   publicKey,
   telegramClient,
   tenantSecretKey,
@@ -252,7 +253,7 @@ export async function configureTelegramWebhook({
     publicKey,
     tenantSecretKey,
   })
-  const normalizedPublicBaseUrl = normalizePublicBaseUrl(publicBaseUrl)
+  const normalizedPublicBaseUrl = bridgeConfig.publicBaseUrl
   const webhookUrl = `${normalizedPublicBaseUrl}/telegram-bridge/${bridgeConfig.publicKey}/${bridgeConfig.telegram.webhookPathSecret}`
   const beforeInfo = await telegramClient.getWebhookInfo()
   const owner = classifyTelegramWebhookOwner({
@@ -330,7 +331,6 @@ export async function runConfigureTelegramWebhookCli(
     const result = await configureTelegramWebhook({
       allowUnknownOwner: args.allowUnknownOwner,
       db: database.db,
-      publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
       publicKey: args.bridgeKey,
       telegramClient: createTelegramClient({
         botToken: bridgeConfig.telegram.botToken,

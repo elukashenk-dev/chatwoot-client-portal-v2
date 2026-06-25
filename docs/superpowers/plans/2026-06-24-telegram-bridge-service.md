@@ -4,7 +4,7 @@
 
 **Goal:** Replace the Yandex Cloud Function Telegram gateway with a small self-hosted, tenant-aware Telegram bridge service on our production server, preserving group-chat forwarding and replacing 1C/S3 private-user checks with Chatwoot contact-phone validation.
 
-**Architecture:** The bridge is a separate backend entrypoint and Docker Compose service. Tenant admins configure it from the portal admin UI after creating a Telegram inbox in Chatwoot: they paste the Chatwoot inbox URL and Telegram bot token, and the portal backend creates the encrypted bridge config and configures Telegram webhook. Telegram sends updates to `<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/<bridge-key>/<path-secret>`, the public reverse proxy routes that path to the bridge, and the bridge resolves tenant/Chatwoot config from a portal-owned `telegram_bridge_configs` row rather than global `CHATWOOT_*` env. It validates Telegram's secret header, deduplicates `update_id` per bridge config in portal Postgres, checks/creates Chatwoot contact inbox links through tenant-scoped Chatwoot Account API, and forwards accepted Telegram payloads to Chatwoot's existing Telegram webhook. Chatwoot core stays external and unchanged.
+**Architecture:** The bridge is a separate backend entrypoint and Docker Compose service. Tenant admins configure it from the portal admin UI after creating a Telegram inbox in Chatwoot: they paste the Chatwoot inbox URL and Telegram bot token, and the portal backend creates the encrypted bridge config and configures Telegram webhook. Telegram sends updates to `<tenant.publicBaseUrl>/telegram-bridge/<bridge-key>/<path-secret>`, the public reverse proxy routes that path to the bridge, and the bridge resolves tenant/Chatwoot config from a portal-owned `telegram_bridge_configs` row rather than global `CHATWOOT_*` env. It validates Telegram's secret header, deduplicates `update_id` per bridge config in portal Postgres, checks/creates Chatwoot contact inbox links through tenant-scoped Chatwoot Account API, and forwards accepted Telegram payloads to Chatwoot's existing Telegram webhook. Chatwoot core stays external and unchanged.
 
 **Tech Stack:** Node 24, TypeScript, Fastify 5, Drizzle/Postgres, Vitest, Docker Compose, Caddy, Telegram Bot API, Chatwoot Account API.
 
@@ -246,7 +246,6 @@ Use bridge-specific process settings only. Do not put Chatwoot account IDs, Chat
 Required:
 
 - `TELEGRAM_BRIDGE_PORT=3401`
-- `TELEGRAM_BRIDGE_PUBLIC_BASE_URL=<public URL whose reverse proxy routes /telegram-bridge/* to the bridge service>`
 - `DATABASE_URL=<portal-postgres-url>`
 - `PORTAL_TENANT_SECRET_KEY=<existing-tenant-secret-key>`
 
@@ -335,7 +334,7 @@ POST /api/admin/integrations/telegram-bridge/setup
 14. Backend verifies the public bridge health route:
 
 ```bash
-curl -fsS "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/health"
+curl -fsS "<tenant.publicBaseUrl>/telegram-bridge/health"
 ```
 
 15. Backend creates or updates one `telegram_bridge_configs` row without breaking any existing active config:
@@ -351,7 +350,7 @@ curl -fsS "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/health"
 
 ```json
 {
-  "url": "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/<generated-public-key>/<generated-path-secret>",
+  "url": "<tenant.publicBaseUrl>/telegram-bridge/<generated-public-key>/<generated-path-secret>",
   "secret_token": "<generated-header-secret>",
   "allowed_updates": ["message"],
   "drop_pending_updates": false
@@ -844,7 +843,7 @@ Test Files  1 passed
 
 ```json
 {
-  "url": "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/<bridge-key>/<path-secret>",
+  "url": "<tenant.publicBaseUrl>/telegram-bridge/<bridge-key>/<path-secret>",
   "secret_token": "<header-secret>",
   "allowed_updates": ["message"],
   "drop_pending_updates": false
@@ -1154,7 +1153,7 @@ command: ["node", "backend/dist/telegram-bridge/server.js"]
 - [ ] Do not add bot token, Chatwoot account id, Chatwoot API token or Telegram inbox id to Compose env.
 - [ ] Depend on `portal-db` health.
 - [ ] Expose internal port `3401`.
-- [ ] Confirm which public host owns `TELEGRAM_BRIDGE_PUBLIC_BASE_URL`.
+- [ ] Confirm each tenant `publicBaseUrl` host routes `/telegram-bridge/*` to the bridge service.
 - [ ] If that host is served by `infra/production/Caddyfile`, add Caddy route before the catch-all handler:
 
 ```caddy
@@ -1167,7 +1166,7 @@ handle /telegram-bridge/* {
 - [ ] Verify public route before any Telegram `setWebhook` call:
 
 ```bash
-curl -fsS "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/health"
+curl -fsS "<tenant.publicBaseUrl>/telegram-bridge/health"
 ```
 
 Expected result:
@@ -1379,7 +1378,7 @@ command exits 0
 - [ ] Verify the public bridge health route before configuring any Telegram webhook:
 
 ```bash
-curl -fsS "<TELEGRAM_BRIDGE_PUBLIC_BASE_URL>/telegram-bridge/health"
+curl -fsS "<tenant.publicBaseUrl>/telegram-bridge/health"
 ```
 
 - [ ] Log in to `/admin/integrations/telegram-bridge` for the test tenant.

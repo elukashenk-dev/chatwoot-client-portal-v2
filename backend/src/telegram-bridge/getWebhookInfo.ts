@@ -16,8 +16,8 @@ import { createTelegramClient, type TelegramWebhookInfo } from './telegramClient
 
 type GetWebhookInfoArgs =
   | { bridgeKey: string }
-  | { telegramBotTokenFile: string }
-  | { telegramBotTokenStdin: true }
+  | { publicBaseUrl: string; telegramBotTokenFile: string }
+  | { publicBaseUrl: string; telegramBotTokenStdin: true }
 
 type TelegramWebhookInfoClient = {
   getWebhookInfo: () => Promise<TelegramWebhookInfo>
@@ -25,7 +25,7 @@ type TelegramWebhookInfoClient = {
 
 type GetSafeTelegramWebhookInfoInput = {
   db?: AppDatabase
-  publicBaseUrl: string
+  publicBaseUrl?: string
   publicKey?: string
   readStdin?: () => Promise<string>
   requestTimeoutMs?: number
@@ -81,6 +81,7 @@ function isDirectCliModule(moduleUrl: string) {
 export function parseGetWebhookInfoArgs(argv: string[]): GetWebhookInfoArgs {
   const parsed: {
     bridgeKey?: string
+    publicBaseUrl?: string
     telegramBotTokenFile?: string
     telegramBotTokenStdin?: boolean
   } = {}
@@ -113,6 +114,16 @@ export function parseGetWebhookInfoArgs(argv: string[]): GetWebhookInfoArgs {
       continue
     }
 
+    const publicBaseUrl = readFlagValue(argv, index, '--public-base-url')
+
+    if (publicBaseUrl) {
+      parsed.publicBaseUrl = publicBaseUrl.value.trim()
+      if (publicBaseUrl.consumedNext) {
+        index += 1
+      }
+      continue
+    }
+
     throw new Error(
       `Unknown argument: ${redactTelegramBridgeSecrets(current)}`,
     )
@@ -129,19 +140,34 @@ export function parseGetWebhookInfoArgs(argv: string[]): GetWebhookInfoArgs {
   }
 
   if (parsed.bridgeKey) {
+    if (parsed.publicBaseUrl) {
+      throw new Error('--public-base-url can only be used with a token source.')
+    }
+
     return { bridgeKey: parsed.bridgeKey }
   }
 
-  if (parsed.telegramBotTokenFile) {
-    return { telegramBotTokenFile: parsed.telegramBotTokenFile }
+  if (!parsed.publicBaseUrl) {
+    throw new Error('--public-base-url is required with a token source.')
   }
 
-  return { telegramBotTokenStdin: true }
+  if (parsed.telegramBotTokenFile) {
+    return {
+      publicBaseUrl: parsed.publicBaseUrl,
+      telegramBotTokenFile: parsed.telegramBotTokenFile,
+    }
+  }
+
+  return {
+    publicBaseUrl: parsed.publicBaseUrl,
+    telegramBotTokenStdin: true,
+  }
 }
 
-async function resolveBotToken({
+async function resolveWebhookInfoContext({
   db,
   publicKey,
+  publicBaseUrl,
   readStdin,
   telegramBotTokenFile,
   telegramBotTokenStdin,
@@ -150,6 +176,7 @@ async function resolveBotToken({
   GetSafeTelegramWebhookInfoInput,
   | 'db'
   | 'publicKey'
+  | 'publicBaseUrl'
   | 'readStdin'
   | 'telegramBotTokenFile'
   | 'telegramBotTokenStdin'
@@ -166,14 +193,24 @@ async function resolveBotToken({
       tenantSecretKey,
     })
 
-    return config.telegram.botToken
+    return {
+      botToken: config.telegram.botToken,
+      publicBaseUrl: config.publicBaseUrl,
+    }
   }
 
-  return readSecretValue({
-    ...(telegramBotTokenFile ? { filePath: telegramBotTokenFile } : {}),
-    ...(readStdin ? { readStdin } : {}),
-    ...(telegramBotTokenStdin ? { stdin: true } : {}),
-  })
+  if (!publicBaseUrl) {
+    throw new Error('Public base URL is required for token webhook info.')
+  }
+
+  return {
+    botToken: await readSecretValue({
+      ...(telegramBotTokenFile ? { filePath: telegramBotTokenFile } : {}),
+      ...(readStdin ? { readStdin } : {}),
+      ...(telegramBotTokenStdin ? { stdin: true } : {}),
+    }),
+    publicBaseUrl,
+  }
 }
 
 function normalizePendingUpdateCount(webhookInfo: TelegramWebhookInfo) {
@@ -185,12 +222,11 @@ function normalizePendingUpdateCount(webhookInfo: TelegramWebhookInfo) {
 }
 
 export async function getSafeTelegramWebhookInfo({
-  publicBaseUrl,
   requestTimeoutMs = 10_000,
   telegramClientFactory,
   ...input
 }: GetSafeTelegramWebhookInfoInput) {
-  const botToken = await resolveBotToken(input)
+  const { botToken, publicBaseUrl } = await resolveWebhookInfoContext(input)
   const client =
     telegramClientFactory?.(botToken) ??
     createTelegramClient({
@@ -233,7 +269,6 @@ export async function runGetWebhookInfoCli(
     try {
       const result = await getSafeWebhookInfo({
         db: database.db,
-        publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
         publicKey: args.bridgeKey,
         requestTimeoutMs: env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS,
         tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
@@ -248,13 +283,18 @@ export async function runGetWebhookInfoCli(
 
   const env = loadTelegramBridgeWebhookInfoEnv(rawEnv)
   const result = await getSafeWebhookInfo({
-    publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
     requestTimeoutMs: env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS,
     ...('telegramBotTokenFile' in args
-      ? { telegramBotTokenFile: args.telegramBotTokenFile }
+      ? {
+          publicBaseUrl: args.publicBaseUrl,
+          telegramBotTokenFile: args.telegramBotTokenFile,
+        }
       : {}),
     ...('telegramBotTokenStdin' in args
-      ? { telegramBotTokenStdin: args.telegramBotTokenStdin }
+      ? {
+          publicBaseUrl: args.publicBaseUrl,
+          telegramBotTokenStdin: args.telegramBotTokenStdin,
+        }
       : {}),
   })
 

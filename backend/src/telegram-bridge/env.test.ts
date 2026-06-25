@@ -7,11 +7,10 @@ const baseRawEnv = {
     'postgres://test:test@127.0.0.1:5432/chatwoot_client_portal_v2_test',
   PORTAL_TENANT_SECRET_KEY: Buffer.alloc(32, 11).toString('base64'),
   TELEGRAM_BRIDGE_PORT: '3401',
-  TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://bridge.example.test/',
 } satisfies NodeJS.ProcessEnv
 
 describe('loadTelegramBridgeEnv', () => {
-  it('parses valid bridge config and normalizes the public base URL', () => {
+  it('parses valid bridge config', () => {
     const env = loadTelegramBridgeEnv({
       ...baseRawEnv,
       TELEGRAM_BRIDGE_MAX_BODY_BYTES: '2048',
@@ -31,7 +30,6 @@ describe('loadTelegramBridgeEnv', () => {
       TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT: 'Prompt',
       TELEGRAM_BRIDGE_PORT: 3401,
       TELEGRAM_BRIDGE_PROCESSING_STALE_MS: 300_000,
-      TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://bridge.example.test',
       TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: 5_000,
     })
   })
@@ -56,39 +54,27 @@ describe('loadTelegramBridgeEnv', () => {
   it('rejects missing required bridge config values', () => {
     expect(() =>
       loadTelegramBridgeEnv({
-        DATABASE_URL: baseRawEnv.DATABASE_URL,
         PORTAL_TENANT_SECRET_KEY: baseRawEnv.PORTAL_TENANT_SECRET_KEY,
         TELEGRAM_BRIDGE_PORT: baseRawEnv.TELEGRAM_BRIDGE_PORT,
-      }),
-    ).toThrow(/TELEGRAM_BRIDGE_PUBLIC_BASE_URL/)
-
-    expect(() =>
-      loadTelegramBridgeEnv({
-        PORTAL_TENANT_SECRET_KEY: baseRawEnv.PORTAL_TENANT_SECRET_KEY,
-        TELEGRAM_BRIDGE_PORT: baseRawEnv.TELEGRAM_BRIDGE_PORT,
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL:
-          baseRawEnv.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
       }),
     ).toThrow(/DATABASE_URL/)
 
     expect(() =>
       loadTelegramBridgeEnv({
         DATABASE_URL: baseRawEnv.DATABASE_URL,
+        TELEGRAM_BRIDGE_PORT: baseRawEnv.TELEGRAM_BRIDGE_PORT,
+      }),
+    ).toThrow(/PORTAL_TENANT_SECRET_KEY/)
+
+    expect(() =>
+      loadTelegramBridgeEnv({
+        DATABASE_URL: baseRawEnv.DATABASE_URL,
         PORTAL_TENANT_SECRET_KEY: baseRawEnv.PORTAL_TENANT_SECRET_KEY,
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL:
-          baseRawEnv.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
       }),
     ).toThrow(/TELEGRAM_BRIDGE_PORT/)
   })
 
-  it('rejects invalid URLs, positive integers, and empty secret strings', () => {
-    expect(() =>
-      loadTelegramBridgeEnv({
-        ...baseRawEnv,
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'not-a-url',
-      }),
-    ).toThrow(/TELEGRAM_BRIDGE_PUBLIC_BASE_URL/)
-
+  it('rejects invalid positive integers and empty secret strings', () => {
     expect(() =>
       loadTelegramBridgeEnv({
         ...baseRawEnv,
@@ -110,6 +96,7 @@ describe('loadTelegramBridgeEnv', () => {
       TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID: '1',
       TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN: 'chatwoot-token',
       TELEGRAM_BRIDGE_CHATWOOT_TELEGRAM_INBOX_ID: '17',
+      TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://old-global.example.test',
       TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN:
         '1234567890:AAExampleTelegramBotTokenSecretValue',
     })
@@ -117,6 +104,7 @@ describe('loadTelegramBridgeEnv', () => {
     expect('TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID' in env).toBe(false)
     expect('TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN' in env).toBe(false)
     expect('TELEGRAM_BRIDGE_CHATWOOT_TELEGRAM_INBOX_ID' in env).toBe(false)
+    expect('TELEGRAM_BRIDGE_PUBLIC_BASE_URL' in env).toBe(false)
     expect('TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN' in env).toBe(false)
   })
 })

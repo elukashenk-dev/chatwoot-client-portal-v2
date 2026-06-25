@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   createBridgeHealthVerifier,
   parseChatwootTelegramInboxResponse,
-  requireTelegramBridgePublicBaseUrl,
 } from './serviceFactory.js'
 
 describe('parseChatwootTelegramInboxResponse', () => {
@@ -63,24 +62,6 @@ describe('parseChatwootTelegramInboxResponse', () => {
         17,
       ),
     ).toThrow(/bot_name/)
-  })
-})
-
-describe('requireTelegramBridgePublicBaseUrl', () => {
-  it('requires a configured bridge public URL before setup can run', () => {
-    expect(() =>
-      requireTelegramBridgePublicBaseUrl({
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL: undefined,
-      }),
-    ).toThrow(/public URL/)
-  })
-
-  it('normalizes the configured bridge public URL', () => {
-    expect(
-      requireTelegramBridgePublicBaseUrl({
-        TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://app.lancora.ru/',
-      }),
-    ).toBe('https://app.lancora.ru')
   })
 })
 
