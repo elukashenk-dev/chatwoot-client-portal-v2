@@ -10,7 +10,7 @@ usage() {
 Usage:
   scripts/ensure-production-object-storage-env.sh [--env-file=<path>]
 
-Adds missing portal object-storage variables to an existing production env file.
+Adds missing portal object-storage and Telegram bridge variables to an existing production env file.
 Existing values are preserved. Missing secrets are generated locally.
 EOF
 }
@@ -51,6 +51,12 @@ has_key() {
   local key="$1"
 
   grep -Eq "^${key}=" "$ENV_FILE"
+}
+
+read_env_value() {
+  local key="$1"
+
+  grep -E "^${key}=" "$ENV_FILE" | tail -n1 | cut -d= -f2- || true
 }
 
 append_env_line() {
@@ -97,6 +103,22 @@ if ! has_key BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY; then
   append_env_line BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "$(random_hex_secret)"
 fi
 append_env_line BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "true"
+
+bridge_public_base_url="$(read_env_value APP_ORIGIN)"
+if [[ -z "$bridge_public_base_url" ]]; then
+  bridge_public_base_url="$(read_env_value DEFAULT_TENANT_PUBLIC_BASE_URL)"
+fi
+
+append_env_line TELEGRAM_BRIDGE_PORT "3401"
+if [[ -n "$bridge_public_base_url" ]]; then
+  append_env_line TELEGRAM_BRIDGE_PUBLIC_BASE_URL "$bridge_public_base_url"
+fi
+append_env_line TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS "10000"
+append_env_line TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
+append_env_line TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
+append_env_line TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT "Пожалуйста, отправьте номер телефона кнопкой ниже, чтобы мы могли найти ваш контакт."
+append_env_line TELEGRAM_BRIDGE_PHONE_NOT_FOUND_TEXT "Не удалось найти контакт с этим номером. Проверьте номер или напишите менеджеру."
+append_env_line TELEGRAM_BRIDGE_PHONE_LINKED_TEXT "Спасибо, контакт найден. Теперь можете отправить сообщение."
 
 chmod 600 "$ENV_FILE"
 

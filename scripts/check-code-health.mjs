@@ -304,6 +304,7 @@ async function checkProductionTelegramBridgeConfig(failures) {
     'TELEGRAM_BRIDGE_MAX_BODY_BYTES:',
     'TELEGRAM_BRIDGE_PROCESSING_STALE_MS:',
     'TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:',
+    'TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: ${TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS:-10000}',
     "expose:\n      - '${TELEGRAM_BRIDGE_PORT:-3401}'",
     "http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health",
   ]

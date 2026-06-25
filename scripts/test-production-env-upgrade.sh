@@ -92,6 +92,8 @@ assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_MAX_BODY_BYTES:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PROCESSING_STALE_MS:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:"
+assert_contains "$COMPOSE_FILE" "portal-backend:"
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: \${TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS:-10000}"
 assert_contains "$COMPOSE_FILE" 'http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health'
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT: \${TELEGRAM_BRIDGE_PORT:-3401}"
 assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN"
@@ -141,6 +143,14 @@ required_keys=(
   BRANDING_ASSET_STORAGE_ACCESS_KEY_ID
   BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY
   BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE
+  TELEGRAM_BRIDGE_PORT
+  TELEGRAM_BRIDGE_PUBLIC_BASE_URL
+  TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS
+  TELEGRAM_BRIDGE_MAX_BODY_BYTES
+  TELEGRAM_BRIDGE_PROCESSING_STALE_MS
+  TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT
+  TELEGRAM_BRIDGE_PHONE_NOT_FOUND_TEXT
+  TELEGRAM_BRIDGE_PHONE_LINKED_TEXT
 )
 
 for key in "${required_keys[@]}"; do
@@ -152,6 +162,11 @@ assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_ENDPOINT "http://portal-ob
 assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_BUCKET "portal-branding-assets"
 assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "portal_v2_branding_assets"
 assert_env_value "$legacy_env" BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "true"
+assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PORT "3401"
+assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PUBLIC_BASE_URL "https://lk.provgroup.ru"
+assert_env_value "$legacy_env" TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS "10000"
+assert_env_value "$legacy_env" TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
+assert_env_value "$legacy_env" TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
 
 mode="$(stat -c '%a' "$legacy_env")"
 if [[ "$mode" != "600" ]]; then
@@ -160,6 +175,7 @@ fi
 
 custom_env="$TMP_DIR/custom.env"
 cat >"$custom_env" <<'ENV'
+DEFAULT_TENANT_PUBLIC_BASE_URL=https://tenant.example.test
 BRANDING_ASSET_STORAGE_ENDPOINT=https://s3.example.test
 BRANDING_ASSET_STORAGE_REGION=eu-central-1
 BRANDING_ASSET_STORAGE_BUCKET=custom-bucket
@@ -167,6 +183,7 @@ BRANDING_ASSET_STORAGE_ACCESS_KEY_ID=custom-access
 BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY=custom-secret
 BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE=false
 PORTAL_OBJECT_STORAGE_ROOT_PASSWORD=existing-root-secret
+TELEGRAM_BRIDGE_PUBLIC_BASE_URL=https://bridge.example.test
 ENV
 
 "$HELPER" --env-file "$custom_env"
@@ -178,6 +195,8 @@ assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_ACCESS_KEY_ID "custom-acce
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_SECRET_ACCESS_KEY "custom-secret"
 assert_env_value "$custom_env" BRANDING_ASSET_STORAGE_FORCE_PATH_STYLE "false"
 assert_env_value "$custom_env" PORTAL_OBJECT_STORAGE_ROOT_PASSWORD "existing-root-secret"
+assert_env_value "$custom_env" TELEGRAM_BRIDGE_PUBLIC_BASE_URL "https://bridge.example.test"
+assert_env_value "$custom_env" TELEGRAM_BRIDGE_PORT "3401"
 
 fake_bin="$TMP_DIR/fake-bin"
 sites_available="$TMP_DIR/sites-available"
