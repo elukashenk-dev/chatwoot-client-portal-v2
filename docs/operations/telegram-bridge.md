@@ -47,6 +47,29 @@ Do not put tenant bot tokens, Chatwoot account ids, Chatwoot API tokens, or
 Telegram inbox ids into production Compose env. Those values belong to encrypted
 tenant bridge config created by the admin UI or CLI fallback.
 
+## Bridge-Only Deploy
+
+When a reviewed change touches only the bridge runtime service, deploy only
+`telegram-bridge`; do not rebuild/recreate the whole portal stack.
+
+```bash
+scripts/deploy-production-archive.sh \
+  --host=ubuntu@93.77.166.238 \
+  --app-path=/opt/chatwoot-client-portal-v2
+
+ssh ubuntu@93.77.166.238
+cd /opt/chatwoot-client-portal-v2
+scripts/ensure-production-object-storage-env.sh --env-file .env.production
+docker compose --env-file .env.production -f infra/production/compose.yaml config --quiet
+docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build telegram-bridge
+curl -fsS https://lk.provgroup.ru/telegram-bridge/health
+```
+
+Do not use bridge-only deploy if the change includes portal admin routes,
+frontend admin UI, migrations, shared tenant/contact lookup behavior,
+production Compose/Caddy, or env upgrade scripts. Those changes need the normal
+full production deploy.
+
 ## Tenant Admin Setup
 
 Example input:

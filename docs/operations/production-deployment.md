@@ -17,6 +17,28 @@ older env files with missing portal-owned object-storage keys before running
 are generated on the VM, and a timestamped `.env.production.backup.*` file is
 written before the first change.
 
+If the change touches only the Telegram bridge runtime service, do not
+redeploy the whole portal stack. Deliver the reviewed archive without
+activation, then rebuild/recreate only `telegram-bridge` on the VM:
+
+```bash
+scripts/deploy-production-archive.sh \
+  --host=ubuntu@93.77.166.238 \
+  --app-path=/opt/chatwoot-client-portal-v2
+
+ssh ubuntu@93.77.166.238
+cd /opt/chatwoot-client-portal-v2
+scripts/ensure-production-object-storage-env.sh --env-file .env.production
+docker compose --env-file .env.production -f infra/production/compose.yaml config --quiet
+docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build telegram-bridge
+curl -fsS https://lk.provgroup.ru/telegram-bridge/health
+```
+
+Use full `--activate` deploy instead when the change touches `portal-backend`
+admin API, frontend admin UI, database migrations, production Compose/Caddy,
+shared env upgrade behavior, or any runtime contract used outside
+`telegram-bridge`.
+
 Use the tenant-aware clean reinstall runbook only when the portal-owned
 production stack must be recreated or reconfigured:
 
