@@ -4,6 +4,7 @@ export const routePaths = {
     branding: '/admin/branding',
     login: '/admin/login',
     root: '/admin',
+    telegramBridge: '/admin/integrations/telegram-bridge',
   },
   app: {
     chat: '/app/chat',

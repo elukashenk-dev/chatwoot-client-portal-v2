@@ -227,9 +227,17 @@ execution-plan детали здесь не хранятся.
   availability, attachment send and service-worker background text-send paths
   now abort into controlled retry/error handling, and background text recovery
   has a real same-origin service-worker network smoke.
+- Tenant-aware Telegram bridge baseline is implemented: tenant admins can
+  create bridge configs from the portal admin UI after creating a Chatwoot
+  Telegram inbox, Telegram updates are handled by a separate bridge service
+  with encrypted tenant config, webhook owner preflight, path/header secrets,
+  Postgres update dedupe, Chatwoot exact phone lookup, group message
+  transformation and production operations runbook.
 
 ## Recommended Next Step
 
-- Pick the next active finding as a separate scope; do not mix remaining chat
-  UI, unread indicator, auth rate-limit or operations findings into this
-  recovery checkpoint.
+- Run the Telegram bridge production cutover from
+  `docs/operations/telegram-bridge.md`: verify Compose config on the server,
+  deploy the bridge service, configure the second bot through the admin UI and
+  complete private/group smoke checks while confirming the first bot webhook is
+  unchanged.

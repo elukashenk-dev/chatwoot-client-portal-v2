@@ -6,7 +6,6 @@ import type { FastifyRequest } from 'fastify'
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
 import { createChatwootAdminAgentsClient } from './integrations/chatwoot/adminAgents.js'
-import { createChatwootClientFactory } from './integrations/chatwoot/client.js'
 import {
   createSmtpEmailDelivery,
   type SmtpEmailDelivery,
@@ -69,6 +68,8 @@ import { createProfileService } from './modules/profile/service.js'
 import { createRegistrationRepository } from './modules/registration/repository.js'
 import { registerRegistrationRoutes } from './modules/registration/routes.js'
 import { createRegistrationService } from './modules/registration/service.js'
+import { registerTelegramBridgeAdminRoutes } from './modules/telegram-bridge-admin/routes.js'
+import { createTelegramBridgeSetupServiceForTenantRequest } from './modules/telegram-bridge-admin/serviceFactory.js'
 import { createTenantAdminAuthRepository } from './modules/tenant-admin/adminAuthRepository.js'
 import { createTenantAdminAuditLogger } from './modules/tenant-admin/adminAuthAudit.js'
 import { registerTenantAdminAuthRoutes } from './modules/tenant-admin/adminAuthRoutes.js'
@@ -83,6 +84,12 @@ import {
 import { createTenantsService } from './modules/tenants/service.js'
 import { createTenantPwaBrandingReader } from './modules/tenants/pwaBrandingReader.js'
 import { createTenantPwaIconReader } from './modules/tenants/pwaIconReader.js'
+import {
+  createRuntimeChatwootClientFactory,
+  getAttachmentProxyAllowedOrigins,
+} from './runtimeChatwootClientFactory.js'
+
+export { createRuntimeChatwootClientFactory } from './runtimeChatwootClientFactory.js'
 
 type BuildAppOptions = {
   brandingObjectStorage?: BrandingObjectStorage
@@ -91,31 +98,7 @@ type BuildAppOptions = {
   emailDelivery?: Pick<SmtpEmailDelivery, 'send'>
   env: AppEnv
   now?: () => Date
-}
-
-type RuntimeChatwootClientFactoryOptions = {
-  chatwootFetchFn?: typeof fetch | undefined
-  env: Pick<AppEnv, 'CHATWOOT_REQUEST_TIMEOUT_MS'>
-}
-
-function getAttachmentProxyAllowedOrigins({
-  env,
-  tenantChatwootBaseUrl,
-}: {
-  env: Pick<AppEnv, 'CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS'>
-  tenantChatwootBaseUrl: string
-}) {
-  return [tenantChatwootBaseUrl, ...env.CHAT_ATTACHMENT_PROXY_ALLOWED_ORIGINS]
-}
-
-export function createRuntimeChatwootClientFactory({
-  chatwootFetchFn,
-  env,
-}: RuntimeChatwootClientFactoryOptions) {
-  return createChatwootClientFactory({
-    ...(chatwootFetchFn ? { fetchFn: chatwootFetchFn } : {}),
-    requestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
-  })
+  telegramFetchFn?: typeof fetch
 }
 
 export function buildApp({
@@ -125,6 +108,7 @@ export function buildApp({
   emailDelivery,
   env,
   now,
+  telegramFetchFn,
 }: BuildAppOptions) {
   const app = Fastify({
     logger:
@@ -364,6 +348,16 @@ export function buildApp({
   }
   const createBrandingServiceForRequest = (request: FastifyRequest) =>
     createBrandingServiceForTenantRequest({ database, request })
+  const createTelegramBridgeSetupServiceForRequest = (
+    request: FastifyRequest,
+  ) =>
+    createTelegramBridgeSetupServiceForTenantRequest({
+      ...(chatwootFetchFn ? { chatwootFetchFn } : {}),
+      database,
+      env,
+      request,
+      ...(telegramFetchFn ? { telegramFetchFn } : {}),
+    })
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
       chatwootClient: createChatwootClientForRequest(request),
@@ -453,6 +447,12 @@ export function buildApp({
   registerBrandingRoutes(app, {
     createBrandingAssetService: createBrandingAssetServiceForRequest,
     createBrandingService: createBrandingServiceForRequest,
+    createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
+    env,
+  })
+  registerTelegramBridgeAdminRoutes(app, {
+    createTelegramBridgeSetupService:
+      createTelegramBridgeSetupServiceForRequest,
     createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
     env,
   })

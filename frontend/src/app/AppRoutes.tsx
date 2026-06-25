@@ -80,6 +80,11 @@ const AdminBrandingPage = lazyRouteComponent(() =>
     (module) => module.AdminBrandingPage,
   ),
 )
+const AdminTelegramBridgePage = lazyRouteComponent(() =>
+  import('../features/admin-shell/pages/AdminTelegramBridgePage').then(
+    (module) => module.AdminTelegramBridgePage,
+  ),
+)
 const LegalDocumentPage = lazyRouteComponent(() =>
   import('../features/legal/pages/LegalDocumentPage').then(
     (module) => module.LegalDocumentPage,
@@ -245,6 +250,14 @@ export function AppRoutes() {
             element={
               <LazyRoute>
                 <AdminBrandingPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path={routePaths.admin.telegramBridge}
+            element={
+              <LazyRoute>
+                <AdminTelegramBridgePage />
               </LazyRoute>
             }
           />

@@ -164,6 +164,54 @@ describe('AppRoutes admin route separation', () => {
     )
   })
 
+  it('renders Telegram bridge setup for an authenticated admin session', async () => {
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/admin/auth/me') {
+        return createAdminSessionResponse()
+      }
+
+      if (url === '/api/auth/me') {
+        return createCustomerUnauthorizedResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderRoute('/admin/integrations/telegram-bridge')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Telegram bridge' }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Chatwoot inbox URL')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.anything(),
+    )
+  })
+
+  it('redirects unauthenticated Telegram bridge admin visits to admin login', async () => {
+    fetchMock.mockResolvedValueOnce(createAdminUnauthorizedResponse())
+
+    renderRoute('/admin/integrations/telegram-bridge')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Вход в админ-консоль' }),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/auth/me',
+      expect.objectContaining({
+        credentials: 'include',
+        method: 'GET',
+      }),
+    )
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/auth/me',
+      expect.anything(),
+    )
+  })
+
   it('redirects authenticated admin login visits to branding', async () => {
     fetchMock.mockImplementation(async (input) => {
       const url = String(input)

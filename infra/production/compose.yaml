@@ -125,6 +125,42 @@ services:
       - portal-internal
     restart: unless-stopped
 
+  telegram-bridge:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+    command: ["node", "backend/dist/telegram-bridge/server.js"]
+    depends_on:
+      portal-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      NODE_ENV: production
+      PORTAL_TENANT_SECRET_KEY: ${PORTAL_TENANT_SECRET_KEY:?set PORTAL_TENANT_SECRET_KEY}
+      TELEGRAM_BRIDGE_MAX_BODY_BYTES: ${TELEGRAM_BRIDGE_MAX_BODY_BYTES:-1048576}
+      TELEGRAM_BRIDGE_PHONE_LINKED_TEXT: ${TELEGRAM_BRIDGE_PHONE_LINKED_TEXT:-Спасибо, контакт найден. Теперь можете отправить сообщение.}
+      TELEGRAM_BRIDGE_PHONE_NOT_FOUND_TEXT: ${TELEGRAM_BRIDGE_PHONE_NOT_FOUND_TEXT:-Не удалось найти контакт с этим номером. Проверьте номер или напишите менеджеру.}
+      TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT: ${TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:-Пожалуйста, отправьте номер телефона кнопкой ниже, чтобы мы могли найти ваш контакт.}
+      TELEGRAM_BRIDGE_PORT: ${TELEGRAM_BRIDGE_PORT:-3401}
+      TELEGRAM_BRIDGE_PROCESSING_STALE_MS: ${TELEGRAM_BRIDGE_PROCESSING_STALE_MS:-600000}
+      TELEGRAM_BRIDGE_PUBLIC_BASE_URL: ${TELEGRAM_BRIDGE_PUBLIC_BASE_URL:?set TELEGRAM_BRIDGE_PUBLIC_BASE_URL}
+      TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: ${TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS:-10000}
+    expose:
+      - '${TELEGRAM_BRIDGE_PORT:-3401}'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health'').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"',
+        ]
+      interval: 15s
+      retries: 10
+      start_period: 20s
+      timeout: 5s
+    networks:
+      - portal-internal
+    restart: unless-stopped
+
   portal-web:
     build:
       context: ../..
@@ -135,6 +171,7 @@ services:
     environment:
       PORTAL_CADDY_SITE_ADDRESS: ${PORTAL_CADDY_SITE_ADDRESS:?set PORTAL_CADDY_SITE_ADDRESS}
       PORTAL_DOMAIN: ${PORTAL_DOMAIN:?set PORTAL_DOMAIN}
+      TELEGRAM_BRIDGE_PORT: ${TELEGRAM_BRIDGE_PORT:-3401}
     networks:
       - portal-internal
     ports:

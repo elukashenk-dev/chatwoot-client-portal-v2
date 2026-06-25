@@ -19,6 +19,7 @@ import {
 import {
   getSafeTelegramWebhookInfo,
   parseGetWebhookInfoArgs,
+  runGetWebhookInfoCli,
 } from './getWebhookInfo.js'
 
 const tenantSecretKey = Buffer.alloc(32, 14).toString('base64')
@@ -197,5 +198,59 @@ describe('getSafeTelegramWebhookInfo', () => {
     await expect(
       database.db.select({ total: count() }).from(telegramBridgeConfigs),
     ).resolves.toEqual([{ total: 0 }])
+  })
+})
+
+describe('runGetWebhookInfoCli', () => {
+  it('does not require database env for pre-configuration token-file checks', async () => {
+    const directory = join(tmpdir(), `telegram-webhook-cli-${Date.now()}`)
+    await mkdir(directory, {
+      recursive: true,
+    })
+    const tokenPath = join(directory, 'token.txt')
+    await writeFile(
+      tokenPath,
+      '1234567890:AAExampleTelegramBotTokenSecretValue',
+    )
+    const createDatabaseClient = vi.fn()
+    const getSafeWebhookInfo = vi.fn().mockResolvedValue({
+      owner: 'empty',
+      pendingUpdateCount: 0,
+      url: '',
+    })
+    const writeOutput = vi.fn()
+
+    await expect(
+      runGetWebhookInfoCli([`--telegram-bot-token-file=${tokenPath}`], {
+        createDatabaseClient,
+        getSafeTelegramWebhookInfo: getSafeWebhookInfo,
+        rawEnv: {
+          TELEGRAM_BRIDGE_PUBLIC_BASE_URL: 'https://app.example.test',
+        },
+        writeOutput,
+      }),
+    ).resolves.toEqual({
+      owner: 'empty',
+      pendingUpdateCount: 0,
+      url: '',
+    })
+
+    expect(createDatabaseClient).not.toHaveBeenCalled()
+    expect(getSafeWebhookInfo).toHaveBeenCalledWith({
+      publicBaseUrl: 'https://app.example.test',
+      requestTimeoutMs: 10_000,
+      telegramBotTokenFile: tokenPath,
+    })
+    expect(writeOutput).toHaveBeenCalledWith(
+      JSON.stringify(
+        {
+          owner: 'empty',
+          pendingUpdateCount: 0,
+          url: '',
+        },
+        null,
+        2,
+      ),
+    )
   })
 })

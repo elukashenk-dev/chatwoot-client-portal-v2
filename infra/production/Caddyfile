@@ -17,6 +17,10 @@
 		}
 	}
 
+	handle /telegram-bridge/* {
+		reverse_proxy telegram-bridge:{$TELEGRAM_BRIDGE_PORT:3401}
+	}
+
 	handle /sw.js {
 		header Cache-Control "no-cache, no-store, must-revalidate"
 		file_server

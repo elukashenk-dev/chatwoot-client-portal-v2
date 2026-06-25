@@ -107,6 +107,15 @@ const telegramBridgeEnvSchema = z.object({
 
 export type TelegramBridgeEnv = z.infer<typeof telegramBridgeEnvSchema>
 
+const telegramBridgeWebhookInfoEnvSchema = telegramBridgeEnvSchema.pick({
+  TELEGRAM_BRIDGE_PUBLIC_BASE_URL: true,
+  TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: true,
+})
+
+export type TelegramBridgeWebhookInfoEnv = z.infer<
+  typeof telegramBridgeWebhookInfoEnvSchema
+>
+
 export function loadTelegramBridgeEnv(
   rawEnv: NodeJS.ProcessEnv = process.env,
 ): TelegramBridgeEnv {
@@ -115,4 +124,14 @@ export function loadTelegramBridgeEnv(
   }
 
   return telegramBridgeEnvSchema.parse(rawEnv)
+}
+
+export function loadTelegramBridgeWebhookInfoEnv(
+  rawEnv: NodeJS.ProcessEnv = process.env,
+): TelegramBridgeWebhookInfoEnv {
+  if (rawEnv === process.env) {
+    loadLocalEnvFileIfPresent()
+  }
+
+  return telegramBridgeWebhookInfoEnvSchema.parse(rawEnv)
 }

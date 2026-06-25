@@ -8,6 +8,7 @@ ENV_PRODUCTION_EXAMPLE="$REPO_ROOT/.env.production.example"
 INGRESS_SCRIPT="$REPO_ROOT/scripts/configure-tenant-domain-ingress.sh"
 INSTALL_SCRIPT="$REPO_ROOT/scripts/install-production.sh"
 COMPOSE_FILE="$REPO_ROOT/infra/production/compose.yaml"
+CADDY_FILE="$REPO_ROOT/infra/production/Caddyfile"
 TMP_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -84,12 +85,30 @@ fi
 
 assert_contains "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production"
 assert_contains "$COMPOSE_FILE" "DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN:"
+assert_contains "$COMPOSE_FILE" "telegram-bridge:"
+assert_contains "$COMPOSE_FILE" 'command: ["node", "backend/dist/telegram-bridge/server.js"]'
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT:"
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PUBLIC_BASE_URL:"
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_MAX_BODY_BYTES:"
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PROCESSING_STALE_MS:"
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:"
+assert_contains "$COMPOSE_FILE" 'http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health'
+assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT: \${TELEGRAM_BRIDGE_PORT:-3401}"
+assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN"
+assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID"
+assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN"
+assert_not_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_CHATWOOT_TELEGRAM_INBOX_ID"
+assert_contains "$CADDY_FILE" "handle /telegram-bridge/*"
+assert_contains "$CADDY_FILE" 'reverse_proxy telegram-bridge:{$TELEGRAM_BRIDGE_PORT:3401}'
 assert_contains "$INSTALL_SCRIPT" "Default tenant Chatwoot admin verification token"
 assert_not_contains "$INSTALL_SCRIPT" "Optional separate Chatwoot admin verification token"
 assert_env_value \
   "$ENV_PRODUCTION_EXAMPLE" \
   DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN \
   "replace-with-dedicated-chatwoot-admin-verification-token"
+assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_PORT "3401"
+assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
+assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
 
 deploy_cd_line="$(line_number_of "$DEPLOY_SCRIPT" 'cd "$app_path"')"
 deploy_helper_line="$(line_number_of "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production")"

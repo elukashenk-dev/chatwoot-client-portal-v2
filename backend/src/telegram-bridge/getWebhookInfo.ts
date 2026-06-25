@@ -7,7 +7,10 @@ import {
   classifyTelegramWebhookOwner,
   loadOperatorBridgeConfig,
 } from './configureWebhook.js'
-import { loadTelegramBridgeEnv } from './env.js'
+import {
+  loadTelegramBridgeEnv,
+  loadTelegramBridgeWebhookInfoEnv,
+} from './env.js'
 import { readSecretValue, redactTelegramBridgeSecrets } from './secrets.js'
 import { createTelegramClient, type TelegramWebhookInfo } from './telegramClient.js'
 
@@ -30,6 +33,13 @@ type GetSafeTelegramWebhookInfoInput = {
   telegramBotTokenStdin?: boolean
   telegramClientFactory?: (botToken: string) => TelegramWebhookInfoClient
   tenantSecretKey?: Buffer | string
+}
+
+type RunGetWebhookInfoCliDependencies = {
+  createDatabaseClient?: typeof createDatabaseClient
+  getSafeTelegramWebhookInfo?: typeof getSafeTelegramWebhookInfo
+  rawEnv?: NodeJS.ProcessEnv
+  writeOutput?: (value: string) => void
 }
 
 function readFlagValue(argv: string[], index: number, flag: string) {
@@ -203,39 +213,53 @@ export async function getSafeTelegramWebhookInfo({
   }
 }
 
-export async function runGetWebhookInfoCli(argv = process.argv.slice(2)) {
+export async function runGetWebhookInfoCli(
+  argv = process.argv.slice(2),
+  {
+    createDatabaseClient: createDatabase = createDatabaseClient,
+    getSafeTelegramWebhookInfo: getSafeWebhookInfo = getSafeTelegramWebhookInfo,
+    rawEnv,
+    writeOutput = console.log,
+  }: RunGetWebhookInfoCliDependencies = {},
+) {
   const args = parseGetWebhookInfoArgs(argv)
-  const env = loadTelegramBridgeEnv()
-  const database = 'bridgeKey' in args
-    ? createDatabaseClient({
-        connectionString: env.DATABASE_URL,
-      })
-    : null
 
-  try {
-    const result = await getSafeTelegramWebhookInfo({
-      ...(database ? { db: database.db } : {}),
-      publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
-      ...('bridgeKey' in args ? { publicKey: args.bridgeKey } : {}),
-      requestTimeoutMs: env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS,
-      ...('telegramBotTokenFile' in args
-        ? { telegramBotTokenFile: args.telegramBotTokenFile }
-        : {}),
-      ...('telegramBotTokenStdin' in args
-        ? { telegramBotTokenStdin: args.telegramBotTokenStdin }
-        : {}),
-      ...(database
-        ? { tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY }
-        : {}),
+  if ('bridgeKey' in args) {
+    const env = loadTelegramBridgeEnv(rawEnv)
+    const database = createDatabase({
+      connectionString: env.DATABASE_URL,
     })
 
-    console.log(JSON.stringify(result, null, 2))
-    return result
-  } finally {
-    if (database) {
+    try {
+      const result = await getSafeWebhookInfo({
+        db: database.db,
+        publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
+        publicKey: args.bridgeKey,
+        requestTimeoutMs: env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS,
+        tenantSecretKey: env.PORTAL_TENANT_SECRET_KEY,
+      })
+
+      writeOutput(JSON.stringify(result, null, 2))
+      return result
+    } finally {
       await database.close()
     }
   }
+
+  const env = loadTelegramBridgeWebhookInfoEnv(rawEnv)
+  const result = await getSafeWebhookInfo({
+    publicBaseUrl: env.TELEGRAM_BRIDGE_PUBLIC_BASE_URL,
+    requestTimeoutMs: env.TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS,
+    ...('telegramBotTokenFile' in args
+      ? { telegramBotTokenFile: args.telegramBotTokenFile }
+      : {}),
+    ...('telegramBotTokenStdin' in args
+      ? { telegramBotTokenStdin: args.telegramBotTokenStdin }
+      : {}),
+  })
+
+  writeOutput(JSON.stringify(result, null, 2))
+  return result
 }
 
 if (isDirectCliModule(import.meta.url)) {

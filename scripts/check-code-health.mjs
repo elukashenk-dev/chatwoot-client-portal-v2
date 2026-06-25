@@ -289,6 +289,90 @@ async function checkProductionObjectStorageConfig(failures) {
   }
 }
 
+async function checkProductionTelegramBridgeConfig(failures) {
+  const composePath = 'infra/production/compose.yaml'
+  const caddyfilePath = 'infra/production/Caddyfile'
+  const envExamplePath = '.env.production.example'
+  const compose = await readFile(path.join(repoRoot, composePath), 'utf8')
+  const caddyfile = await readFile(path.join(repoRoot, caddyfilePath), 'utf8')
+  const envExample = await readFile(path.join(repoRoot, envExamplePath), 'utf8')
+  const requiredComposeSnippets = [
+    'telegram-bridge:',
+    'command: ["node", "backend/dist/telegram-bridge/server.js"]',
+    'TELEGRAM_BRIDGE_PORT:',
+    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL:',
+    'TELEGRAM_BRIDGE_MAX_BODY_BYTES:',
+    'TELEGRAM_BRIDGE_PROCESSING_STALE_MS:',
+    'TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:',
+    "expose:\n      - '${TELEGRAM_BRIDGE_PORT:-3401}'",
+    "http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health",
+  ]
+  const forbiddenComposeSnippets = [
+    'TELEGRAM_BRIDGE_TELEGRAM_BOT_TOKEN',
+    'TELEGRAM_BRIDGE_CHATWOOT_ACCOUNT_ID',
+    'TELEGRAM_BRIDGE_CHATWOOT_API_ACCESS_TOKEN',
+    'TELEGRAM_BRIDGE_CHATWOOT_TELEGRAM_INBOX_ID',
+  ]
+  const requiredEnvNames = [
+    'TELEGRAM_BRIDGE_PORT',
+    'TELEGRAM_BRIDGE_PUBLIC_BASE_URL',
+    'TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS',
+    'TELEGRAM_BRIDGE_MAX_BODY_BYTES',
+    'TELEGRAM_BRIDGE_PROCESSING_STALE_MS',
+    'TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT',
+    'TELEGRAM_BRIDGE_PHONE_NOT_FOUND_TEXT',
+    'TELEGRAM_BRIDGE_PHONE_LINKED_TEXT',
+  ]
+
+  for (const snippet of requiredComposeSnippets) {
+    if (!compose.includes(snippet)) {
+      failures.push({
+        relativePath: composePath,
+        message: `missing production Telegram bridge wiring: ${snippet}`,
+      })
+    }
+  }
+
+  for (const snippet of forbiddenComposeSnippets) {
+    if (compose.includes(snippet)) {
+      failures.push({
+        relativePath: composePath,
+        message: `tenant-specific Telegram bridge secret must not be in Compose env: ${snippet}`,
+      })
+    }
+  }
+
+  for (const envName of requiredEnvNames) {
+    if (!envExample.includes(`${envName}=`)) {
+      failures.push({
+        relativePath: envExamplePath,
+        message: `missing production Telegram bridge env example: ${envName}`,
+      })
+    }
+  }
+
+  if (!caddyfile.includes('handle /telegram-bridge/*')) {
+    failures.push({
+      relativePath: caddyfilePath,
+      message: 'production Caddyfile must route /telegram-bridge/*',
+    })
+  }
+
+  if (!compose.includes('TELEGRAM_BRIDGE_PORT: ${TELEGRAM_BRIDGE_PORT:-3401}')) {
+    failures.push({
+      relativePath: composePath,
+      message: 'production Caddy container must receive TELEGRAM_BRIDGE_PORT',
+    })
+  }
+
+  if (!caddyfile.includes('reverse_proxy telegram-bridge:{$TELEGRAM_BRIDGE_PORT:3401}')) {
+    failures.push({
+      relativePath: caddyfilePath,
+      message: 'production Caddyfile must proxy Telegram bridge to port 3401',
+    })
+  }
+}
+
 async function main() {
   const relativePaths = (
     await Promise.all(codeHealthConfig.roots.map((root) => listFiles(root)))
@@ -321,6 +405,7 @@ async function main() {
   await checkProductionSecurityHeaders(failures)
   await checkRetiredWebhookScripts(failures)
   await checkProductionObjectStorageConfig(failures)
+  await checkProductionTelegramBridgeConfig(failures)
 
   if (failures.length > 0) {
     console.error('Code health check failed.\n')

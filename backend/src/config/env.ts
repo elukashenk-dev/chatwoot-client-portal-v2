@@ -199,6 +199,8 @@ const envSchema = z
     PUSH_VAPID_SUBJECT: optionalNonEmptyString,
     PUSH_VAPID_KEY_ID: optionalNonEmptyString,
     PUSH_SUBSCRIPTION_ALLOWED_ORIGINS: pushSubscriptionAllowedOrigins,
+    TELEGRAM_BRIDGE_PUBLIC_BASE_URL: optionalUrlString,
+    TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: optionalPositiveInt.default(10_000),
     BRANDING_ASSET_STORAGE_ACCESS_KEY_ID: optionalNonEmptyString,
     BRANDING_ASSET_STORAGE_BUCKET: optionalNonEmptyString,
     BRANDING_ASSET_STORAGE_ENDPOINT: optionalUrlString,
