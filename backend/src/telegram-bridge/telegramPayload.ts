@@ -13,6 +13,8 @@ const serviceMessageKeys = [
   'group_chat_created',
   'left_chat_member',
   'message_auto_delete_timer_changed',
+  'migrate_from_chat_id',
+  'migrate_to_chat_id',
   'new_chat_members',
   'new_chat_photo',
   'new_chat_title',
@@ -45,8 +47,12 @@ function hasMessageShape(value: unknown): value is TelegramMessage {
   return 'id' in value.chat && typeof value.chat.type === 'string'
 }
 
+function escapeMarkdownStrongText(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/\*/g, '\\*')
+}
+
 function prefixWithAuthor(authorName: string, value: string) {
-  return `${authorName}: ${value}`
+  return `**${escapeMarkdownStrongText(authorName)}:**\n${value}`
 }
 
 export function extractSupportedMessage(

@@ -173,6 +173,14 @@ describe('telegram payload helpers', () => {
       ),
     ).toBe(true)
     expect(
+      shouldIgnoreMessage(
+        groupUpdate({
+          migrate_to_chat_id: -1004333099080,
+          text: undefined,
+        }).message,
+      ),
+    ).toBe(true)
+    expect(
       extractSupportedMessage({
         edited_message: privateTextUpdate().message,
         update_id: 303,
@@ -195,7 +203,7 @@ describe('telegram payload helpers', () => {
     expect(message.from?.id).toBe('tg_group:-100123')
     expect(message.from?.first_name).toBe('Support Group')
     expect(message.from?.original_author).toEqual(update.message.from)
-    expect(message.text).toBe('Ivan Petrov: group hello')
+    expect(message.text).toBe('**Ivan Petrov:**\ngroup hello')
   })
 
   it('prefixes group captions with author names', () => {
@@ -212,7 +220,21 @@ describe('telegram payload helpers', () => {
     )
 
     expect(buildAuthorName({ username: 'support_user' })).toBe('@support_user')
-    expect(transformed.message.caption).toBe('@support_user: photo caption')
+    expect(transformed.message.caption).toBe('**@support_user:**\nphoto caption')
+  })
+
+  it('escapes markdown control characters in group author names', () => {
+    const transformed = transformGroupUpdate(
+      groupUpdate({
+        from: {
+          first_name: 'Ivan *VIP*',
+          id: 88,
+          is_bot: false,
+        },
+      }),
+    )
+
+    expect(transformed.message.text).toBe('**Ivan \\*VIP\\*:**\ngroup hello')
   })
 
   it('adds a clear author placeholder for group attachments without text or caption', () => {
@@ -227,6 +249,6 @@ describe('telegram payload helpers', () => {
       }),
     )
 
-    expect(transformed.message.text).toBe('Ivan Petrov: [attachment]')
+    expect(transformed.message.text).toBe('**Ivan Petrov:**\n[attachment]')
   })
 })

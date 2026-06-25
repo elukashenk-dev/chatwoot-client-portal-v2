@@ -127,6 +127,28 @@ function groupTextUpdate(updateId = 1001): TelegramUpdate {
   }
 }
 
+function groupMigrationUpdate(updateId = 1001): TelegramUpdate {
+  return {
+    message: {
+      chat: {
+        id: -5562198093,
+        title: 'Support Group',
+        type: 'group',
+      },
+      date: 1_700_000_000,
+      from: {
+        first_name: 'Ivan',
+        id: 88,
+        is_bot: false,
+        last_name: 'Petrov',
+      },
+      message_id: 10,
+      migrate_to_chat_id: -1004333099080,
+    },
+    update_id: updateId,
+  }
+}
+
 function createDependencies() {
   const configRepository = {
     findActiveBridgeConfigByPublicKey: vi.fn().mockResolvedValue({
@@ -654,12 +676,39 @@ describe('createTelegramBridgeService', () => {
             first_name: 'Support Group',
             id: 'tg_group:-100123',
           }),
-          text: 'Ivan Petrov: group hello',
+          text: '**Ivan Petrov:**\ngroup hello',
         }),
         update_id: 1014,
       }),
     )
     expect(dependencies.dedupeRepository.markUpdateProcessed).toHaveBeenCalled()
+  })
+
+  it('ignores Telegram group migration service updates without creating dead Chatwoot conversations', async () => {
+    const dependencies = createDependencies()
+
+    await expect(
+      dependencies.service.handleTelegramUpdate({
+        bridgeKey: 'tenant-a-support',
+        telegramSecretToken: 'tenant-a-header-secret',
+        update: groupMigrationUpdate(1020),
+        webhookPathSecret: 'tenant-a-path-secret',
+      }),
+    ).resolves.toEqual({
+      kind: 'accepted',
+    })
+
+    expect(dependencies.createChatwootClient).not.toHaveBeenCalled()
+    expect(dependencies.createTelegramClient).not.toHaveBeenCalled()
+    expect(
+      dependencies.chatwootClient.forwardTelegramUpdateToChatwoot,
+    ).not.toHaveBeenCalled()
+    expect(dependencies.dedupeRepository.markUpdateProcessed).toHaveBeenCalledWith({
+      attemptCount: 1,
+      bridgeConfigId: 'bridge-config-1',
+      now: new Date('2026-06-24T12:00:00.000Z'),
+      updateId: 1020,
+    })
   })
 
   it('marks Chatwoot forward failures as retryable without marking the update processed', async () => {
