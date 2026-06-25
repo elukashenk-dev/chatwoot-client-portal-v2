@@ -238,9 +238,14 @@ execution-plan детали здесь не хранятся.
   `tenant.publicBaseUrl`, and the old global
   `TELEGRAM_BRIDGE_PUBLIC_BASE_URL` env contract is removed from runtime,
   Compose, env upgrade helpers and current operations docs.
+- Telegram bridge review hardening baseline is implemented: bot replacement
+  through an existing bridge is rejected, webhook route secrets are redacted
+  from request logs, private phone-contact retries do not repeat external side
+  effects, processed/failed bridge delivery rows are covered by retention
+  cleanup, admin setup has app-level tenant isolation coverage, and the
+  production backend image uses a test-excluding build config.
 
 ## Recommended Next Step
 
-- Deploy the Telegram bridge tenant-webhook contract with the normal production
-  deploy flow because Compose/env contracts changed, then configure the next
-  tenant bot through the admin UI and complete private/group smoke checks.
+- Checkpoint commit the Telegram bridge review-hardening slice, then merge and
+  deploy it with the normal backend production image rebuild.

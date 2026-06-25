@@ -1,4 +1,7 @@
-import Fastify from 'fastify'
+import Fastify, {
+  type FastifyRequest,
+  type FastifyServerOptions,
+} from 'fastify'
 
 import { createDatabaseClient, type DatabaseClient } from '../db/client.js'
 import { runDatabaseMigrations } from '../db/migrate.js'
@@ -23,7 +26,7 @@ type TelegramBridgeHandler = (
 
 type BuildTelegramBridgeAppOptions = {
   handleTelegramUpdate: TelegramBridgeHandler
-  logger?: boolean
+  logger?: FastifyServerOptions['logger']
   maxBodyBytes: number
 }
 
@@ -118,6 +121,61 @@ function mapBridgeResult(result: TelegramBridgeResult) {
   }
 }
 
+function redactTelegramBridgeUrl(url: string) {
+  if (!url.startsWith('/telegram-bridge/')) {
+    return url
+  }
+
+  if (url === '/telegram-bridge/health') {
+    return url
+  }
+
+  return '/telegram-bridge/[redacted]'
+}
+
+function serializeRequestForLogs(request: FastifyRequest) {
+  const serialized: {
+    host: string
+    method: string
+    remoteAddress: string
+    remotePort?: number
+    url: string
+  } = {
+    host: request.host,
+    method: request.method,
+    remoteAddress: request.ip,
+    url: redactTelegramBridgeUrl(request.url),
+  }
+
+  if (request.socket.remotePort !== undefined) {
+    serialized.remotePort = request.socket.remotePort
+  }
+
+  return serialized
+}
+
+function createLoggerOptions(logger: BuildTelegramBridgeAppOptions['logger']) {
+  if (logger === false || logger === undefined) {
+    return logger
+  }
+
+  if (logger === true) {
+    return {
+      serializers: {
+        req: serializeRequestForLogs,
+      },
+    } satisfies Exclude<BuildTelegramBridgeAppOptions['logger'], boolean>
+  }
+
+  return {
+    ...logger,
+    serializers: {
+      ...logger.serializers,
+      req: serializeRequestForLogs,
+    },
+  }
+}
+
 export function createTelegramBridgeServiceTextsFromEnv(
   env: TelegramBridgeServiceTextEnv,
 ): TelegramBridgeServiceTexts {
@@ -175,10 +233,16 @@ export function buildTelegramBridgeApp({
   logger = false,
   maxBodyBytes,
 }: BuildTelegramBridgeAppOptions) {
-  const app = Fastify({
+  const appOptions: FastifyServerOptions = {
     bodyLimit: maxBodyBytes,
-    logger,
-  })
+  }
+  const loggerOptions = createLoggerOptions(logger)
+
+  if (loggerOptions !== undefined) {
+    appOptions.logger = loggerOptions
+  }
+
+  const app = Fastify(appOptions)
 
   app.setNotFoundHandler(async (_request, reply) => {
     return reply.code(404).send(genericError('not_found', 'Not found.'))

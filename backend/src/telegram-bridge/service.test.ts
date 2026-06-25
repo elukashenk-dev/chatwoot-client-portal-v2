@@ -640,6 +640,68 @@ describe('createTelegramBridgeService', () => {
     expect(dependencies.dedupeRepository.markUpdateProcessed).toHaveBeenCalled()
   })
 
+  it('keeps repeated private contact cards auth-only even when the sender is already linked', async () => {
+    const dependencies = createDependencies()
+    dependencies.chatwootClient.findContactInboxBySourceId.mockResolvedValue({
+      contactId: 44,
+      inboxId: 17,
+      sourceId: '77',
+    })
+
+    await expect(
+      dependencies.service.handleTelegramUpdate({
+        bridgeKey: 'tenant-a-support',
+        telegramSecretToken: 'tenant-a-header-secret',
+        update: privateContactUpdate({
+          updateId: 1021,
+        }),
+        webhookPathSecret: 'tenant-a-path-secret',
+      }),
+    ).resolves.toEqual({
+      kind: 'accepted',
+    })
+
+    expect(
+      dependencies.chatwootClient.forwardTelegramUpdateToChatwoot,
+    ).not.toHaveBeenCalled()
+    expect(dependencies.chatwootClient.createContactInbox).not.toHaveBeenCalled()
+    expect(dependencies.dedupeRepository.markUpdateProcessed).toHaveBeenCalled()
+  })
+
+  it('does not ask Telegram to retry after a post-forward processed mark failure', async () => {
+    const dependencies = createDependencies()
+    const update = privateTextUpdate(1022)
+    const error = new Error('Database unavailable after Chatwoot accepted update.')
+    dependencies.chatwootClient.findContactInboxBySourceId.mockResolvedValue({
+      contactId: 44,
+      inboxId: 17,
+      sourceId: '77',
+    })
+    dependencies.dedupeRepository.markUpdateProcessed.mockRejectedValueOnce(error)
+
+    await expect(
+      dependencies.service.handleTelegramUpdate({
+        bridgeKey: 'tenant-a-support',
+        telegramSecretToken: 'tenant-a-header-secret',
+        update,
+        webhookPathSecret: 'tenant-a-path-secret',
+      }),
+    ).resolves.toEqual({
+      kind: 'accepted',
+    })
+
+    expect(
+      dependencies.chatwootClient.forwardTelegramUpdateToChatwoot,
+    ).toHaveBeenCalledWith(update)
+    expect(dependencies.dedupeRepository.markUpdateFailed).not.toHaveBeenCalled()
+    expect(dependencies.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'processed_mark_failed_after_external_side_effect',
+        updateId: 1022,
+      }),
+    )
+  })
+
   it('forwards group messages as private-looking Chatwoot payloads without phone prompts', async () => {
     const dependencies = createDependencies()
     const update = groupTextUpdate(1014)

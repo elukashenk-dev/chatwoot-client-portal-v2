@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { count, eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -11,6 +13,8 @@ import {
   portalRateLimitBuckets,
   portalSessions,
   portalUsers,
+  telegramBridgeConfigs,
+  telegramBridgeDeliveries,
   verificationRecords,
 } from '../../db/schema.js'
 import { hashPassword } from '../../lib/password.js'
@@ -35,11 +39,48 @@ async function countRows(
     | typeof portalPushSubscriptions
     | typeof portalRateLimitBuckets
     | typeof portalSessions
+    | typeof telegramBridgeDeliveries
     | typeof verificationRecords,
 ) {
   const [result] = await database.select({ value: count() }).from(table)
 
   return result?.value ?? 0
+}
+
+async function seedTelegramBridgeConfig(
+  database: DatabaseClient,
+  {
+    botId,
+    inboxId,
+    tenantId,
+  }: {
+    botId: string
+    inboxId: number
+    tenantId: number
+  },
+) {
+  const [config] = await database.db
+    .insert(telegramBridgeConfigs)
+    .values({
+      chatwootTelegramInboxId: inboxId,
+      displayName: `Bridge ${botId}`,
+      id: randomUUID(),
+      publicKey: `bridge-${botId}`,
+      status: 'active',
+      telegramBotId: botId,
+      telegramBotTokenCiphertext: 'bot-token-ciphertext',
+      telegramBotUsername: `bot_${botId}`,
+      telegramSecretTokenCiphertext: 'header-secret-ciphertext',
+      telegramWebhookPathSecretCiphertext: 'path-secret-ciphertext',
+      tenantId,
+    })
+    .returning({ id: telegramBridgeConfigs.id })
+
+  if (!config) {
+    throw new Error('Failed to create telegram bridge config fixture.')
+  }
+
+  return config.id
 }
 
 describe('cleanupPortalMaintenanceData', () => {
@@ -274,6 +315,46 @@ describe('cleanupPortalMaintenanceData', () => {
         threadId: 'private:me',
       },
     ])
+    const bridgeConfigId = await seedTelegramBridgeConfig(database, {
+      botId: '111',
+      inboxId: 17,
+      tenantId,
+    })
+
+    await database.db.insert(telegramBridgeDeliveries).values([
+      {
+        id: randomUUID(),
+        processedAt: daysAgo(now, 31),
+        status: 'processed',
+        telegramBridgeConfigId: bridgeConfigId,
+        updateId: 1001,
+        updatedAt: daysAgo(now, 31),
+      },
+      {
+        errorCode: 'Error',
+        errorMessage: 'old failure',
+        id: randomUUID(),
+        status: 'failed',
+        telegramBridgeConfigId: bridgeConfigId,
+        updateId: 1002,
+        updatedAt: daysAgo(now, 31),
+      },
+      {
+        id: randomUUID(),
+        status: 'processing',
+        telegramBridgeConfigId: bridgeConfigId,
+        updateId: 1003,
+        updatedAt: daysAgo(now, 31),
+      },
+      {
+        id: randomUUID(),
+        processedAt: daysAgo(now, 2),
+        status: 'processed',
+        telegramBridgeConfigId: bridgeConfigId,
+        updateId: 1004,
+        updatedAt: daysAgo(now, 2),
+      },
+    ])
 
     await expect(
       cleanupPortalMaintenanceData(database.db, {
@@ -286,6 +367,7 @@ describe('cleanupPortalMaintenanceData', () => {
       pushSubscriptionsDeleted: 1,
       rateLimitBucketsDeleted: 1,
       sessionsDeleted: 1,
+      telegramBridgeDeliveriesDeleted: 2,
       verificationRecordsDeleted: 1,
       webhookDeliveriesDeleted: 1,
     })
@@ -305,6 +387,9 @@ describe('cleanupPortalMaintenanceData', () => {
     await expect(countRows(database.db, portalPushSubscriptions)).resolves.toBe(
       1,
     )
+    await expect(
+      countRows(database.db, telegramBridgeDeliveries),
+    ).resolves.toBe(2)
 
     const [threadCount] = await database.db
       .select({ value: count() })
@@ -332,6 +417,35 @@ describe('cleanupPortalMaintenanceData', () => {
         tenantId: otherTenantId,
       },
     ])
+    const bridgeConfigId = await seedTelegramBridgeConfig(database, {
+      botId: '222',
+      inboxId: 17,
+      tenantId,
+    })
+    const otherBridgeConfigId = await seedTelegramBridgeConfig(database, {
+      botId: '333',
+      inboxId: 17,
+      tenantId: otherTenantId,
+    })
+
+    await database.db.insert(telegramBridgeDeliveries).values([
+      {
+        id: randomUUID(),
+        processedAt: daysAgo(now, 31),
+        status: 'processed',
+        telegramBridgeConfigId: bridgeConfigId,
+        updateId: 2001,
+        updatedAt: daysAgo(now, 31),
+      },
+      {
+        id: randomUUID(),
+        processedAt: daysAgo(now, 31),
+        status: 'processed',
+        telegramBridgeConfigId: otherBridgeConfigId,
+        updateId: 2002,
+        updatedAt: daysAgo(now, 31),
+      },
+    ])
 
     await expect(
       cleanupPortalMaintenanceData(database.db, {
@@ -343,10 +457,14 @@ describe('cleanupPortalMaintenanceData', () => {
       dryRun: true,
       pushDeliveriesDeleted: 0,
       pushSubscriptionsDeleted: 0,
+      telegramBridgeDeliveriesDeleted: 1,
       webhookDeliveriesDeleted: 1,
     })
     await expect(
       countRows(database.db, chatwootWebhookDeliveries),
+    ).resolves.toBe(2)
+    await expect(
+      countRows(database.db, telegramBridgeDeliveries),
     ).resolves.toBe(2)
 
     await expect(
@@ -356,10 +474,14 @@ describe('cleanupPortalMaintenanceData', () => {
       }),
     ).resolves.toMatchObject({
       dryRun: false,
+      telegramBridgeDeliveriesDeleted: 1,
       webhookDeliveriesDeleted: 1,
     })
     await expect(
       countRows(database.db, chatwootWebhookDeliveries),
+    ).resolves.toBe(1)
+    await expect(
+      countRows(database.db, telegramBridgeDeliveries),
     ).resolves.toBe(1)
   })
 })

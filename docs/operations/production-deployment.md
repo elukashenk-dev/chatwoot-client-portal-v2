@@ -171,6 +171,8 @@ Default retention:
 - send ledger `confirmed`/`failed`: `90` days;
 - send ledger stuck in `processing`: `24` hours;
 - Chatwoot webhook delivery bookkeeping: `30` days;
+- Telegram bridge delivery bookkeeping: `30` days for `processed`/`failed`
+  rows;
 - expired rate-limit buckets: `24` hours after reset;
 - expired sessions: `7` days after expiry;
 - expired verification records: `30` days after expiry.

@@ -360,7 +360,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
         .mockReturnValueOnce('path-secret')
         .mockReturnValueOnce('header-secret'),
       getTelegramBotIdentity: vi.fn().mockResolvedValue({
-        id: '1234567890',
+        id: 'old-bot-id',
         username: 'support_bot',
       }),
       now: () => now,
@@ -469,6 +469,61 @@ describe('createTenantTelegramBridgeSetupService', () => {
     )
   })
 
+  it('rejects replacing an existing inbox bridge with a different Telegram bot id', async () => {
+    await seedBridgeConfig(database, {
+      botId: 'old-bot-id',
+    })
+
+    const telegramClient = {
+      getWebhookInfo: vi.fn(),
+      setWebhook: vi.fn(),
+    }
+    const service = createTenantTelegramBridgeSetupService({
+      audit: vi.fn().mockResolvedValue(undefined),
+      db: database.db,
+      generateBridgeKey: () => 'new-bridge-key',
+      generateSecret: vi
+        .fn()
+        .mockReturnValueOnce('new-path-secret')
+        .mockReturnValueOnce('new-header-secret'),
+      getTelegramBotIdentity: vi.fn().mockResolvedValue({
+        id: 'new-bot-id',
+        username: 'support_bot',
+      }),
+      now: () => now,
+      readChatwootTelegramInbox: vi.fn().mockResolvedValue({
+        botName: 'support_bot',
+        id: 17,
+      }),
+      telegramClientFactory: vi.fn(() => telegramClient),
+      tenant: createTenantContext(),
+      tenantSecretKey,
+      verifyBridgeHealth: vi.fn().mockResolvedValue(undefined),
+    })
+
+    await expect(
+      service.setupTelegramBridge({
+        admin,
+        input: {
+          chatwootAccountIdFromUrl: 3,
+          chatwootTelegramInboxId: 17,
+          telegramBotToken: '9876543210:AANewTelegramBotTokenSecretValue',
+        },
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'TELEGRAM_BRIDGE_BOT_REPLACEMENT_CONFLICT',
+      statusCode: 409,
+    })
+    expect(telegramClient.getWebhookInfo).not.toHaveBeenCalled()
+    expect(telegramClient.setWebhook).not.toHaveBeenCalled()
+
+    const [row] = await database.db.select().from(telegramBridgeConfigs)
+
+    expect(row?.telegramBotId).toBe('old-bot-id')
+  })
+
   it('keeps existing active secrets unchanged when setWebhook fails', async () => {
     await seedBridgeConfig(database)
     const telegramClient = {
@@ -493,7 +548,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
         .mockReturnValueOnce('path-secret')
         .mockReturnValueOnce('header-secret'),
       getTelegramBotIdentity: vi.fn().mockResolvedValue({
-        id: '1234567890',
+        id: 'old-bot-id',
         username: 'support_bot',
       }),
       now: () => now,
