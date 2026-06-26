@@ -360,6 +360,7 @@ export function buildApp({
     })
   const createRegistrationServiceForRequest = (request: FastifyRequest) =>
     createRegistrationService({
+      authService,
       chatwootClient: createChatwootClientForRequest(request),
       emailDelivery: createEmailDelivery(),
       legalDocumentsReader: createLegalDocumentsServiceForRequest(request),
@@ -436,6 +437,7 @@ export function buildApp({
   })
   registerRegistrationRoutes(app, {
     createRegistrationService: createRegistrationServiceForRequest,
+    env,
   })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,

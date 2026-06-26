@@ -14,14 +14,27 @@ import {
   SmtpEmailDeliveryError,
 } from '../../integrations/email/smtp.js'
 import { normalizeEmail } from '../../lib/email.js'
-import { ApiError } from '../../lib/errors.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
 import { assertValidPortalPassword } from '../../lib/passwordPolicy.js'
+import type { AuthService, AuthenticatedPortalUser } from '../auth/service.js'
 import type { PortalUsersRepository } from '../portal-users/repository.js'
 import {
   createContactNotFoundError,
   type RegistrationSupportContactReader,
 } from './contactNotFoundError.js'
+import {
+  createAccountExistsError,
+  createChatwootUnavailableError,
+  createDeliveryInProgressError,
+  createDeliveryUnavailableError,
+  createRegistrationUnavailableError,
+  createVerificationCodeExpiredError,
+  createVerificationContinuationInvalidError,
+  createVerificationInvalidCodeError,
+  createVerificationNotFoundOrInvalidatedError,
+  createVerificationRequiredError,
+  createVerificationTooManyAttemptsError,
+} from './errors.js'
 import {
   buildLegalAcceptanceRecord,
   type RegistrationLegalDocumentVersions,
@@ -36,6 +49,7 @@ const REGISTRATION_CONTINUATION_TTL_SECONDS = 15 * 60
 const REGISTRATION_PURPOSE = 'registration'
 
 type CreateRegistrationServiceOptions = {
+  authService: Pick<AuthService, 'issueSessionForUser'>
   chatwootClient: Pick<ChatwootClient, 'findContactByEmail'>
   emailDelivery: Pick<SmtpEmailDelivery, 'send'>
   legalDocumentsReader: {
@@ -67,11 +81,15 @@ type RegistrationVerificationConfirmResult = {
   result: 'verification_confirmed'
 }
 
-type RegistrationSetPasswordResult = {
-  email: string
-  nextStep: 'login'
+export type RegistrationCompletedSession = {
+  nextStep: 'chat'
   purpose: 'registration'
   result: 'registration_completed'
+  session: {
+    expiresAt: Date
+  }
+  sessionToken: string
+  user: AuthenticatedPortalUser
 }
 
 function createRegistrationVerificationCode() {
@@ -140,103 +158,23 @@ function buildVerificationConfirmedResponse(
   }
 }
 
-function buildRegistrationCompletedResponse(
-  email: string,
-): RegistrationSetPasswordResult {
+function buildRegistrationCompletedResponse({
+  session,
+  sessionToken,
+  user,
+}: {
+  session: { expiresAt: Date }
+  sessionToken: string
+  user: AuthenticatedPortalUser
+}): RegistrationCompletedSession {
   return {
-    email,
-    nextStep: 'login',
+    nextStep: 'chat',
     purpose: REGISTRATION_PURPOSE,
     result: 'registration_completed',
+    session,
+    sessionToken,
+    user,
   }
-}
-
-function createRegistrationUnavailableError() {
-  return new ApiError(
-    503,
-    'REGISTRATION_UNAVAILABLE',
-    'Регистрация сейчас недоступна. Попробуйте позже.',
-  )
-}
-
-function createChatwootUnavailableError() {
-  return new ApiError(
-    502,
-    'CHATWOOT_UNAVAILABLE',
-    'Мы не смогли проверить доступ через Chatwoot. Попробуйте чуть позже.',
-  )
-}
-
-function createDeliveryUnavailableError() {
-  return new ApiError(
-    503,
-    'REGISTRATION_DELIVERY_UNAVAILABLE',
-    'Мы не смогли отправить код подтверждения. Попробуйте чуть позже.',
-  )
-}
-
-function createDeliveryInProgressError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_DELIVERY_IN_PROGRESS',
-    'Код подтверждения уже отправляется. Подождите немного и попробуйте снова.',
-  )
-}
-
-function createVerificationInvalidCodeError() {
-  return new ApiError(
-    400,
-    'REGISTRATION_VERIFICATION_INVALID_CODE',
-    'Неверный код подтверждения. Проверьте код и попробуйте еще раз.',
-  )
-}
-
-function createVerificationCodeExpiredError() {
-  return new ApiError(
-    410,
-    'REGISTRATION_VERIFICATION_CODE_EXPIRED',
-    'Срок действия кода подтверждения истек. Запросите новый код.',
-  )
-}
-
-function createVerificationTooManyAttemptsError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_VERIFICATION_TOO_MANY_ATTEMPTS',
-    'Слишком много неверных попыток. Запросите новый код подтверждения.',
-  )
-}
-
-function createVerificationNotFoundOrInvalidatedError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_VERIFICATION_NOT_FOUND_OR_INVALIDATED',
-    'Этот код подтверждения больше недействителен. Запросите новый код.',
-  )
-}
-
-function createVerificationRequiredError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_VERIFICATION_REQUIRED',
-    'Сначала снова подтвердите email, прежде чем задавать пароль.',
-  )
-}
-
-function createVerificationContinuationInvalidError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_VERIFICATION_CONTINUATION_INVALID',
-    'Подтверждение регистрации больше недействительно. Запросите новый код и попробуйте еще раз.',
-  )
-}
-
-function createAccountExistsError() {
-  return new ApiError(
-    409,
-    'REGISTRATION_ACCOUNT_EXISTS',
-    'Для этого email уже создан аккаунт. Войдите или используйте восстановление пароля.',
-  )
 }
 
 function hashContinuationToken(token: string) {
@@ -267,6 +205,7 @@ function isUniqueViolation(error: unknown) {
 }
 
 export function createRegistrationService({
+  authService,
   chatwootClient,
   emailDelivery,
   legalDocumentsReader,
@@ -276,6 +215,218 @@ export function createRegistrationService({
   supportContactReader,
   tenantId,
 }: CreateRegistrationServiceOptions) {
+  async function completeRegistration({
+    continuationToken,
+    email,
+    ipAddress,
+    passwordHash,
+    userAgent,
+  }: {
+    continuationToken: string
+    email: string
+    ipAddress?: string | null
+    passwordHash: string | null
+    userAgent?: string | null
+  }): Promise<RegistrationCompletedSession> {
+    const normalizedEmail = normalizeEmail(email)
+    const normalizedContinuationToken = continuationToken.trim()
+    const completedAt = now()
+
+    try {
+      const completionResult =
+        await registrationRepository.transactionWithScopedLock(
+          normalizedEmail,
+          async (tx) => {
+            const verifiedRecord =
+              await registrationRepository.findLatestVerifiedVerificationByEmail(
+                normalizedEmail,
+                tx,
+              )
+
+            if (!verifiedRecord) {
+              const latestVerification =
+                await registrationRepository.findLatestVerificationByEmail(
+                  normalizedEmail,
+                  tx,
+                )
+
+              if (latestVerification?.status === 'consumed') {
+                return {
+                  outcome: 'not_found_or_consumed' as const,
+                }
+              }
+
+              return {
+                outcome: 'verification_required' as const,
+              }
+            }
+
+            const isContinuationExpired =
+              !verifiedRecord.continuationTokenExpiresAt ||
+              verifiedRecord.continuationTokenExpiresAt.getTime() <=
+                completedAt.getTime()
+
+            if (isContinuationExpired) {
+              await registrationRepository.invalidateVerifiedVerification(
+                verifiedRecord.id,
+                completedAt,
+                tx,
+              )
+
+              return {
+                outcome: 'verification_required' as const,
+              }
+            }
+
+            if (
+              !verifyContinuationToken({
+                providedToken: normalizedContinuationToken,
+                storedTokenHash: verifiedRecord.continuationTokenHash,
+              })
+            ) {
+              return {
+                outcome: 'continuation_invalid' as const,
+              }
+            }
+
+            const existingPortalUser =
+              await registrationRepository.findPortalUserByEmail(
+                normalizedEmail,
+                tx,
+              )
+
+            if (existingPortalUser) {
+              await registrationRepository.invalidateVerifiedVerification(
+                verifiedRecord.id,
+                completedAt,
+                tx,
+              )
+
+              return {
+                outcome: 'account_exists' as const,
+              }
+            }
+
+            const createdUser = await registrationRepository.createPortalUser(
+              {
+                email: normalizedEmail,
+                fullName: verifiedRecord.fullName,
+                passwordHash,
+              },
+              tx,
+            )
+
+            if (!createdUser) {
+              throw new Error(
+                'Portal user could not be created during registration completion.',
+              )
+            }
+
+            if (!verifiedRecord.chatwootContactId) {
+              throw new Error(
+                'Verified registration record is missing Chatwoot contact id.',
+              )
+            }
+
+            await registrationRepository.createPortalUserContactLink(
+              {
+                chatwootContactId: verifiedRecord.chatwootContactId,
+                userId: createdUser.id,
+              },
+              tx,
+            )
+
+            const linkedAcceptance =
+              await registrationRepository.linkLatestRegistrationAcceptanceToUser(
+                {
+                  email: normalizedEmail,
+                  portalUserId: createdUser.id,
+                },
+                tx,
+              )
+
+            if (!linkedAcceptance) {
+              throw new Error(
+                'Registration legal acceptance could not be linked to the created portal user.',
+              )
+            }
+
+            const consumedRecord =
+              await registrationRepository.consumeVerifiedVerification(
+                verifiedRecord.id,
+                completedAt,
+                tx,
+              )
+
+            if (!consumedRecord) {
+              return {
+                outcome: 'not_found_or_consumed' as const,
+              }
+            }
+
+            const issuedSession = await authService.issueSessionForUser({
+              executor: tx,
+              tenantId,
+              user: createdUser,
+              userId: createdUser.id,
+              ...(ipAddress !== undefined ? { ipAddress } : {}),
+              ...(userAgent !== undefined ? { userAgent } : {}),
+            })
+
+            return {
+              outcome: 'completed' as const,
+              response: buildRegistrationCompletedResponse(issuedSession),
+            }
+          },
+        )
+
+      if (completionResult.outcome === 'account_exists') {
+        throw createAccountExistsError()
+      }
+
+      if (completionResult.outcome === 'continuation_invalid') {
+        throw createVerificationContinuationInvalidError()
+      }
+
+      if (completionResult.outcome === 'not_found_or_consumed') {
+        throw createVerificationNotFoundOrInvalidatedError()
+      }
+
+      if (completionResult.outcome === 'verification_required') {
+        throw createVerificationRequiredError()
+      }
+
+      return completionResult.response
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        await registrationRepository.transactionWithScopedLock(
+          normalizedEmail,
+          async (tx) => {
+            const verifiedRecord =
+              await registrationRepository.findLatestVerifiedVerificationByEmail(
+                normalizedEmail,
+                tx,
+              )
+
+            if (!verifiedRecord) {
+              return
+            }
+
+            await registrationRepository.invalidateVerifiedVerification(
+              verifiedRecord.id,
+              completedAt,
+              tx,
+            )
+          },
+        )
+
+        throw createAccountExistsError()
+      }
+
+      throw error
+    }
+  }
+
   return {
     async requestVerification({
       email,
@@ -778,194 +929,47 @@ export function createRegistrationService({
     async setPassword({
       continuationToken,
       email,
+      ipAddress,
       newPassword,
+      userAgent,
     }: {
       continuationToken: string
       email: string
+      ipAddress?: string | null
       newPassword: string
-    }): Promise<RegistrationSetPasswordResult> {
-      const normalizedEmail = normalizeEmail(email)
-      const normalizedContinuationToken = continuationToken.trim()
-      const completedAt = now()
-
+      userAgent?: string | null
+    }): Promise<RegistrationCompletedSession> {
       assertValidPortalPassword(newPassword)
 
-      try {
-        const completionResult =
-          await registrationRepository.transactionWithScopedLock(
-            normalizedEmail,
-            async (tx) => {
-              const verifiedRecord =
-                await registrationRepository.findLatestVerifiedVerificationByEmail(
-                  normalizedEmail,
-                  tx,
-                )
+      const passwordHash = await hashPassword(newPassword)
 
-              if (!verifiedRecord) {
-                const latestVerification =
-                  await registrationRepository.findLatestVerificationByEmail(
-                    normalizedEmail,
-                    tx,
-                  )
+      return completeRegistration({
+        continuationToken,
+        email,
+        passwordHash,
+        ...(ipAddress !== undefined ? { ipAddress } : {}),
+        ...(userAgent !== undefined ? { userAgent } : {}),
+      })
+    },
 
-                if (latestVerification?.status === 'consumed') {
-                  return {
-                    outcome: 'not_found_or_consumed' as const,
-                  }
-                }
-
-                return {
-                  outcome: 'verification_required' as const,
-                }
-              }
-
-              const isContinuationExpired =
-                !verifiedRecord.continuationTokenExpiresAt ||
-                verifiedRecord.continuationTokenExpiresAt.getTime() <=
-                  completedAt.getTime()
-
-              if (isContinuationExpired) {
-                await registrationRepository.invalidateVerifiedVerification(
-                  verifiedRecord.id,
-                  completedAt,
-                  tx,
-                )
-
-                return {
-                  outcome: 'verification_required' as const,
-                }
-              }
-
-              if (
-                !verifyContinuationToken({
-                  providedToken: normalizedContinuationToken,
-                  storedTokenHash: verifiedRecord.continuationTokenHash,
-                })
-              ) {
-                return {
-                  outcome: 'continuation_invalid' as const,
-                }
-              }
-
-              const existingPortalUser =
-                await registrationRepository.findPortalUserByEmail(
-                  normalizedEmail,
-                  tx,
-                )
-
-              if (existingPortalUser) {
-                await registrationRepository.invalidateVerifiedVerification(
-                  verifiedRecord.id,
-                  completedAt,
-                  tx,
-                )
-
-                return {
-                  outcome: 'account_exists' as const,
-                }
-              }
-
-              const createdUser = await registrationRepository.createPortalUser(
-                {
-                  email: normalizedEmail,
-                  fullName: verifiedRecord.fullName,
-                  passwordHash: await hashPassword(newPassword),
-                },
-                tx,
-              )
-
-              if (!createdUser) {
-                throw new Error(
-                  'Portal user could not be created during registration completion.',
-                )
-              }
-
-              if (!verifiedRecord.chatwootContactId) {
-                throw new Error(
-                  'Verified registration record is missing Chatwoot contact id.',
-                )
-              }
-
-              await registrationRepository.createPortalUserContactLink(
-                {
-                  chatwootContactId: verifiedRecord.chatwootContactId,
-                  userId: createdUser.id,
-                },
-                tx,
-              )
-              await registrationRepository.linkLatestRegistrationAcceptanceToUser(
-                {
-                  email: normalizedEmail,
-                  portalUserId: createdUser.id,
-                },
-                tx,
-              )
-
-              const consumedRecord =
-                await registrationRepository.consumeVerifiedVerification(
-                  verifiedRecord.id,
-                  completedAt,
-                  tx,
-                )
-
-              if (!consumedRecord) {
-                return {
-                  outcome: 'not_found_or_consumed' as const,
-                }
-              }
-
-              return {
-                outcome: 'completed' as const,
-                response: buildRegistrationCompletedResponse(normalizedEmail),
-              }
-            },
-          )
-
-        if (completionResult.outcome === 'account_exists') {
-          throw createAccountExistsError()
-        }
-
-        if (completionResult.outcome === 'continuation_invalid') {
-          throw createVerificationContinuationInvalidError()
-        }
-
-        if (completionResult.outcome === 'not_found_or_consumed') {
-          throw createVerificationNotFoundOrInvalidatedError()
-        }
-
-        if (completionResult.outcome === 'verification_required') {
-          throw createVerificationRequiredError()
-        }
-
-        return completionResult.response
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          await registrationRepository.transactionWithScopedLock(
-            normalizedEmail,
-            async (tx) => {
-              const verifiedRecord =
-                await registrationRepository.findLatestVerifiedVerificationByEmail(
-                  normalizedEmail,
-                  tx,
-                )
-
-              if (!verifiedRecord) {
-                return
-              }
-
-              await registrationRepository.invalidateVerifiedVerification(
-                verifiedRecord.id,
-                completedAt,
-                tx,
-              )
-            },
-          )
-
-          throw createAccountExistsError()
-        }
-
-        throw error
-      }
+    async skipPassword({
+      continuationToken,
+      email,
+      ipAddress,
+      userAgent,
+    }: {
+      continuationToken: string
+      email: string
+      ipAddress?: string | null
+      userAgent?: string | null
+    }): Promise<RegistrationCompletedSession> {
+      return completeRegistration({
+        continuationToken,
+        email,
+        passwordHash: null,
+        ...(ipAddress !== undefined ? { ipAddress } : {}),
+        ...(userAgent !== undefined ? { userAgent } : {}),
+      })
     },
   }
 }

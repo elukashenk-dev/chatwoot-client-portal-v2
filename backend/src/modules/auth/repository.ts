@@ -44,8 +44,8 @@ type RefreshSessionInput = {
 
 export function createAuthRepository(db: AppDatabase) {
   return {
-    async createSession(input: CreateSessionInput) {
-      await db.insert(portalSessions).values(input)
+    async createSession(input: CreateSessionInput, executor: AppDatabase = db) {
+      await executor.insert(portalSessions).values(input)
     },
 
     async deleteSessionByTokenHash({ tenantId, tokenHash }: TenantTokenScope) {
@@ -84,13 +84,15 @@ export function createAuthRepository(db: AppDatabase) {
     },
 
     async findActiveUserById({
+      executor = db,
       tenantId,
       userId,
     }: {
+      executor?: AppDatabase
       tenantId: number
       userId: number
     }) {
-      const [user] = await db
+      const [user] = await executor
         .select({
           email: portalUsers.email,
           fullName: portalUsers.fullName,
@@ -155,14 +157,16 @@ export function createAuthRepository(db: AppDatabase) {
 
     async recordSuccessfulLogin({
       at,
+      executor = db,
       tenantId,
       userId,
     }: {
       at: Date
+      executor?: AppDatabase
       tenantId: number
       userId: number
     }) {
-      await db
+      await executor
         .update(portalUsers)
         .set({
           lastLoginAt: at,

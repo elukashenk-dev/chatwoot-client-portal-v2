@@ -72,10 +72,12 @@ export function createAuthService({
   const repository = createAuthRepository(db)
 
   async function issueSessionForUser({
+    executor,
     tenantId,
     user,
     userId,
   }: {
+    executor?: AppDatabase
     ipAddress?: string | null
     tenantId: number
     user?: AuthenticatedPortalUserRecord
@@ -85,6 +87,7 @@ export function createAuthService({
     const sessionUser =
       user ??
       (await repository.findActiveUserById({
+        ...(executor ? { executor } : {}),
         tenantId,
         userId,
       }))
@@ -109,9 +112,10 @@ export function createAuthService({
       tenantId,
       tokenHash: hashSessionToken(sessionToken),
       userId: sessionUser.id,
-    })
+    }, executor)
     await repository.recordSuccessfulLogin({
       at: issuedAt,
+      ...(executor ? { executor } : {}),
       tenantId,
       userId: sessionUser.id,
     })

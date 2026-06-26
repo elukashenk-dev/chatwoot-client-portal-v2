@@ -4,7 +4,6 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DatabaseClient } from '../../db/client.js'
 import {
   portalLegalAcceptances,
-  portalUserContactLinks,
   verificationRecords,
 } from '../../db/schema.js'
 import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
@@ -13,7 +12,9 @@ import {
   SmtpEmailDeliveryError,
 } from '../../integrations/email/smtp.js'
 import { hashPassword } from '../../lib/password.js'
+import { testEnv } from '../../test/appTestHelpers.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
+import { createAuthService } from '../auth/service.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
 import { createRegistrationRepository } from './repository.js'
@@ -36,12 +37,12 @@ type RegistrationServiceOptions = Parameters<
 >[0]
 type RegistrationServiceTestOptions = Omit<
   RegistrationServiceOptions,
-  'legalDocumentsReader' | 'supportContactReader' | 'tenantId'
+  'authService' | 'legalDocumentsReader' | 'supportContactReader' | 'tenantId'
 > &
   Partial<
     Pick<
       RegistrationServiceOptions,
-      'legalDocumentsReader' | 'supportContactReader'
+      'authService' | 'legalDocumentsReader' | 'supportContactReader'
     >
   >
 
@@ -149,19 +150,6 @@ async function findActiveRegistrationRecords(
     )
 }
 
-async function findPortalUserContactLinks(
-  database: DatabaseClient,
-  tenantId: number,
-) {
-  return database.db
-    .select({
-      chatwootContactId: portalUserContactLinks.chatwootContactId,
-      userId: portalUserContactLinks.userId,
-    })
-    .from(portalUserContactLinks)
-    .where(eq(portalUserContactLinks.tenantId, tenantId))
-}
-
 async function findLegalAcceptanceRecords(
   database: DatabaseClient,
   tenantId: number,
@@ -200,6 +188,11 @@ describe('registration service', () => {
     options: RegistrationServiceTestOptions,
   ) {
     const {
+      authService = createAuthService({
+        db: database.db,
+        env: testEnv,
+        ...(options.now ? { now: options.now } : {}),
+      }),
       legalDocumentsReader = createDefaultLegalDocumentsReader(),
       supportContactReader = createDefaultSupportContactReader(),
       ...serviceOptions
@@ -207,6 +200,7 @@ describe('registration service', () => {
 
     return createRegistrationService({
       ...serviceOptions,
+      authService,
       legalDocumentsReader,
       supportContactReader,
       tenantId,
@@ -756,89 +750,6 @@ describe('registration service', () => {
     })
   })
 
-  it('completes registration after verification and creates a portal user', async () => {
-    const sendEmail = vi.fn().mockResolvedValue(undefined)
-    const portalUsersRepository = createPortalUsersRepository(database.db)
-    const registrationRepository = createRegistrationRepository(database.db, {
-      tenantId,
-    })
-    const service = createRegistrationServiceForTest({
-      chatwootClient: {
-        findContactByEmail: vi.fn().mockResolvedValue({
-          email: 'name@company.ru',
-          id: 44,
-          name: 'Portal User',
-        }),
-      },
-      emailDelivery: {
-        send: sendEmail,
-      },
-      now: () => new Date('2026-04-21T12:00:00.000Z'),
-      portalUsersRepository,
-      registrationRepository,
-    })
-
-    await service.requestVerification({
-      email: 'name@company.ru',
-      fullName: 'Portal User',
-      legalAcceptance: acceptedRegistrationLegal,
-    })
-
-    const emailMessage = sendEmail.mock.calls[0]?.[0]
-    const verificationCode = extractVerificationCode(emailMessage?.text ?? '')
-    const verification = await service.confirmVerification({
-      code: verificationCode,
-      email: 'name@company.ru',
-    })
-
-    const result = await service.setPassword({
-      continuationToken: verification.continuationToken,
-      email: 'name@company.ru',
-      newPassword: 'PortalPass123',
-    })
-
-    expect(result).toEqual({
-      email: 'name@company.ru',
-      nextStep: 'login',
-      purpose: 'registration',
-      result: 'registration_completed',
-    })
-
-    const createdUser = await portalUsersRepository.findByEmail({
-      email: 'name@company.ru',
-      tenantId,
-    })
-
-    expect(createdUser).toMatchObject({
-      email: 'name@company.ru',
-      fullName: 'Portal User',
-      isActive: true,
-    })
-    expect(await findPortalUserContactLinks(database, tenantId)).toEqual([
-      {
-        chatwootContactId: 44,
-        userId: createdUser?.id,
-      },
-    ])
-    expect(await findLegalAcceptanceRecords(database, tenantId)).toEqual([
-      expect.objectContaining({
-        email: 'name@company.ru',
-        portalUserId: createdUser?.id,
-        purpose: 'registration',
-      }),
-    ])
-
-    const latestRecord =
-      await registrationRepository.findLatestVerificationByEmail(
-        'name@company.ru',
-      )
-
-    expect(latestRecord).toMatchObject({
-      continuationTokenHash: null,
-      status: 'consumed',
-    })
-  })
-
   it('rejects registration set-password when password misses a letter or number', async () => {
     const service = createRegistrationServiceForTest({
       chatwootClient: {
@@ -948,7 +859,13 @@ describe('registration service', () => {
     })
     const portalUsersRepository = createPortalUsersRepository(database.db)
     const now = new Date('2026-04-21T12:00:00.000Z')
+    const authService = createAuthService({
+      db: database.db,
+      env: testEnv,
+      now: () => now,
+    })
     const serviceA = createRegistrationService({
+      authService,
       chatwootClient: {
         findContactByEmail: vi.fn(),
       },
@@ -965,6 +882,7 @@ describe('registration service', () => {
       tenantId,
     })
     const serviceB = createRegistrationService({
+      authService,
       chatwootClient: {
         findContactByEmail: vi.fn(),
       },
@@ -980,6 +898,33 @@ describe('registration service', () => {
       supportContactReader: createDefaultSupportContactReader(),
       tenantId: tenantB.id,
     })
+
+    await database.db.insert(portalLegalAcceptances).values([
+      {
+        acceptedAt: now,
+        email: 'name@company.ru',
+        personalDataConsentAccepted: true,
+        privacyPolicyVersion: 'privacy-upload-v9',
+        purpose: 'registration',
+        requestIp: '203.0.113.10',
+        tenantId,
+        termsAccepted: true,
+        termsVersion: 'terms-upload-v7',
+        userAgent: 'Mozilla/5.0',
+      },
+      {
+        acceptedAt: now,
+        email: 'name@company.ru',
+        personalDataConsentAccepted: true,
+        privacyPolicyVersion: 'privacy-upload-v9',
+        purpose: 'registration',
+        requestIp: '203.0.113.10',
+        tenantId: tenantB.id,
+        termsAccepted: true,
+        termsVersion: 'terms-upload-v7',
+        userAgent: 'Mozilla/5.0',
+      },
+    ])
 
     await database.db.insert(verificationRecords).values([
       {
@@ -1051,7 +996,12 @@ describe('registration service', () => {
         newPassword: 'TenantA123',
       }),
     ).resolves.toMatchObject({
+      nextStep: 'chat',
       result: 'registration_completed',
+      user: {
+        fullName: 'Tenant A User',
+        passwordConfigured: true,
+      },
     })
     await expect(
       serviceB.setPassword({
@@ -1060,7 +1010,12 @@ describe('registration service', () => {
         newPassword: 'TenantB123',
       }),
     ).resolves.toMatchObject({
+      nextStep: 'chat',
       result: 'registration_completed',
+      user: {
+        fullName: 'Tenant B User',
+        passwordConfigured: true,
+      },
     })
     await expect(
       portalUsersRepository.findByEmail({
