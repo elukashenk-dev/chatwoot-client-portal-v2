@@ -300,7 +300,7 @@ describe('LoginPage', () => {
     ).toHaveAttribute('href', '/auth/password-reset/request')
     expect(
       screen.getByRole('link', {
-        name: 'Уже есть аккаунт? Войти по коду из почты.',
+        name: 'Уже есть аккаунт без пароля? Войти по коду из почты.',
       }),
     ).toHaveAttribute('href', '/auth/code-login/request')
     expect(

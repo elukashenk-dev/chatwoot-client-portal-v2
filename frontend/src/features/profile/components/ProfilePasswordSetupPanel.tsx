@@ -209,7 +209,8 @@ export function ProfilePasswordSetupPanel() {
           Безопасность
         </h2>
         <p className="mt-1 text-[13px] leading-5 text-slate-500">
-          Пароль нужен только для входа после выхода или очистки cookies.
+          Пароль пока не задан. Вы можете пользоваться чатом без него. Если
+          выйдете из аккаунта, следующий вход будет по коду из почты.
         </p>
       </div>
 
@@ -233,8 +234,9 @@ export function ProfilePasswordSetupPanel() {
             {step === 'request' ? (
               <>
                 <p className="text-[13px] leading-5 text-slate-500">
-                  Мы отправим код на {user?.email}. После подтверждения можно
-                  задать первый пароль без выхода из чата.
+                  Чтобы задать пароль, мы отправим код подтверждения на{' '}
+                  {user?.email}. После подтверждения вы сможете входить по
+                  паролю или по коду из почты.
                 </p>
                 <InlineAlert message={errorMessage} tone="error" />
                 <PrimaryButton
@@ -245,7 +247,7 @@ export function ProfilePasswordSetupPanel() {
                   }}
                   type="button"
                 >
-                  Настроить пароль
+                  Задать пароль
                 </PrimaryButton>
               </>
             ) : null}

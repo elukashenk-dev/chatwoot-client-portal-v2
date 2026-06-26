@@ -214,7 +214,7 @@ export function LoginForm({ legalNotice }: LoginFormProps = {}) {
         className="auth-code-login-link"
         to={routePaths.auth.codeLoginRequest}
       >
-        <span>Уже есть аккаунт? Войти по коду из почты.</span>
+        <span>Уже есть аккаунт без пароля? Войти по коду из почты.</span>
       </Link>
 
       <InlineAlert message={visibleGlobalError} tone="error" />
