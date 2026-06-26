@@ -16,7 +16,7 @@ import {
 import { readStartupAuthSession } from '../../offline/startupCache'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
 import { getCurrentSession, login, logout } from '../api/authClient'
-import type { AuthenticatedPortalUser, LoginFormValues } from '../types'
+import type { AuthenticatedPortalSession, AuthenticatedPortalUser, LoginFormValues } from '../types'
 import { getAuthRequestErrorMessage } from './authErrors'
 import {
   AuthSessionContext,
@@ -24,12 +24,12 @@ import {
   type AuthSessionSource,
   type AuthSessionStatus,
 } from './authSessionContext'
+import { useOfflineAuthMutationQueue } from './offlineAuthMutations'
 import {
   completePendingLocalDeviceSignout,
   type CachedAuthSessionReadResult,
   type OfflineAuthScope,
   readCachedAuthSession,
-  saveOnlineAuthSnapshot,
   isStartupNetworkFailure,
 } from './offlineAuthSession'
 
@@ -68,6 +68,10 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
   )
   const [offlineRemovalScope, setOfflineRemovalScope] =
     useState<OfflineAuthScope | null>(startupAuthSession?.scope ?? null)
+  const { runOfflineAuthMutation, saveOnlineSessionSnapshot } =
+    useOfflineAuthMutationQueue({
+      tenantSlug: tenant?.slug ?? null,
+    })
 
   const setAuthStatus = useCallback((nextStatus: AuthSessionStatus) => {
     statusRef.current = nextStatus
@@ -86,30 +90,6 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     requestTimeoutRef.current?.cancel()
     requestTimeoutRef.current = null
   }, [])
-
-  const saveOnlineSessionSnapshot = useCallback(
-    async (
-      currentSession: Parameters<
-        typeof saveOnlineAuthSnapshot
-      >[0]['currentSession'],
-    ) => {
-      if (!tenant) {
-        return null
-      }
-
-      try {
-        return await saveOnlineAuthSnapshot({
-          currentSession,
-          host: window.location.host,
-          tenantSlug: tenant.slug,
-        })
-      } catch {
-        // Online auth remains valid even if local offline persistence fails.
-        return null
-      }
-    },
-    [tenant],
-  )
 
   const requireOnlineSessionCheck = useCallback(
     (scope: OfflineAuthScope | null) => {
@@ -255,12 +235,15 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
                 }
               : rejectedScope
 
-            if (signoutScope) {
-              await clearCurrentUserOfflineData(signoutScope)
-              await offlineStore.deleteLocalDeviceSignout(host)
-            } else if (rejectedScope) {
-              await clearRejectedAuthSnapshot(rejectedScope)
-            }
+            await runOfflineAuthMutation(async () => {
+              if (!isCurrentAttempt()) return
+              if (signoutScope) {
+                await clearCurrentUserOfflineData(signoutScope)
+                await offlineStore.deleteLocalDeviceSignout(host)
+              } else if (rejectedScope) {
+                await clearRejectedAuthSnapshot(rejectedScope)
+              }
+            })
           } catch {
             identity = null
             signoutScope = null
@@ -282,6 +265,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
         const pendingLocalSignout =
           await offlineStore.readLocalDeviceSignout(host)
 
+        if (!isCurrentAttempt()) return
         if (
           pendingLocalSignout &&
           pendingLocalSignout.tenantSlug === tenant?.slug &&
@@ -292,8 +276,10 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
             tenantSlug: pendingLocalSignout.tenantSlug,
             userId: pendingLocalSignout.userId,
           }
-          const logoutCompleted =
-            await completePendingLocalDeviceSignout(signoutScope)
+          const logoutCompleted = await runOfflineAuthMutation(async () => {
+            if (!isCurrentAttempt()) return false
+            return completePendingLocalDeviceSignout(signoutScope)
+          })
 
           if (!isCurrentAttempt()) {
             return
@@ -317,6 +303,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
           return
         }
 
+        if (!isCurrentAttempt()) return
         const scope = await saveOnlineSessionSnapshot(currentSession)
 
         if (!isCurrentAttempt()) {
@@ -363,6 +350,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     cancelStartupRequest,
     clearDeadlineTimers,
     openCachedSession,
+    runOfflineAuthMutation,
     saveOnlineSessionSnapshot,
     setAuthStatus,
     startupAuthSession,
@@ -373,20 +361,29 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
     await resolveCurrentSession()
   }, [resolveCurrentSession])
 
+  const completeAuthenticatedSession = useCallback(
+    async (authenticatedSession: AuthenticatedPortalSession) => {
+      setErrorMessage(null)
+      const handoffAttemptId = (startupAttemptRef.current += 1)
+      clearDeadlineTimers()
+      cancelStartupRequest()
+      const scope = await saveOnlineSessionSnapshot(authenticatedSession)
+      if (!isMountedRef.current || startupAttemptRef.current !== handoffAttemptId) return
+      setUser(authenticatedSession.user)
+      setSessionSource('online')
+      setOfflineRemovalScope(scope)
+      setAuthStatus('authenticated')
+    },
+    [cancelStartupRequest, clearDeadlineTimers, saveOnlineSessionSnapshot, setAuthStatus],
+  )
+
   const signIn = useCallback(
     async (credentials: LoginFormValues) => {
       setErrorMessage(null)
 
       try {
         const authenticatedSession = await login(credentials)
-        const scope = await saveOnlineSessionSnapshot(authenticatedSession)
-
-        if (isMountedRef.current) {
-          setUser(authenticatedSession.user)
-          setSessionSource('online')
-          setOfflineRemovalScope(scope)
-          setAuthStatus('authenticated')
-        }
+        await completeAuthenticatedSession(authenticatedSession)
 
         return authenticatedSession.user
       } catch (error) {
@@ -397,7 +394,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
         throw error
       }
     },
-    [saveOnlineSessionSnapshot, setAuthStatus],
+    [completeAuthenticatedSession],
   )
 
   const signOut = useCallback(async () => {
@@ -460,6 +457,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
 
   const value = useMemo<AuthSessionContextValue>(
     () => ({
+      completeAuthenticatedSession,
       errorMessage,
       localDeviceDataRemovalAvailable: offlineRemovalScope !== null,
       removeLocalDeviceData,
@@ -471,6 +469,7 @@ export function AuthSessionProvider({ children }: AuthSessionProviderProps) {
       user,
     }),
     [
+      completeAuthenticatedSession,
       errorMessage,
       offlineRemovalScope,
       removeLocalDeviceData,

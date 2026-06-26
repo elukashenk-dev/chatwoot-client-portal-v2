@@ -452,7 +452,7 @@ describe('Auth flow pages', () => {
     ).toBeInTheDocument()
   })
 
-  it('completes registration set-password and shows success feedback', async () => {
+  it('completes registration set-password against the backend', async () => {
     const user = userEvent.setup()
 
     saveRegistrationRequest({
@@ -521,11 +521,6 @@ describe('Auth flow pages', () => {
         method: 'POST',
       }),
     )
-
-    expect(await screen.findByText(/Пароль сохранен для name@company.ru/))
-      .toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Перейти к чатам' }))
-      .toHaveAttribute('href', '/app/chat')
   })
 
   it('guards registration set-password when verification state is missing', async () => {

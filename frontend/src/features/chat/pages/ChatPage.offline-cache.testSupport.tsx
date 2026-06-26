@@ -186,6 +186,7 @@ export function renderChatRoute() {
 
 export function renderChatPageWithCachedAuth() {
   const authContextValue = {
+    completeAuthenticatedSession: vi.fn(async () => undefined),
     errorMessage: null,
     localDeviceDataRemovalAvailable: true,
     refreshSession: vi.fn(async () => undefined),

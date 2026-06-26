@@ -264,8 +264,11 @@ execution-plan детали здесь не хранятся.
   responses, expose registration skip-password and protected password-setup
   client methods, and require `passwordConfigured` in authenticated user
   snapshots.
+- Frontend auth state handoff is implemented: authenticated backend completion
+  responses can hydrate the customer auth context, persist online auth
+  snapshots, and ignore stale startup session-check results.
 
 ## Recommended Next Step
 
-- Continue with Task 7 of the passwordless registration plan: frontend auth
-  state handoff.
+- Continue with Task 8 of the passwordless registration plan: frontend
+  registration completion UI.

@@ -16,6 +16,7 @@ import {
   getStoredRegistrationRequest,
   getStoredRegistrationVerification,
 } from '../lib/registrationFlow'
+import { useAuthSession } from '../lib/authSessionContext'
 import { validateRegisterSetPasswordForm } from '../lib/registerSetPasswordValidation'
 import type {
   RegisterSetPasswordFormValues,
@@ -80,6 +81,7 @@ function getVisibleFieldError(error?: string) {
 }
 
 export function RegisterSetPasswordForm() {
+  const { completeAuthenticatedSession } = useAuthSession()
   const registrationRequest = getStoredRegistrationRequest()
   const registrationVerification = getStoredRegistrationVerification()
   const [values, setValues] =
@@ -169,6 +171,10 @@ export function RegisterSetPasswordForm() {
         newPassword: values.newPassword,
       })
 
+      await completeAuthenticatedSession({
+        session: response.session,
+        user: response.user,
+      })
       clearRegistrationFlow()
       setCompletionSuccess(response)
       setGlobalError(null)

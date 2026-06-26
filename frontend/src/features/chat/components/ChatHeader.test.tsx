@@ -117,6 +117,7 @@ const brandingContextValue: BrandingContextValue = {
 }
 
 const authSession: AuthSessionContextValue = {
+  completeAuthenticatedSession: vi.fn(async () => undefined),
   errorMessage: null,
   localDeviceDataRemovalAvailable: false,
   refreshSession: vi.fn(),
