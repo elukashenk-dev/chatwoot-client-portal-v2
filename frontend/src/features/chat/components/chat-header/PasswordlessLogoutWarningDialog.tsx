@@ -5,8 +5,6 @@ import {
 } from 'react'
 import { Link } from 'react-router-dom'
 
-import { ShieldLockIcon } from '../../../../shared/ui/icons'
-
 type PasswordlessLogoutWarningDialogProps = {
   isLoggingOut: boolean
   onCancel: () => void
@@ -75,31 +73,24 @@ export function PasswordlessLogoutWarningDialog({
         ref={dialogRef}
         role="dialog"
       >
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-brand-50 text-brand-800">
-            <ShieldLockIcon className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <h2
-              className="text-[17px] font-semibold leading-6 tracking-normal"
-              id="passwordless-logout-warning-title"
-            >
-              Выйти из аккаунта?
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              У вас пока не задан пароль. После выхода вы сможете снова войти
-              только по коду из почты. Задать пароль можно в{' '}
-              <Link
-                className="font-medium text-brand-800 underline underline-offset-4 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-                onClick={onOpenProfile}
-                to={profileTo}
-              >
-                профиле
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
+        <h2
+          className="text-[17px] font-semibold leading-6 tracking-normal"
+          id="passwordless-logout-warning-title"
+        >
+          Выйти из аккаунта?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          У вас пока не задан пароль. После выхода вы сможете снова войти
+          только по коду из почты. Задать пароль можно в{' '}
+          <Link
+            className="font-medium text-brand-800 underline underline-offset-4 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+            onClick={onOpenProfile}
+            to={profileTo}
+          >
+            профиле
+          </Link>
+          .
+        </p>
 
         <div className="mt-5 flex justify-end gap-2">
           <button
