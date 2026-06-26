@@ -130,6 +130,9 @@ describe('UserProfilePage', () => {
       ),
     ).toBeInTheDocument()
     expect(
+      screen.queryByText('Изменение пароля будет добавлено отдельно.'),
+    ).not.toBeInTheDocument()
+    expect(
       screen.queryByRole('button', { name: 'Задать пароль' }),
     ).not.toBeInTheDocument()
     expect(screen.getByLabelText('Заменить аватар').closest('label')).toHaveClass(
