@@ -66,6 +66,7 @@ function createAuthenticatedUserResponse(userId = 7) {
       email: 'name@group.ru',
       fullName: 'Portal User',
       id: userId,
+      passwordConfigured: true,
     },
   })
 }
@@ -935,6 +936,7 @@ describe('ChatPage optimistic text send', () => {
         email: 'name@group.ru',
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
       userId: 7,
     })

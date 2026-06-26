@@ -260,8 +260,12 @@ execution-plan детали здесь не хранятся.
 - Password reset behavior is covered for nullable customer passwords: logged-out
   passwordless users can set their first password through the existing email-code
   reset flow, and reset completion still returns the user to login.
+- Frontend auth API contracts now use authenticated registration completion
+  responses, expose registration skip-password and protected password-setup
+  client methods, and require `passwordConfigured` in authenticated user
+  snapshots.
 
 ## Recommended Next Step
 
-- Continue with Task 6 of the passwordless registration plan: frontend auth API
-  contracts.
+- Continue with Task 7 of the passwordless registration plan: frontend auth
+  state handoff.

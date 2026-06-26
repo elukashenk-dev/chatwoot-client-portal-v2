@@ -45,6 +45,7 @@ function createSessionResponse({
         email,
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
     }),
     {
@@ -128,6 +129,7 @@ async function saveTenantAndCachedAuth({
       email: 'name@company.ru',
       fullName: 'Portal User',
       id: 7,
+      passwordConfigured: true,
     },
     userId: 7,
   })
@@ -155,6 +157,7 @@ function saveStartupAuthSnapshot({
             email: 'name@company.ru',
             fullName: 'Portal User',
             id: 7,
+            passwordConfigured: true,
           },
           userId: 7,
         },

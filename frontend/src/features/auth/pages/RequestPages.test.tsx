@@ -471,15 +471,13 @@ describe('Auth flow pages', () => {
 
     mockUnauthenticatedSession()
     fetchMock.mockResolvedValueOnce(
-      createJsonResponse(
-        {
-          email: 'name@company.ru',
-          nextStep: 'login',
-          purpose: 'registration',
-          result: 'registration_completed',
-        },
-        200,
-      ),
+      createJsonResponse({
+        nextStep: 'chat',
+        purpose: 'registration',
+        result: 'registration_completed',
+        session: { expiresAt: '2026-06-10T10:00:00.000Z' },
+        user: { email: 'name@company.ru', fullName: 'Portal User', id: 7, passwordConfigured: true },
+      }, 200),
     )
 
     renderAuthRoutes(['/auth/register/set-password'])
@@ -524,9 +522,10 @@ describe('Auth flow pages', () => {
       }),
     )
 
-    expect(
-      await screen.findByText(/Пароль сохранен для name@company.ru/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/Пароль сохранен для name@company.ru/))
+      .toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Перейти к чатам' }))
+      .toHaveAttribute('href', '/app/chat')
   })
 
   it('guards registration set-password when verification state is missing', async () => {

@@ -129,6 +129,7 @@ const authSession: AuthSessionContextValue = {
     email: 'name@group.ru',
     fullName: 'Portal User',
     id: 7,
+    passwordConfigured: true,
   },
 }
 

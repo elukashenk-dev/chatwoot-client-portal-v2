@@ -54,6 +54,7 @@ export const cachedAuthUser = {
   email: 'name@company.ru',
   fullName: 'Portal User',
   id: 7,
+  passwordConfigured: true,
 }
 
 export function createJsonResponse(body: unknown, status = 200) {
@@ -74,6 +75,7 @@ export function createAuthenticatedUserResponse() {
       email: 'name@company.ru',
       fullName: 'Portal User',
       id: 7,
+      passwordConfigured: true,
     },
   })
 }
