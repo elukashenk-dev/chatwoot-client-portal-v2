@@ -217,14 +217,9 @@ export function ProfilePasswordSetupPanel() {
 
       <div className="space-y-4 px-4 py-4">
         {isPasswordConfigured ? (
-          <>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-900">
-              Пароль настроен
-            </div>
-            <p className="text-[13px] leading-5 text-slate-500">
-              Изменение пароля будет добавлено отдельно.
-            </p>
-          </>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] font-medium text-emerald-900">
+            Пароль настроен
+          </div>
         ) : (
           <>
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-900">
