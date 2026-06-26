@@ -108,6 +108,40 @@
   in-service инициализацию: создать БД, прогнать миграции, наполнить
   минимальные данные, запустить тесты и локальные проверки.
 
+## Scalability And Load-Aware Design Rule
+
+- `chatwoot-client-portal-v2` проектируется как multi-tenant SaaS, а не как
+  single-tenant demo. По умолчанию считать, что tenants, users, chats,
+  messages, sessions, logins, browser tabs, realtime events, push/email jobs и
+  API requests будут расти.
+- Перед любым новым feature/API/session/realtime/polling/background/storage
+  изменением агент обязан оценить load impact:
+  - как часто код будет выполняться: per request, per page load, per tab,
+    per reconnect, per message, per chat, per user, per tenant или per job;
+  - сколько добавляется DB reads/writes, external calls, locks, transactions,
+    fan-out операций и background work;
+  - есть ли риск N+1 queries, unbounded scans, unindexed filters,
+    write amplification, chatty polling, duplicate jobs, high-cardinality logs,
+    hot rows, long transactions или синхронных внешних calls в hot path;
+  - что произойдет при росте нагрузки в 10x и 100x.
+- Если прямое выполнение пользовательского условия может создать лишнюю
+  нагрузку или плохо масштабироваться, агент обязан не принимать условие
+  буквально. Нужно явно объяснить риск и предложить bounded alternative:
+  threshold/window, batching, caching, debouncing, rate limit, queue,
+  idempotency, tenant-scoped indexes, pagination, backpressure или event-driven
+  flow.
+- Это правило сильнее ad-hoc условий пользователя в текущем чате, если эти
+  условия были сформулированы без учета runtime/load последствий. Исключение
+  допустимо только если пользователь явно принимает documented scalability
+  risk после объяснения альтернатив.
+- Для high-risk и shared-runtime изменений в plan/review обязательно
+  фиксировать load model и выбранные limits: частоту writes/reads, границы
+  fan-out, rate limits/backpressure, индексы/queries, retry/idempotency
+  поведение и targeted tests на отсутствие очевидной load regression.
+- Не добавлять бесконечные или частые polling/heartbeat механики, per-request
+  writes, tenant-wide loops, full-table scans или синхронные external calls в
+  hot path без явного bounded design и тестируемого ограничения.
+
 ## No Backward Compatibility Rule
 
 - `chatwoot-client-portal-v2` сейчас разрабатывается как новый продукт. Все
