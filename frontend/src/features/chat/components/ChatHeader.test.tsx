@@ -370,7 +370,7 @@ describe('ChatHeader', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Выход' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(signOut).toHaveBeenCalledTimes(1)
@@ -397,7 +397,7 @@ describe('ChatHeader', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Выход' }))
 
     const dialog = screen.getByRole('dialog', { name: 'Выйти из аккаунта?' })
 
@@ -436,7 +436,7 @@ describe('ChatHeader', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Выход' }))
     await user.click(screen.getByRole('link', { name: 'профиле' }))
 
     expect(signOut).not.toHaveBeenCalled()
@@ -464,7 +464,7 @@ describe('ChatHeader', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Выход' }))
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
 
     expect(signOut).toHaveBeenCalledTimes(1)
@@ -494,7 +494,7 @@ describe('ChatHeader', () => {
     const menuButton = screen.getByRole('button', { name: 'Открыть меню чата' })
 
     await user.click(menuButton)
-    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Выход' }))
     await user.keyboard('{Escape}')
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

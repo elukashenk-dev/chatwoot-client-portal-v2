@@ -437,7 +437,7 @@ describe('LoginPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
     await user.click(
-      await screen.findByRole('menuitem', { name: 'Завершить диалог' }),
+      await screen.findByRole('menuitem', { name: 'Выход' }),
     )
 
     expect(fetchMock).toHaveBeenCalledWith(
