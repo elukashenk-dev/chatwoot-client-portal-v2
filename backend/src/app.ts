@@ -1,20 +1,17 @@
 import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
-import Fastify from 'fastify'
-import type { FastifyRequest } from 'fastify'
+import Fastify, { type FastifyRequest } from 'fastify'
 
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
 import { createChatwootAdminAgentsClient } from './integrations/chatwoot/adminAgents.js'
-import {
-  createSmtpEmailDelivery,
-  type SmtpEmailDelivery,
-} from './integrations/email/smtp.js'
+import { createSmtpEmailDelivery, type SmtpEmailDelivery } from './integrations/email/smtp.js'
 import {
   createBrandingObjectStorageFromEnv,
   type BrandingObjectStorage,
 } from './integrations/object-storage/brandingStorage.js'
 import { registerApiErrorHandler } from './lib/errors.js'
+import { createAuthPasswordServiceFactories } from './modules/auth/passwordServiceFactories.js'
 import { registerAuthRateLimit } from './modules/auth/rateLimit.js'
 import { registerAuthRoutes } from './modules/auth/routes.js'
 import { createAuthService } from './modules/auth/service.js'
@@ -59,9 +56,8 @@ import { createChatwootWebhookService } from './modules/chatwoot-webhooks/servic
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { registerLegalDocumentRoutes } from './modules/legal-documents/routes.js'
 import { createLegalDocumentsServiceForTenantRequest } from './modules/legal-documents/serviceFactory.js'
-import { createPasswordResetRepository } from './modules/password-reset/repository.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
-import { createPasswordResetService } from './modules/password-reset/service.js'
+import { registerPasswordSetupRoutes } from './modules/password-setup/routes.js'
 import { createPortalUsersRepository } from './modules/portal-users/repository.js'
 import { registerProfileRoutes } from './modules/profile/routes.js'
 import { createProfileService } from './modules/profile/service.js'
@@ -76,18 +72,11 @@ import { registerTenantAdminAuthRoutes } from './modules/tenant-admin/adminAuthR
 import { createTenantAdminAuthService } from './modules/tenant-admin/adminAuthService.js'
 import { createTenantAdminVerificationService } from './modules/tenant-admin/adminVerification.js'
 import { createTenantsRepository } from './modules/tenants/repository.js'
-import {
-  requireTenantContext,
-  registerTenantContext,
-  registerTenantRoutes,
-} from './modules/tenants/routes.js'
+import { requireTenantContext, registerTenantContext, registerTenantRoutes } from './modules/tenants/routes.js'
 import { createTenantsService } from './modules/tenants/service.js'
 import { createTenantPwaBrandingReader } from './modules/tenants/pwaBrandingReader.js'
 import { createTenantPwaIconReader } from './modules/tenants/pwaIconReader.js'
-import {
-  createRuntimeChatwootClientFactory,
-  getAttachmentProxyAllowedOrigins,
-} from './runtimeChatwootClientFactory.js'
+import { createRuntimeChatwootClientFactory, getAttachmentProxyAllowedOrigins } from './runtimeChatwootClientFactory.js'
 
 export { createRuntimeChatwootClientFactory } from './runtimeChatwootClientFactory.js'
 
@@ -315,13 +304,15 @@ export function buildApp({
       request,
       ...(now ? { now } : {}),
     })
-  const createPasswordResetServiceForRequest = (request: FastifyRequest) =>
-    createPasswordResetService({
-      emailDelivery: createEmailDelivery(),
-      passwordResetRepository: createPasswordResetRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
-      }),
-    })
+  const {
+    createPasswordResetServiceForRequest,
+    createPasswordSetupServiceForRequest,
+  } = createAuthPasswordServiceFactories({
+    authService,
+    createEmailDelivery,
+    database,
+    ...(now ? { now } : {}),
+  })
   const createTenantAdminAuthServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -441,6 +432,11 @@ export function buildApp({
   })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,
+  })
+  registerPasswordSetupRoutes(app, {
+    authService,
+    createPasswordSetupService: createPasswordSetupServiceForRequest,
+    env,
   })
   registerTenantAdminAuthRoutes(app, {
     createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,

@@ -252,8 +252,13 @@ execution-plan детали здесь не хранятся.
   effects, processed/failed bridge delivery rows are covered by retention
   cleanup, admin setup has app-level tenant isolation coverage, and the
   production backend image uses a test-excluding build config.
+- Password-later backend setup is implemented for passwordless portal users:
+  protected password setup derives identity from the current customer session,
+  requires an email-code proof before first password storage, rejects already
+  configured passwords, rotates customer sessions after success, and guards
+  stale delivery cleanup from invalidating newer setup codes.
 
 ## Recommended Next Step
 
-- Merge and deploy the customer session idle-renewal prerequisite, then start
-  Task 1 of the passwordless registration plan.
+- Continue with Task 5 of the passwordless registration plan: password reset
+  behavior with nullable password hashes.
