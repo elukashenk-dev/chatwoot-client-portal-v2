@@ -50,6 +50,7 @@ describe('profile service', () => {
           email: 'user@example.test',
           fullName: 'Portal User',
           id: 7,
+          passwordConfigured: true,
         },
       }),
     ).resolves.toEqual({
@@ -69,6 +70,7 @@ describe('profile service', () => {
         email: 'user@example.test',
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
     })
 
@@ -87,6 +89,7 @@ describe('profile service', () => {
           email: 'user@example.test',
           fullName: null,
           id: 7,
+          passwordConfigured: true,
         },
       }),
     ).resolves.toEqual({

@@ -29,6 +29,7 @@ type SessionUserRecord = {
     email: string
     fullName: string | null
     id: number
+    passwordConfigured: boolean
   }
 }
 
@@ -62,12 +63,46 @@ export function createAuthRepository(db: AppDatabase) {
       const normalizedEmail = normalizeEmail(email)
 
       const [user] = await db
-        .select()
+        .select({
+          email: portalUsers.email,
+          fullName: portalUsers.fullName,
+          id: portalUsers.id,
+          isActive: portalUsers.isActive,
+          passwordConfigured: sql<boolean>`${portalUsers.passwordHash} is not null`,
+          passwordHash: portalUsers.passwordHash,
+        })
         .from(portalUsers)
         .where(
           and(
             eq(portalUsers.tenantId, tenantId),
             sql`lower(${portalUsers.email}) = ${normalizedEmail}`,
+          ),
+        )
+        .limit(1)
+
+      return user ?? null
+    },
+
+    async findActiveUserById({
+      tenantId,
+      userId,
+    }: {
+      tenantId: number
+      userId: number
+    }) {
+      const [user] = await db
+        .select({
+          email: portalUsers.email,
+          fullName: portalUsers.fullName,
+          id: portalUsers.id,
+          passwordConfigured: sql<boolean>`${portalUsers.passwordHash} is not null`,
+        })
+        .from(portalUsers)
+        .where(
+          and(
+            eq(portalUsers.id, userId),
+            eq(portalUsers.tenantId, tenantId),
+            eq(portalUsers.isActive, true),
           ),
         )
         .limit(1)
@@ -86,6 +121,7 @@ export function createAuthRepository(db: AppDatabase) {
           expiresAt: portalSessions.expiresAt,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
+          passwordConfigured: sql<boolean>`${portalUsers.passwordHash} is not null`,
           sessionId: portalSessions.id,
         })
         .from(portalSessions)
@@ -112,6 +148,7 @@ export function createAuthRepository(db: AppDatabase) {
           email: session.email,
           fullName: session.fullName,
           id: session.id,
+          passwordConfigured: session.passwordConfigured,
         },
       }
     },

@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
@@ -213,6 +213,59 @@ describe('auth service tenant scope', () => {
     })
   })
 
+  it('uses password verification work for generic invalid login states', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const verifyPasswordHash = vi.fn().mockResolvedValue(false)
+    const authService = createAuthService({
+      db: database.db,
+      env: testEnv,
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+      verifyPasswordHash,
+    })
+
+    await portalUsersRepository.create({
+      email: 'inactive@company.ru',
+      fullName: 'Inactive User',
+      isActive: false,
+      passwordHash: await hashPassword('Secret123'),
+      tenantId: tenant.id,
+    })
+    await portalUsersRepository.create({
+      email: 'passwordless@company.ru',
+      fullName: 'Passwordless User',
+      passwordHash: null,
+      tenantId: tenant.id,
+    })
+
+    for (const email of [
+      'missing@company.ru',
+      'inactive@company.ru',
+      'passwordless@company.ru',
+    ]) {
+      await expect(
+        authService.login({
+          email,
+          password: 'Secret123',
+          tenantId: tenant.id,
+        }),
+      ).rejects.toMatchObject({
+        code: 'INVALID_CREDENTIALS',
+        statusCode: 401,
+      })
+    }
+
+    expect(verifyPasswordHash).toHaveBeenCalledTimes(3)
+    expect(verifyPasswordHash.mock.calls.map(([password]) => password)).toEqual(
+      ['Secret123', 'Secret123', 'Secret123'],
+    )
+    expect(
+      new Set(verifyPasswordHash.mock.calls.map(([, hash]) => hash)).size,
+    ).toBe(1)
+    expect(verifyPasswordHash.mock.calls[0]?.[1]).toMatch(/^scrypt:/)
+    await expect(readOptionalSession(database, tenant.id)).resolves.toBeNull()
+  })
+
   it('renews customer session only inside the renewal window when renewal is allowed', async () => {
     const tenant = await seedTestTenant(database.db)
     const portalUsersRepository = createPortalUsersRepository(database.db)
@@ -353,4 +406,14 @@ async function readOnlySession(database: DatabaseClient, tenantId: number) {
   }
 
   return session
+}
+
+async function readOptionalSession(database: DatabaseClient, tenantId: number) {
+  const [session] = await database.db
+    .select()
+    .from(portalSessions)
+    .where(eq(portalSessions.tenantId, tenantId))
+    .limit(1)
+
+  return session ?? null
 }
