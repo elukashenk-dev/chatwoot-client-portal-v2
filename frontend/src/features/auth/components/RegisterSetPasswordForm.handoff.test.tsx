@@ -128,7 +128,9 @@ describe('RegisterSetPasswordForm auth handoff', () => {
     expect(completeAuthenticatedSession).toHaveBeenCalledWith(
       authenticatedSession,
     )
-    expect(screen.getByTestId('location')).toHaveTextContent('/app/chat')
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('/app/chat')
+    })
     expect(getStoredRegistrationRequest()).toBeNull()
     expect(getStoredRegistrationVerification()).toBeNull()
   })

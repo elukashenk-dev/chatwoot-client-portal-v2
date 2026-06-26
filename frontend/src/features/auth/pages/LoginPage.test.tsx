@@ -299,6 +299,11 @@ describe('LoginPage', () => {
       screen.getByRole('link', { name: 'Забыли пароль?' }),
     ).toHaveAttribute('href', '/auth/password-reset/request')
     expect(
+      screen.getByRole('link', {
+        name: 'Уже есть аккаунт? Войти по коду из почты.',
+      }),
+    ).toHaveAttribute('href', '/auth/code-login/request')
+    expect(
       screen.getByRole('link', { name: 'Создать аккаунт' }),
     ).toHaveAttribute('href', '/auth/register')
     expect(screen.queryByText('Нет доступа к чату?')).not.toBeInTheDocument()

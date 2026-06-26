@@ -8,6 +8,7 @@ export type AuthBrandPlacement = 'center' | 'left' | 'right'
 
 export type AuthShellProps = {
   brandPlacement?: AuthBrandPlacement
+  className?: string
   brandLogoHeight?: number | null
   brandLogoUrl?: string | null
   brandLogoWidth?: number | null
@@ -27,6 +28,7 @@ const brandPlacementClassMap: Record<AuthBrandPlacement, string> = {
 
 export function AuthShell({
   brandPlacement = 'center',
+  className,
   brandLogoHeight,
   brandLogoUrl,
   brandLogoWidth,
@@ -38,7 +40,12 @@ export function AuthShell({
   title,
 }: AuthShellProps) {
   return (
-    <section className="auth-canvas-background relative flex min-h-full w-full shrink-0">
+    <section
+      className={cn(
+        'auth-canvas-background relative flex min-h-full w-full shrink-0',
+        className,
+      )}
+    >
       <div
         aria-hidden="true"
         className="auth-background-overlay absolute inset-0 z-0"

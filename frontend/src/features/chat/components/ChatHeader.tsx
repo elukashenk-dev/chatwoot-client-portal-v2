@@ -24,6 +24,7 @@ import { type ChatHeaderPresenceTone } from './ChatHeaderPresence'
 import { ChatHeaderIdentity } from './ChatHeaderIdentity'
 import { ChatHeaderActionsMenu } from './chat-header/ChatHeaderActionsMenu'
 import { ChatHeaderNavigationMenu } from './chat-header/ChatHeaderNavigationMenu'
+import { PasswordlessLogoutWarningDialog } from './chat-header/PasswordlessLogoutWarningDialog'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { MenuIcon, MoreHorizontalIcon } from '../../../shared/ui/icons'
 import {
@@ -67,7 +68,7 @@ export function ChatHeader({
   threads,
 }: ChatHeaderProps) {
   const navigate = useNavigate()
-  const { signOut } = useAuthSession()
+  const { signOut, user } = useAuthSession()
   const { branding } = useBranding()
   const { tenant } = useTenantIdentity()
   const pwaInstallPrompt = usePwaInstallPrompt()
@@ -78,6 +79,7 @@ export function ChatHeader({
   const [isChatMenuOpen, setIsChatMenuOpen] = useState(false)
   const [isNavMenuOpen, setIsNavMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLogoutWarningOpen, setIsLogoutWarningOpen] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
 
   const closeMenus = useCallback(
@@ -190,6 +192,8 @@ export function ChatHeader({
   async function handleLogout() {
     setIsLoggingOut(true)
     setLogoutError(null)
+    setIsLogoutWarningOpen(false)
+    closeMenus()
 
     try {
       await signOut()
@@ -199,6 +203,29 @@ export function ChatHeader({
     } finally {
       setIsLoggingOut(false)
     }
+  }
+
+  function closeLogoutWarning() {
+    setIsLogoutWarningOpen(false)
+    window.setTimeout(() => {
+      focusElement(chatMenuButtonRef.current)
+    }, 0)
+  }
+
+  function openProfileFromLogoutWarning() {
+    setIsLogoutWarningOpen(false)
+    closeMenus()
+  }
+
+  function requestLogout() {
+    if (user?.passwordConfigured === false) {
+      closeMenus()
+      setLogoutError(null)
+      setIsLogoutWarningOpen(true)
+      return
+    }
+
+    void handleLogout()
   }
 
   function handleInstallApp() {
@@ -340,9 +367,7 @@ export function ChatHeader({
                 : undefined
             }
             onKeyDown={handleMenuKeyDown}
-            onLogout={() => {
-              void handleLogout()
-            }}
+            onLogout={requestLogout}
             onOpenProfile={() => {
               closeMenus()
               navigate(routePaths.app.profile)
@@ -373,6 +398,18 @@ export function ChatHeader({
         <div className="mx-auto mt-2 w-full max-w-[620px] sm:mt-3">
           <InlineAlert message={logoutError} tone="error" />
         </div>
+      ) : null}
+
+      {isLogoutWarningOpen ? (
+        <PasswordlessLogoutWarningDialog
+          isLoggingOut={isLoggingOut}
+          onCancel={closeLogoutWarning}
+          onOpenProfile={openProfileFromLogoutWarning}
+          onConfirm={() => {
+            void handleLogout()
+          }}
+          profileTo={routePaths.app.profile}
+        />
       ) : null}
     </header>
   )

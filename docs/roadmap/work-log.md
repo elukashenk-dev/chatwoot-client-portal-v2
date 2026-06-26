@@ -278,8 +278,12 @@ execution-plan детали здесь не хранятся.
 - Profile security UI now lets passwordless users set their first password while
   logged in through a protected email-code challenge and rotated authenticated
   session handoff; configured-password users see status only.
+- Passwordless repeat login is implemented: already registered customer users
+  can enter through a tenant-scoped email-code login flow without browser auth
+  tokens, successful verification issues the normal customer `portal_session`,
+  and passwordless users get an explicit warning before manual logout.
 
 ## Recommended Next Step
 
-- Continue with Task 15 of the passwordless registration plan: final
-  verification before merge/deploy.
+- Run a manual local browser smoke of the passwordless login/logout flow before
+  merge or production deployment.

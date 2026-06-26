@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  confirmPasswordlessLoginCode,
   completePasswordSetup,
   completeRegistrationSetPassword,
   getCurrentSession,
   getCurrentUser,
+  requestPasswordlessLoginCode,
   requestPasswordSetup,
   skipRegistrationPassword,
   verifyPasswordSetupCode,
@@ -232,6 +234,79 @@ describe('auth API client', () => {
         body: JSON.stringify({
           continuationToken: 'password-setup-continuation-token',
           newPassword: 'PortalPass123',
+        }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('calls passwordless code-login endpoints and returns authenticated session', async () => {
+    const responses = [
+      {
+        accepted: true,
+        email: 'name@company.ru',
+        expiresInSeconds: 900,
+        nextStep: 'verify_code',
+        purpose: 'passwordless_login',
+        resendAvailableInSeconds: 60,
+        result: 'passwordless_login_requested',
+      },
+      {
+        nextStep: 'chat',
+        purpose: 'passwordless_login',
+        result: 'passwordless_login_completed',
+        session: {
+          expiresAt: '2026-06-10T10:00:00.000Z',
+        },
+        user: {
+          email: 'name@company.ru',
+          fullName: 'Portal User',
+          id: 7,
+          passwordConfigured: false,
+        },
+      },
+    ]
+    const fetchMock = vi.fn(async () => jsonResponse(responses.shift()))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      requestPasswordlessLoginCode({ email: 'name@company.ru' }),
+    ).resolves.toMatchObject({
+      accepted: true,
+      nextStep: 'verify_code',
+      purpose: 'passwordless_login',
+    })
+    await expect(
+      confirmPasswordlessLoginCode({
+        code: '123456',
+        email: 'name@company.ru',
+      }),
+    ).resolves.toMatchObject({
+      nextStep: 'chat',
+      user: {
+        passwordConfigured: false,
+      },
+    })
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/auth/code-login/request',
+      expect.objectContaining({
+        body: JSON.stringify({
+          email: 'name@company.ru',
+        }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/auth/code-login/verify',
+      expect.objectContaining({
+        body: JSON.stringify({
+          code: '123456',
+          email: 'name@company.ru',
         }),
         credentials: 'include',
         method: 'POST',

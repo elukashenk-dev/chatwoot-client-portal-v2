@@ -56,6 +56,7 @@ import { createChatwootWebhookService } from './modules/chatwoot-webhooks/servic
 import { registerHealthRoutes } from './modules/health/routes.js'
 import { registerLegalDocumentRoutes } from './modules/legal-documents/routes.js'
 import { createLegalDocumentsServiceForTenantRequest } from './modules/legal-documents/serviceFactory.js'
+import { registerPasswordlessLoginModule } from './modules/passwordless-login/module.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
 import { registerPasswordSetupRoutes } from './modules/password-setup/routes.js'
 import { createPortalUsersRepository } from './modules/portal-users/repository.js'
@@ -432,6 +433,9 @@ export function buildApp({
   })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,
+  })
+  registerPasswordlessLoginModule(app, {
+    authService, createEmailDelivery, database, env, ...(now ? { now } : {}),
   })
   registerPasswordSetupRoutes(app, {
     authService,

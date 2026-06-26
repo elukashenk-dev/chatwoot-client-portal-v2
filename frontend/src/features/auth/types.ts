@@ -83,6 +83,23 @@ export type PasswordResetVerifyFormValues = {
   code: string
 }
 
+export type PasswordlessLoginRequestFormValues = {
+  email: string
+}
+
+export type PasswordlessLoginRequestFormErrors = Partial<
+  Record<keyof PasswordlessLoginRequestFormValues, string>
+>
+
+export type TouchedPasswordlessLoginRequestFields = Record<
+  keyof PasswordlessLoginRequestFormValues,
+  boolean
+>
+
+export type PasswordlessLoginVerifyFormValues = {
+  code: string
+}
+
 export type PasswordResetSetPasswordFormValues = {
   confirmPassword: string
   newPassword: string
