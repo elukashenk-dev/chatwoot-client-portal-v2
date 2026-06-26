@@ -969,12 +969,9 @@ button:not(:disabled),
 }
 
 .auth-code-login-link {
-  display: inline-flex;
+  display: block;
   width: max-content;
   max-width: 100%;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
   margin: 14px auto 0;
   border-radius: 6px;
   font-size: 13px;
