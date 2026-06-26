@@ -5,6 +5,7 @@ import { ChatMenuItem } from '../ChatMenuItem'
 import {
   BellIcon,
   BellOffIcon,
+  DownloadIcon,
   ImageIcon,
   InfoIcon,
   LogOutIcon,
@@ -16,6 +17,7 @@ type ChatHeaderActionsMenuProps = {
   isLoggingOut: boolean
   menuRef: RefObject<HTMLDivElement | null>
   notificationsStatus: string
+  onInstallApp?: () => void
   onKeyDown: KeyboardEventHandler<HTMLDivElement>
   onLogout: () => void
   onOpenProfile: () => void
@@ -31,6 +33,7 @@ export function ChatHeaderActionsMenu({
   isLoggingOut,
   menuRef,
   notificationsStatus,
+  onInstallApp,
   onKeyDown,
   onLogout,
   onOpenProfile,
@@ -60,6 +63,13 @@ export function ChatHeaderActionsMenu({
         label="Профиль"
         onSelect={onOpenProfile}
       />
+      {onInstallApp ? (
+        <ChatMenuItem
+          icon={<DownloadIcon className="h-5 w-5" />}
+          label="Установить приложение"
+          onSelect={onInstallApp}
+        />
+      ) : null}
       <div className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-normal text-slate-400">
         Чат
       </div>

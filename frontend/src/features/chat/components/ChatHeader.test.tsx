@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router-dom'
@@ -12,6 +12,7 @@ import {
   type BrandingContextValue,
 } from '../../branding/lib/brandingContext'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
+import { PwaInstallPromptProvider } from '../../../pwa/installPromptRuntime'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type {
   ChatNotificationSettings,
@@ -127,6 +128,25 @@ const authSession: AuthSessionContextValue = {
   },
 }
 
+type MockBeforeInstallPromptEvent = Event & {
+  prompt: ReturnType<typeof vi.fn<() => Promise<void>>>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+function createBeforeInstallPromptEvent(): MockBeforeInstallPromptEvent {
+  const event = new Event('beforeinstallprompt', {
+    cancelable: true,
+  }) as MockBeforeInstallPromptEvent
+
+  event.prompt = vi.fn().mockResolvedValue(undefined)
+  event.userChoice = Promise.resolve({
+    outcome: 'accepted',
+    platform: 'web',
+  })
+
+  return event
+}
+
 function CurrentPath() {
   const location = useLocation()
 
@@ -158,20 +178,22 @@ function renderHeader({
     >
       <AuthSessionContext.Provider value={authSession}>
         <BrandingContext.Provider value={brandingValue}>
-          <ChatHeader
-            activeThread={activeThread}
-            connectionStatus={connectionStatus}
-            onOpenThreadInfo={vi.fn()}
-            onOpenThreadMedia={vi.fn()}
-            onOpenThreadNotifications={vi.fn()}
-            onOpenThreadSearch={vi.fn()}
-            onSelectThread={vi.fn()}
-            selectedThreadId={activeThread.id}
-            supportAvailability={supportAvailability}
-            threadNotificationSettings={notificationSettings}
-            threads={[activeThread]}
-          />
-          <CurrentPath />
+          <PwaInstallPromptProvider>
+            <ChatHeader
+              activeThread={activeThread}
+              connectionStatus={connectionStatus}
+              onOpenThreadInfo={vi.fn()}
+              onOpenThreadMedia={vi.fn()}
+              onOpenThreadNotifications={vi.fn()}
+              onOpenThreadSearch={vi.fn()}
+              onSelectThread={vi.fn()}
+              selectedThreadId={activeThread.id}
+              supportAvailability={supportAvailability}
+              threadNotificationSettings={notificationSettings}
+              threads={[activeThread]}
+            />
+            <CurrentPath />
+          </PwaInstallPromptProvider>
         </BrandingContext.Provider>
       </AuthSessionContext.Provider>
     </TenantIdentityContext.Provider>,
@@ -297,6 +319,9 @@ describe('ChatHeader', () => {
     expect(menu).not.toHaveClass('border-slate-200/90')
     expect(screen.getByText('Аккаунт')).toBeInTheDocument()
     expect(screen.getByText('Чат')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('menuitem', { name: 'Установить приложение' }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Профиль' })).toHaveClass(
       'border-slate-300/45',
       'hover:bg-white/45',
@@ -307,6 +332,25 @@ describe('ChatHeader', () => {
     expect(screen.getByLabelText('current path')).toHaveTextContent(
       '/app/profile',
     )
+  })
+
+  it('shows install app action when the PWA native prompt is available', async () => {
+    const user = userEvent.setup()
+    const installEvent = createBeforeInstallPromptEvent()
+
+    renderHeader()
+
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(
+      screen.getByRole('menuitem', { name: 'Установить приложение' }),
+    )
+
+    expect(installEvent.prompt).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('uses a glass surface for the navigation menu', async () => {

@@ -300,6 +300,25 @@ export function UploadIcon({ className = iconClassName }: IconProps) {
   )
 }
 
+export function DownloadIcon({ className = iconClassName }: IconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.45"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 4v12" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11A2.5 2.5 0 0 0 20 18.5V16" />
+    </svg>
+  )
+}
+
 export function TrashIcon({ className = iconClassName }: IconProps) {
   return (
     <svg

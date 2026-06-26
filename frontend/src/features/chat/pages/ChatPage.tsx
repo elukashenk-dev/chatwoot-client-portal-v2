@@ -22,6 +22,7 @@ import { useBranding } from '../../branding/lib/useBranding'
 import { readStartupChatFallback } from '../../offline/startupCache'
 import { useOfflineTextQueueAvailability } from '../../offline/useOfflineTextQueueAvailability'
 import { useTenantIdentity } from '../../tenant/lib/useTenantIdentity'
+import { PwaInstallBanner } from '../../../pwa/PwaInstallBanner'
 import { ChatAuxiliaryPages } from './ChatAuxiliaryPages'
 import { ChatComposerDock } from './ChatComposerDock'
 import { createChatHistoryFragmentControls } from './chatHistoryFragmentControls'
@@ -441,6 +442,7 @@ export function ChatPage() {
         queuedSendCount={queuedSendCount}
         resyncStatus={resyncStatus}
       />
+      {shouldRenderTranscript ? <PwaInstallBanner /> : null}
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
         {pageState.status === 'error' ? (

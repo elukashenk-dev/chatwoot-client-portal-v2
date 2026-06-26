@@ -26,6 +26,10 @@ import { ChatHeaderActionsMenu } from './chat-header/ChatHeaderActionsMenu'
 import { ChatHeaderNavigationMenu } from './chat-header/ChatHeaderNavigationMenu'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { MenuIcon, MoreHorizontalIcon } from '../../../shared/ui/icons'
+import {
+  PWA_INSTALL_MANUAL_INSTRUCTIONS_EVENT,
+  usePwaInstallPrompt,
+} from '../../../pwa/installPromptContext'
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
@@ -64,6 +68,7 @@ export function ChatHeader({
   const { signOut } = useAuthSession()
   const { branding } = useBranding()
   const { tenant } = useTenantIdentity()
+  const pwaInstallPrompt = usePwaInstallPrompt()
   const chatMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const chatMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const navMenuButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -194,6 +199,17 @@ export function ChatHeader({
     }
   }
 
+  function handleInstallApp() {
+    closeMenus()
+    void pwaInstallPrompt.install().then((result) => {
+      if (result !== 'manual') {
+        return
+      }
+
+      window.dispatchEvent(new Event(PWA_INSTALL_MANUAL_INSTRUCTIONS_EVENT))
+    })
+  }
+
   const supportPresence: {
     label: string
     tone: ChatHeaderPresenceTone
@@ -314,6 +330,11 @@ export function ChatHeader({
             isLoggingOut={isLoggingOut}
             menuRef={chatMenuPanelRef}
             notificationsStatus={notificationsStatus}
+            onInstallApp={
+              pwaInstallPrompt.state.status === 'available' && selectedThreadId
+                ? handleInstallApp
+                : undefined
+            }
             onKeyDown={handleMenuKeyDown}
             onLogout={() => {
               void handleLogout()

@@ -227,6 +227,10 @@ execution-plan детали здесь не хранятся.
   availability, attachment send and service-worker background text-send paths
   now abort into controlled retry/error handling, and background text recovery
   has a real same-origin service-worker network smoke.
+- PWA install prompt is a progressive enhancement: Chromium `beforeinstallprompt`
+  is captured for an explicit chat-ready install CTA, iOS keeps manual
+  Add-to-Home-Screen instructions, standalone launches suppress install UI, and
+  dismissals are scoped to the current tenant host.
 - Tenant-aware Telegram bridge baseline is implemented: tenant admins can
   create bridge configs from the portal admin UI after creating a Chatwoot
   Telegram inbox, Telegram updates are handled by a separate bridge service
@@ -247,5 +251,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Checkpoint commit the Telegram bridge review-hardening slice, then merge and
-  deploy it with the normal backend production image rebuild.
+- Checkpoint commit the PWA install prompt slice, then run a real-device
+  installed PWA smoke after the next staging or production deploy.
