@@ -122,7 +122,7 @@ describe('UserProfilePage', () => {
     )
     expect(screen.getByText('Пароль настроен')).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Настроить пароль' }),
+      screen.queryByRole('button', { name: 'Задать пароль' }),
     ).not.toBeInTheDocument()
     expect(screen.getByLabelText('Заменить аватар').closest('label')).toHaveClass(
       'border-white/65',
@@ -236,7 +236,7 @@ describe('UserProfilePage', () => {
     renderPage(authSession)
 
     await user.click(await screen.findByRole('button', {
-      name: 'Настроить пароль',
+      name: 'Задать пароль',
     }))
     expect(requestPasswordSetupMock).toHaveBeenCalledWith()
 
@@ -300,7 +300,7 @@ describe('UserProfilePage', () => {
     renderPage(authSession)
 
     await user.click(await screen.findByRole('button', {
-      name: 'Настроить пароль',
+      name: 'Задать пароль',
     }))
     await user.click(await screen.findByLabelText('Код из письма'))
     await user.keyboard('123456')
@@ -312,7 +312,7 @@ describe('UserProfilePage', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Настроить пароль' }),
+      screen.getByRole('button', { name: 'Задать пароль' }),
     ).toBeInTheDocument()
     expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument()
     expect(completePasswordSetupMock).not.toHaveBeenCalled()
@@ -357,7 +357,7 @@ describe('UserProfilePage', () => {
     renderPage(authSession)
 
     await user.click(await screen.findByRole('button', {
-      name: 'Настроить пароль',
+      name: 'Задать пароль',
     }))
     await user.click(await screen.findByLabelText('Код из письма'))
     await user.keyboard('123456')
@@ -375,7 +375,7 @@ describe('UserProfilePage', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Настроить пароль' }),
+      screen.getByRole('button', { name: 'Задать пароль' }),
     ).toBeInTheDocument()
     expect(authSession.completeAuthenticatedSession).not.toHaveBeenCalled()
   })
