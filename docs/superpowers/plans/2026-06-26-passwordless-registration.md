@@ -12,7 +12,7 @@ Implement optional password creation after email-code registration verification.
 
 The target behavior is:
 
-- customer portal sessions use a 30-day rolling idle timeout before passwordless registration is implemented;
+- customer portal sessions use a 30-day idle timeout with a 15-day renewal window before passwordless registration is implemented;
 - email verification remains mandatory;
 - password creation becomes optional at registration completion;
 - skipping password creates the user, links contact/legal acceptance, creates a normal session, and enters chats;
@@ -25,14 +25,14 @@ The target behavior is:
 ## Pre-Implementation Gate
 
 - Start from current `main` and create `feature/customer-session-rolling-idle-timeout`.
-- Implement and merge the rolling idle timeout prerequisite first.
+- Implement and merge the customer idle-renewal prerequisite first.
 - After the prerequisite is in `main`, create `feature/passwordless-registration-completion` from the updated `main`.
 - Confirm `git status --short --branch` is clean before code work.
 - Read open auth-related findings in `docs/findings/`. Current known finding `F-AUTH-001-rate-limit-shared-store.md` is related to distributed rate-limit storage but does not block this slice.
 - Do not modify Chatwoot core.
 - Do not use old portal project code or data.
 
-## Task 0 - Customer Session Rolling Idle Timeout
+## Task 0 - Customer Session Idle Renewal Window
 
 Files:
 
@@ -75,7 +75,14 @@ write_env_line SESSION_TTL_DAYS 30
 ```
 
 2. Update backend test helpers from `SESSION_TTL_DAYS: 14` to `SESSION_TTL_DAYS: 30`.
-3. Replace the customer session repository `touchSession` method with a method that updates both `lastSeenAt` and `expiresAt` for the current tenant/session:
+3. Add a customer auth service constant:
+
+```ts
+const CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS = 15
+const DAY_MS = 24 * 60 * 60 * 1000
+```
+
+4. Replace the customer session repository `touchSession` method with a method that updates both `lastSeenAt` and `expiresAt` for the current tenant/session:
 
 ```ts
 async refreshSession({
@@ -104,56 +111,70 @@ async refreshSession({
 }
 ```
 
-4. In `authService.resolveCurrentSession`, keep the existing non-expired lookup. After it succeeds, calculate the refreshed expiry from the current backend time:
+5. In `authService.resolveCurrentSession`, keep the existing non-expired lookup. After it succeeds, calculate whether the session is inside the renewal window:
+
+```ts
+const remainingMs = session.expiresAt.getTime() - resolvedAt.getTime()
+const shouldRefreshSession =
+  remainingMs <= CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS * DAY_MS
+```
+
+6. If `shouldRefreshSession` is false, return the current `session.expiresAt`, set `sessionRefreshed: false`, and do not write `portal_sessions`.
+7. If `shouldRefreshSession` is true, calculate the refreshed expiry from the current backend time:
 
 ```ts
 const refreshedExpiresAt = new Date(
-  resolvedAt.getTime() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+  resolvedAt.getTime() + env.SESSION_TTL_DAYS * DAY_MS,
 )
 ```
 
-5. Call `repository.refreshSession({ at: resolvedAt, expiresAt: refreshedExpiresAt, sessionId: session.sessionId, tenantId })`.
-6. Return `expiresAt: refreshedExpiresAt` from `resolveCurrentSession`, not the stale DB value.
-7. In `/api/auth/me`, after `authService.getCurrentSession` succeeds, set the same session cookie value again:
+8. Call `repository.refreshSession({ at: resolvedAt, expiresAt: refreshedExpiresAt, sessionId: session.sessionId, tenantId })`.
+9. Return `expiresAt: refreshedExpiresAt` and `sessionRefreshed: true` from `resolveCurrentSession`.
+10. Add `sessionRefreshed: boolean` to the internal current-session response used by `/api/auth/me`. Keep public JSON response shape unchanged.
+11. In `/api/auth/me`, after `authService.getCurrentSession` succeeds, set the same session cookie value again only when the service reports `sessionRefreshed: true`:
 
 ```ts
-reply.setCookie(
-  env.SESSION_COOKIE_NAME,
-  sessionToken,
-  getSessionCookieOptions(env),
-)
+if (session.sessionRefreshed) {
+  reply.setCookie(
+    env.SESSION_COOKIE_NAME,
+    sessionToken,
+    getSessionCookieOptions(env),
+  )
+}
 ```
 
-8. Do not change `getSessionCookieOptions` except through the 30-day `SESSION_TTL_DAYS` value it already reads.
-9. Do not add a renewal threshold such as "refresh only when fewer than N days remain". The product contract is exact rolling idle timeout: every successful online customer session check moves expiry to `now + 30 days`.
-10. Keep `/api/auth/me` as an online session check, not a high-frequency heartbeat. If future traffic requires coalescing, that must be a separate product/security decision because it changes exact idle-timeout behavior.
-11. Do not change tenant-admin routes, repositories, env names or `portal_admin_session`.
-12. Keep logout behavior unchanged: deleting the session row and clearing the cookie still makes the next login mandatory.
-13. Keep missing-cookie, invalid-cookie, revoked and expired sessions unchanged: `/api/auth/me` returns `401`, clears the cookie and does not extend anything.
-14. Confirm frontend auth/offline code needs no new browser token. Existing `saveOnlineAuthSnapshot` should store the refreshed `session.expiresAt` returned by `/api/auth/me`.
+12. Do not change `getSessionCookieOptions` except through the 30-day `SESSION_TTL_DAYS` value it already reads.
+13. Keep `/api/auth/me` as an online session check, not a high-frequency heartbeat.
+14. Do not change tenant-admin routes, repositories, env names or `portal_admin_session`.
+15. Keep logout behavior unchanged: deleting the session row and clearing the cookie still makes the next login mandatory.
+16. Keep missing-cookie, invalid-cookie, revoked and expired sessions unchanged: `/api/auth/me` returns `401`, clears the cookie and does not extend anything.
+17. Confirm frontend auth/offline code needs no new browser token. Existing `saveOnlineAuthSnapshot` should store the effective `session.expiresAt` returned by `/api/auth/me`.
 
 Backend tests:
 
 1. Update existing login expiry expectations from login time plus 14 days to login time plus 30 days. For example, fixed login at `2026-04-21T12:00:00.000Z` should expire at `2026-05-21T12:00:00.000Z`.
-2. Add a service or integration test where a session created at `2026-04-21T12:00:00.000Z` is checked online at `2026-04-22T09:30:00.000Z`; expect `/api/auth/me` or `getCurrentSession` to return `2026-05-22T09:30:00.000Z`.
-3. Assert the corresponding `portal_sessions.expires_at` row was updated to the refreshed expiry and `last_seen_at` was updated to the check time.
-4. Add a route integration assertion that successful `/api/auth/me` returns a `Set-Cookie` header for `portal_session` with the same signed token value and refreshed `Max-Age`.
-5. Add an expired-session test where backend time is later than the stored `expires_at`; expect `401`, cookie clear, and no extension.
-6. Keep or add a logout test proving deleted sessions are not revived by `/api/auth/me`.
-7. Keep tenant-admin auth tests unchanged except for avoiding accidental customer-session helper changes.
+2. Add a service or integration test where a session created at `2026-04-21T12:00:00.000Z` is checked online at `2026-04-22T09:30:00.000Z`; because more than 15 days remain, expect `/api/auth/me` or `getCurrentSession` to return the original `2026-05-21T12:00:00.000Z`, `sessionRefreshed: false`, no `portal_sessions` write, and no `Set-Cookie` refresh.
+3. Add a service or integration test where the same session is checked online at `2026-05-10T09:30:00.000Z`; because 15 days or fewer remain, expect the response to return `2026-06-09T09:30:00.000Z` and `sessionRefreshed: true`.
+4. Assert the corresponding `portal_sessions.expires_at` row was updated to the refreshed expiry and `last_seen_at` was updated to the check time only in the renewal-window case.
+5. Add a route integration assertion that `/api/auth/me` inside the renewal window returns a `Set-Cookie` header for `portal_session` with the same signed token value and refreshed `Max-Age`.
+6. Add a route integration assertion that `/api/auth/me` outside the renewal window does not return a `Set-Cookie` refresh.
+7. Add an expired-session test where backend time is later than the stored `expires_at`; expect `401`, cookie clear, and no extension.
+8. Keep or add a logout test proving deleted sessions are not revived by `/api/auth/me`.
+9. Keep tenant-admin auth tests unchanged except for avoiding accidental customer-session helper changes.
 
 Frontend tests:
 
 1. If a frontend test mocks `/api/auth/me`, update only exact mocked `expiresAt` values that assume 14 days.
-2. Add or update an auth provider/offline test so a successful online `/api/auth/me` with a later `session.expiresAt` overwrites the offline auth snapshot `sessionExpiresAt`.
-3. Keep the cached-auth expiry behavior unchanged: offline cache is usable only until the stored backend `sessionExpiresAt`.
+2. Add or update an auth provider/offline test so a successful online `/api/auth/me` with a later renewed `session.expiresAt` overwrites the offline auth snapshot `sessionExpiresAt`.
+3. Add or update a test proving that when `/api/auth/me` returns the same unrenewed `session.expiresAt`, the offline auth snapshot keeps that effective backend expiry.
+4. Keep the cached-auth expiry behavior unchanged: offline cache is usable only until the stored backend `sessionExpiresAt`.
 
 Acceptance:
 
 - Customer login creates a 30-day customer session.
-- Successful `/api/auth/me` extends only a valid, non-expired customer session to `now + 30 days`.
-- Renewal has no threshold in this slice; every successful online customer session check refreshes the idle deadline.
-- `/api/auth/me` refreshes the existing `portal_session` cookie with the same token and a fresh cookie lifetime.
+- Successful `/api/auth/me` outside the 15-day renewal window does not write the session row and does not refresh the cookie.
+- Successful `/api/auth/me` inside the 15-day renewal window extends only a valid, non-expired customer session to `now + 30 days`.
+- `/api/auth/me` refreshes the existing `portal_session` cookie with the same token and a fresh cookie lifetime only after backend renewal.
 - Missing, invalid, revoked, manually logged-out and expired customer sessions require login and are not extended.
 - Offline/PWA auth snapshot stores the refreshed backend `sessionExpiresAt` after successful online checks.
 - Tenant-admin sessions are untouched.
@@ -509,8 +530,8 @@ Acceptance:
 Review focus:
 
 - tenant isolation in every new query;
-- customer session rolling idle refresh on every successful `/api/auth/me` without reviving expired/revoked sessions;
-- customer cookie refresh uses the same signed httpOnly `portal_session` token and does not alter tenant-admin session behavior;
+- customer session renewal happens only inside the 15-day renewal window and never revives expired/revoked sessions;
+- customer cookie refresh uses the same signed httpOnly `portal_session` token only after backend renewal and does not alter tenant-admin session behavior;
 - continuation token one-time semantics;
 - session issuance reuse and cookie behavior;
 - no passwordless state leak through login;
