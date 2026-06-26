@@ -11,7 +11,7 @@ import {
   portalUsers,
   verificationRecords,
 } from './db/schema.js'
-import { hashPassword } from './lib/password.js'
+import { hashPassword, verifyPassword } from './lib/password.js'
 import { seedDefaultTenant, testEnv } from './test/appTestHelpers.js'
 import { createTestDatabase } from './test/testDatabase.js'
 
@@ -158,6 +158,20 @@ describe('registration completion app integration', () => {
       ),
     ).toBe(true)
 
+    const [createdUser] = await database.db
+      .select({
+        id: portalUsers.id,
+        passwordHash: portalUsers.passwordHash,
+      })
+      .from(portalUsers)
+      .where(eq(portalUsers.email, 'name@company.ru'))
+
+    expect(createdUser?.id).toBe(response.json().user.id)
+    expect(createdUser?.passwordHash).toEqual(expect.any(String))
+    await expect(
+      verifyPassword('PortalPass123', createdUser?.passwordHash ?? ''),
+    ).resolves.toBe(true)
+
     const [contactLink] = await database.db
       .select({
         chatwootContactId: portalUserContactLinks.chatwootContactId,
@@ -268,6 +282,23 @@ describe('registration completion app integration', () => {
       id: response.json().user.id,
       passwordHash: null,
     })
+
+    const [contactLink] = await database.db
+      .select({
+        chatwootContactId: portalUserContactLinks.chatwootContactId,
+      })
+      .from(portalUserContactLinks)
+
+    expect(contactLink).toEqual({
+      chatwootContactId: 45,
+    })
+    const [linkedAcceptance] = await database.db
+      .select({
+        portalUserId: portalLegalAcceptances.portalUserId,
+      })
+      .from(portalLegalAcceptances)
+
+    expect(linkedAcceptance?.portalUserId).toBe(response.json().user.id)
 
     const meResponse = await app.inject({
       headers: {
