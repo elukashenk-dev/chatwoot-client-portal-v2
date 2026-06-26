@@ -1,12 +1,13 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import {
   ApiClientError,
   completeRegistrationSetPassword,
+  skipRegistrationPassword,
   type RegistrationSetPasswordResponse,
 } from '../api/authClient'
 import { getPasswordRuleStates } from '../lib/passwordRules'
@@ -82,6 +83,7 @@ function getVisibleFieldError(error?: string) {
 
 export function RegisterSetPasswordForm() {
   const { completeAuthenticatedSession } = useAuthSession()
+  const navigate = useNavigate()
   const registrationRequest = getStoredRegistrationRequest()
   const registrationVerification = getStoredRegistrationVerification()
   const [values, setValues] =
@@ -91,11 +93,10 @@ export function RegisterSetPasswordForm() {
     newPassword: false,
   })
   const [hasSubmitted, setHasSubmitted] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSavingPassword, setIsSavingPassword] = useState(false)
+  const [isSkippingPassword, setIsSkippingPassword] = useState(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [nextAction, setNextAction] = useState<NextAction>(null)
-  const [completionSuccess, setCompletionSuccess] =
-    useState<RegistrationSetPasswordResponse | null>(null)
 
   const fieldErrors = validateRegisterSetPasswordForm(values)
   const visiblePasswordError =
@@ -124,6 +125,8 @@ export function RegisterSetPasswordForm() {
     passwordRuleStates.hasLetter &&
     passwordRuleStates.hasNumber &&
     passwordRuleStates.matches
+  const isBusy = isSavingPassword || isSkippingPassword
+  const canSkip = Boolean(hasFlowAccess) && !isBusy
 
   function setFieldValue<Key extends keyof RegisterSetPasswordFormValues>(
     field: Key,
@@ -144,6 +147,28 @@ export function RegisterSetPasswordForm() {
     }))
   }
 
+  async function completeRegistration(response: RegistrationSetPasswordResponse) {
+    await completeAuthenticatedSession({
+      session: response.session,
+      user: response.user,
+    })
+    clearRegistrationFlow()
+    setGlobalError(null)
+    setNextAction(null)
+    navigate(routePaths.app.chat, { replace: true })
+  }
+
+  function handleCompletionError(error: unknown) {
+    const errorDetails = getErrorDetails(error)
+
+    if (errorDetails.nextAction === 'verify') {
+      clearRegistrationVerification()
+    }
+
+    setGlobalError(errorDetails.message)
+    setNextAction(errorDetails.nextAction)
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setHasSubmitted(true)
@@ -162,7 +187,7 @@ export function RegisterSetPasswordForm() {
       return
     }
 
-    setIsSubmitting(true)
+    setIsSavingPassword(true)
 
     try {
       const response = await completeRegistrationSetPassword({
@@ -171,44 +196,40 @@ export function RegisterSetPasswordForm() {
         newPassword: values.newPassword,
       })
 
-      await completeAuthenticatedSession({
-        session: response.session,
-        user: response.user,
-      })
-      clearRegistrationFlow()
-      setCompletionSuccess(response)
-      setGlobalError(null)
-      setNextAction(null)
+      await completeRegistration(response)
     } catch (error) {
-      const errorDetails = getErrorDetails(error)
-
-      if (errorDetails.nextAction === 'verify') {
-        clearRegistrationVerification()
-      }
-
-      setGlobalError(errorDetails.message)
-      setNextAction(errorDetails.nextAction)
+      handleCompletionError(error)
     } finally {
-      setIsSubmitting(false)
+      setIsSavingPassword(false)
     }
   }
 
-  if (completionSuccess) {
-    return (
-      <div className="space-y-5">
-        <div className="rounded-[0.6rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900 shadow-sm">
-          Пароль сохранен для {completionSuccess.user.email}. Теперь можно
-          перейти к чатам.
-        </div>
+  async function handleSkipPassword() {
+    setGlobalError(null)
+    setNextAction(null)
 
-        <Link
-          className="inline-flex min-h-14 w-full items-center justify-center rounded-[0.6rem] bg-brand-800 px-4 py-3.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
-          to={routePaths.app.chat}
-        >
-          Перейти к чатам
-        </Link>
-      </div>
-    )
+    if (!hasFlowAccess) {
+      setGlobalError(
+        'Сначала подтвердите email, чтобы открыть шаг завершения регистрации.',
+      )
+      setNextAction('verify')
+      return
+    }
+
+    setIsSkippingPassword(true)
+
+    try {
+      const response = await skipRegistrationPassword({
+        continuationToken: registrationVerification.continuationToken,
+        email: registrationRequest.email,
+      })
+
+      await completeRegistration(response)
+    } catch (error) {
+      handleCompletionError(error)
+    } finally {
+      setIsSkippingPassword(false)
+    }
   }
 
   if (!hasFlowAccess || !registrationRequest) {
@@ -217,7 +238,7 @@ export function RegisterSetPasswordForm() {
         <InlineAlert
           message={
             globalError ??
-            'Сначала подтвердите email, чтобы открыть шаг установки пароля.'
+            'Сначала подтвердите email, чтобы завершить регистрацию.'
           }
           tone="error"
         />
@@ -233,42 +254,61 @@ export function RegisterSetPasswordForm() {
   }
 
   return (
-    <PasswordSetupFormLayout
-      canSubmit={Boolean(canSubmit)}
-      confirmPassword={values.confirmPassword}
-      confirmPasswordError={visibleConfirmErrorMessage}
-      confirmPasswordErrorId={confirmPasswordErrorId}
-      confirmPasswordHasError={Boolean(visibleConfirmError)}
-      confirmPasswordInputId="register-set-confirm-password"
-      errorMessage={globalError}
-      isSubmitting={isSubmitting}
-      newPassword={values.newPassword}
-      onConfirmPasswordBlur={() => markFieldTouched('confirmPassword')}
-      onConfirmPasswordChange={(nextValue) =>
-        setFieldValue('confirmPassword', nextValue)
-      }
-      onNewPasswordBlur={() => markFieldTouched('newPassword')}
-      onNewPasswordChange={(nextValue) =>
-        setFieldValue('newPassword', nextValue)
-      }
-      onSubmit={handleSubmit}
-      passwordError={visiblePasswordErrorMessage}
-      passwordErrorId={passwordErrorId}
-      passwordHasError={Boolean(visiblePasswordError)}
-      passwordInputId="register-set-password"
-      recoveryAction={
-        nextAction === 'verify'
-          ? {
-              label: 'Вернуться к подтверждению email',
-              to: routePaths.auth.registerVerify,
-            }
-          : nextAction === 'login'
+    <div className="space-y-4">
+      <p className="auth-form-note">
+        Можно продолжить без пароля. Пароль можно задать позже в профиле или
+        через восстановление по email-коду после выхода.
+      </p>
+
+      <PasswordSetupFormLayout
+        canSubmit={Boolean(canSubmit)}
+        confirmPassword={values.confirmPassword}
+        confirmPasswordError={visibleConfirmErrorMessage}
+        confirmPasswordErrorId={confirmPasswordErrorId}
+        confirmPasswordHasError={Boolean(visibleConfirmError)}
+        confirmPasswordInputId="register-set-confirm-password"
+        errorMessage={globalError}
+        isDisabled={isBusy}
+        isSubmitting={isSavingPassword}
+        newPassword={values.newPassword}
+        onConfirmPasswordBlur={() => markFieldTouched('confirmPassword')}
+        onConfirmPasswordChange={(nextValue) =>
+          setFieldValue('confirmPassword', nextValue)
+        }
+        onNewPasswordBlur={() => markFieldTouched('newPassword')}
+        onNewPasswordChange={(nextValue) =>
+          setFieldValue('newPassword', nextValue)
+        }
+        onSubmit={handleSubmit}
+        passwordError={visiblePasswordErrorMessage}
+        passwordErrorId={passwordErrorId}
+        passwordHasError={Boolean(visiblePasswordError)}
+        passwordInputId="register-set-password"
+        recoveryAction={
+          nextAction === 'verify'
             ? {
-                label: 'Перейти ко входу',
-                to: routePaths.auth.login,
+                label: 'Вернуться к подтверждению email',
+                to: routePaths.auth.registerVerify,
               }
-            : null
-      }
-    />
+            : nextAction === 'login'
+              ? {
+                  label: 'Перейти ко входу',
+                  to: routePaths.auth.login,
+                }
+              : null
+        }
+      />
+
+      <button
+        className="inline-flex min-h-12 w-full items-center justify-center rounded-[0.6rem] border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-brand-800 shadow-sm transition hover:border-brand-200 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+        disabled={!canSkip}
+        onClick={() => {
+          void handleSkipPassword()
+        }}
+        type="button"
+      >
+        {isSkippingPassword ? 'Переходим...' : 'Продолжить без пароля'}
+      </button>
+    </div>
   )
 }

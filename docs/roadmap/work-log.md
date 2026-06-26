@@ -267,8 +267,11 @@ execution-plan детали здесь не хранятся.
 - Frontend auth state handoff is implemented: authenticated backend completion
   responses can hydrate the customer auth context, persist online auth
   snapshots, and ignore stale startup session-check results.
+- Registration completion UI now treats password creation as optional: users can
+  either set a password immediately or continue to chats without one, and both
+  successful paths enter the protected app through the customer auth context.
 
 ## Recommended Next Step
 
-- Continue with Task 8 of the passwordless registration plan: frontend
-  registration completion UI.
+- Continue with Task 9 of the passwordless registration plan: frontend password
+  later UI.

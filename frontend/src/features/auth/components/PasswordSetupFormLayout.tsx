@@ -25,6 +25,7 @@ type PasswordSetupFormLayoutProps = {
   confirmPasswordHasError: boolean
   confirmPasswordInputId: string
   errorMessage?: string | null
+  isDisabled?: boolean
   isSubmitting: boolean
   canSubmit: boolean
   newPassword: string
@@ -48,6 +49,7 @@ export function PasswordSetupFormLayout({
   confirmPasswordHasError,
   confirmPasswordInputId,
   errorMessage,
+  isDisabled = false,
   isSubmitting,
   newPassword,
   onConfirmPasswordBlur,
@@ -81,6 +83,7 @@ export function PasswordSetupFormLayout({
           aria-invalid={passwordHasError}
           autoComplete="new-password"
           className={authFieldClassName}
+          disabled={isDisabled}
           hasError={passwordHasError}
           id={passwordInputId}
           isFilled={newPassword.length > 0}
@@ -109,6 +112,7 @@ export function PasswordSetupFormLayout({
           aria-invalid={confirmPasswordHasError}
           autoComplete="new-password"
           className={authFieldClassName}
+          disabled={isDisabled}
           hasError={confirmPasswordHasError}
           id={confirmPasswordInputId}
           isFilled={confirmPassword.length > 0}
@@ -139,7 +143,7 @@ export function PasswordSetupFormLayout({
       ) : null}
 
       <PrimaryButton
-        disabled={!canSubmit || isSubmitting}
+        disabled={!canSubmit || isSubmitting || isDisabled}
         loading={isSubmitting}
         loadingLabel="Сохранение..."
         type="submit"
