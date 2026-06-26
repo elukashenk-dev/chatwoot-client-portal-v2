@@ -107,14 +107,15 @@
   одинаковые emails и одинаковые Chatwoot IDs могут легитимно существовать в
   разных tenants, особенно при разных Chatwoot installations/accounts.
 
-## D-008. Password reset остается в `verification_records`
+## D-008. Email-code auth proofs остаются в `verification_records`
 
 - дата: `2026-05-05`
 - решение:
-  отдельную таблицу `password_reset_records` не создаем. Registration и password
-  reset используют общий persistence layer `verification_records`, а сценарий
-  различается через `purpose = registration` или `purpose = password_reset`.
-  Continuation token поля остаются там же.
+  отдельные таблицы для password reset или first-password setup не создаем.
+  Registration, password reset и logged-in first-password setup используют
+  общий persistence layer `verification_records`, а сценарий различается через
+  `purpose = registration`, `purpose = password_reset` или
+  `purpose = password_setup`. Continuation token поля остаются там же.
 - причина:
   текущая модель email-code flows уже единая. Для multi-tenant isolation
   достаточно tenant-aware lookup, индексов и advisory lock key.
@@ -494,3 +495,32 @@
   multi-tenant portal must avoid turning every auth check or protected API call
   into a session write. A renewal window keeps the behavior convenient while
   bounding write load and preserving backend authority over session validity.
+
+## D-029. Registration password is optional after email proof
+
+- дата: `2026-06-26`
+- решение:
+  Customer registration still requires tenant-scoped Chatwoot contact
+  eligibility and email-code verification, but password creation is optional at
+  completion. `POST /api/auth/register/set-password` stores a password hash,
+  while `POST /api/auth/register/skip-password` creates the same portal user
+  with `portal_users.password_hash = null`; both successful completion paths
+  consume the one-time registration continuation, link contact/legal acceptance,
+  issue the normal signed httpOnly customer `portal_session` cookie and enter
+  the protected chat app. Authenticated user snapshots expose
+  `passwordConfigured` as `password_hash is not null`.
+- граница:
+  Password login for a null-hash customer returns the same generic invalid
+  credentials as any bad login. A passwordless customer can create the first
+  password later only through an email-code proof tied to the current customer
+  session or, after logout, through the existing email-code password reset
+  flow. Logged-in first-password setup derives user identity from the current
+  session, rejects users who already have a hash, stores the first hash only
+  for that current tenant/user and rotates customer sessions after success.
+  Tenant-admin sessions and Chatwoot authority are not involved.
+- причина:
+  Known Chatwoot contacts have already proven email control during
+  registration, so requiring immediate password setup is unnecessary friction.
+  Keeping later password creation behind a fresh email-code proof preserves the
+  backend authority boundary, avoids browser-submitted user/email targets and
+  lets passwordless rows remain a deliberate state instead of an auth leak.
