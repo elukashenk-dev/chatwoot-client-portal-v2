@@ -3,6 +3,7 @@
 Date: 2026-06-26
 Status: ready for implementation after user approval
 Design source: `docs/superpowers/specs/2026-06-26-passwordless-registration-design.md`
+Prerequisite branch: `feature/customer-session-rolling-idle-timeout`
 Target branch: `feature/passwordless-registration-completion`
 
 ## Overview
@@ -11,6 +12,7 @@ Implement optional password creation after email-code registration verification.
 
 The target behavior is:
 
+- customer portal sessions use a 30-day rolling idle timeout before passwordless registration is implemented;
 - email verification remains mandatory;
 - password creation becomes optional at registration completion;
 - skipping password creates the user, links contact/legal acceptance, creates a normal session, and enters chats;
@@ -22,11 +24,146 @@ The target behavior is:
 
 ## Pre-Implementation Gate
 
-- Start from current `main` and create `feature/passwordless-registration-completion`.
+- Start from current `main` and create `feature/customer-session-rolling-idle-timeout`.
+- Implement and merge the rolling idle timeout prerequisite first.
+- After the prerequisite is in `main`, create `feature/passwordless-registration-completion` from the updated `main`.
 - Confirm `git status --short --branch` is clean before code work.
 - Read open auth-related findings in `docs/findings/`. Current known finding `F-AUTH-001-rate-limit-shared-store.md` is related to distributed rate-limit storage but does not block this slice.
 - Do not modify Chatwoot core.
 - Do not use old portal project code or data.
+
+## Task 0 - Customer Session Rolling Idle Timeout
+
+Files:
+
+- `backend/src/config/env.ts`
+- `.env.example`
+- `.env.production.example`
+- `infra/production/compose.yaml`
+- `scripts/install-production.sh`
+- `backend/src/test/appTestHelpers.ts`
+- `backend/src/modules/auth/repository.ts`
+- `backend/src/modules/auth/service.ts`
+- `backend/src/modules/auth/routes.ts`
+- `backend/src/modules/auth/service.test.ts`
+- `backend/src/app-auth.integration.test.ts`
+- `backend/src/app.test.ts` if existing auth route expectations use the old fixed expiration
+- frontend auth/offline tests only if they assert exact old `session.expiresAt` behavior
+
+Steps:
+
+1. Change customer `SESSION_TTL_DAYS` defaults and examples from `14` to `30`:
+
+```ts
+// backend/src/config/env.ts
+SESSION_TTL_DAYS: z.coerce.number().int().positive().max(90).default(30)
+```
+
+```dotenv
+# .env.example and .env.production.example
+SESSION_TTL_DAYS=30
+```
+
+```yaml
+# infra/production/compose.yaml
+SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+```
+
+```bash
+# scripts/install-production.sh
+write_env_line SESSION_TTL_DAYS 30
+```
+
+2. Update backend test helpers from `SESSION_TTL_DAYS: 14` to `SESSION_TTL_DAYS: 30`.
+3. Replace the customer session repository `touchSession` method with a method that updates both `lastSeenAt` and `expiresAt` for the current tenant/session:
+
+```ts
+async refreshSession({
+  at,
+  expiresAt,
+  sessionId,
+  tenantId,
+}: {
+  at: Date
+  expiresAt: Date
+  sessionId: number
+  tenantId: number
+}) {
+  await db
+    .update(portalSessions)
+    .set({
+      expiresAt,
+      lastSeenAt: at,
+    })
+    .where(
+      and(
+        eq(portalSessions.id, sessionId),
+        eq(portalSessions.tenantId, tenantId),
+      ),
+    )
+}
+```
+
+4. In `authService.resolveCurrentSession`, keep the existing non-expired lookup. After it succeeds, calculate the refreshed expiry from the current backend time:
+
+```ts
+const refreshedExpiresAt = new Date(
+  resolvedAt.getTime() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+)
+```
+
+5. Call `repository.refreshSession({ at: resolvedAt, expiresAt: refreshedExpiresAt, sessionId: session.sessionId, tenantId })`.
+6. Return `expiresAt: refreshedExpiresAt` from `resolveCurrentSession`, not the stale DB value.
+7. In `/api/auth/me`, after `authService.getCurrentSession` succeeds, set the same session cookie value again:
+
+```ts
+reply.setCookie(
+  env.SESSION_COOKIE_NAME,
+  sessionToken,
+  getSessionCookieOptions(env),
+)
+```
+
+8. Do not change `getSessionCookieOptions` except through the 30-day `SESSION_TTL_DAYS` value it already reads.
+9. Do not add a renewal threshold such as "refresh only when fewer than N days remain". The product contract is exact rolling idle timeout: every successful online customer session check moves expiry to `now + 30 days`.
+10. Keep `/api/auth/me` as an online session check, not a high-frequency heartbeat. If future traffic requires coalescing, that must be a separate product/security decision because it changes exact idle-timeout behavior.
+11. Do not change tenant-admin routes, repositories, env names or `portal_admin_session`.
+12. Keep logout behavior unchanged: deleting the session row and clearing the cookie still makes the next login mandatory.
+13. Keep missing-cookie, invalid-cookie, revoked and expired sessions unchanged: `/api/auth/me` returns `401`, clears the cookie and does not extend anything.
+14. Confirm frontend auth/offline code needs no new browser token. Existing `saveOnlineAuthSnapshot` should store the refreshed `session.expiresAt` returned by `/api/auth/me`.
+
+Backend tests:
+
+1. Update existing login expiry expectations from login time plus 14 days to login time plus 30 days. For example, fixed login at `2026-04-21T12:00:00.000Z` should expire at `2026-05-21T12:00:00.000Z`.
+2. Add a service or integration test where a session created at `2026-04-21T12:00:00.000Z` is checked online at `2026-04-22T09:30:00.000Z`; expect `/api/auth/me` or `getCurrentSession` to return `2026-05-22T09:30:00.000Z`.
+3. Assert the corresponding `portal_sessions.expires_at` row was updated to the refreshed expiry and `last_seen_at` was updated to the check time.
+4. Add a route integration assertion that successful `/api/auth/me` returns a `Set-Cookie` header for `portal_session` with the same signed token value and refreshed `Max-Age`.
+5. Add an expired-session test where backend time is later than the stored `expires_at`; expect `401`, cookie clear, and no extension.
+6. Keep or add a logout test proving deleted sessions are not revived by `/api/auth/me`.
+7. Keep tenant-admin auth tests unchanged except for avoiding accidental customer-session helper changes.
+
+Frontend tests:
+
+1. If a frontend test mocks `/api/auth/me`, update only exact mocked `expiresAt` values that assume 14 days.
+2. Add or update an auth provider/offline test so a successful online `/api/auth/me` with a later `session.expiresAt` overwrites the offline auth snapshot `sessionExpiresAt`.
+3. Keep the cached-auth expiry behavior unchanged: offline cache is usable only until the stored backend `sessionExpiresAt`.
+
+Acceptance:
+
+- Customer login creates a 30-day customer session.
+- Successful `/api/auth/me` extends only a valid, non-expired customer session to `now + 30 days`.
+- Renewal has no threshold in this slice; every successful online customer session check refreshes the idle deadline.
+- `/api/auth/me` refreshes the existing `portal_session` cookie with the same token and a fresh cookie lifetime.
+- Missing, invalid, revoked, manually logged-out and expired customer sessions require login and are not extended.
+- Offline/PWA auth snapshot stores the refreshed backend `sessionExpiresAt` after successful online checks.
+- Tenant-admin sessions are untouched.
+- No browser auth tokens or localStorage auth tokens are added.
+
+Suggested checkpoint commit after this task closes:
+
+```text
+feat: use rolling customer sessions
+```
 
 ## Task 1 - Backend Data Contract
 
@@ -372,6 +509,8 @@ Acceptance:
 Review focus:
 
 - tenant isolation in every new query;
+- customer session rolling idle refresh on every successful `/api/auth/me` without reviving expired/revoked sessions;
+- customer cookie refresh uses the same signed httpOnly `portal_session` token and does not alter tenant-admin session behavior;
 - continuation token one-time semantics;
 - session issuance reuse and cookie behavior;
 - no passwordless state leak through login;

@@ -2,11 +2,13 @@
 
 Date: 2026-06-26
 Status: ready for implementation planning, pending user approval
-Scope: auth registration completion, optional password setup, session handoff
+Scope: auth registration completion, customer rolling idle sessions, optional password setup, session handoff
 
 ## Goal
 
 After a known user confirms their email by code during registration, the portal must let them skip password creation, immediately enter the chat app, and set a password later when convenient.
+
+Customer portal sessions must also move from a fixed lifetime to a 30-day rolling idle timeout, so an active customer who opens the portal online at least once every 30 days keeps the normal customer session alive without a forced absolute timeout.
 
 This is not anonymous signup. Eligibility remains the existing tenant-scoped Chatwoot contact check plus email-code verification. The portal backend remains the only authority for auth, session, profile, chat send, and realtime.
 
@@ -38,6 +40,16 @@ This is not anonymous signup. Eligibility remains the existing tenant-scoped Cha
    - The successful set-password action rotates the portal session: delete existing sessions for the user, create a fresh one, set the normal signed httpOnly session cookie, and return the authenticated session payload.
    - If a password already exists, reject this first-password flow with a clear typed conflict and keep password change as a separate future slice or use the existing password reset flow.
 
+6. Customer sessions use a 30-day rolling idle timeout.
+   - `SESSION_TTL_DAYS` becomes `30` for customer portal sessions.
+   - Login creates `portal_sessions.expires_at = now + 30 days`.
+   - A successful online `/api/auth/me` check extends the same customer session to `now + 30 days`, updates `last_seen_at`, returns the refreshed `session.expiresAt`, and refreshes the same signed httpOnly `portal_session` cookie with a fresh `Max-Age`.
+   - Do not add a renewal threshold in this slice. A threshold would reduce writes, but it would also weaken the exact idle-timeout promise because an early online check could fail to move the expiry forward.
+   - Expired, revoked, missing-cookie, manually logged-out, or invalid sessions are not extended and must require login.
+   - There is no forced absolute timeout for ordinary customer chat sessions.
+   - Sensitive actions remain separate fresh re-auth flows and must not depend on the age of the ordinary customer session.
+   - Tenant-admin sessions and `portal_admin_session` are not part of this change.
+
 ## External Guidance Applied
 
 - OWASP Authentication Cheat Sheet: sensitive account changes such as password updates require reauthentication, and session identifiers should be rotated after authentication/risk changes.
@@ -60,7 +72,8 @@ Backend facts from the current codebase:
 - Registration code verification already creates a one-time continuation token in `verification_records` with a short TTL.
 - `registrationService.setPassword` currently consumes that continuation token, creates a `portal_users` row with a non-null password hash, creates `portal_user_contact_links`, links latest legal acceptance, consumes verification, and returns `nextStep: "login"`.
 - `authService.login` verifies email/password and then creates a session row and returns a session token for the route to set as a signed httpOnly cookie.
-- `/api/auth/me` returns the authenticated user and session metadata from the cookie-backed session.
+- Customer session TTL is currently fixed from login time. `resolveCurrentSession` touches `last_seen_at`, but does not extend `portal_sessions.expires_at`.
+- `/api/auth/me` currently returns the authenticated user and session metadata from the cookie-backed session, but does not refresh the cookie.
 - Password reset already uses email-code verification and can be reused for logged-out users who skipped password setup.
 
 Frontend facts from the current codebase:
@@ -68,6 +81,8 @@ Frontend facts from the current codebase:
 - The registration flow stores email and continuation token in session storage.
 - `RegisterSetPasswordForm` is the current required final registration step.
 - `AuthSessionProvider.signIn` can hydrate auth state after normal login, but there is no generic method to accept an already-authenticated backend session returned by registration.
+- `AuthSessionProvider` already saves `session.expiresAt` from successful online session checks into the offline auth snapshot.
+- Offline/PWA startup cache already refuses cached auth snapshots after their stored `sessionExpiresAt`.
 - The profile page currently has no password/security section.
 
 ## User Flow
@@ -208,7 +223,17 @@ Authenticated response should include `passwordConfigured` in `user`.
 
 ### Updated: `GET /api/auth/me`
 
-Add `passwordConfigured` to `user`.
+Successful response behavior:
+
+- validate the signed `portal_session` cookie;
+- resolve only a non-expired, non-revoked, current-tenant customer session;
+- update `portal_sessions.last_seen_at` to the current backend time;
+- update `portal_sessions.expires_at` to `now + SESSION_TTL_DAYS`, with `SESSION_TTL_DAYS = 30`;
+- set the same `portal_session` cookie value again using the existing httpOnly, signed, SameSite, secure and path rules with a fresh `Max-Age`;
+- return the refreshed `session.expiresAt`;
+- add `passwordConfigured` to `user`.
+
+Expired, revoked, invalid and missing-cookie sessions still return `401` and clear the cookie. They must not be extended.
 
 ### New: `POST /api/auth/password-setup/request`
 
@@ -318,7 +343,34 @@ ALTER TABLE portal_users ALTER COLUMN password_hash DROP NOT NULL;
 
 No portal legacy migration is required. Existing users keep their hashes. New skipped users store null. If a clean reinstall is preferred during deployment, the same schema shape is the target baseline.
 
+The 30-day rolling idle timeout does not require a schema migration because `portal_sessions` already has `expires_at` and `last_seen_at`. It does require changing the customer `SESSION_TTL_DAYS` default and runtime config from `14` to `30`.
+
 ## Backend Architecture
+
+### Customer Rolling Idle Session
+
+Customer session resolution must become the single rolling-idle refresh boundary.
+
+After `findUserBySessionTokenHash` confirms `portal_sessions.expires_at > now`, the auth service calculates:
+
+```ts
+const refreshedExpiresAt = new Date(
+  resolvedAt.getTime() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+)
+```
+
+Then it updates the current customer session row with:
+
+- `last_seen_at = resolvedAt`;
+- `expires_at = refreshedExpiresAt`.
+
+The service returns `refreshedExpiresAt`, not the stale DB value read before the refresh. `/api/auth/me` must then re-set the same `portal_session` cookie with the existing cookie options so the browser cookie lifetime tracks the refreshed backend session lifetime.
+
+Do not add a renewal threshold such as "refresh only when fewer than N days remain" in this implementation. That optimization changes behavior: if a user opens the app soon after login and then returns just under 30 days after that activity, the session could expire earlier than the user's last online activity plus 30 days. The exact product contract is worth the extra write because `/api/auth/me` is an online session check, not a high-frequency heartbeat.
+
+Do not add browser auth tokens, localStorage tokens or a separate browser-side renewal marker. The backend session row and signed httpOnly cookie remain the only customer auth authority.
+
+Do not change tenant-admin auth. `portal_admin_sessions`, `/api/admin/auth/me` and `portal_admin_session` keep their current semantics.
 
 ### Session Issuance
 
@@ -404,9 +456,15 @@ completeAuthenticatedSession(session: AuthenticatedPortalSession): void
 It should:
 
 - store user/session in auth state;
-- save the online auth snapshot with the returned session expiration;
+- save the online auth snapshot with the returned session expiration, including the refreshed expiration from `/api/auth/me`;
 - mark auth status as authenticated;
 - avoid re-posting credentials.
+
+### Offline Auth Snapshot
+
+Offline/PWA cache must continue to treat backend `sessionExpiresAt` as the source of truth. After any successful online `/api/auth/me`, login, registration completion or password-setup completion, the frontend saves the returned `session.expiresAt`. If the user is offline after that, cached auth remains usable only until that stored timestamp.
+
+If cookies are cleared, the next online `/api/auth/me` returns `401` and login is required. If only offline storage is cleared but the signed httpOnly cookie remains valid, the next online `/api/auth/me` may restore the authenticated runtime and save a fresh offline snapshot.
 
 ### Registration Completion UI
 
@@ -435,6 +493,9 @@ Minimum production-ready UI:
 - The skip endpoint must not reduce proof strength. It must require the same verified email continuation token as password creation.
 - The continuation token remains one-time and short-lived.
 - Session creation remains backend-only and cookie-backed.
+- Customer `/api/auth/me` extends only valid, non-expired customer sessions and refreshes the existing cookie. It must not revive expired or revoked sessions.
+- No absolute timeout is added for ordinary customer chat sessions.
+- Tenant-admin session behavior is not changed.
 - Login does not reveal passwordless account state.
 - Browser does not receive Chatwoot authority.
 - Public skip endpoint is rate-limited and origin-guarded.
@@ -455,3 +516,6 @@ Minimum production-ready UI:
 8. Existing password users can still log in normally.
 9. All changed auth/session contracts are covered by backend and frontend tests.
 10. Playwright covers registration skip to chat and later password setup to password login.
+11. Customer login creates a 30-day session, successful `/api/auth/me` extends it another 30 days from the check time, refreshes the same cookie, and updates the offline auth snapshot with the refreshed `sessionExpiresAt`.
+12. Expired, revoked, logged-out, missing-cookie and invalid customer sessions require login and are not extended.
+13. Tenant-admin session behavior remains unchanged.
