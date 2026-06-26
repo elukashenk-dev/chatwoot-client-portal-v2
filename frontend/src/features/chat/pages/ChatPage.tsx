@@ -372,8 +372,7 @@ export function ChatPage() {
     openSearchResultContext,
     retargetHistoryFragment,
   })
-  const transcriptHighlightedMessageId =
-    historyFragment?.targetMessageId ?? highlightedMessageId
+  const transcriptHighlightedMessageId = historyFragment?.targetMessageId ?? highlightedMessageId
   const historyFragmentControls = createChatHistoryFragmentControls({
     clearHighlightedMessage,
     clearHistoryFragment,
@@ -423,9 +422,7 @@ export function ChatPage() {
         }}
         onOpenThreadMedia={() => void chatMediaPanel.loadChatMedia()}
         onOpenThreadInfo={() => void chatInfoPanel.loadChatInfo()}
-        onOpenThreadNotifications={() =>
-          void chatNotificationsPanel.loadChatNotifications()
-        }
+        onOpenThreadNotifications={() => void chatNotificationsPanel.loadChatNotifications()}
         onSelectThread={(threadId) => {
           clearHighlightedMessage()
           clearHistoryFragment()

@@ -183,11 +183,18 @@ export async function readCachedAuthSession({
     const observedSnapshot = snapshotWithClockObservation(snapshot, nowMs)
 
     if (observedSnapshot !== snapshot) {
-      await offlineStore.saveAuthSnapshot(observedSnapshot)
-      saveStartupAuthSession({
-        host,
-        snapshot: observedSnapshot,
-      })
+      const observationSaved =
+        await offlineStore.saveAuthSnapshotClockObservation({
+          observedFrom: snapshot,
+          snapshot: observedSnapshot,
+        })
+
+      if (observationSaved) {
+        saveStartupAuthSession({
+          host,
+          snapshot: observedSnapshot,
+        })
+      }
     }
 
     if (!isOfflineAuthSnapshotReadable(observedSnapshot, nowMs)) {

@@ -213,6 +213,10 @@ execution-plan детали здесь не хранятся.
   sign-out still require online/session-check before exposing cached chat, and
   cached auth records remember the latest observed client clock to reject later
   rollback behind that observation.
+- Customer `portal_session` now uses a 30-day idle timeout with a 15-day renewal
+  window: explicit same-origin `/api/auth/me` checks can refresh valid customer
+  sessions and cookies, ordinary protected APIs do not write sessions, and
+  offline auth snapshots persist the refreshed backend `sessionExpiresAt`.
 - Lazy-loaded older chat history reuses scoped IndexedDB older-page cache when
   an online history request falls to connection-unavailable, so warmed older
   pages can still render during degraded/offline PWA sessions.
@@ -251,5 +255,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Checkpoint commit the PWA install prompt slice, then run a real-device
-  installed PWA smoke after the next staging or production deploy.
+- Merge and deploy the customer session idle-renewal prerequisite, then start
+  Task 1 of the passwordless registration plan.

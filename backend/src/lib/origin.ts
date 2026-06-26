@@ -14,20 +14,28 @@ function normalizeOrigin(value: string | undefined) {
   }
 }
 
+export function isAllowedOrigin(
+  originHeader: string | undefined,
+  expectedOrigin: string,
+) {
+  const requestOrigin =
+    typeof originHeader === 'string' ? normalizeOrigin(originHeader) : null
+  const normalizedExpectedOrigin = normalizeOrigin(expectedOrigin)
+
+  return Boolean(
+    requestOrigin &&
+      normalizedExpectedOrigin &&
+      requestOrigin === normalizedExpectedOrigin,
+  )
+}
+
 export function assertAllowedOrigin(
   request: FastifyRequest,
   expectedOrigin: string,
 ) {
   const originHeader = request.headers.origin
-  const requestOrigin =
-    typeof originHeader === 'string' ? normalizeOrigin(originHeader) : null
-  const normalizedExpectedOrigin = normalizeOrigin(expectedOrigin)
 
-  if (
-    !requestOrigin ||
-    !normalizedExpectedOrigin ||
-    requestOrigin !== normalizedExpectedOrigin
-  ) {
+  if (!isAllowedOrigin(originHeader, expectedOrigin)) {
     throw new ApiError(
       403,
       'FORBIDDEN_ORIGIN',

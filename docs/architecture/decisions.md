@@ -468,3 +468,29 @@
   Keeping legacy layers for test-only portal data makes the runtime harder to
   reason about, hides obsolete assumptions and conflicts with the clean-baseline
   approach already used for portal schema and tenant runtime.
+
+## D-028. Customer sessions use bounded idle renewal
+
+- дата: `2026-06-26`
+- решение:
+  Customer `portal_session` uses a `30` day idle timeout without a separate
+  absolute timeout. Login creates `portal_sessions.expires_at = now + 30 days`.
+  A successful same-origin `/api/auth/me` may renew only a valid, non-expired
+  customer session inside the final `15` days before expiry, only when the
+  frontend sends explicit session-check intent. Renewal updates
+  `portal_sessions.last_seen_at` and `expires_at = now + 30 days`, then refreshes
+  the same signed httpOnly cookie token with a fresh cookie lifetime. Ordinary
+  protected customer APIs validate sessions without renewal writes or cookie
+  refresh. Tenant-admin sessions and `portal_admin_session` are untouched.
+- граница:
+  Missing, invalid, revoked, manually logged-out and expired customer sessions
+  are not revived. `/api/auth/me` requests without explicit renewal intent, with
+  cross-site fetch metadata or with invalid Origin still return the current user
+  when the cookie is valid, but do not write `portal_sessions` or refresh the
+  cookie. Concurrent renewal attempts for the same observed expiry are
+  deduplicated by a conditional update and re-read the effective expiry.
+- причина:
+  Customer chat UX should not force active users through periodic login, but a
+  multi-tenant portal must avoid turning every auth check or protected API call
+  into a session write. A renewal window keeps the behavior convenient while
+  bounding write load and preserving backend authority over session validity.

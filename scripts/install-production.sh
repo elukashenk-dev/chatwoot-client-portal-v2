@@ -649,7 +649,7 @@ collect_env() {
     write_env_line PORTAL_TRUST_PROXY "$PORTAL_TRUST_PROXY"
     write_env_line SESSION_COOKIE_NAME portal_session
     write_env_line SESSION_SECRET "$SESSION_SECRET"
-    write_env_line SESSION_TTL_DAYS 14
+    write_env_line SESSION_TTL_DAYS 30
     write_env_line PORTAL_V2_POSTGRES_DB "$PORTAL_V2_POSTGRES_DB"
     write_env_line PORTAL_V2_POSTGRES_USER "$PORTAL_V2_POSTGRES_USER"
     write_env_line PORTAL_V2_POSTGRES_PASSWORD "$PORTAL_V2_POSTGRES_PASSWORD"

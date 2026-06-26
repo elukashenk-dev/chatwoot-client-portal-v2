@@ -18,11 +18,18 @@ export type PublicPortalSession = {
   user: PublicPortalUser
 }
 
+export type CurrentPortalSession = PublicPortalSession & {
+  sessionRefreshed: boolean
+}
+
 type CreateAuthServiceOptions = {
   db: AppDatabase
   env: AppEnv
   now?: () => Date
 }
+
+const CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS = 15
+const DAY_MS = 24 * 60 * 60 * 1000
 
 function createSessionToken() {
   return randomBytes(32).toString('base64url')
@@ -40,41 +47,100 @@ export function createAuthService({
   const repository = createAuthRepository(db)
 
   async function resolveCurrentSession({
+    allowRenewal,
     sessionToken,
     tenantId,
   }: {
+    allowRenewal: boolean
     sessionToken: string
     tenantId: number
-  }): Promise<PublicPortalSession | null> {
+  }): Promise<CurrentPortalSession | null> {
     const resolvedAt = now()
+    const tokenHash = hashSessionToken(sessionToken)
     const session = await repository.findUserBySessionTokenHash({
       now: resolvedAt,
       tenantId,
-      tokenHash: hashSessionToken(sessionToken),
+      tokenHash,
     })
 
     if (!session) {
       return null
     }
 
-    await repository.touchSession({
+    const user = {
+      ...session.user,
+      email: normalizeEmail(session.user.email),
+    }
+
+    const renewBefore = new Date(
+      resolvedAt.getTime() + CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS * DAY_MS,
+    )
+    const shouldRefreshSession =
+      allowRenewal && session.expiresAt.getTime() <= renewBefore.getTime()
+
+    if (!shouldRefreshSession) {
+      return {
+        expiresAt: session.expiresAt,
+        sessionRefreshed: false,
+        user,
+      }
+    }
+
+    const refreshedExpiresAt = new Date(
+      resolvedAt.getTime() + env.SESSION_TTL_DAYS * DAY_MS,
+    )
+    const refreshedSession = await repository.tryRefreshSession({
       at: resolvedAt,
+      expiresAt: refreshedExpiresAt,
+      observedExpiresAt: session.expiresAt,
+      renewBefore,
       sessionId: session.sessionId,
       tenantId,
     })
 
+    if (refreshedSession) {
+      return {
+        expiresAt: refreshedSession.expiresAt,
+        sessionRefreshed: true,
+        user,
+      }
+    }
+
+    const latestSession = await repository.findUserBySessionTokenHash({
+      now: resolvedAt,
+      tenantId,
+      tokenHash,
+    })
+
+    if (!latestSession) {
+      return null
+    }
+
     return {
-      expiresAt: session.expiresAt,
+      expiresAt: latestSession.expiresAt,
+      sessionRefreshed: false,
       user: {
-        ...session.user,
-        email: normalizeEmail(session.user.email),
+        ...latestSession.user,
+        email: normalizeEmail(latestSession.user.email),
       },
     }
   }
 
   return {
-    async getCurrentSession(input: { sessionToken: string; tenantId: number }) {
-      return resolveCurrentSession(input)
+    async getCurrentSession({
+      allowRenewal = false,
+      sessionToken,
+      tenantId,
+    }: {
+      allowRenewal?: boolean
+      sessionToken: string
+      tenantId: number
+    }) {
+      return resolveCurrentSession({
+        allowRenewal,
+        sessionToken,
+        tenantId,
+      })
     },
 
     async getCurrentUser({
@@ -85,7 +151,11 @@ export function createAuthService({
       tenantId: number
     }): Promise<PublicPortalUser | null> {
       return (
-        (await resolveCurrentSession({ sessionToken, tenantId }))?.user ?? null
+        (await resolveCurrentSession({
+          allowRenewal: false,
+          sessionToken,
+          tenantId,
+        }))?.user ?? null
       )
     },
 

@@ -1,9 +1,12 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
-import { assertAllowedTenantOrigin } from '../../lib/origin.js'
+import {
+  assertAllowedTenantOrigin,
+  isAllowedOrigin,
+} from '../../lib/origin.js'
 import { requireTenantContext } from '../tenants/routes.js'
 import type { AuthService } from './service.js'
 import {
@@ -22,6 +25,35 @@ const loginBodySchema = z.object({
     message: 'Введите пароль',
   }),
 })
+
+const SESSION_RENEWAL_HEADER = 'x-portal-session-check'
+
+function headerContains(value: string | string[] | undefined, expected: string) {
+  return Array.isArray(value) ? value.includes(expected) : value === expected
+}
+
+function canRenewCustomerSessionFromRequest(request: FastifyRequest) {
+  const tenant = requireTenantContext(request)
+
+  if (!headerContains(request.headers[SESSION_RENEWAL_HEADER], '1')) {
+    return false
+  }
+
+  if (headerContains(request.headers['sec-fetch-site'], 'cross-site')) {
+    return false
+  }
+
+  const origin = request.headers.origin
+
+  if (
+    typeof origin === 'string' &&
+    !isAllowedOrigin(origin, tenant.publicBaseUrl)
+  ) {
+    return false
+  }
+
+  return true
+}
 
 type RegisterAuthRoutesOptions = {
   authService: AuthService
@@ -84,6 +116,7 @@ export function registerAuthRoutes(
     }
 
     const session = await authService.getCurrentSession({
+      allowRenewal: canRenewCustomerSessionFromRequest(request),
       sessionToken,
       tenantId: tenant.id,
     })
@@ -91,6 +124,14 @@ export function registerAuthRoutes(
     if (!session) {
       clearSessionCookie(reply, env)
       throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
+    }
+
+    if (session.sessionRefreshed) {
+      reply.setCookie(
+        env.SESSION_COOKIE_NAME,
+        sessionToken,
+        getSessionCookieOptions(env),
+      )
     }
 
     return {

@@ -49,6 +49,9 @@ describe('auth API client', () => {
       '/api/auth/me',
       expect.objectContaining({
         credentials: 'include',
+        headers: {
+          'X-Portal-Session-Check': '1',
+        },
         method: 'GET',
         signal,
       }),

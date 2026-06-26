@@ -65,6 +65,23 @@ async function shouldSkipUserScopedCacheWrite(record: {
   return isUserScopedOfflineWriteBlocked(record.tenantSlug, record.userId)
 }
 
+function isSameAuthSnapshotVersion(
+  current: OfflineAuthSnapshotRecord,
+  expected: OfflineAuthSnapshotRecord,
+) {
+  return (
+    current.lastClockSeenAt === expected.lastClockSeenAt &&
+    current.lastVerifiedAt === expected.lastVerifiedAt &&
+    current.savedAt === expected.savedAt &&
+    current.sessionExpiresAt === expected.sessionExpiresAt &&
+    current.tenantSlug === expected.tenantSlug &&
+    current.user.email === expected.user.email &&
+    current.user.fullName === expected.user.fullName &&
+    current.user.id === expected.user.id &&
+    current.userId === expected.userId
+  )
+}
+
 export const offlineStore = {
   deleteLocalDeviceSignout(host: string) {
     return deleteOfflineRecord('local_device_signouts', host)
@@ -184,6 +201,36 @@ export const offlineStore = {
       scopedUserKey(record.tenantSlug, record.userId),
       record,
     )
+  },
+  async saveAuthSnapshotClockObservation({
+    observedFrom,
+    snapshot,
+  }: {
+    observedFrom: OfflineAuthSnapshotRecord
+    snapshot: OfflineAuthSnapshotRecord
+  }) {
+    const key = scopedUserKey(snapshot.tenantSlug, snapshot.userId)
+    const database = await openOfflineDatabase()
+
+    try {
+      const transaction = database.transaction('auth_snapshots', 'readwrite')
+      const store = transaction.objectStore('auth_snapshots')
+      const current = await store.get(key)
+
+      if (
+        !isAuthSnapshotRecord(current) ||
+        !isSameAuthSnapshotVersion(current, observedFrom)
+      ) {
+        await transaction.done
+        return false
+      }
+
+      await store.put(snapshot, key)
+      await transaction.done
+      return true
+    } finally {
+      database.close()
+    }
   },
   saveLastActiveIdentity(record: OfflineLastActiveIdentityRecord) {
     return putOfflineRecord('last_active_identities', record.host, record)

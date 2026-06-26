@@ -44,7 +44,7 @@ const baseTestEnv: AppEnv = {
   PORTAL_TENANT_SECRET_KEY: tenantSecretKey,
   SESSION_COOKIE_NAME: 'portal_session',
   SESSION_SECRET: 'test-session-secret-with-at-least-thirty-two-characters',
-  SESSION_TTL_DAYS: 14,
+  SESSION_TTL_DAYS: 30,
   TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: 10_000,
   SMTP_FROM: undefined,
   SMTP_HOST: undefined,

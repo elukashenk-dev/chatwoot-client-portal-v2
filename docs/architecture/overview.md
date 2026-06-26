@@ -215,6 +215,13 @@ signup does not create a production portal tenant.
 - session хранится в `httpOnly` cookie;
 - session row содержит `tenant_id`;
 - session lookup всегда проверяет current tenant;
+- customer session создается на `30` дней и работает как idle timeout:
+  успешный same-origin `/api/auth/me` с явным frontend session-check intent
+  продлевает только non-expired session внутри последних `15` дней до
+  `now + 30 days`;
+- обычные protected customer routes валидируют session без продления
+  `portal_sessions` и без cookie refresh; tenant-admin session boundary не
+  затрагивается;
 - email не считается глобально уникальным;
 - корректная уникальность пользователя - `tenant_id + email`;
 - registration eligibility ищет exact email match только внутри current tenant Chatwoot account;
@@ -324,6 +331,9 @@ Tenant-aware PWA endpoints:
 - browser offline state хранится в scoped IndexedDB `portal-offline`; текстовая
   outbox является frontend-domain модулем, а backend остается authority для
   session, send и freshness;
+- offline auth snapshot хранит backend `sessionExpiresAt`; после успешного
+  online `/api/auth/me` frontend сохраняет effective expiry из backend response,
+  а cached auth не открывается после этого срока;
 - installability в production требует HTTPS;
 - iOS/iPadOS используют Add to Home Screen, а не Chromium-style install prompt.
 

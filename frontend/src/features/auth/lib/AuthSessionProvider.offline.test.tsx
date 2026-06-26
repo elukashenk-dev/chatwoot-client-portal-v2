@@ -327,6 +327,41 @@ describe('AuthSessionProvider offline startup', () => {
     expect(screen.queryByText('cached')).not.toBeInTheDocument()
   })
 
+  it('stores refreshed backend session expiry after successful online check', async () => {
+    const renewedSessionExpiresAt = '2026-06-09T09:30:00.000Z'
+
+    await saveTenantAndCachedAuth({
+      sessionExpiresAt: '2026-05-21T12:00:00.000Z',
+    })
+    fetchMock.mockResolvedValueOnce(
+      createSessionResponse({
+        expiresAt: renewedSessionExpiresAt,
+      }),
+    )
+
+    renderAuthProbe()
+
+    await waitFor(() => {
+      expect(screen.getByText('online')).toBeInTheDocument()
+    })
+
+    await expect(
+      offlineStore.readAuthSnapshot('buhfirma', 7),
+    ).resolves.toMatchObject({
+      sessionExpiresAt: renewedSessionExpiresAt,
+    })
+
+    const startupAuthSession = JSON.parse(
+      window.localStorage.getItem(
+        `portal.startup.auth:${window.location.host}`,
+      ) ?? 'null',
+    ) as { record?: { snapshot?: { sessionExpiresAt?: string } } } | null
+
+    expect(startupAuthSession?.record?.snapshot?.sessionExpiresAt).toBe(
+      renewedSessionExpiresAt,
+    )
+  })
+
   it('requires online session check when cached auth scope does not match tenant', async () => {
     await saveTenantAndCachedAuth()
     await offlineStore.saveLastActiveIdentity({

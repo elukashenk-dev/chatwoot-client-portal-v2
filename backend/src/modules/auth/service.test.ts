@@ -1,7 +1,9 @@
+import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { AppEnv } from '../../config/env.js'
 import type { DatabaseClient } from '../../db/client.js'
+import { portalSessions } from '../../db/schema.js'
 import { hashPassword } from '../../lib/password.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
@@ -28,7 +30,7 @@ const testEnv: AppEnv = {
   PORTAL_TENANT_SECRET_KEY: Buffer.alloc(32, 8).toString('base64'),
   SESSION_COOKIE_NAME: 'portal_session',
   SESSION_SECRET: 'test-session-secret-with-at-least-thirty-two-characters',
-  SESSION_TTL_DAYS: 14,
+  SESSION_TTL_DAYS: 30,
   TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: 10_000,
   SMTP_FROM: undefined,
   SMTP_HOST: undefined,
@@ -68,10 +70,11 @@ describe('auth service tenant scope', () => {
       slug: 'tenant-b',
     })
     const portalUsersRepository = createPortalUsersRepository(database.db)
+    let currentTime = new Date('2026-04-21T12:00:00.000Z')
     const authService = createAuthService({
       db: database.db,
       env: testEnv,
-      now: () => new Date('2026-04-21T12:00:00.000Z'),
+      now: () => currentTime,
     })
 
     await portalUsersRepository.create({
@@ -113,7 +116,7 @@ describe('auth service tenant scope', () => {
       fullName: 'Tenant A User',
     })
     expect(tenantASession.expiresAt.toISOString()).toBe(
-      '2026-05-05T12:00:00.000Z',
+      '2026-05-21T12:00:00.000Z',
     )
     expect(tenantBSession.user).toMatchObject({
       email: 'name@company.ru',
@@ -125,7 +128,7 @@ describe('auth service tenant scope', () => {
         tenantId: tenantA.id,
       }),
     ).resolves.toMatchObject({
-      expiresAt: new Date('2026-05-05T12:00:00.000Z'),
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
       user: {
         email: 'name@company.ru',
         fullName: 'Tenant A User',
@@ -161,5 +164,164 @@ describe('auth service tenant scope', () => {
       email: 'name@company.ru',
       fullName: 'Tenant A User',
     })
+
+    currentTime = new Date('2026-05-10T09:30:00.000Z')
+    const sessionBeforeUserLookup = await readOnlySession(database, tenantA.id)
+
+    await expect(
+      authService.getCurrentUser({
+        sessionToken: tenantASession.sessionToken,
+        tenantId: tenantA.id,
+      }),
+    ).resolves.toMatchObject({
+      email: 'name@company.ru',
+      fullName: 'Tenant A User',
+    })
+
+    await expect(readOnlySession(database, tenantA.id)).resolves.toMatchObject({
+      expiresAt: sessionBeforeUserLookup.expiresAt,
+      lastSeenAt: sessionBeforeUserLookup.lastSeenAt,
+    })
+  })
+
+  it('renews customer session only inside the renewal window when renewal is allowed', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    let currentTime = new Date('2026-04-21T12:00:00.000Z')
+    const authService = createAuthService({
+      db: database.db,
+      env: testEnv,
+      now: () => currentTime,
+    })
+
+    await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+      tenantId: tenant.id,
+    })
+
+    const loginSession = await authService.login({
+      email: 'name@company.ru',
+      password: 'Secret123',
+      tenantId: tenant.id,
+    })
+
+    expect(loginSession.expiresAt.toISOString()).toBe(
+      '2026-05-21T12:00:00.000Z',
+    )
+
+    currentTime = new Date('2026-04-22T09:30:00.000Z')
+    await expect(
+      authService.getCurrentSession({
+        allowRenewal: true,
+        sessionToken: loginSession.sessionToken,
+        tenantId: tenant.id,
+      }),
+    ).resolves.toMatchObject({
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
+      sessionRefreshed: false,
+    })
+    await expect(readOnlySession(database, tenant.id)).resolves.toMatchObject({
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
+      lastSeenAt: new Date('2026-04-21T12:00:00.000Z'),
+    })
+
+    currentTime = new Date('2026-05-10T09:30:00.000Z')
+    await expect(
+      authService.getCurrentSession({
+        allowRenewal: false,
+        sessionToken: loginSession.sessionToken,
+        tenantId: tenant.id,
+      }),
+    ).resolves.toMatchObject({
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
+      sessionRefreshed: false,
+    })
+    await expect(readOnlySession(database, tenant.id)).resolves.toMatchObject({
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
+      lastSeenAt: new Date('2026-04-21T12:00:00.000Z'),
+    })
+
+    await expect(
+      authService.getCurrentSession({
+        allowRenewal: true,
+        sessionToken: loginSession.sessionToken,
+        tenantId: tenant.id,
+      }),
+    ).resolves.toMatchObject({
+      expiresAt: new Date('2026-06-09T09:30:00.000Z'),
+      sessionRefreshed: true,
+    })
+    await expect(readOnlySession(database, tenant.id)).resolves.toMatchObject({
+      expiresAt: new Date('2026-06-09T09:30:00.000Z'),
+      lastSeenAt: new Date('2026-05-10T09:30:00.000Z'),
+    })
+  })
+
+  it('deduplicates concurrent renewal attempts for the same observed expiry', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    let currentTime = new Date('2026-04-21T12:00:00.000Z')
+    const authService = createAuthService({
+      db: database.db,
+      env: testEnv,
+      now: () => currentTime,
+    })
+
+    await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('Secret123'),
+      tenantId: tenant.id,
+    })
+
+    const loginSession = await authService.login({
+      email: 'name@company.ru',
+      password: 'Secret123',
+      tenantId: tenant.id,
+    })
+
+    currentTime = new Date('2026-05-10T09:30:00.000Z')
+    const renewalResults = await Promise.all([
+      authService.getCurrentSession({
+        allowRenewal: true,
+        sessionToken: loginSession.sessionToken,
+        tenantId: tenant.id,
+      }),
+      authService.getCurrentSession({
+        allowRenewal: true,
+        sessionToken: loginSession.sessionToken,
+        tenantId: tenant.id,
+      }),
+    ])
+
+    expect(
+      renewalResults.filter((session) => session?.sessionRefreshed).length,
+    ).toBeLessThanOrEqual(1)
+    expect(
+      renewalResults.map((session) => session?.expiresAt.toISOString()),
+    ).toEqual([
+      '2026-06-09T09:30:00.000Z',
+      '2026-06-09T09:30:00.000Z',
+    ])
+    await expect(readOnlySession(database, tenant.id)).resolves.toMatchObject({
+      expiresAt: new Date('2026-06-09T09:30:00.000Z'),
+      lastSeenAt: new Date('2026-05-10T09:30:00.000Z'),
+    })
   })
 })
+
+async function readOnlySession(database: DatabaseClient, tenantId: number) {
+  const [session] = await database.db
+    .select()
+    .from(portalSessions)
+    .where(eq(portalSessions.tenantId, tenantId))
+    .limit(1)
+
+  if (!session) {
+    throw new Error(`Expected session for tenant ${tenantId}.`)
+  }
+
+  return session
+}

@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from 'drizzle-orm'
+import { and, eq, gt, lte, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import { portalSessions, portalUsers } from '../../db/schema.js'
@@ -30,6 +30,15 @@ type SessionUserRecord = {
     fullName: string | null
     id: number
   }
+}
+
+type RefreshSessionInput = {
+  at: Date
+  expiresAt: Date
+  observedExpiresAt: Date
+  renewBefore: Date
+  sessionId: number
+  tenantId: number
 }
 
 export function createAuthRepository(db: AppDatabase) {
@@ -127,26 +136,34 @@ export function createAuthRepository(db: AppDatabase) {
         )
     },
 
-    async touchSession({
+    async tryRefreshSession({
       at,
+      expiresAt,
+      observedExpiresAt,
+      renewBefore,
       sessionId,
       tenantId,
-    }: {
-      at: Date
-      sessionId: number
-      tenantId: number
-    }) {
-      await db
+    }: RefreshSessionInput): Promise<{ expiresAt: Date } | null> {
+      const [updated] = await db
         .update(portalSessions)
         .set({
+          expiresAt,
           lastSeenAt: at,
         })
         .where(
           and(
             eq(portalSessions.id, sessionId),
             eq(portalSessions.tenantId, tenantId),
+            eq(portalSessions.expiresAt, observedExpiresAt),
+            gt(portalSessions.expiresAt, at),
+            lte(portalSessions.expiresAt, renewBefore),
           ),
         )
+        .returning({
+          expiresAt: portalSessions.expiresAt,
+        })
+
+      return updated ?? null
     },
   }
 }

@@ -149,6 +149,9 @@ type AuthSessionResponse = AuthenticatedPortalSession
 export async function getCurrentSession({ signal }: AuthRequestOptions = {}) {
   try {
     return await request<AuthSessionResponse>('/auth/me', {
+      headers: {
+        'X-Portal-Session-Check': '1',
+      },
       method: 'GET',
       signal,
     })
