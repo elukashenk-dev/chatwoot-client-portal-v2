@@ -257,8 +257,11 @@ execution-plan детали здесь не хранятся.
   requires an email-code proof before first password storage, rejects already
   configured passwords, rotates customer sessions after success, and guards
   stale delivery cleanup from invalidating newer setup codes.
+- Password reset behavior is covered for nullable customer passwords: logged-out
+  passwordless users can set their first password through the existing email-code
+  reset flow, and reset completion still returns the user to login.
 
 ## Recommended Next Step
 
-- Continue with Task 5 of the passwordless registration plan: password reset
-  behavior with nullable password hashes.
+- Continue with Task 6 of the passwordless registration plan: frontend auth API
+  contracts.

@@ -116,6 +116,61 @@ describe('password reset service', () => {
     )
   })
 
+  it('sets the first password for a passwordless portal user through reset', async () => {
+    const sendEmail = vi.fn().mockResolvedValue(undefined)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
+
+    await portalUsersRepository.create({
+      email: 'Passwordless@Company.RU',
+      fullName: 'Passwordless User',
+      passwordHash: null,
+      tenantId,
+    })
+
+    const service = createPasswordResetService({
+      emailDelivery: {
+        send: sendEmail,
+      },
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+      passwordResetRepository,
+    })
+
+    await service.requestPasswordReset({
+      email: ' passwordless@company.ru ',
+    })
+    await waitForBackgroundDelivery()
+
+    const emailMessage = sendEmail.mock.calls[0]?.[0]
+    const resetCode = extractResetCode(emailMessage?.text ?? '')
+    const verification = await service.confirmPasswordReset({
+      code: resetCode,
+      email: 'passwordless@company.ru',
+    })
+    const result = await service.setPassword({
+      continuationToken: verification.continuationToken,
+      email: 'passwordless@company.ru',
+      newPassword: 'FirstPass123',
+    })
+    const updatedUser = await portalUsersRepository.findByEmail({
+      email: 'passwordless@company.ru',
+      tenantId,
+    })
+
+    expect(result).toEqual({
+      email: 'passwordless@company.ru',
+      nextStep: 'login',
+      purpose: 'password_reset',
+      result: 'password_reset_completed',
+    })
+    expect(updatedUser?.passwordHash).toEqual(expect.any(String))
+    expect(
+      await verifyPassword('FirstPass123', updatedUser?.passwordHash ?? ''),
+    ).toBe(true)
+  })
+
   it('keeps request response generic for a missing account and does not send email', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const passwordResetRepository = createPasswordResetRepository(database.db, {
