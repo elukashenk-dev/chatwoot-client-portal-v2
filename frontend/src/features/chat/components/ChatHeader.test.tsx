@@ -1,6 +1,6 @@
 import { act, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router-dom'
 
 import {
@@ -12,7 +12,11 @@ import {
   type BrandingContextValue,
 } from '../../branding/lib/brandingContext'
 import { TenantIdentityContext } from '../../tenant/lib/tenantIdentityContext'
-import { PwaInstallPromptProvider } from '../../../pwa/installPromptRuntime'
+import {
+  PwaInstallPromptCapture,
+  PwaInstallPromptProvider,
+} from '../../../pwa/installPromptRuntime'
+import { pwaInstallPromptInternalsForTests } from '../../../pwa/installPromptContext'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import type {
   ChatNotificationSettings,
@@ -156,52 +160,62 @@ function CurrentPath() {
 function renderHeader({
   activeThread = privateThread,
   brandingValue = brandingContextValue,
+  canShowInstallApp = true,
   connectionStatus = 'online',
 }: {
   activeThread?: ChatThreadListSummary
   brandingValue?: BrandingContextValue
+  canShowInstallApp?: boolean
   connectionStatus?: 'connecting' | 'offline' | 'online'
 } = {}) {
   renderWithRouter(
-    <TenantIdentityContext.Provider
-      value={{
-        errorMessage: null,
-        isUsingCachedData: false,
-        status: 'ready',
-        tenant: {
-          displayName: 'ProvGroup',
-          primaryDomain: 'lk.example.test',
-          publicBaseUrl: 'https://lk.example.test',
-          slug: 'provgroup',
-        },
-      }}
-    >
-      <AuthSessionContext.Provider value={authSession}>
-        <BrandingContext.Provider value={brandingValue}>
-          <PwaInstallPromptProvider>
-            <ChatHeader
-              activeThread={activeThread}
-              connectionStatus={connectionStatus}
-              onOpenThreadInfo={vi.fn()}
-              onOpenThreadMedia={vi.fn()}
-              onOpenThreadNotifications={vi.fn()}
-              onOpenThreadSearch={vi.fn()}
-              onSelectThread={vi.fn()}
-              selectedThreadId={activeThread.id}
-              supportAvailability={supportAvailability}
-              threadNotificationSettings={notificationSettings}
-              threads={[activeThread]}
-            />
-            <CurrentPath />
-          </PwaInstallPromptProvider>
-        </BrandingContext.Provider>
-      </AuthSessionContext.Provider>
-    </TenantIdentityContext.Provider>,
+    <>
+      <PwaInstallPromptCapture />
+      <TenantIdentityContext.Provider
+        value={{
+          errorMessage: null,
+          isUsingCachedData: false,
+          status: 'ready',
+          tenant: {
+            displayName: 'ProvGroup',
+            primaryDomain: 'lk.example.test',
+            publicBaseUrl: 'https://lk.example.test',
+            slug: 'provgroup',
+          },
+        }}
+      >
+        <AuthSessionContext.Provider value={authSession}>
+          <BrandingContext.Provider value={brandingValue}>
+            <PwaInstallPromptProvider>
+              <ChatHeader
+                activeThread={activeThread}
+                canShowInstallApp={canShowInstallApp}
+                connectionStatus={connectionStatus}
+                onOpenThreadInfo={vi.fn()}
+                onOpenThreadMedia={vi.fn()}
+                onOpenThreadNotifications={vi.fn()}
+                onOpenThreadSearch={vi.fn()}
+                onSelectThread={vi.fn()}
+                selectedThreadId={activeThread.id}
+                supportAvailability={supportAvailability}
+                threadNotificationSettings={notificationSettings}
+                threads={[activeThread]}
+              />
+              <CurrentPath />
+            </PwaInstallPromptProvider>
+          </BrandingContext.Provider>
+        </AuthSessionContext.Provider>
+      </TenantIdentityContext.Provider>
+    </>,
     { initialEntries: ['/app/chat'] },
   )
 }
 
 describe('ChatHeader', () => {
+  beforeEach(() => {
+    pwaInstallPromptInternalsForTests.resetPromptEventSnapshot()
+  })
+
   it('renders the branded logo image in the header before thread avatar fallback', () => {
     renderHeader()
 
@@ -351,6 +365,24 @@ describe('ChatHeader', () => {
 
     expect(installEvent.prompt).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('hides install app action while the chat install surface is unavailable', async () => {
+    const user = userEvent.setup()
+    const installEvent = createBeforeInstallPromptEvent()
+
+    renderHeader({ canShowInstallApp: false })
+
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+
+    expect(
+      screen.queryByRole('menuitem', { name: 'Установить приложение' }),
+    ).not.toBeInTheDocument()
+    expect(installEvent.prompt).not.toHaveBeenCalled()
   })
 
   it('uses a glass surface for the navigation menu', async () => {

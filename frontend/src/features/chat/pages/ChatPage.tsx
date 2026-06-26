@@ -415,6 +415,7 @@ export function ChatPage() {
     <>
       <ChatHeader
         activeThread={headerThread}
+        canShowInstallApp={shouldRenderTranscript}
         connectionStatus={connectionStatus}
         onOpenThreadSearch={() => {
           clearSearchResultOpenError()

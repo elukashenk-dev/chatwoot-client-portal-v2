@@ -1,35 +1,33 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 
 import { useTenantIdentity } from '../features/tenant/lib/useTenantIdentity'
 import {
-  type BrowserBeforeInstallPromptEvent,
+  capturePwaBeforeInstallPromptEvent,
+  clearPwaInstallDeferredPrompt,
   getPwaInstallPromptState,
+  markPwaInstallAppInstalled,
   type PwaInstallPromptResult,
   PwaInstallPromptContext,
+  readPwaInstallPromptEventSnapshot,
   recordPwaInstallDismissal,
+  subscribePwaInstallPromptEvents,
 } from './installPromptContext'
 
-export function PwaInstallPromptProvider({
-  children,
-}: {
-  children: ReactNode
-}) {
-  const { tenant } = useTenantIdentity()
-  const tenantSlug = tenant?.slug ?? null
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BrowserBeforeInstallPromptEvent | null>(null)
-  const [installed, setInstalled] = useState(false)
-  const [, setDismissalRevision] = useState(0)
-
+export function PwaInstallPromptCapture() {
   useEffect(() => {
     function handleBeforeInstallPrompt(event: Event) {
-      event.preventDefault()
-      setDeferredPrompt(event as BrowserBeforeInstallPromptEvent)
+      capturePwaBeforeInstallPromptEvent(event)
     }
 
     function handleAppInstalled() {
-      setDeferredPrompt(null)
-      setInstalled(true)
+      markPwaInstallAppInstalled()
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
@@ -44,11 +42,28 @@ export function PwaInstallPromptProvider({
     }
   }, [])
 
+  return null
+}
+
+export function PwaInstallPromptProvider({
+  children,
+}: {
+  children: ReactNode
+}) {
+  const { tenant } = useTenantIdentity()
+  const tenantSlug = tenant?.slug ?? null
+  const promptEvents = useSyncExternalStore(
+    subscribePwaInstallPromptEvents,
+    readPwaInstallPromptEventSnapshot,
+    readPwaInstallPromptEventSnapshot,
+  )
+  const [, setDismissalRevision] = useState(0)
   const state = getPwaInstallPromptState({
-    deferredPrompt,
-    installed,
+    deferredPrompt: promptEvents.deferredPrompt,
+    installed: promptEvents.installed,
     tenantSlug,
   })
+  const availablePlatform = state.status === 'available' ? state.platform : null
 
   const dismiss = useCallback(() => {
     if (!tenantSlug) {
@@ -56,40 +71,44 @@ export function PwaInstallPromptProvider({
     }
 
     recordPwaInstallDismissal(tenantSlug)
-    setDeferredPrompt(null)
+    clearPwaInstallDeferredPrompt()
     setDismissalRevision((value) => value + 1)
   }, [tenantSlug])
 
   const install = useCallback(async (): Promise<PwaInstallPromptResult> => {
-    if (state.status !== 'available' || !tenantSlug) {
+    if (!availablePlatform || !tenantSlug) {
       return 'unavailable'
     }
 
-    if (state.platform === 'ios_manual') {
+    if (availablePlatform === 'ios_manual') {
       return 'manual'
     }
 
-    const prompt = deferredPrompt
+    const prompt = promptEvents.deferredPrompt
 
     if (!prompt) {
       return 'unavailable'
     }
 
-    setDeferredPrompt(null)
-    await prompt.prompt()
+    clearPwaInstallDeferredPrompt()
 
-    const choice = await prompt.userChoice
+    try {
+      await prompt.prompt()
+      const choice = await prompt.userChoice
 
-    if (choice.outcome === 'accepted') {
-      setInstalled(true)
-      return 'accepted'
+      if (choice.outcome === 'accepted') {
+        markPwaInstallAppInstalled()
+        return 'accepted'
+      }
+
+      recordPwaInstallDismissal(tenantSlug)
+      setDismissalRevision((value) => value + 1)
+
+      return 'dismissed'
+    } catch {
+      return 'unavailable'
     }
-
-    recordPwaInstallDismissal(tenantSlug)
-    setDismissalRevision((value) => value + 1)
-
-    return 'dismissed'
-  }, [deferredPrompt, state, tenantSlug])
+  }, [availablePlatform, promptEvents.deferredPrompt, tenantSlug])
 
   const contextValue = useMemo(
     () => ({

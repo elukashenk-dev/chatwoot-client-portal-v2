@@ -24,6 +24,12 @@ export type BrowserBeforeInstallPromptEvent = Event & {
   }>
 }
 
+export type PwaInstallPromptEventSnapshot = {
+  deferredPrompt: BrowserBeforeInstallPromptEvent | null
+  installed: boolean
+  revision: number
+}
+
 export type PwaInstallPromptContextValue = {
   dismiss: () => void
   install: () => Promise<PwaInstallPromptResult>
@@ -50,6 +56,27 @@ export const PwaInstallPromptContext =
 
 const DISMISSAL_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const STORAGE_KEY_PREFIX = 'portal:pwa-install-dismissed'
+const initialPromptEventSnapshot: PwaInstallPromptEventSnapshot = {
+  deferredPrompt: null,
+  installed: false,
+  revision: 0,
+}
+const promptEventListeners = new Set<() => void>()
+
+let promptEventSnapshot = initialPromptEventSnapshot
+
+function publishPromptEventSnapshot(
+  nextSnapshot: Omit<PwaInstallPromptEventSnapshot, 'revision'>,
+) {
+  promptEventSnapshot = {
+    ...nextSnapshot,
+    revision: promptEventSnapshot.revision + 1,
+  }
+
+  for (const listener of promptEventListeners) {
+    listener()
+  }
+}
 
 function getCurrentHost() {
   if (typeof window === 'undefined') {
@@ -155,6 +182,49 @@ export function isIosDevice() {
   )
 }
 
+export function readPwaInstallPromptEventSnapshot() {
+  return promptEventSnapshot
+}
+
+export function subscribePwaInstallPromptEvents(listener: () => void) {
+  promptEventListeners.add(listener)
+
+  return () => {
+    promptEventListeners.delete(listener)
+  }
+}
+
+export function capturePwaBeforeInstallPromptEvent(event: Event) {
+  event.preventDefault()
+
+  if (isIosDevice()) {
+    return
+  }
+
+  publishPromptEventSnapshot({
+    deferredPrompt: event as BrowserBeforeInstallPromptEvent,
+    installed: promptEventSnapshot.installed,
+  })
+}
+
+export function clearPwaInstallDeferredPrompt() {
+  if (!promptEventSnapshot.deferredPrompt) {
+    return
+  }
+
+  publishPromptEventSnapshot({
+    deferredPrompt: null,
+    installed: promptEventSnapshot.installed,
+  })
+}
+
+export function markPwaInstallAppInstalled() {
+  publishPromptEventSnapshot({
+    deferredPrompt: null,
+    installed: true,
+  })
+}
+
 export function getPwaInstallPromptState({
   deferredPrompt,
   installed,
@@ -182,16 +252,16 @@ export function getPwaInstallPromptState({
     }
   }
 
-  if (deferredPrompt) {
+  if (isIosDevice()) {
     return {
-      platform: 'native',
+      platform: 'ios_manual',
       status: 'available',
     }
   }
 
-  if (isIosDevice()) {
+  if (deferredPrompt) {
     return {
-      platform: 'ios_manual',
+      platform: 'native',
       status: 'available',
     }
   }
@@ -207,4 +277,11 @@ export const pwaInstallPromptInternalsForTests = {
   getDismissalStorageKey,
   isIosDevice,
   isRunningStandalone,
+  resetPromptEventSnapshot() {
+    promptEventSnapshot = initialPromptEventSnapshot
+
+    for (const listener of promptEventListeners) {
+      listener()
+    }
+  },
 }

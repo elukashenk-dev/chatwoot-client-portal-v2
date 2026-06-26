@@ -4,7 +4,10 @@ import { AppRoutes } from './AppRoutes'
 import { routePaths } from './routePaths'
 import { BrandingProvider } from '../features/branding/lib/BrandingProvider'
 import { TenantProvider } from '../features/tenant/lib/TenantProvider'
-import { PwaInstallPromptProvider } from '../pwa/installPromptRuntime'
+import {
+  PwaInstallPromptCapture,
+  PwaInstallPromptProvider,
+} from '../pwa/installPromptRuntime'
 import { PwaUpdateBanner } from '../pwa/PwaUpdateBanner'
 
 function isPublicLegalRoute(pathname: string) {
@@ -23,14 +26,17 @@ function PublicLegalApp() {
 
 function TenantScopedApp() {
   return (
-    <TenantProvider>
-      <PwaInstallPromptProvider>
-        <BrandingProvider>
-          <PwaUpdateBanner />
-          <AppRoutes />
-        </BrandingProvider>
-      </PwaInstallPromptProvider>
-    </TenantProvider>
+    <>
+      <PwaInstallPromptCapture />
+      <TenantProvider>
+        <PwaInstallPromptProvider>
+          <BrandingProvider>
+            <PwaUpdateBanner />
+            <AppRoutes />
+          </BrandingProvider>
+        </PwaInstallPromptProvider>
+      </TenantProvider>
+    </>
   )
 }
 

@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessagesSnapshot } from '../types'
 import { AppRoutes } from '../../../app/AppRoutes'
-import { PwaInstallPromptProvider } from '../../../pwa/installPromptRuntime'
+import {
+  PwaInstallPromptCapture,
+  PwaInstallPromptProvider,
+} from '../../../pwa/installPromptRuntime'
+import { pwaInstallPromptInternalsForTests } from '../../../pwa/installPromptContext'
 import {
   MockEventSource,
   MockMediaRecorder,
@@ -210,6 +214,7 @@ describe('ChatPage', () => {
   }
 
   beforeEach(async () => {
+    pwaInstallPromptInternalsForTests.resetPromptEventSnapshot()
     await setupOfflineChatTestEnvironment()
     vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     vi.stubGlobal('fetch', fetchMock)
@@ -314,9 +319,12 @@ describe('ChatPage', () => {
     mockInitialReadyChatResponses()
 
     renderChatRoute(
-      <PwaInstallPromptProvider>
-        <AppRoutes />
-      </PwaInstallPromptProvider>,
+      <>
+        <PwaInstallPromptCapture />
+        <PwaInstallPromptProvider>
+          <AppRoutes />
+        </PwaInstallPromptProvider>
+      </>,
     )
 
     expect(screen.queryByText('Установите кабинет')).not.toBeInTheDocument()
@@ -334,6 +342,49 @@ describe('ChatPage', () => {
 
     expect(screen.getByText('Установите кабинет')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Установить' })).toBeInTheDocument()
+  })
+
+  it('does not show the PWA install menu action before the transcript surface is available', async () => {
+    const user = userEvent.setup()
+    const installEvent = createBeforeInstallPromptEvent()
+
+    mockInitialReadyChatResponses(
+      createReadySnapshot({
+        activeThread: null,
+        messages: [],
+        reason: 'chatwoot_not_configured',
+        result: 'not_ready',
+      }),
+    )
+
+    renderChatRoute(
+      <>
+        <PwaInstallPromptCapture />
+        <PwaInstallPromptProvider>
+          <AppRoutes />
+        </PwaInstallPromptProvider>
+      </>,
+    )
+
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Чат временно недоступен' },
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+
+    expect(screen.queryByText('Установите кабинет')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('menuitem', { name: 'Установить приложение' }),
+    ).not.toBeInTheDocument()
+    expect(installEvent.prompt).not.toHaveBeenCalled()
   })
 
   it('renders real support availability instead of connection readiness', async () => {

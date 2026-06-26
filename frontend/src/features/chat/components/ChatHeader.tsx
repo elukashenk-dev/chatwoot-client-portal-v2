@@ -33,6 +33,7 @@ import {
 
 type ChatHeaderProps = {
   activeThread: ChatThreadSummary | null
+  canShowInstallApp?: boolean
   connectionStatus: 'connecting' | 'offline' | 'online'
   onOpenThreadInfo: () => void
   onOpenThreadMedia: () => void
@@ -53,6 +54,7 @@ function focusElement(element: HTMLElement | null) {
 
 export function ChatHeader({
   activeThread,
+  canShowInstallApp = true,
   connectionStatus,
   onOpenThreadInfo,
   onOpenThreadMedia,
@@ -331,7 +333,9 @@ export function ChatHeader({
             menuRef={chatMenuPanelRef}
             notificationsStatus={notificationsStatus}
             onInstallApp={
-              pwaInstallPrompt.state.status === 'available' && selectedThreadId
+              canShowInstallApp &&
+              pwaInstallPrompt.state.status === 'available' &&
+              selectedThreadId
                 ? handleInstallApp
                 : undefined
             }

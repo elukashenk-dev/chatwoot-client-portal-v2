@@ -3,9 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  PwaInstallPromptCapture,
   PwaInstallPromptProvider,
 } from './installPromptRuntime'
-import { usePwaInstallPrompt } from './installPromptContext'
+import {
+  pwaInstallPromptInternalsForTests,
+  usePwaInstallPrompt,
+} from './installPromptContext'
 import { TenantIdentityContext } from '../features/tenant/lib/tenantIdentityContext'
 
 const tenantContextValue = {
@@ -124,18 +128,26 @@ function PromptProbe() {
   )
 }
 
-function renderPromptProbe() {
+function renderPromptProbe({
+  includeCapture = true,
+}: {
+  includeCapture?: boolean
+} = {}) {
   return render(
-    <TenantIdentityContext.Provider value={tenantContextValue}>
-      <PwaInstallPromptProvider>
-        <PromptProbe />
-      </PwaInstallPromptProvider>
-    </TenantIdentityContext.Provider>,
+    <>
+      {includeCapture ? <PwaInstallPromptCapture /> : null}
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <PwaInstallPromptProvider>
+          <PromptProbe />
+        </PwaInstallPromptProvider>
+      </TenantIdentityContext.Provider>
+    </>,
   )
 }
 
 describe('PWA install prompt runtime', () => {
   beforeEach(() => {
+    pwaInstallPromptInternalsForTests.resetPromptEventSnapshot()
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     window.localStorage.clear()
     setBrowserEnvironment()
@@ -193,6 +205,30 @@ describe('PWA install prompt runtime', () => {
     expect(screen.getByLabelText('install detail')).toHaveTextContent(
       'installed',
     )
+  })
+
+  it('retains a native prompt captured before tenant-scoped install state mounts', async () => {
+    const user = userEvent.setup()
+    const installEvent = createBeforeInstallPromptEvent('accepted')
+    const { unmount } = render(<PwaInstallPromptCapture />)
+
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    unmount()
+    renderPromptProbe({ includeCapture: false })
+
+    expect(installEvent.defaultPrevented).toBe(true)
+    expect(screen.getByLabelText('install status')).toHaveTextContent(
+      'available',
+    )
+    expect(screen.getByLabelText('install detail')).toHaveTextContent('native')
+
+    await user.click(screen.getByRole('button', { name: 'install' }))
+    await screen.findByText('installed')
+
+    expect(installEvent.prompt).toHaveBeenCalledTimes(1)
   })
 
   it('records native prompt dismissal for the current host and tenant', async () => {
@@ -266,6 +302,32 @@ describe('PWA install prompt runtime', () => {
     expect(screen.getByLabelText('install status')).toHaveTextContent(
       'available',
     )
+    expect(screen.getByLabelText('install detail')).toHaveTextContent(
+      'ios_manual',
+    )
+  })
+
+  it('keeps iOS on manual instructions even if beforeinstallprompt is dispatched', async () => {
+    const user = userEvent.setup()
+    setIosSafariEnvironment()
+    renderPromptProbe()
+    const installEvent = createBeforeInstallPromptEvent('accepted')
+
+    await act(async () => {
+      window.dispatchEvent(installEvent)
+    })
+
+    expect(installEvent.defaultPrevented).toBe(true)
+    expect(screen.getByLabelText('install status')).toHaveTextContent(
+      'available',
+    )
+    expect(screen.getByLabelText('install detail')).toHaveTextContent(
+      'ios_manual',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'install' }))
+
+    expect(installEvent.prompt).not.toHaveBeenCalled()
     expect(screen.getByLabelText('install detail')).toHaveTextContent(
       'ios_manual',
     )

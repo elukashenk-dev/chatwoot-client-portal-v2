@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TenantIdentityContext } from '../features/tenant/lib/tenantIdentityContext'
 import { PwaInstallBanner } from './PwaInstallBanner'
-import { PwaInstallPromptProvider } from './installPromptRuntime'
+import {
+  PwaInstallPromptCapture,
+  PwaInstallPromptProvider,
+} from './installPromptRuntime'
+import { pwaInstallPromptInternalsForTests } from './installPromptContext'
 
 const tenantContextValue = {
   errorMessage: null,
@@ -91,16 +95,20 @@ function setIosSafariEnvironment() {
 
 function renderBanner() {
   return render(
-    <TenantIdentityContext.Provider value={tenantContextValue}>
-      <PwaInstallPromptProvider>
-        <PwaInstallBanner />
-      </PwaInstallPromptProvider>
-    </TenantIdentityContext.Provider>,
+    <>
+      <PwaInstallPromptCapture />
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <PwaInstallPromptProvider>
+          <PwaInstallBanner />
+        </PwaInstallPromptProvider>
+      </TenantIdentityContext.Provider>
+    </>,
   )
 }
 
 describe('PwaInstallBanner', () => {
   beforeEach(() => {
+    pwaInstallPromptInternalsForTests.resetPromptEventSnapshot()
     vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     window.localStorage.clear()
     setBrowserEnvironment()
