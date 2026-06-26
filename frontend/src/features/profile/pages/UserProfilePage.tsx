@@ -13,6 +13,7 @@ import {
   updateProfileAvatar,
   type UserProfile,
 } from '../api/profileClient'
+import { ProfilePasswordSetupPanel } from '../components/ProfilePasswordSetupPanel'
 
 const PROFILE_AVATAR_MAX_BYTES = 15 * 1024 * 1024
 const allowedAvatarTypes = new Set(['image/gif', 'image/jpeg', 'image/png'])
@@ -233,6 +234,8 @@ export function UserProfilePage() {
               />
             </dl>
           </section>
+
+          <ProfilePasswordSetupPanel />
 
           {profile.result === 'unavailable' ? (
             <div className="mt-4">

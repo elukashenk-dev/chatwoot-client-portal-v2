@@ -270,8 +270,11 @@ execution-plan детали здесь не хранятся.
 - Registration completion UI now treats password creation as optional: users can
   either set a password immediately or continue to chats without one, and both
   successful paths enter the protected app through the customer auth context.
+- Profile security UI now lets passwordless users set their first password while
+  logged in through a protected email-code challenge and rotated authenticated
+  session handoff; configured-password users see status only.
 
 ## Recommended Next Step
 
-- Continue with Task 9 of the passwordless registration plan: frontend password
-  later UI.
+- Continue with Task 10 of the passwordless registration plan: backend test
+  coverage.
