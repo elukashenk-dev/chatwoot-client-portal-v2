@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  ApiClientError,
   completePasswordSetup,
   requestPasswordSetup,
   verifyPasswordSetupCode,
@@ -267,5 +268,115 @@ describe('UserProfilePage', () => {
       },
     })
     expect(await screen.findByText('Пароль настроен')).toBeInTheDocument()
+  })
+
+  it('returns to password setup request when the email code is expired', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      email: 'ivan@example.com',
+      expiresInSeconds: 900,
+      nextStep: 'verify_code',
+      purpose: 'password_setup',
+      resendAvailableInSeconds: 60,
+      result: 'password_setup_requested',
+    })
+    verifyPasswordSetupCodeMock.mockRejectedValueOnce(
+      new ApiClientError({
+        code: 'PASSWORD_SETUP_CODE_EXPIRED',
+        message: 'Срок действия кода подтверждения истек. Запросите новый код.',
+        statusCode: 410,
+      }),
+    )
+
+    renderPage(authSession)
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Настроить пароль',
+    }))
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('123456')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
+
+    expect(
+      await screen.findByText(
+        'Срок действия кода подтверждения истек. Запросите новый код.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Настроить пароль' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument()
+    expect(completePasswordSetupMock).not.toHaveBeenCalled()
+  })
+
+  it('returns to password setup request when continuation is invalid', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      email: 'ivan@example.com',
+      expiresInSeconds: 900,
+      nextStep: 'verify_code',
+      purpose: 'password_setup',
+      resendAvailableInSeconds: 60,
+      result: 'password_setup_requested',
+    })
+    verifyPasswordSetupCodeMock.mockResolvedValueOnce({
+      continuationExpiresInSeconds: 900,
+      continuationToken: 'password-setup-continuation-token',
+      email: 'ivan@example.com',
+      nextStep: 'set_password',
+      purpose: 'password_setup',
+      result: 'password_setup_verified',
+    })
+    completePasswordSetupMock.mockRejectedValueOnce(
+      new ApiClientError({
+        code: 'PASSWORD_SETUP_CONTINUATION_INVALID',
+        message:
+          'Подтверждение создания пароля больше недействительно. Запросите новый код и попробуйте еще раз.',
+        statusCode: 409,
+      }),
+    )
+
+    renderPage(authSession)
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Настроить пароль',
+    }))
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('123456')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
+    await user.type(screen.getByLabelText(/Новый пароль/), 'PortalPass123')
+    await user.type(
+      screen.getByLabelText(/Подтвердите пароль/),
+      'PortalPass123',
+    )
+    await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }))
+
+    expect(
+      await screen.findByText(
+        'Подтверждение создания пароля больше недействительно. Запросите новый код и попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Настроить пароль' }),
+    ).toBeInTheDocument()
+    expect(authSession.completeAuthenticatedSession).not.toHaveBeenCalled()
   })
 })
