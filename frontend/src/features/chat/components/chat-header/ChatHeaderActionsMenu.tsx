@@ -112,7 +112,7 @@ export function ChatHeaderActionsMenu({
             className={isLoggingOut ? 'h-5 w-5 animate-pulse' : 'h-5 w-5'}
           />
         }
-        label={isLoggingOut ? 'Завершаем...' : 'Завершить диалог'}
+        label={isLoggingOut ? 'Завершаем...' : 'Выход'}
         onSelect={onLogout}
       />
     </div>
