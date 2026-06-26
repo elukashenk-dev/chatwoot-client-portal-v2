@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from 'node:crypto'
+import { randomBytes, randomInt } from 'node:crypto'
 
 import type { ChatwootClient } from '../../integrations/chatwoot/client.js'
 import {
@@ -29,10 +29,8 @@ import {
   createDeliveryUnavailableError,
   createRegistrationUnavailableError,
   createVerificationCodeExpiredError,
-  createVerificationContinuationInvalidError,
   createVerificationInvalidCodeError,
   createVerificationNotFoundOrInvalidatedError,
-  createVerificationRequiredError,
   createVerificationTooManyAttemptsError,
 } from './errors.js'
 import {
@@ -40,6 +38,12 @@ import {
   type RegistrationLegalDocumentVersions,
   type RegistrationLegalAcceptanceInput,
 } from './legalAcceptance.js'
+import {
+  assertRegistrationCompletionReadyBeforeExpensiveWork,
+  checkRegistrationCompletionReadiness,
+  hashRegistrationContinuationToken,
+  throwRegistrationCompletionFailure,
+} from './completionReadiness.js'
 import type { RegistrationRepository } from './repository.js'
 
 const REGISTRATION_VERIFICATION_CODE_LENGTH = 6
@@ -58,6 +62,7 @@ type CreateRegistrationServiceOptions = {
   now?: () => Date
   portalUsersRepository: Pick<PortalUsersRepository, 'findByEmail'>
   registrationRepository: RegistrationRepository
+  secretHasher?: typeof hashPassword
   supportContactReader: RegistrationSupportContactReader
   tenantId: number
 }
@@ -177,24 +182,6 @@ function buildRegistrationCompletedResponse({
   }
 }
 
-function hashContinuationToken(token: string) {
-  return createHash('sha256').update(token).digest('hex')
-}
-
-function verifyContinuationToken({
-  providedToken,
-  storedTokenHash,
-}: {
-  providedToken: string
-  storedTokenHash: string | null
-}) {
-  if (!storedTokenHash) {
-    return false
-  }
-
-  return hashContinuationToken(providedToken) === storedTokenHash
-}
-
 function isUniqueViolation(error: unknown) {
   return (
     typeof error === 'object' &&
@@ -212,6 +199,7 @@ export function createRegistrationService({
   now = () => new Date(),
   portalUsersRepository,
   registrationRepository,
+  secretHasher = hashPassword,
   supportContactReader,
   tenantId,
 }: CreateRegistrationServiceOptions) {
@@ -237,80 +225,22 @@ export function createRegistrationService({
         await registrationRepository.transactionWithScopedLock(
           normalizedEmail,
           async (tx) => {
-            const verifiedRecord =
-              await registrationRepository.findLatestVerifiedVerificationByEmail(
-                normalizedEmail,
-                tx,
-              )
+            const readiness = await checkRegistrationCompletionReadiness({
+              completedAt,
+              normalizedContinuationToken,
+              normalizedEmail,
+              registrationRepository,
+              tx,
+            })
 
-            if (!verifiedRecord) {
-              const latestVerification =
-                await registrationRepository.findLatestVerificationByEmail(
-                  normalizedEmail,
-                  tx,
-                )
-
-              if (latestVerification?.status === 'consumed') {
-                return {
-                  outcome: 'not_found_or_consumed' as const,
-                }
-              }
-
-              return {
-                outcome: 'verification_required' as const,
-              }
-            }
-
-            const isContinuationExpired =
-              !verifiedRecord.continuationTokenExpiresAt ||
-              verifiedRecord.continuationTokenExpiresAt.getTime() <=
-                completedAt.getTime()
-
-            if (isContinuationExpired) {
-              await registrationRepository.invalidateVerifiedVerification(
-                verifiedRecord.id,
-                completedAt,
-                tx,
-              )
-
-              return {
-                outcome: 'verification_required' as const,
-              }
-            }
-
-            if (
-              !verifyContinuationToken({
-                providedToken: normalizedContinuationToken,
-                storedTokenHash: verifiedRecord.continuationTokenHash,
-              })
-            ) {
-              return {
-                outcome: 'continuation_invalid' as const,
-              }
-            }
-
-            const existingPortalUser =
-              await registrationRepository.findPortalUserByEmail(
-                normalizedEmail,
-                tx,
-              )
-
-            if (existingPortalUser) {
-              await registrationRepository.invalidateVerifiedVerification(
-                verifiedRecord.id,
-                completedAt,
-                tx,
-              )
-
-              return {
-                outcome: 'account_exists' as const,
-              }
+            if (readiness.outcome !== 'ready') {
+              return readiness
             }
 
             const createdUser = await registrationRepository.createPortalUser(
               {
                 email: normalizedEmail,
-                fullName: verifiedRecord.fullName,
+                fullName: readiness.verifiedRecord.fullName,
                 passwordHash,
               },
               tx,
@@ -322,7 +252,7 @@ export function createRegistrationService({
               )
             }
 
-            if (!verifiedRecord.chatwootContactId) {
+            if (!readiness.verifiedRecord.chatwootContactId) {
               throw new Error(
                 'Verified registration record is missing Chatwoot contact id.',
               )
@@ -330,7 +260,7 @@ export function createRegistrationService({
 
             await registrationRepository.createPortalUserContactLink(
               {
-                chatwootContactId: verifiedRecord.chatwootContactId,
+                chatwootContactId: readiness.verifiedRecord.chatwootContactId,
                 userId: createdUser.id,
               },
               tx,
@@ -353,7 +283,7 @@ export function createRegistrationService({
 
             const consumedRecord =
               await registrationRepository.consumeVerifiedVerification(
-                verifiedRecord.id,
+                readiness.verifiedRecord.id,
                 completedAt,
                 tx,
               )
@@ -380,20 +310,8 @@ export function createRegistrationService({
           },
         )
 
-      if (completionResult.outcome === 'account_exists') {
-        throw createAccountExistsError()
-      }
-
-      if (completionResult.outcome === 'continuation_invalid') {
-        throw createVerificationContinuationInvalidError()
-      }
-
-      if (completionResult.outcome === 'not_found_or_consumed') {
-        throw createVerificationNotFoundOrInvalidatedError()
-      }
-
-      if (completionResult.outcome === 'verification_required') {
-        throw createVerificationRequiredError()
+      if (completionResult.outcome !== 'completed') {
+        throwRegistrationCompletionFailure(completionResult.outcome)
       }
 
       return completionResult.response
@@ -557,7 +475,7 @@ export function createRegistrationService({
       }
 
       const verificationCode = createRegistrationVerificationCode()
-      const verificationCodeHash = await hashPassword(verificationCode)
+      const verificationCodeHash = await secretHasher(verificationCode)
       const expiresAt = new Date(
         requestedAt.getTime() + REGISTRATION_VERIFICATION_TTL_SECONDS * 1000,
       )
@@ -881,7 +799,7 @@ export function createRegistrationService({
                 {
                   continuationTokenExpiresAt,
                   continuationTokenHash:
-                    hashContinuationToken(continuationToken),
+                    hashRegistrationContinuationToken(continuationToken),
                   recordId: pendingVerification.id,
                   updatedAt: requestedAt,
                   verifiedAt: requestedAt,
@@ -940,8 +858,14 @@ export function createRegistrationService({
       userAgent?: string | null
     }): Promise<RegistrationCompletedSession> {
       assertValidPortalPassword(newPassword)
+      await assertRegistrationCompletionReadyBeforeExpensiveWork({
+        continuationToken,
+        email,
+        now,
+        registrationRepository,
+      })
 
-      const passwordHash = await hashPassword(newPassword)
+      const passwordHash = await secretHasher(newPassword)
 
       return completeRegistration({
         continuationToken,

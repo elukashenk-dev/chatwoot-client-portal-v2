@@ -11,6 +11,7 @@ import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
 import { createAuthService } from '../auth/service.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
+import { hashRegistrationContinuationToken } from './completionReadiness.js'
 import { createRegistrationRepository } from './repository.js'
 import { createRegistrationService } from './service.js'
 
@@ -179,5 +180,94 @@ describe('registration service completion', () => {
       continuationTokenHash: null,
       status: 'consumed',
     })
+  })
+
+  it('rejects unready set-password completion before hashing the password', async () => {
+    const requestedAt = new Date('2026-04-21T12:00:00.000Z')
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const registrationRepository = createRegistrationRepository(database.db, {
+      tenantId,
+    })
+    const secretHasher = vi.fn().mockResolvedValue('hashed-password')
+    const service = createRegistrationService({
+      authService: createAuthService({
+        db: database.db,
+        env: testEnv,
+        now: () => requestedAt,
+      }),
+      chatwootClient: {
+        findContactByEmail: vi.fn(),
+      },
+      emailDelivery: {
+        send: vi.fn(),
+      },
+      legalDocumentsReader: {
+        getActiveVersionsForRegistration: vi
+          .fn()
+          .mockResolvedValue(activeLegalDocumentVersions),
+      },
+      now: () => requestedAt,
+      portalUsersRepository,
+      registrationRepository,
+      secretHasher,
+      supportContactReader: {
+        getPublicBranding: vi.fn().mockResolvedValue({
+          branding: {
+            supportContact: {
+              phoneDisplay: '+7 (846) 211-11-11',
+            },
+          },
+        }),
+      },
+      tenantId,
+    })
+
+    await expect(
+      service.setPassword({
+        continuationToken: 'missing-continuation-token',
+        email: 'missing@company.ru',
+        newPassword: 'PortalPass123',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REGISTRATION_VERIFICATION_REQUIRED',
+      statusCode: 409,
+    })
+    expect(secretHasher).not.toHaveBeenCalled()
+
+    const pendingRecord = await registrationRepository.createPendingVerification(
+      {
+        chatwootContactId: 44,
+        codeHash: 'code-hash',
+        email: 'name@company.ru',
+        expiresAt: new Date(requestedAt.getTime() + 15 * 60 * 1000),
+        fullName: 'Portal User',
+        lastSentAt: requestedAt,
+        resendNotBefore: requestedAt,
+      },
+    )
+
+    await registrationRepository.verifyPendingVerification({
+      continuationTokenExpiresAt: new Date(
+        requestedAt.getTime() + 15 * 60 * 1000,
+      ),
+      continuationTokenHash: hashRegistrationContinuationToken(
+        'valid-continuation-token',
+      ),
+      recordId: pendingRecord.id,
+      updatedAt: requestedAt,
+      verifiedAt: requestedAt,
+    })
+
+    await expect(
+      service.setPassword({
+        continuationToken: 'invalid-continuation-token',
+        email: 'name@company.ru',
+        newPassword: 'PortalPass123',
+      }),
+    ).rejects.toMatchObject({
+      code: 'REGISTRATION_VERIFICATION_CONTINUATION_INVALID',
+      statusCode: 409,
+    })
+    expect(secretHasher).not.toHaveBeenCalled()
   })
 })
