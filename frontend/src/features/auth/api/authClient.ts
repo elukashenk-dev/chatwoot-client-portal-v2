@@ -40,10 +40,39 @@ export type RegistrationVerificationConfirmResponse = {
 }
 
 export type RegistrationSetPasswordResponse = {
-  email: string
-  nextStep: 'login'
+  nextStep: 'chat'
   purpose: 'registration'
   result: 'registration_completed'
+  session: AuthenticatedPortalSession['session']
+  user: AuthenticatedPortalSession['user']
+}
+
+export type RegistrationSkipPasswordResponse = RegistrationSetPasswordResponse
+
+export type PasswordSetupRequestResponse = {
+  email: string
+  expiresInSeconds: number
+  nextStep: 'verify_code'
+  purpose: 'password_setup'
+  resendAvailableInSeconds: number
+  result: 'password_setup_requested'
+}
+
+export type PasswordSetupVerificationConfirmResponse = {
+  continuationToken: string
+  continuationExpiresInSeconds: number
+  email: string
+  nextStep: 'set_password'
+  purpose: 'password_setup'
+  result: 'password_setup_verified'
+}
+
+export type PasswordSetupCompleteResponse = {
+  nextStep: 'chat'
+  purpose: 'password_setup'
+  result: 'password_setup_completed'
+  session: AuthenticatedPortalSession['session']
+  user: AuthenticatedPortalSession['user']
 }
 
 export type PasswordResetRequestResponse = {
@@ -246,6 +275,28 @@ export async function completeRegistrationSetPassword({
   )
 }
 
+export async function skipRegistrationPassword({
+  continuationToken,
+  email,
+}: {
+  continuationToken: string
+  email: string
+}) {
+  return request<RegistrationSkipPasswordResponse>(
+    '/auth/register/skip-password',
+    {
+      body: JSON.stringify({
+        continuationToken,
+        email,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  )
+}
+
 export async function requestPasswordReset(
   requestBody: PasswordResetRequestFormValues,
 ) {
@@ -303,4 +354,48 @@ export async function completePasswordResetSetPassword({
       method: 'POST',
     },
   )
+}
+
+export async function requestPasswordSetup() {
+  return request<PasswordSetupRequestResponse>('/auth/password-setup/request', {
+    body: JSON.stringify({}),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  })
+}
+
+export async function verifyPasswordSetupCode({ code }: { code: string }) {
+  return request<PasswordSetupVerificationConfirmResponse>(
+    '/auth/password-setup/verify',
+    {
+      body: JSON.stringify({
+        code,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  )
+}
+
+export async function completePasswordSetup({
+  continuationToken,
+  newPassword,
+}: {
+  continuationToken: string
+  newPassword: string
+}) {
+  return request<PasswordSetupCompleteResponse>('/auth/password-setup/set', {
+    body: JSON.stringify({
+      continuationToken,
+      newPassword,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  })
 }

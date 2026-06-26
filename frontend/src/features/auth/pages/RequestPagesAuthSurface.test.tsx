@@ -105,7 +105,7 @@ describe('Auth flow pages surface contract', () => {
           email: 'name@company.ru',
         })
       },
-      heading: 'Создание пароля',
+      heading: 'Завершение регистрации',
       path: '/auth/register/set-password',
       realFormTestId: 'password-setup-form',
     },

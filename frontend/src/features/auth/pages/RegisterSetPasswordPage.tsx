@@ -4,8 +4,8 @@ import { RegisterSetPasswordForm } from '../components/RegisterSetPasswordForm'
 export function RegisterSetPasswordPage() {
   return (
     <TenantAuthShell
-      description="Создайте пароль, чтобы входить в Центр поддержки."
-      title="Создание пароля"
+      description="Создайте пароль сейчас или перейдите к чатам без него."
+      title="Завершение регистрации"
     >
       <RegisterSetPasswordForm />
     </TenantAuthShell>

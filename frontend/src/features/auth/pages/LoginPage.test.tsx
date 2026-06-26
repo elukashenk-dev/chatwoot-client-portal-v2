@@ -87,6 +87,7 @@ const brandingContextValue: BrandingContextValue = {
 }
 
 const unauthenticatedAuthSession: AuthSessionContextValue = {
+  completeAuthenticatedSession: vi.fn(async () => undefined),
   errorMessage: null,
   localDeviceDataRemovalAvailable: false,
   refreshSession: vi.fn(async () => undefined),
@@ -117,6 +118,7 @@ function createAuthenticatedSessionResponse() {
         email: 'user@example.com',
         fullName: 'Portal User',
         id: 42,
+        passwordConfigured: true,
       },
     },
     200,

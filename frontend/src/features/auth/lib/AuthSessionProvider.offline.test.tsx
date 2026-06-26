@@ -45,6 +45,7 @@ function createSessionResponse({
         email,
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
     }),
     {
@@ -128,6 +129,7 @@ async function saveTenantAndCachedAuth({
       email: 'name@company.ru',
       fullName: 'Portal User',
       id: 7,
+      passwordConfigured: true,
     },
     userId: 7,
   })
@@ -155,6 +157,7 @@ function saveStartupAuthSnapshot({
             email: 'name@company.ru',
             fullName: 'Portal User',
             id: 7,
+            passwordConfigured: true,
           },
           userId: 7,
         },
@@ -167,14 +170,38 @@ function saveStartupAuthSnapshot({
 }
 
 function AuthProbe() {
-  const { removeLocalDeviceData, sessionSource, signOut, status, user } =
-    useAuthSession()
+  const {
+    completeAuthenticatedSession,
+    removeLocalDeviceData,
+    sessionSource,
+    signOut,
+    status,
+    user,
+  } = useAuthSession()
 
   return (
     <div>
       <span>{status}</span>
       <span>{sessionSource ?? 'no source'}</span>
       <span>{user?.email ?? 'no user'}</span>
+      <button
+        onClick={() =>
+          void completeAuthenticatedSession({
+            session: {
+              expiresAt: VALID_SESSION_EXPIRES_AT,
+            },
+            user: {
+              email: 'skip@company.ru',
+              fullName: null,
+              id: 8,
+              passwordConfigured: false,
+            },
+          })
+        }
+        type="button"
+      >
+        Complete authenticated session
+      </button>
       <button onClick={() => void removeLocalDeviceData()} type="button">
         Remove local data
       </button>
@@ -734,6 +761,64 @@ describe('AuthSessionProvider offline startup', () => {
     expect(await screen.findByText('authenticated')).toBeInTheDocument()
     expect(screen.getByText('online')).toBeInTheDocument()
     expect(screen.getByText('name@company.ru')).toBeInTheDocument()
+  })
+
+  it('completes authenticated session from backend handoff and persists snapshot', async () => {
+    const startupSession = createDeferred<Response>()
+    const startupIdentity =
+      createDeferred<Awaited<ReturnType<typeof offlineStore.readLastActiveIdentity>>>()
+    vi.spyOn(offlineStore, 'readLastActiveIdentity').mockReturnValueOnce(
+      startupIdentity.promise,
+    )
+    fetchMock.mockReturnValueOnce(startupSession.promise)
+
+    renderAuthProbe()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      startupSession.resolve(createUnauthorizedResponse())
+      await Promise.resolve()
+    })
+    await waitFor(() =>
+      expect(offlineStore.readLastActiveIdentity).toHaveBeenCalled(),
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Complete authenticated session',
+      }),
+    )
+
+    expect(await screen.findByText('authenticated')).toBeInTheDocument()
+    expect(screen.getByText('online')).toBeInTheDocument()
+    expect(screen.getByText('skip@company.ru')).toBeInTheDocument()
+
+    await waitFor(async () => {
+      await expect(offlineStore.readAuthSnapshot('buhfirma', 8)).resolves
+        .toMatchObject({
+          sessionExpiresAt: VALID_SESSION_EXPIRES_AT,
+          user: {
+            passwordConfigured: false,
+          },
+        })
+    })
+
+    await act(async () => {
+      startupIdentity.resolve({
+        host: window.location.host,
+        savedAt: '2026-05-27T09:55:00.000Z',
+        tenantSlug: 'buhfirma',
+        userId: 8,
+      })
+      await new Promise((resolve) => window.setTimeout(resolve, 20))
+    })
+
+    expect(screen.getByText('authenticated')).toBeInTheDocument()
+    expect(screen.getByText('skip@company.ru')).toBeInTheDocument()
+    await expect(offlineStore.readAuthSnapshot('buhfirma', 8)).resolves
+      .toMatchObject({
+        user: {
+          email: 'skip@company.ru',
+        },
+      })
   })
 
   it('saves online session snapshot and stays online-authenticated', async () => {

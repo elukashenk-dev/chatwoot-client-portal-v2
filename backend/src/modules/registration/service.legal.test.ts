@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseClient } from '../../db/client.js'
 import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
 import { ApiError } from '../../lib/errors.js'
+import { testEnv } from '../../test/appTestHelpers.js'
+import { createAuthService } from '../auth/service.js'
 import { createPortalUsersRepository } from '../portal-users/repository.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { seedTestTenant } from '../../test/testTenants.js'
@@ -26,12 +28,12 @@ type RegistrationServiceOptions = Parameters<
 >[0]
 type RegistrationServiceTestOptions = Omit<
   RegistrationServiceOptions,
-  'legalDocumentsReader' | 'supportContactReader' | 'tenantId'
+  'authService' | 'legalDocumentsReader' | 'supportContactReader' | 'tenantId'
 > &
   Partial<
     Pick<
       RegistrationServiceOptions,
-      'legalDocumentsReader' | 'supportContactReader'
+      'authService' | 'legalDocumentsReader' | 'supportContactReader'
     >
   >
 
@@ -63,6 +65,11 @@ describe('registration service legal/support preflight', () => {
     options: RegistrationServiceTestOptions,
   ) {
     const {
+      authService = createAuthService({
+        db: database.db,
+        env: testEnv,
+        ...(options.now ? { now: options.now } : {}),
+      }),
       legalDocumentsReader = createDefaultLegalDocumentsReader(),
       supportContactReader = createDefaultSupportContactReader(),
       ...serviceOptions
@@ -70,6 +77,7 @@ describe('registration service legal/support preflight', () => {
 
     return createRegistrationService({
       ...serviceOptions,
+      authService,
       legalDocumentsReader,
       supportContactReader,
       tenantId,

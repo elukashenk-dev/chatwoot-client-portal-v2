@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 
@@ -63,6 +65,7 @@ describe('buildApp auth integration', () => {
         email: 'name@company.ru',
         fullName: 'Portal User',
         id: 1,
+        passwordConfigured: true,
       },
     })
 
@@ -93,6 +96,7 @@ describe('buildApp auth integration', () => {
         email: 'name@company.ru',
         fullName: 'Portal User',
         id: 1,
+        passwordConfigured: true,
       },
     })
 
@@ -120,6 +124,72 @@ describe('buildApp auth integration', () => {
       error: {
         code: 'UNAUTHORIZED',
         message: 'Требуется вход.',
+      },
+    })
+  })
+
+  it('reports passwordless users without allowing password login state leaks', async () => {
+    const [user] = await database.db
+      .insert(portalUsers)
+      .values({
+        email: 'Passwordless@Company.RU',
+        fullName: 'Passwordless User',
+        passwordHash: null,
+        tenantId,
+      })
+      .returning({ id: portalUsers.id })
+
+    if (!user) {
+      throw new Error('Failed to seed passwordless portal user.')
+    }
+
+    const loginResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'passwordless@company.ru',
+        password: 'Secret123',
+      },
+      url: '/api/auth/login',
+    })
+
+    expect(loginResponse.statusCode).toBe(401)
+    expect(loginResponse.json()).toEqual({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        message: 'Неверный email или пароль.',
+      },
+    })
+
+    const sessionToken = 'passwordless-session-token'
+    await database.db.insert(portalSessions).values({
+      expiresAt: new Date('2026-05-21T12:00:00.000Z'),
+      lastSeenAt: fixedNow,
+      tenantId,
+      tokenHash: hashSessionToken(sessionToken),
+      userId: user.id,
+    })
+
+    const meResponse = await app.inject({
+      headers: {
+        cookie: `${testEnv.SESSION_COOKIE_NAME}=${app.signCookie(sessionToken)}`,
+      },
+      method: 'GET',
+      url: '/api/auth/me',
+    })
+
+    expect(meResponse.statusCode).toBe(200)
+    expect(meResponse.json()).toEqual({
+      session: {
+        expiresAt: '2026-05-21T12:00:00.000Z',
+      },
+      user: {
+        email: 'passwordless@company.ru',
+        fullName: 'Passwordless User',
+        id: user.id,
+        passwordConfigured: false,
       },
     })
   })
@@ -243,4 +313,8 @@ async function readOnlySession(database: DatabaseClient, tenantId: number) {
   }
 
   return session
+}
+
+function hashSessionToken(token: string) {
+  return createHash('sha256').update(token).digest('hex')
 }

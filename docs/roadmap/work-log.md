@@ -252,8 +252,34 @@ execution-plan детали здесь не хранятся.
   effects, processed/failed bridge delivery rows are covered by retention
   cleanup, admin setup has app-level tenant isolation coverage, and the
   production backend image uses a test-excluding build config.
+- Registration completion is password-optional at the backend boundary:
+  set-password and skip-password both consume the verified registration
+  continuation, create the portal user/contact/legal links, issue a normal
+  customer session and keep null-hash password login indistinguishable from
+  invalid credentials.
+- Password-later backend setup is implemented for passwordless portal users:
+  protected password setup derives identity from the current customer session,
+  requires an email-code proof before first password storage, rejects already
+  configured passwords, rotates customer sessions after success, and guards
+  stale delivery cleanup from invalidating newer setup codes.
+- Password reset behavior is covered for nullable customer passwords: logged-out
+  passwordless users can set their first password through the existing email-code
+  reset flow, and reset completion still returns the user to login.
+- Frontend auth API contracts now use authenticated registration completion
+  responses, expose registration skip-password and protected password-setup
+  client methods, and require `passwordConfigured` in authenticated user
+  snapshots.
+- Frontend auth state handoff is implemented: authenticated backend completion
+  responses can hydrate the customer auth context, persist online auth
+  snapshots, and ignore stale startup session-check results.
+- Registration completion UI now treats password creation as optional: users can
+  either set a password immediately or continue to chats without one, and both
+  successful paths enter the protected app through the customer auth context.
+- Profile security UI now lets passwordless users set their first password while
+  logged in through a protected email-code challenge and rotated authenticated
+  session handoff; configured-password users see status only.
 
 ## Recommended Next Step
 
-- Merge and deploy the customer session idle-renewal prerequisite, then start
-  Task 1 of the passwordless registration plan.
+- Continue with Task 15 of the passwordless registration plan: final
+  verification before merge/deploy.

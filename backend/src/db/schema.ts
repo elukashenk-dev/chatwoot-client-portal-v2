@@ -31,7 +31,7 @@ export const portalUsers = pgTable(
       }),
     email: text('email').notNull(),
     fullName: text('full_name'),
-    passwordHash: text('password_hash').notNull(),
+    passwordHash: text('password_hash'),
     isActive: boolean('is_active').notNull().default(true),
     lastLoginAt: timestamp('last_login_at', timestampWithTimezone),
     createdAt: timestamp('created_at', timestampWithTimezone)

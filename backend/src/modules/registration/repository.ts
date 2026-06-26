@@ -405,7 +405,7 @@ export function createRegistrationRepository(
       }: {
         email: string
         fullName?: string | null
-        passwordHash: string
+        passwordHash: string | null
       },
       executor: AppDatabase = db,
     ) {
@@ -424,8 +424,7 @@ export function createRegistrationRepository(
           email: portalUsers.email,
           fullName: portalUsers.fullName,
           id: portalUsers.id,
-          isActive: portalUsers.isActive,
-          tenantId: portalUsers.tenantId,
+          passwordConfigured: sql<boolean>`${portalUsers.passwordHash} is not null`,
         })
 
       return createdUser ?? null

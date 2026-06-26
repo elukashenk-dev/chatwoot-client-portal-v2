@@ -157,6 +157,7 @@ describe('offline store database', () => {
         email: 'name@company.ru',
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
       userId: 7,
     })
@@ -220,6 +221,7 @@ describe('offline store database', () => {
         email: 'other@company.ru',
         fullName: 'Other User',
         id: 8,
+        passwordConfigured: true,
       },
       userId: 8,
     })
@@ -259,6 +261,7 @@ describe('offline store database', () => {
         email: 'name@company.ru',
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
       userId: 7,
     })
@@ -272,6 +275,7 @@ describe('offline store database', () => {
         email: 'other@company.ru',
         fullName: 'Other User',
         id: 8,
+        passwordConfigured: true,
       },
       userId: 8,
     })
@@ -439,6 +443,7 @@ describe('offline store database', () => {
         email: 'name@company.ru',
         fullName: 'Portal User',
         id: 7,
+        passwordConfigured: true,
       },
       userId: 7,
     })

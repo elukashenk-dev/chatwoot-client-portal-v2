@@ -6,7 +6,6 @@ import { buildApp } from './app.js'
 import type { DatabaseClient } from './db/client.js'
 import {
   portalSessions,
-  portalUserContactLinks,
   portalUsers,
   verificationRecords,
 } from './db/schema.js'
@@ -713,74 +712,6 @@ describe('buildApp', () => {
       nextStep: 'set_password',
       purpose: 'registration',
       result: 'verification_confirmed',
-    })
-  })
-
-  it('completes registration set-password and creates a portal user', async () => {
-    await database.db.insert(verificationRecords).values({
-      attemptsCount: 0,
-      chatwootContactId: 44,
-      codeHash: await hashPassword('123456'),
-      continuationTokenExpiresAt: minutesFromNow(15),
-      continuationTokenHash: createHash('sha256')
-        .update('continuation-token-for-registration-completion')
-        .digest('hex'),
-      email: 'name@company.ru',
-      expiresAt: minutesFromNow(15),
-      fullName: 'Portal User',
-      lastSentAt: minutesFromNow(-1),
-      maxAttempts: 5,
-      purpose: 'registration',
-      resendCount: 0,
-      resendNotBefore: minutesFromNow(1),
-      status: 'verified',
-      tenantId,
-      verifiedAt: minutesFromNow(-1),
-    })
-
-    const response = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        continuationToken: 'continuation-token-for-registration-completion',
-        email: 'name@company.ru',
-        newPassword: 'PortalPass123',
-      },
-      url: '/api/auth/register/set-password',
-    })
-
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({
-      email: 'name@company.ru',
-      nextStep: 'login',
-      purpose: 'registration',
-      result: 'registration_completed',
-    })
-
-    const loginResponse = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        email: 'name@company.ru',
-        password: 'PortalPass123',
-      },
-      url: '/api/auth/login',
-    })
-
-    expect(loginResponse.statusCode).toBe(200)
-
-    const [contactLink] = await database.db
-      .select({
-        chatwootContactId: portalUserContactLinks.chatwootContactId,
-      })
-      .from(portalUserContactLinks)
-
-    expect(contactLink).toEqual({
-      chatwootContactId: 44,
     })
   })
 

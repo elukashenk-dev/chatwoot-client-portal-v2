@@ -4,10 +4,31 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  ApiClientError,
+  completePasswordSetup,
+  requestPasswordSetup,
+  verifyPasswordSetupCode,
+} from '../../auth/api/authClient'
+import type { AuthSessionContextValue } from '../../auth/lib/authSessionContext'
+import { AuthSessionContext } from '../../auth/lib/authSessionContext'
+import {
   getCurrentUserProfile,
   updateProfileAvatar,
 } from '../api/profileClient'
 import { UserProfilePage } from './UserProfilePage'
+
+vi.mock('../../auth/api/authClient', async () => {
+  const actual = await vi.importActual<typeof import('../../auth/api/authClient')>(
+    '../../auth/api/authClient',
+  )
+
+  return {
+    ...actual,
+    completePasswordSetup: vi.fn(),
+    requestPasswordSetup: vi.fn(),
+    verifyPasswordSetupCode: vi.fn(),
+  }
+})
 
 vi.mock('../api/profileClient', async () => {
   const actual = await vi.importActual<typeof import('../api/profileClient')>(
@@ -22,14 +43,45 @@ vi.mock('../api/profileClient', async () => {
 })
 
 const getCurrentUserProfileMock = vi.mocked(getCurrentUserProfile)
+const completePasswordSetupMock = vi.mocked(completePasswordSetup)
+const requestPasswordSetupMock = vi.mocked(requestPasswordSetup)
 const updateProfileAvatarMock = vi.mocked(updateProfileAvatar)
+const verifyPasswordSetupCodeMock = vi.mocked(verifyPasswordSetupCode)
 
-function renderPage() {
+function createAuthSession({
+  passwordConfigured = true,
+}: {
+  passwordConfigured?: boolean
+} = {}) {
+  return {
+    completeAuthenticatedSession: vi.fn(async () => undefined),
+    errorMessage: null,
+    localDeviceDataRemovalAvailable: false,
+    refreshSession: vi.fn(async () => undefined),
+    removeLocalDeviceData: vi.fn(async () => undefined),
+    sessionSource: 'online',
+    signIn: vi.fn(),
+    signOut: vi.fn(async () => undefined),
+    status: 'authenticated',
+    user: {
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      id: 7,
+      passwordConfigured,
+    },
+  } satisfies AuthSessionContextValue
+}
+
+function renderPage(authSession = createAuthSession()) {
   render(
     <MemoryRouter initialEntries={['/app/profile']}>
-      <UserProfilePage />
+      <AuthSessionContext.Provider value={authSession}>
+        <UserProfilePage />
+      </AuthSessionContext.Provider>
     </MemoryRouter>,
   )
+
+  return authSession
 }
 
 describe('UserProfilePage', () => {
@@ -68,6 +120,10 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('Имя').closest('div')).toHaveClass(
       'border-slate-300/45',
     )
+    expect(screen.getByText('Пароль настроен')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Настроить пароль' }),
+    ).not.toBeInTheDocument()
     expect(screen.getByLabelText('Заменить аватар').closest('label')).toHaveClass(
       'border-white/65',
       'bg-white/60',
@@ -133,5 +189,194 @@ describe('UserProfilePage', () => {
     expect(
       screen.getByText('Можно загрузить JPEG, PNG или GIF.'),
     ).toBeInTheDocument()
+  })
+
+  it('sets the first password through an email-code challenge', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      email: 'ivan@example.com',
+      expiresInSeconds: 900,
+      nextStep: 'verify_code',
+      purpose: 'password_setup',
+      resendAvailableInSeconds: 60,
+      result: 'password_setup_requested',
+    })
+    verifyPasswordSetupCodeMock.mockResolvedValueOnce({
+      continuationExpiresInSeconds: 900,
+      continuationToken: 'password-setup-continuation-token',
+      email: 'ivan@example.com',
+      nextStep: 'set_password',
+      purpose: 'password_setup',
+      result: 'password_setup_verified',
+    })
+    completePasswordSetupMock.mockResolvedValueOnce({
+      nextStep: 'chat',
+      purpose: 'password_setup',
+      result: 'password_setup_completed',
+      session: {
+        expiresAt: '2026-06-10T10:00:00.000Z',
+      },
+      user: {
+        email: 'ivan@example.com',
+        fullName: 'Иван Петров',
+        id: 7,
+        passwordConfigured: true,
+      },
+    })
+
+    renderPage(authSession)
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Настроить пароль',
+    }))
+    expect(requestPasswordSetupMock).toHaveBeenCalledWith()
+
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('123456')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
+    expect(verifyPasswordSetupCodeMock).toHaveBeenCalledWith({ code: '123456' })
+
+    await user.type(screen.getByLabelText(/Новый пароль/), 'PortalPass123')
+    await user.type(
+      screen.getByLabelText(/Подтвердите пароль/),
+      'PortalPass123',
+    )
+    await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }))
+
+    expect(completePasswordSetupMock).toHaveBeenCalledWith({
+      continuationToken: 'password-setup-continuation-token',
+      newPassword: 'PortalPass123',
+    })
+    expect(authSession.completeAuthenticatedSession).toHaveBeenCalledWith({
+      session: {
+        expiresAt: '2026-06-10T10:00:00.000Z',
+      },
+      user: {
+        email: 'ivan@example.com',
+        fullName: 'Иван Петров',
+        id: 7,
+        passwordConfigured: true,
+      },
+    })
+    expect(await screen.findByText('Пароль настроен')).toBeInTheDocument()
+  })
+
+  it('returns to password setup request when the email code is expired', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      email: 'ivan@example.com',
+      expiresInSeconds: 900,
+      nextStep: 'verify_code',
+      purpose: 'password_setup',
+      resendAvailableInSeconds: 60,
+      result: 'password_setup_requested',
+    })
+    verifyPasswordSetupCodeMock.mockRejectedValueOnce(
+      new ApiClientError({
+        code: 'PASSWORD_SETUP_CODE_EXPIRED',
+        message: 'Срок действия кода подтверждения истек. Запросите новый код.',
+        statusCode: 410,
+      }),
+    )
+
+    renderPage(authSession)
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Настроить пароль',
+    }))
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('123456')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
+
+    expect(
+      await screen.findByText(
+        'Срок действия кода подтверждения истек. Запросите новый код.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Настроить пароль' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument()
+    expect(completePasswordSetupMock).not.toHaveBeenCalled()
+  })
+
+  it('returns to password setup request when continuation is invalid', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      email: 'ivan@example.com',
+      expiresInSeconds: 900,
+      nextStep: 'verify_code',
+      purpose: 'password_setup',
+      resendAvailableInSeconds: 60,
+      result: 'password_setup_requested',
+    })
+    verifyPasswordSetupCodeMock.mockResolvedValueOnce({
+      continuationExpiresInSeconds: 900,
+      continuationToken: 'password-setup-continuation-token',
+      email: 'ivan@example.com',
+      nextStep: 'set_password',
+      purpose: 'password_setup',
+      result: 'password_setup_verified',
+    })
+    completePasswordSetupMock.mockRejectedValueOnce(
+      new ApiClientError({
+        code: 'PASSWORD_SETUP_CONTINUATION_INVALID',
+        message:
+          'Подтверждение создания пароля больше недействительно. Запросите новый код и попробуйте еще раз.',
+        statusCode: 409,
+      }),
+    )
+
+    renderPage(authSession)
+
+    await user.click(await screen.findByRole('button', {
+      name: 'Настроить пароль',
+    }))
+    await user.click(await screen.findByLabelText('Код из письма'))
+    await user.keyboard('123456')
+    await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
+    await user.type(screen.getByLabelText(/Новый пароль/), 'PortalPass123')
+    await user.type(
+      screen.getByLabelText(/Подтвердите пароль/),
+      'PortalPass123',
+    )
+    await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }))
+
+    expect(
+      await screen.findByText(
+        'Подтверждение создания пароля больше недействительно. Запросите новый код и попробуйте еще раз.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Настроить пароль' }),
+    ).toBeInTheDocument()
+    expect(authSession.completeAuthenticatedSession).not.toHaveBeenCalled()
   })
 })

@@ -54,6 +54,7 @@ export const cachedAuthUser = {
   email: 'name@company.ru',
   fullName: 'Portal User',
   id: 7,
+  passwordConfigured: true,
 }
 
 export function createJsonResponse(body: unknown, status = 200) {
@@ -74,6 +75,7 @@ export function createAuthenticatedUserResponse() {
       email: 'name@company.ru',
       fullName: 'Portal User',
       id: 7,
+      passwordConfigured: true,
     },
   })
 }
@@ -184,6 +186,7 @@ export function renderChatRoute() {
 
 export function renderChatPageWithCachedAuth() {
   const authContextValue = {
+    completeAuthenticatedSession: vi.fn(async () => undefined),
     errorMessage: null,
     localDeviceDataRemovalAvailable: true,
     refreshSession: vi.fn(async () => undefined),

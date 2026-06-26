@@ -255,3 +255,14 @@ export async function saveOnlineAuthSnapshot({
 
   return scope
 }
+
+export async function saveOnlineAuthSnapshotSafely(
+  options: Parameters<typeof saveOnlineAuthSnapshot>[0],
+) {
+  try {
+    return await saveOnlineAuthSnapshot(options)
+  } catch {
+    // Online auth remains valid even if local offline persistence fails.
+    return null
+  }
+}

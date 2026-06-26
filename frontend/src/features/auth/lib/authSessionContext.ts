@@ -1,6 +1,10 @@
 import { createContext, useContext } from 'react'
 
-import type { AuthenticatedPortalUser, LoginFormValues } from '../types'
+import type {
+  AuthenticatedPortalSession,
+  AuthenticatedPortalUser,
+  LoginFormValues,
+} from '../types'
 
 export type AuthSessionSource = 'cached' | 'online'
 
@@ -12,6 +16,9 @@ export type AuthSessionStatus =
   | 'unauthenticated'
 
 export type AuthSessionContextValue = {
+  completeAuthenticatedSession: (
+    session: AuthenticatedPortalSession,
+  ) => Promise<void>
   errorMessage: string | null
   localDeviceDataRemovalAvailable: boolean
   removeLocalDeviceData: () => Promise<void>

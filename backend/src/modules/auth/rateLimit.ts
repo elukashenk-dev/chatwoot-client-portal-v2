@@ -22,12 +22,16 @@ const authRateLimitGroups = new Map<string, string>([
   ['POST /api/auth/register/request', 'auth-registration-request'],
   ['POST /api/auth/register/verify', 'auth-registration-verify'],
   ['POST /api/auth/register/set-password', 'auth-registration-set-password'],
+  ['POST /api/auth/register/skip-password', 'auth-registration-skip-password'],
   ['POST /api/auth/password-reset/request', 'auth-password-reset-request'],
   ['POST /api/auth/password-reset/verify', 'auth-password-reset-verify'],
   [
     'POST /api/auth/password-reset/set-password',
     'auth-password-reset-set-password',
   ],
+  ['POST /api/auth/password-setup/request', 'auth-password-setup-request'],
+  ['POST /api/auth/password-setup/verify', 'auth-password-setup-verify'],
+  ['POST /api/auth/password-setup/set', 'auth-password-setup-set'],
 ])
 
 function getRequestPathname(request: FastifyRequest) {

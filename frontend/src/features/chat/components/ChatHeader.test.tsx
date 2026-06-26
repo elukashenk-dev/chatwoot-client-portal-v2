@@ -117,6 +117,7 @@ const brandingContextValue: BrandingContextValue = {
 }
 
 const authSession: AuthSessionContextValue = {
+  completeAuthenticatedSession: vi.fn(async () => undefined),
   errorMessage: null,
   localDeviceDataRemovalAvailable: false,
   refreshSession: vi.fn(),
@@ -129,6 +130,7 @@ const authSession: AuthSessionContextValue = {
     email: 'name@group.ru',
     fullName: 'Portal User',
     id: 7,
+    passwordConfigured: true,
   },
 }
 

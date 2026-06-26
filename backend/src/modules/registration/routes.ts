@@ -1,9 +1,14 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
+import type { AppEnv } from '../../config/env.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import { portalPasswordSchema } from '../../lib/passwordPolicy.js'
-import type { RegistrationService } from './service.js'
+import { getSessionCookieOptions } from '../auth/sessionCookie.js'
+import type {
+  RegistrationCompletedSession,
+  RegistrationService,
+} from './service.js'
 
 const registerRequestBodySchema = z.strictObject({
   email: z
@@ -41,13 +46,52 @@ const registerSetPasswordBodySchema = z.object({
   newPassword: portalPasswordSchema,
 })
 
+const registerSkipPasswordBodySchema = z.object({
+  continuationToken: z
+    .string()
+    .trim()
+    .min(32, 'Некорректное подтверждение регистрации'),
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Введите email')
+    .email('Проверьте формат email'),
+})
+
 type RegisterRegistrationRoutesOptions = {
   createRegistrationService: (request: FastifyRequest) => RegistrationService
+  env: AppEnv
+}
+
+function sendRegistrationCompletionResponse({
+  env,
+  reply,
+  result,
+}: {
+  env: AppEnv
+  reply: FastifyReply
+  result: RegistrationCompletedSession
+}) {
+  reply.setCookie(
+    env.SESSION_COOKIE_NAME,
+    result.sessionToken,
+    getSessionCookieOptions(env),
+  )
+
+  return {
+    nextStep: result.nextStep,
+    purpose: result.purpose,
+    result: result.result,
+    session: {
+      expiresAt: result.session.expiresAt.toISOString(),
+    },
+    user: result.user,
+  }
 }
 
 export function registerRegistrationRoutes(
   app: FastifyInstance,
-  { createRegistrationService }: RegisterRegistrationRoutesOptions,
+  { createRegistrationService, env }: RegisterRegistrationRoutesOptions,
 ) {
   app.post('/api/auth/register/request', async (request) => {
     assertAllowedTenantOrigin(request)
@@ -77,15 +121,42 @@ export function registerRegistrationRoutes(
     })
   })
 
-  app.post('/api/auth/register/set-password', async (request) => {
+  app.post('/api/auth/register/set-password', async (request, reply) => {
     assertAllowedTenantOrigin(request)
 
     const body = registerSetPasswordBodySchema.parse(request.body)
 
-    return createRegistrationService(request).setPassword({
+    const result = await createRegistrationService(request).setPassword({
       continuationToken: body.continuationToken,
       email: body.email,
+      ipAddress: request.ip,
       newPassword: body.newPassword,
+      userAgent: request.headers['user-agent'] ?? null,
+    })
+
+    return sendRegistrationCompletionResponse({
+      env,
+      reply,
+      result,
+    })
+  })
+
+  app.post('/api/auth/register/skip-password', async (request, reply) => {
+    assertAllowedTenantOrigin(request)
+
+    const body = registerSkipPasswordBodySchema.parse(request.body)
+
+    const result = await createRegistrationService(request).skipPassword({
+      continuationToken: body.continuationToken,
+      email: body.email,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] ?? null,
+    })
+
+    return sendRegistrationCompletionResponse({
+      env,
+      reply,
+      result,
     })
   })
 }

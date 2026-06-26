@@ -355,7 +355,7 @@ describe('Auth flow pages', () => {
     )
 
     expect(
-      await screen.findByRole('heading', { name: 'Создание пароля' }),
+      await screen.findByRole('heading', { name: 'Завершение регистрации' }),
     ).toBeInTheDocument()
     expect(screen.getByText(/Требования к паролю/)).toBeInTheDocument()
     expect(screen.getByTestId('password-rules-card')).toHaveClass(
@@ -401,7 +401,7 @@ describe('Auth flow pages', () => {
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', { name: 'Создание пароля' }),
+      screen.queryByRole('heading', { name: 'Завершение регистрации' }),
     ).not.toBeInTheDocument()
   })
 
@@ -452,7 +452,7 @@ describe('Auth flow pages', () => {
     ).toBeInTheDocument()
   })
 
-  it('completes registration set-password and shows success feedback', async () => {
+  it('completes registration set-password against the backend', async () => {
     const user = userEvent.setup()
 
     saveRegistrationRequest({
@@ -471,25 +471,26 @@ describe('Auth flow pages', () => {
 
     mockUnauthenticatedSession()
     fetchMock.mockResolvedValueOnce(
-      createJsonResponse(
-        {
-          email: 'name@company.ru',
-          nextStep: 'login',
-          purpose: 'registration',
-          result: 'registration_completed',
-        },
-        200,
-      ),
+      createJsonResponse({
+        nextStep: 'chat',
+        purpose: 'registration',
+        result: 'registration_completed',
+        session: { expiresAt: '2026-06-10T10:00:00.000Z' },
+        user: { email: 'name@company.ru', fullName: 'Portal User', id: 7, passwordConfigured: true },
+      }, 200),
     )
 
     renderAuthRoutes(['/auth/register/set-password'])
 
     expect(
-      await screen.findByRole('heading', { name: 'Создание пароля' }),
+      await screen.findByRole('heading', { name: 'Завершение регистрации' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('Создайте пароль, чтобы входить в Центр поддержки.'),
+      screen.getByText('Создайте пароль сейчас или перейдите к чатам без него.'),
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', {
+      name: 'Продолжить без пароля',
+    })).toBeInTheDocument()
     expect(screen.getByTestId('password-setup-form')).toBeInTheDocument()
     expect(screen.getByTestId('password-rules-card')).toHaveClass(
       'auth-password-rules',
@@ -523,10 +524,6 @@ describe('Auth flow pages', () => {
         method: 'POST',
       }),
     )
-
-    expect(
-      await screen.findByText(/Пароль сохранен для name@company.ru/),
-    ).toBeInTheDocument()
   })
 
   it('guards registration set-password when verification state is missing', async () => {
@@ -535,7 +532,7 @@ describe('Auth flow pages', () => {
 
     expect(
       await screen.findByText(
-        'Сначала подтвердите email, чтобы открыть шаг установки пароля.',
+        'Сначала подтвердите email, чтобы завершить регистрацию.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -627,7 +624,7 @@ describe('Auth flow pages', () => {
 
     expect(
       await screen.findByText(
-        'Сначала подтвердите email, чтобы открыть шаг установки пароля.',
+        'Сначала подтвердите email, чтобы завершить регистрацию.',
       ),
     ).toBeInTheDocument()
     expect(

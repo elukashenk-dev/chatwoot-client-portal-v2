@@ -50,6 +50,10 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean'
+}
+
 export function isTenantContextRecord(
   value: unknown,
 ): value is OfflineTenantContextRecord {
@@ -98,7 +102,8 @@ function isAuthenticatedPortalUser(
     isObject(value) &&
     isString(value.email) &&
     (isString(value.fullName) || value.fullName === null) &&
-    isNumber(value.id)
+    isNumber(value.id) &&
+    isBoolean(value.passwordConfigured)
   )
 }
 

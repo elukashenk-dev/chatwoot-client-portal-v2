@@ -11,6 +11,7 @@ export type AuthenticatedPortalUser = {
   email: string
   fullName: string | null
   id: number
+  passwordConfigured: boolean
 }
 
 export type AuthenticatedSession = {

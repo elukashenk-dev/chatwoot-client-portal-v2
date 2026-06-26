@@ -42,8 +42,10 @@ Tenant владеет:
 Текущий пользовательский контур:
 
 - существующий Chatwoot contact может пройти registration eligibility check;
-- пользователь подтверждает email, задает пароль и входит в портал;
-- password reset работает через email-code flow;
+- пользователь подтверждает email, может задать пароль сразу или пропустить
+  этот шаг и сразу войти в портал;
+- password reset работает через email-code flow, включая первый пароль для
+  пользователя, который пропустил пароль при регистрации;
 - пользователь открывает защищенную клиентскую зону;
 - пользователь видит личный чат и, при наличии доступа, групповые чаты;
 - backend загружает историю сообщений, отправляет текст, отправляет один файл и доставляет realtime-обновления;
@@ -56,7 +58,8 @@ Tenant владеет:
   звук, подключение Web Push на конкретном устройстве и overrides на уровне
   конкретного чата;
 - пользователь может открыть `Профиль`, увидеть read-only `Имя`, `Email`,
-  `Телефон` и загрузить/заменить свой аватар;
+  `Телефон`, загрузить/заменить свой аватар и, если пароль еще не задан, создать
+  первый пароль через email-code проверку;
 - групповые чаты показывают аватары участников через portal proxy URLs, а
   сообщения поддержки в группе отмечаются компактным badge `Поддержка`;
 - PWA manifest, icons и iOS Home Screen metadata резолвятся tenant-aware.
@@ -84,7 +87,7 @@ Portal backend отвечает за:
 
 - tenant resolution;
 - auth и sessions;
-- registration и password reset;
+- registration, password reset и password setup;
 - access control;
 - profile read and avatar update boundary;
 - chat thread/access resolution;
@@ -210,7 +213,7 @@ signup does not create a production portal tenant.
 4. Frontend получает только public tenant context.
 5. Chatwoot secrets и Chatwoot authority в браузер не попадают.
 
-### Auth, Registration И Password Reset
+### Auth, Registration, Password Reset И Password Setup
 
 - session хранится в `httpOnly` cookie;
 - session row содержит `tenant_id`;
@@ -225,9 +228,18 @@ signup does not create a production portal tenant.
 - email не считается глобально уникальным;
 - корректная уникальность пользователя - `tenant_id + email`;
 - registration eligibility ищет exact email match только внутри current tenant Chatwoot account;
-- registration и password reset используют общую таблицу `verification_records`;
-- сценарий различается через `purpose`: `registration` или `password_reset`;
-- отдельная таблица `password_reset_records` не создается;
+- registration completion создает нормальную customer session и может сохранить
+  password hash или оставить `portal_users.password_hash = null`;
+- password login для null-hash пользователя возвращает generic invalid
+  credentials без раскрытия passwordless state;
+- logged-in first-password setup доступен только текущему customer session user,
+  требует email-code proof, сохраняет первый hash и ротирует customer session;
+- registration, password reset и logged-in first-password setup используют
+  общую таблицу `verification_records`;
+- сценарий различается через `purpose`: `registration`, `password_reset` или
+  `password_setup`;
+- отдельные таблицы `password_reset_records` или `password_setup_records` не
+  создаются;
 - verification/advisory-lock логика tenant-aware.
 
 ### Chat
@@ -365,7 +377,10 @@ Tenant-aware PWA endpoints:
 - уникальность users, contact links, chat threads, send ledger и webhook
   deliveries учитывает tenant scope;
 - `portal_users.email` не является глобально уникальным;
-- `verification_records` обслуживает registration и password reset;
+- `portal_users.password_hash` nullable: отсутствие hash означает, что customer
+  прошел email-code registration/passwordless flow, но еще не создал пароль;
+- `verification_records` обслуживает registration, password reset и logged-in
+  first-password setup;
 - continuation token fields остаются в `verification_records`;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
@@ -396,9 +411,13 @@ API `v2` остается простым и явным:
 - `/api/auth/register/request`;
 - `/api/auth/register/verify`;
 - `/api/auth/register/set-password`;
+- `/api/auth/register/skip-password`;
 - `/api/auth/password-reset/request`;
 - `/api/auth/password-reset/verify`;
 - `/api/auth/password-reset/set-password`;
+- `/api/auth/password-setup/request`;
+- `/api/auth/password-setup/verify`;
+- `/api/auth/password-setup/set`;
 - `/api/profile`;
 - `/api/profile/avatar`;
 - `/api/branding`;
@@ -464,8 +483,11 @@ chatwoot-client-portal-v2/
 - `health` - readiness/health endpoints;
 - `tenants` - host resolution, tenant runtime config, secret handling, public tenant context and PWA identity;
 - `auth` - login, logout, current user and session handling;
-- `registration` - eligibility, verification request/confirm and password setup completion;
+- `registration` - eligibility, verification request/confirm and
+  password-optional authenticated completion;
 - `password-reset` - reset request, verification and password update;
+- `password-setup` - protected first-password setup for passwordless users,
+  email-code proof and rotated session handoff;
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
 - `branding` - tenant-scoped public/admin branding settings read model,
   backend-owned asset upload/read/delete routes and admin update boundary;
@@ -488,7 +510,8 @@ chatwoot-client-portal-v2/
 ### Frontend Features
 
 - `tenant` - public tenant context and tenant identity metadata;
-- `auth` - registration, password reset, login/logout/me UI;
+- `auth` - registration with optional password completion, password reset,
+  login/logout/me UI and authenticated session handoff;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
 - `admin-branding` - admin branding API client, draft state, settings form,
   support phone/legal document/asset upload controls and live preview
@@ -497,7 +520,8 @@ chatwoot-client-portal-v2/
 - `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
 - `legal` - public terms/privacy reader pages backed by portal legal document
   API;
-- `profile` - protected read-only profile page and avatar upload flow;
+- `profile` - protected read-only profile page, avatar upload flow and
+  first-password setup UI for passwordless users;
 - `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
 - `settings` - user-level notification settings;
 - `pwa` - service worker registration and PWA runtime support;
