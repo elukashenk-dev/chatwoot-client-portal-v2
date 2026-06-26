@@ -184,6 +184,35 @@ describe('auth service tenant scope', () => {
     })
   })
 
+  it('rejects password login for users without a configured password hash', async () => {
+    const tenant = await seedTestTenant(database.db)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const authService = createAuthService({
+      db: database.db,
+      env: testEnv,
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+    })
+
+    await portalUsersRepository.create({
+      email: 'passwordless@company.ru',
+      fullName: 'Passwordless User',
+      passwordHash: null,
+      tenantId: tenant.id,
+    })
+
+    await expect(
+      authService.login({
+        email: 'passwordless@company.ru',
+        password: 'Secret123',
+        tenantId: tenant.id,
+      }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_CREDENTIALS',
+      message: 'Неверный email или пароль.',
+      statusCode: 401,
+    })
+  })
+
   it('renews customer session only inside the renewal window when renewal is allowed', async () => {
     const tenant = await seedTestTenant(database.db)
     const portalUsersRepository = createPortalUsersRepository(database.db)

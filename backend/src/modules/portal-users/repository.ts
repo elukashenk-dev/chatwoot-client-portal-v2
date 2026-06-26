@@ -16,7 +16,7 @@ type CreatePortalUserInput = {
   email: string
   fullName?: string | null
   isActive?: boolean
-  passwordHash: string
+  passwordHash: string | null
   tenantId: number
 }
 

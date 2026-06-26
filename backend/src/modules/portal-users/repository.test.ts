@@ -48,6 +48,28 @@ describe('portal users repository', () => {
     })
   })
 
+  it('supports portal users without a configured password hash', async () => {
+    const repository = createPortalUsersRepository(database.db)
+
+    await repository.create({
+      email: 'passwordless@company.ru',
+      fullName: 'Passwordless User',
+      passwordHash: null,
+      tenantId,
+    })
+
+    const resolvedUser = await repository.findByEmail({
+      email: 'passwordless@company.ru',
+      tenantId,
+    })
+
+    expect(resolvedUser).toMatchObject({
+      email: 'passwordless@company.ru',
+      fullName: 'Passwordless User',
+      passwordHash: null,
+    })
+  })
+
   it('rejects duplicate portal users for the same email regardless of case', async () => {
     const repository = createPortalUsersRepository(database.db)
 

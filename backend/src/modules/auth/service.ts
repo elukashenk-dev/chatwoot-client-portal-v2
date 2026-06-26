@@ -181,6 +181,14 @@ export function createAuthService({
         )
       }
 
+      if (user.passwordHash === null) {
+        throw new ApiError(
+          401,
+          'INVALID_CREDENTIALS',
+          'Неверный email или пароль.',
+        )
+      }
+
       const passwordMatches = await verifyPassword(password, user.passwordHash)
 
       if (!passwordMatches) {

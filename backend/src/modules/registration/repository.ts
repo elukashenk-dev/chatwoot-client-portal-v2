@@ -405,7 +405,7 @@ export function createRegistrationRepository(
       }: {
         email: string
         fullName?: string | null
-        passwordHash: string
+        passwordHash: string | null
       },
       executor: AppDatabase = db,
     ) {
