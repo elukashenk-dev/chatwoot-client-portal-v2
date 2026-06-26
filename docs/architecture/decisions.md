@@ -112,10 +112,11 @@
 - дата: `2026-05-05`
 - решение:
   отдельные таблицы для password reset или first-password setup не создаем.
-  Registration, password reset и logged-in first-password setup используют
-  общий persistence layer `verification_records`, а сценарий различается через
-  `purpose = registration`, `purpose = password_reset` или
-  `purpose = password_setup`. Continuation token поля остаются там же.
+  Registration, password reset, logged-in first-password setup и passwordless
+  email-code login используют общий persistence layer `verification_records`,
+  а сценарий различается через `purpose = registration`,
+  `purpose = password_reset`, `purpose = password_setup` или
+  `purpose = passwordless_login`. Continuation token поля остаются там же.
 - причина:
   текущая модель email-code flows уже единая. Для multi-tenant isolation
   достаточно tenant-aware lookup, индексов и advisory lock key.
@@ -511,13 +512,14 @@
   `passwordConfigured` as `password_hash is not null`.
 - граница:
   Password login for a null-hash customer returns the same generic invalid
-  credentials as any bad login. A passwordless customer can create the first
-  password later only through an email-code proof tied to the current customer
-  session or, after logout, through the existing email-code password reset
-  flow. Logged-in first-password setup derives user identity from the current
-  session, rejects users who already have a hash, stores the first hash only
-  for that current tenant/user and rotates customer sessions after success.
-  Tenant-admin sessions and Chatwoot authority are not involved.
+  credentials as any bad login. A passwordless customer can enter again after
+  logout through the public passwordless email-code login flow for already
+  registered users, then create the first password later through an email-code
+  proof tied to the current customer session. Logged-in first-password setup
+  derives user identity from the current session, rejects users who already have
+  a hash, stores the first hash only for that current tenant/user and rotates
+  customer sessions after success. Tenant-admin sessions and Chatwoot authority
+  are not involved.
 - причина:
   Known Chatwoot contacts have already proven email control during
   registration, so requiring immediate password setup is unnecessary friction.

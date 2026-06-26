@@ -743,6 +743,10 @@ button:not(:disabled),
   margin-top: 43px;
 }
 
+.auth-page--register-set-password .auth-form-slot {
+  margin-top: 24px;
+}
+
 .auth-login-form {
   display: flex;
   flex-direction: column;
@@ -817,6 +821,31 @@ button:not(:disabled),
   letter-spacing: 0;
   line-height: 22px;
   text-align: left;
+}
+
+.registration-password-note {
+  max-width: 330px;
+  margin-top: 0;
+  color: var(--portal-auth-text-color, #15486b);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
+}
+
+.registration-set-password-flow > .auth-flow-form {
+  margin-top: 12px;
+}
+
+.registration-set-password-flow .auth-flow-form > :is(div, label) + :is(div, label) {
+  margin-top: 16px;
+}
+
+.registration-set-password-flow .auth-flow-form > .auth-password-rules {
+  margin-top: 20px;
+}
+
+.registration-set-password-flow .auth-flow-form > button[type='submit'] {
+  margin-top: 22px;
 }
 
 .auth-password-rules {
@@ -928,6 +957,7 @@ button:not(:disabled),
 
 .auth-legal-text a,
 .auth-legal-preview-link,
+.auth-code-login-link,
 .auth-secondary-links,
 .auth-support-block {
   color: var(--portal-auth-link-color, #003a78);
@@ -936,6 +966,35 @@ button:not(:disabled),
 .auth-legal-text a {
   font-weight: 600;
   text-decoration: none;
+}
+
+.auth-code-login-link {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 14px auto 0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
+}
+
+.auth-code-login-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px
+    color-mix(
+      in srgb,
+      var(--portal-auth-link-color, #003a78) 16%,
+      transparent
+    );
 }
 
 .auth-legal-consent {
@@ -1182,6 +1241,7 @@ button:not(:disabled),
 .auth-legal-text a:hover,
 .auth-legal-consent a:hover,
 a.legal-document-back-link:hover,
+.auth-code-login-link:hover,
 a.auth-flow-action-link:hover,
 a.auth-flow-support__phone:hover,
 a.auth-secondary-link:hover,
@@ -1289,6 +1349,10 @@ a.auth-support-phone:hover {
 
   .auth-form-slot {
     margin-top: 31px;
+  }
+
+  .auth-page--register-set-password .auth-form-slot {
+    margin-top: 18px;
   }
 
   .auth-login-form > :is(div, label) + :is(div, label),

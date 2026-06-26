@@ -254,10 +254,10 @@ export function RegisterSetPasswordForm() {
   }
 
   return (
-    <div className="space-y-4">
-      <p className="auth-form-note">
-        Можно продолжить без пароля. Пароль можно задать позже в профиле или
-        через восстановление по email-коду после выхода.
+    <div className="registration-set-password-flow space-y-4">
+      <p className="auth-form-note registration-password-note">
+        Можно продолжить без пароля. Позже задайте его в профиле. После выхода
+        войдите по email-коду.
       </p>
 
       <PasswordSetupFormLayout

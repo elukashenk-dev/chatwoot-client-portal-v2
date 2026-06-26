@@ -1,13 +1,14 @@
 import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
+import { routePaths } from '../../../app/routePaths'
 import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PasswordField } from '../../../shared/ui/PasswordField'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 import { TextField } from '../../../shared/ui/TextField'
-import { LockIcon, MailIcon } from '../../../shared/ui/icons'
+import { LockIcon, MailIcon, ShieldLockIcon } from '../../../shared/ui/icons'
 import {
   authFieldClassName,
   authFieldIconClassName,
@@ -208,6 +209,14 @@ export function LoginForm({ legalNotice }: LoginFormProps = {}) {
           value={values.password}
         />
       </FormField>
+
+      <Link
+        className="auth-code-login-link"
+        to={routePaths.auth.codeLoginRequest}
+      >
+        <ShieldLockIcon className="h-4 w-4" />
+        <span>Уже есть аккаунт? Войти по коду из почты.</span>
+      </Link>
 
       <InlineAlert message={visibleGlobalError} tone="error" />
 

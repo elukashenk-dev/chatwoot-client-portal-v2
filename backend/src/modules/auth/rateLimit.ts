@@ -29,6 +29,8 @@ const authRateLimitGroups = new Map<string, string>([
     'POST /api/auth/password-reset/set-password',
     'auth-password-reset-set-password',
   ],
+  ['POST /api/auth/code-login/request', 'auth-passwordless-login-request'],
+  ['POST /api/auth/code-login/verify', 'auth-passwordless-login-verify'],
   ['POST /api/auth/password-setup/request', 'auth-password-setup-request'],
   ['POST /api/auth/password-setup/verify', 'auth-password-setup-verify'],
   ['POST /api/auth/password-setup/set', 'auth-password-setup-set'],

@@ -52,6 +52,16 @@ const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
     (module) => module.PasswordResetSetPasswordPage,
   ),
 )
+const PasswordlessLoginRequestPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordlessLoginRequestPage').then(
+    (module) => module.PasswordlessLoginRequestPage,
+  ),
+)
+const PasswordlessLoginVerifyPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordlessLoginVerifyPage').then(
+    (module) => module.PasswordlessLoginVerifyPage,
+  ),
+)
 const ChatPage = lazyRouteComponent(() =>
   import('../features/chat/pages/ChatPage').then((module) => module.ChatPage),
 )
@@ -157,6 +167,22 @@ export function AppRoutes() {
             element={
               <LazyRoute fallback={<AuthStartupCanvas />}>
                 <RegisterSetPasswordPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="code-login/request"
+            element={
+              <LazyRoute fallback={<AuthStartupCanvas />}>
+                <PasswordlessLoginRequestPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="code-login/verify"
+            element={
+              <LazyRoute fallback={<AuthStartupCanvas />}>
+                <PasswordlessLoginVerifyPage />
               </LazyRoute>
             }
           />

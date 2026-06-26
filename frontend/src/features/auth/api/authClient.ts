@@ -1,6 +1,7 @@
 import type {
   AuthenticatedPortalSession,
   LoginFormValues,
+  PasswordlessLoginRequestFormValues,
   PasswordResetRequestFormValues,
   RegisterRequestFormValues,
 } from '../types'
@@ -99,6 +100,24 @@ export type PasswordResetSetPasswordResponse = {
   nextStep: 'login'
   purpose: 'password_reset'
   result: 'password_reset_completed'
+}
+
+export type PasswordlessLoginRequestResponse = {
+  accepted: true
+  email: string
+  expiresInSeconds: number
+  nextStep: 'verify_code'
+  purpose: 'passwordless_login'
+  resendAvailableInSeconds: number
+  result: 'passwordless_login_requested'
+}
+
+export type PasswordlessLoginVerifyResponse = {
+  nextStep: 'chat'
+  purpose: 'passwordless_login'
+  result: 'passwordless_login_completed'
+  session: AuthenticatedPortalSession['session']
+  user: AuthenticatedPortalSession['user']
 }
 
 export class ApiClientError extends Error {
@@ -354,6 +373,40 @@ export async function completePasswordResetSetPassword({
       method: 'POST',
     },
   )
+}
+
+export async function requestPasswordlessLoginCode(
+  requestBody: PasswordlessLoginRequestFormValues,
+) {
+  return request<PasswordlessLoginRequestResponse>(
+    '/auth/code-login/request',
+    {
+      body: JSON.stringify(requestBody),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  )
+}
+
+export async function confirmPasswordlessLoginCode({
+  code,
+  email,
+}: {
+  code: string
+  email: string
+}) {
+  return request<PasswordlessLoginVerifyResponse>('/auth/code-login/verify', {
+    body: JSON.stringify({
+      code,
+      email,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    method: 'POST',
+  })
 }
 
 export async function requestPasswordSetup() {

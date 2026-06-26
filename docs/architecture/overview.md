@@ -232,12 +232,18 @@ signup does not create a production portal tenant.
   password hash или оставить `portal_users.password_hash = null`;
 - password login для null-hash пользователя возвращает generic invalid
   credentials без раскрытия passwordless state;
+- already registered customer может войти без пароля через отдельный
+  passwordless email-code login flow; request endpoint возвращает generic
+  accepted response, не раскрывает наличие аккаунта и выдает обычную customer
+  session только после успешной проверки кода;
+- если passwordless пользователь сам выходит из чата, frontend предупреждает,
+  что следующий вход будет через код из почты;
 - logged-in first-password setup доступен только текущему customer session user,
   требует email-code proof, сохраняет первый hash и ротирует customer session;
-- registration, password reset и logged-in first-password setup используют
-  общую таблицу `verification_records`;
-- сценарий различается через `purpose`: `registration`, `password_reset` или
-  `password_setup`;
+- registration, password reset, logged-in first-password setup и passwordless
+  email-code login используют общую таблицу `verification_records`;
+- сценарий различается через `purpose`: `registration`, `password_reset`,
+  `password_setup` или `passwordless_login`;
 - отдельные таблицы `password_reset_records` или `password_setup_records` не
   создаются;
 - verification/advisory-lock логика tenant-aware.
@@ -379,8 +385,8 @@ Tenant-aware PWA endpoints:
 - `portal_users.email` не является глобально уникальным;
 - `portal_users.password_hash` nullable: отсутствие hash означает, что customer
   прошел email-code registration/passwordless flow, но еще не создал пароль;
-- `verification_records` обслуживает registration, password reset и logged-in
-  first-password setup;
+- `verification_records` обслуживает registration, password reset, logged-in
+  first-password setup и passwordless email-code login;
 - continuation token fields остаются в `verification_records`;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
@@ -415,6 +421,8 @@ API `v2` остается простым и явным:
 - `/api/auth/password-reset/request`;
 - `/api/auth/password-reset/verify`;
 - `/api/auth/password-reset/set-password`;
+- `/api/auth/code-login/request`;
+- `/api/auth/code-login/verify`;
 - `/api/auth/password-setup/request`;
 - `/api/auth/password-setup/verify`;
 - `/api/auth/password-setup/set`;
@@ -486,6 +494,8 @@ chatwoot-client-portal-v2/
 - `registration` - eligibility, verification request/confirm and
   password-optional authenticated completion;
 - `password-reset` - reset request, verification and password update;
+- `passwordless-login` - public email-code login for already registered
+  customer users and normal customer session issuance;
 - `password-setup` - protected first-password setup for passwordless users,
   email-code proof and rotated session handoff;
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
@@ -511,7 +521,8 @@ chatwoot-client-portal-v2/
 
 - `tenant` - public tenant context and tenant identity metadata;
 - `auth` - registration with optional password completion, password reset,
-  login/logout/me UI and authenticated session handoff;
+  passwordless code login, login/logout/me UI and authenticated session
+  handoff;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
 - `admin-branding` - admin branding API client, draft state, settings form,
   support phone/legal document/asset upload controls and live preview

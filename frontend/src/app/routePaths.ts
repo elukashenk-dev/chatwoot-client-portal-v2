@@ -14,6 +14,8 @@ export const routePaths = {
     settingsNotifications: '/app/settings/notifications',
   },
   auth: {
+    codeLoginRequest: '/auth/code-login/request',
+    codeLoginVerify: '/auth/code-login/verify',
     login: '/auth/login',
     register: '/auth/register',
     registerSetPassword: '/auth/register/set-password',

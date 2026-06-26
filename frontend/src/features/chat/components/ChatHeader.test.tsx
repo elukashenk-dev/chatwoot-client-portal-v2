@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLocation } from 'react-router-dom'
@@ -116,6 +116,13 @@ const brandingContextValue: BrandingContextValue = {
   status: 'ready',
 }
 
+const authenticatedUser = {
+  email: 'name@group.ru',
+  fullName: 'Portal User',
+  id: 7,
+  passwordConfigured: true,
+} satisfies NonNullable<AuthSessionContextValue['user']>
+
 const authSession: AuthSessionContextValue = {
   completeAuthenticatedSession: vi.fn(async () => undefined),
   errorMessage: null,
@@ -126,12 +133,7 @@ const authSession: AuthSessionContextValue = {
   signIn: vi.fn(),
   signOut: vi.fn(),
   status: 'authenticated',
-  user: {
-    email: 'name@group.ru',
-    fullName: 'Portal User',
-    id: 7,
-    passwordConfigured: true,
-  },
+  user: authenticatedUser,
 }
 
 type MockBeforeInstallPromptEvent = Event & {
@@ -161,11 +163,13 @@ function CurrentPath() {
 
 function renderHeader({
   activeThread = privateThread,
+  authValue = authSession,
   brandingValue = brandingContextValue,
   canShowInstallApp = true,
   connectionStatus = 'online',
 }: {
   activeThread?: ChatThreadListSummary
+  authValue?: AuthSessionContextValue
   brandingValue?: BrandingContextValue
   canShowInstallApp?: boolean
   connectionStatus?: 'connecting' | 'offline' | 'online'
@@ -186,7 +190,7 @@ function renderHeader({
           },
         }}
       >
-        <AuthSessionContext.Provider value={authSession}>
+        <AuthSessionContext.Provider value={authValue}>
           <BrandingContext.Provider value={brandingValue}>
             <PwaInstallPromptProvider>
               <ChatHeader
@@ -348,6 +352,156 @@ describe('ChatHeader', () => {
     expect(screen.getByLabelText('current path')).toHaveTextContent(
       '/app/profile',
     )
+  })
+
+  it('logs out configured-password users without a passwordless warning', async () => {
+    const user = userEvent.setup()
+    const signOut = vi.fn(async () => undefined)
+
+    renderHeader({
+      authValue: {
+        ...authSession,
+        signOut,
+        user: {
+          ...authenticatedUser,
+          passwordConfigured: true,
+        },
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(signOut).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(screen.getByLabelText('current path')).toHaveTextContent(
+        '/auth/login',
+      )
+    })
+  })
+
+  it('warns passwordless users before logout and can cancel the action', async () => {
+    const user = userEvent.setup()
+    const signOut = vi.fn(async () => undefined)
+
+    renderHeader({
+      authValue: {
+        ...authSession,
+        signOut,
+        user: {
+          ...authenticatedUser,
+          passwordConfigured: false,
+        },
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Выйти из аккаунта?' })
+
+    expect(dialog).toHaveTextContent(
+      'У вас пока не задан пароль. После выхода вы сможете снова войти только по коду из почты. Задать пароль можно в профиле.',
+    )
+    expect(screen.getByRole('link', { name: 'профиле' })).toHaveAttribute(
+      'href',
+      '/app/profile',
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Остаться' })).toHaveFocus()
+    })
+    expect(signOut).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Остаться' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(signOut).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('current path')).toHaveTextContent('/app/chat')
+  })
+
+  it('opens profile from the passwordless logout warning without signing out', async () => {
+    const user = userEvent.setup()
+    const signOut = vi.fn(async () => undefined)
+
+    renderHeader({
+      authValue: {
+        ...authSession,
+        signOut,
+        user: {
+          ...authenticatedUser,
+          passwordConfigured: false,
+        },
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('link', { name: 'профиле' }))
+
+    expect(signOut).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText('current path')).toHaveTextContent(
+        '/app/profile',
+      )
+    })
+  })
+
+  it('logs out passwordless users only after warning confirmation', async () => {
+    const user = userEvent.setup()
+    const signOut = vi.fn(async () => undefined)
+
+    renderHeader({
+      authValue: {
+        ...authSession,
+        signOut,
+        user: {
+          ...authenticatedUser,
+          passwordConfigured: false,
+        },
+      },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText('current path')).toHaveTextContent(
+        '/auth/login',
+      )
+    })
+  })
+
+  it('closes the passwordless logout warning on Escape and restores menu button focus', async () => {
+    const user = userEvent.setup()
+    const signOut = vi.fn(async () => undefined)
+
+    renderHeader({
+      authValue: {
+        ...authSession,
+        signOut,
+        user: {
+          ...authenticatedUser,
+          passwordConfigured: false,
+        },
+      },
+    })
+
+    const menuButton = screen.getByRole('button', { name: 'Открыть меню чата' })
+
+    await user.click(menuButton)
+    await user.click(screen.getByRole('menuitem', { name: 'Завершить диалог' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(signOut).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(menuButton).toHaveFocus()
+    })
   })
 
   it('shows install app action when the PWA native prompt is available', async () => {
