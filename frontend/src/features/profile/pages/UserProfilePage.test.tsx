@@ -120,7 +120,15 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('Имя').closest('div')).toHaveClass(
       'border-slate-300/45',
     )
+    expect(
+      screen.queryByText(/Пароль пока не задан/),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Пароль настроен')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Пароль настроен. Если вы выйдете и забудете пароль, используйте восстановление по email-коду.',
+      ),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Задать пароль' }),
     ).not.toBeInTheDocument()
