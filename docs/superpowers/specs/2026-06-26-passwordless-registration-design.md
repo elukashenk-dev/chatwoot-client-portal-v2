@@ -45,7 +45,8 @@ This is not anonymous signup. Eligibility remains the existing tenant-scoped Cha
    - Login creates `portal_sessions.expires_at = now + 30 days`.
    - A successful online `/api/auth/me` check calculates the remaining lifetime.
    - If more than 15 days remain, `/api/auth/me` returns the current `session.expiresAt` and does not write `portal_sessions` or refresh the cookie.
-   - If 15 days or fewer remain, `/api/auth/me` extends the same customer session to `now + 30 days`, updates `last_seen_at`, returns the refreshed `session.expiresAt`, and refreshes the same signed httpOnly `portal_session` cookie with a fresh `Max-Age`.
+   - If 15 days or fewer remain but frontend renewal intent is missing or request metadata is cross-site, `/api/auth/me` returns the current `session.expiresAt` and does not write `portal_sessions` or refresh the cookie.
+   - If 15 days or fewer remain and the request is an explicit frontend session check with allowed request metadata, `/api/auth/me` conditionally extends the same customer session to `now + 30 days`, updates `last_seen_at`, returns the refreshed `session.expiresAt`, and refreshes the same signed httpOnly `portal_session` cookie with a fresh `Max-Age`.
    - Expired, revoked, missing-cookie, manually logged-out, or invalid sessions are not extended and must require login.
    - There is no forced absolute timeout for ordinary customer chat sessions.
    - Sensitive actions remain separate fresh re-auth flows and must not depend on the age of the ordinary customer session.
@@ -217,7 +218,7 @@ No request shape change.
 
 Behavior change:
 
-- If the tenant-scoped user exists but `password_hash IS NULL`, return the existing generic invalid credentials error.
+- If the tenant-scoped user exists but `password_hash IS NULL`, return the existing typed generic `401 INVALID_CREDENTIALS` response.
 - Do not expose a separate `PASSWORD_NOT_SET` error from this public endpoint.
 
 Authenticated response should include `passwordConfigured` in `user`.
@@ -230,13 +231,24 @@ Successful response behavior:
 - resolve only a non-expired, non-revoked, current-tenant customer session;
 - calculate the remaining lifetime until `portal_sessions.expires_at`;
 - if more than 15 days remain, return the current `session.expiresAt` without a session-row write or cookie refresh;
-- if 15 days or fewer remain, update `portal_sessions.last_seen_at` to the current backend time;
-- if 15 days or fewer remain, update `portal_sessions.expires_at` to `now + SESSION_TTL_DAYS`, with `SESSION_TTL_DAYS = 30`;
-- if 15 days or fewer remain, set the same `portal_session` cookie value again using the existing httpOnly, signed, SameSite, secure and path rules with a fresh `Max-Age`;
+- if 15 days or fewer remain but the request is not an explicit frontend session check with allowed request metadata, return the current `session.expiresAt` without a session-row write or cookie refresh;
+- if 15 days or fewer remain and the request is an explicit frontend session check with allowed request metadata, conditionally update `portal_sessions.last_seen_at` to the current backend time;
+- if 15 days or fewer remain and the request is an explicit frontend session check with allowed request metadata, conditionally update `portal_sessions.expires_at` to `now + SESSION_TTL_DAYS`, with `SESSION_TTL_DAYS = 30`;
+- if the conditional backend renewal succeeds, set the same `portal_session` cookie value again using the existing httpOnly, signed, SameSite, secure and path rules with a fresh `Max-Age`;
 - return the current or refreshed `session.expiresAt`;
 - add `passwordConfigured` to `user`.
 
 Expired, revoked, invalid and missing-cookie sessions still return `401` and clear the cookie. They must not be extended.
+
+Because `/api/auth/me` remains a `GET`, renewal must be opt-in for the frontend
+auth client rather than a side effect of every valid cookie-bearing request. The
+frontend auth client sends a small explicit header, for example
+`X-Portal-Session-Check: 1`. Backend renewal is allowed only when that header is
+present and request metadata is allowed: disable renewal when
+`Sec-Fetch-Site: cross-site`; if an `Origin` header is present, it must match the
+current tenant public origin for renewal to proceed. Requests without renewal
+intent, or with invalid renewal metadata, still return the valid current session,
+but they do not write `portal_sessions` and do not set `Set-Cookie`.
 
 ### New: `POST /api/auth/password-setup/request`
 
@@ -352,19 +364,30 @@ The 30-day idle timeout with 15-day renewal window does not require a schema mig
 
 ### Customer Idle Session Renewal
 
-Customer session resolution must become the single customer session renewal boundary.
+`/api/auth/me` must become the single customer session renewal boundary. Other
+protected customer APIs still validate the session, but they must not renew it
+or write `portal_sessions`.
 
-After `findUserBySessionTokenHash` confirms `portal_sessions.expires_at > now`, the auth service calculates the remaining lifetime. Use a named constant:
+The auth service should keep one internal resolver with an explicit renewal
+switch, for example `allowRenewal: boolean`. `getCurrentUser` and ordinary
+protected routes call it with renewal disabled. `/api/auth/me` calculates
+`allowRenewal` from a route-level helper that requires explicit frontend renewal
+intent and allowed request metadata.
+
+After `findUserBySessionTokenHash` confirms `portal_sessions.expires_at > now`,
+and only when renewal is enabled, the auth service calculates the remaining
+lifetime. Use a named constant:
 
 ```ts
 const CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS = 15
 const dayMs = 24 * 60 * 60 * 1000
 const renewalWindowMs = CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS * dayMs
 const remainingMs = session.expiresAt.getTime() - resolvedAt.getTime()
-const shouldRefreshSession = remainingMs <= renewalWindowMs
+const shouldRefreshSession = allowRenewal && remainingMs <= renewalWindowMs
 ```
 
-If `shouldRefreshSession` is false, return the existing `session.expiresAt` and do not write the session row or refresh the cookie.
+If renewal is disabled or `shouldRefreshSession` is false, return the existing
+`session.expiresAt` and do not write the session row or refresh the cookie.
 
 If `shouldRefreshSession` is true, calculate:
 
@@ -374,12 +397,43 @@ const refreshedExpiresAt = new Date(
 )
 ```
 
-Then update the current customer session row with:
+Then attempt a conditional update of the current customer session row:
 
 - `last_seen_at = resolvedAt`;
 - `expires_at = refreshedExpiresAt`.
 
-The service returns the effective `expiresAt` and a boolean flag such as `sessionRefreshed`. `/api/auth/me` re-sets the same `portal_session` cookie only when `sessionRefreshed` is true, using the existing cookie options so the browser cookie lifetime tracks the refreshed backend session lifetime.
+The update must include the current tenant/session id and the observed expiry in
+the `WHERE` clause, and it must only match rows still inside the renewal window.
+Conceptually:
+
+```sql
+UPDATE portal_sessions
+SET last_seen_at = :resolvedAt,
+    expires_at = :refreshedExpiresAt
+WHERE id = :sessionId
+  AND tenant_id = :tenantId
+  AND expires_at = :observedExpiresAt
+  AND expires_at > :resolvedAt
+  AND expires_at <= :renewBefore;
+```
+
+If the conditional update affects one row, the service returns
+`expiresAt: refreshedExpiresAt` and `sessionRefreshed: true`. If it affects zero
+rows because another request already renewed the session, re-read the current
+session by token hash and return the latest effective `expiresAt` with
+`sessionRefreshed: false`. If the re-read no longer finds a valid session, treat
+the request as unauthenticated. This keeps concurrent tabs/devices from turning
+one renewal window into multiple session writes.
+
+The service returns the effective `expiresAt` and a boolean flag such as
+`sessionRefreshed`. `/api/auth/me` re-sets the same `portal_session` cookie only
+when `sessionRefreshed` is true, using the existing cookie options so the
+browser cookie lifetime tracks the refreshed backend session lifetime.
+
+Do not renew from `resolveAuthenticatedPortalUser`, chat routes, profile routes,
+attachment/avatar proxy routes, notification routes, realtime routes or other
+ordinary protected customer endpoints. Those paths can be hot under load, and
+renewing there would turn normal API traffic into session write amplification.
 
 This is intentionally not a pure "refresh on every check" rolling timeout. The 15-day window is the product decision: it keeps active users from being forced through login while limiting writes to at most roughly once per active session per renewal window.
 
@@ -425,9 +479,9 @@ The function must:
 10. return authenticated session payload with `passwordConfigured`.
 
 User creation, contact/legal linking, verification consumption and session row
-creation must share one defensible atomic boundary. A failure must not leave a
-new passwordless user unable to receive the completion session or recover
-through the tested password-reset path.
+creation must run in one transaction under the existing tenant/email scoped
+lock. A failure must not leave a new passwordless user unable to receive the
+completion session or recover through the tested password-reset path.
 
 ### Password-Setup Flow
 
@@ -444,8 +498,8 @@ Use the same password validation and hashing helper as registration/password
 reset. On successful password setup, rotate the portal session by deleting
 existing sessions for the user and issuing a fresh session for the current
 response. The password update, setup-record consumption, old-session deletion
-and fresh-session insertion should be completed under one transaction boundary
-where the repository allows it.
+and fresh-session insertion must run in one transaction using the same scoped
+executor pattern as password reset.
 
 ### Rate Limits
 
@@ -508,7 +562,7 @@ Minimum production-ready UI:
 - The skip endpoint must not reduce proof strength. It must require the same verified email continuation token as password creation.
 - The continuation token remains one-time and short-lived.
 - Session creation remains backend-only and cookie-backed.
-- Customer `/api/auth/me` extends only valid, non-expired customer sessions inside the 15-day renewal window and refreshes the existing cookie only after extension. It must not revive expired or revoked sessions.
+- Customer `/api/auth/me` extends only valid, non-expired customer sessions inside the 15-day renewal window when explicit frontend renewal intent and allowed request metadata are present. It refreshes the existing cookie only after extension and must not revive expired or revoked sessions.
 - No absolute timeout is added for ordinary customer chat sessions.
 - Tenant-admin session behavior is not changed.
 - Login does not reveal passwordless account state.
@@ -532,6 +586,6 @@ Minimum production-ready UI:
 9. All changed auth/session contracts are covered by backend and frontend tests.
 10. Playwright covers registration skip to chat and later password setup to password login.
 11. Customer login creates a 30-day session. Successful `/api/auth/me` outside the 15-day renewal window returns the current expiry without a DB write or cookie refresh.
-12. Successful `/api/auth/me` inside the 15-day renewal window extends the session another 30 days from the check time, refreshes the same cookie, and updates the offline auth snapshot with the refreshed `sessionExpiresAt`.
+12. Successful `/api/auth/me` inside the 15-day renewal window extends the session another 30 days from the check time only when explicit frontend renewal intent and allowed request metadata are present; when renewal succeeds, it refreshes the same cookie and updates the offline auth snapshot with the refreshed `sessionExpiresAt`.
 13. Expired, revoked, logged-out, missing-cookie and invalid customer sessions require login and are not extended.
 14. Tenant-admin session behavior remains unchanged.

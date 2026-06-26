@@ -3,7 +3,7 @@
 Date: 2026-06-26
 Status: ready for implementation after user approval
 Design source: `docs/superpowers/specs/2026-06-26-passwordless-registration-design.md`
-Prerequisite branch: `feature/customer-session-rolling-idle-timeout`
+Prerequisite branch: `feature/customer-session-idle-renewal`
 Target branch: `feature/passwordless-registration-completion`
 
 ## Overview
@@ -24,7 +24,7 @@ The target behavior is:
 
 ## Pre-Implementation Gate
 
-- Start from current `main` and create `feature/customer-session-rolling-idle-timeout`.
+- Start from current `main` and create `feature/customer-session-idle-renewal`.
 - Implement and merge the customer idle-renewal prerequisite first.
 - After the prerequisite is in `main`, create `feature/passwordless-registration-completion` from the updated `main`.
 - Confirm `git status --short --branch` is clean before code work.
@@ -45,6 +45,8 @@ Files:
 - `backend/src/modules/auth/repository.ts`
 - `backend/src/modules/auth/service.ts`
 - `backend/src/modules/auth/routes.ts`
+- `backend/src/lib/origin.ts` or a small auth-local request metadata helper
+- `frontend/src/features/auth/api/authClient.ts`
 - `backend/src/modules/auth/service.test.ts`
 - `backend/src/app-auth.integration.test.ts`
 - `backend/src/app.test.ts` if existing auth route expectations use the old fixed expiration
@@ -74,29 +76,38 @@ SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
 write_env_line SESSION_TTL_DAYS 30
 ```
 
-2. Update backend test helpers from `SESSION_TTL_DAYS: 14` to `SESSION_TTL_DAYS: 30`.
-3. Add a customer auth service constant:
+2. Add a production deploy preflight note for this prerequisite: the real
+   production `.env.production` is not committed, so deployment must verify and
+   update `SESSION_TTL_DAYS=30` on the production host before activation. A code
+   deploy that changes only defaults/examples will not override an existing
+   `SESSION_TTL_DAYS=14` value.
+3. Update backend test helpers from `SESSION_TTL_DAYS: 14` to `SESSION_TTL_DAYS: 30`.
+4. Add a customer auth service constant:
 
 ```ts
 const CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS = 15
 const DAY_MS = 24 * 60 * 60 * 1000
 ```
 
-4. Replace the customer session repository `touchSession` method with a method that updates both `lastSeenAt` and `expiresAt` for the current tenant/session:
+5. Replace the customer session repository `touchSession` method with a conditional renewal method that updates both `lastSeenAt` and `expiresAt` only if the row still matches the observed expiry and is still inside the renewal window:
 
 ```ts
-async refreshSession({
+async tryRefreshSession({
   at,
+  observedExpiresAt,
   expiresAt,
+  renewBefore,
   sessionId,
   tenantId,
 }: {
   at: Date
+  observedExpiresAt: Date
   expiresAt: Date
+  renewBefore: Date
   sessionId: number
   tenantId: number
-}) {
-  await db
+}): Promise<{ expiresAt: Date } | null> {
+  const [updated] = await db
     .update(portalSessions)
     .set({
       expiresAt,
@@ -106,21 +117,85 @@ async refreshSession({
       and(
         eq(portalSessions.id, sessionId),
         eq(portalSessions.tenantId, tenantId),
+        eq(portalSessions.expiresAt, observedExpiresAt),
+        gt(portalSessions.expiresAt, at),
+        lte(portalSessions.expiresAt, renewBefore),
       ),
     )
+    .returning({ expiresAt: portalSessions.expiresAt })
+
+  return updated ?? null
 }
 ```
 
-5. In `authService.resolveCurrentSession`, keep the existing non-expired lookup. After it succeeds, calculate whether the session is inside the renewal window:
+The conditional `expires_at = observedExpiresAt` check is required to avoid
+multiple concurrent `/api/auth/me` requests writing the same session row after
+they all read the old expiry.
+
+6. Add a route-level helper that decides whether `/api/auth/me` is allowed to renew the session. It must require explicit frontend intent and disable renewal for cross-site or invalid-origin request metadata. Prefer adding a boolean origin helper next to `assertAllowedOrigin`; do not implement this by catching thrown origin errors:
 
 ```ts
-const remainingMs = session.expiresAt.getTime() - resolvedAt.getTime()
-const shouldRefreshSession =
-  remainingMs <= CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS * DAY_MS
+const SESSION_RENEWAL_HEADER = 'x-portal-session-check'
+
+function canRenewCustomerSessionFromRequest(request: FastifyRequest) {
+  const tenant = requireTenantContext(request)
+
+  if (request.headers[SESSION_RENEWAL_HEADER] !== '1') {
+    return false
+  }
+
+  if (request.headers['sec-fetch-site'] === 'cross-site') {
+    return false
+  }
+
+  const origin = request.headers.origin
+  if (typeof origin === 'string' && !isAllowedOrigin(origin, tenant.publicBaseUrl)) {
+    return false
+  }
+
+  return true
+}
 ```
 
-6. If `shouldRefreshSession` is false, return the current `session.expiresAt`, set `sessionRefreshed: false`, and do not write `portal_sessions`.
-7. If `shouldRefreshSession` is true, calculate the refreshed expiry from the current backend time:
+Do not throw only because the renewal header is absent. A valid cookie-bearing
+`GET /api/auth/me` without frontend renewal intent or with invalid renewal
+metadata should still return the current session when the cookie is otherwise
+valid, but it must not write `portal_sessions` or refresh the cookie.
+
+7. Update `frontend/src/features/auth/api/authClient.ts` so `getCurrentSession`
+sends `X-Portal-Session-Check: 1` on the `/api/auth/me` request.
+
+8. In `authService.resolveCurrentSession`, keep the existing non-expired lookup. After it succeeds, calculate whether the session is inside the renewal window:
+
+First add an explicit renewal switch to the internal resolver:
+
+```ts
+async function resolveCurrentSession({
+  allowRenewal,
+  sessionToken,
+  tenantId,
+}: {
+  allowRenewal: boolean
+  sessionToken: string
+  tenantId: number
+}): Promise<(PublicPortalSession & { sessionRefreshed: boolean }) | null>
+```
+
+`authService.getCurrentSession`, used by `/api/auth/me`, should accept
+`allowRenewal` from the route helper. `authService.getCurrentUser`, used by
+ordinary protected routes through `resolveAuthenticatedPortalUser`, must pass
+`allowRenewal: false`.
+
+```ts
+const renewBefore = new Date(
+  resolvedAt.getTime() + CUSTOMER_SESSION_RENEWAL_WINDOW_DAYS * DAY_MS,
+)
+const shouldRefreshSession =
+  allowRenewal && session.expiresAt.getTime() <= renewBefore.getTime()
+```
+
+9. If `shouldRefreshSession` is false, return the current `session.expiresAt`, set `sessionRefreshed: false`, and do not write `portal_sessions`.
+10. If `shouldRefreshSession` is true, calculate the refreshed expiry from the current backend time:
 
 ```ts
 const refreshedExpiresAt = new Date(
@@ -128,10 +203,12 @@ const refreshedExpiresAt = new Date(
 )
 ```
 
-8. Call `repository.refreshSession({ at: resolvedAt, expiresAt: refreshedExpiresAt, sessionId: session.sessionId, tenantId })`.
-9. Return `expiresAt: refreshedExpiresAt` and `sessionRefreshed: true` from `resolveCurrentSession`.
-10. Add `sessionRefreshed: boolean` to the internal current-session response used by `/api/auth/me`. Keep public JSON response shape unchanged.
-11. In `/api/auth/me`, after `authService.getCurrentSession` succeeds, set the same session cookie value again only when the service reports `sessionRefreshed: true`:
+11. Call `repository.tryRefreshSession({ at: resolvedAt, observedExpiresAt: session.expiresAt, expiresAt: refreshedExpiresAt, renewBefore, sessionId: session.sessionId, tenantId })`.
+12. If the conditional update succeeds, return `expiresAt: refreshedExpiresAt` and `sessionRefreshed: true` from `resolveCurrentSession`.
+13. If the conditional update returns no row, re-read the current session by token hash. If it is still valid, return that effective expiry with `sessionRefreshed: false`; if it is no longer valid, return `null` and let `/api/auth/me` clear the cookie.
+14. Add `sessionRefreshed: boolean` to the internal current-session response used by `/api/auth/me`. Keep public JSON response shape unchanged.
+15. In `/api/auth/me`, calculate `allowRenewal = canRenewCustomerSessionFromRequest(request)` and pass it to `authService.getCurrentSession`.
+16. In `/api/auth/me`, after `authService.getCurrentSession` succeeds, set the same session cookie value again only when the service reports `sessionRefreshed: true`:
 
 ```ts
 if (session.sessionRefreshed) {
@@ -143,47 +220,72 @@ if (session.sessionRefreshed) {
 }
 ```
 
-12. Do not change `getSessionCookieOptions` except through the 30-day `SESSION_TTL_DAYS` value it already reads.
-13. Keep `/api/auth/me` as an online session check, not a high-frequency heartbeat.
-14. Do not change tenant-admin routes, repositories, env names or `portal_admin_session`.
-15. Keep logout behavior unchanged: deleting the session row and clearing the cookie still makes the next login mandatory.
-16. Keep missing-cookie, invalid-cookie, revoked and expired sessions unchanged: `/api/auth/me` returns `401`, clears the cookie and does not extend anything.
-17. Confirm frontend auth/offline code needs no new browser token. Existing `saveOnlineAuthSnapshot` should store the effective `session.expiresAt` returned by `/api/auth/me`.
+17. Do not change `getSessionCookieOptions` except through the 30-day `SESSION_TTL_DAYS` value it already reads.
+18. Keep `/api/auth/me` as an online session check, not a high-frequency heartbeat.
+19. Do not renew sessions from `resolveAuthenticatedPortalUser`, chat routes, profile routes, attachment/avatar proxy routes, notification routes, realtime routes or other ordinary protected customer endpoints.
+20. Do not change tenant-admin routes, repositories, env names or `portal_admin_session`.
+21. Keep logout behavior unchanged: deleting the session row and clearing the cookie still makes the next login mandatory.
+22. Keep missing-cookie, invalid-cookie, revoked and expired sessions unchanged: `/api/auth/me` returns `401`, clears the cookie and does not extend anything.
+23. Confirm frontend auth/offline code needs no new browser token. Existing `saveOnlineAuthSnapshot` should store the effective `session.expiresAt` returned by `/api/auth/me`.
 
 Backend tests:
 
 1. Update existing login expiry expectations from login time plus 14 days to login time plus 30 days. For example, fixed login at `2026-04-21T12:00:00.000Z` should expire at `2026-05-21T12:00:00.000Z`.
 2. Add a service or integration test where a session created at `2026-04-21T12:00:00.000Z` is checked online at `2026-04-22T09:30:00.000Z`; because more than 15 days remain, expect `/api/auth/me` or `getCurrentSession` to return the original `2026-05-21T12:00:00.000Z`, `sessionRefreshed: false`, no `portal_sessions` write, and no `Set-Cookie` refresh.
-3. Add a service or integration test where the same session is checked online at `2026-05-10T09:30:00.000Z`; because 15 days or fewer remain, expect the response to return `2026-06-09T09:30:00.000Z` and `sessionRefreshed: true`.
+3. Add a service or integration test where the same session is checked online at `2026-05-10T09:30:00.000Z` with renewal allowed; because 15 days or fewer remain, expect the response to return `2026-06-09T09:30:00.000Z` and `sessionRefreshed: true`.
 4. Assert the corresponding `portal_sessions.expires_at` row was updated to the refreshed expiry and `last_seen_at` was updated to the check time only in the renewal-window case.
-5. Add a route integration assertion that `/api/auth/me` inside the renewal window returns a `Set-Cookie` header for `portal_session` with the same signed token value and refreshed `Max-Age`.
+5. Add a route integration assertion that `/api/auth/me` inside the renewal window with the explicit renewal header and allowed request metadata returns a `Set-Cookie` header for `portal_session` with the same signed token value and refreshed `Max-Age`.
 6. Add a route integration assertion that `/api/auth/me` outside the renewal window does not return a `Set-Cookie` refresh.
-7. Add an expired-session test where backend time is later than the stored `expires_at`; expect `401`, cookie clear, and no extension.
-8. Keep or add a logout test proving deleted sessions are not revived by `/api/auth/me`.
-9. Keep tenant-admin auth tests unchanged except for avoiding accidental customer-session helper changes.
+7. Add route assertions that `/api/auth/me` inside the renewal window does not renew and does not return `Set-Cookie` when the explicit renewal header is absent or request metadata is cross-site.
+8. Add a route assertion that `/api/auth/me` with the explicit renewal header and allowed request metadata does renew inside the window.
+9. Add a repository-level conditional-update test or service race test proving two concurrent renewal attempts for the same observed expiry produce at most one session-row write; the losing attempt must re-read and return the effective expiry without `sessionRefreshed: true`.
+10. Add a service test proving `authService.getCurrentUser` inside the renewal window returns the user but does not update `portal_sessions.expires_at`, does not update `last_seen_at`, and reports no renewal.
+11. Add an integration test for one ordinary protected customer endpoint, for example a profile or chat endpoint, inside the renewal window. Expect the endpoint to authenticate successfully without `Set-Cookie` refresh and without `portal_sessions` renewal.
+12. Add an expired-session test where backend time is later than the stored `expires_at`; expect `401`, cookie clear, and no extension.
+13. Keep or add a logout test proving deleted sessions are not revived by `/api/auth/me`.
+14. Keep tenant-admin auth tests unchanged except for avoiding accidental customer-session helper changes.
 
 Frontend tests:
 
 1. If a frontend test mocks `/api/auth/me`, update only exact mocked `expiresAt` values that assume 14 days.
-2. Add or update an auth provider/offline test so a successful online `/api/auth/me` with a later renewed `session.expiresAt` overwrites the offline auth snapshot `sessionExpiresAt`.
-3. Add or update a test proving that when `/api/auth/me` returns the same unrenewed `session.expiresAt`, the offline auth snapshot keeps that effective backend expiry.
-4. Keep the cached-auth expiry behavior unchanged: offline cache is usable only until the stored backend `sessionExpiresAt`.
+2. Add or update an auth client test proving `getCurrentSession` sends `X-Portal-Session-Check: 1`.
+3. Add or update an auth provider/offline test so a successful online `/api/auth/me` with a later renewed `session.expiresAt` overwrites the offline auth snapshot `sessionExpiresAt`.
+4. Add or update a test proving that when `/api/auth/me` returns the same unrenewed `session.expiresAt`, the offline auth snapshot keeps that effective backend expiry.
+5. Keep the cached-auth expiry behavior unchanged: offline cache is usable only until the stored backend `sessionExpiresAt`.
 
 Acceptance:
 
 - Customer login creates a 30-day customer session.
 - Successful `/api/auth/me` outside the 15-day renewal window does not write the session row and does not refresh the cookie.
-- Successful `/api/auth/me` inside the 15-day renewal window extends only a valid, non-expired customer session to `now + 30 days`.
+- Successful `/api/auth/me` inside the 15-day renewal window extends only a valid, non-expired customer session to `now + 30 days` when the frontend renewal header and allowed request metadata are present.
+- Valid `/api/auth/me` requests without frontend renewal intent or with cross-site/invalid-origin renewal metadata return the current session without renewal writes or cookie refresh.
+- Concurrent `/api/auth/me` renewal attempts for the same observed expiry produce at most one session-row write.
 - `/api/auth/me` refreshes the existing `portal_session` cookie with the same token and a fresh cookie lifetime only after backend renewal.
+- Ordinary protected customer APIs validate sessions without renewal writes or cookie refresh.
 - Missing, invalid, revoked, manually logged-out and expired customer sessions require login and are not extended.
 - Offline/PWA auth snapshot stores the refreshed backend `sessionExpiresAt` after successful online checks.
 - Tenant-admin sessions are untouched.
 - No browser auth tokens or localStorage auth tokens are added.
+- Production deploy verifies the real production env uses `SESSION_TTL_DAYS=30`,
+  not only the repository defaults/examples.
+- `docs/roadmap/work-log.md` is updated when this prerequisite closes because it changes the stable customer auth/session runtime baseline.
+
+Prerequisite closure gate:
+
+- Merge `feature/customer-session-idle-renewal` into `main`.
+- Push `main`.
+- Deploy the prerequisite to production before starting
+  `feature/passwordless-registration-completion`.
+- Verify production `DEPLOY_SOURCE.txt` points at the prerequisite commit.
+- Verify production backend effective env/runtime uses `SESSION_TTL_DAYS=30`.
+- Smoke production login and `/api/auth/me` for an existing customer user.
+- Confirm tenant-admin login/session still works or that existing admin auth
+  integration tests passed unchanged if production admin smoke is not practical.
 
 Suggested checkpoint commit after this task closes:
 
 ```text
-feat: use rolling customer sessions
+feat: use customer session renewal window
 ```
 
 ## Task 1 - Backend Data Contract
@@ -240,7 +342,7 @@ issueSessionForUser(input: {
 
 2. Reuse existing session token generation, token hashing, session TTL, and session repository insert logic.
 3. Change password login to call the same session issuer after password verification.
-4. Update login to reject `passwordHash === null` with the existing generic invalid credentials error before calling `verifyPassword`.
+4. Update login to reject `passwordHash === null` with the existing typed generic `401 INVALID_CREDENTIALS` response before calling `verifyPassword`; do not expose a public `PASSWORD_NOT_SET` account-state error.
 5. Add `passwordConfigured` to authenticated user mapping for login and `/api/auth/me`.
 
 Acceptance:
@@ -297,7 +399,7 @@ completeRegistration(input: {
 6. Add `POST /api/auth/register/skip-password` route.
 7. Both set-password and skip-password routes must set the signed session cookie with `getSessionCookieOptions(env)`.
 8. Add skip endpoint to auth origin/rate-limit handling.
-9. Keep user creation, contact/legal linking, verification consume and session row creation in one transaction where possible. If the shared session issuer cannot accept the transaction executor, consume the verification only after session insertion or make completion idempotently recoverable before merging.
+9. Keep user creation, contact/legal linking, verification consume and session row creation in one transaction using the existing `transactionWithScopedLock(email, handler)` executor pattern from the registration repository. The shared session issuer must accept an optional transaction executor or expose a lower-level `createSession` helper that can be called inside that executor. Do not merge a best-effort multi-step completion path.
 
 Acceptance:
 
@@ -305,7 +407,7 @@ Acceptance:
 - `skip-password` uses the same continuation proof and also authenticates.
 - Reusing a continuation after either path fails.
 - A failure cannot leave a newly created passwordless user unable to receive the completion session or recover through the tested password-reset path.
-- User/contact/legal acceptance creation, verification consumption and session creation use one defensible atomic boundary.
+- User/contact/legal acceptance creation, verification consumption and session creation use one transaction boundary under the existing tenant/email scoped lock.
 
 ## Task 4 - Backend Password-Later Email-Code Flow
 
@@ -334,7 +436,7 @@ Steps:
 11. Re-load the current tenant/user under lock. If `passwordHash !== null`, consume or invalidate the setup record and return `409 PASSWORD_ALREADY_SET`.
 12. Verify continuation hash and TTL, store the new password hash, consume the setup record.
 13. Delete existing sessions for the user, issue a fresh session, set the signed session cookie and return authenticated session metadata with `passwordConfigured: true`.
-    Keep password update, setup-record consume, session deletion and fresh session insert in one transaction where the repository allows it.
+    Keep password update, setup-record consume, session deletion and fresh session insert in one transaction using the same executor pattern as password reset. The fresh-session insertion must be inside the transaction or the service must not consume the setup record before it has a recoverable way to issue the new session.
 14. Add rate limits for request/verify/set. Request limits protect email delivery; verify limits protect code brute force; set limits protect expensive hash work.
 
 Acceptance:
@@ -344,6 +446,7 @@ Acceptance:
 - Existing password users are not silently changed by this first-password endpoint.
 - A stolen active session alone is not enough to bind a password; the email-code proof is also required.
 - Successful first-password setup rotates the session and leaves the frontend authenticated with the new cookie.
+- Password update, setup-record consumption, old-session deletion and fresh-session insertion use one transaction boundary under the scoped password-reset executor pattern.
 
 ## Task 5 - Password Reset Behavior With Nullable Hash
 
@@ -531,6 +634,8 @@ Review focus:
 
 - tenant isolation in every new query;
 - customer session renewal happens only inside the 15-day renewal window and never revives expired/revoked sessions;
+- customer session renewal is guarded by explicit frontend request intent and does not run on cross-site `GET /api/auth/me`;
+- concurrent customer session renewal attempts produce at most one session-row write per observed expiry;
 - customer cookie refresh uses the same signed httpOnly `portal_session` token only after backend renewal and does not alter tenant-admin session behavior;
 - continuation token one-time semantics;
 - session issuance reuse and cookie behavior;
@@ -547,7 +652,30 @@ If findings are found:
 2. Fix in-scope findings before moving to deploy readiness.
 3. Rerun targeted checks after each fix.
 
-## Task 14 - Final Verification Before Commit
+## Task 14 - Stable Architecture Docs
+
+Files:
+
+- `docs/architecture/overview.md`
+- `docs/architecture/decisions.md`
+- `docs/roadmap/work-log.md`
+
+Steps:
+
+1. Update `docs/architecture/overview.md` so it reflects the new stable auth baseline:
+   nullable customer password hashes, authenticated registration completion, password-later setup, and customer session idle renewal.
+2. Update `docs/architecture/overview.md` verification-record descriptions so `password_setup` is listed alongside `registration` and `password_reset`.
+3. Update `docs/architecture/decisions.md`: either extend D-008 if the password-setup purpose naturally belongs there, or add a new decision for password-later setup and customer session renewal.
+4. Update `docs/roadmap/work-log.md` only after implementation, tests, review, and fixes are complete.
+
+Acceptance:
+
+- Stable architecture docs match the implemented API/session/data baseline.
+- Docs make clear that customer session renewal is `/api/auth/me`-only, conditional, load-aware, and customer-only.
+- Docs make clear that tenant-admin sessions are unchanged.
+- `docs/roadmap/work-log.md` remains a short baseline map with one final `Recommended Next Step` block.
+
+## Task 15 - Final Verification Before Commit
 
 Required local commands, adjusted to actual package scripts:
 
@@ -563,7 +691,7 @@ Before commit:
 
 - confirm `git status --short --branch` contains only this slice;
 - confirm no `.env`, secrets, generated output, `dist`, `node_modules`, Playwright report, or runtime artifacts are staged;
-- update `docs/roadmap/work-log.md` only after implementation, tests, review, and fixes are complete because this changes auth/runtime baseline.
+- confirm `docs/architecture/overview.md`, `docs/architecture/decisions.md`, and `docs/roadmap/work-log.md` are updated as required by Task 14.
 
 Suggested commit after closure:
 
@@ -571,7 +699,7 @@ Suggested commit after closure:
 feat: allow registration password skip
 ```
 
-## Task 15 - Merge And Production Deploy Plan
+## Task 16 - Merge And Production Deploy Plan
 
 After implementation branch is green:
 
@@ -604,6 +732,6 @@ The slice is ready for production only when:
 
 - backend, frontend, and e2e acceptance criteria pass;
 - independent review findings are fixed or explicitly deferred by user decision;
-- docs/work-log reflects the new auth baseline after implementation closure;
+- stable architecture docs and docs/work-log reflect the new auth baseline after implementation closure;
 - feature branch is committed and merged into main;
 - production deploy and smoke checks pass.
