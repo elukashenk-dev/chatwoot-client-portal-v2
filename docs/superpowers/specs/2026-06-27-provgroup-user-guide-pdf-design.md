@@ -7,8 +7,8 @@ Create a user-facing PDF guide for the PROVGROUP client portal at
 
 The guide must explain, in non-technical Russian:
 
-- what must be prepared before access: the user's contact with email and phone
-  must already exist in the support admin system;
+- how to use the correct PROVGROUP communication email without exposing
+  internal admin/support-system access rules;
 - how to open the client cabinet in a browser;
 - how to sign in with email code;
 - how passwordless access works;
@@ -30,9 +30,8 @@ Use the approved "B. Пошаговая инструкция" structure:
 
 ## Page Plan
 
-1. Open `lk.provgroup.ru` in the browser, with the upfront explanation that
-   access is available only for known clients whose email/phone contact is
-   already registered by support.
+1. Open `lk.provgroup.ru` in the browser and enter the email used for
+   communication with PROVGROUP.
 2. First sign-in by email code.
 3. Enter the email code.
 4. Accept legal terms and personal-data consent.
@@ -70,6 +69,9 @@ Use the approved "B. Пошаговая инструкция" structure:
 - Installation wording must stay generic and user-facing.
 - Do not render source/reference lines in the final user-facing PDF.
 - Do not imply Safari is the only supported browser for iPhone/iPad install.
+- Do not explain internal access preconditions with terms like "known client",
+  "admin system" or "contact must be registered"; keep those details only as a
+  soft support fallback if sign-in fails.
 
 ## Output
 
