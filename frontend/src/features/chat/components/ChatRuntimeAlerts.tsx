@@ -1,4 +1,7 @@
-import { InlineAlert } from '../../../shared/ui/InlineAlert'
+import {
+  ChatRuntimeNotice,
+  type ChatRuntimeNoticeTone,
+} from './ChatRuntimeNotice'
 
 type ChatRuntimeAlertsProps = {
   connectionStatus: 'connecting' | 'offline' | 'online'
@@ -37,7 +40,7 @@ export function ChatRuntimeAlerts({
 }: ChatRuntimeAlertsProps) {
   let notice: {
     message: string
-    tone: 'error' | 'info' | 'warning'
+    tone: ChatRuntimeNoticeTone
   } | null = null
 
   if (connectionStatus === 'online' && resyncStatus === 'resyncing') {
@@ -79,9 +82,9 @@ export function ChatRuntimeAlerts({
   }
 
   return (
-    <div className="relative z-10 border-b border-slate-200/70 bg-white/80 px-4 py-3 backdrop-blur-sm sm:px-6">
+    <div className="relative z-10 px-3 pt-2 sm:px-6">
       <div className="mx-auto w-full max-w-[620px]">
-        <InlineAlert message={notice.message} tone={notice.tone} />
+        <ChatRuntimeNotice message={notice.message} tone={notice.tone} />
       </div>
     </div>
   )

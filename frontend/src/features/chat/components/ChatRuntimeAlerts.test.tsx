@@ -20,6 +20,17 @@ describe('ChatRuntimeAlerts', () => {
         'Нет связи. 1 сообщение в очереди. Отправим, когда связь восстановится.',
       ),
     ).toBeInTheDocument()
+    const notice = screen.getByRole('status')
+
+    expect(notice).toHaveAttribute('data-chat-runtime-notice')
+    expect(notice).toHaveClass(
+      'chat-runtime-notice',
+      'chat-glass-card-surface',
+    )
+    expect(notice).not.toHaveClass(
+      'auth-form-message',
+      'auth-form-message--warning',
+    )
     expect(
       screen.queryByText(/Показываем сохраненные данные/),
     ).not.toBeInTheDocument()
@@ -46,8 +57,8 @@ describe('ChatRuntimeAlerts', () => {
       screen.getByText('Нет связи. Показываем сохраненные сообщения.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveClass(
-      'auth-form-message',
-      'auth-form-message--warning',
+      'chat-runtime-notice',
+      'chat-glass-card-surface',
     )
     expect(
       container.querySelectorAll('[role="status"], [role="alert"]'),
@@ -68,6 +79,31 @@ describe('ChatRuntimeAlerts', () => {
     expect(
       screen.getByText('Связь восстановилась. Обновляем чат...'),
     ).toBeInTheDocument()
+    expect(
+      container.querySelectorAll('[role="status"], [role="alert"]'),
+    ).toHaveLength(1)
+  })
+
+  it('renders failed resync as an alert notice', () => {
+    const { container } = render(
+      <ChatRuntimeAlerts
+        connectionStatus="online"
+        isChatAvailable
+        isRealtimeSupported
+        queuedSendCount={0}
+        resyncStatus="error"
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'Не удалось обновить чат. Проверьте соединение и попробуйте снова.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveClass(
+      'chat-runtime-notice',
+      'chat-runtime-notice--error',
+    )
     expect(
       container.querySelectorAll('[role="status"], [role="alert"]'),
     ).toHaveLength(1)
