@@ -66,9 +66,9 @@ export function PwaInstallBanner() {
 
             {showIosInstructions ? (
               <ol className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
-                <li>Откройте портал в Safari.</li>
+                <li>Откройте личный кабинет клиента в Safari или Chrome.</li>
                 <li>Нажмите «Поделиться».</li>
-                <li>Выберите «На экран Домой».</li>
+                <li>Выберите добавление на экран Домой.</li>
                 <li>Нажмите «Добавить».</li>
               </ol>
             ) : null}

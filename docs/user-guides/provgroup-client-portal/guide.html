@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>PROVGROUP: инструкция по личному кабинету</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    html { color: #112540; font-family: Inter, Arial, sans-serif; hyphens: auto; }
+    body { margin: 0; background: #eef4fb; color: #203047; }
+    p, li { color: #526174; font-size: 15px; line-height: 1.58; overflow-wrap: anywhere; hyphens: auto; }
+    strong { color: #15486b; }
+    ul { margin: 16px 0 0; padding-left: 20px; }
+    li + li { margin-top: 8px; }
+    .page {
+      break-after: page;
+      display: flex;
+      flex-direction: column;
+      min-height: 273mm;
+      padding: 2mm 1mm 0;
+    }
+    .page-head { margin-bottom: 12mm; }
+    .kicker {
+      color: #4676b4;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      color: #15486b;
+      font-size: 30px;
+      line-height: 1.08;
+      margin: 6px 0 0;
+      max-width: 560px;
+      text-transform: uppercase;
+    }
+    .page-grid {
+      align-items: center;
+      display: grid;
+      gap: 14mm;
+      grid-template-columns: minmax(0, 1fr) 78mm;
+      min-height: 190mm;
+    }
+    .page-copy {
+      align-self: start;
+      padding-top: 34mm;
+    }
+    .page-copy p:first-child { margin-top: 0; }
+    .page-note {
+      border-left: 4px solid #f7cf55;
+      color: #59687a;
+      font-size: 12px;
+      margin-top: auto;
+      padding-left: 10px;
+    }
+    .phone-shot { margin: 0; }
+    .phone-frame {
+      background: #fff;
+      border: 1px solid rgba(17, 37, 64, .18);
+      border-radius: 26px;
+      box-shadow: 0 12px 32px rgba(17, 37, 64, .18);
+      overflow: hidden;
+      position: relative;
+      width: 78mm;
+    }
+    .phone-frame img { display: block; width: 100%; }
+    figcaption {
+      color: #718096;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 8px;
+      text-align: center;
+    }
+    .guide-steps {
+      counter-reset: guide-step;
+      list-style: none;
+      margin: 18px 0 0;
+      padding: 0;
+    }
+    .guide-steps li {
+      align-items: flex-start;
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .guide-steps li::before {
+      align-items: center;
+      background: #15486b;
+      border-radius: 999px;
+      color: #fff;
+      content: counter(guide-step);
+      counter-increment: guide-step;
+      display: inline-flex;
+      flex: 0 0 auto;
+      font-size: 11px;
+      font-weight: 800;
+      height: 22px;
+      justify-content: center;
+      line-height: 1;
+      margin-top: 1px;
+      width: 22px;
+    }
+    .support-card {
+      background: rgba(255, 255, 255, .9);
+      border: 1px solid rgba(17, 37, 64, .12);
+      border-radius: 18px;
+      box-shadow: 0 12px 34px rgba(17, 37, 64, .13);
+      color: #112540;
+      min-height: 126mm;
+      overflow: hidden;
+      padding: 18px;
+      position: relative;
+      width: 78mm;
+    }
+    .support-card { display: flex; flex-direction: column; justify-content: center; }
+    .support-title { color: #15486b; font-size: 22px; font-weight: 850; }
+    .support-phone { color: #4676b4; font-size: 21px; font-weight: 850; margin: 12px 0 8px; }
+    .mini-checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+    .mini-checklist span {
+      background: #f1f7ff;
+      border-radius: 10px;
+      color: #15486b;
+      font-size: 12px;
+      font-weight: 750;
+      padding: 9px 10px;
+    }
+  </style>
+</head>
+<body>
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 1</div>
+        <h1>Откройте личный кабинет клиента в браузере</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p><strong>Доступ открывается только для известных клиентов.</strong> Перед первым входом ваш контакт должен быть заведен в админке поддержки.</p>
+        <p>В контакте должны быть указаны email и телефон, которые вы используете для общения с поддержкой.</p>
+        <ul><li>если email уже известен личному кабинету клиента, вы сразу войдете по коду из почты;</li><li>если email найден в контактах поддержки, личный кабинет клиента активирует доступ после принятия условий;</li><li>если email не найден, обратитесь в поддержку.</li></ul>
+        <p>Откройте браузер на телефоне и введите адрес <strong>lk.provgroup.ru</strong>.</p>
+        <ol class="guide-steps"><li>В адресной строке должен быть именно lk.provgroup.ru.</li><li>После открытия вы увидите экран входа для клиентов.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/01-login.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 2</div>
+        <h1>Получите код на email</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Основной вход работает по email-коду. Введите email, который используется для общения с поддержкой, и нажмите <strong>Получить код</strong>.</p>
+        <p>Если пароль уже был настроен, можно перейти к входу по паролю отдельной ссылкой.</p>
+        <ol class="guide-steps"><li>Введите email из вашего контакта поддержки.</li><li>Нажмите «Получить код».</li><li>Ссылка «Войти по паролю» нужна только тем, кто уже настроил пароль.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/01-login.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 3</div>
+        <h1>Введите код из письма</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Откройте письмо от сервиса, найдите одноразовый код и введите его на экране подтверждения.</p>
+        <p>Код действует ограниченное время. Если время вышло, запросите новый код.</p>
+        <ol class="guide-steps"><li>Проверьте, что на экране указан ваш email.</li><li>Введите 6 цифр из письма.</li><li>Если письма нет, проверьте «Спам» или запросите новый код после таймера.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/03-code.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 4</div>
+        <h1>Примите условия</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>При первом доступе нужно принять пользовательское соглашение и согласие на обработку персональных данных.</p>
+        <p>Без этих отметок личный кабинет клиента не откроет чат.</p>
+        <ol class="guide-steps"><li>Отметьте оба согласия.</li><li>Кнопка «Продолжить» станет активной.</li><li>После продолжения откроется чат.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/04-legal.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 5</div>
+        <h1>Пользуйтесь чатом</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>В чате отображается переписка с поддержкой. Напишите сообщение в нижнее поле и отправьте его кнопкой справа.</p>
+        <p>Меню в правом верхнем углу открывает профиль, настройки и выход. Если вас добавили в групповые чаты, выберите нужную группу через меню слева.</p>
+        <p>После входа по коду можно пользоваться чатом без пароля. Если вы выйдете из аккаунта или очистите cookies, следующий вход снова будет по коду из почты. Пароль можно задать позже в профиле.</p>
+        <ol class="guide-steps"><li>Верхняя панель показывает текущий чат и статус связи.</li><li>История сообщений находится в центре экрана.</li><li>Новое сообщение вводится в поле внизу.</li><li>Групповой чат можно выбрать в левом меню, если он доступен вашему аккаунту.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/05-chat.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 6</div>
+        <h1>Установите на Android</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>На Android личный кабинет клиента показывает блок установки, когда браузер готов установить приложение.</p>
+        <p>Нажмите <strong>Установить</strong>. После этого Chrome покажет системное подтверждение установки.</p>
+        <p>Если вы нажали <strong>Позже</strong>, установку можно запустить через меню Chrome: нажмите кнопку с тремя точками в правом верхнем углу браузера, найдите пункт <strong>Установить приложение</strong> или <strong>Добавить на главный экран</strong> и подтвердите установку.</p>
+        <ol class="guide-steps"><li>Откройте личный кабинет клиента в Chrome.</li><li>Дождитесь блока «Установите кабинет».</li><li>Нажмите «Установить» и подтвердите установку в системном окне Chrome.</li><li>Если блок закрыт, нажмите меню Chrome в правом верхнем углу.</li><li>Выберите «Установить приложение» или «Добавить на главный экран».</li><li>Нажмите «Установить» или «Добавить» в системном подтверждении.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/06-android-install.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+      <p class="page-note">Если блок установки не появился сразу, откройте чат при наличии интернета и подождите несколько секунд. Chrome сам решает, когда показать предложение установки.</p>
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 7</div>
+        <h1>Установите на iPhone</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>На iPhone установка выполняется вручную через меню браузера, поэтому личный кабинет клиента показывает короткую инструкцию прямо внутри чата.</p>
+        <p>Нажмите <strong>Установить</strong>, прочитайте шаги и выполните их в Safari или Chrome.</p>
+        <ol class="guide-steps"><li>Откройте личный кабинет клиента в Safari или Chrome.</li><li>Нажмите «Поделиться».</li><li>Выберите добавление на экран Домой.</li><li>Нажмите «Добавить».</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/07-ios-install.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+      <p class="page-note">В Chrome название пункта может отличаться, например «Добавить на главный экран». Системное меню браузера открывается поверх страницы, поэтому на скриншоте показана подсказка внутри кабинета.</p>
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 8</div>
+        <h1>Проверьте профиль и пароль</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Откройте профиль из меню чата. Здесь видны имя, email, телефон и состояние пароля.</p>
+        <p>Если пароль не задан, нажмите <strong>Задать пароль</strong>. Личный кабинет клиента отправит код на ваш email, чтобы подтвердить владельца аккаунта.</p>
+        <ol class="guide-steps"><li>Данные профиля берутся из вашего контакта поддержки.</li><li>Если пароль не задан, это нормально: можно продолжать работать по email-коду.</li><li>Пароль можно настроить позже без выхода из чата.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/08-profile.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 9</div>
+        <h1>Войдите снова по коду</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Если вы вышли из аккаунта, очистили cookies или открываете личный кабинет клиента на новом устройстве, просто войдите снова по коду из почты.</p>
+        <p>Это штатный сценарий для пользователей, которые не задавали пароль.</p>
+        <ol class="guide-steps"><li>Введите тот же email.</li><li>Получите новый код.</li><li>После подтверждения личный кабинет клиента снова откроет чат.</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/01-login.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 10</div>
+        <h1>Войдите по паролю, если он задан</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Если пароль уже настроен, можно войти быстрее через экран <strong>Вход по паролю</strong>.</p>
+        <p>Если пароль забыт, используйте восстановление по коду из почты на этом же экране.</p>
+        <ol class="guide-steps"><li>Введите email и пароль.</li><li>Если пароль забыт, нажмите «Забыли пароль?».</li><li>Можно вернуться к входу по коду через ссылку «Войти по коду».</li></ol>
+      </div>
+        <div class="page-visual">
+    <figure class="phone-shot ">
+      <div class="phone-frame">
+        <img src="assets/10-password-login.png" alt="">
+      </div>
+
+    </figure>
+  </div>
+      </div>
+
+    </section>
+
+
+    <section class="page">
+      <header class="page-head">
+        <div class="kicker">Шаг 11</div>
+        <h1>Поддержка и быстрые проверки</h1>
+      </header>
+      <div class="page-grid">
+        <div class="page-copy">
+        <p>Если письмо с кодом не пришло, проверьте папку «Спам», правильность email и наличие интернета.</p>
+        <p>Если личный кабинет клиента пишет, что доступа нет, обратитесь в поддержку: скорее всего, email или телефон еще не добавлены в контакт.</p>
+      </div>
+        <div class="page-visual">
+    <div class="support-card">
+      <div class="support-title">Нужна помощь?</div>
+      <div class="support-phone">+7 (939) 702 48 82</div>
+      <p>Если email или телефон не найден, обратитесь к поддержке. Контакт должен быть заранее добавлен в админке.</p>
+      <div class="mini-checklist">
+        <span>Проверьте адрес сайта</span>
+        <span>Проверьте email</span>
+        <span>Проверьте папку «Спам»</span>
+      </div>
+    </div>
+  </div>
+      </div>
+
+    </section>
+
+</body>
+</html>

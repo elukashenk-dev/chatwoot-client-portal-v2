@@ -166,9 +166,13 @@ describe('PwaInstallBanner', () => {
 
     await user.click(screen.getByRole('button', { name: 'Установить' }))
 
-    expect(screen.getByText('Откройте портал в Safari.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Откройте личный кабинет клиента в Safari или Chrome.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Нажмите «Поделиться».')).toBeInTheDocument()
-    expect(screen.getByText('Выберите «На экран Домой».')).toBeInTheDocument()
+    expect(
+      screen.getByText('Выберите добавление на экран Домой.'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Нажмите «Добавить».')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Понятно' }))
