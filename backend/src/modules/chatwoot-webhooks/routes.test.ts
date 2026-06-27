@@ -101,7 +101,7 @@ describe('registerChatwootWebhookRoutes', () => {
     expect(response.json()).toEqual({
       error: {
         code: 'chatwoot_webhook_json_invalid',
-        message: 'Chatwoot webhook JSON is invalid.',
+        message: 'JSON webhook системы поддержки некорректен.',
       },
     })
     expect(handleWebhook).not.toHaveBeenCalled()

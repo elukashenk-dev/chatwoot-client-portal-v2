@@ -924,7 +924,7 @@ describe('tenant routes and request context', () => {
       expect(wrongSecretResponse.json()).toEqual({
         error: {
           code: 'chatwoot_webhook_signature_invalid',
-          message: 'Chatwoot webhook signature is invalid.',
+          message: 'Подпись webhook системы поддержки недействительна.',
         },
       })
 

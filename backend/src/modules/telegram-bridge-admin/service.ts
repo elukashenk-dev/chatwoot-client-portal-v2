@@ -244,7 +244,7 @@ export function createTenantTelegramBridgeSetupService({
       try {
         if (input.chatwootAccountIdFromUrl !== tenant.chatwoot.accountId) {
           throw new TelegramBridgeAdminSetupError(
-            'Chatwoot account id does not match the current tenant.',
+            'Источник поддержки не относится к текущему порталу.',
           )
         }
 
@@ -256,7 +256,7 @@ export function createTenantTelegramBridgeSetupService({
 
         if (botIdentity.username !== inbox.botName) {
           throw new TelegramBridgeAdminSetupError(
-            'Chatwoot Telegram inbox bot_name does not match Telegram getMe username.',
+            'Telegram-источник системы поддержки не совпадает с указанным ботом.',
           )
         }
 

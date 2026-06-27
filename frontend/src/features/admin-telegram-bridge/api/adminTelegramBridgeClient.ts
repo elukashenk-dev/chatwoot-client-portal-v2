@@ -9,7 +9,7 @@ const bridgeSetupErrorMessages = new Map<number, string>([
   [401, 'Войдите в админ-консоль заново.'],
   [403, 'Запрос отклонен для этого портала.'],
   [409, 'Этот Telegram бот или источник уже подключен.'],
-  [502, 'Не удалось связаться с Telegram или Chatwoot.'],
+  [502, 'Не удалось связаться с Telegram или системой поддержки.'],
 ])
 
 type ApiErrorResponse = {

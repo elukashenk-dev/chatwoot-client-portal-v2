@@ -942,7 +942,7 @@ export function createChatMessagesService({
           throw new ApiError(
             503,
             'chat_send_unavailable',
-            'Chatwoot не вернул клиентское сообщение.',
+            'Сервис поддержки не вернул клиентское сообщение.',
           )
         }
 
@@ -1087,7 +1087,7 @@ export function createChatMessagesService({
           throw new ApiError(
             503,
             'chat_send_unavailable',
-            'Chatwoot не вернул клиентское сообщение.',
+            'Сервис поддержки не вернул клиентское сообщение.',
           )
         }
 

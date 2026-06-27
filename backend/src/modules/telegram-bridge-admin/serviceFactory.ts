@@ -80,7 +80,7 @@ export function parseChatwootTelegramInboxResponse(
     throw new ApiError(
       400,
       'TELEGRAM_BRIDGE_INBOX_NOT_FOUND',
-      'Telegram источник не найден в Chatwoot.',
+      'Telegram-источник не найден в системе поддержки.',
     )
   }
 
@@ -88,7 +88,7 @@ export function parseChatwootTelegramInboxResponse(
     throw new ApiError(
       400,
       'TELEGRAM_BRIDGE_INBOX_NOT_TELEGRAM',
-      'Выбранный источник Chatwoot не является Telegram источником.',
+      'Выбранный источник не является Telegram-источником.',
     )
   }
 
@@ -98,7 +98,7 @@ export function parseChatwootTelegramInboxResponse(
     throw new ApiError(
       400,
       'TELEGRAM_BRIDGE_INBOX_BOT_NAME_MISSING',
-      'Telegram источник Chatwoot не содержит bot_name.',
+      'Telegram-источник не содержит bot_name.',
     )
   }
 
@@ -174,7 +174,7 @@ export function createChatwootTelegramInboxReader({
     )
     const request = await fetchChatwoot(
       requestUrl,
-      'Chatwoot Telegram inbox lookup is unavailable.',
+      'Telegram-источник системы поддержки недоступен.',
       {
         headers: {
           Accept: 'application/json',
@@ -189,7 +189,7 @@ export function createChatwootTelegramInboxReader({
         throw new ApiError(
           400,
           'TELEGRAM_BRIDGE_INBOX_NOT_FOUND',
-          'Telegram источник не найден в Chatwoot.',
+          'Telegram-источник не найден в системе поддержки.',
         )
       }
 
@@ -197,15 +197,16 @@ export function createChatwootTelegramInboxReader({
         throw new ApiError(
           400,
           'TELEGRAM_BRIDGE_INBOX_LOOKUP_FAILED',
-          `Не удалось проверить Telegram источник в Chatwoot. Status: ${request.response.status}.`,
+          `Не удалось проверить Telegram-источник в системе поддержки. Status: ${request.response.status}.`,
         )
       }
 
       const payload = await readChatwootJson({
         invalidJsonMessage:
-          'Chatwoot Telegram inbox lookup returned invalid JSON.',
+          'Telegram-источник системы поддержки вернул некорректный JSON.',
         request,
-        unavailableMessage: 'Chatwoot Telegram inbox lookup is unavailable.',
+        unavailableMessage:
+          'Telegram-источник системы поддержки недоступен.',
       })
 
       return parseChatwootTelegramInboxResponse(payload, inboxId)

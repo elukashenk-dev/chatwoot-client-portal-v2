@@ -56,7 +56,7 @@ export function AdminTelegramBridgeForm() {
       <div className="space-y-4">
         <label className="block">
           <span className="text-sm font-medium text-slate-700">
-            Chatwoot inbox URL
+            URL Telegram-канала поддержки
           </span>
           <input
             autoComplete="off"

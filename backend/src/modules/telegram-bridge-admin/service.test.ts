@@ -176,7 +176,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
     await database.close()
   })
 
-  it('rejects when the Chatwoot account id from the submitted URL does not match the tenant', async () => {
+  it('rejects when the submitted support source belongs to another tenant', async () => {
     const { service } = createServiceDependencies(database)
 
     await expect(
@@ -191,7 +191,7 @@ describe('createTenantTelegramBridgeSetupService', () => {
         requestIp: '127.0.0.1',
         userAgent: 'vitest',
       }),
-    ).rejects.toThrow(/Chatwoot account/)
+    ).rejects.toThrow('Источник поддержки не относится к текущему порталу.')
   })
 
   it('creates an encrypted bridge config, configures webhook and returns safe status', async () => {

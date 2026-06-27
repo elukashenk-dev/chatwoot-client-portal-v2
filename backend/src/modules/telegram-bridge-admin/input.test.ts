@@ -23,10 +23,13 @@ describe('parseChatwootInboxUrl', () => {
       parseChatwootInboxUrl(
         'http://app.lancora.ru/app/accounts/1/settings/inboxes/17',
       ),
-    ).toThrow(ApiError)
+    ).toThrow('Ссылка на Telegram источник должна быть HTTPS.')
     expect(() =>
       parseChatwootInboxUrl('https://app.lancora.ru/app/accounts/1/settings'),
-    ).toThrow(ApiError)
+    ).toThrow('Укажите ссылку на настройки Telegram источника.')
+    expect(() => parseChatwootInboxUrl('not-a-url')).toThrow(
+      'Укажите ссылку на Telegram-источник в системе поддержки.',
+    )
   })
 })
 

@@ -184,7 +184,9 @@ describe('AppRoutes admin route separation', () => {
     expect(
       await screen.findByRole('heading', { name: 'Telegram bridge' }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Chatwoot inbox URL')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('URL Telegram-канала поддержки'),
+    ).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalledWith(
       '/api/auth/me',
       expect.anything(),

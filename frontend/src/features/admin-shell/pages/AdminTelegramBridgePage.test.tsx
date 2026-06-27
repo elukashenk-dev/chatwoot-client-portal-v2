@@ -69,7 +69,9 @@ describe('AdminTelegramBridgePage', () => {
     expect(
       screen.getByRole('heading', { name: 'Telegram bridge' }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Chatwoot inbox URL')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('URL Telegram-канала поддержки'),
+    ).toBeInTheDocument()
     expect(screen.getByLabelText('Telegram bot token')).toBeInTheDocument()
   })
 
@@ -92,7 +94,7 @@ describe('AdminTelegramBridgePage', () => {
     renderAdminTelegramBridgePage()
 
     await user.type(
-      screen.getByLabelText('Chatwoot inbox URL'),
+      screen.getByLabelText('URL Telegram-канала поддержки'),
       'https://app.lancora.ru/app/accounts/1/settings/inboxes/17',
     )
     await user.type(screen.getByLabelText('Telegram bot token'), secret)

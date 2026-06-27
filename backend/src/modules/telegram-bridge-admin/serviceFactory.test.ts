@@ -36,7 +36,7 @@ describe('parseChatwootTelegramInboxResponse', () => {
         },
         17,
       ),
-    ).toThrow(/Telegram источник не найден/)
+    ).toThrow('Telegram-источник не найден в системе поддержки.')
   })
 
   it('rejects non-Telegram inboxes', () => {
@@ -48,7 +48,7 @@ describe('parseChatwootTelegramInboxResponse', () => {
         },
         17,
       ),
-    ).toThrow(/не является Telegram/)
+    ).toThrow('Выбранный источник не является Telegram-источником.')
   })
 
   it('rejects Telegram inboxes without bot_name', () => {
@@ -61,7 +61,7 @@ describe('parseChatwootTelegramInboxResponse', () => {
         },
         17,
       ),
-    ).toThrow(/bot_name/)
+    ).toThrow('Telegram-источник не содержит bot_name.')
   })
 })
 

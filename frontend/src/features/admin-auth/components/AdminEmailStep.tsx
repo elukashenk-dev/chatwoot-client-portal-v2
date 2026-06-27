@@ -28,7 +28,7 @@ export function AdminEmailStep({
     <form className="space-y-4" noValidate onSubmit={onSubmit}>
       <FormField
         htmlFor={emailInputId}
-        hint="Мы отправим 6-значный код на email администратора Chatwoot."
+        hint="Мы отправим 6-значный код на email администратора поддержки."
         label="Email администратора"
         required
       >

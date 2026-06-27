@@ -78,7 +78,7 @@ export function assertChatwootWebhookPayloadTenantInvariants({
     throw new ApiError(
       403,
       'chatwoot_webhook_tenant_mismatch',
-      'Chatwoot webhook payload does not match tenant configuration.',
+      'Webhook системы поддержки не соответствует конфигурации портала.',
     )
   }
 }

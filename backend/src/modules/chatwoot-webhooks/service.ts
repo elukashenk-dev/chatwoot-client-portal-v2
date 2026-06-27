@@ -227,7 +227,7 @@ export function createChatwootWebhookService({
         throw new ApiError(
           503,
           'chatwoot_webhook_not_configured',
-          'Chatwoot webhook secret is not configured.',
+          'Webhook системы поддержки не настроен.',
         )
       }
 
@@ -244,7 +244,7 @@ export function createChatwootWebhookService({
         throw new ApiError(
           401,
           'chatwoot_webhook_signature_invalid',
-          'Chatwoot webhook signature is invalid.',
+          'Подпись webhook системы поддержки недействительна.',
         )
       }
 
@@ -252,7 +252,7 @@ export function createChatwootWebhookService({
         throw new ApiError(
           400,
           'chatwoot_webhook_payload_invalid',
-          'Chatwoot webhook payload is invalid.',
+          'Payload webhook системы поддержки некорректен.',
         )
       }
 
@@ -268,7 +268,7 @@ export function createChatwootWebhookService({
         throw new ApiError(
           400,
           'chatwoot_webhook_event_required',
-          'Chatwoot webhook event is required.',
+          'Событие webhook системы поддержки обязательно.',
         )
       }
 

@@ -112,6 +112,11 @@ describe('AdminLoginPage', () => {
     expect(
       document.body.querySelector('.auth-header-shell'),
     ).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Мы отправим 6-значный код на email администратора поддержки.',
+      ),
+    ).toBeInTheDocument()
 
     await user.type(
       screen.getByLabelText('Email администратора'),

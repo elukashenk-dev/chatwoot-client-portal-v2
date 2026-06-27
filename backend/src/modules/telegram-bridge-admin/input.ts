@@ -22,7 +22,9 @@ export function parseChatwootInboxUrl(input: string) {
   try {
     url = new URL(input.trim())
   } catch {
-    throw invalidSetupInput('Укажите ссылку на Telegram источник в Chatwoot.')
+    throw invalidSetupInput(
+      'Укажите ссылку на Telegram-источник в системе поддержки.',
+    )
   }
 
   if (url.protocol !== 'https:') {

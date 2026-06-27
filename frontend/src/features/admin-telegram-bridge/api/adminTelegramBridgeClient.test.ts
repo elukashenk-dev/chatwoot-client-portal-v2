@@ -73,7 +73,7 @@ describe('adminTelegramBridgeClient', () => {
     [401, 'Войдите в админ-консоль заново.'],
     [403, 'Запрос отклонен для этого портала.'],
     [409, 'Этот Telegram бот или источник уже подключен.'],
-    [502, 'Не удалось связаться с Telegram или Chatwoot.'],
+    [502, 'Не удалось связаться с Telegram или системой поддержки.'],
   ])('maps HTTP %i to a short safe Russian message', async (status, message) => {
     const secret = '1234567890:AASecretBotTokenValue'
 

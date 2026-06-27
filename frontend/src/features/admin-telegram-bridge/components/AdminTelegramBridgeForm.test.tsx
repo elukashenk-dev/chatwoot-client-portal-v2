@@ -39,7 +39,7 @@ describe('AdminTelegramBridgeForm', () => {
 
     render(<AdminTelegramBridgeForm />)
 
-    const inboxUrlInput = screen.getByLabelText('Chatwoot inbox URL')
+    const inboxUrlInput = screen.getByLabelText('URL Telegram-канала поддержки')
     const botTokenInput = screen.getByLabelText('Telegram bot token')
     const submitButton = screen.getByRole('button', {
       name: 'Создать Telegram bridge',
@@ -65,7 +65,7 @@ describe('AdminTelegramBridgeForm', () => {
     render(<AdminTelegramBridgeForm />)
 
     await user.type(
-      screen.getByLabelText('Chatwoot inbox URL'),
+      screen.getByLabelText('URL Telegram-канала поддержки'),
       'https://app.lancora.ru/app/accounts/1/settings/inboxes/17',
     )
     await user.type(
@@ -104,7 +104,7 @@ describe('AdminTelegramBridgeForm', () => {
     render(<AdminTelegramBridgeForm />)
 
     await user.type(
-      screen.getByLabelText('Chatwoot inbox URL'),
+      screen.getByLabelText('URL Telegram-канала поддержки'),
       'https://app.lancora.ru/app/accounts/1/settings/inboxes/17',
     )
     await user.type(screen.getByLabelText('Telegram bot token'), secret)

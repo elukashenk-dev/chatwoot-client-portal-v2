@@ -23,7 +23,7 @@ function parseJsonRawBody(rawBody: Buffer) {
     throw new ApiError(
       400,
       'chatwoot_webhook_json_invalid',
-      'Chatwoot webhook JSON is invalid.',
+      'JSON webhook системы поддержки некорректен.',
     )
   }
 }
@@ -63,7 +63,7 @@ export function registerChatwootWebhookRoutes(
         throw new ApiError(
           400,
           'chatwoot_webhook_body_required',
-          'Chatwoot webhook body is required.',
+          'Тело webhook системы поддержки обязательно.',
         )
       }
 
@@ -74,7 +74,7 @@ export function registerChatwootWebhookRoutes(
         throw new ApiError(
           500,
           'chatwoot_webhook_service_missing',
-          'Chatwoot webhook service is missing.',
+          'Сервис webhook системы поддержки недоступен.',
         )
       }
 
