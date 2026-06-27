@@ -80,6 +80,16 @@ export function ChatHeaderNavigationMenu({
         )
       })}
       <button
+        aria-disabled="true"
+        className="mt-1 flex w-full cursor-not-allowed items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-400"
+        disabled
+        role="menuitem"
+        type="button"
+      >
+        <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>Центр поддержки - скоро</span>
+      </button>
+      <button
         className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
         onClick={onOpenSettings}
         role="menuitem"

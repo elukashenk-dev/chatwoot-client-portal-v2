@@ -554,6 +554,16 @@ describe('ChatHeader', () => {
     expect(menu).toHaveAttribute('data-chat-header-menu', 'navigation')
     expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/80')
+    const supportCenterItem = screen.getByRole('menuitem', {
+      name: 'Центр поддержки - скоро',
+    })
+
+    expect(supportCenterItem).toBeDisabled()
+    expect(supportCenterItem).toHaveClass(
+      'text-slate-400',
+      'cursor-not-allowed',
+    )
+    expect(supportCenterItem).not.toHaveClass('hover:bg-white/45')
     expect(screen.getByRole('menuitem', { name: 'Настройки' })).toHaveClass(
       'hover:bg-white/45',
     )
