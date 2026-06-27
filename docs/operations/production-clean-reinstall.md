@@ -156,6 +156,218 @@ Default reinstall/deploy flow must preserve both volumes. Destructive reset is
 allowed only when the operator explicitly confirms that portal-owned data is
 disposable or has been backed up and restored elsewhere.
 
+## Secret-Preserving Destructive Portal DB Reinstall
+
+Use this path when the portal database must be recreated from a clean schema,
+but production tenant/runtime secrets must not be re-entered manually.
+
+This is the current production-safe clean reinstall model for the two active
+tenants:
+
+```text
+provgroup  -> lk.provgroup.ru,  Chatwoot account 1, API Channel inbox 5
+pronalogi  -> lk.pronalogi.pro, Chatwoot account 2, API Channel inbox 6
+```
+
+It preserves only operational configuration and secrets:
+
+- `/opt/chatwoot-client-portal-v2/.env.production`;
+- `portal_tenants`, including encrypted Chatwoot runtime tokens, admin
+  verification tokens and webhook secrets;
+- `telegram_bridge_configs`, including encrypted Telegram bot and webhook
+  secrets;
+- `portal_branding_assets` and `portal_branding_settings`, so active tenant UI
+  assets continue to match the preserved object-storage volume;
+- `portal_legal_documents`, so the first-access legal consent flow can continue
+  without re-uploading active terms/privacy documents.
+
+It intentionally discards customer/runtime rows:
+
+- `portal_users`;
+- `portal_sessions`;
+- `verification_records`;
+- `portal_user_contact_links`;
+- `portal_chat_threads`;
+- `portal_chat_message_sends`;
+- notification preferences, push subscriptions, push deliveries and unread
+  rows;
+- `portal_legal_acceptances`;
+- rate-limit buckets;
+- Chatwoot webhook delivery bookkeeping;
+- Telegram delivery bookkeeping;
+- tenant admin sessions, login challenges and audit events;
+- tenant provisioning run history.
+
+Do not run `scripts/install-production.sh --install --reconfigure` for this
+path. The full installer includes Chatwoot API Channel configuration steps.
+For a portal-only reinstall, restore the preserved portal DB rows and verify
+the Chatwoot connection read-only instead.
+
+### Backup Current Portal Secrets And Config
+
+Run on the production VM before stopping or deleting portal volumes:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+
+BACKUP_DIR="/home/ubuntu/portal-v2-clean-reinstall-notes/secret-preserving-$(date -u +%Y%m%dT%H%M%SZ)"
+install -d -m 0700 "$BACKUP_DIR"
+
+cp -a .env.production "$BACKUP_DIR/.env.production"
+chmod 600 "$BACKUP_DIR/.env.production"
+
+docker compose --env-file .env.production -f infra/production/compose.yaml ps \
+  >"$BACKUP_DIR/docker-compose-ps-before.txt"
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --file=/tmp/portal-full.dump'
+
+docker cp \
+  "$(docker compose --env-file .env.production -f infra/production/compose.yaml ps -q portal-db)":/tmp/portal-full.dump \
+  "$BACKUP_DIR/portal-full.dump"
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --data-only \
+    --table=portal_tenants \
+    --table=portal_branding_assets \
+    --table=portal_branding_settings \
+    --table=portal_legal_documents \
+    --table=telegram_bridge_configs \
+    --file=/tmp/portal-preserved-config.dump'
+
+docker cp \
+  "$(docker compose --env-file .env.production -f infra/production/compose.yaml ps -q portal-db)":/tmp/portal-preserved-config.dump \
+  "$BACKUP_DIR/portal-preserved-config.dump"
+
+sha256sum "$BACKUP_DIR/.env.production" \
+  "$BACKUP_DIR/portal-full.dump" \
+  "$BACKUP_DIR/portal-preserved-config.dump" \
+  >"$BACKUP_DIR/SHA256SUMS"
+```
+
+Never paste `.env.production` or dump contents into chat. The files stay on the
+VM with `0700` backup directory permissions.
+
+### Remove Portal Runtime And Recreate DB Volume
+
+After the backup exists and has checksums:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+
+docker compose --env-file .env.production -f infra/production/compose.yaml down --remove-orphans
+
+docker volume rm chatwoot-client-portal-v2_portal-db-data
+
+sudo rm -rf /opt/chatwoot-client-portal-v2
+sudo install -d -m 0755 -o ubuntu -g ubuntu /opt/chatwoot-client-portal-v2
+```
+
+Keep `chatwoot-client-portal-v2_portal-object-storage-data` unless the operator
+explicitly accepts losing branding/PWA assets. This volume does not contain
+customer auth/session/chat runtime rows.
+
+### Upload Code, Restore Env And Start Fresh Schema
+
+From the local reviewed `main`:
+
+```bash
+scripts/deploy-production-archive.sh \
+  --host=ubuntu@93.77.166.238 \
+  --app-path=/opt/chatwoot-client-portal-v2
+```
+
+Then on the VM:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+
+cp -a "$BACKUP_DIR/.env.production" .env.production
+chmod 600 .env.production
+
+scripts/ensure-production-object-storage-env.sh --env-file .env.production
+
+docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build
+```
+
+The backend starts against a new `portal-db-data` volume and runs current
+migrations before accepting health checks.
+
+### Restore Preserved Config Rows
+
+Run on the VM after `portal-db` is healthy and migrations have completed:
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+
+docker cp \
+  "$BACKUP_DIR/portal-preserved-config.dump" \
+  "$(docker compose --env-file .env.production -f infra/production/compose.yaml ps -q portal-db)":/tmp/portal-preserved-config.dump
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -lc 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --data-only --disable-triggers /tmp/portal-preserved-config.dump'
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 <<'"'"'SQL'"'"'
+select setval(pg_get_serial_sequence('"'"'portal_tenants'"'"','"'"'id'"'"'), coalesce((select max(id) from portal_tenants), 1), (select count(*) > 0 from portal_tenants));
+select setval(pg_get_serial_sequence('"'"'portal_branding_assets'"'"','"'"'id'"'"'), coalesce((select max(id) from portal_branding_assets), 1), (select count(*) > 0 from portal_branding_assets));
+select setval(pg_get_serial_sequence('"'"'portal_branding_settings'"'"','"'"'id'"'"'), coalesce((select max(id) from portal_branding_settings), 1), (select count(*) > 0 from portal_branding_settings));
+select setval(pg_get_serial_sequence('"'"'portal_legal_documents'"'"','"'"'id'"'"'), coalesce((select max(id) from portal_legal_documents), 1), (select count(*) > 0 from portal_legal_documents));
+SQL'
+
+docker compose --env-file .env.production -f infra/production/compose.yaml up -d --force-recreate portal-backend telegram-bridge portal-web
+```
+
+### Verify Preserved Config Without Printing Secrets
+
+```bash
+cd /opt/chatwoot-client-portal-v2
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-db \
+  sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 <<'"'"'SQL'"'"'
+select slug, primary_domain, chatwoot_account_id, chatwoot_portal_inbox_id,
+       chatwoot_api_access_token_ciphertext is not null as has_runtime_token,
+       chatwoot_admin_verification_token_ciphertext is not null as has_admin_token,
+       chatwoot_webhook_secret_ciphertext is not null as has_webhook_secret
+from portal_tenants
+order by slug;
+
+select count(*) as telegram_bridge_configs from telegram_bridge_configs;
+select count(*) as portal_users from portal_users;
+select count(*) as portal_sessions from portal_sessions;
+select count(*) as verification_records from verification_records;
+select count(*) as portal_chat_threads from portal_chat_threads;
+SQL'
+```
+
+Expected:
+
+- `provgroup` and `pronalogi` exist and all secret boolean columns are `true`
+  where configured before reinstall;
+- Telegram bridge config count matches the pre-reinstall value;
+- customer/runtime row counts listed above are `0`.
+
+Then verify services and public endpoints:
+
+```bash
+docker compose --env-file .env.production -f infra/production/compose.yaml ps
+
+curl -fsS https://app.lancora.ru/api
+curl -fsS https://lk.provgroup.ru/api/health
+curl -fsS https://lk.provgroup.ru/api/tenant
+curl -fsS https://lk.pronalogi.pro/api/health
+curl -fsS https://lk.pronalogi.pro/api/tenant
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=provgroup
+
+docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
+  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=pronalogi
+```
+
+Do not run `configure-tenant-chatwoot-webhook.js` during this portal-only
+reinstall unless the operator explicitly approves a Chatwoot API Channel write.
+
 ## Step 3. Reset Portal-Owned Runtime Only
 
 Go to the portal app path if it exists:
