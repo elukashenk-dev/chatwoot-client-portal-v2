@@ -16,6 +16,7 @@ import {
   type AuthSessionContextValue,
 } from '../lib/authSessionContext'
 import { LoginPage } from './LoginPage'
+import { PasswordLoginPage } from './PasswordLoginPage'
 
 vi.mock('../../chat/pages/notificationBrowserPush', async () => {
   const actual = await vi.importActual<
@@ -271,6 +272,71 @@ describe('LoginPage', () => {
     expect(screen.queryByText('Центр поддержки')).not.toBeInTheDocument()
   })
 
+  it('places password login before legal copy and support on the code login screen', () => {
+    renderWithRouter(
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <BrandingContext.Provider value={brandingContextValue}>
+          <AuthSessionContext.Provider value={unauthenticatedAuthSession}>
+            <LoginPage />
+          </AuthSessionContext.Provider>
+        </BrandingContext.Provider>
+      </TenantIdentityContext.Provider>,
+    )
+
+    const submitButton = screen.getByRole('button', { name: 'Получить код' })
+    const passwordLoginLink = screen.getByRole('link', {
+      name: 'Войти по паролю',
+    })
+    const legalText = document.querySelector('.auth-legal-text')
+    const supportBlock = document.querySelector('.auth-support-block')
+
+    expect(legalText).toBeInTheDocument()
+    expect(supportBlock).toBeInTheDocument()
+
+    if (!(legalText instanceof Element) || !(supportBlock instanceof Element)) {
+      throw new Error('Expected login legal text and support block to render')
+    }
+
+    expect(
+      submitButton.compareDocumentPosition(passwordLoginLink) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      passwordLoginLink.compareDocumentPosition(legalText) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(
+      legalText.compareDocumentPosition(supportBlock) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('renders compact code-login link and support on the password login screen', () => {
+    renderWithRouter(
+      <TenantIdentityContext.Provider value={tenantContextValue}>
+        <BrandingContext.Provider value={brandingContextValue}>
+          <AuthSessionContext.Provider value={unauthenticatedAuthSession}>
+            <PasswordLoginPage />
+          </AuthSessionContext.Provider>
+        </BrandingContext.Provider>
+      </TenantIdentityContext.Provider>,
+    )
+
+    expect(
+      screen.getByRole('heading', { name: 'Вход по паролю' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Войти по коду' }),
+    ).toHaveAttribute('href', '/auth/login')
+    expect(
+      screen.queryByRole('link', { name: 'Войти по коду из почты' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Нет доступа к чату?')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: '+7 (846) 211-11-11' }),
+    ).toHaveAttribute('href', 'tel:+78462111111')
+  })
+
   it('redirects to the login route and renders code-first auth links', async () => {
     fetchMock.mockResolvedValueOnce(
       createJsonResponse(
@@ -347,7 +413,7 @@ describe('LoginPage', () => {
       await screen.findByRole('heading', { name: 'Вход по паролю' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: 'Войти по коду из почты' }),
+      screen.getByRole('link', { name: 'Войти по коду' }),
     ).toHaveAttribute('href', '/auth/login')
     expect(
       screen.getByRole('link', { name: 'Забыли пароль?' }),

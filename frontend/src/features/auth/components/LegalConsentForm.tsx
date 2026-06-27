@@ -105,7 +105,11 @@ export function LegalConsentForm() {
   }
 
   return (
-    <form className="auth-flow-form" noValidate onSubmit={handleSubmit}>
+    <form
+      className="auth-flow-form auth-flow-form--legal-consent"
+      noValidate
+      onSubmit={handleSubmit}
+    >
       <p className="auth-form-note">
         Чтобы открыть чат, примите условия сервиса и согласие на обработку
         персональных данных.

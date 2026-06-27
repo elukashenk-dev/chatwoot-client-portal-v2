@@ -124,9 +124,12 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('Пароль настроен')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Пароль настроен. Если вы выйдете и забудете пароль, используйте восстановление по email-коду.',
+        'Пароль настроен. Если забудете пароль, восстановите его на экране входа по коду из почты.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Забыли пароль?' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText('Изменение пароля будет добавлено отдельно.'),
     ).not.toBeInTheDocument()

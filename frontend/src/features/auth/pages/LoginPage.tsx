@@ -15,8 +15,8 @@ export function LoginPage() {
       title={branding.copy.authTitle}
     >
       <PasswordlessLoginRequestForm />
+      <AuthSecondaryLinks className="auth-secondary-links--after-submit" />
       <AuthLegalNotice />
-      <AuthSecondaryLinks />
       <AuthSupportBlock />
     </TenantAuthShell>
   )

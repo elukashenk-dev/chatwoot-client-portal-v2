@@ -399,6 +399,32 @@ describe('Passwordless login pages', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('renders legal consent in the compact auth layout', async () => {
+    savePasswordlessLoginLegalContinuation()
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createUnauthorizedSessionResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderAuthRoutes(['/auth/login/legal'])
+
+    expect(
+      await screen.findByRole('heading', { name: 'Принять условия' }),
+    ).toBeInTheDocument()
+    expect(document.querySelector('.auth-canvas-background')).toHaveClass(
+      'auth-canvas-background--legal-consent',
+    )
+    expect(document.querySelector('.auth-flow-form')).toHaveClass(
+      'auth-flow-form--legal-consent',
+    )
+  })
+
   it('requires both legal checkboxes before continuing to chat', async () => {
     const user = userEvent.setup()
 

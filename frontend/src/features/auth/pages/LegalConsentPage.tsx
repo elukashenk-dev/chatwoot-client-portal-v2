@@ -7,6 +7,7 @@ export function LegalConsentPage() {
 
   return (
     <TenantAuthShell
+      className="auth-canvas-background--legal-consent"
       description={
         <>
           <span className="block">Email подтвержден для</span>

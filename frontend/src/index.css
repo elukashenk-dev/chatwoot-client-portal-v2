@@ -743,6 +743,10 @@ button:not(:disabled),
   margin-top: 43px;
 }
 
+.auth-canvas-background--legal-consent .auth-form-slot {
+  margin-top: 18px;
+}
+
 .auth-login-form {
   display: flex;
   flex-direction: column;
@@ -786,6 +790,10 @@ button:not(:disabled),
   font-size: 16px;
   font-weight: 400;
   line-height: 20px;
+}
+
+.auth-flow-form--legal-consent > button[type='submit'] {
+  margin-top: 23px;
 }
 
 .auth-login-submit:disabled,
@@ -1241,6 +1249,20 @@ a.auth-support-phone:hover {
   justify-items: center;
 }
 
+.auth-secondary-links--after-submit {
+  margin-top: 15px;
+}
+
+.auth-secondary-links--after-submit .auth-secondary-link {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+}
+
+.auth-secondary-links--after-submit + .auth-legal-text {
+  margin-top: 13px;
+}
+
 .auth-secondary-link {
   text-decoration: none;
   white-space: nowrap;
@@ -1259,6 +1281,10 @@ a.auth-support-phone:hover {
 .auth-support-block {
   margin-top: 12px;
   text-align: center;
+}
+
+.auth-legal-text + .auth-support-block {
+  margin-top: 28px;
 }
 
 .auth-support-divider {
@@ -1324,6 +1350,10 @@ a.auth-support-phone:hover {
     margin-top: 31px;
   }
 
+  .auth-canvas-background--legal-consent .auth-form-slot {
+    margin-top: 16px;
+  }
+
   .auth-login-form > :is(div, label) + :is(div, label),
   .auth-flow-form > :is(div, label) + :is(div, label) {
     margin-top: 18px;
@@ -1332,6 +1362,10 @@ a.auth-support-phone:hover {
   .auth-login-submit,
   .auth-flow-form > button[type='submit'] {
     margin-top: 22px;
+  }
+
+  .auth-flow-form--legal-consent > button[type='submit'] {
+    margin-top: 21px;
   }
 
   .auth-legal-text {
@@ -1343,8 +1377,20 @@ a.auth-support-phone:hover {
     margin-top: 22px;
   }
 
+  .auth-secondary-links--after-submit {
+    margin-top: 12px;
+  }
+
+  .auth-secondary-links--after-submit + .auth-legal-text {
+    margin-top: 10px;
+  }
+
   .auth-support-block {
     margin-top: 10px;
+  }
+
+  .auth-legal-text + .auth-support-block {
+    margin-top: 22px;
   }
 
   .auth-support-divider {

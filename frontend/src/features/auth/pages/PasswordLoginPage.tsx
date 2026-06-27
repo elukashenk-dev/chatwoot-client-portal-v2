@@ -1,6 +1,7 @@
 import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { AuthLegalNotice } from '../components/AuthLegalNotice'
 import { AuthSecondaryLinks } from '../components/AuthSecondaryLinks'
+import { AuthSupportBlock } from '../components/AuthSupportBlock'
 import { LoginForm } from '../components/LoginForm'
 
 export function PasswordLoginPage() {
@@ -12,6 +13,7 @@ export function PasswordLoginPage() {
     >
       <LoginForm legalNotice={<AuthLegalNotice />} />
       <AuthSecondaryLinks variant="password-login" />
+      <AuthSupportBlock />
     </TenantAuthShell>
   )
 }

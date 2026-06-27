@@ -37,7 +37,6 @@ export function AuthLoginPreview() {
               />
             </label>
 
-            <AuthLegalNotice preview />
             <button
               aria-disabled="true"
               className="auth-login-submit w-full bg-brand-900 text-white"
@@ -48,7 +47,11 @@ export function AuthLoginPreview() {
             </button>
           </form>
 
-          <AuthSecondaryLinks preview />
+          <AuthSecondaryLinks
+            className="auth-secondary-links--after-submit"
+            preview
+          />
+          <AuthLegalNotice preview />
           <AuthSupportBlock preview />
         </TenantAuthShell>
       </div>
