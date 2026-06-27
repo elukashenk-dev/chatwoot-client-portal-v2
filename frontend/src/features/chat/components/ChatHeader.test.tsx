@@ -554,11 +554,14 @@ describe('ChatHeader', () => {
     expect(menu).toHaveAttribute('data-chat-header-menu', 'navigation')
     expect(menu.closest('[data-chat-floating-surface="header"]')).toBeNull()
     expect(menu).not.toHaveClass('border-slate-200/80')
+    expect(screen.getByText('Разделы')).toBeInTheDocument()
+    expect(screen.queryByText('Центр поддержки - скоро')).not.toBeInTheDocument()
     const supportCenterItem = screen.getByRole('menuitem', {
-      name: 'Центр поддержки - скоро',
+      name: 'Центр поддержки Скоро',
     })
 
     expect(supportCenterItem).toBeDisabled()
+    expect(supportCenterItem.closest('[data-navigation-section="sections"]')).not.toBeNull()
     expect(supportCenterItem).toHaveClass(
       'text-slate-400',
       'cursor-not-allowed',

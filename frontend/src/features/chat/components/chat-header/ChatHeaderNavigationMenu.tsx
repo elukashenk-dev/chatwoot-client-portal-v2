@@ -6,7 +6,11 @@ import {
   readThreadUnreadCount,
 } from '../../lib/chatUnreadPresentation'
 import type { ChatThreadSummary } from '../../types'
-import { CheckIcon, SettingsIcon } from '../../../../shared/ui/icons'
+import {
+  CheckIcon,
+  FileTextIcon,
+  SettingsIcon,
+} from '../../../../shared/ui/icons'
 
 type ChatHeaderNavigationMenuProps = {
   availableThreads: ChatThreadSummary[]
@@ -79,18 +83,30 @@ export function ChatHeaderNavigationMenu({
           </button>
         )
       })}
-      <button
-        aria-disabled="true"
-        className="mt-1 flex w-full cursor-not-allowed items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-400"
-        disabled
-        role="menuitem"
-        type="button"
+      <div
+        className="mt-1 border-t border-slate-300/35 pt-1"
+        data-navigation-section="sections"
       >
-        <span className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>Центр поддержки - скоро</span>
-      </button>
+        <div className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-slate-400">
+          Разделы
+        </div>
+        <button
+          aria-disabled="true"
+          aria-label="Центр поддержки Скоро"
+          className="flex w-full cursor-not-allowed items-center gap-2 rounded-[0.6rem] bg-white/20 px-3 py-2 text-left text-slate-400"
+          disabled
+          role="menuitem"
+          type="button"
+        >
+          <FileTextIcon className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">Центр поддержки</span>
+          <span className="shrink-0 rounded-full border border-slate-300/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-normal text-slate-400">
+            Скоро
+          </span>
+        </button>
+      </div>
       <button
-        className="mt-1 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 text-left text-slate-600 transition hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+        className="mt-1 border-t border-slate-300/35 flex w-full items-center gap-2 rounded-[0.6rem] px-3 py-2 pt-3 text-left text-slate-600 transition hover:bg-white/45 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
         onClick={onOpenSettings}
         role="menuitem"
         type="button"
