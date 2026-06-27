@@ -14,6 +14,8 @@ const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
 const TEXT_OUTBOX_SEND_IN_PROGRESS_RETRY_MS = 5_000
 const TEXT_OUTBOX_BACKGROUND_SEND_TIMEOUT_MS = 10_000
 const TEXT_OUTBOX_GENERIC_SEND_ERROR_MESSAGE = 'Не удалось отправить сообщение.'
+const TEXT_OUTBOX_PENDING_BACKGROUND_WORK_MESSAGE =
+  'Text outbox has pending background work.'
 const PERMANENT_TEXT_OUTBOX_SEND_ERROR_CODES = new Set([
   'INVALID_REQUEST',
   'chat_thread_unsupported',
@@ -435,6 +437,11 @@ async function hasLocalDeviceSignout(host, identity) {
 async function drainTextOutboxForIdentity(identity) {
   const dueRecords = await listDueTextOutboxRecords(identity, new Date())
 
+  if (dueRecords.length === 0) {
+    await keepTextOutboxBackgroundSyncPendingIfRetryableWorkExists(identity)
+    return
+  }
+
   for (const record of dueRecords) {
     const attemptAt = new Date()
     const ownerId = createTextOutboxOwnerId()
@@ -526,6 +533,8 @@ async function drainTextOutboxForIdentity(identity) {
       )
     }
   }
+
+  await keepTextOutboxBackgroundSyncPendingIfRetryableWorkExists(identity)
 }
 
 function classifyTextOutboxSendError(error) {
@@ -737,6 +746,31 @@ async function listDueTextOutboxRecords(identity, now) {
       )
     })
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}
+
+async function keepTextOutboxBackgroundSyncPendingIfRetryableWorkExists(
+  identity,
+) {
+  if (await hasPendingRetryableTextOutboxRecords(identity)) {
+    throw new Error(TEXT_OUTBOX_PENDING_BACKGROUND_WORK_MESSAGE)
+  }
+}
+
+async function hasPendingRetryableTextOutboxRecords(identity) {
+  const records = await listPortalOfflineRecords('chat_text_outbox')
+
+  return records
+    .filter(isTextOutboxRecord)
+    .some(
+      (record) =>
+        record.tenantSlug === identity.tenantSlug &&
+        record.userId === identity.userId &&
+        isRetryableTextOutboxRecord(record),
+    )
+}
+
+function isRetryableTextOutboxRecord(record) {
+  return record.status === 'queued' || record.status === 'sending'
 }
 
 function isSendResultForTextOutboxRecord(result, record) {

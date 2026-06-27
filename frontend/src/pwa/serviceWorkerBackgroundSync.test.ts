@@ -38,7 +38,7 @@ type TextOutboxRecordForTests = {
   sendOwnerId: string | null
   sendingLeaseExpiresAt: string | null
   sendingStartedAt: string | null
-  status: 'queued'
+  status: 'queued' | 'sending'
   tenantSlug: string
   threadId: string
   updatedAt: string
@@ -337,6 +337,121 @@ describe('service worker background outbox sync', () => {
   })
 
   it.each([
+    {
+      description: 'future queued retry',
+      record: {
+        nextAttemptAt: '2099-01-01T00:00:00.000Z',
+        status: 'queued' as const,
+      },
+    },
+    {
+      description: 'active sending lease',
+      record: {
+        sendOwnerId: 'closed-client',
+        sendingLeaseExpiresAt: '2099-01-01T00:00:00.000Z',
+        sendingStartedAt: '2026-05-29T12:00:02.000Z',
+        status: 'sending' as const,
+      },
+    },
+  ])(
+    'keeps background sync pending when only $description records are pending',
+    async ({ record }) => {
+      const fetch = vi.fn()
+      const { listeners } = loadServiceWorker({ fetch })
+      const syncListener = listeners.get('sync')?.[0]
+
+      expect(syncListener).toBeDefined()
+
+      await saveLastActiveIdentity()
+      await saveQueuedTextOutboxRecord(record)
+
+      await expect(
+        dispatchSync(syncListener!, 'portal-text-outbox-drain'),
+      ).rejects.toThrow('Text outbox has pending background work.')
+
+      expect(fetch).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps background sync pending when an initially future retry becomes due during another send', async () => {
+    const fetch = vi.fn(
+      async (_input: RequestInfo | URL, options?: RequestInit) => {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 350)
+        })
+
+        const requestBody = JSON.parse(String(options?.body)) as {
+          clientMessageKey: string
+          content: string
+          threadId: string
+        }
+
+        return Response.json({
+          activeThread: {
+            id: requestBody.threadId,
+            subtitle: 'Вы и поддержка',
+            title: 'Личный чат',
+            type: 'private',
+          },
+          reason: 'none',
+          result: 'ready',
+          sentMessage: {
+            attachments: [],
+            authorName: 'Вы',
+            authorRole: 'current_user',
+            clientMessageKey: requestBody.clientMessageKey,
+            content: requestBody.content,
+            contentType: 'text',
+            createdAt: new Date().toISOString(),
+            direction: 'outgoing',
+            id: 9002,
+            status: 'sent',
+          },
+        })
+      },
+    )
+    const { listeners } = loadServiceWorker({ fetch })
+    const syncListener = listeners.get('sync')?.[0]
+
+    expect(syncListener).toBeDefined()
+
+    await saveLastActiveIdentity()
+    await saveQueuedTextOutboxRecord({
+      clientMessageKey: 'portal-send:slow-due',
+      content: 'Медленная фоновая отправка',
+      createdAt: '2026-05-29T12:00:01.000Z',
+      updatedAt: '2026-05-29T12:00:01.000Z',
+    })
+    await saveQueuedTextOutboxRecord({
+      clientMessageKey: 'portal-send:soon-due',
+      content: 'Скоро готовая отправка',
+      createdAt: '2026-05-29T12:00:02.000Z',
+      nextAttemptAt: new Date(Date.now() + 250).toISOString(),
+      updatedAt: '2026-05-29T12:00:02.000Z',
+    })
+
+    await expect(
+      dispatchSync(syncListener!, 'portal-text-outbox-drain'),
+    ).rejects.toThrow('Text outbox has pending background work.')
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+    await expect(
+      readPortalOfflineRecord(
+        'chat_text_outbox',
+        'provgroup:7:private:me:portal-send:slow-due',
+      ),
+    ).resolves.toBeUndefined()
+    await expect(
+      readPortalOfflineRecord(
+        'chat_text_outbox',
+        'provgroup:7:private:me:portal-send:soon-due',
+      ),
+    ).resolves.toMatchObject({
+      status: 'queued',
+    })
+  })
+
+  it.each([
     { code: 'message_content_too_long', statusCode: 422 },
     { code: 'reply_target_unavailable', statusCode: 409 },
   ])(
@@ -450,6 +565,9 @@ describe('service worker background outbox sync', () => {
     await saveLastActiveIdentity()
 
     const syncPromise = dispatchSync(syncListener!, 'portal-text-outbox-drain')
+    const pendingSyncExpectation = expect(syncPromise).rejects.toThrow(
+      'Text outbox has pending background work.',
+    )
 
     await vi.waitFor(() => {
       expect(fetch).toHaveBeenCalledTimes(1)
@@ -457,7 +575,7 @@ describe('service worker background outbox sync', () => {
     await vi.waitFor(() => {
       expect(backgroundSendSignal?.aborted).toBe(true)
     })
-    await syncPromise
+    await pendingSyncExpectation
 
     await expect(
       readPortalOfflineRecord(
