@@ -1,4 +1,4 @@
-import { LockIcon, MailIcon } from '../../../../shared/ui/icons'
+import { MailIcon } from '../../../../shared/ui/icons'
 import {
   authFieldIconClassName,
   inputClassName,
@@ -37,19 +37,6 @@ export function AuthLoginPreview() {
               />
             </label>
 
-            <label className="relative block">
-              <span className="auth-muted-text auth-field-icon pointer-events-none absolute left-5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
-                <LockIcon className={authFieldIconClassName} />
-              </span>
-              <input
-                aria-label="Пароль"
-                className={`${inputClassName(false, false)} pl-16`}
-                disabled
-                placeholder="Введите пароль"
-                type="password"
-              />
-            </label>
-
             <AuthLegalNotice preview />
             <button
               aria-disabled="true"
@@ -57,7 +44,7 @@ export function AuthLoginPreview() {
               tabIndex={-1}
               type="button"
             >
-              Войти
+              Получить код
             </button>
           </form>
 

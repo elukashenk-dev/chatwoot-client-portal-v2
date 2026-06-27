@@ -230,7 +230,7 @@ describe('legal routes', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/auth/register',
+          '/auth/login/legal',
           {
             pathname: '/legal/privacy',
             state: { legalBackMode: 'history' },
@@ -243,7 +243,7 @@ describe('legal routes', () => {
             element={<LegalDocumentPage document="privacy" />}
             path="/legal/privacy"
           />
-          <Route element={<p>register page</p>} path="/auth/register" />
+          <Route element={<p>legal consent page</p>} path="/auth/login/legal" />
           <Route element={<p>login page</p>} path="/auth/login" />
         </Routes>
       </MemoryRouter>,
@@ -251,7 +251,7 @@ describe('legal routes', () => {
 
     await user.click(await screen.findByRole('link', { name: 'Назад' }))
 
-    expect(screen.getByText('register page')).toBeInTheDocument()
+    expect(screen.getByText('legal consent page')).toBeInTheDocument()
     expect(screen.queryByText('login page')).not.toBeInTheDocument()
   })
 

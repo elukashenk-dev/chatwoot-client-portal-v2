@@ -5,6 +5,7 @@ import { portalSessions, portalUsers } from '../../db/schema.js'
 import { normalizeEmail } from '../../lib/email.js'
 
 type CreateSessionInput = {
+  emailProofExpiresAt?: Date | null
   expiresAt: Date
   lastSeenAt: Date
   tenantId: number
@@ -23,6 +24,7 @@ type TenantTokenScope = {
 }
 
 type SessionUserRecord = {
+  emailProofExpiresAt: Date | null
   expiresAt: Date
   sessionId: number
   user: {
@@ -119,6 +121,7 @@ export function createAuthRepository(db: AppDatabase) {
     }: TenantTokenScope & { now: Date }): Promise<SessionUserRecord | null> {
       const [session] = await db
         .select({
+          emailProofExpiresAt: portalSessions.emailProofExpiresAt,
           email: portalUsers.email,
           expiresAt: portalSessions.expiresAt,
           fullName: portalUsers.fullName,
@@ -144,6 +147,7 @@ export function createAuthRepository(db: AppDatabase) {
       }
 
       return {
+        emailProofExpiresAt: session.emailProofExpiresAt,
         expiresAt: session.expiresAt,
         sessionId: session.sessionId,
         user: {

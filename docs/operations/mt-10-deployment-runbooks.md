@@ -160,7 +160,7 @@ curl -fsS https://app.lancora.ru/api
 
 Manual acceptance:
 
-- portal registration code arrives from `no-reply@lancora.ru`;
+- portal email-code login code arrives from `no-reply@lancora.ru`;
 - Chatwoot password reset for a tenant admin arrives from
   `no-reply@lancora.ru`;
 - Chatwoot worker logs do not show `SMTPAuthenticationError` after the change.
@@ -576,7 +576,7 @@ Object-storage credentials:
 SMTP credentials:
 
 - update env and restart backend;
-- verify registration, login code and password reset email delivery.
+- verify email-code login and password reset email delivery.
 
 VAPID keys:
 
@@ -636,7 +636,7 @@ After deploy:
 - `/api/tenant` returns the intended tenant;
 - tenant Chatwoot verification passes;
 - API Channel webhook configure/check passes when required;
-- login, registration and password reset flows work;
+- login, email-code access and password reset flows work;
 - personal chat can send a customer message and receive support reply;
 - group chat still renders participants and support badges;
 - admin login works for the tenant;

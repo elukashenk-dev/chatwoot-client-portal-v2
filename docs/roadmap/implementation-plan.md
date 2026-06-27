@@ -27,9 +27,9 @@ stable docs.
 
 Завершено:
 
-- рабочий portal baseline поверх Chatwoot: auth, registration, password reset,
-  protected app shell, chat read/send/attachments/realtime, notifications,
-  profile and PWA foundation;
+- рабочий portal baseline поверх Chatwoot: primary email-code access,
+  secondary password login, password reset, protected app shell, chat
+  read/send/attachments/realtime, notifications, profile and PWA foundation;
 - production deployment baseline на `lk.provgroup.ru`;
 - `MT-0`-`MT-8` multi-tenant program;
 - `MT-8R Codebase Audit And Refactoring Readiness`;

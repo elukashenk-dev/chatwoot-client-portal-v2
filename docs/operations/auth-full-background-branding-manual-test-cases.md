@@ -8,7 +8,7 @@ Scope:
   `docs/design/2026-06-16-provgroup-login-screen-figma-spec.md`;
 - Full Background auth branding в `/admin/branding`;
 - customer auth runtime;
-- public legal pages and registration legal consent.
+- public legal pages and customer access legal consent.
 
 Out of scope:
 
@@ -187,13 +187,13 @@ Notes:
 Screenshot:
 ```
 
-## TC-AUTH-007 Registration Consent UI
+## TC-AUTH-007 Customer Access Legal Consent UI
 
 Steps:
 
-1. Открыть `/auth/register`.
-2. Заполнить имя и email.
-3. Не отмечать legal checkboxes.
+1. Открыть `/auth/login`.
+2. Ввести email first-access Chatwoot contact и подтвердить код из Mailpit.
+3. На `/auth/login/legal` не отмечать legal checkboxes.
 4. Отметить только `Я принимаю условия Пользовательского соглашения`.
 5. Отметить только/затем оба consent checkboxes.
 6. Снять один checkbox.
@@ -215,34 +215,36 @@ Notes:
 Screenshot:
 ```
 
-## TC-AUTH-008 Registration Consent Submit
+## TC-AUTH-008 Customer Access Legal Consent Submit
 
 Steps:
 
-1. Открыть `/auth/register`.
-2. Заполнить валидные имя и email.
-3. Отметить оба legal checkboxes.
-4. Отправить форму.
-5. Проверить переход на `/auth/register/verify`.
+1. Открыть `/auth/login`.
+2. Заполнить валидный email, который существует как Chatwoot contact текущего
+   tenant и еще не имеет portal user.
+3. Отправить форму и ввести код из Mailpit.
+4. Проверить переход на `/auth/login/legal`.
+5. Отметить оба legal checkboxes и продолжить в чат.
 
 Expected:
 
-- Request проходит только после явного consent.
-- Пользователь видит verify-code step.
-- При повторной отправке кода consent state сохраняется для registration flow.
+- Request возвращает generic accepted response без раскрытия eligibility.
+- Пользователь видит verify-code step, затем explicit legal consent step.
+- Portal user создается только после email-code verification и legal consent.
 
 Optional API check:
 
 ```bash
 curl -i \
   -H 'Content-Type: application/json' \
-  -d '{"fullName":"Test User","email":"test@example.com"}' \
-  http://localhost:<backend-port>/api/auth/register/request
+  -d '{"email":"test@example.com"}' \
+  http://localhost:<backend-port>/api/auth/code-login/request
 ```
 
 Expected API check:
 
-- backend rejects request without consent flags.
+- backend returns generic accepted response; legal consent is required only
+  after successful code verification.
 
 Result:
 
@@ -256,11 +258,13 @@ Screenshot:
 
 Steps:
 
-1. Открыть `/auth/register`.
-2. Открыть `/auth/password-reset/request`.
-3. Пройти до OTP verify page.
-4. Пройти до set-password page.
-5. Открыть `/admin/login`.
+1. Открыть `/auth/login`.
+2. Пройти до `/auth/login/verify`.
+3. Пройти до `/auth/login/legal` для first-access contact.
+4. Открыть `/auth/password-reset/request`.
+5. Пройти до password reset OTP verify page.
+6. Пройти до password reset set-password page.
+7. Открыть `/admin/login`.
 
 Expected:
 
@@ -510,7 +514,8 @@ Screenshot:
 Steps:
 
 1. На `/auth/login` пройти page только клавиатурой.
-2. На `/auth/register` пройти legal checkboxes только клавиатурой.
+2. На `/auth/login/legal` пройти legal checkboxes только клавиатурой после
+   email-code verification.
 3. Проверить visible focus на links, checkboxes, fields, buttons.
 4. Проверить accessible names через browser accessibility tree или screen
    reader smoke.

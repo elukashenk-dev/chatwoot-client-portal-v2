@@ -15,6 +15,11 @@ import {
 } from './legalDocumentTypes.js'
 import type { LegalDocumentsRepository } from './repository.js'
 
+export type CustomerAccessLegalDocumentVersions = {
+  privacyPolicyVersion: string
+  termsVersion: string
+}
+
 type LegalAudit = (input: {
   action: string
   actor?: PublicTenantAdmin | null
@@ -152,7 +157,7 @@ export function createLegalDocumentsService({
       return { document: toSummary(document) }
     },
 
-    async getActiveVersionsForRegistration() {
+    async getActiveVersionsForCustomerAccess(): Promise<CustomerAccessLegalDocumentVersions> {
       const [terms, privacy] = await Promise.all([
         repository.findActiveDocument('terms'),
         repository.findActiveDocument('privacy'),
@@ -162,7 +167,7 @@ export function createLegalDocumentsService({
         throw new ApiError(
           503,
           'LEGAL_DOCUMENTS_NOT_CONFIGURED',
-          'Регистрация временно недоступна: юридические документы еще не загружены.',
+          'Вход временно недоступен: юридические документы еще не загружены.',
         )
       }
 

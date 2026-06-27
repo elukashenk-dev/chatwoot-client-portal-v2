@@ -542,34 +542,24 @@ describe('buildApp', () => {
     })
   })
 
-  it('rate limits repeated registration verification attempts', async () => {
-    const responses = []
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      responses.push(
-        await app.inject({
-          headers: {
-            origin: testEnv.APP_ORIGIN,
-          },
-          method: 'POST',
-          payload: {
-            code: '000000',
-            email: 'missing@company.ru',
-          },
-          url: '/api/auth/register/verify',
-        }),
-      )
-    }
+  it('does not expose legacy customer registration endpoints', async () => {
+    for (const url of [
+      '/api/auth/register/request',
+      '/api/auth/register/verify',
+      '/api/auth/register/set-password',
+      '/api/auth/register/skip-password',
+    ]) {
+      const response = await app.inject({
+        headers: {
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {},
+        url,
+      })
 
-    expect(
-      responses.slice(0, 5).map((response) => response.statusCode),
-    ).toEqual([409, 409, 409, 409, 409])
-    expect(responses[5]?.statusCode).toBe(429)
-    expect(responses[5]?.json()).toEqual({
-      error: {
-        code: 'RATE_LIMITED',
-        message: 'Слишком много запросов. Попробуйте позже.',
-      },
-    })
+      expect(response.statusCode).toBe(404)
+    }
   })
 
   it('rate limits repeated password reset requests', async () => {
@@ -622,96 +612,6 @@ describe('buildApp', () => {
         code: 'FORBIDDEN_ORIGIN',
         message: 'Недопустимый источник запроса.',
       },
-    })
-  })
-
-  it('rejects registration requests without required legal consent flags', async () => {
-    const response = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-      },
-      url: '/api/auth/register/request',
-    })
-
-    expect(response.statusCode).toBe(400)
-    expect(response.json()).toEqual(
-      expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'INVALID_REQUEST',
-        }),
-      }),
-    )
-  })
-
-  it('rejects client-controlled registration legal document versions', async () => {
-    const response = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        email: 'name@company.ru',
-        fullName: 'Portal User',
-        personalDataConsentAccepted: true,
-        privacyPolicyVersion: 'attacker-controlled-version',
-        termsAccepted: true,
-        termsVersion: 'attacker-controlled-version',
-      },
-      url: '/api/auth/register/request',
-    })
-
-    expect(response.statusCode).toBe(400)
-    expect(response.json()).toEqual(
-      expect.objectContaining({
-        error: expect.objectContaining({
-          code: 'INVALID_REQUEST',
-        }),
-      }),
-    )
-  })
-
-  it('confirms a pending registration verification and returns a continuation token', async () => {
-    await database.db.insert(verificationRecords).values({
-      attemptsCount: 0,
-      chatwootContactId: 44,
-      codeHash: await hashPassword('123456'),
-      email: 'name@company.ru',
-      expiresAt: minutesFromNow(15),
-      fullName: 'Portal User',
-      lastSentAt: minutesFromNow(-1),
-      maxAttempts: 5,
-      purpose: 'registration',
-      resendCount: 0,
-      resendNotBefore: minutesFromNow(1),
-      status: 'pending',
-      tenantId,
-    })
-
-    const response = await app.inject({
-      headers: {
-        origin: testEnv.APP_ORIGIN,
-      },
-      method: 'POST',
-      payload: {
-        code: '123456',
-        email: 'name@company.ru',
-      },
-      url: '/api/auth/register/verify',
-    })
-
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({
-      continuationToken: expect.any(String),
-      continuationExpiresInSeconds: 900,
-      email: 'name@company.ru',
-      nextStep: 'set_password',
-      purpose: 'registration',
-      result: 'verification_confirmed',
     })
   })
 

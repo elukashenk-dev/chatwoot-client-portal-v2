@@ -48,8 +48,10 @@ async function cleanupFailedLoginDelivery({
         await passwordlessLoginRepository.replacePendingLogin(
           {
             attemptsCount: previousPendingLogin.attemptsCount,
+            chatwootContactId: previousPendingLogin.chatwootContactId,
             codeHash: previousPendingLogin.codeHash,
             expiresAt: previousPendingLogin.expiresAt,
+            fullName: previousPendingLogin.fullName,
             lastSentAt: previousPendingLogin.lastSentAt,
             portalUserId: previousPendingLogin.portalUserId,
             recordId: previousPendingLogin.id,

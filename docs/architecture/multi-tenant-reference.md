@@ -84,7 +84,7 @@ Portal tenant is wider than Chatwoot account because it also owns:
 
 Tenant must be resolved before:
 
-- registration;
+- email-code access;
 - login;
 - password reset;
 - session lookup;
@@ -197,8 +197,9 @@ portal_admin_audit_events
 `verification_records` is the shared persistence table for:
 
 ```text
-purpose = registration
+purpose = passwordless_login
 purpose = password_reset
+purpose = password_setup
 ```
 
 Do not create `password_reset_records`.
@@ -231,7 +232,7 @@ Requirements:
 Runtime token:
 
 - one Chatwoot runtime Application API token per tenant;
-- used for normal portal runtime: registration eligibility, chat context, send,
+- used for normal portal runtime: first-access eligibility, chat context, send,
   webhook/provisioning checks where appropriate;
 - token owner should have the smallest practical access for that tenant account.
 
@@ -436,7 +437,7 @@ accepted as the branding baseline.
 Review scope:
 
 - auth/login;
-- registration and verification forms;
+- email-code access and verification forms;
 - password reset;
 - access denied and error states;
 - app shell;

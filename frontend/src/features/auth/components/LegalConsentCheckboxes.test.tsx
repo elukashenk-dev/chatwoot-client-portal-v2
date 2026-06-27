@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-import { RegistrationLegalConsent } from './RegistrationLegalConsent'
+import { LegalConsentCheckboxes } from './LegalConsentCheckboxes'
 
 function renderConsent({
   disabled = false,
@@ -21,7 +21,7 @@ function renderConsent({
 } = {}) {
   render(
     <MemoryRouter>
-      <RegistrationLegalConsent
+      <LegalConsentCheckboxes
         disabled={disabled}
         onChange={onChange}
         value={{
@@ -35,7 +35,7 @@ function renderConsent({
   return { onChange }
 }
 
-describe('RegistrationLegalConsent', () => {
+describe('LegalConsentCheckboxes', () => {
   it('renders separate legal acceptance controls with public document links', () => {
     renderConsent()
 

@@ -1,12 +1,12 @@
 import type {
-  RegisterSetPasswordFormErrors,
-  RegisterSetPasswordFormValues,
+  PasswordSetupFormErrors,
+  PasswordSetupFormValues,
 } from '../types'
 
-export function validateRegisterSetPasswordForm(
-  values: RegisterSetPasswordFormValues,
-): RegisterSetPasswordFormErrors {
-  const errors: RegisterSetPasswordFormErrors = {}
+export function validatePasswordSetupForm(
+  values: PasswordSetupFormValues,
+): PasswordSetupFormErrors {
+  const errors: PasswordSetupFormErrors = {}
   const hasLength = values.newPassword.trim().length >= 8
   const hasLetter = /[A-Za-zА-Яа-яЁё]/.test(values.newPassword)
   const hasNumber = /\d/.test(values.newPassword)

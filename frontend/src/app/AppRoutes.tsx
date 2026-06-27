@@ -22,19 +22,14 @@ function lazyRouteComponent<TProps extends object>(
 const LoginPage = lazyRouteComponent(() =>
   import('../features/auth/pages/LoginPage').then((module) => module.LoginPage),
 )
-const RegisterRequestPage = lazyRouteComponent(() =>
-  import('../features/auth/pages/RegisterRequestPage').then(
-    (module) => module.RegisterRequestPage,
+const PasswordLoginPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/PasswordLoginPage').then(
+    (module) => module.PasswordLoginPage,
   ),
 )
-const RegisterVerifyPage = lazyRouteComponent(() =>
-  import('../features/auth/pages/RegisterVerifyPage').then(
-    (module) => module.RegisterVerifyPage,
-  ),
-)
-const RegisterSetPasswordPage = lazyRouteComponent(() =>
-  import('../features/auth/pages/RegisterSetPasswordPage').then(
-    (module) => module.RegisterSetPasswordPage,
+const LegalConsentPage = lazyRouteComponent(() =>
+  import('../features/auth/pages/LegalConsentPage').then(
+    (module) => module.LegalConsentPage,
   ),
 )
 const PasswordResetRequestPage = lazyRouteComponent(() =>
@@ -50,11 +45,6 @@ const PasswordResetVerifyPage = lazyRouteComponent(() =>
 const PasswordResetSetPasswordPage = lazyRouteComponent(() =>
   import('../features/auth/pages/PasswordResetSetPasswordPage').then(
     (module) => module.PasswordResetSetPasswordPage,
-  ),
-)
-const PasswordlessLoginRequestPage = lazyRouteComponent(() =>
-  import('../features/auth/pages/PasswordlessLoginRequestPage').then(
-    (module) => module.PasswordlessLoginRequestPage,
   ),
 )
 const PasswordlessLoginVerifyPage = lazyRouteComponent(() =>
@@ -147,42 +137,26 @@ export function AppRoutes() {
             }
           />
           <Route
-            path="register"
+            path="login/password"
             element={
               <LazyRoute fallback={<AuthStartupCanvas />}>
-                <RegisterRequestPage />
+                <PasswordLoginPage />
               </LazyRoute>
             }
           />
           <Route
-            path="register/verify"
-            element={
-              <LazyRoute fallback={<AuthStartupCanvas />}>
-                <RegisterVerifyPage />
-              </LazyRoute>
-            }
-          />
-          <Route
-            path="register/set-password"
-            element={
-              <LazyRoute fallback={<AuthStartupCanvas />}>
-                <RegisterSetPasswordPage />
-              </LazyRoute>
-            }
-          />
-          <Route
-            path="code-login/request"
-            element={
-              <LazyRoute fallback={<AuthStartupCanvas />}>
-                <PasswordlessLoginRequestPage />
-              </LazyRoute>
-            }
-          />
-          <Route
-            path="code-login/verify"
+            path="login/verify"
             element={
               <LazyRoute fallback={<AuthStartupCanvas />}>
                 <PasswordlessLoginVerifyPage />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="login/legal"
+            element={
+              <LazyRoute fallback={<AuthStartupCanvas />}>
+                <LegalConsentPage />
               </LazyRoute>
             }
           />

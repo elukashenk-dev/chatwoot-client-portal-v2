@@ -5,13 +5,16 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import type { AppDatabase } from '../../db/client.js'
 import { portalUsers, verificationRecords } from '../../db/schema.js'
 import { normalizeEmail } from '../../lib/email.js'
+import { createPasswordlessLoginLegalRepository } from './legalRepository.js'
 
 export const PASSWORDLESS_LOGIN_PURPOSE = 'passwordless_login'
 
 type CreatePendingLoginInput = {
+  chatwootContactId?: number | null
   codeHash: string
   email: string
   expiresAt: Date
+  fullName?: string | null
   lastSentAt: Date
   maxAttempts?: number
   portalUserId: number | null
@@ -21,8 +24,10 @@ type CreatePendingLoginInput = {
 
 type ReplacePendingLoginInput = {
   attemptsCount?: number
+  chatwootContactId?: number | null
   codeHash: string
   expiresAt: Date
+  fullName?: string | null
   lastSentAt: Date
   portalUserId: number | null
   recordId: number
@@ -33,9 +38,13 @@ type ReplacePendingLoginInput = {
 
 export type PasswordlessLoginRecord = {
   attemptsCount: number
+  chatwootContactId: number | null
   codeHash: string
+  continuationTokenExpiresAt: Date | null
+  continuationTokenHash: string | null
   email: string
   expiresAt: Date
+  fullName: string | null
   id: number
   lastSentAt: Date
   maxAttempts: number
@@ -43,6 +52,7 @@ export type PasswordlessLoginRecord = {
   resendCount: number
   resendNotBefore: Date
   status: string
+  verifiedAt: Date | null
 }
 
 export type PasswordlessLoginPortalUser = {
@@ -56,9 +66,13 @@ export type PasswordlessLoginPortalUser = {
 function baseLoginRecordSelection() {
   return {
     attemptsCount: verificationRecords.attemptsCount,
+    chatwootContactId: verificationRecords.chatwootContactId,
     codeHash: verificationRecords.codeHash,
+    continuationTokenExpiresAt: verificationRecords.continuationTokenExpiresAt,
+    continuationTokenHash: verificationRecords.continuationTokenHash,
     email: verificationRecords.email,
     expiresAt: verificationRecords.expiresAt,
+    fullName: verificationRecords.fullName,
     id: verificationRecords.id,
     lastSentAt: verificationRecords.lastSentAt,
     maxAttempts: verificationRecords.maxAttempts,
@@ -66,6 +80,7 @@ function baseLoginRecordSelection() {
     resendCount: verificationRecords.resendCount,
     resendNotBefore: verificationRecords.resendNotBefore,
     status: verificationRecords.status,
+    verifiedAt: verificationRecords.verifiedAt,
   }
 }
 
@@ -125,6 +140,8 @@ export function createPasswordlessLoginRepository(
   { tenantId }: { tenantId: number },
 ) {
   return {
+    ...createPasswordlessLoginLegalRepository(db, { tenantId }),
+
     async transactionWithScopedLock<T>(
       email: string,
       handler: (executor: AppDatabase) => Promise<T>,
@@ -153,9 +170,11 @@ export function createPasswordlessLoginRepository(
         .insert(verificationRecords)
         .values({
           attemptsCount: 0,
+          chatwootContactId: input.chatwootContactId ?? null,
           codeHash: input.codeHash,
           email: normalizedEmail,
           expiresAt: input.expiresAt,
+          fullName: input.fullName?.trim() ? input.fullName.trim() : null,
           lastSentAt: input.lastSentAt,
           maxAttempts: input.maxAttempts ?? 5,
           portalUserId: input.portalUserId,
@@ -270,8 +289,10 @@ export function createPasswordlessLoginRepository(
         .update(verificationRecords)
         .set({
           attemptsCount: input.attemptsCount ?? 0,
+          chatwootContactId: input.chatwootContactId ?? null,
           codeHash: input.codeHash,
           expiresAt: input.expiresAt,
+          fullName: input.fullName?.trim() ? input.fullName.trim() : null,
           lastSentAt: input.lastSentAt,
           portalUserId: input.portalUserId,
           resendCount: input.resendCount,
@@ -340,6 +361,80 @@ export function createPasswordlessLoginRepository(
 
       return updatedRecord ?? null
     },
+
+    async verifyPendingLoginForLegal(
+      {
+        continuationTokenExpiresAt,
+        continuationTokenHash,
+        recordId,
+        updatedAt,
+        verifiedAt,
+      }: {
+        continuationTokenExpiresAt: Date
+        continuationTokenHash: string
+        recordId: number
+        updatedAt: Date
+        verifiedAt: Date
+      },
+      executor: AppDatabase = db,
+    ) {
+      const [updatedRecord] = await executor
+        .update(verificationRecords)
+        .set({
+          continuationTokenExpiresAt,
+          continuationTokenHash,
+          status: 'verified',
+          updatedAt,
+          verifiedAt,
+        })
+        .where(
+          and(
+            scopedLoginRecord(tenantId, recordId),
+            eq(verificationRecords.status, 'pending'),
+          ),
+        )
+        .returning(baseLoginRecordSelection())
+
+      return updatedRecord ?? null
+    },
+
+    async findLatestVerifiedLoginByEmail(
+      email: string,
+      executor: AppDatabase = db,
+    ) {
+      return findLatestLoginByStatus({
+        email,
+        executor,
+        lock: true,
+        status: 'verified',
+        tenantId,
+      })
+    },
+
+    async consumeVerifiedLogin(
+      recordId: number,
+      at: Date,
+      executor: AppDatabase = db,
+    ) {
+      const [updatedRecord] = await executor
+        .update(verificationRecords)
+        .set({
+          continuationTokenExpiresAt: null,
+          continuationTokenHash: null,
+          status: 'consumed',
+          updatedAt: at,
+        })
+        .where(
+          and(
+            scopedLoginRecord(tenantId, recordId),
+            eq(verificationRecords.status, 'verified'),
+          ),
+        )
+        .returning(baseLoginRecordSelection())
+
+      return updatedRecord ?? null
+    },
+
   }
 }
 

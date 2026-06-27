@@ -113,7 +113,7 @@ describe('PortalPreviewFrame', () => {
     expect(
       container.querySelectorAll('[data-portal-preview-device-nav-control]'),
     ).toHaveLength(3)
-    const loginButton = screen.getByRole('button', { name: 'Войти' })
+    const loginButton = screen.getByRole('button', { name: 'Получить код' })
 
     expect(loginButton).not.toHaveAttribute('disabled')
     expect(loginButton).toHaveAttribute('aria-disabled', 'true')
@@ -316,15 +316,13 @@ describe('PortalPreviewFrame', () => {
       'auth-brand-mark--left',
     )
     const emailInput = screen.getByLabelText('Email')
-    const passwordInput = screen.getByLabelText('Пароль')
     const mailIcon = document.querySelector('.auth-field-icon')
 
     expect(emailInput).toBeDisabled()
     expect(emailInput).toHaveClass('auth-input')
-    expect(passwordInput).toBeDisabled()
-    expect(passwordInput).toHaveClass('auth-input')
+    expect(screen.queryByLabelText('Пароль')).not.toBeInTheDocument()
     expect(mailIcon).toHaveClass('z-10')
-    const loginButton = screen.getByRole('button', { name: 'Войти' })
+    const loginButton = screen.getByRole('button', { name: 'Получить код' })
 
     expect(loginButton).not.toHaveAttribute('disabled')
     expect(loginButton).toHaveAttribute('aria-disabled', 'true')
@@ -349,8 +347,11 @@ describe('PortalPreviewFrame', () => {
       within(phonePreview).getByText('+7 (846) 211-11-11'),
     ).toBeInTheDocument()
     expect(
-      phonePreview.querySelector('.auth-link-separator'),
+      phonePreview.querySelector('.auth-secondary-links--single'),
     ).toBeInTheDocument()
+    expect(
+      phonePreview.querySelector('.auth-link-separator'),
+    ).not.toBeInTheDocument()
     expect(
       phonePreview.querySelector('.auth-support-divider .auth-support-icon'),
     ).toBeInTheDocument()
@@ -359,7 +360,7 @@ describe('PortalPreviewFrame', () => {
       screen.queryByRole('link', { name: 'Забыли пароль?' }),
     ).not.toBeInTheDocument()
     expect(
-      screen.queryByRole('link', { name: 'Создать аккаунт' }),
+      screen.queryByText(/Активировать доступ|Создать аккаунт|Регистрация/),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /\+7/ })).not.toBeInTheDocument()
     expect(fetchSpy).not.toHaveBeenCalled()

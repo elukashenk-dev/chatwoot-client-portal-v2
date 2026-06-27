@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
 import { FormField } from '../../../shared/ui/FormField'
@@ -44,17 +44,20 @@ function getErrorMessage(error: unknown) {
 }
 
 export function PasswordlessLoginRequestForm() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [values, setValues] =
     useState<PasswordlessLoginRequestFormValues>(DEFAULT_VALUES)
-  const [touched, setTouched] =
-    useState<TouchedPasswordlessLoginRequestFields>({
+  const [touched, setTouched] = useState<TouchedPasswordlessLoginRequestFields>(
+    {
       email: false,
-    })
-  const [focused, setFocused] =
-    useState<TouchedPasswordlessLoginRequestFields>({
+    },
+  )
+  const [focused, setFocused] = useState<TouchedPasswordlessLoginRequestFields>(
+    {
       email: false,
-    })
+    },
+  )
   const [hasSubmitted, setHasSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
@@ -106,7 +109,7 @@ export function PasswordlessLoginRequestForm() {
         resendAvailableInSeconds: response.resendAvailableInSeconds,
       })
 
-      navigate(routePaths.auth.codeLoginVerify)
+      navigate(routePaths.auth.codeLoginVerify, { state: location.state })
     } catch (error) {
       setGlobalError(getErrorMessage(error))
     } finally {
@@ -146,7 +149,7 @@ export function PasswordlessLoginRequestForm() {
       </FormField>
 
       <p className="auth-form-note">
-        Введите email, указанный при создании вашего профиля.
+        Введите email, который вы используете для общения с поддержкой.
       </p>
 
       <InlineAlert message={globalError} tone="error" />

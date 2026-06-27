@@ -884,7 +884,7 @@ Cleanup:
 
 - Keep or remove installed PWA according to device smoke plan.
 
-### S-22. Registration Email-Code Flow
+### S-22. Customer Email-Code Access Flow
 
 Type: Mutating auth
 Risk: Medium
@@ -892,26 +892,28 @@ Can be automated: Later
 
 Preconditions:
 
-- Test email is eligible for registration in the current tenant Chatwoot
-  account.
+- Test email is eligible for first access in the current tenant Chatwoot account
+  or already belongs to an active portal user.
 - `MAILBOX_ACCESS` is available. For local runs this is usually Mailpit.
 - Do not use a real customer email.
 
 MCP steps:
 
-1. Open registration page from public/auth UI.
+1. Open `/auth/login` from public/auth UI.
 2. Enter test email.
 3. Submit request.
 4. Read verification code from allowed test mailbox outside the portal UI.
 5. Enter code.
-6. Set password.
+6. If legal consent is required, accept both legal checkboxes.
 7. Confirm protected app opens.
 
 Expected:
 
 - Eligibility is tenant-scoped.
 - Verification code flow has controlled copy and errors.
-- New portal user opens only current tenant chat.
+- First-access portal user is created only after code verification and legal
+  consent.
+- Existing portal user opens only current tenant chat.
 - No Chatwoot authority is exposed to browser.
 
 Evidence:
@@ -922,16 +924,16 @@ Evidence:
 
 FAIL:
 
-- Ineligible email can register.
+- Ineligible email receives an email code or creates a portal user.
 - Eligible test email is rejected unexpectedly.
 - Code accepted for wrong tenant/email.
-- Registration opens wrong tenant/user data.
+- Email-code access opens wrong tenant/user data.
 
 Cleanup:
 
 - For local/staging, remove disposable test user if runbook owner requires it.
 - For production, prefer a pre-created smoke account instead of repeated
-  registration unless explicitly approved.
+  first-access provisioning unless explicitly approved.
 
 ### S-23. Password Reset Email-Code Flow
 
@@ -1726,7 +1728,7 @@ Preconditions:
 MCP steps:
 
 1. Submit invalid login credentials.
-2. Trigger invalid/expired OTP for registration or password reset.
+2. Trigger invalid/expired OTP for email-code access or password reset.
 3. Trigger resend cooldown.
 4. Submit password reset request for an unknown email.
 5. If safe, repeat auth request enough to hit local/staging rate limit.
@@ -1876,10 +1878,11 @@ Risk: High
 Can be automated: Yes
 
 Local HTTP `*.127.0.0.1.nip.io` may not expose `navigator.serviceWorker`
-because service workers require a secure context. In that case, mark the browser
-registration part `BLOCKED` and still verify tenant-specific manifest and
-`/sw.js` responses. Full service worker registration isolation requires HTTPS
-staging/local HTTPS or a browser configured to treat the local tenant origins as
+because service workers require a secure context. In that case, mark the
+browser service-worker registration part `BLOCKED` and still verify
+tenant-specific manifest and `/sw.js` responses. Full service worker
+registration isolation requires HTTPS staging/local HTTPS or a browser
+configured to treat the local tenant origins as
 secure.
 
 MCP steps:
@@ -2066,7 +2069,8 @@ MCP/API steps:
 1. Create two portal-eligible person contacts in the same Chatwoot account.
 2. Put the same group contact id in both contacts'
    `portal_client_group_contact_ids`.
-3. Register/login both portal users.
+3. Enter both portal users through the email-code access flow or log in with an
+   already configured password.
 4. User A sends `${LCT_MESSAGE_PREFIX} <tenant> member-a group fanout`.
 5. User B opens the same group and sees the message.
 6. Remove the group id from user B's person contact.
@@ -2129,7 +2133,7 @@ MCP steps:
 2. Navigate to an unknown host, for example
    `http://unknown.127.0.0.1.nip.io:5173/api/tenant`.
 3. If `LCT_SHARED_EMAIL` is configured only in tenant A, try using it on tenant
-   B and tenant C registration/login flows.
+   B and tenant C email-code/password login flows.
 
 Expected:
 
@@ -2156,10 +2160,10 @@ MCP steps:
 
 1. Create or use the same email address as a portal-eligible person contact in
    tenant A and tenant B, backed by different Chatwoot accounts/contacts.
-2. Register/login that email on tenant A.
+2. Enter that email on tenant A through email-code access or password login.
 3. Open chat and warm cached transcript.
-4. Register/login the same email on tenant B in the same browser profile or a
-   separate tab.
+4. Enter the same email on tenant B through email-code access or password login
+   in the same browser profile or a separate tab.
 5. Open chat and compare tenant/user/thread state.
 6. Run password reset for the shared email on tenant A and tenant B if safe.
 

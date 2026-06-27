@@ -27,6 +27,20 @@ const passwordlessLoginVerifyBodySchema = z.object({
     .email('Проверьте формат email'),
 })
 
+const passwordlessLoginAcceptLegalBodySchema = z.object({
+  continuationToken: z
+    .string()
+    .trim()
+    .min(32, 'Некорректное подтверждение входа'),
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Введите email')
+    .email('Проверьте формат email'),
+  personalDataConsentAccepted: z.literal(true),
+  termsAccepted: z.literal(true),
+})
+
 type RegisterPasswordlessLoginRoutesOptions = {
   createPasswordlessLoginService: (
     request: FastifyRequest,
@@ -53,35 +67,85 @@ export function registerPasswordlessLoginRoutes(
 
     const body = passwordlessLoginVerifyBodySchema.parse(request.body)
     const tenant = requireTenantContext(request)
-    const session = await createPasswordlessLoginService(
+    const result = await createPasswordlessLoginService(
       request,
     ).verifyLoginCode({
       code: body.code,
       email: body.email,
     })
 
+    if (result.nextStep === 'accept_legal') {
+      request.log.debug(
+        {
+          tenantId: tenant.id,
+        },
+        'Customer passwordless code login requires legal acceptance.',
+      )
+
+      return result
+    }
+
     reply.setCookie(
       env.SESSION_COOKIE_NAME,
-      session.sessionToken,
+      result.sessionToken,
       getSessionCookieOptions(env),
     )
 
     request.log.debug(
       {
         tenantId: tenant.id,
-        userId: session.user.id,
+        userId: result.user.id,
       },
       'Customer passwordless code login verified.',
     )
 
     return {
-      nextStep: session.nextStep,
-      purpose: session.purpose,
-      result: session.result,
+      nextStep: result.nextStep,
+      purpose: result.purpose,
+      result: result.result,
       session: {
-        expiresAt: session.session.expiresAt.toISOString(),
+        expiresAt: result.session.expiresAt.toISOString(),
       },
-      user: session.user,
+      user: result.user,
+    }
+  })
+
+  app.post('/api/auth/code-login/accept-legal', async (request, reply) => {
+    assertAllowedTenantOrigin(request)
+
+    const body = passwordlessLoginAcceptLegalBodySchema.parse(request.body)
+    const tenant = requireTenantContext(request)
+    const result = await createPasswordlessLoginService(request).acceptLegal({
+      continuationToken: body.continuationToken,
+      email: body.email,
+      ipAddress: request.ip,
+      personalDataConsentAccepted: body.personalDataConsentAccepted,
+      termsAccepted: body.termsAccepted,
+      userAgent: request.headers['user-agent'] ?? null,
+    })
+
+    reply.setCookie(
+      env.SESSION_COOKIE_NAME,
+      result.sessionToken,
+      getSessionCookieOptions(env),
+    )
+
+    request.log.debug(
+      {
+        tenantId: tenant.id,
+        userId: result.user.id,
+      },
+      'Customer passwordless legal acceptance completed.',
+    )
+
+    return {
+      nextStep: result.nextStep,
+      purpose: result.purpose,
+      result: result.result,
+      session: {
+        expiresAt: result.session.expiresAt.toISOString(),
+      },
+      user: result.user,
     }
   })
 }

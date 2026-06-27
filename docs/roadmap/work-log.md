@@ -8,9 +8,9 @@ execution-plan детали здесь не хранятся.
 
 - `v2` закреплен как самостоятельный tenant-aware клиентский portal поверх
   Chatwoot.
-- Собран рабочий customer portal baseline: auth/session, registration,
-  password reset, protected app shell, chat read/send, attachments, realtime,
-  notifications, profile и PWA foundation.
+- Собран рабочий customer portal baseline: auth/session, primary email-code
+  access, secondary password login, password reset, protected app shell, chat
+  read/send, attachments, realtime, notifications, profile и PWA foundation.
 - Browser не получает Chatwoot authority; portal backend остается единственной
   authority-зоной для auth, session, profile, send, realtime, webhooks,
   notifications, read/typing sync и Chatwoot access.
@@ -154,10 +154,10 @@ execution-plan детали здесь не хранятся.
   style presets and real runtime preview parity. Separate auth form background
   controls were removed from the active branding contract.
 - Auth legal UX has public terms/privacy pages, informational login legal links
-  and explicit registration consent with backend persistence.
+  and explicit customer access consent with backend persistence.
 - Accepted customer UI visual baseline now uses the branded full-background
   auth/chat direction: Inter auth pages, logo alignment/size controls, explicit
-  registration consent, legal reader pages, translucent chat shell/composer,
+  customer access consent, legal reader pages, translucent chat shell/composer,
   glass secondary chat surfaces and runtime/admin preview parity over the
   tenant-owned chat background asset.
 - Branding asset storage is packaged as portal-owned production infrastructure:
@@ -194,7 +194,7 @@ execution-plan детали здесь не хранятся.
 - Tenant legal document and support contact baseline is implemented:
   tenant admins upload active terms/privacy documents as PDF/DOCX/TXT without
   inline editing, backend stores extracted active versions in portal DB,
-  registration consent records use those active versions, public legal pages
+  customer access consent records use those active versions, public legal pages
   load document text from backend, and support phone is tenant branding contact
   metadata instead of a frontend default.
 - PWA offline launch regression baseline is added: installed-app cold launch
@@ -252,11 +252,12 @@ execution-plan детали здесь не хранятся.
   effects, processed/failed bridge delivery rows are covered by retention
   cleanup, admin setup has app-level tenant isolation coverage, and the
   production backend image uses a test-excluding build config.
-- Registration completion is password-optional at the backend boundary:
-  set-password and skip-password both consume the verified registration
-  continuation, create the portal user/contact/legal links, issue a normal
-  customer session and keep null-hash password login indistinguishable from
-  invalid credentials.
+- Unified email-code customer access replaces separate registration:
+  `/auth/login` requests an email code, existing active portal users can enter
+  after verification and current legal acceptance, eligible Chatwoot contacts
+  are provisioned only after code verification plus `customer_access` legal
+  consent, and legacy `/api/auth/register/*` routes are removed from the active
+  contract.
 - Password-later backend setup is implemented for passwordless portal users:
   protected password setup derives identity from the current customer session,
   requires an email-code proof before first password storage, rejects already
@@ -265,25 +266,20 @@ execution-plan детали здесь не хранятся.
 - Password reset behavior is covered for nullable customer passwords: logged-out
   passwordless users can set their first password through the existing email-code
   reset flow, and reset completion still returns the user to login.
-- Frontend auth API contracts now use authenticated registration completion
-  responses, expose registration skip-password and protected password-setup
-  client methods, and require `passwordConfigured` in authenticated user
-  snapshots.
+- Frontend auth API contracts now use unified code-login completion responses,
+  expose the legal continuation step and protected password-setup client
+  methods, and require `passwordConfigured` in authenticated user snapshots.
 - Frontend auth state handoff is implemented: authenticated backend completion
   responses can hydrate the customer auth context, persist online auth
   snapshots, and ignore stale startup session-check results.
-- Registration completion UI now treats password creation as optional: users can
-  either set a password immediately or continue to chats without one, and both
-  successful paths enter the protected app through the customer auth context.
+- Frontend auth UI now makes email-code access the primary path, keeps password
+  login secondary and removes separate registration/activation routes.
 - Profile security UI now lets passwordless users set their first password while
   logged in through a protected email-code challenge and rotated authenticated
   session handoff; configured-password users see status only.
-- Passwordless repeat login is implemented: already registered customer users
-  can enter through a tenant-scoped email-code login flow without browser auth
-  tokens, successful verification issues the normal customer `portal_session`,
-  and passwordless users get an explicit warning before manual logout.
 
 ## Recommended Next Step
 
-- Run a manual local browser smoke of the passwordless login/logout flow before
-  merge or production deployment.
+- Review the local `feature/auth-email-code-primary` branch in browser and
+  decide whether to create a checkpoint commit; do not merge to `main` or deploy
+  until the new auth flow is accepted.

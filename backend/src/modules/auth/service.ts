@@ -17,6 +17,7 @@ export type PublicPortalUser = {
 export type AuthenticatedPortalUser = PublicPortalUser
 
 export type PublicPortalSession = {
+  emailProofExpiresAt: Date | null
   expiresAt: Date
   user: AuthenticatedPortalUser
 }
@@ -72,11 +73,13 @@ export function createAuthService({
   const repository = createAuthRepository(db)
 
   async function issueSessionForUser({
+    emailProofExpiresAt = null,
     executor,
     tenantId,
     user,
     userId,
   }: {
+    emailProofExpiresAt?: Date | null
     executor?: AppDatabase
     ipAddress?: string | null
     tenantId: number
@@ -106,13 +109,17 @@ export function createAuthService({
     )
     const sessionToken = createSessionToken()
 
-    await repository.createSession({
-      expiresAt,
-      lastSeenAt: issuedAt,
-      tenantId,
-      tokenHash: hashSessionToken(sessionToken),
-      userId: sessionUser.id,
-    }, executor)
+    await repository.createSession(
+      {
+        emailProofExpiresAt,
+        expiresAt,
+        lastSeenAt: issuedAt,
+        tenantId,
+        tokenHash: hashSessionToken(sessionToken),
+        userId: sessionUser.id,
+      },
+      executor,
+    )
     await repository.recordSuccessfulLogin({
       at: issuedAt,
       ...(executor ? { executor } : {}),
@@ -122,6 +129,7 @@ export function createAuthService({
 
     return {
       session: {
+        emailProofExpiresAt,
         expiresAt,
       },
       sessionToken,
@@ -174,6 +182,7 @@ export function createAuthService({
     if (!shouldRefreshSession) {
       return {
         expiresAt: session.expiresAt,
+        emailProofExpiresAt: session.emailProofExpiresAt,
         sessionRefreshed: false,
         user,
       }
@@ -194,6 +203,7 @@ export function createAuthService({
     if (refreshedSession) {
       return {
         expiresAt: refreshedSession.expiresAt,
+        emailProofExpiresAt: session.emailProofExpiresAt,
         sessionRefreshed: true,
         user,
       }
@@ -211,6 +221,7 @@ export function createAuthService({
 
     return {
       expiresAt: latestSession.expiresAt,
+      emailProofExpiresAt: latestSession.emailProofExpiresAt,
       sessionRefreshed: false,
       user: {
         ...toAuthenticatedPortalUser(latestSession.user),
@@ -245,11 +256,13 @@ export function createAuthService({
       tenantId: number
     }): Promise<AuthenticatedPortalUser | null> {
       return (
-        (await resolveCurrentSession({
-          allowRenewal: false,
-          sessionToken,
-          tenantId,
-        }))?.user ?? null
+        (
+          await resolveCurrentSession({
+            allowRenewal: false,
+            sessionToken,
+            tenantId,
+          })
+        )?.user ?? null
       )
     },
 

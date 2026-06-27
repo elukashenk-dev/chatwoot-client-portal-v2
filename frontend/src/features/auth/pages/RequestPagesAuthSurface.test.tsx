@@ -9,10 +9,10 @@ import {
   savePasswordResetVerification,
 } from '../lib/passwordResetFlow'
 import {
-  clearRegistrationFlow,
-  saveRegistrationRequest,
-  saveRegistrationVerification,
-} from '../lib/registrationFlow'
+  clearPasswordlessLoginFlow,
+  savePasswordlessLoginLegalContinuation,
+  savePasswordlessLoginRequest,
+} from '../lib/passwordlessLoginFlow'
 
 function createJsonResponse(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -49,7 +49,6 @@ type AuthSurfaceSmokeCase = {
 type AuthFlowActionSurfaceCase = {
   actionLabel: string
   arrange?: () => void
-  expectsCompactSupport: boolean
   heading: string
   path: string
   splitActions?: boolean
@@ -63,7 +62,7 @@ describe('Auth flow pages surface contract', () => {
   })
 
   afterEach(() => {
-    clearRegistrationFlow()
+    clearPasswordlessLoginFlow()
     clearPasswordResetFlow()
     vi.unstubAllGlobals()
     fetchMock.mockReset()
@@ -71,43 +70,27 @@ describe('Auth flow pages surface contract', () => {
 
   it.each<AuthSurfaceSmokeCase>([
     {
-      heading: 'Создать аккаунт',
-      path: '/auth/register',
-    },
-    {
       arrange: () => {
-        saveRegistrationRequest({
+        savePasswordlessLoginRequest({
           email: 'name@company.ru',
           expiresInSeconds: 900,
-          fullName: 'Portal User',
-          personalDataConsentAccepted: true,
           resendAvailableInSeconds: 60,
-          termsAccepted: true,
         })
       },
-      heading: 'Подтверждение почты',
-      path: '/auth/register/verify',
+      heading: 'Код из почты',
+      path: '/auth/login/verify',
       realFormTestId: 'otp-verification-form',
     },
     {
       arrange: () => {
-        saveRegistrationRequest({
-          email: 'name@company.ru',
-          expiresInSeconds: 900,
-          fullName: 'Portal User',
-          personalDataConsentAccepted: true,
-          resendAvailableInSeconds: 60,
-          termsAccepted: true,
-        })
-        saveRegistrationVerification({
+        savePasswordlessLoginLegalContinuation({
           continuationExpiresInSeconds: 900,
-          continuationToken: 'continuation-token',
+          continuationToken: 'legal-continuation-token',
           email: 'name@company.ru',
         })
       },
-      heading: 'Завершение регистрации',
-      path: '/auth/register/set-password',
-      realFormTestId: 'password-setup-form',
+      heading: 'Принять условия',
+      path: '/auth/login/legal',
     },
     {
       heading: 'Восстановить пароль',
@@ -161,9 +144,7 @@ describe('Auth flow pages surface contract', () => {
       expect(
         document.querySelector('.auth-subtitle--login'),
       ).not.toBeInTheDocument()
-      expect(
-        document.querySelector('.auth-header-shell'),
-      ).not.toBeInTheDocument()
+      expect(document.querySelector('.auth-header-shell')).not.toBeInTheDocument()
       expect(document.querySelector('.auth-footer-art')).not.toBeInTheDocument()
 
       if (realFormTestId) {
@@ -174,32 +155,21 @@ describe('Auth flow pages surface contract', () => {
 
   it.each<AuthFlowActionSurfaceCase>([
     {
-      actionLabel: 'Войти',
-      expectsCompactSupport: false,
-      heading: 'Создать аккаунт',
-      path: '/auth/register',
-    },
-    {
       actionLabel: 'Вернуться ко входу',
-      expectsCompactSupport: false,
       heading: 'Восстановить пароль',
       path: '/auth/password-reset/request',
     },
     {
       actionLabel: 'Изменить email',
       arrange: () => {
-        saveRegistrationRequest({
+        savePasswordlessLoginRequest({
           email: 'name@company.ru',
           expiresInSeconds: 900,
-          fullName: 'Portal User',
-          personalDataConsentAccepted: true,
           resendAvailableInSeconds: 60,
-          termsAccepted: true,
         })
       },
-      expectsCompactSupport: false,
-      heading: 'Подтверждение почты',
-      path: '/auth/register/verify',
+      heading: 'Код из почты',
+      path: '/auth/login/verify',
       splitActions: true,
     },
     {
@@ -211,21 +181,13 @@ describe('Auth flow pages surface contract', () => {
           resendAvailableInSeconds: 60,
         })
       },
-      expectsCompactSupport: false,
       heading: 'Подтверждение почты',
       path: '/auth/password-reset/verify',
       splitActions: true,
     },
   ])(
     'uses shared flow footer composition on $path',
-    async ({
-      actionLabel,
-      arrange,
-      expectsCompactSupport,
-      heading,
-      path,
-      splitActions = false,
-    }) => {
+    async ({ actionLabel, arrange, heading, path, splitActions = false }) => {
       arrange?.()
       fetchMock.mockResolvedValueOnce(createUnauthorizedSessionResponse())
 
@@ -241,17 +203,6 @@ describe('Auth flow pages surface contract', () => {
 
       if (splitActions) {
         expect(actionContainer).toHaveClass('auth-flow-actions--split')
-      }
-
-      if (expectsCompactSupport) {
-        expect(screen.getByText('Нужна помощь?')).toHaveClass(
-          'auth-flow-support__question',
-        )
-        expect(
-          screen.getByRole('link', { name: '+7 (800) 000-00-00' }),
-        ).toHaveAttribute('href', 'tel:+78000000000')
-      } else {
-        expect(screen.queryByText('Нужна помощь?')).not.toBeInTheDocument()
       }
     },
   )

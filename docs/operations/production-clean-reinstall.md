@@ -452,14 +452,14 @@ Check:
 
 - login page renders;
 - tenant branding/name context loads;
-- registration route opens;
+- email-code access flow opens;
 - password reset route opens;
 - no console errors for `/api/tenant`;
 - PWA manifest loads.
 
 Then test with a known Chatwoot contact:
 
-- login or register;
+- enter through email-code access or password login;
 - open chat;
 - fetch transcript;
 - send a text message;
@@ -580,7 +580,7 @@ The clean reinstall is complete when:
   `lock_to_single_conversation=true`;
 - tenant API Channel webhook URL is configured;
 - tenant webhook secret is stored in portal DB;
-- login/registration/password reset pages load;
+- login/email-code/password reset pages load;
 - branding asset upload/readback works through portal admin and public asset
   routes;
 - chat transcript and send flow work;

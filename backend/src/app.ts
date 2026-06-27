@@ -59,12 +59,8 @@ import { createLegalDocumentsServiceForTenantRequest } from './modules/legal-doc
 import { registerPasswordlessLoginModule } from './modules/passwordless-login/module.js'
 import { registerPasswordResetRoutes } from './modules/password-reset/routes.js'
 import { registerPasswordSetupRoutes } from './modules/password-setup/routes.js'
-import { createPortalUsersRepository } from './modules/portal-users/repository.js'
 import { registerProfileRoutes } from './modules/profile/routes.js'
 import { createProfileService } from './modules/profile/service.js'
-import { createRegistrationRepository } from './modules/registration/repository.js'
-import { registerRegistrationRoutes } from './modules/registration/routes.js'
-import { createRegistrationService } from './modules/registration/service.js'
 import { registerTelegramBridgeAdminRoutes } from './modules/telegram-bridge-admin/routes.js'
 import { createTelegramBridgeSetupServiceForTenantRequest } from './modules/telegram-bridge-admin/serviceFactory.js'
 import { createTenantAdminAuthRepository } from './modules/tenant-admin/adminAuthRepository.js'
@@ -350,19 +346,6 @@ export function buildApp({
       request,
       ...(telegramFetchFn ? { telegramFetchFn } : {}),
     })
-  const createRegistrationServiceForRequest = (request: FastifyRequest) =>
-    createRegistrationService({
-      authService,
-      chatwootClient: createChatwootClientForRequest(request),
-      emailDelivery: createEmailDelivery(),
-      legalDocumentsReader: createLegalDocumentsServiceForRequest(request),
-      portalUsersRepository: createPortalUsersRepository(database.db),
-      registrationRepository: createRegistrationRepository(database.db, {
-        tenantId: requireTenantContext(request).id,
-      }),
-      supportContactReader: createBrandingServiceForRequest(request),
-      tenantId: requireTenantContext(request).id,
-    })
   const createBrandingAssetServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
     const adminAuthRepository = createTenantAdminAuthRepository(database.db, {
@@ -427,15 +410,17 @@ export function buildApp({
     createTenantAdminAuthService: createTenantAdminAuthServiceForRequest,
     env,
   })
-  registerRegistrationRoutes(app, {
-    createRegistrationService: createRegistrationServiceForRequest,
-    env,
-  })
   registerPasswordResetRoutes(app, {
     createPasswordResetService: createPasswordResetServiceForRequest,
   })
   registerPasswordlessLoginModule(app, {
-    authService, createEmailDelivery, database, env, ...(now ? { now } : {}),
+    authService,
+    createChatwootClient: createChatwootClientForRequest,
+    createEmailDelivery,
+    createLegalDocumentsService: createLegalDocumentsServiceForRequest,
+    database,
+    env,
+    ...(now ? { now } : {}),
   })
   registerPasswordSetupRoutes(app, {
     authService,

@@ -1,0 +1,1 @@
+ALTER TABLE "portal_sessions" ADD COLUMN "email_proof_expires_at" timestamp with time zone;

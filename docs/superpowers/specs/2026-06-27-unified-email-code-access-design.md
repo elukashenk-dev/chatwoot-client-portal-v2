@@ -1,11 +1,12 @@
 # Unified Email-Code Access Design
 
-Status: approved design, not implemented.
+Status: implemented locally on `feature/auth-email-code-primary`; pending user
+acceptance, checkpoint commit, merge and production deployment.
 
 This spec supersedes the future implementation direction from
 `docs/superpowers/specs/2026-06-26-passwordless-registration-design.md`.
-The old document remains historical context until the implementation cleanup
-removes the separate registration flow.
+The old document remains historical context; the active implementation removes
+the separate registration flow.
 
 ## Goal
 
@@ -121,19 +122,25 @@ service or route surface.
 For a normalized email inside the current tenant:
 
 1. Apply endpoint and email-scoped rate limits.
-2. Look up an active portal user by `tenant_id + email`.
+2. Look up any portal user by `tenant_id + email`.
 3. If found, create or replace a pending email-code record tied to the portal
-   user and send the code.
-4. If not found, call `ChatwootClient.findContactByEmail()` for the current
+   user and send the code only when that user is active.
+4. If the portal user exists but is inactive, return the generic accepted
+   response without Chatwoot lookup, email delivery or first-access
+   provisioning.
+5. If not found, call `ChatwootClient.findContactByEmail()` for the current
    tenant Chatwoot account.
-5. If an eligible contact is found, create or replace a pending email-code
+6. If an eligible contact is found, create or replace a pending email-code
    record tied to the Chatwoot contact snapshot and send the code.
-6. If no eligible contact is found, return the same generic accepted response
+7. If no eligible contact is found, return the same generic accepted response
    without sending email and without creating portal-owned user data.
 
-Chatwoot lookup happens only for emails that do not already have an active
-portal user. Verification and legal acceptance use the stored pending record
-instead of calling Chatwoot again.
+Chatwoot lookup happens only for emails that do not have any portal user in the
+current tenant. It happens outside DB transactions/advisory locks; the write
+path repeats portal-user and pending record validation under lock before
+creating/replacing the verification record.
+Verification and legal acceptance use the stored pending record instead of
+calling Chatwoot again.
 
 ### Verify Algorithm
 
@@ -234,6 +241,10 @@ Backend tests:
   legal, create portal user/contact link and get session;
 - unknown email gets generic request response, sends no email and cannot verify;
 - first-time verified user cannot skip legal consent;
+- existing users with stale legal acceptance are routed to legal consent before
+  receiving a session;
+- inactive portal users do not enter first-access Chatwoot provisioning;
+- request cooldown does not repeat Chatwoot lookup;
 - missing active legal documents fail closed before first-time user creation;
 - expired/invalidated code and continuation records are not extended;
 - tenant A cannot use tenant B user/contact/code records.

@@ -1,8 +1,7 @@
 import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
-import { routePaths } from '../../../app/routePaths'
 import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PasswordField } from '../../../shared/ui/PasswordField'
@@ -209,13 +208,6 @@ export function LoginForm({ legalNotice }: LoginFormProps = {}) {
           value={values.password}
         />
       </FormField>
-
-      <Link
-        className="auth-code-login-link"
-        to={routePaths.auth.codeLoginRequest}
-      >
-        <span>Уже есть аккаунт без пароля? Войти по коду из почты.</span>
-      </Link>
 
       <InlineAlert message={visibleGlobalError} tone="error" />
 

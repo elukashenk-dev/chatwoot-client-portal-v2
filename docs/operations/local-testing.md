@@ -532,18 +532,18 @@ Installed PWA smoke для реальных Android/iOS устройств оп�
 production-like окружений:
 `docs/operations/production-mcp-playwright-test-cycle.md`.
 
-Подготовка Chatwoot contacts, portal registration test users, group contacts,
-обязательных `portal_*` custom attributes и Mailpit registration flow описана
+Подготовка Chatwoot contacts, portal email-code access test users, group contacts,
+обязательных `portal_*` custom attributes и Mailpit email-code flow описана
 отдельно:
 `docs/operations/local-cross-tenant-test-data.md`.
 
-Коды registration/password reset смотреть в Mailpit:
+Коды email-code access/password reset смотреть в Mailpit:
 
 ```text
 http://127.0.0.1:8025
 ```
 
-## 11. Создать Portal User Без Registration
+## 11. Создать Portal User Без Email-Code Flow
 
 Использовать только для быстрых локальных проверок.
 

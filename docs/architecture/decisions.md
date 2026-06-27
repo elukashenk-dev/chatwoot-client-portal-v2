@@ -112,11 +112,11 @@
 - дата: `2026-05-05`
 - решение:
   отдельные таблицы для password reset или first-password setup не создаем.
-  Registration, password reset, logged-in first-password setup и passwordless
-  email-code login используют общий persistence layer `verification_records`,
-  а сценарий различается через `purpose = registration`,
-  `purpose = password_reset`, `purpose = password_setup` или
-  `purpose = passwordless_login`. Continuation token поля остаются там же.
+  Unified customer email-code access, password reset и logged-in
+  first-password setup используют общий persistence layer
+  `verification_records`, а сценарий различается через
+  `purpose = passwordless_login`, `purpose = password_reset` или
+  `purpose = password_setup`. Continuation token поля остаются там же.
 - причина:
   текущая модель email-code flows уже единая. Для multi-tenant isolation
   достаточно tenant-aware lookup, индексов и advisory lock key.
@@ -230,14 +230,14 @@
   поддержки не являются frontend constants. Tenant admin загружает active legal
   documents в portal через PDF/DOCX/TXT upload без inline-редактора. Backend
   извлекает текст, хранит active version в `portal_legal_documents`, отдает
-  public legal reader routes and blocks registration until both active versions
-  exist. Телефон поддержки хранится в branding settings и отдается browser как
-  public `supportContact` metadata.
+  public legal reader routes and blocks first customer access completion until
+  both active versions exist. Телефон поддержки хранится в branding settings и
+  отдается browser как public `supportContact` metadata.
 - причина:
   legal copy and support contact are operator-owned tenant configuration.
   Browser не должен быть source of truth для legal versions or contact
-  fallbacks, а registration consent должен фиксировать actual active document
-  versions from backend authority.
+  fallbacks, а customer access consent должен фиксировать actual active
+  document versions from backend authority.
 
 ## D-015. Feature boundaries не смешиваем в `shared`
 
@@ -497,32 +497,32 @@
   into a session write. A renewal window keeps the behavior convenient while
   bounding write load and preserving backend authority over session validity.
 
-## D-029. Registration password is optional after email proof
+## D-029. Unified email-code access replaces customer registration
 
-- дата: `2026-06-26`
+- дата: `2026-06-27`
 - решение:
-  Customer registration still requires tenant-scoped Chatwoot contact
-  eligibility and email-code verification, but password creation is optional at
-  completion. `POST /api/auth/register/set-password` stores a password hash,
-  while `POST /api/auth/register/skip-password` creates the same portal user
-  with `portal_users.password_hash = null`; both successful completion paths
-  consume the one-time registration continuation, link contact/legal acceptance,
-  issue the normal signed httpOnly customer `portal_session` cookie and enter
-  the protected chat app. Authenticated user snapshots expose
-  `passwordConfigured` as `password_hash is not null`.
+  Customer-facing registration is no longer a separate product or API surface.
+  `/auth/login` is the primary email-code access route, backed by
+  `/api/auth/code-login/request`, `/api/auth/code-login/verify` and
+  `/api/auth/code-login/accept-legal`. Existing active portal users can receive
+  a code and enter after verification when they have accepted the current active
+  legal document versions. First-access users are eligible only when the email
+  matches a Chatwoot contact inside the current tenant account; the portal user,
+  contact link and `customer_access` legal acceptance are created only after
+  code verification and legal consent. Passwords remain optional, and
+  `portal_users.password_hash = null` is a normal state.
 - граница:
+  Password login remains a secondary route for users who configured a password.
   Password login for a null-hash customer returns the same generic invalid
-  credentials as any bad login. A passwordless customer can enter again after
-  logout through the public passwordless email-code login flow for already
-  registered users, then create the first password later through an email-code
-  proof tied to the current customer session. Logged-in first-password setup
-  derives user identity from the current session, rejects users who already have
-  a hash, stores the first hash only for that current tenant/user and rotates
-  customer sessions after success. Tenant-admin sessions and Chatwoot authority
-  are not involved.
+  credentials as any bad login. Unknown emails receive the same generic request
+  response as eligible emails and get no email. Inactive portal users are a
+  terminal auth state and are not provisioned again through Chatwoot. Chatwoot
+  lookup happens only on code request after portal-user lookup misses, outside
+  DB transactions/advisory locks; verification and legal acceptance use the
+  stored verification record and do not call Chatwoot.
 - причина:
-  Known Chatwoot contacts have already proven email control during
-  registration, so requiring immediate password setup is unnecessary friction.
-  Keeping later password creation behind a fresh email-code proof preserves the
-  backend authority boundary, avoids browser-submitted user/email targets and
-  lets passwordless rows remain a deliberate state instead of an auth leak.
+  Customers should not have to choose between login and registration. The
+  backend already knows whether the email belongs to an active portal user or
+  an eligible Chatwoot contact. A unified code-first flow reduces UI branching,
+  keeps browser tokens out of the flow, preserves tenant/backend authority and
+  avoids extra Chatwoot calls or DB writes on ordinary session checks.

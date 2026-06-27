@@ -23,48 +23,16 @@ export type AuthenticatedPortalSession = {
   user: AuthenticatedPortalUser
 }
 
-export type RegisterRequestFormValues = {
-  email: string
-  fullName: string
-  personalDataConsentAccepted: boolean
-  termsAccepted: boolean
-}
-
-export type RegisterRequestFormErrors = Partial<
-  Record<keyof RegisterRequestFormValues, string>
->
-
-export type TouchedRegisterRequestFields = Record<
-  'email' | 'fullName',
-  boolean
->
-
-export type RegisterVerifyFormValues = {
-  code: string
-}
-
-export type RegisterVerifyFormErrors = Partial<
-  Record<keyof RegisterVerifyFormValues, string>
->
-
-export type TouchedRegisterVerifyFields = Record<
-  keyof RegisterVerifyFormValues,
-  boolean
->
-
-export type RegisterSetPasswordFormValues = {
+export type PasswordSetupFormValues = {
   confirmPassword: string
   newPassword: string
 }
 
-export type RegisterSetPasswordFormErrors = Partial<
-  Record<keyof RegisterSetPasswordFormValues, string>
+export type PasswordSetupFormErrors = Partial<
+  Record<keyof PasswordSetupFormValues, string>
 >
 
-export type TouchedRegisterSetPasswordFields = Record<
-  keyof RegisterSetPasswordFormValues,
-  boolean
->
+export type TouchedPasswordSetupFields = Record<keyof PasswordSetupFormValues, boolean>
 
 export type PasswordResetRequestFormValues = {
   email: string

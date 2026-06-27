@@ -70,16 +70,22 @@ export function buildVerifyResponse({
   }
 }
 
-export function buildCompletedResponse(
-  input: Pick<
-    PasswordSetupCompletedSession,
-    'session' | 'sessionToken' | 'user'
-  >,
-): PasswordSetupCompletedSession {
+export function buildCompletedResponse({
+  session,
+  sessionToken,
+  user,
+}: Pick<
+  PasswordSetupCompletedSession,
+  'session' | 'sessionToken' | 'user'
+>): PasswordSetupCompletedSession {
   return {
     nextStep: 'chat',
     purpose: PASSWORD_SETUP_PURPOSE,
     result: 'password_setup_completed',
-    ...input,
+    session: {
+      expiresAt: session.expiresAt,
+    },
+    sessionToken,
+    user,
   }
 }

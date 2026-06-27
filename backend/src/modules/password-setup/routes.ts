@@ -2,10 +2,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
+import { ApiError } from '../../lib/errors.js'
 import { assertAllowedTenantOrigin } from '../../lib/origin.js'
 import { portalPasswordSchema } from '../../lib/passwordPolicy.js'
-import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
-import { getSessionCookieOptions } from '../auth/sessionCookie.js'
+import { requireTenantContext } from '../tenants/routes.js'
+import {
+  clearSessionCookie,
+  getSessionCookieOptions,
+  getSessionToken,
+} from '../auth/sessionCookie.js'
 import type { AuthService } from '../auth/service.js'
 import type {
   PasswordSetupCompletedSession,
@@ -46,16 +51,28 @@ async function resolvePasswordSetupScope({
   reply: FastifyReply
   request: FastifyRequest
 }) {
-  const user = await resolveAuthenticatedPortalUser({
-    authService,
-    env,
-    reply,
-    request,
+  const sessionToken = getSessionToken(request, env)
+
+  if (!sessionToken) {
+    clearSessionCookie(reply, env)
+    throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
+  }
+
+  const tenant = requireTenantContext(request)
+  const session = await authService.getCurrentSession({
+    sessionToken,
+    tenantId: tenant.id,
   })
 
+  if (!session) {
+    clearSessionCookie(reply, env)
+    throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
+  }
+
   return {
-    email: user.email,
-    userId: user.id,
+    email: session.user.email,
+    emailProofExpiresAt: session.emailProofExpiresAt,
+    userId: session.user.id,
   }
 }
 

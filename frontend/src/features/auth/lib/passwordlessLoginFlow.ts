@@ -5,7 +5,15 @@ type StoredPasswordlessLoginRequest = {
   resendAvailableInSeconds: number
 }
 
+type StoredPasswordlessLoginLegalContinuation = {
+  continuationExpiresInSeconds: number
+  continuationToken: string
+  email: string
+  verifiedAt: number
+}
+
 type PasswordlessLoginFlowState = {
+  legalContinuation: StoredPasswordlessLoginLegalContinuation | null
   request: StoredPasswordlessLoginRequest | null
 }
 
@@ -13,6 +21,7 @@ const STORAGE_KEY = 'portal.passwordless-login-flow'
 
 function createEmptyState(): PasswordlessLoginFlowState {
   return {
+    legalContinuation: null,
     request: null,
   }
 }
@@ -46,6 +55,7 @@ function readPasswordlessLoginFlowState(): PasswordlessLoginFlowState {
     ) as Partial<PasswordlessLoginFlowState>
 
     return {
+      legalContinuation: parsedState.legalContinuation ?? null,
       request: parsedState.request ?? null,
     }
   } catch {
@@ -59,7 +69,7 @@ function writePasswordlessLoginFlowState(state: PasswordlessLoginFlowState) {
   }
 
   try {
-    if (!state.request) {
+    if (!state.request && !state.legalContinuation) {
       window.sessionStorage.removeItem(STORAGE_KEY)
       return
     }
@@ -94,6 +104,31 @@ export function getStoredPasswordlessLoginRequest() {
   return request
 }
 
+export function getStoredPasswordlessLoginLegalContinuation() {
+  const currentState = readPasswordlessLoginFlowState()
+  const legalContinuation = currentState.legalContinuation
+
+  if (!legalContinuation) {
+    return null
+  }
+
+  if (
+    !isFinitePositiveNumber(legalContinuation.verifiedAt) ||
+    !isFinitePositiveNumber(
+      legalContinuation.continuationExpiresInSeconds,
+    ) ||
+    hasExpired(
+      legalContinuation.verifiedAt,
+      legalContinuation.continuationExpiresInSeconds,
+    )
+  ) {
+    clearPasswordlessLoginFlow()
+    return null
+  }
+
+  return legalContinuation
+}
+
 export function savePasswordlessLoginRequest({
   email,
   expiresInSeconds,
@@ -104,11 +139,32 @@ export function savePasswordlessLoginRequest({
   resendAvailableInSeconds: number
 }) {
   writePasswordlessLoginFlowState({
+    legalContinuation: null,
     request: {
       email: normalizeEmail(email),
       expiresInSeconds,
       requestedAt: Date.now(),
       resendAvailableInSeconds,
     },
+  })
+}
+
+export function savePasswordlessLoginLegalContinuation({
+  continuationExpiresInSeconds,
+  continuationToken,
+  email,
+}: {
+  continuationExpiresInSeconds: number
+  continuationToken: string
+  email: string
+}) {
+  writePasswordlessLoginFlowState({
+    legalContinuation: {
+      continuationExpiresInSeconds,
+      continuationToken,
+      email: normalizeEmail(email),
+      verifiedAt: Date.now(),
+    },
+    request: null,
   })
 }

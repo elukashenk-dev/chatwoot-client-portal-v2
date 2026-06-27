@@ -97,7 +97,7 @@ describe('createLegalDocumentsService', () => {
       documentType: 'terms',
       requestIp: '127.0.0.1',
       upload: {
-        data: Buffer.from('Legal terms text for registration consent.'),
+        data: Buffer.from('Legal terms text for customer access consent.'),
         fileName: '..\\terms.txt',
         mimeType: 'text/plain',
       },
@@ -106,7 +106,7 @@ describe('createLegalDocumentsService', () => {
 
     expect(repository.activateDocument).toHaveBeenCalledWith(
       expect.objectContaining({
-        bodyText: 'Legal terms text for registration consent.',
+        bodyText: 'Legal terms text for customer access consent.',
         documentType: 'terms',
         sourceContentType: 'text/plain',
         sourceFileName: 'terms.txt',
@@ -119,7 +119,7 @@ describe('createLegalDocumentsService', () => {
     )
     expect(response).toEqual({
       document: expect.objectContaining({
-        bodyCharacterCount: 42,
+        bodyCharacterCount: 45,
         documentType: 'terms',
         sourceFileName: 'terms.txt',
         title: 'Пользовательское соглашение',
@@ -197,7 +197,7 @@ describe('createLegalDocumentsService', () => {
       documentType: 'privacy',
       requestIp: null,
       upload: {
-        data: Buffer.from('Privacy policy text for registration consent.'),
+        data: Buffer.from('Privacy policy text for customer access consent.'),
         fileName: 'privacy.txt',
         mimeType: 'text/plain',
       },
@@ -206,7 +206,7 @@ describe('createLegalDocumentsService', () => {
 
     await expect(service.getPublicDocument('privacy')).resolves.toEqual({
       document: expect.objectContaining({
-        bodyText: 'Privacy policy text for registration consent.',
+        bodyText: 'Privacy policy text for customer access consent.',
         documentType: 'privacy',
         title: 'Политика обработки персональных данных',
       }),

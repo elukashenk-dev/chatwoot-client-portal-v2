@@ -32,10 +32,11 @@ import {
   PASSWORD_SETUP_RESEND_COOLDOWN_SECONDS,
   PASSWORD_SETUP_TTL_SECONDS,
 } from './tokens.js'
+import { requestPasswordSetupFromFreshEmailProof } from './freshEmailProofSetup.js'
 import type {
   CreatePasswordSetupServiceOptions,
   PasswordSetupCompletedSession,
-  PasswordSetupRequestResult,
+  PasswordSetupRequestResponse,
   PasswordSetupScope,
   PasswordSetupVerifyResult,
 } from './types.js'
@@ -68,10 +69,23 @@ export function createPasswordSetupService({
   return {
     async requestPasswordSetup(
       scope: PasswordSetupScope,
-    ): Promise<PasswordSetupRequestResult> {
+    ): Promise<PasswordSetupRequestResponse> {
       const normalizedEmail = normalizeEmail(scope.email)
       const normalizedScope = { email: normalizedEmail, userId: scope.userId }
       const requestedAt = now()
+
+      const freshEmailProofResponse =
+        await requestPasswordSetupFromFreshEmailProof({
+          emailProofExpiresAt: scope.emailProofExpiresAt,
+          passwordSetupRepository,
+          requestedAt,
+          scope: normalizedScope,
+        })
+
+      if (freshEmailProofResponse) {
+        return freshEmailProofResponse
+      }
+
       const preflight = await readPasswordSetupRequestPreflight({
         passwordSetupRepository,
         requestedAt,
@@ -225,7 +239,9 @@ export function createPasswordSetupService({
     async confirmPasswordSetup({
       code,
       ...scope
-    }: PasswordSetupScope & { code: string }): Promise<PasswordSetupVerifyResult> {
+    }: PasswordSetupScope & {
+      code: string
+    }): Promise<PasswordSetupVerifyResult> {
       const normalizedScope = {
         email: normalizeEmail(scope.email),
         userId: scope.userId,

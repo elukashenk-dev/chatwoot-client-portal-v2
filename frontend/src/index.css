@@ -743,10 +743,6 @@ button:not(:disabled),
   margin-top: 43px;
 }
 
-.auth-page--register-set-password .auth-form-slot {
-  margin-top: 24px;
-}
-
 .auth-login-form {
   display: flex;
   flex-direction: column;
@@ -821,31 +817,6 @@ button:not(:disabled),
   letter-spacing: 0;
   line-height: 22px;
   text-align: left;
-}
-
-.registration-password-note {
-  max-width: 330px;
-  margin-top: 0;
-  color: var(--portal-auth-text-color, #15486b);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 21px;
-}
-
-.registration-set-password-flow > .auth-flow-form {
-  margin-top: 12px;
-}
-
-.registration-set-password-flow .auth-flow-form > :is(div, label) + :is(div, label) {
-  margin-top: 16px;
-}
-
-.registration-set-password-flow .auth-flow-form > .auth-password-rules {
-  margin-top: 20px;
-}
-
-.registration-set-password-flow .auth-flow-form > button[type='submit'] {
-  margin-top: 22px;
 }
 
 .auth-password-rules {
@@ -1265,6 +1236,11 @@ a.auth-support-phone:hover {
   line-height: 18px;
 }
 
+.auth-secondary-links--single {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
 .auth-secondary-link {
   text-decoration: none;
   white-space: nowrap;
@@ -1346,10 +1322,6 @@ a.auth-support-phone:hover {
 
   .auth-form-slot {
     margin-top: 31px;
-  }
-
-  .auth-page--register-set-password .auth-form-slot {
-    margin-top: 18px;
   }
 
   .auth-login-form > :is(div, label) + :is(div, label),

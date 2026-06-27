@@ -41,11 +41,14 @@ Tenant владеет:
 
 Текущий пользовательский контур:
 
-- существующий Chatwoot contact может пройти registration eligibility check;
-- пользователь подтверждает email, может задать пароль сразу или пропустить
-  этот шаг и сразу войти в портал;
+- пользователь вводит email и подтверждает его кодом;
+- если email принадлежит active portal user, backend выдает обычную customer
+  session после успешной проверки кода и актуального legal consent;
+- если email еще не принадлежит portal user, но найден как Chatwoot contact
+  текущего tenant, пользователь принимает legal documents, после чего backend
+  создает portal user/contact link и выдает обычную customer session;
 - password reset работает через email-code flow, включая первый пароль для
-  пользователя, который пропустил пароль при регистрации;
+  пользователя, который вошел без пароля;
 - пользователь открывает защищенную клиентскую зону;
 - пользователь видит личный чат и, при наличии доступа, групповые чаты;
 - backend загружает историю сообщений, отправляет текст, отправляет один файл и доставляет realtime-обновления;
@@ -87,7 +90,7 @@ Portal backend отвечает за:
 
 - tenant resolution;
 - auth и sessions;
-- registration, password reset и password setup;
+- unified email-code access, password reset и password setup;
 - access control;
 - profile read and avatar update boundary;
 - chat thread/access resolution;
@@ -213,7 +216,7 @@ signup does not create a production portal tenant.
 4. Frontend получает только public tenant context.
 5. Chatwoot secrets и Chatwoot authority в браузер не попадают.
 
-### Auth, Registration, Password Reset И Password Setup
+### Auth, Email-Code Access, Password Reset И Password Setup
 
 - session хранится в `httpOnly` cookie;
 - session row содержит `tenant_id`;
@@ -227,23 +230,29 @@ signup does not create a production portal tenant.
   затрагивается;
 - email не считается глобально уникальным;
 - корректная уникальность пользователя - `tenant_id + email`;
-- registration eligibility ищет exact email match только внутри current tenant Chatwoot account;
-- registration completion создает нормальную customer session и может сохранить
-  password hash или оставить `portal_users.password_hash = null`;
+- `/api/auth/code-login/request` является primary customer access path:
+  existing active portal users получают email-code login, а first-access users
+  допускаются только при exact Chatwoot contact match внутри current tenant
+  account;
+- Chatwoot lookup для first access выполняется только на request path, вне
+  DB transaction/advisory lock, и только если portal-user lookup не нашел
+  existing user;
+- inactive portal user является terminal auth state: backend не пытается
+  provision такого пользователя заново через Chatwoot contact;
+- first-access portal user создается только после email-code verification и
+  acceptance текущих active legal document versions;
 - password login для null-hash пользователя возвращает generic invalid
   credentials без раскрытия passwordless state;
-- already registered customer может войти без пароля через отдельный
-  passwordless email-code login flow; request endpoint возвращает generic
-  accepted response, не раскрывает наличие аккаунта и выдает обычную customer
-  session только после успешной проверки кода;
+- request endpoint возвращает generic accepted response, не раскрывает наличие
+  аккаунта или Chatwoot contact и отправляет email только eligible пользователям;
 - если passwordless пользователь сам выходит из чата, frontend предупреждает,
   что следующий вход будет через код из почты;
 - logged-in first-password setup доступен только текущему customer session user,
   требует email-code proof, сохраняет первый hash и ротирует customer session;
-- registration, password reset, logged-in first-password setup и passwordless
-  email-code login используют общую таблицу `verification_records`;
-- сценарий различается через `purpose`: `registration`, `password_reset`,
-  `password_setup` или `passwordless_login`;
+- email-code access, password reset и logged-in first-password setup используют
+  общую таблицу `verification_records`;
+- сценарий различается через `purpose`: `passwordless_login`,
+  `password_reset` или `password_setup`;
 - отдельные таблицы `password_reset_records` или `password_setup_records` не
   создаются;
 - verification/advisory-lock логика tenant-aware.
@@ -384,9 +393,9 @@ Tenant-aware PWA endpoints:
   deliveries учитывает tenant scope;
 - `portal_users.email` не является глобально уникальным;
 - `portal_users.password_hash` nullable: отсутствие hash означает, что customer
-  прошел email-code registration/passwordless flow, но еще не создал пароль;
-- `verification_records` обслуживает registration, password reset, logged-in
-  first-password setup и passwordless email-code login;
+  прошел email-code access flow, но еще не создал пароль;
+- `verification_records` обслуживает email-code access, password reset и
+  logged-in first-password setup;
 - continuation token fields остаются в `verification_records`;
 - tenant Chatwoot secrets хранятся encrypted/backend-only;
 - encryption key для tenant secrets задается через `PORTAL_TENANT_SECRET_KEY`;
@@ -414,15 +423,12 @@ API `v2` остается простым и явным:
 - `/api/auth/login`;
 - `/api/auth/logout`;
 - `/api/auth/me`;
-- `/api/auth/register/request`;
-- `/api/auth/register/verify`;
-- `/api/auth/register/set-password`;
-- `/api/auth/register/skip-password`;
 - `/api/auth/password-reset/request`;
 - `/api/auth/password-reset/verify`;
 - `/api/auth/password-reset/set-password`;
 - `/api/auth/code-login/request`;
 - `/api/auth/code-login/verify`;
+- `/api/auth/code-login/accept-legal`;
 - `/api/auth/password-setup/request`;
 - `/api/auth/password-setup/verify`;
 - `/api/auth/password-setup/set`;
@@ -491,18 +497,17 @@ chatwoot-client-portal-v2/
 - `health` - readiness/health endpoints;
 - `tenants` - host resolution, tenant runtime config, secret handling, public tenant context and PWA identity;
 - `auth` - login, logout, current user and session handling;
-- `registration` - eligibility, verification request/confirm and
-  password-optional authenticated completion;
 - `password-reset` - reset request, verification and password update;
-- `passwordless-login` - public email-code login for already registered
-  customer users and normal customer session issuance;
+- `passwordless-login` - unified public email-code access for existing portal
+  users and eligible Chatwoot contacts, legal continuation and normal customer
+  session issuance;
 - `password-setup` - protected first-password setup for passwordless users,
   email-code proof and rotated session handoff;
 - `profile` - read-only current user profile, avatar upload and current-avatar proxy;
 - `branding` - tenant-scoped public/admin branding settings read model,
   backend-owned asset upload/read/delete routes and admin update boundary;
 - `legal-documents` - tenant-scoped active legal document uploads, extracted
-  public text read model and registration version authority;
+  public text read model and customer access consent version authority;
 - `portal-users` - portal user persistence helpers;
 - `chat-threads` - portal-owned thread listing, access validation and Chatwoot conversation mapping;
 - `chat-messages` - history, text send, attachment send, attachment proxy, media, search and send ledger;
@@ -520,9 +525,8 @@ chatwoot-client-portal-v2/
 ### Frontend Features
 
 - `tenant` - public tenant context and tenant identity metadata;
-- `auth` - registration with optional password completion, password reset,
-  passwordless code login, login/logout/me UI and authenticated session
-  handoff;
+- `auth` - primary email-code access, secondary password login, password reset,
+  login/logout/me UI and authenticated session handoff;
 - `admin-auth` - separate tenant-admin login/session UI over backend admin auth;
 - `admin-branding` - admin branding API client, draft state, settings form,
   support phone/legal document/asset upload controls and live preview
@@ -581,7 +585,7 @@ tenant-aware runtime.
 - tenant support phone is part of branding settings and is exposed to browser
   only as public contact metadata;
 - legal terms/privacy texts are tenant-owned portal data, uploaded by tenant
-  admin as PDF/DOCX/TXT and read by registration/legal pages through backend
+  admin as PDF/DOCX/TXT and read by customer access/legal pages through backend
   routes;
 - admin code хранится через slow password-hash boundary, admin session token
   хранится только как hash;

@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { routePaths } from '../../../app/routePaths'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
@@ -14,8 +14,10 @@ import { calculateResendCountdown } from '../lib/otpVerificationTiming'
 import {
   clearPasswordlessLoginFlow,
   getStoredPasswordlessLoginRequest,
+  savePasswordlessLoginLegalContinuation,
   savePasswordlessLoginRequest,
 } from '../lib/passwordlessLoginFlow'
+import { getPostLoginPath } from '../lib/postLoginRedirect'
 import type { PasswordlessLoginVerifyFormValues } from '../types'
 import { OtpVerificationFormLayout } from './OtpVerificationFormLayout'
 
@@ -35,6 +37,7 @@ function getErrorMessage(error: unknown) {
 }
 
 export function PasswordlessLoginVerifyForm() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { completeAuthenticatedSession } = useAuthSession()
   const [loginRequest, setLoginRequest] = useState(() =>
@@ -110,9 +113,22 @@ export function PasswordlessLoginVerifyForm() {
         email: loginRequest.email,
       })
 
+      if (response.nextStep === 'accept_legal') {
+        savePasswordlessLoginLegalContinuation({
+          continuationExpiresInSeconds: response.continuationExpiresInSeconds,
+          continuationToken: response.continuationToken,
+          email: response.email,
+        })
+        navigate(routePaths.auth.codeLoginLegal, {
+          replace: true,
+          state: location.state,
+        })
+        return
+      }
+
       clearPasswordlessLoginFlow()
       await completeAuthenticatedSession(response)
-      navigate(routePaths.app.chat, { replace: true })
+      navigate(getPostLoginPath(location.state), { replace: true })
     } catch (error) {
       setGlobalError(getErrorMessage(error))
     } finally {
@@ -163,6 +179,7 @@ export function PasswordlessLoginVerifyForm() {
 
         <Link
           className="inline-flex min-h-11 items-center rounded-[0.75rem] px-3 text-sm font-medium text-brand-800 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+          state={location.state}
           to={routePaths.auth.codeLoginRequest}
         >
           Запросить код входа
@@ -174,6 +191,7 @@ export function PasswordlessLoginVerifyForm() {
   return (
     <OtpVerificationFormLayout
       changeEmailTo={routePaths.auth.codeLoginRequest}
+      changeEmailState={location.state}
       code={values.code}
       codeInputId="passwordless-login-verify-code"
       errorMessage={globalError}

@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  acceptCodeLoginLegal,
   confirmPasswordlessLoginCode,
   completePasswordSetup,
-  completeRegistrationSetPassword,
   getCurrentSession,
   getCurrentUser,
   requestPasswordlessLoginCode,
   requestPasswordSetup,
-  skipRegistrationPassword,
   verifyPasswordSetupCode,
 } from './authClient'
 
@@ -67,99 +66,6 @@ describe('auth API client', () => {
         },
         method: 'GET',
         signal,
-      }),
-    )
-  })
-
-  it('uses authenticated registration completion contracts', async () => {
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({
-        nextStep: 'chat',
-        purpose: 'registration',
-        result: 'registration_completed',
-        session: {
-          expiresAt: '2026-06-10T10:00:00.000Z',
-        },
-        user: {
-          email: 'name@company.ru',
-          fullName: 'Portal User',
-          id: 7,
-          passwordConfigured: true,
-        },
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      completeRegistrationSetPassword({
-        continuationToken: 'registration-continuation-token',
-        email: 'name@company.ru',
-        newPassword: 'PortalPass123',
-      }),
-    ).resolves.toMatchObject({
-      nextStep: 'chat',
-      session: {
-        expiresAt: '2026-06-10T10:00:00.000Z',
-      },
-      user: {
-        passwordConfigured: true,
-      },
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/auth/register/set-password',
-      expect.objectContaining({
-        body: JSON.stringify({
-          continuationToken: 'registration-continuation-token',
-          email: 'name@company.ru',
-          newPassword: 'PortalPass123',
-        }),
-        credentials: 'include',
-        method: 'POST',
-      }),
-    )
-  })
-
-  it('calls registration skip-password endpoint', async () => {
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({
-        nextStep: 'chat',
-        purpose: 'registration',
-        result: 'registration_completed',
-        session: {
-          expiresAt: '2026-06-10T10:00:00.000Z',
-        },
-        user: {
-          email: 'skip@company.ru',
-          fullName: 'Skip User',
-          id: 8,
-          passwordConfigured: false,
-        },
-      }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-
-    await expect(
-      skipRegistrationPassword({
-        continuationToken: 'registration-skip-token',
-        email: 'skip@company.ru',
-      }),
-    ).resolves.toMatchObject({
-      nextStep: 'chat',
-      user: {
-        passwordConfigured: false,
-      },
-    })
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/auth/register/skip-password',
-      expect.objectContaining({
-        body: JSON.stringify({
-          continuationToken: 'registration-skip-token',
-          email: 'skip@company.ru',
-        }),
-        credentials: 'include',
-        method: 'POST',
       }),
     )
   })
@@ -307,6 +213,54 @@ describe('auth API client', () => {
         body: JSON.stringify({
           code: '123456',
           email: 'name@company.ru',
+        }),
+        credentials: 'include',
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('calls passwordless legal-accept endpoint and returns authenticated session', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        nextStep: 'chat',
+        purpose: 'passwordless_login',
+        result: 'passwordless_login_completed',
+        session: {
+          expiresAt: '2026-06-10T10:00:00.000Z',
+        },
+        user: {
+          email: 'name@company.ru',
+          fullName: 'Portal User',
+          id: 7,
+          passwordConfigured: false,
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      acceptCodeLoginLegal({
+        continuationToken: 'legal-continuation-token',
+        email: 'name@company.ru',
+        personalDataConsentAccepted: true,
+        termsAccepted: true,
+      }),
+    ).resolves.toMatchObject({
+      nextStep: 'chat',
+      user: {
+        passwordConfigured: false,
+      },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/code-login/accept-legal',
+      expect.objectContaining({
+        body: JSON.stringify({
+          continuationToken: 'legal-continuation-token',
+          email: 'name@company.ru',
+          personalDataConsentAccepted: true,
+          termsAccepted: true,
         }),
         credentials: 'include',
         method: 'POST',

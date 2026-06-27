@@ -4,19 +4,19 @@ import { routePaths } from '../../../app/routePaths'
 
 const legalHistoryBackState = { legalBackMode: 'history' } as const
 
-export type RegistrationLegalConsentValue = {
+export type LegalConsentCheckboxesValue = {
   personalDataConsentAccepted: boolean
   termsAccepted: boolean
 }
 
-export function RegistrationLegalConsent({
+export function LegalConsentCheckboxes({
   disabled,
   onChange,
   value,
 }: {
   disabled: boolean
-  onChange: (value: RegistrationLegalConsentValue) => void
-  value: RegistrationLegalConsentValue
+  onChange: (value: LegalConsentCheckboxesValue) => void
+  value: LegalConsentCheckboxesValue
 }) {
   return (
     <fieldset className="auth-legal-consent">

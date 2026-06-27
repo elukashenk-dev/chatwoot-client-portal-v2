@@ -126,7 +126,7 @@ describe('auth input CSS contract', () => {
     expect(legalLinkRule).toContain('font-weight: 600')
   })
 
-  it('uses a custom auth checkbox style for registration consent', () => {
+  it('uses a custom auth checkbox style for legal consent', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
     const checkboxRule = getCssRule(css, '.auth-legal-consent input {')
     const checkedRule = getCssRule(

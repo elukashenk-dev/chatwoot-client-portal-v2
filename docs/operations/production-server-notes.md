@@ -195,7 +195,7 @@ Clean reinstall коротко:
 4. Запустить tenant-aware installer.
 5. Поднять portal v2 на `lk.provgroup.ru`.
 6. Проверить tenant bootstrap, Chatwoot account/inbox verification, API Channel
-   webhook setup, auth, registration, chat, realtime and PWA identity.
+   webhook setup, auth, email-code access, chat, realtime and PWA identity.
 
 ## Что Не Хранить В Этом Файле
 

@@ -9,13 +9,14 @@ import {
   verificationRecords,
 } from '../../db/schema.js'
 import { normalizeEmail } from '../../lib/email.js'
+import {
+  createVerifiedPasswordSetupRecord,
+  type CreateVerifiedSetupInput,
+} from './verifiedSetupRepository.js'
 
 export const PASSWORD_SETUP_PURPOSE = 'password_setup'
 
-type PasswordSetupUserScope = {
-  email: string
-  userId: number
-}
+type PasswordSetupUserScope = { email: string; userId: number }
 
 type CreatePendingSetupInput = PasswordSetupUserScope & {
   codeHash: string
@@ -119,7 +120,10 @@ export function createPasswordSetupRepository(
           ...(status ? [eq(verificationRecords.status, status)] : []),
         ),
       )
-      .orderBy(desc(verificationRecords.createdAt), desc(verificationRecords.id))
+      .orderBy(
+        desc(verificationRecords.createdAt),
+        desc(verificationRecords.id),
+      )
       .limit(1)
 
     const [record] = lock ? await query.for('update') : await query
@@ -177,6 +181,10 @@ export function createPasswordSetupRepository(
       }
 
       return createdRecord
+    },
+
+    async createVerifiedSetup(input: CreateVerifiedSetupInput, executor = db) {
+      return createVerifiedPasswordSetupRecord({ executor, input, tenantId })
     },
 
     async deleteSetupRecord(recordId: number, executor: AppDatabase = db) {
@@ -242,17 +250,15 @@ export function createPasswordSetupRepository(
       })
     },
 
-    async findPortalUserForSetup(
-      {
-        email,
-        executor = db,
-        lock = false,
-        userId,
-      }: PasswordSetupUserScope & {
-        executor?: AppDatabase
-        lock?: boolean
-      },
-    ): Promise<PasswordSetupPortalUser | null> {
+    async findPortalUserForSetup({
+      email,
+      executor = db,
+      lock = false,
+      userId,
+    }: PasswordSetupUserScope & {
+      executor?: AppDatabase
+      lock?: boolean
+    }): Promise<PasswordSetupPortalUser | null> {
       const normalizedEmail = normalizeEmail(email)
       const query = executor
         .select({

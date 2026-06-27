@@ -4,6 +4,7 @@ import type { PasswordSetupRepository } from './repository.js'
 
 export type PasswordSetupScope = {
   email: string
+  emailProofExpiresAt?: Date | null
   userId: number
 }
 
@@ -23,6 +24,10 @@ export type PasswordSetupRequestResult = {
   resendAvailableInSeconds: number
   result: 'password_setup_requested'
 }
+
+export type PasswordSetupRequestResponse =
+  | PasswordSetupRequestResult
+  | PasswordSetupVerifyResult
 
 export type PasswordSetupVerifyResult = {
   continuationExpiresInSeconds: number

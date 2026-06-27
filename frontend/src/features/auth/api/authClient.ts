@@ -3,7 +3,6 @@ import type {
   LoginFormValues,
   PasswordlessLoginRequestFormValues,
   PasswordResetRequestFormValues,
-  RegisterRequestFormValues,
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -21,36 +20,7 @@ type AuthRequestOptions = {
   signal?: AbortSignal
 }
 
-export type RegistrationVerificationRequestResponse = {
-  delivery: 'sent' | 'existing_pending'
-  email: string
-  expiresInSeconds: number
-  nextStep: 'verify_code'
-  purpose: 'registration'
-  resendAvailableInSeconds: number
-  result: 'verification_requested'
-}
-
-export type RegistrationVerificationConfirmResponse = {
-  continuationToken: string
-  continuationExpiresInSeconds: number
-  email: string
-  nextStep: 'set_password'
-  purpose: 'registration'
-  result: 'verification_confirmed'
-}
-
-export type RegistrationSetPasswordResponse = {
-  nextStep: 'chat'
-  purpose: 'registration'
-  result: 'registration_completed'
-  session: AuthenticatedPortalSession['session']
-  user: AuthenticatedPortalSession['user']
-}
-
-export type RegistrationSkipPasswordResponse = RegistrationSetPasswordResponse
-
-export type PasswordSetupRequestResponse = {
+export type PasswordSetupCodeRequestResponse = {
   email: string
   expiresInSeconds: number
   nextStep: 'verify_code'
@@ -67,6 +37,10 @@ export type PasswordSetupVerificationConfirmResponse = {
   purpose: 'password_setup'
   result: 'password_setup_verified'
 }
+
+export type PasswordSetupRequestResponse =
+  | PasswordSetupCodeRequestResponse
+  | PasswordSetupVerificationConfirmResponse
 
 export type PasswordSetupCompleteResponse = {
   nextStep: 'chat'
@@ -112,13 +86,29 @@ export type PasswordlessLoginRequestResponse = {
   result: 'passwordless_login_requested'
 }
 
-export type PasswordlessLoginVerifyResponse = {
+export type PasswordlessLoginCompletedResponse = {
   nextStep: 'chat'
   purpose: 'passwordless_login'
   result: 'passwordless_login_completed'
   session: AuthenticatedPortalSession['session']
   user: AuthenticatedPortalSession['user']
 }
+
+export type PasswordlessLoginLegalRequiredResponse = {
+  continuationExpiresInSeconds: number
+  continuationToken: string
+  email: string
+  nextStep: 'accept_legal'
+  purpose: 'passwordless_login'
+  result: 'legal_acceptance_required'
+}
+
+export type PasswordlessLoginVerifyResponse =
+  | PasswordlessLoginCompletedResponse
+  | PasswordlessLoginLegalRequiredResponse
+
+export type PasswordlessLoginAcceptLegalResponse =
+  PasswordlessLoginCompletedResponse
 
 export class ApiClientError extends Error {
   readonly code?: string
@@ -232,90 +222,6 @@ export async function logout() {
   })
 }
 
-export async function requestRegistrationVerification(
-  requestBody: RegisterRequestFormValues,
-) {
-  return request<RegistrationVerificationRequestResponse>(
-    '/auth/register/request',
-    {
-      body: JSON.stringify(requestBody),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    },
-  )
-}
-
-export async function confirmRegistrationVerification({
-  code,
-  email,
-}: {
-  code: string
-  email: string
-}) {
-  return request<RegistrationVerificationConfirmResponse>(
-    '/auth/register/verify',
-    {
-      body: JSON.stringify({
-        code,
-        email,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    },
-  )
-}
-
-export async function completeRegistrationSetPassword({
-  continuationToken,
-  email,
-  newPassword,
-}: {
-  continuationToken: string
-  email: string
-  newPassword: string
-}) {
-  return request<RegistrationSetPasswordResponse>(
-    '/auth/register/set-password',
-    {
-      body: JSON.stringify({
-        continuationToken,
-        email,
-        newPassword,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    },
-  )
-}
-
-export async function skipRegistrationPassword({
-  continuationToken,
-  email,
-}: {
-  continuationToken: string
-  email: string
-}) {
-  return request<RegistrationSkipPasswordResponse>(
-    '/auth/register/skip-password',
-    {
-      body: JSON.stringify({
-        continuationToken,
-        email,
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-    },
-  )
-}
-
 export async function requestPasswordReset(
   requestBody: PasswordResetRequestFormValues,
 ) {
@@ -378,16 +284,13 @@ export async function completePasswordResetSetPassword({
 export async function requestPasswordlessLoginCode(
   requestBody: PasswordlessLoginRequestFormValues,
 ) {
-  return request<PasswordlessLoginRequestResponse>(
-    '/auth/code-login/request',
-    {
-      body: JSON.stringify(requestBody),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
+  return request<PasswordlessLoginRequestResponse>('/auth/code-login/request', {
+    body: JSON.stringify(requestBody),
+    headers: {
+      'Content-Type': 'application/json',
     },
-  )
+    method: 'POST',
+  })
 }
 
 export async function confirmPasswordlessLoginCode({
@@ -407,6 +310,34 @@ export async function confirmPasswordlessLoginCode({
     },
     method: 'POST',
   })
+}
+
+export async function acceptCodeLoginLegal({
+  continuationToken,
+  email,
+  personalDataConsentAccepted,
+  termsAccepted,
+}: {
+  continuationToken: string
+  email: string
+  personalDataConsentAccepted: true
+  termsAccepted: true
+}) {
+  return request<PasswordlessLoginAcceptLegalResponse>(
+    '/auth/code-login/accept-legal',
+    {
+      body: JSON.stringify({
+        continuationToken,
+        email,
+        personalDataConsentAccepted,
+        termsAccepted,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    },
+  )
 }
 
 export async function requestPasswordSetup() {

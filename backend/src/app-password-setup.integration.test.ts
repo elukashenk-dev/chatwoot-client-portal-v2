@@ -251,13 +251,14 @@ describe('password setup app integration', () => {
   })
 
   it('rejects wrong, expired, replayed, and tenant-mismatched password-setup codes', async () => {
-    const { sessionToken: wrongCodeSessionToken } =
-      await seedPortalUserSession({
+    const { sessionToken: wrongCodeSessionToken } = await seedPortalUserSession(
+      {
         database,
         email: 'wrong-code@company.ru',
         passwordHash: null,
         tenantId,
-      })
+      },
+    )
     const wrongCodeCookie = `${testEnv.SESSION_COOKIE_NAME}=${app.signCookie(
       wrongCodeSessionToken,
     )}`
@@ -723,8 +724,7 @@ describe('password setup app integration', () => {
       },
       method: 'POST',
       payload: {
-        continuationToken:
-          'wrong-continuation-token-with-valid-length-000000',
+        continuationToken: 'wrong-continuation-token-with-valid-length-000000',
         newPassword: 'PortalPass123',
       },
       url: '/api/auth/password-setup/set',

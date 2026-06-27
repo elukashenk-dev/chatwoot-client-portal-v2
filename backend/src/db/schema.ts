@@ -88,7 +88,7 @@ export const portalLegalAcceptances = pgTable(
     ),
     check(
       'portal_legal_acceptances_purpose_check',
-      sql`${table.purpose} in ('registration')`,
+      sql`${table.purpose} in ('customer_access')`,
     ),
     check(
       'portal_legal_acceptances_terms_accepted_check',
@@ -117,6 +117,10 @@ export const portalSessions = pgTable(
       }),
     tokenHash: text('token_hash').notNull(),
     expiresAt: timestamp('expires_at', timestampWithTimezone).notNull(),
+    emailProofExpiresAt: timestamp(
+      'email_proof_expires_at',
+      timestampWithTimezone,
+    ),
     lastSeenAt: timestamp('last_seen_at', timestampWithTimezone).notNull(),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()

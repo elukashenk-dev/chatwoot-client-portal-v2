@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppRoutes } from '../../../app/AppRoutes'
+import type { InitialEntry } from 'react-router-dom'
 import { renderWithRouter } from '../../../test/renderWithRouter'
 import {
   BrandingContext,
@@ -195,7 +196,7 @@ function createSupportAvailabilityResponse() {
   )
 }
 
-function renderAuthRoutes(initialEntries: string[]) {
+function renderAuthRoutes(initialEntries: InitialEntry[]) {
   renderWithRouter(<AppRoutes />, { initialEntries })
 }
 
@@ -270,7 +271,7 @@ describe('LoginPage', () => {
     expect(screen.queryByText('Центр поддержки')).not.toBeInTheDocument()
   })
 
-  it('redirects to the login route and renders working auth links', async () => {
+  it('redirects to the login route and renders code-first auth links', async () => {
     fetchMock.mockResolvedValueOnce(
       createJsonResponse(
         {
@@ -295,17 +296,16 @@ describe('LoginPage', () => {
     expect(document.querySelector('.auth-subtitle--login')).toHaveTextContent(
       'Войдите, чтобы продолжить общение с поддержкой.',
     )
+    expect(screen.queryByLabelText(/Пароль/)).not.toBeInTheDocument()
     expect(
-      screen.getByRole('link', { name: 'Забыли пароль?' }),
-    ).toHaveAttribute('href', '/auth/password-reset/request')
+      screen.getByRole('button', { name: 'Получить код' }),
+    ).toBeInTheDocument()
     expect(
-      screen.getByRole('link', {
-        name: 'Уже есть аккаунт без пароля? Войти по коду из почты.',
-      }),
-    ).toHaveAttribute('href', '/auth/code-login/request')
+      screen.getByRole('link', { name: 'Войти по паролю' }),
+    ).toHaveAttribute('href', '/auth/login/password')
     expect(
-      screen.getByRole('link', { name: 'Создать аккаунт' }),
-    ).toHaveAttribute('href', '/auth/register')
+      screen.queryByRole('link', { name: /Активировать доступ|Регистрация/ }),
+    ).not.toBeInTheDocument()
     expect(screen.queryByText('Нет доступа к чату?')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: '+7 (846) 211-11-11' }),
@@ -320,7 +320,7 @@ describe('LoginPage', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('toggles password visibility, validates fields, and authenticates against backend auth routes', async () => {
+  it('toggles password visibility, validates fields, and authenticates from the password login route', async () => {
     const user = userEvent.setup()
 
     fetchMock
@@ -341,9 +341,19 @@ describe('LoginPage', () => {
       .mockResolvedValueOnce(createNotificationSettingsResponse())
       .mockResolvedValueOnce(createSupportAvailabilityResponse())
 
-    renderAuthRoutes(['/auth/login'])
+    renderAuthRoutes(['/auth/login/password'])
 
-    const emailInput = await screen.findByLabelText(/Email/)
+    expect(
+      await screen.findByRole('heading', { name: 'Вход по паролю' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Войти по коду из почты' }),
+    ).toHaveAttribute('href', '/auth/login')
+    expect(
+      screen.getByRole('link', { name: 'Забыли пароль?' }),
+    ).toHaveAttribute('href', '/auth/password-reset/request')
+
+    const emailInput = screen.getByLabelText(/Email/)
     const passwordInput = screen.getByLabelText(/Пароль/)
     expect(passwordInput).toHaveAttribute('type', 'password')
 
@@ -396,6 +406,55 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Чат не подключен')).toBeInTheDocument()
   })
 
+  it('preserves protected redirect when switching to password login', async () => {
+    const user = userEvent.setup()
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+
+      if (url === '/api/auth/me') {
+        return createJsonResponse(
+          {
+            error: {
+              code: 'UNAUTHORIZED',
+              message: 'Требуется вход.',
+            },
+          },
+          401,
+        )
+      }
+
+      if (url === '/api/auth/login') {
+        return createAuthenticatedSessionResponse()
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    renderAuthRoutes(['/app/settings'])
+
+    expect(
+      await screen.findByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Войти по паролю' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Вход по паролю' }),
+    ).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/Email/), 'name@company.ru')
+    await user.type(screen.getByLabelText(/Пароль/), 'Secret123')
+    await user.click(screen.getByRole('button', { name: 'Войти' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Настройки' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Личный чат' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('loads existing session into the app shell and returns to login after logout', async () => {
     const user = userEvent.setup()
 
@@ -436,9 +495,7 @@ describe('LoginPage', () => {
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Открыть меню чата' }))
-    await user.click(
-      await screen.findByRole('menuitem', { name: 'Выход' }),
-    )
+    await user.click(await screen.findByRole('menuitem', { name: 'Выход' }))
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/logout',
@@ -540,12 +597,14 @@ describe('LoginPage', () => {
     renderAuthRoutes(['/auth/login'])
 
     expect(document.querySelector('.auth-frame-background')).toBeInTheDocument()
-    expect(document.querySelector('.auth-canvas-background')).toBeInTheDocument()
+    expect(
+      document.querySelector('.auth-canvas-background'),
+    ).toBeInTheDocument()
     expect(screen.queryByLabelText(/Email/)).not.toBeInTheDocument()
   })
 
   it.each([
-    ['/auth/register', 'Создать аккаунт'],
+    ['/auth/login/legal', 'Принять условия'],
     ['/auth/password-reset/request', 'Восстановление пароля'],
   ])(
     'redirects authenticated public auth route %s to the app shell',

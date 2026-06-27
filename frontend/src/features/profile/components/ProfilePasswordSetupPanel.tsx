@@ -10,17 +10,17 @@ import {
 import { OtpInputGroup } from '../../auth/components/OtpInputGroup'
 import { PasswordSetupFormLayout } from '../../auth/components/PasswordSetupFormLayout'
 import { getPasswordRuleStates } from '../../auth/lib/passwordRules'
-import { validateRegisterSetPasswordForm } from '../../auth/lib/registerSetPasswordValidation'
+import { validatePasswordSetupForm } from '../../auth/lib/passwordSetupValidation'
 import type {
-  RegisterSetPasswordFormValues,
-  TouchedRegisterSetPasswordFields,
+  PasswordSetupFormValues,
+  TouchedPasswordSetupFields,
 } from '../../auth/types'
 import { useAuthSession } from '../../auth/lib/authSessionContext'
 import { FormField } from '../../../shared/ui/FormField'
 import { InlineAlert } from '../../../shared/ui/InlineAlert'
 import { PrimaryButton } from '../../../shared/ui/PrimaryButton'
 
-const DEFAULT_VALUES: RegisterSetPasswordFormValues = {
+const DEFAULT_VALUES: PasswordSetupFormValues = {
   confirmPassword: '',
   newPassword: '',
 }
@@ -49,10 +49,12 @@ export function ProfilePasswordSetupPanel() {
     useState(false)
   const [step, setStep] = useState<PasswordSetupStep>('request')
   const [code, setCode] = useState('')
-  const [continuationToken, setContinuationToken] = useState<string | null>(null)
+  const [continuationToken, setContinuationToken] = useState<string | null>(
+    null,
+  )
   const [values, setValues] =
-    useState<RegisterSetPasswordFormValues>(DEFAULT_VALUES)
-  const [touched, setTouched] = useState<TouchedRegisterSetPasswordFields>({
+    useState<PasswordSetupFormValues>(DEFAULT_VALUES)
+  const [touched, setTouched] = useState<TouchedPasswordSetupFields>({
     confirmPassword: false,
     newPassword: false,
   })
@@ -66,7 +68,7 @@ export function ProfilePasswordSetupPanel() {
   const isPasswordConfigured =
     Boolean(user?.passwordConfigured) || passwordConfiguredLocally
 
-  const fieldErrors = validateRegisterSetPasswordForm(values)
+  const fieldErrors = validatePasswordSetupForm(values)
   const visiblePasswordError =
     touched.newPassword || hasSubmitted ? fieldErrors.newPassword : undefined
   const visibleConfirmError =
@@ -83,9 +85,9 @@ export function ProfilePasswordSetupPanel() {
     passwordRuleStates.hasNumber &&
     passwordRuleStates.matches
 
-  function setFieldValue<Key extends keyof RegisterSetPasswordFormValues>(
+  function setFieldValue<Key extends keyof PasswordSetupFormValues>(
     field: Key,
-    nextValue: RegisterSetPasswordFormValues[Key],
+    nextValue: PasswordSetupFormValues[Key],
   ) {
     setValues((currentValues) => ({
       ...currentValues,
@@ -94,7 +96,7 @@ export function ProfilePasswordSetupPanel() {
     setErrorMessage(null)
   }
 
-  function markFieldTouched(field: keyof TouchedRegisterSetPasswordFields) {
+  function markFieldTouched(field: keyof TouchedPasswordSetupFields) {
     setTouched((currentTouched) => ({
       ...currentTouched,
       [field]: true,
@@ -110,6 +112,13 @@ export function ProfilePasswordSetupPanel() {
       const response = await requestPasswordSetup()
 
       setCode('')
+      if (response.nextStep === 'set_password') {
+        setContinuationToken(response.continuationToken)
+        setStep('set_password')
+        setMessage('Email подтвержден. Теперь задайте пароль.')
+        return
+      }
+
       setContinuationToken(null)
       setStep('verify_code')
       setMessage(`Код отправлен на ${response.email}.`)
@@ -248,7 +257,11 @@ export function ProfilePasswordSetupPanel() {
             ) : null}
 
             {step === 'verify_code' ? (
-              <form className="space-y-4" noValidate onSubmit={handleVerifyCode}>
+              <form
+                className="space-y-4"
+                noValidate
+                onSubmit={handleVerifyCode}
+              >
                 <FormField
                   htmlFor="profile-password-setup-code"
                   label="Код из письма"
@@ -287,7 +300,9 @@ export function ProfilePasswordSetupPanel() {
                 errorMessage={errorMessage}
                 isSubmitting={isSubmittingPassword}
                 newPassword={values.newPassword}
-                onConfirmPasswordBlur={() => markFieldTouched('confirmPassword')}
+                onConfirmPasswordBlur={() =>
+                  markFieldTouched('confirmPassword')
+                }
                 onConfirmPasswordChange={(nextValue) =>
                   setFieldValue('confirmPassword', nextValue)
                 }

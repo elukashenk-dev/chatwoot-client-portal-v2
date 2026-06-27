@@ -3,7 +3,7 @@ import { TenantAuthShell } from '../../tenant/components/TenantAuthShell'
 import { AuthLegalNotice } from '../components/AuthLegalNotice'
 import { AuthSecondaryLinks } from '../components/AuthSecondaryLinks'
 import { AuthSupportBlock } from '../components/AuthSupportBlock'
-import { LoginForm } from '../components/LoginForm'
+import { PasswordlessLoginRequestForm } from '../components/PasswordlessLoginRequestForm'
 
 export function LoginPage() {
   const { branding } = useBranding()
@@ -14,7 +14,8 @@ export function LoginPage() {
       descriptionClassName="auth-subtitle--login"
       title={branding.copy.authTitle}
     >
-      <LoginForm legalNotice={<AuthLegalNotice />} />
+      <PasswordlessLoginRequestForm />
+      <AuthLegalNotice />
       <AuthSecondaryLinks />
       <AuthSupportBlock />
     </TenantAuthShell>

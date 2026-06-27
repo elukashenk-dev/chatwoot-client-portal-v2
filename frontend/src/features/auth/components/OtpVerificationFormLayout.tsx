@@ -14,6 +14,7 @@ import { OtpInputGroup } from './OtpInputGroup'
 
 type OtpVerificationFormLayoutProps = {
   changeEmailLabel?: string
+  changeEmailState?: unknown
   changeEmailTo: string
   code: string
   codeInputId: string
@@ -42,6 +43,7 @@ function formatCountdown(seconds: number) {
 
 export function OtpVerificationFormLayout({
   changeEmailLabel = 'Изменить email',
+  changeEmailState,
   changeEmailTo,
   code,
   codeInputId,
@@ -117,6 +119,7 @@ export function OtpVerificationFormLayout({
           ) : (
             <Link
               className={authFlowActionSecondaryLinkClassName}
+              state={changeEmailState}
               to={changeEmailTo}
             >
               {changeEmailLabel}

@@ -18,9 +18,9 @@ import {
 import { UserProfilePage } from './UserProfilePage'
 
 vi.mock('../../auth/api/authClient', async () => {
-  const actual = await vi.importActual<typeof import('../../auth/api/authClient')>(
-    '../../auth/api/authClient',
-  )
+  const actual = await vi.importActual<
+    typeof import('../../auth/api/authClient')
+  >('../../auth/api/authClient')
 
   return {
     ...actual,
@@ -120,9 +120,7 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('Имя').closest('div')).toHaveClass(
       'border-slate-300/45',
     )
-    expect(
-      screen.queryByText(/Пароль пока не задан/),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/Пароль пока не задан/)).not.toBeInTheDocument()
     expect(screen.getByText('Пароль настроен')).toBeInTheDocument()
     expect(
       screen.getByText(
@@ -135,11 +133,9 @@ describe('UserProfilePage', () => {
     expect(
       screen.queryByRole('button', { name: 'Задать пароль' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Заменить аватар').closest('label')).toHaveClass(
-      'border-white/65',
-      'bg-white/60',
-      'backdrop-blur-md',
-    )
+    expect(
+      screen.getByLabelText('Заменить аватар').closest('label'),
+    ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
 
   it('uploads an avatar and switches to the replace action', async () => {
@@ -246,9 +242,11 @@ describe('UserProfilePage', () => {
 
     renderPage(authSession)
 
-    await user.click(await screen.findByRole('button', {
-      name: 'Задать пароль',
-    }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Задать пароль',
+      }),
+    )
     expect(requestPasswordSetupMock).toHaveBeenCalledWith()
 
     await user.click(await screen.findByLabelText('Код из письма'))
@@ -277,6 +275,65 @@ describe('UserProfilePage', () => {
         id: 7,
         passwordConfigured: true,
       },
+    })
+    expect(await screen.findByText('Пароль настроен')).toBeInTheDocument()
+  })
+
+  it('sets the first password immediately when the session has a fresh email proof', async () => {
+    const user = userEvent.setup()
+    const authSession = createAuthSession({ passwordConfigured: false })
+
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Иван Петров',
+      phoneNumber: null,
+      result: 'ready',
+    })
+    requestPasswordSetupMock.mockResolvedValueOnce({
+      continuationExpiresInSeconds: 900,
+      continuationToken: 'fresh-proof-continuation-token',
+      email: 'ivan@example.com',
+      nextStep: 'set_password',
+      purpose: 'password_setup',
+      result: 'password_setup_verified',
+    })
+    completePasswordSetupMock.mockResolvedValueOnce({
+      nextStep: 'chat',
+      purpose: 'password_setup',
+      result: 'password_setup_completed',
+      session: {
+        expiresAt: '2026-06-10T10:00:00.000Z',
+      },
+      user: {
+        email: 'ivan@example.com',
+        fullName: 'Иван Петров',
+        id: 7,
+        passwordConfigured: true,
+      },
+    })
+
+    renderPage(authSession)
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Задать пароль' }),
+    )
+
+    expect(requestPasswordSetupMock).toHaveBeenCalledWith()
+    expect(verifyPasswordSetupCodeMock).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument()
+    expect(await screen.findByLabelText(/Новый пароль/)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/Новый пароль/), 'PortalPass123')
+    await user.type(
+      screen.getByLabelText(/Подтвердите пароль/),
+      'PortalPass123',
+    )
+    await user.click(screen.getByRole('button', { name: 'Сохранить пароль' }))
+
+    expect(completePasswordSetupMock).toHaveBeenCalledWith({
+      continuationToken: 'fresh-proof-continuation-token',
+      newPassword: 'PortalPass123',
     })
     expect(await screen.findByText('Пароль настроен')).toBeInTheDocument()
   })
@@ -310,9 +367,11 @@ describe('UserProfilePage', () => {
 
     renderPage(authSession)
 
-    await user.click(await screen.findByRole('button', {
-      name: 'Задать пароль',
-    }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Задать пароль',
+      }),
+    )
     await user.click(await screen.findByLabelText('Код из письма'))
     await user.keyboard('123456')
     await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
@@ -367,9 +426,11 @@ describe('UserProfilePage', () => {
 
     renderPage(authSession)
 
-    await user.click(await screen.findByRole('button', {
-      name: 'Задать пароль',
-    }))
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Задать пароль',
+      }),
+    )
     await user.click(await screen.findByLabelText('Код из письма'))
     await user.keyboard('123456')
     await user.click(screen.getByRole('button', { name: 'Подтвердить код' }))
