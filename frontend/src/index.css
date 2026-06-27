@@ -822,9 +822,13 @@ button:not(:disabled),
   color: var(--portal-auth-muted-text-color, #8a909b);
   font-size: 14px;
   font-weight: 400;
+  -webkit-hyphens: auto;
+  hyphens: auto;
   letter-spacing: 0;
   line-height: 22px;
+  overflow-wrap: break-word;
   text-align: left;
+  word-break: normal;
 }
 
 .auth-password-rules {
