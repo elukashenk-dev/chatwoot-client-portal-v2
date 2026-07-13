@@ -1,6 +1,8 @@
 # Full Application Risk Audit Design
 
-Status: approved by the user on `2026-07-13`; audit execution has not started.
+Status: approved by the user on `2026-07-13`; execution is in progress. A
+cost-aware security-stage amendment was approved on `2026-07-13` after the
+architecture checkpoint.
 
 ## Goal
 
@@ -36,6 +38,15 @@ The audit separates:
 5. later remediation in separately approved fix scopes.
 
 No product-code fix is part of audit discovery.
+
+The security stage uses a cost-aware escalation gate: one canonical standard
+repository-wide security scan is mandatory, while a Deep Security Scan is not
+run by default. Deep review is limited to `backend/` and is triggered only by
+a reportable `Critical`/`High`, an unresolved plausibly `Critical`/`High`
+backend authority risk, or a concrete inability to close coverage of the core
+tenant/auth/session/data/webhook/message/Chatwoot boundaries. A skipped or
+blocked conditional deep review is recorded explicitly and cannot be used to
+hide an unresolved high-impact gap.
 
 ## Fixed Baseline
 
@@ -166,8 +177,13 @@ Review:
 - transactions, concurrency, idempotency and duplicate delivery handling;
 - rate limits, retention and cleanup behavior.
 
-The security portion uses a deep, multi-pass security scan workflow. Candidate
-security findings still require canonical validation before reporting.
+The security portion first uses the canonical standard single-pass,
+repository-wide scan workflow. Its discovery, validation, attack-path and
+generated-report phases remain mandatory. The conditional escalation gate
+above decides whether the canonical Deep Security Scan must then review
+`backend/`; ordinary low/medium candidates alone do not trigger repeated deep
+passes. Candidate security findings still require canonical validation before
+reporting.
 
 ### Stage 3. Chatwoot And External Integrations
 
@@ -352,6 +368,8 @@ Assign `GO with conditions` when:
 Assign `GO` only when:
 
 - no blocking `Critical` or `High` remains;
+- the mandatory standard security scan is complete, and the conditional deep
+  gate either did not trigger or its high-impact proof gap was closed;
 - core authority, tenant, persistence and runtime invariants are validated;
 - required automated checks pass or non-material blockers are documented;
 - unverified areas do not prevent the decision to operate and onboard.
@@ -407,6 +425,8 @@ resolve ownership before continuing.
 The audit is complete only when:
 
 - every in-scope subsystem is classified in the coverage matrix;
+- the standard repository-wide security report is finalized and the
+  conditional backend deep-review decision is recorded with evidence;
 - every existing finding has been revalidated;
 - every new candidate is confirmed or rejected with a reason;
 - every `Critical` and `High` has independent revalidation;
@@ -442,6 +462,6 @@ The following are starting candidates, not pre-validated audit conclusions:
 
 ## Next Gate
 
-The user reviews this written spec. After explicit approval, create a detailed
-task-by-task audit execution plan. Audit discovery must not begin before that
-plan is reviewed and approved.
+Continue Task 4 from the approved execution plan using the cost-aware security
+gate. Do not start product fixes or broaden conditional deep review beyond
+`backend/` without a separate user decision.

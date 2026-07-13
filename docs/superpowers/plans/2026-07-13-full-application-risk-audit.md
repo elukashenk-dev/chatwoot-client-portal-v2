@@ -18,8 +18,8 @@ creating canonical findings or assigning the final verdict.
 
 **Tech Stack:** Git worktrees, Markdown audit artifacts, Node.js 24, pnpm 10,
 TypeScript, Fastify, React, PostgreSQL/Drizzle, Vitest, Playwright, Docker
-Compose, Codex Security Deep Security Scan, official Chatwoot and dependency
-sources.
+Compose, Codex Security standard scan with a conditional backend Deep Security
+Scan, official Chatwoot and dependency sources.
 
 ## Global Constraints
 
@@ -54,13 +54,17 @@ sources.
 - Browser/runtime checks use local isolated portal services only. Before any
   mutating Chatwoot fixture call, prove the configured base URL is local and
   not a production host.
-- The Codex Security Deep Security Scan must use its own canonical workflow.
-  It requires exactly six usable discovery workers per completed round. Do not
-  claim that stage completed when capability preflight is not `ready`.
-- The currently observed session has four total concurrency slots and cannot
-  satisfy a six-worker discovery round. Execution must pass the official
-  capability preflight in a sufficiently provisioned session before Task 4 can
-  proceed.
+- Task 4 must first complete the canonical standard repository-wide Codex
+  Security scan. Run its official `security_scan` capability preflight and do
+  not create a scan goal before the result is `ready`.
+- Deep Security Scan is conditional and scoped to `backend/`. Trigger it only
+  for a reportable `Critical`/`High`, an unresolved plausibly
+  `Critical`/`High` backend authority risk, or a concrete inability to close
+  coverage of tenant/auth/session/data/webhook/message/Chatwoot boundaries.
+- When the conditional deep gate triggers, use the canonical Deep Security
+  workflow without modification: exactly six usable discovery workers per
+  completed round and a `ready` `deep_security_scan` preflight. Never silently
+  reduce worker count or widen the target.
 - Point-in-time audit reports belong under `docs/superpowers/`; active
   validated risks belong under `docs/findings/`.
 - Do not update `docs/roadmap/work-log.md` merely for commands, test runs,
@@ -453,8 +457,8 @@ git commit -m "docs(audit): record baseline and safety net"
 
 - Consumes: baseline route/table/runtime inventory from Task 2.
 - Produces: overall application trust-boundary map and invariant checklist.
-  This document is not supplied to Deep Security Scan discovery workers; each
-  security worker must build its own independent threat model.
+  This document is not supplied to Codex Security discovery workers; the
+  security workflow must build its own threat model from the frozen source.
 
 - [ ] **Step 1: Trace tenant resolution before protected runtime**
 
@@ -506,29 +510,31 @@ git commit -m "docs(audit): map architecture invariants"
 
 ---
 
-### Task 4: Run The Canonical Deep Security Scan
+### Task 4: Run The Cost-Aware Canonical Security Review
 
 **Files:**
 
 - Create after the external scan completes:
   `docs/superpowers/audits/2026-07-13-full-application-risk-audit/stages/02-security.md`
 - Modify: shared manifest, coverage matrix and candidate ledger.
-- External generated artifacts: the scan directory selected by
-  `codex-security:deep-security-scan`.
+- External generated artifacts: the standard scan directory selected by
+  `codex-security:security-scan` and, only when triggered, the backend scan
+  directory selected by `codex-security:deep-security-scan`.
 
 **Interfaces:**
 
-- Consumes: frozen `AUDIT_SOURCE_ROOT` only. Discovery workers must not consume
-  the coordinator architecture report or one another's results.
-- Produces: generated Codex Security report, canonical validated security
-  findings, coverage artifacts and a concise import record.
+- Consumes: frozen `AUDIT_SOURCE_ROOT` only. Security discovery must not consume
+  the coordinator candidate ledger as a finding seed.
+- Produces: a generated standard Codex Security report, a recorded deep-review
+  gate decision, an optional generated backend Deep Security report, canonical
+  validated security findings, coverage artifacts and a concise import record.
 
 - [ ] **Step 1: Load the required security workflow and references**
 
 Read completely at execution time:
 
 ```text
-codex-security:deep-security-scan
+codex-security:security-scan
 codex-security config-preflight reference
 codex-security final-report reference
 codex-security finding-detail-fields reference
@@ -537,48 +543,67 @@ codex-security finding-detail-fields reference
 Confirm the plugin exposes `security-scan`, `threat-model`,
 `finding-discovery`, `validation`, `attack-path-analysis`,
 `vulnerability-writeup` and `propose-security-hardening`. Stop with an exact
-blocker if a required skill is unavailable.
+blocker if a required skill is unavailable. Load `deep-security-scan` and its
+required references only if Step 4 triggers escalation.
 
-- [ ] **Step 2: Run official capability preflight**
+- [ ] **Step 2: Run the standard-scan capability preflight**
 
-Run `scripts/config_preflight.py` with profile `deep_security_scan`, cwd
-`AUDIT_SOURCE_ROOT`, delegation/goal availability and multi-agent
-owner/version/cap/provenance verified from the active tool surface, plus only
-the codex-security skills exposed by the current Available Skills surface.
+Run `scripts/config_preflight.py` with profile `security_scan`, cwd
+`AUDIT_SOURCE_ROOT`, delegation/goal availability and verified runtime facts
+required by that profile, plus only the codex-security skills exposed by the
+current Available Skills surface.
 
 Expected: `status: ready` before any scan goal, worklist or worker is created.
-The observed four-slot session is insufficient for a six-worker round. Follow
-only the helper's concrete remediation and never silently reduce worker count.
+Follow only the helper's concrete remediation.
 
-- [ ] **Step 3: Start the deep scan only after preflight is ready**
+- [ ] **Step 3: Complete one canonical standard repository scan**
 
 Use the terminal/chat route unless the host explicitly identifies itself as
 the Codex desktop app and exposes both setup-continuation tools. Create or
-adopt the coordinator goal required by the deep-security workflow. Resolve the
-entire frozen repository as target and do not edit repository files while the
-security scan is active.
+adopt the coordinator goal required by `security-scan`. Resolve the entire
+frozen repository as target; run threat model, exhaustive discovery,
+validation, attack-path analysis, write-ups/hardening when findings survive,
+canonical JSON and deterministic finalization in the required order. Do not
+edit repository files while the security scan is active.
 
-- [ ] **Step 4: Complete independent discovery rounds**
+- [ ] **Step 4: Apply the conditional backend deep-review gate**
 
-Follow the workflow without modification: exactly six usable workers per
-completed round, the same canonical brief, worker-specific threat models,
-shared authoritative rank/deep-review inputs, no result sharing, no
-partial-round semantic inspection, lossless merge, remediation-subsumption
-dedupe and recorded `saturated` or `capped` terminal state.
+After the standard report is finalized, trigger a Deep Security Scan of exact
+scope `backend/` only when at least one condition is true:
 
-- [ ] **Step 5: Complete centralized validation and generated reporting**
+```text
+- a canonical standard finding is Critical or High;
+- a standard closure row is Needs follow-up with plausible Critical/High impact
+  in tenant resolution, customer/admin auth or session, cryptography/secrets,
+  tenant-scoped persistence, webhook authority, message send/realtime or
+  Chatwoot credential/authority handling;
+- the standard scan records a concrete coverage blocker for one of those core
+  backend boundaries.
+```
 
-Run canonical threat-model synthesis, `validation`, `attack-path-analysis`, one
-write-up worker per reportable finding, one structural hardening pass when
-findings survive, canonical JSON completion and deterministic report
-finalization. Do not hand-author the security `report.md`.
+Otherwise record `not_triggered` with the exact standard-report evidence and
+do not spend tokens on deep review. Low/Medium findings without an unresolved
+high-impact escalation path do not trigger it.
+
+- [ ] **Step 5: Run conditional backend Deep Security Scan when triggered**
+
+Read the complete deep-security workflow and references, run the official
+`deep_security_scan` preflight, and continue only after `ready`. Use exact
+target `AUDIT_SOURCE_ROOT/backend`; follow all six-worker rounds, saturation,
+canonical validation, attack-path, write-up, hardening and finalization rules
+without modification. Reconcile the resulting canonical backend findings with
+the standard report without dropping independently reportable issues. If this
+conditional scan is blocked, preserve the standard result and record the exact
+proof gap and remediation; do not claim that the high-impact trigger was
+closed.
 
 - [ ] **Step 6: Import only canonical security results**
 
-After the scan ends, create `02-security.md` with scan target/commit, generated
-report path, preflight status, validation mode, reportable IDs/severities,
-reviewed surfaces, limitations and candidate-ledger mapping. Do not copy raw
-worker bookkeeping into the overall report.
+After the standard scan and gate decision, create `02-security.md` with frozen
+target/commit, standard report path and preflight status, validation mode,
+reportable IDs/severities, reviewed surfaces, limitations, gate decision and
+evidence, optional backend deep-report path/status, and candidate-ledger
+mapping. Do not copy raw worker bookkeeping into the overall report.
 
 - [ ] **Step 7: Validate and commit the security-stage import**
 
@@ -590,8 +615,11 @@ git add docs/superpowers/audits/2026-07-13-full-application-risk-audit
 git commit -m "docs(audit): record canonical security review"
 ```
 
-Task 4 is blocked, not completed, if preflight cannot reach `ready` or the
-generated report cannot be finalized.
+Task 4 is blocked if the mandatory standard preflight cannot reach `ready` or
+its generated report cannot be finalized. A blocked conditional backend Deep
+Security Scan is recorded as `Needs follow-up`; it prevents `GO` while its
+plausible Critical/High trigger remains unresolved, but it does not prevent the
+remaining audit stages from collecting independent closure evidence.
 
 ---
 
@@ -1372,8 +1400,9 @@ Record evidence for the verdict. Passing tests cannot override a blocking
 finding. A `needs_follow_up` item with plausible Critical/High impact, or an
 unknown in a core tenant/auth/data/message-delivery/production-safety boundary,
 prevents `GO`; classify the decision as `NO-GO` when safe operation or
-onboarding cannot be established. A blocked Deep Security Scan makes the full
-audit incomplete and also prevents `GO`.
+onboarding cannot be established. A blocked mandatory standard security scan
+also prevents `GO`. A blocked conditional backend Deep Security Scan prevents
+`GO` only while the triggering plausible Critical/High proof gap remains open.
 
 - [ ] **Step 3: Write the final report with `apply_patch`**
 
@@ -1484,7 +1513,8 @@ Before execution starts, verify this plan has:
 
 - one task for every approved design stage;
 - an immutable source commit;
-- a Deep Security Scan capability gate;
+- a mandatory standard Security Scan capability gate and an evidence-driven
+  conditional backend Deep Security Scan gate;
 - exact artifact ownership and file paths;
 - candidate, coverage, severity and verdict contracts;
 - local-only runtime safety gates;
@@ -1494,5 +1524,7 @@ Before execution starts, verify this plan has:
 - a user review gate before any fix work.
 
 Execution is not complete until Task 13 is finished and the user receives the
-final report. A blocked Deep Security Scan means the full audit is incomplete;
-do not downgrade it silently or issue `GO` under the approved design.
+final report. A blocked standard scan makes the full audit incomplete. A
+blocked conditional backend Deep Security Scan must remain explicit and blocks
+`GO` only while its triggering plausible Critical/High proof gap is unresolved;
+do not downgrade that gap silently.
