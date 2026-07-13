@@ -27,7 +27,7 @@ Decision target: safe continued operation and new-client onboarding
 
 | Stage                   | Status      | Artifact                             |
 | ----------------------- | ----------- | ------------------------------------ |
-| Baseline                | not_started | stages/00-baseline.md                |
+| Baseline                | complete    | stages/00-baseline.md                |
 | Architecture invariants | not_started | stages/01-architecture-invariants.md |
 | Security                | not_started | stages/02-security.md                |
 | Backend/data            | not_started | stages/03-backend-data.md            |
