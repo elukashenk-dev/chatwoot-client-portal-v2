@@ -35,11 +35,11 @@ Use the approved "B. Пошаговая инструкция" structure:
 2. First sign-in by email code.
 3. Enter the email code.
 4. Accept legal terms and personal-data consent.
-5. Main chat and sending a message, with the passwordless access explanation
-   and group-chat selection from the left menu when groups are available.
-6. Install on Android through Chrome, including the menu-based path if the user
+5. Install on Android through Chrome, including the menu-based path if the user
    dismissed the install banner.
-7. Install on iPhone through Safari or Chrome.
+6. Install on iPhone through Safari or Chrome.
+7. Main chat and sending a message, with the passwordless access explanation
+   and group-chat selection from the left menu when groups are available.
 8. Profile and password setup.
 9. Returning without password: sign in by email code.
 10. Password sign-in for users who already set a password.
@@ -60,6 +60,8 @@ Use the approved "B. Пошаговая инструкция" structure:
   Chromium `beforeinstallprompt` flow.
 - For iPhone install, show the real portal iOS manual install instruction state
   from `PwaInstallBanner`.
+- The iPhone install guide text must describe reading the already opened
+  instruction state with the `Понятно` button, not pressing `Установить`.
 - The iOS wording must not imply Safari is the only supported browser; Chrome on
   iPhone/iPad can also add websites to the Home Screen through its share menu.
 - Do not use drawn browser/device mockups for install steps.
