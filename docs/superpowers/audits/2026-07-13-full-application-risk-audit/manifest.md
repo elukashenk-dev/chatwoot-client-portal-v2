@@ -28,7 +28,7 @@ Decision target: safe continued operation and new-client onboarding
 | Stage                   | Status      | Artifact                             |
 | ----------------------- | ----------- | ------------------------------------ |
 | Baseline                | complete    | stages/00-baseline.md                |
-| Architecture invariants | not_started | stages/01-architecture-invariants.md |
+| Architecture invariants | complete    | stages/01-architecture-invariants.md |
 | Security                | not_started | stages/02-security.md                |
 | Backend/data            | not_started | stages/03-backend-data.md            |
 | Chatwoot/integrations   | not_started | stages/04-chatwoot-integrations.md   |
