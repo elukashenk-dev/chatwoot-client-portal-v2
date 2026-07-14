@@ -25,16 +25,16 @@ Decision target: safe continued operation and new-client onboarding
 
 ## Stage Status
 
-| Stage                   | Status      | Artifact                             |
-| ----------------------- | ----------- | ------------------------------------ |
-| Baseline                | complete    | stages/00-baseline.md                |
-| Architecture invariants | complete    | stages/01-architecture-invariants.md |
-| Security                | complete    | stages/02-security.md                |
-| Backend/data            | complete    | stages/03-backend-data.md            |
-| Chatwoot/integrations   | complete    | stages/04-chatwoot-integrations.md   |
-| Frontend/PWA            | complete    | stages/05-frontend-pwa.md            |
-| Load/reliability        | complete    | stages/06-load-reliability.md        |
-| Operations/supply chain | complete    | stages/07-operations-supply-chain.md |
-| Existing findings       | complete    | stages/08-existing-findings.md       |
-| Dynamic validation      | complete    | stages/09-dynamic-validation.md      |
-| Canonical validation    | not_started | stages/10-canonical-validation.md    |
+| Stage                   | Status   | Artifact                             |
+| ----------------------- | -------- | ------------------------------------ |
+| Baseline                | complete | stages/00-baseline.md                |
+| Architecture invariants | complete | stages/01-architecture-invariants.md |
+| Security                | complete | stages/02-security.md                |
+| Backend/data            | complete | stages/03-backend-data.md            |
+| Chatwoot/integrations   | complete | stages/04-chatwoot-integrations.md   |
+| Frontend/PWA            | complete | stages/05-frontend-pwa.md            |
+| Load/reliability        | complete | stages/06-load-reliability.md        |
+| Operations/supply chain | complete | stages/07-operations-supply-chain.md |
+| Existing findings       | complete | stages/08-existing-findings.md       |
+| Dynamic validation      | complete | stages/09-dynamic-validation.md      |
+| Canonical validation    | complete | stages/10-canonical-validation.md    |
