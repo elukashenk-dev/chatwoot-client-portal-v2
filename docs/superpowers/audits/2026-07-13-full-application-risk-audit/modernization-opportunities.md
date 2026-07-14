@@ -5,7 +5,14 @@ validation promotes the underlying behavior to a finding.
 
 ## Supported-version Changes
 
-No opportunities recorded yet.
+- Schedule a dependency-refresh scope for the 29 direct packages reported by
+  `pnpm outdated`. Keep routine patch/minor updates separate from reviewed major
+  migrations such as Nodemailer 9, ESLint 10 and TypeScript 7.
+- Automate dependency-update pull requests and a production-advisory policy.
+  Require zero known production advisories or a time-limited exception with an
+  owner, applicability analysis and removal date.
+- Keep Node on a supported LTS line and update the exact Node 24 patch used by
+  CI/container builds through a reviewed, tested digest refresh.
 
 ## Maintainability
 
@@ -34,6 +41,18 @@ No opportunities recorded yet.
   highest-volume tables. Disposable PGlite checks are useful hypotheses, but
   production-like `EXPLAIN (ANALYZE, BUFFERS)` and WAL behavior need a separate
   isolated environment.
+- Declare minimal workflow `permissions`, pin GitHub Actions to verified full
+  commit SHAs and pin runtime/build images to reviewed digests. Use automated
+  update pull requests so immutability does not turn into permanent staleness.
+- Promote one immutable, CI-tested artifact through the canonical production
+  deploy path. Record commit/image digests and use bounded health gates plus an
+  explicit migration-aware rollback decision.
+- Generate and retain an SBOM and build provenance/attestation for release
+  artifacts. This improves incident response and dependency traceability; it
+  is not a substitute for vulnerability reachability review.
+- Make the production environment contract explicit per service and test it by
+  variable name. Deliberately classify operator-only, runtime, secret and
+  installer-only values so future keys cannot be silently dropped by compose.
 
 ## Observability
 
@@ -45,6 +64,10 @@ No opportunities recorded yet.
   thread-projection call/write, maintenance batch/progress and browser quota
   failure metrics. Do not label by tenant/user/thread; use bounded route or
   operation families and sampled traces for diagnosis.
+- Add low-cardinality deploy outcome/provenance, health-gate duration and
+  rollback outcome signals. Monitor backup age, copy success, restore-drill age
+  and recovery duration without putting tenant names, object keys or secrets in
+  labels/logs.
 
 ## Deferred Product Choices
 
@@ -54,3 +77,6 @@ No opportunities recorded yet.
 - Decide whether all production tenant provisioning must require HTTPS and how
   local/test exceptions are represented explicitly rather than inferred from a
   URL.
+- Define portal DB/object-storage RPO, RTO, retention, geographic/provider
+  failure scope and evidence ownership before new-client onboarding. Keep the
+  Chatwoot backup lifecycle separate but coordinate recovery ordering.
