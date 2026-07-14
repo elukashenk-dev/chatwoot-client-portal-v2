@@ -30,7 +30,7 @@ Decision target: safe continued operation and new-client onboarding
 | Baseline                | complete    | stages/00-baseline.md                |
 | Architecture invariants | complete    | stages/01-architecture-invariants.md |
 | Security                | complete    | stages/02-security.md                |
-| Backend/data            | not_started | stages/03-backend-data.md            |
+| Backend/data            | complete    | stages/03-backend-data.md            |
 | Chatwoot/integrations   | not_started | stages/04-chatwoot-integrations.md   |
 | Frontend/PWA            | not_started | stages/05-frontend-pwa.md            |
 | Load/reliability        | not_started | stages/06-load-reliability.md        |
