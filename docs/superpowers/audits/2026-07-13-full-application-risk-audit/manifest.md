@@ -36,5 +36,5 @@ Decision target: safe continued operation and new-client onboarding
 | Load/reliability        | complete    | stages/06-load-reliability.md        |
 | Operations/supply chain | complete    | stages/07-operations-supply-chain.md |
 | Existing findings       | complete    | stages/08-existing-findings.md       |
-| Dynamic validation      | not_started | stages/09-dynamic-validation.md      |
+| Dynamic validation      | complete    | stages/09-dynamic-validation.md      |
 | Canonical validation    | not_started | stages/10-canonical-validation.md    |
