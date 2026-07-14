@@ -23,6 +23,17 @@ No opportunities recorded yet.
   SMTP plus explicit SMTP TLS policy after provider/library defaults are
   confirmed. Current production guidance uses TLS, so this is not yet a
   validated defect.
+- Make the node-postgres pool maximum, connection-acquisition timeout and
+  statement/transaction budgets explicit per backend process. Size the total
+  connection budget across expected replicas instead of relying on the driver
+  default as an undocumented deployment contract.
+- Measure the indexed tenant lookup and secret-decryption cost before adding a
+  request cache. If a cache becomes justified, give suspension and secret
+  rotation an explicit invalidation path or short maximum staleness.
+- Preserve representative PostgreSQL query-plan/cardinality fixtures for the
+  highest-volume tables. Disposable PGlite checks are useful hypotheses, but
+  production-like `EXPLAIN (ANALYZE, BUFFERS)` and WAL behavior need a separate
+  isolated environment.
 
 ## Observability
 
@@ -30,6 +41,10 @@ No opportunities recorded yet.
   webhook dedupe hits, recipient-resolution cardinality/duration, external
   Chatwoot calls per event and push queue depth. These would make the candidate
   realtime/load paths measurable without high-cardinality user labels.
+- Add low-cardinality pool wait/active-connection, support-cache hit,
+  thread-projection call/write, maintenance batch/progress and browser quota
+  failure metrics. Do not label by tenant/user/thread; use bounded route or
+  operation families and sampled traces for diagnosis.
 
 ## Deferred Product Choices
 

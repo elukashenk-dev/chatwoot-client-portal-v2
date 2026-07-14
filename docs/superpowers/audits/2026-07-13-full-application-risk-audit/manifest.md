@@ -33,7 +33,7 @@ Decision target: safe continued operation and new-client onboarding
 | Backend/data            | complete    | stages/03-backend-data.md            |
 | Chatwoot/integrations   | complete    | stages/04-chatwoot-integrations.md   |
 | Frontend/PWA            | complete    | stages/05-frontend-pwa.md            |
-| Load/reliability        | not_started | stages/06-load-reliability.md        |
+| Load/reliability        | complete    | stages/06-load-reliability.md        |
 | Operations/supply chain | not_started | stages/07-operations-supply-chain.md |
 | Existing findings       | not_started | stages/08-existing-findings.md       |
 | Dynamic validation      | not_started | stages/09-dynamic-validation.md      |
