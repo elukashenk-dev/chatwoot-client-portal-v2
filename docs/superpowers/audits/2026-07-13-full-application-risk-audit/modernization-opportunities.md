@@ -1,16 +1,47 @@
 # Full Application Risk Audit Modernization Opportunities
 
+Status: complete for frozen commit
+`a61b4975ae7b59e244c0b5bbc4efd02466aa075c`
+
 Entries in this document are not defects or verdict blockers unless separate
 validation promotes the underlying behavior to a finding.
+
+## Finding-Backed Hardening Boundaries
+
+The generated
+[security hardening portfolio](/tmp/codex-security-scans/chatwoot-client-portal-v2-audit-source-2026-07-13/a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T191131Z/hardening/hardening.md)
+qualifies two structural opportunities:
+
+- generation-aware authority lifecycle across proof, session, SSE and push
+  state;
+- bounded work admission/backpressure across uploads, parsers, webhook work,
+  realtime, push fanout and tenant scheduling.
+
+These are decision options, not implemented controls. Apply the direct finding
+fixes and their regression gates first. Consider the shared boundaries only in
+a later approved design scope, with measured latency/cardinality, explicit
+tenant/global limits, rollback and migration costs. Focused local fixes remain
+preferable for Chatwoot redirect validation and secret-file creation mode.
+
+Several originally listed improvements became validated findings during the
+audit and must no longer be treated as optional modernization:
+
+- production advisory enforcement —
+  `docs/findings/F-SUPPLY-001-production-advisory-gate.md`;
+- immutable Actions/images —
+  `docs/findings/F-SUPPLY-002-immutable-build-inputs.md`;
+- production environment propagation —
+  `docs/findings/F-OPS-004-production-env-propagation.md`;
+- deploy authority/completion —
+  `docs/findings/F-OPS-005-deploy-authority-completion.md`.
 
 ## Supported-version Changes
 
 - Schedule a dependency-refresh scope for the 29 direct packages reported by
   `pnpm outdated`. Keep routine patch/minor updates separate from reviewed major
   migrations such as Nodemailer 9, ESLint 10 and TypeScript 7.
-- Automate dependency-update pull requests and a production-advisory policy.
-  Require zero known production advisories or a time-limited exception with an
-  owner, applicability analysis and removal date.
+- After closing `F-SUPPLY-001`, automate dependency-update pull requests so the
+  enforced production-advisory policy receives small reviewed refreshes.
 - Keep Node on a supported LTS line and update the exact Node 24 patch used by
   CI/container builds through a reviewed, tested digest refresh.
 
@@ -41,18 +72,17 @@ validation promotes the underlying behavior to a finding.
   highest-volume tables. Disposable PGlite checks are useful hypotheses, but
   production-like `EXPLAIN (ANALYZE, BUFFERS)` and WAL behavior need a separate
   isolated environment.
-- Declare minimal workflow `permissions`, pin GitHub Actions to verified full
-  commit SHAs and pin runtime/build images to reviewed digests. Use automated
-  update pull requests so immutability does not turn into permanent staleness.
-- Promote one immutable, CI-tested artifact through the canonical production
-  deploy path. Record commit/image digests and use bounded health gates plus an
-  explicit migration-aware rollback decision.
+- After closing `F-SUPPLY-002`, add minimal workflow `permissions` and automated
+  digest-refresh pull requests so immutability does not turn into permanent
+  staleness.
+- After closing `F-OPS-005`, extend immutable artifact promotion with retained
+  provenance and release-to-runtime traceability.
 - Generate and retain an SBOM and build provenance/attestation for release
   artifacts. This improves incident response and dependency traceability; it
   is not a substitute for vulnerability reachability review.
-- Make the production environment contract explicit per service and test it by
-  variable name. Deliberately classify operator-only, runtime, secret and
-  installer-only values so future keys cannot be silently dropped by compose.
+- After closing `F-OPS-004`, formalize the production environment contract by
+  classifying operator-only, runtime, secret and installer-only values and
+  generating bounded validation from that classification.
 
 ## Observability
 

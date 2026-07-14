@@ -1,7 +1,9 @@
 # Full Application Risk Audit Manifest
 
-Status: in progress
+Status: complete
 Decision target: safe continued operation and new-client onboarding
+Verdict: NO-GO for new-client onboarding and production expansion on the
+frozen commit; see `final-report.md`
 
 ## Frozen Source
 
@@ -38,3 +40,14 @@ Decision target: safe continued operation and new-client onboarding
 | Existing findings       | complete | stages/08-existing-findings.md       |
 | Dynamic validation      | complete | stages/09-dynamic-validation.md      |
 | Canonical validation    | complete | stages/10-canonical-validation.md    |
+| Final synthesis         | complete | final-report.md                      |
+
+## Final Canonical State
+
+- Candidate ledger: 71 rows; 58 `validated`, 11 `needs_follow_up`, 2
+  `rejected`, 0 unresolved discovery statuses.
+- Unique validated findings: 56; 0 Critical, 0 High, 40 Medium, 16 Low.
+- Blocking proof gates: `SEC-DEEP-001`, `OPS-009`, `F-OPS-002`.
+- Product-code delta from frozen source: none.
+- Final audit-document verification: recorded by the concluding audit commit;
+  see `final-report.md#evidence-and-artifact-map`.
