@@ -1,8 +1,7 @@
 # SEC-DEEP-001 Two-Auditor Disposition Design
 
-Status: approved in principle by the user on `2026-07-15`; written-spec review
-is pending. Execution is not approved and must not start without a separate
-explicit user decision.
+Status: approved by the user on `2026-07-15`. Execution is not approved and
+must not start without a separate explicit user decision.
 
 ## Goal
 
