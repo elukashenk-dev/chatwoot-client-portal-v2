@@ -33,7 +33,7 @@ describe('ensureTenantPortalContactCustomAttributes', () => {
       .mockResolvedValue({
         created: [
           'portal_enabled',
-          'portal_contact_type',
+          'portal_is_group',
           'portal_client_group_contact_ids',
           'curator_name',
         ],
@@ -75,7 +75,7 @@ describe('ensureTenantPortalContactCustomAttributes', () => {
       customAttributes: {
         created: [
           'portal_enabled',
-          'portal_contact_type',
+          'portal_is_group',
           'portal_client_group_contact_ids',
           'curator_name',
         ],

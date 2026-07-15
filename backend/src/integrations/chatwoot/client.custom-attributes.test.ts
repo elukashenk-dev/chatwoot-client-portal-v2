@@ -34,11 +34,10 @@ describe('createChatwootClient portal contact custom attributes', () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          attribute_display_name: 'Тип контакта портала',
-          attribute_display_type: 'list',
-          attribute_key: 'portal_contact_type',
+          attribute_display_name: 'Это группа',
+          attribute_display_type: 'checkbox',
+          attribute_key: 'portal_is_group',
           attribute_model: 'contact_attribute',
-          attribute_values: ['person', 'group'],
           id: 52,
         }),
       )
@@ -70,7 +69,7 @@ describe('createChatwootClient portal contact custom attributes', () => {
     expect(result).toEqual({
       created: [
         'portal_enabled',
-        'portal_contact_type',
+        'portal_is_group',
         'portal_client_group_contact_ids',
         'curator_name',
       ],
@@ -111,11 +110,10 @@ describe('createChatwootClient portal contact custom attributes', () => {
       expect.objectContaining({
         body: JSON.stringify({
           custom_attribute_definition: {
-            attribute_display_name: 'Тип контакта портала',
-            attribute_display_type: 'list',
-            attribute_key: 'portal_contact_type',
+            attribute_display_name: 'Это группа',
+            attribute_display_type: 'checkbox',
+            attribute_key: 'portal_is_group',
             attribute_model: 'contact_attribute',
-            attribute_values: ['person', 'group'],
           },
         }),
         method: 'POST',
@@ -171,11 +169,10 @@ describe('createChatwootClient portal contact custom attributes', () => {
             id: 61,
           },
           {
-            attribute_display_name: 'Тип контакта портала',
-            attribute_display_type: 'list',
-            attribute_key: 'portal_contact_type',
+            attribute_display_name: 'Old group flag',
+            attribute_display_type: 'text',
+            attribute_key: 'portal_is_group',
             attribute_model: 'contact_attribute',
-            attribute_values: ['person'],
             id: 62,
           },
           {
@@ -192,6 +189,14 @@ describe('createChatwootClient portal contact custom attributes', () => {
             attribute_model: 'contact_attribute',
             id: 64,
           },
+          {
+            attribute_display_name: 'External segment',
+            attribute_display_type: 'list',
+            attribute_key: 'external_contact_segment',
+            attribute_model: 'contact_attribute',
+            attribute_values: ['customer'],
+            id: 65,
+          },
         ]),
       )
       .mockResolvedValueOnce(
@@ -205,11 +210,10 @@ describe('createChatwootClient portal contact custom attributes', () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          attribute_display_name: 'Тип контакта портала',
-          attribute_display_type: 'list',
-          attribute_key: 'portal_contact_type',
+          attribute_display_name: 'Это группа',
+          attribute_display_type: 'checkbox',
+          attribute_key: 'portal_is_group',
           attribute_model: 'contact_attribute',
-          attribute_values: ['person', 'group'],
           id: 62,
         }),
       )
@@ -223,7 +227,7 @@ describe('createChatwootClient portal contact custom attributes', () => {
     expect(result).toEqual({
       created: [],
       unchanged: ['portal_client_group_contact_ids', 'curator_name'],
-      updated: ['portal_enabled', 'portal_contact_type'],
+      updated: ['portal_enabled', 'portal_is_group'],
     })
     expect(fetchFn).toHaveBeenNthCalledWith(
       2,
@@ -250,15 +254,18 @@ describe('createChatwootClient portal contact custom attributes', () => {
       expect.objectContaining({
         body: JSON.stringify({
           custom_attribute_definition: {
-            attribute_display_name: 'Тип контакта портала',
-            attribute_display_type: 'list',
-            attribute_key: 'portal_contact_type',
+            attribute_display_name: 'Это группа',
+            attribute_display_type: 'checkbox',
+            attribute_key: 'portal_is_group',
             attribute_model: 'contact_attribute',
-            attribute_values: ['person', 'group'],
           },
         }),
         method: 'PATCH',
       }),
     )
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+    expect(
+      fetchFn.mock.calls.some(([url]) => String(url).endsWith('/65')),
+    ).toBe(false)
   })
 })

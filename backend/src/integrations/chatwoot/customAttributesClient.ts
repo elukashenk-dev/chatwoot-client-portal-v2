@@ -3,8 +3,8 @@ import { ChatwootClientRequestError } from './errors.js'
 export type ChatwootPortalContactCustomAttributeKey =
   | 'curator_name'
   | 'portal_client_group_contact_ids'
-  | 'portal_contact_type'
   | 'portal_enabled'
+  | 'portal_is_group'
 
 export type ChatwootPortalContactCustomAttributeDefinitionsResult = {
   created: ChatwootPortalContactCustomAttributeKey[]
@@ -55,10 +55,9 @@ const REQUIRED_PORTAL_CONTACT_CUSTOM_ATTRIBUTE_DEFINITIONS: DesiredPortalContact
       key: 'portal_enabled',
     },
     {
-      displayName: 'Тип контакта портала',
-      displayType: 'list',
-      key: 'portal_contact_type',
-      values: ['person', 'group'],
+      displayName: 'Это группа',
+      displayType: 'checkbox',
+      key: 'portal_is_group',
     },
     {
       displayName: 'ID групп портала',

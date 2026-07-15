@@ -470,8 +470,8 @@ In the drift test, include:
 
 - an incorrectly typed/display-named `portal_is_group` definition that must be
   patched to the checkbox schema;
-- an extra legacy `portal_contact_type` definition that must receive no PATCH
-  or DELETE request.
+- an extra unrelated Chatwoot contact definition that must receive no PATCH or
+  DELETE request.
 
 Update provisioning/script result fixtures to list `portal_is_group` in place
 of `portal_contact_type`.
