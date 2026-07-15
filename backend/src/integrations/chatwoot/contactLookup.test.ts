@@ -54,7 +54,6 @@ describe('findChatwootContactById', () => {
           avatar_url: '/rails/active_storage/group-avatar.png',
           custom_attributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.com',
@@ -69,7 +68,6 @@ describe('findChatwootContactById', () => {
       avatarUrl: 'http://127.0.0.1:3000/rails/active_storage/group-avatar.png',
       customAttributes: {
         portal_client_group_contact_ids: '154',
-        portal_contact_type: 'person',
         portal_enabled: true,
       },
       email: 'ivan@example.com',

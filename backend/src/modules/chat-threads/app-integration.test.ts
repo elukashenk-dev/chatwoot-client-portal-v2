@@ -31,7 +31,6 @@ function createThreadListingChatwootFetch(): typeof fetch {
         payload: {
           custom_attributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.com',
@@ -45,8 +44,8 @@ function createThreadListingChatwootFetch(): typeof fetch {
       return createJsonResponse({
         payload: {
           custom_attributes: {
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.ru',
           id: 154,

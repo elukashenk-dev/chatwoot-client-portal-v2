@@ -73,7 +73,6 @@ export function createChatwootClientStub({
         return {
           customAttributes: {
             portal_client_group_contact_ids: groupContactIds,
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.com',
@@ -85,8 +84,8 @@ export function createChatwootClientStub({
       if (contactId === 154) {
         return {
           customAttributes: {
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.ru',
           id: 154,

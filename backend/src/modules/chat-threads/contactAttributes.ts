@@ -22,12 +22,16 @@ function createContactConfigurationError(code: string) {
   return new ApiError(403, code, CONFIGURATION_ERROR_MESSAGE)
 }
 
-function readPortalContactType(value: unknown): PortalContactType {
-  if (value === 'person' || value === 'group') {
-    return value
+function readPortalIsGroup(value: unknown) {
+  if (value === undefined || value === null || value === false) {
+    return false
   }
 
-  throw createContactConfigurationError('portal_contact_type_invalid')
+  if (value === true) {
+    return true
+  }
+
+  throw createContactConfigurationError('portal_is_group_invalid')
 }
 
 function readPortalEnabled(value: unknown) {
@@ -109,7 +113,7 @@ export function parsePortalContactAttributes(
       attributes.portal_client_group_contact_ids,
     ),
     enabled: readPortalEnabled(attributes.portal_enabled),
-    type: readPortalContactType(attributes.portal_contact_type),
+    type: readPortalIsGroup(attributes.portal_is_group) ? 'group' : 'person',
   }
 }
 
@@ -119,7 +123,7 @@ export function assertPortalPersonContactEnabled(
   const attributes = parsePortalContactAttributes(contact.customAttributes)
 
   if (attributes.type !== 'person') {
-    throw createContactConfigurationError('portal_contact_type_invalid')
+    throw createContactConfigurationError('portal_person_contact_expected')
   }
 
   if (!attributes.enabled) {
@@ -135,7 +139,7 @@ export function assertPortalGroupContactEnabled(
   const attributes = parsePortalContactAttributes(contact.customAttributes)
 
   if (attributes.type !== 'group') {
-    throw createContactConfigurationError('portal_group_contact_type_invalid')
+    throw createContactConfigurationError('portal_group_flag_required')
   }
 
   if (!attributes.enabled) {

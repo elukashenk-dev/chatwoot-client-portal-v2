@@ -269,7 +269,6 @@ describe('createChatwootWebhookService typing events', () => {
             id: 3,
           },
           custom_attributes: {
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'customer@example.test',

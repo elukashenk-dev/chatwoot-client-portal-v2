@@ -274,7 +274,6 @@ describe('chat attachment proxy service', () => {
           avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'maria@example.test',
@@ -371,7 +370,6 @@ describe('chat attachment proxy service', () => {
       avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
       customAttributes: {
         portal_client_group_contact_ids: '',
-        portal_contact_type: 'person',
         portal_enabled: true,
       },
       email: 'maria@example.test',
@@ -401,7 +399,6 @@ describe('chat attachment proxy service', () => {
       avatarUrl: null,
       customAttributes: {
         portal_client_group_contact_ids: '154',
-        portal_contact_type: 'person',
         portal_enabled: true,
       },
       email: 'maria@example.test',

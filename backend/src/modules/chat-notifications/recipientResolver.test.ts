@@ -7,7 +7,6 @@ function personContact(id: number, groupContactIds: number[]) {
   return {
     customAttributes: {
       portal_client_group_contact_ids: groupContactIds.join(','),
-      portal_contact_type: 'person',
       portal_enabled: true,
     },
     email: `user-${id}@example.test`,
@@ -20,8 +19,8 @@ function personContact(id: number, groupContactIds: number[]) {
 function groupContact(id: number, name: string | null = `Group ${id}`) {
   return {
     customAttributes: {
-      portal_contact_type: 'group',
       portal_enabled: true,
+      portal_is_group: true,
     },
     email: null,
     id,

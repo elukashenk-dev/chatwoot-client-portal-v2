@@ -567,7 +567,6 @@ describe('createChatThreadsService', () => {
         return {
           customAttributes: {
             portal_client_group_contact_ids: '154,203',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.com',
@@ -579,8 +578,8 @@ describe('createChatThreadsService', () => {
       if (contactId === 154) {
         return {
           customAttributes: {
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.ru',
           id: 154,
@@ -591,8 +590,8 @@ describe('createChatThreadsService', () => {
       if (contactId === 203) {
         return {
           customAttributes: {
-            portal_contact_type: 'group',
             portal_enabled: false,
+            portal_is_group: true,
           },
           email: 'disabled@romashka.ru',
           id: 203,
@@ -667,11 +666,10 @@ describe('createChatThreadsService', () => {
     expect(chatThreadsRepository.upsertGroupThread).not.toHaveBeenCalled()
   })
 
-  it('omits a referenced group contact that has the wrong type while listing threads', async () => {
+  it('omits a referenced contact without the group flag while listing threads', async () => {
     const chatwootClient = createChatwootClientStub({
       groupContactOverrides: {
         customAttributes: {
-          portal_contact_type: 'person',
           portal_enabled: true,
         },
       },
@@ -697,8 +695,8 @@ describe('createChatThreadsService', () => {
     const chatwootClient = createChatwootClientStub({
       groupContactOverrides: {
         customAttributes: {
-          portal_contact_type: 'group',
           portal_enabled: false,
+          portal_is_group: true,
         },
       },
     })
@@ -746,8 +744,8 @@ describe('createChatThreadsService', () => {
     const chatwootClient = createChatwootClientStub({
       groupContactOverrides: {
         customAttributes: {
-          portal_contact_type: 'group',
           portal_enabled: false,
+          portal_is_group: true,
         },
       },
     })
@@ -778,7 +776,6 @@ describe('createChatThreadsService', () => {
         return {
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: false,
           },
           email: 'ivan@example.com',
@@ -811,8 +808,8 @@ describe('createChatThreadsService', () => {
         return {
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.ru',
           id: 44,
@@ -827,7 +824,7 @@ describe('createChatThreadsService', () => {
     await expect(
       service.listCurrentUserThreads({ userId: 7 }),
     ).rejects.toMatchObject({
-      code: 'portal_contact_type_invalid',
+      code: 'portal_person_contact_expected',
       statusCode: 403,
     })
     expect(chatwootClient.findContactById).toHaveBeenCalledTimes(1)

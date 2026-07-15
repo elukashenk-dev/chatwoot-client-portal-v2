@@ -615,6 +615,9 @@ describe('passwordless code login app integration', () => {
     await seedActiveLegalDocuments({ database, tenantId })
     chatwootContacts = [
       {
+        customAttributes: {
+          portal_enabled: true,
+        },
         email: 'FirstAccess@Company.RU',
         id: 77,
         name: 'First Access',
@@ -676,11 +679,11 @@ describe('passwordless code login app integration', () => {
         passwordConfigured: false,
       },
     })
-    expect(
-      legalResponse.cookies.some(
-        (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
-      ),
-    ).toBe(true)
+    const sessionCookie = legalResponse.cookies.find(
+      (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
+    )
+
+    expect(sessionCookie).toBeDefined()
 
     const [createdUser] = await database.db
       .select({
@@ -728,6 +731,46 @@ describe('passwordless code login app integration', () => {
       purpose: 'customer_access',
       termsAccepted: true,
       termsVersion: 'terms-v1',
+    })
+
+    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${
+      sessionCookie?.value ?? ''
+    }`
+    const threadsResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/threads',
+    })
+
+    expect(threadsResponse.statusCode).toBe(200)
+    expect(threadsResponse.json()).toMatchObject({
+      activeThreadId: 'private:me',
+      threads: [
+        {
+          id: 'private:me',
+          type: 'private',
+        },
+      ],
+    })
+
+    const messagesResponse = await app.inject({
+      headers: {
+        cookie: cookieHeader,
+      },
+      method: 'GET',
+      url: '/api/chat/messages?threadId=private%3Ame',
+    })
+
+    expect(messagesResponse.statusCode).toBe(200)
+    expect(messagesResponse.json()).toMatchObject({
+      activeThread: {
+        id: 'private:me',
+        type: 'private',
+      },
+      reason: 'conversation_missing',
+      result: 'not_ready',
     })
 
     const reusedResponse = await app.inject({

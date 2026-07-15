@@ -4,6 +4,7 @@ import type { EmailMessage } from '../integrations/email/smtp.js'
 import { normalizeEmail } from '../lib/email.js'
 
 export type ChatwootTestContact = {
+  customAttributes?: Record<string, unknown>
   email: string
   id: number
   name: string | null
@@ -81,7 +82,31 @@ export function createChatwootFetchWithContacts(
   getContacts: () => ChatwootTestContact[],
 ) {
   return vi.fn<typeof fetch>(async (input) => {
-    const requestUrl = new URL(String(input))
+    const requestUrl =
+      input instanceof Request ? new URL(input.url) : new URL(String(input))
+    const contactIdMatch = requestUrl.pathname.match(/\/contacts\/(\d+)$/)
+
+    if (contactIdMatch) {
+      const contactId = Number(contactIdMatch[1])
+      const contact = getContacts().find(
+        (candidate) => candidate.id === contactId,
+      )
+
+      if (!contact) {
+        return createJsonResponse({ error: 'not found' }, { status: 404 })
+      }
+
+      return createJsonResponse({
+        payload: {
+          custom_attributes: contact.customAttributes ?? {},
+          email: contact.email,
+          id: contact.id,
+          name: contact.name,
+          phone_number: null,
+        },
+      })
+    }
+
     const query = normalizeEmail(requestUrl.searchParams.get('q') ?? '')
     const matches = getContacts().filter(
       (contact) => normalizeEmail(contact.email) === query,

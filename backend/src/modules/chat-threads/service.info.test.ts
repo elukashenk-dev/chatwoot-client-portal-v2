@@ -62,7 +62,6 @@ function createChatwootClientStub({
         return {
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.com',
@@ -75,8 +74,8 @@ function createChatwootClientStub({
       if (contactId === 154) {
         return {
           customAttributes: {
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.ru',
           id: 154,
@@ -178,7 +177,6 @@ describe('chat thread info service', () => {
                 customAttributes: {
                   curator_name: 'Анна Маттина',
                   portal_client_group_contact_ids: '',
-                  portal_contact_type: 'person',
                   portal_enabled: true,
                 },
                 email: 'ivan@example.com',
@@ -234,7 +232,6 @@ describe('chat thread info service', () => {
           avatarUrl: 'https://chatwoot.test/rails/active_storage/ivan.png',
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'ivan@example.test',
@@ -249,7 +246,6 @@ describe('chat thread info service', () => {
           avatarUrl: 'https://chatwoot.test/rails/active_storage/maria.png',
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'maria@example.test',
@@ -263,7 +259,6 @@ describe('chat thread info service', () => {
         {
           customAttributes: {
             portal_client_group_contact_ids: '',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'denied@example.test',
@@ -277,7 +272,6 @@ describe('chat thread info service', () => {
         {
           customAttributes: {
             portal_client_group_contact_ids: '154',
-            portal_contact_type: 'person',
             portal_enabled: true,
           },
           email: 'petr@example.test',
@@ -291,8 +285,8 @@ describe('chat thread info service', () => {
         {
           customAttributes: {
             curator_name: 'Анна Маттина',
-            portal_contact_type: 'group',
             portal_enabled: true,
+            portal_is_group: true,
           },
           email: 'office@romashka.test',
           id: 154,

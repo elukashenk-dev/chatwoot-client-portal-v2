@@ -75,9 +75,9 @@ function isSkippableGroupListConfigurationError(error: unknown) {
   return (
     error instanceof ApiError &&
     (error.code === 'portal_group_contact_disabled' ||
-      error.code === 'portal_group_contact_type_invalid' ||
+      error.code === 'portal_group_flag_required' ||
       error.code === 'portal_contact_disabled' ||
-      error.code === 'portal_contact_type_invalid')
+      error.code === 'portal_is_group_invalid')
   )
 }
 
