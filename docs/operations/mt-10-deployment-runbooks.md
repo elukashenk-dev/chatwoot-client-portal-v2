@@ -416,6 +416,26 @@ pnpm --dir backend tenant:deprovision -- --tenant=buhfirma --archive-only --conf
 Use `tenant:chatwoot:reconcile -- --apply` only after reviewing dry-run output.
 Use `tenant:chatwoot:ensure-portal-attributes -- --tenant=<slug>` to repair or
 verify Chatwoot contact custom attribute definitions for an existing tenant.
+
+### Portal Group Checkbox Cutover
+
+Для каждого выбранного tenant переход на checkbox-модель выполнять как один
+bounded operator flow:
+
+1. Один раз запустить обновленную
+   `tenant:chatwoot:ensure-portal-attributes -- --tenant=<slug>`.
+2. Выставить `portal_is_group=true` только на уже известных и проверенных
+   group contacts; на обычных customer contacts checkbox не включать.
+3. Не разворачивать новый portal runtime, пока все используемые group contacts
+   не получили этот флажок.
+4. После deploy проверить отдельно обычный личный чат и каждый настроенный
+   групповой чат выбранного tenant.
+5. Удалять старое определение типа контакта только после успешного smoke.
+
+Этот flow не разрешает массовый поиск или tenant-wide автоматическую
+переклассификацию contacts: список group contacts должен быть заранее известен
+оператору и ограничен выбранным tenant.
+
 Use
 `tenant:deprovision -- --tenant=<slug> --delete-chatwoot-account --confirm=<slug>`
 only when the operator explicitly intends to suspend the portal tenant and
@@ -428,7 +448,7 @@ Expected result from `tenant:create`:
 - portal runtime and admin-verification service users exist;
 - tenant API Channel inbox exists and is configured for the tenant webhook URL;
 - Chatwoot contact custom attribute definitions exist for
-  `portal_enabled`, `portal_contact_type`, `portal_client_group_contact_ids`
+  `portal_enabled`, `portal_is_group`, `portal_client_group_contact_ids`
   and `curator_name`;
 - portal tenant row exists with encrypted runtime/admin/webhook secrets;
 - rerunning the same command is idempotent for the same tenant/domain inputs.

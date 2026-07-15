@@ -23,12 +23,13 @@ Production tenants этим runbook не мутировать. Для production
 
 ## Terminology
 
-- Chatwoot `contact` с `portal_contact_type=person` - это клиент, которому
-  разрешен first access в портале.
+- Chatwoot `contact` с `portal_enabled=true` и выключенным или отсутствующим
+  `portal_is_group` - это обычный клиент, которому разрешен first access в
+  портале.
 - Portal `user` - запись в portal DB, создается после email-code access
   или shortcut-скриптом `user:create`.
-- Chatwoot `contact` с `portal_contact_type=group` - это групповой чат в
-  portal UI. Это не Chatwoot team и не portal user.
+- Chatwoot `contact` с `portal_enabled=true` и `portal_is_group=true` - это
+  групповой чат в portal UI. Это не Chatwoot team и не portal user.
 - Chatwoot agent/admin `User` нужен только для ответа из админки или Rails
   helper incoming/admin checks. Его не нужно создавать на каждый portal user.
 
@@ -79,26 +80,29 @@ Portal first access и chat runtime зависят от Chatwoot contact data.
 Chatwoot account с exact email. First-access eligibility ищет contact по email
 в current tenant account.
 
-Для открытия чата у person contact обязательны custom attributes:
+Для открытия чата у обычного customer contact используются custom attributes:
 
-| Attribute                         | Type             | Required value for person contact                 |
+| Attribute                         | Type             | Required value for ordinary contact               |
 | --------------------------------- | ---------------- | ------------------------------------------------- |
 | `portal_enabled`                  | boolean/checkbox | `true`                                            |
-| `portal_contact_type`             | string/list/text | `person`                                          |
+| `portal_is_group`                 | boolean/checkbox | absent or `false`                                 |
 | `portal_client_group_contact_ids` | string/text      | empty string or comma-separated group contact ids |
 
 Для group contact обязательны custom attributes:
 
-| Attribute             | Type             | Required value for group contact |
-| --------------------- | ---------------- | -------------------------------- |
-| `portal_enabled`      | boolean/checkbox | `true`                           |
-| `portal_contact_type` | string/list/text | `group`                          |
+| Attribute         | Type             | Required value for group contact |
+| ----------------- | ---------------- | -------------------------------- |
+| `portal_enabled`  | boolean/checkbox | `true`                           |
+| `portal_is_group` | boolean/checkbox | `true`                           |
 
 Important details:
 
 - `portal_enabled` должен быть boolean `true`, не строкой `"true"`.
-- `portal_contact_type` принимает только `person` или `group`.
-- `portal_client_group_contact_ids` хранится на person contact.
+- `portal_is_group` должен быть настоящим checkbox/boolean: absent или `false`
+  означает обычного клиента, `true` означает группу.
+- Небулево значение `portal_is_group` закрывает доступ с ошибкой
+  `portal_is_group_invalid`.
+- `portal_client_group_contact_ids` хранится на обычном customer contact.
 - Значение `portal_client_group_contact_ids` - строка с Chatwoot contact IDs
   групп, например `154` или `154,203`.
 - Максимум `20` group ids на person contact.
@@ -157,14 +161,14 @@ Mailpit, а не во внешний SMTP.
 убедиться, что есть:
 
 - `portal_enabled`;
-- `portal_contact_type`;
+- `portal_is_group`;
 - `portal_client_group_contact_ids`;
 - `curator_name`.
 
 Если Chatwoot UI предлагает тип поля:
 
 - `portal_enabled` делать checkbox/boolean;
-- `portal_contact_type` делать text/list;
+- `portal_is_group` делать checkbox/boolean;
 - `portal_client_group_contact_ids` делать text;
 - `curator_name` делать text.
 
@@ -185,7 +189,7 @@ Mailpit, а не во внешний SMTP.
 - Email: соответствующий `LCT_*_EMAIL`;
 - Custom attributes:
   - `portal_enabled`: checked / `true`;
-  - `portal_contact_type`: `person`;
+  - `portal_is_group`: не включать; оставить absent / unchecked / `false`;
   - `portal_client_group_contact_ids`: пока empty.
 
 Записать Chatwoot contact id из URL contact page. Он понадобится для
@@ -200,7 +204,7 @@ Mailpit, а не во внешний SMTP.
   `LCT_*_GROUP_EMAIL`;
 - Custom attributes:
   - `portal_enabled`: checked / `true`;
-  - `portal_contact_type`: `group`.
+  - `portal_is_group`: checked / `true`.
 
 Записать Chatwoot group contact id.
 
@@ -299,7 +303,7 @@ result = tenants.map do |tenant|
   group.name = tenant[:group_name]
   group.custom_attributes = (group.custom_attributes || {}).merge(
     "portal_enabled" => true,
-    "portal_contact_type" => "group"
+    "portal_is_group" => true
   )
   group.save!
 
@@ -310,7 +314,6 @@ result = tenants.map do |tenant|
   person.name = tenant[:person_name]
   person.custom_attributes = (person.custom_attributes || {}).merge(
     "portal_enabled" => true,
-    "portal_contact_type" => "person",
     "portal_client_group_contact_ids" => group.id.to_s
   )
   person.save!
@@ -475,7 +478,7 @@ If group is missing:
 - check person `portal_client_group_contact_ids`;
 - check group contact id belongs to the same Chatwoot account;
 - check group contact has `portal_enabled: true`;
-- check group contact has `portal_contact_type: group`;
+- check group contact has `portal_is_group: true`;
 - check value is a comma-separated string, not array.
 
 ## Mutating Personal Chat Checks
@@ -791,23 +794,24 @@ Reference local run:
 
 ## Common Failure Map
 
-| Symptom                                                    | Likely cause                                                            | Fix                                                                           |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Code request returns accepted but no email arrives          | Contact email is missing, typoed, exists in another Chatwoot account, or portal user is inactive | Create/enable person contact in the current tenant Chatwoot account with exact email |
-| Email-code access works, chat returns `portal_contact_disabled` | `portal_enabled` missing, false, or saved as string                  | Save boolean/checkbox `true` on person contact                                |
-| Chat returns `portal_contact_type_invalid`                 | Person contact has wrong/missing `portal_contact_type`                  | Set `portal_contact_type=person`                                              |
-| Group thread missing                                       | Person contact has no valid group id list                               | Set `portal_client_group_contact_ids` to group contact id string              |
-| Group thread returns denied/missing                        | Group contact missing or in another account                             | Create group contact in same account and use its id                           |
-| Group returns `portal_group_contact_disabled`              | Group contact disabled                                                  | Set group `portal_enabled=true`                                               |
-| Group returns `portal_group_contact_type_invalid`          | Group contact type is not `group`                                       | Set group `portal_contact_type=group`                                         |
-| Removed group still appears in menu                        | Person contact still has the group id or stale cache has not resynced   | Clear/update `portal_client_group_contact_ids`, then refresh/resync           |
-| Removed group direct request returns `not_ready`           | Expected fail-closed response after membership removal                  | Treat as PASS if reason is `thread_access_denied` and no message is created   |
-| Text/file lands in wrong Chatwoot account                  | Tenant `chatwoot_account_id` or `chatwoot_portal_inbox_id` wrong        | Fix tenant bootstrap/config before testing                                    |
-| Group cached boot opens `Личный чат` instead               | Selected group snapshot was not cached or active thread list is stale   | Warm the group online, then rerun the hanging startup check                   |
-| Attachment proxy opens wrong thread file                   | Attachment route is not validating thread/conversation ownership        | Stop testing and create a high-risk finding                                   |
-| Webhook/incoming message not visible                       | Tenant webhook not configured or wrong API Channel secret               | Run `tenant:chatwoot:webhook:configure` for that tenant                       |
-| Composer disabled during offline test                      | Browser went offline before chat reached ready state                    | Reopen online, wait for enabled textarea, then switch offline                 |
-| Repeated code-login requests get 429                       | Local auth rate limit                                                   | Wait for rate-limit window or use fewer repeated attempts                     |
+| Symptom                                                         | Likely cause                                                                                     | Fix                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Code request returns accepted but no email arrives              | Contact email is missing, typoed, exists in another Chatwoot account, or portal user is inactive | Create/enable person contact in the current tenant Chatwoot account with exact email |
+| Email-code access works, chat returns `portal_contact_disabled` | `portal_enabled` missing, false, or saved as string                                              | Save boolean/checkbox `true` on person contact                                       |
+| Chat returns `portal_is_group_invalid`                          | `portal_is_group` contains a non-boolean value                                                   | Use the Chatwoot checkbox; ordinary contact is unchecked, group is checked           |
+| Chat returns `portal_person_contact_expected`                   | Ordinary customer contact is incorrectly flagged as a group                                      | Turn off `portal_is_group` on the ordinary customer contact                          |
+| Group thread missing                                            | Person contact has no valid group id list                                                        | Set `portal_client_group_contact_ids` to group contact id string                     |
+| Group thread returns denied/missing                             | Group contact missing or in another account                                                      | Create group contact in same account and use its id                                  |
+| Group returns `portal_group_contact_disabled`                   | Group contact disabled                                                                           | Set group `portal_enabled=true`                                                      |
+| Group returns `portal_group_flag_required`                      | Referenced group contact is not flagged as a group                                               | Set group checkbox `portal_is_group=true`                                            |
+| Removed group still appears in menu                             | Person contact still has the group id or stale cache has not resynced                            | Clear/update `portal_client_group_contact_ids`, then refresh/resync                  |
+| Removed group direct request returns `not_ready`                | Expected fail-closed response after membership removal                                           | Treat as PASS if reason is `thread_access_denied` and no message is created          |
+| Text/file lands in wrong Chatwoot account                       | Tenant `chatwoot_account_id` or `chatwoot_portal_inbox_id` wrong                                 | Fix tenant bootstrap/config before testing                                           |
+| Group cached boot opens `Личный чат` instead                    | Selected group snapshot was not cached or active thread list is stale                            | Warm the group online, then rerun the hanging startup check                          |
+| Attachment proxy opens wrong thread file                        | Attachment route is not validating thread/conversation ownership                                 | Stop testing and create a high-risk finding                                          |
+| Webhook/incoming message not visible                            | Tenant webhook not configured or wrong API Channel secret                                        | Run `tenant:chatwoot:webhook:configure` for that tenant                              |
+| Composer disabled during offline test                           | Browser went offline before chat reached ready state                                             | Reopen online, wait for enabled textarea, then switch offline                        |
+| Repeated code-login requests get 429                            | Local auth rate limit                                                                            | Wait for rate-limit window or use fewer repeated attempts                            |
 
 ## Cleanup
 
