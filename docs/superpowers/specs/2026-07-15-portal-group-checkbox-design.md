@@ -2,7 +2,7 @@
 
 Date: 2026-07-15
 
-Status: approved in chat; awaiting written-spec review
+Status: approved
 
 Finding: `F-CHAT-012`
 
