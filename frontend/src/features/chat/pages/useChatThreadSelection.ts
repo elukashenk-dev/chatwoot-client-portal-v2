@@ -260,14 +260,18 @@ export function useChatThreadSelection({
       }
 
       const canUseOfflineFallback = handleConnectionUnavailableError(error)
+
+      if (!canUseOfflineFallback) {
+        cacheFallbackAllowed = false
+        markBrowserOnline()
+        setChatReachability('online')
+      }
+
       const cachedFallbackAlreadyOpened =
         cachedFallbackOpened || (await cachedFallbackPromise)
 
-      if (cachedFallbackAlreadyOpened) {
-        if (canUseOfflineFallback) {
-          setChatReachability('offline')
-        }
-
+      if (cachedFallbackAlreadyOpened && canUseOfflineFallback) {
+        setChatReachability('offline')
         return
       }
 
@@ -393,14 +397,18 @@ export function useChatThreadSelection({
         }
 
         const canUseOfflineFallback = handleConnectionUnavailableError(error)
+
+        if (!canUseOfflineFallback) {
+          cacheFallbackAllowed = false
+          markBrowserOnline()
+          setChatReachability('online')
+        }
+
         const cachedFallbackAlreadyOpened =
           cachedFallbackOpened || (await cachedFallbackPromise)
 
-        if (cachedFallbackAlreadyOpened) {
-          if (canUseOfflineFallback) {
-            setChatReachability('offline')
-          }
-
+        if (cachedFallbackAlreadyOpened && canUseOfflineFallback) {
+          setChatReachability('offline')
           return
         }
 

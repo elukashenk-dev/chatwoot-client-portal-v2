@@ -41,6 +41,19 @@ describe('portal contact attributes', () => {
     })
   })
 
+  it('treats a null group flag as an absent checkbox value', () => {
+    expect(
+      parsePortalContactAttributes({
+        portal_enabled: true,
+        portal_is_group: null,
+      }),
+    ).toEqual({
+      groupContactIds: [],
+      enabled: true,
+      type: 'person',
+    })
+  })
+
   it('accepts the maximum group contact ID count', () => {
     expect(
       parsePortalGroupContactIdsAttribute(
@@ -120,6 +133,20 @@ describe('portal contact attributes', () => {
       }),
     )
   })
+
+  it.each(['true', 'false', 0, 1, null, [], {}])(
+    'rejects a non-boolean portal_enabled value: %j',
+    (portalEnabled) => {
+      expect(() =>
+        parsePortalContactAttributes({ portal_enabled: portalEnabled }),
+      ).toThrowError(
+        expect.objectContaining({
+          code: 'portal_contact_disabled',
+          statusCode: 403,
+        }),
+      )
+    },
+  )
 
   it('requires person contacts to be portal enabled', () => {
     expect(() =>

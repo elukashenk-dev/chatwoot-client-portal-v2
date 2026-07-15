@@ -595,12 +595,44 @@ pnpm --dir backend maintenance:cleanup -- --dry-run
 
 ## 14. Playwright E2E
 
+До migrations или seed глобальный Playwright setup проверяет, что
+`NODE_ENV` не равен `production`, а `DATABASE_URL` указывает на local-dev
+portal Postgres с именем и портом из `PORTAL_V2_POSTGRES_DB` и
+`PORTAL_V2_POSTGRES_PORT`. Каждый запуск, который может менять fixtures, также
+требует точного одноразового подтверждения
+`E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations`.
+Без него setup завершается до подключения к БД.
+
+Автоматически разрешены только loopback (`localhost`, `127.0.0.0/8`, `::1`) и
+`host.docker.internal`. Если локальный WSL workaround использует частный IP,
+этот exact host нужно дополнительно передать в
+`E2E_DATABASE_ALLOWED_HOST`; произвольного private-range недостаточно. Public
+database host, другое имя/порт или production environment всегда завершают
+setup без подключения и изменений. Query-параметры и fragment в E2E
+`DATABASE_URL` запрещены, потому что PostgreSQL driver может использовать их
+для подмены фактического host/port после preflight. Порт должен быть явно
+записан в URL, чтобы driver не подставил `PGPORT`. Эти E2E-переменные не
+добавлять в `.env` или как постоянные production defaults: global setup
+намеренно считывает их до загрузки `.env`, поэтому передавать их нужно прямо в
+команду текущего запуска.
+
+После безопасного preflight setup идемпотентно создаёт синтетические active
+terms/privacy только когда соответствующих документов у выбранного tenant ещё
+нет. Уже загруженные документы не заменяются и не архивируются. Эти fixture
+documents предназначены только для локальных Playwright-сценариев первого
+входа.
+
 Перед запуском должны быть подняты:
 
 - Postgres v2;
 - backend `http://127.0.0.1:3301`;
 - frontend на нужном tenant host;
 - Chatwoot/Mailpit, если сценарий их требует.
+
+Локальный helper, создающий Chatwoot contact, намеренно откажется работать с
+`NODE_USE_ENV_PROXY=1` или `--use-env-proxy`: loopback POST с Chatwoot token не
+должен уходить через environment proxy. Для этого сценария proxy mode нужно
+отключить.
 
 Для полного parallel-suite backend нужно поднять с увеличенным local/e2e auth
 rate limit, иначе несколько login-сценариев с одного `127.0.0.1` честно
@@ -613,6 +645,7 @@ AUTH_RATE_LIMIT_MAX=100 pnpm dev:backend
 Для конкретного tenant host:
 
 ```bash
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
 E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 E2E_CHATWOOT_ACCOUNT_ID=3 \
 E2E_CHATWOOT_PORTAL_INBOX_ID=6 \
@@ -625,6 +658,7 @@ pnpm test:e2e
 Для stroyfirma:
 
 ```bash
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
 E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 E2E_CHATWOOT_ACCOUNT_ID=5 \
 E2E_CHATWOOT_PORTAL_INBOX_ID=9 \
@@ -637,6 +671,7 @@ pnpm test:e2e
 Для zubi:
 
 ```bash
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
 E2E_CHATWOOT_BASE_URL=http://127.0.0.1:3000 \
 E2E_CHATWOOT_ACCOUNT_ID=1 \
 E2E_CHATWOOT_PORTAL_INBOX_ID=8 \
@@ -646,11 +681,20 @@ E2E_TENANT_SLUG=zubi \
 pnpm test:e2e
 ```
 
+Если `DATABASE_URL` этой WSL-машины использует, например,
+`10.255.255.254`, к конкретному запуску добавить точное разрешение:
+
+```bash
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
+E2E_DATABASE_ALLOWED_HOST=10.255.255.254 \
+pnpm test:e2e
+```
+
 Дополнительные режимы:
 
 ```bash
-pnpm test:e2e:headed
-pnpm test:e2e:ui
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations pnpm test:e2e:headed
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations pnpm test:e2e:ui
 pnpm test:e2e:report
 ```
 

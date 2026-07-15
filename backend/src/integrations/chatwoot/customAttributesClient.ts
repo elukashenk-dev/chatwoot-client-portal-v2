@@ -70,6 +70,11 @@ const REQUIRED_PORTAL_CONTACT_CUSTOM_ATTRIBUTE_DEFINITIONS: DesiredPortalContact
       key: 'curator_name',
     },
   ]
+const REQUIRED_PORTAL_CONTACT_CUSTOM_ATTRIBUTE_KEYS = new Set<string>(
+  REQUIRED_PORTAL_CONTACT_CUSTOM_ATTRIBUTE_DEFINITIONS.map(
+    (definition) => definition.key,
+  ),
+)
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -133,7 +138,25 @@ function parseContactCustomAttributeDefinitionsResponse(payload: unknown) {
     )
   }
 
-  return payload.map(mapContactCustomAttributeDefinition)
+  return payload.flatMap((definition) => {
+    if (!isPlainObject(definition)) {
+      throw new ChatwootClientRequestError(
+        'Chatwoot custom attribute definition returned an invalid payload.',
+      )
+    }
+
+    const key = readString(definition.attribute_key)
+
+    if (!key) {
+      throw new ChatwootClientRequestError(
+        'Chatwoot custom attribute definition returned an invalid payload.',
+      )
+    }
+
+    return REQUIRED_PORTAL_CONTACT_CUSTOM_ATTRIBUTE_KEYS.has(key)
+      ? [mapContactCustomAttributeDefinition(definition)]
+      : []
+  })
 }
 
 function buildContactCustomAttributeDefinitionPayload(
@@ -199,10 +222,7 @@ export function createChatwootCustomAttributesClient({
           ),
         )
       const existingByKey = new Map(
-        existingDefinitions.map((definition) => [
-          definition.key,
-          definition,
-        ]),
+        existingDefinitions.map((definition) => [definition.key, definition]),
       )
       const result: ChatwootPortalContactCustomAttributeDefinitionsResult = {
         created: [],

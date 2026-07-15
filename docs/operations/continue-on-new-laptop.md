@@ -245,8 +245,13 @@ database, tenant isolation, deployment scripts, or public contracts:
 
 ```bash
 pnpm test
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
 pnpm test:e2e
 ```
+
+Если локальный `DATABASE_URL` использует private WSL/Docker host вместо
+loopback, к E2E-команде также добавить exact
+`E2E_DATABASE_ALLOWED_HOST=<host>` по инструкции в `local-testing.md`.
 
 ## Production Deploy
 

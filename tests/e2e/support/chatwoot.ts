@@ -5,6 +5,16 @@ type ChatwootContactPayload = {
   payload?: unknown
 }
 
+function isNodeEnvironmentProxyEnabled() {
+  const nodeOptions = process.env.NODE_OPTIONS?.split(/\s+/u) ?? []
+
+  return (
+    process.env.NODE_USE_ENV_PROXY === '1' ||
+    process.execArgv.some((argument) => argument === '--use-env-proxy') ||
+    nodeOptions.some((option) => option === '--use-env-proxy')
+  )
+}
+
 function readContactId(payload: ChatwootContactPayload) {
   if (typeof payload.id === 'number') {
     return payload.id
@@ -70,6 +80,12 @@ export async function createChatwootContactForE2e({
     )
   }
 
+  if (isNodeEnvironmentProxyEnabled()) {
+    throw new Error(
+      'Node environment proxy mode must be disabled for loopback Chatwoot E2E mutations.',
+    )
+  }
+
   if (!Number.isInteger(inboxId) || inboxId <= 0) {
     throw new Error('E2E_CHATWOOT_PORTAL_INBOX_ID must be a positive integer.')
   }
@@ -92,6 +108,7 @@ export async function createChatwootContactForE2e({
       api_access_token: apiAccessToken,
     },
     method: 'POST',
+    redirect: 'error',
   })
 
   if (!response.ok) {

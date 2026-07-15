@@ -80,6 +80,9 @@ describe('ChatPage bootstrap errors', () => {
     expect(
       screen.queryByRole('button', { name: 'Повторить' }),
     ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: 'Соединение...' }),
+    ).not.toBeInTheDocument()
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })

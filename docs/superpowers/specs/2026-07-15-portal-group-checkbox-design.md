@@ -48,12 +48,12 @@ Add one Chatwoot contact custom attribute definition:
 
 The runtime rules are:
 
-| Contact state                                              | Runtime type | Result                               |
-| ---------------------------------------------------------- | ------------ | ------------------------------------ |
-| `portal_enabled=true`, `portal_is_group` absent or `false` | `person`     | Eligible ordinary customer contact   |
-| `portal_enabled=true`, `portal_is_group=true`              | `group`      | Eligible group contact               |
-| `portal_enabled=false` or missing                          | none         | Portal access remains disabled       |
-| `portal_is_group` has a non-boolean value                  | none         | Fail closed as invalid configuration |
+| Contact state                                                       | Runtime type | Result                               |
+| ------------------------------------------------------------------- | ------------ | ------------------------------------ |
+| `portal_enabled=true`, `portal_is_group` absent, `null`, or `false` | `person`     | Eligible ordinary customer contact   |
+| `portal_enabled=true`, `portal_is_group=true`                       | `group`      | Eligible group contact               |
+| `portal_enabled=false` or missing                                   | none         | Portal access remains disabled       |
+| `portal_is_group` has another non-boolean value                     | none         | Fail closed as invalid configuration |
 
 The non-boolean case is defensive validation for API, import, script, or
 database mistakes. The normal Chatwoot checkbox UI produces only booleans.
@@ -68,7 +68,7 @@ Email-code discovery and login remain unchanged. After authentication:
 1. The portal backend resolves the tenant-scoped Chatwoot contact link.
 2. The backend still requires `portal_enabled=true`.
 3. The backend derives the contact type from `portal_is_group`:
-   absent or `false` means `person`; `true` means `group`.
+   absent, `null`, or `false` means `person`; `true` means `group`.
 4. Person contacts continue to read
    `portal_client_group_contact_ids` for their bounded list of accessible
    group contacts.
@@ -120,6 +120,7 @@ Required automated coverage:
 
 - contact-attribute unit tests:
   - absent `portal_is_group` resolves to `person`;
+  - `null` resolves to `person` as an absent checkbox value;
   - `false` resolves to `person`;
   - `true` resolves to `group`;
   - non-boolean values fail closed;

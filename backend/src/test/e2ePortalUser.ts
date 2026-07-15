@@ -1,6 +1,6 @@
 import { and, eq, or, sql } from 'drizzle-orm'
 
-import type { NodeAppDatabase } from '../db/client.js'
+import type { AppDatabase, NodeAppDatabase } from '../db/client.js'
 import {
   portalTenants,
   portalUsers,
@@ -52,7 +52,7 @@ export function resolveE2eTenantLookupFromEnv() {
   return null
 }
 
-export async function findE2eTenantId(db: NodeAppDatabase) {
+export async function findE2eTenantId(db: AppDatabase) {
   const lookup = resolveE2eTenantLookupFromEnv()
 
   if (!lookup) {

@@ -117,10 +117,19 @@ export async function expectFirstAccessPrivateChatBootstrap({
 
 export function createChatwootFetchWithContacts(
   getContacts: () => ChatwootTestContact[],
+  expectedAccountId = 1,
 ) {
   return vi.fn<typeof fetch>(async (input) => {
     const requestUrl =
       input instanceof Request ? new URL(input.url) : new URL(String(input))
+    const accountIdMatch = requestUrl.pathname.match(
+      /^\/api\/v1\/accounts\/(\d+)\//,
+    )
+
+    if (!accountIdMatch || Number(accountIdMatch[1]) !== expectedAccountId) {
+      throw new Error('Unexpected Chatwoot test account request.')
+    }
+
     const contactIdMatch = requestUrl.pathname.match(/\/contacts\/(\d+)$/)
 
     if (contactIdMatch) {

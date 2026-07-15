@@ -104,7 +104,8 @@ automation around:
   volume prune as routine maintenance. Docker build cache cleanup is allowed
   only with `docker builder prune -af` after checking disk usage.
 
-Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
+Routine portal deploys do not mutate Chatwoot. Default automated tenant
+lifecycle changes are limited to the tenant API Channel inbox:
 
 - verify that the inbox belongs to the tenant Chatwoot account and is
   `Channel::Api`;
@@ -112,6 +113,13 @@ Allowed Chatwoot-side changes are limited to the tenant API Channel inbox:
 - set the portal webhook URL;
 - read the returned Chatwoot `Channel::Api.secret`;
 - store that secret encrypted in the portal tenant record.
+
+The only exception is a separately approved, tenant-scoped lifecycle or
+cutover procedure explicitly documented later in this runbook. Such a
+procedure is not authorized by the runbook itself: before any command or
+contact mutation, the operator must obtain fresh approval for the exact
+commands, tenants, bounded contact list, reviewed release, smoke accounts,
+rollback point, and expected result.
 
 ## Production Mail Sender
 
@@ -418,6 +426,12 @@ Use `tenant:chatwoot:ensure-portal-attributes -- --tenant=<slug>` to repair or
 verify Chatwoot contact custom attribute definitions for an existing tenant.
 
 ### Portal Group Checkbox Cutover
+
+Этот раздел описывает процедуру, но сам по себе не разрешает production
+изменения. До первой команды или правки contact оператор должен отдельно
+предъявить и получить свежее подтверждение для точных commands, tenant,
+известных group contacts, release commit, smoke accounts, rollback point и
+ожидаемых результатов. Без такого подтверждения остановиться до шага 1.
 
 Для каждого выбранного tenant переход на checkbox-модель выполнять как один
 bounded operator flow:

@@ -766,6 +766,8 @@ as the current auth tests. Do not revive removed registration routes.
 Run only after confirming the local services and loopback Chatwoot preflight:
 
 ```bash
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
+E2E_DATABASE_ALLOWED_HOST=10.255.255.254 \
 pnpm exec playwright test \
   tests/e2e/chat-code-login-bootstrap.spec.ts \
   --project=chromium
@@ -929,6 +931,8 @@ pnpm --dir backend test
 pnpm --dir frontend test
 pnpm lint
 pnpm build
+E2E_DATABASE_MUTATION_CONFIRM=allow-local-playwright-database-mutations \
+E2E_DATABASE_ALLOWED_HOST=10.255.255.254 \
 pnpm exec playwright test \
   tests/e2e/chat-code-login-bootstrap.spec.ts \
   --project=chromium
