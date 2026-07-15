@@ -56,6 +56,14 @@ The original generated scan directory was intentionally outside Git under
 `round-01-candidate-families.md` and `deep-scan-status.md` paths were no longer
 present on the local filesystem.
 
+Later on `2026-07-15`, the exact coordinator pair was recovered from the local
+Codex execution journal's file-write payloads and successful apply receipts.
+Durable copies and a recovery receipt now live under
+`docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/`.
+This restores the exact family inventory and its source candidate IDs. It does
+not by itself restore the six raw worker artifact sets or waive the evidence
+provenance requirements below.
+
 Execution must not begin until an input ledger containing the exact nine
 families and their original evidence provenance has been recovered from one of
 these sources, in order:
@@ -72,6 +80,9 @@ If the exact input inventory cannot be recovered, this targeted review is
 blocked. The user must then choose separately between a new canonical Deep
 scan and a new two-auditor scoped assessment whose narrower coverage cannot
 close the historical `SEC-DEEP-001` saturation gap by itself.
+
+Recovery of these files is documentation preservation only. It does not count
+as the separate approval required to start the two-auditor review.
 
 ## Source Baselines
 

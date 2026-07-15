@@ -108,10 +108,16 @@ attack-path analysis or generated final reporting. There is no authoritative
 Deep `findings.json` or `report.md`, and no Deep candidate is imported as a
 finding.
 
-- Status record:
+- Historical generated status path:
   `/tmp/codex-security-scans/chatwoot-client-portal-v2-audit-source-2026-07-13-backend-deep/a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T231902Z/artifacts/deep_merge/deep-scan-status.md`
-- Initial semantic merge:
+- Historical generated merge path:
   `/tmp/codex-security-scans/chatwoot-client-portal-v2-audit-source-2026-07-13-backend-deep/a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T231902Z/artifacts/deep_merge/round-01-candidate-families.md`
+- Durable recovered status:
+  [`deep-scan-status.md`](../evidence/sec-deep-001-initial-discovery/deep-scan-status.md)
+- Durable recovered merge:
+  [`round-01-candidate-families.md`](../evidence/sec-deep-001-initial-discovery/round-01-candidate-families.md)
+- Recovery provenance and checksums:
+  [`recovery-receipt.md`](../evidence/sec-deep-001-initial-discovery/recovery-receipt.md)
 
 The merge records nine families already covered by Standard findings, two
 families repeating Standard-suppressed/ignored paths, and nine unresolved or

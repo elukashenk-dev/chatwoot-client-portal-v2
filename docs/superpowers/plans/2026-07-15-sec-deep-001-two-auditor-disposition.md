@@ -82,6 +82,7 @@ docs/superpowers/audits/2026-07-13-full-application-risk-audit/
       manifest.md
       input-ledger.md
       input-families.jsonl
+      source-provenance.jsonl
       threat-model.md
       validate-ledgers.mjs
       auditor-a/
@@ -103,8 +104,10 @@ docs/superpowers/audits/2026-07-13-full-application-risk-audit/
 
 The `poc/` directories are created only when an auditor needs a safe local
 reproduction. Empty directories are not committed. Generated scan bulk and
-restored raw worker outputs remain outside Git; the normalized nine-family
-ledger, provenance and SHA-256 receipts are committed.
+restored raw worker outputs remain outside Git. The small coordinator merge,
+status record and recovery receipt are preserved under the historical audit's
+`evidence/sec-deep-001-initial-discovery/` directory; the normalized
+nine-family ledger, provenance and SHA-256 receipts are committed separately.
 
 ---
 
@@ -117,15 +120,24 @@ ledger, provenance and SHA-256 receipts are committed.
   `docs/superpowers/audits/2026-07-13-full-application-risk-audit/stages/02-security.md`
 - Read:
   `docs/superpowers/audits/2026-07-13-full-application-risk-audit/final-report.md`
+- Read:
+  `docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/recovery-receipt.md`
+- Read:
+  `docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/round-01-candidate-families.md`
+- Read:
+  `docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/deep-scan-status.md`
 - Create:
   `docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-ledger.md`
 - Create:
   `docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-families.jsonl`
+- Create:
+  `docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/source-provenance.jsonl`
 
 **Interfaces:**
 
-- Consumes: separate user execution approval, closed `F-CHAT-012`, and a
-  restored immutable copy of the original Deep merge artifacts.
+- Consumes: separate user execution approval, closed `F-CHAT-012`, a restored
+  immutable copy of the original Deep merge artifacts and immutable
+  candidate-level evidence provenance.
 - Produces: exactly nine normalized records named `DEEP-R1-F01` through
   `DEEP-R1-F09`, plus provenance and checksums used by both auditors.
 
@@ -168,45 +180,47 @@ Expected: the `test` exits `0`, and the current worktree has no unclear or
 unrelated changes. If the finding file still exists, stop without searching
 for scan artifacts or creating auditors.
 
-- [ ] **Step 4: Perform one bounded recovery search**
+- [ ] **Step 4: Select the preserved recovery pair**
 
-Run this exact selection command:
+Run:
 
 ```bash
-mapfile -t RECOVERED_FAMILY_FILES < <(
-  find /home/evluk/backups /home/evluk/recovered /tmp/codex-security-scans \
-    -type f \
-    -path '*/a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T231902Z/artifacts/deep_merge/round-01-candidate-families.md' \
-    -print 2>/dev/null | sort -u
-)
-printf '%s\n' "${RECOVERED_FAMILY_FILES[@]}"
-test "${#RECOVERED_FAMILY_FILES[@]}" -eq 1
-FAMILIES_FILE=${RECOVERED_FAMILY_FILES[0]}
+RECOVERED_ROOT=docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery
+FAMILIES_FILE="$RECOVERED_ROOT/round-01-candidate-families.md"
+STATUS_FILE="$RECOVERED_ROOT/deep-scan-status.md"
+RECEIPT_FILE="$RECOVERED_ROOT/recovery-receipt.md"
+test -f "$FAMILIES_FILE"
+test -f "$STATUS_FILE"
+test -f "$RECEIPT_FILE"
 ```
 
-Expected: exactly one candidate path belonging to scan id
-`a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T231902Z`.
-
-If no path is returned, record no invented family names, do not spawn either
-auditor, and stop with the exact blocker: the historical input inventory is
-not recoverable from the approved local sources. If more than one path is
-returned, stop and require the recovery owner to provide one authoritative
-immutable export; do not select a source by convenience.
+Expected: all three tests exit `0`. If any file is missing, record no invented
+family names, do not spawn either auditor, and stop with the exact blocker:
+the preserved historical input inventory is incomplete.
 
 - [ ] **Step 5: Verify the recovered pair belongs to one scan**
 
-Use `FAMILIES_FILE` selected by Step 4, then run:
+Use the paths selected by Step 4, then run:
 
 ```bash
-RECOVERED_SCAN_DIR="${FAMILIES_FILE%/artifacts/deep_merge/round-01-candidate-families.md}"
-STATUS_FILE="$RECOVERED_SCAN_DIR/artifacts/deep_merge/deep-scan-status.md"
 test -f "$FAMILIES_FILE"
 test -f "$STATUS_FILE"
-sha256sum "$FAMILIES_FILE" "$STATUS_FILE"
+SCAN_ID=a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T231902Z
+FAMILIES_SHA=64ffd2cd43a3ccb2187f36a78a44229bfc1c07c8c7eed1aa325b1e1e901dc1df
+STATUS_SHA=0f62b0bbc83b4b501a6f9c5e0d3f8ac866670fd8c0b42af9a25b30c63549a486
+printf '%s  %s\n' \
+  "$FAMILIES_SHA" "$FAMILIES_FILE" \
+  "$STATUS_SHA" "$STATUS_FILE" | sha256sum -c -
+rg -F -q "$SCAN_ID" "$RECEIPT_FILE"
+rg -F -q "$FAMILIES_SHA" "$RECEIPT_FILE"
+rg -F -q "$STATUS_SHA" "$RECEIPT_FILE"
 ```
 
-Expected: both `test` commands exit `0`; the two SHA-256 receipts print without
-reading or exposing secrets.
+Expected: both `test` commands exit `0`; SHA-256 is
+`64ffd2cd43a3ccb2187f36a78a44229bfc1c07c8c7eed1aa325b1e1e901dc1df`
+for the family merge and
+`0f62b0bbc83b4b501a6f9c5e0d3f8ac866670fd8c0b42af9a25b30c63549a486`
+for the status record; the receipt contains the scan id and both hashes.
 
 - [ ] **Step 6: Reconcile the recovered totals before normalization**
 
@@ -225,7 +239,46 @@ Expected: every count agrees with
 `stages/02-security.md#conditional-backend-deep-gate`. Any disagreement blocks
 execution and must be reported without choosing the more convenient source.
 
-- [ ] **Step 7: Create the normalized nine-family input files**
+- [ ] **Step 7: Recover candidate-level evidence provenance**
+
+The recovered coordinator pair is necessary but not sufficient for auditor
+assignment. It preserves family titles and source candidate IDs, but not the
+repository paths, line ranges and evidence details required by the approved
+auditor contract.
+
+For every source candidate ID absorbed by the nine unresolved or expanded
+families, recover the exact original candidate record from one of the approved
+Input Recovery Gate sources. A structured Codex worker execution receipt is
+acceptable only when it contains the original record verbatim and can be
+cited by session path, timestamp, line and call ID. A chat summary, a new
+source-code trace or recollection is not an original provenance record.
+
+Use `apply_patch` to create `source-provenance.jsonl` with one record per source
+candidate ID:
+
+```json
+{
+  "sourceCandidateId": "the exact worker candidate ID",
+  "sourceReceipt": "immutable artifact path or structured execution receipt",
+  "sourceReceiptSha256": "SHA-256 of the exact file or receipt record",
+  "evidence": [
+    {
+      "path": "the original repository-relative path",
+      "lines": "the original line or range",
+      "detail": "the original evidence detail"
+    }
+  ]
+}
+```
+
+Require set equality between the candidate IDs in this file and all source
+candidate IDs attached to the nine selected families. Every record must have
+at least one non-empty evidence item. If exact provenance cannot be recovered,
+stop before normalization, do not spawn either auditor and report that the
+family inventory is restored but the approved evidence contract remains
+blocked.
+
+- [ ] **Step 8: Create the normalized nine-family input files**
 
 Use `apply_patch` to create `input-families.jsonl` with one JSON object per
 unresolved or expanded family, preserving original order. Assign deterministic
@@ -236,9 +289,9 @@ IDs `DEEP-R1-F01` through `DEEP-R1-F09`. Map fields exactly as follows:
 | `familyId`                  | Sequential deterministic ID in preserved merge order |
 | `title`                     | Verbatim title from the recovered family record      |
 | `originalDisposition`       | Literal `unresolved_or_expanded`                     |
-| `originalEvidence[].path`   | Recovered repository-relative evidence path          |
-| `originalEvidence[].lines`  | Recovered line or line range as a string             |
-| `originalEvidence[].detail` | Recovered explanation of why the location matters    |
+| `originalEvidence[].path`   | Exact path from `source-provenance.jsonl`            |
+| `originalEvidence[].lines`  | Exact line or range from `source-provenance.jsonl`   |
+| `originalEvidence[].detail` | Exact detail from `source-provenance.jsonl`          |
 | `sourceCandidateIds[]`      | Every worker candidate ID absorbed by the family     |
 | `sourceArtifactSha256`      | Step 5 SHA-256 for `round-01-candidate-families.md`  |
 
@@ -247,33 +300,35 @@ Never populate a field from recollection or a newly generated hypothesis.
 Use `apply_patch` to create `input-ledger.md` with:
 
 - original scan id and historical commit;
-- recovered source path outside Git;
+- recovered durable source paths and the original historical `/tmp` paths;
 - both SHA-256 receipts;
+- the candidate-level provenance receipts and their hashes when applicable;
 - the five verified totals from Step 6;
 - a table mapping `DEEP-R1-F01`–`DEEP-R1-F09` to original family titles and
   source candidate IDs;
 - a statement that no new discovery was used to construct the input.
 
-- [ ] **Step 8: Review and checkpoint the recovered input**
+- [ ] **Step 9: Review and checkpoint the recovered input**
 
 Run:
 
 ```bash
 pnpm exec prettier --write \
   docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-ledger.md
-node -e "const fs=require('node:fs');const p='docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-families.jsonl';const rows=fs.readFileSync(p,'utf8').trim().split(/\n/).map(JSON.parse);if(rows.length!==9)throw new Error('expected 9 families');const ids=rows.map(r=>r.familyId);const expected=Array.from({length:9},(_,i)=>'DEEP-R1-F'+String(i+1).padStart(2,'0'));if(JSON.stringify(ids)!==JSON.stringify(expected))throw new Error('family ids/order mismatch');"
+node -e "const fs=require('node:fs');const root='docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor';const rows=fs.readFileSync(root+'/input-families.jsonl','utf8').trim().split(/\n/).map(JSON.parse);const provenance=fs.readFileSync(root+'/source-provenance.jsonl','utf8').trim().split(/\n/).map(JSON.parse);if(rows.length!==9)throw new Error('expected 9 families');const ids=rows.map(r=>r.familyId);const expected=Array.from({length:9},(_,i)=>'DEEP-R1-F'+String(i+1).padStart(2,'0'));if(JSON.stringify(ids)!==JSON.stringify(expected))throw new Error('family ids/order mismatch');const sourceIds=[...new Set(rows.flatMap(r=>r.sourceCandidateIds))].sort();const provenanceIds=provenance.map(r=>r.sourceCandidateId).sort();if(JSON.stringify(sourceIds)!==JSON.stringify(provenanceIds))throw new Error('candidate provenance mismatch');if(provenance.some(r=>!r.sourceReceipt||!r.sourceReceiptSha256||!Array.isArray(r.evidence)||!r.evidence.length||r.evidence.some(e=>!e.path||!e.lines||!e.detail)))throw new Error('incomplete candidate provenance');"
 git diff --check
 ```
 
 Expected: Prettier succeeds, Node exits `0`, and `git diff --check` prints
 nothing.
 
-Commit only the two normalized input files after focused evidence review:
+Commit only the three normalized input files after focused evidence review:
 
 ```bash
 git add \
   docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-ledger.md \
-  docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-families.jsonl
+  docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/input-families.jsonl \
+  docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/source-provenance.jsonl
 git commit -m "docs(audit): recover sec-deep candidate inventory"
 ```
 

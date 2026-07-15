@@ -3,3 +3,7 @@ node_modules
 dist
 coverage
 pnpm-lock.yaml
+
+# Byte-exact recovered audit artifacts; hashes are recorded beside them.
+docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/round-01-candidate-families.md
+docs/superpowers/audits/2026-07-13-full-application-risk-audit/evidence/sec-deep-001-initial-discovery/deep-scan-status.md
