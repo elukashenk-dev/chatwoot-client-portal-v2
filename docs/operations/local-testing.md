@@ -33,6 +33,20 @@ metadata в portal Postgres, бинарные файлы в S3-compatible object
 - `worker` (`Sidekiq`) выполняет фоновые задачи, включая realtime-события;
 - `vite` собирает frontend Chatwoot для локального интерфейса агента.
 
+Chatwoot `v4.15.1` по умолчанию блокирует webhook-запросы на loopback/private
+адреса. Локальные tenant hosts `*.127.0.0.1.nip.io` резолвятся в `127.0.0.1`,
+поэтому в `/home/evluk/projects/chatwoot-ce-stable/.env` требуется:
+
+```bash
+SAFE_FETCH_ALLOW_PRIVATE_NETWORK=true
+```
+
+Это разрешение относится только к локальному trusted development environment.
+Не переносить его в production с публичными HTTPS webhook: настройка разрешает
+SafeFetch обращаться ко всем private-network адресам, а не только к portal.
+Без нее API Channel webhook получает SSRF-отказ, и Chatwoot помечает уже
+сохранённые сообщения как `failed`.
+
 Запускать их вместе в отдельном терминале:
 
 ```bash
