@@ -33,6 +33,10 @@ execution-plan детали здесь не хранятся.
 - Portal maintenance cleanup добавлен для service traces: send ledger,
   webhook deliveries, expired rate-limit buckets, sessions and verification
   records; Chatwoot-owned data and `portal_chat_threads` не удаляются.
+- Local integration baseline aligned with Chatwoot CE `v4.15.1`: development
+  runtime запускает Puma, Sidekiq и Vite вместе, а trusted
+  `*.127.0.0.1.nip.io` API Channel webhooks используют local-only SafeFetch
+  private-network opt-in.
 
 ## Chat And PWA Baseline
 
