@@ -25,6 +25,7 @@ import {
   createChatwootFetchWithContacts,
   createDeferred,
   createWrongCode,
+  expectFirstAccessPrivateChatBootstrap,
   extractLatestCode,
   type ChatwootTestContact,
   waitForMockCall,
@@ -733,44 +734,10 @@ describe('passwordless code login app integration', () => {
       termsVersion: 'terms-v1',
     })
 
-    const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${
-      sessionCookie?.value ?? ''
-    }`
-    const threadsResponse = await app.inject({
-      headers: {
-        cookie: cookieHeader,
-      },
-      method: 'GET',
-      url: '/api/chat/threads',
-    })
-
-    expect(threadsResponse.statusCode).toBe(200)
-    expect(threadsResponse.json()).toMatchObject({
-      activeThreadId: 'private:me',
-      threads: [
-        {
-          id: 'private:me',
-          type: 'private',
-        },
-      ],
-    })
-
-    const messagesResponse = await app.inject({
-      headers: {
-        cookie: cookieHeader,
-      },
-      method: 'GET',
-      url: '/api/chat/messages?threadId=private%3Ame',
-    })
-
-    expect(messagesResponse.statusCode).toBe(200)
-    expect(messagesResponse.json()).toMatchObject({
-      activeThread: {
-        id: 'private:me',
-        type: 'private',
-      },
-      reason: 'conversation_missing',
-      result: 'not_ready',
+    await expectFirstAccessPrivateChatBootstrap({
+      app,
+      sessionCookieName: testEnv.SESSION_COOKIE_NAME,
+      sessionCookieValue: sessionCookie?.value ?? '',
     })
 
     const reusedResponse = await app.inject({

@@ -1,4 +1,5 @@
-import { vi } from 'vitest'
+import type { FastifyInstance } from 'fastify'
+import { expect, vi } from 'vitest'
 
 import type { EmailMessage } from '../integrations/email/smtp.js'
 import { normalizeEmail } from '../lib/email.js'
@@ -76,6 +77,42 @@ export async function waitForMockCall(
   }
 
   throw new Error(`Expected ${callCount} mock calls, saw ${lastCallCount}.`)
+}
+
+export async function expectFirstAccessPrivateChatBootstrap({
+  app,
+  sessionCookieName,
+  sessionCookieValue,
+}: {
+  app: Pick<FastifyInstance, 'inject'>
+  sessionCookieName: string
+  sessionCookieValue: string
+}) {
+  const cookie = `${sessionCookieName}=${sessionCookieValue}`
+  const threadsResponse = await app.inject({
+    headers: { cookie },
+    method: 'GET',
+    url: '/api/chat/threads',
+  })
+
+  expect(threadsResponse.statusCode).toBe(200)
+  expect(threadsResponse.json()).toMatchObject({
+    activeThreadId: 'private:me',
+    threads: [{ id: 'private:me', type: 'private' }],
+  })
+
+  const messagesResponse = await app.inject({
+    headers: { cookie },
+    method: 'GET',
+    url: '/api/chat/messages?threadId=private%3Ame',
+  })
+
+  expect(messagesResponse.statusCode).toBe(200)
+  expect(messagesResponse.json()).toMatchObject({
+    activeThread: { id: 'private:me', type: 'private' },
+    reason: 'conversation_missing',
+    result: 'not_ready',
+  })
 }
 
 export function createChatwootFetchWithContacts(
