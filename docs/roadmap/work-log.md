@@ -180,8 +180,10 @@ execution-plan детали здесь не хранятся.
   archive or Chatwoot account delete request.
 - `MT-10A` tenant provisioning now reconciles the required Chatwoot contact
   custom attribute definitions for portal operation:
-  `portal_enabled`, `portal_contact_type`, `portal_client_group_contact_ids`
-  and `curator_name`. Existing tenants can be repaired with the operator
+  `portal_enabled`, `portal_is_group`, `portal_client_group_contact_ids` and
+  `curator_name`. Enabled ordinary contacts default to person when the checkbox
+  is absent or off; known group contacts require an explicit checked
+  `portal_is_group`. Existing tenants can be repaired with the operator
   `tenant:chatwoot:ensure-portal-attributes` command.
 - Agent execution governance now uses risk-based efficiency rules: full review
   flow remains mandatory for high-risk auth/security/migration/runtime work,
@@ -280,6 +282,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Review the local `feature/auth-email-code-primary` branch in browser and
-  decide whether to create a checkpoint commit; do not merge to `main` or deploy
-  until the new auth flow is accepted.
+- Complete the operator-gated production rollout for F-CHAT-012, verify an
+  ordinary email-code login plus known group chats, and only then close the
+  finding. Do not start Deep without explicit user approval.
