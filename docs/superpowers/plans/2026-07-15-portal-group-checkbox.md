@@ -754,8 +754,8 @@ The new spec must:
 4. Fill the six `Код из письма` controls and click `Войти`.
 5. On first access, check both legal-consent checkboxes and click
    `Продолжить`.
-6. Assert URL `/app/chat`, heading `Личный чат`, and the supported
-   `Переписка пока не создана` state.
+6. Assert URL `/app/chat`, heading `Личный чат`, and the supported first-message
+   bootstrap state: `Мы на связи`, its empty-chat copy, and the message composer.
 7. Assert neither `Чат временно недоступен` nor `Чат не подключён` is visible.
 
 Use the existing `waitForMailpitCode` helper and the same OTP accessible labels
