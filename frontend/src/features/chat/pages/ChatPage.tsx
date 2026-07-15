@@ -445,9 +445,9 @@ export function ChatPage() {
       <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
         {pageState.status === 'error' ? (
           <ChatNotReadyState
-            isUnavailable
+            isUnavailable={pageState.errorReason === 'chatwoot_unavailable'}
             onRetry={() => void loadInitialChat()}
-            reason={snapshot?.reason ?? 'chatwoot_unavailable'}
+            reason={pageState.errorReason}
           />
         ) : null}
 

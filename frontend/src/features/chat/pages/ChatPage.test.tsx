@@ -444,12 +444,20 @@ describe('ChatPage', () => {
     renderChatRoute()
 
     expect(
-      await screen.findByText(
-        'Мы не смогли получить состояние переписки из сервиса поддержки. Попробуйте обновить чат немного позже.',
-        {},
+      await screen.findByRole(
+        'heading',
+        { name: 'Чат не подключён' },
         CHAT_PAGE_LOAD_TIMEOUT,
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Настройка профиля клиента не завершена. Обратитесь в поддержку.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Повторить' }),
+    ).not.toBeInTheDocument()
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
@@ -469,6 +477,40 @@ describe('ChatPage', () => {
     expect(
       fetchMock.mock.calls.some(([url]) => String(url).includes('group%3A')),
     ).toBe(false)
+  })
+
+  it('keeps an upstream chat bootstrap failure retryable', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createAuthenticatedUserResponse())
+      .mockResolvedValueOnce(
+        createJsonResponse(
+          {
+            error: {
+              code: 'chatwoot_unavailable',
+              message: 'Сервис поддержки временно недоступен.',
+            },
+          },
+          503,
+        ),
+      )
+
+    renderChatRoute()
+
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Чат временно недоступен' },
+        CHAT_PAGE_LOAD_TIMEOUT,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Мы не смогли получить состояние переписки из сервиса поддержки. Попробуйте обновить чат немного позже.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Повторить' }),
+    ).toBeInTheDocument()
   })
 
   it('restores focus to the chat menu trigger when Escape closes the menu', async () => {

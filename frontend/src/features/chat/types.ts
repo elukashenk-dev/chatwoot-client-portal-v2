@@ -2,6 +2,7 @@ export type ChatThreadReason =
   | 'none'
   | 'chatwoot_not_configured'
   | 'chatwoot_unavailable'
+  | 'contact_configuration_invalid'
   | 'contact_link_missing'
   | 'conversation_mapping_unavailable'
   | 'conversation_missing'

@@ -1,4 +1,8 @@
-import type { ChatMessagesSnapshot, ChatThreadListSummary } from '../types'
+import type {
+  ChatMessagesSnapshot,
+  ChatThreadListSummary,
+  ChatThreadReason,
+} from '../types'
 
 export type ChatReachability = 'connecting' | 'offline' | 'online'
 
@@ -21,6 +25,7 @@ export type ChatPageState =
   | (ChatPageThreadState & {
       status: 'error'
       errorMessage: string
+      errorReason: ChatThreadReason
       snapshot: ChatMessagesSnapshot | null
     })
   | (ChatPageThreadState & {

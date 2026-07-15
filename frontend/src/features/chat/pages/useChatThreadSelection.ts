@@ -30,6 +30,7 @@ import {
   readOfflineChatFallback,
   saveOfflineThreadList,
 } from './offlineChatCache'
+import { getChatBootstrapErrorReason } from './chatBootstrapErrorReason'
 
 type UseChatThreadSelectionInput = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -287,6 +288,7 @@ export function useChatThreadSelection({
           error instanceof Error
             ? error.message
             : 'Мы не смогли загрузить чат. Попробуйте еще раз.',
+        errorReason: getChatBootstrapErrorReason(error),
         selectedThreadId: currentState.selectedThreadId,
         snapshot: null,
         status: 'error',
@@ -413,6 +415,7 @@ export function useChatThreadSelection({
             error instanceof Error
               ? error.message
               : 'Мы не смогли загрузить чат. Попробуйте еще раз.',
+          errorReason: getChatBootstrapErrorReason(error),
           selectedThreadId: threadId,
           snapshot: null,
           status: 'error',
