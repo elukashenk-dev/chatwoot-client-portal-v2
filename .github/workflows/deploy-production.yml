@@ -3,9 +3,24 @@ name: Deploy Production
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: Git tag, branch, or commit SHA to deploy.
+      commit:
+        description: Full lowercase 40-character origin/main commit SHA.
         required: true
+        type: string
+      phase:
+        description: Prepare without cutover, or activate an existing preparation.
+        required: true
+        type: choice
+        options:
+          - prepare
+          - activate
+      migration_policy:
+        description: Empty unless the prepared release is migration-sensitive.
+        required: false
+        type: string
+      approval_ref:
+        description: Required with a migration policy; never a secret.
+        required: false
         type: string
 
 concurrency:
@@ -18,81 +33,76 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Prepare SSH
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Run staged production deployment
         env:
+          APPROVAL_REF: ${{ inputs.approval_ref }}
+          COMMIT: ${{ inputs.commit }}
+          MIGRATION_POLICY: ${{ inputs.migration_policy }}
+          PHASE: ${{ inputs.phase }}
           SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
           SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
           SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT || '22' }}
           SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-        run: |
-          set -Eeuo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/production_deploy_key
-          chmod 600 ~/.ssh/production_deploy_key
-
-          if [ -n "$SSH_KNOWN_HOSTS" ]; then
-            printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          else
-            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
-          fi
-
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Deploy on VM
-        env:
-          APP_PATH: ${{ secrets.PRODUCTION_APP_PATH }}
-          DEPLOY_REF: ${{ inputs.ref }}
-          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
-          SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT || '22' }}
           SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
         run: |
           set -Eeuo pipefail
 
-          if [[ ! "$DEPLOY_REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$ ]]; then
-            echo "Invalid deploy ref. Use a tag, branch, or commit SHA without shell metacharacters." >&2
+          fail() {
+            printf '%s\n' "$1" >&2
             exit 2
-          fi
+          }
 
-          case "$DEPLOY_REF" in
-            -*|*..*|*@\{*|*//*|*/|*.|*.lock|*.lock/*)
-              echo "Invalid deploy ref syntax: $DEPLOY_REF" >&2
-              exit 2
+          require_nonempty() {
+            local name="$1"
+            local value="$2"
+
+            [[ -n "$value" ]] || fail "Missing required production secret: $name"
+          }
+
+          require_nonempty SSH_HOST "$SSH_HOST"
+          require_nonempty SSH_USER "$SSH_USER"
+          require_nonempty SSH_PRIVATE_KEY "$SSH_PRIVATE_KEY"
+          require_nonempty SSH_KNOWN_HOSTS "$SSH_KNOWN_HOSTS"
+
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail 'Commit must be a full lowercase SHA.'
+          case "$PHASE" in
+            prepare)
+              [[ -z "$MIGRATION_POLICY" && -z "$APPROVAL_REF" ]] ||
+                fail 'Prepare does not accept migration policy or approval reference.'
+              ;;
+            activate)
+              if [[ -n "$MIGRATION_POLICY" || -n "$APPROVAL_REF" ]]; then
+                [[ -n "$MIGRATION_POLICY" && -n "$APPROVAL_REF" ]] ||
+                  fail 'Migration policy and approval reference are required together.'
+                [[ "$MIGRATION_POLICY" == 'backward-compatible' || "$MIGRATION_POLICY" == 'forward-only' ]] ||
+                  fail 'Migration policy must be backward-compatible or forward-only.'
+              fi
+              ;;
+            *)
+              fail 'Phase must be prepare or activate.'
               ;;
           esac
 
-          if [[ ! "$APP_PATH" =~ ^/[A-Za-z0-9._/@+-]+$ ]]; then
-            echo "Invalid production app path." >&2
-            exit 2
-          fi
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" >"$RUNNER_TEMP/production_deploy_key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" >"$RUNNER_TEMP/production_known_hosts"
+          chmod 600 "$RUNNER_TEMP/production_deploy_key" "$RUNNER_TEMP/production_known_hosts"
 
-          printf -v REMOTE_SCRIPT_ARGS '%q ' "$APP_PATH" "$DEPLOY_REF"
-
-          ssh \
-            -i ~/.ssh/production_deploy_key \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "bash -s -- $REMOTE_SCRIPT_ARGS" <<'EOF'
-          set -Eeuo pipefail
-
-          app_path="$1"
-          deploy_ref="$2"
-
-          cd "$app_path"
-          git fetch --tags --prune origin
-
-          if [[ "$deploy_ref" =~ ^[0-9a-fA-F]{7,40}$ ]] && git rev-parse --verify --quiet "${deploy_ref}^{commit}" >/dev/null; then
-            resolved_ref="$deploy_ref"
-          elif git rev-parse --verify --quiet "refs/tags/${deploy_ref}^{commit}" >/dev/null; then
-            resolved_ref="refs/tags/${deploy_ref}"
-          elif git rev-parse --verify --quiet "refs/remotes/origin/${deploy_ref}^{commit}" >/dev/null; then
-            resolved_ref="refs/remotes/origin/${deploy_ref}"
-          else
-            echo "Deploy ref not found after fetch: $deploy_ref" >&2
-            exit 2
-          fi
-
-          git checkout --detach -- "$resolved_ref"
-          docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build
-          docker compose --env-file .env.production -f infra/production/compose.yaml ps
-          EOF
+          args=(
+            "scripts/deploy-production-staged.sh"
+            "$PHASE"
+            "--host=$SSH_USER@$SSH_HOST"
+            "--ssh-port=$SSH_PORT"
+            "--identity-file=$RUNNER_TEMP/production_deploy_key"
+            "--app-path=/opt/chatwoot-client-portal-v2"
+            "--commit=$COMMIT"
+            "--known-hosts-file=$RUNNER_TEMP/production_known_hosts"
+          )
+          [[ -n "$MIGRATION_POLICY" ]] && args+=("--migration-policy=$MIGRATION_POLICY")
+          [[ -n "$APPROVAL_REF" ]] && args+=("--approval-ref=$APPROVAL_REF")
+          "${args[@]}"

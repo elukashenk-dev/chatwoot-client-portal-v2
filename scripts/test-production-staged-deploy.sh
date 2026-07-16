@@ -3699,6 +3699,56 @@ for path in root.rglob("*"):
 PY
 }
 
+github_and_local_cli_use_the_same_contract() {
+  local output candidate old_flag old_flag_index=0
+
+  setup_prepare_fixture "$FUNCNAME-prepare"
+  output="$CASE_ROOT/prepare-output"
+  if ! deploy_command prepare >"$output" 2>&1; then
+    sed 's/^/  output: /' "$output" >&2
+    fail 'workflow-shaped prepare arguments were not accepted by the public CLI'
+  fi
+  assert_status_once "$output" prepared
+  assert_strict_transport_records
+
+  PREPARED_COMMIT="$FIXTURE_COMMIT"
+  reset_activation_observation
+  output="$CASE_ROOT/activate-output"
+  assert_activation_success "$output"
+  assert_strict_transport_records
+
+  for candidate in main v1.2.3; do
+    setup_prepare_fixture "$FUNCNAME-$candidate"
+    DEPLOY_COMMIT_OVERRIDE="$candidate" assert_fails deploy_command prepare
+    assert_no_transport
+  done
+
+  setup_prepare_fixture "$FUNCNAME-prepare-policy"
+  assert_fails deploy_command prepare \
+    --migration-policy=backward-compatible --approval-ref=OPS-GITHUB-1
+  assert_no_transport
+
+  setup_activation_fixture "$FUNCNAME-migration" backend/drizzle/0001_workflow.sql
+  output="$CASE_ROOT/missing-policy-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy
+  reset_activation_observation
+  output="$CASE_ROOT/accepted-policy-output"
+  assert_activation_success "$output" \
+    --migration-policy=backward-compatible --approval-ref=OPS-GITHUB-1
+
+  for old_flag in \
+    --activate \
+    --sync-webhook-secret \
+    --allow-dirty-preview \
+    --preview-label=legacy-preview \
+    --keep-remote-archive; do
+    old_flag_index=$((old_flag_index + 1))
+    setup_prepare_fixture "$FUNCNAME-old-flag-$old_flag_index"
+    assert_fails deploy_command prepare "$old_flag"
+    assert_no_transport
+  done
+}
+
 run_case() {
   local name="$1"
   "$name"
@@ -3727,6 +3777,7 @@ run_bootstrap_cases() {
 }
 
 run_prepare_cases() {
+  run_case github_and_local_cli_use_the_same_contract
   run_case prepare_imports_clean_legacy_current_once
   run_case first_prepare_uses_adoption_pointer_without_publishing_current
   run_case prepare_rejects_dirty_preview_or_post_staged_legacy_marker

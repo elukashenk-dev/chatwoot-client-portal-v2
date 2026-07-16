@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)"
 HELPER="$REPO_ROOT/scripts/ensure-production-object-storage-env.sh"
-DEPLOY_SCRIPT="$REPO_ROOT/scripts/deploy-production-archive.sh"
 ENV_PRODUCTION_EXAMPLE="$REPO_ROOT/.env.production.example"
 INGRESS_SCRIPT="$REPO_ROOT/scripts/configure-tenant-domain-ingress.sh"
 INSTALL_SCRIPT="$REPO_ROOT/scripts/install-production.sh"
@@ -39,19 +38,6 @@ assert_not_contains() {
   fi
 }
 
-line_number_of() {
-  local path="$1"
-  local needle="$2"
-  local line
-
-  line="$(grep -Fn "$needle" "$path" | head -n1 | cut -d: -f1 || true)"
-  if [[ -z "$line" ]]; then
-    fail "expected $path to contain: $needle"
-  fi
-
-  printf '%s\n' "$line"
-}
-
 assert_env_value() {
   local env_file="$1"
   local key="$2"
@@ -83,7 +69,6 @@ if [[ ! -x "$INGRESS_SCRIPT" ]]; then
   fail "missing executable ingress helper: $INGRESS_SCRIPT"
 fi
 
-assert_contains "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production"
 assert_contains "$COMPOSE_FILE" "DEFAULT_TENANT_CHATWOOT_ADMIN_VERIFICATION_TOKEN:"
 assert_contains "$COMPOSE_FILE" "telegram-bridge:"
 assert_contains "$COMPOSE_FILE" 'command: ["node", "backend/dist/telegram-bridge/server.js"]'
@@ -111,12 +96,6 @@ assert_env_value \
 assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_PORT "3401"
 assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_MAX_BODY_BYTES "1048576"
 assert_env_value "$ENV_PRODUCTION_EXAMPLE" TELEGRAM_BRIDGE_PROCESSING_STALE_MS "600000"
-
-deploy_cd_line="$(line_number_of "$DEPLOY_SCRIPT" 'cd "$app_path"')"
-deploy_helper_line="$(line_number_of "$DEPLOY_SCRIPT" "scripts/ensure-production-object-storage-env.sh --env-file .env.production")"
-if (( deploy_cd_line >= deploy_helper_line )); then
-  fail "deploy script must cd into app_path before running the env upgrade helper"
-fi
 
 legacy_env="$TMP_DIR/legacy.env"
 cat >"$legacy_env" <<'ENV'
