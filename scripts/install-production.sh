@@ -5,6 +5,17 @@ APP_NAME="chatwoot-client-portal-v2"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 
+RELEASE_RECORDS_LIB="$SCRIPT_DIR/production-release-records.sh"
+if [[ ! -r "$RELEASE_RECORDS_LIB" ]]; then
+  echo "Release records helper is missing: $RELEASE_RECORDS_LIB" >&2
+  exit 1
+fi
+# shellcheck source=scripts/production-release-records.sh
+source "$RELEASE_RECORDS_LIB"
+
+BOOTSTRAP_SOURCE_FILE="$REPO_ROOT/BOOTSTRAP_SOURCE.txt"
+ACTIVE_SOURCE_FILE="$REPO_ROOT/DEPLOY_SOURCE.txt"
+
 ENV_FILE="${ENV_FILE:-$REPO_ROOT/.env.production}"
 STATE_DIR="${INSTALL_STATE_DIR:-$REPO_ROOT/.install}"
 STATE_FILE="$STATE_DIR/production.state"
@@ -96,6 +107,15 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "$ACTION" == "install" &&
+  ( -e "$BOOTSTRAP_SOURCE_FILE" || -L "$BOOTSTRAP_SOURCE_FILE" ) ]]; then
+  release_marker_validate_bootstrap "$BOOTSTRAP_SOURCE_FILE"
+  if [[ "$SKIP_PUBLIC_HEALTH" == "true" ]]; then
+    echo "Bootstrap installation requires public health and tenant checks." >&2
+    exit 2
+  fi
+fi
 
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
@@ -937,6 +957,17 @@ install_maintenance_cleanup_timer() {
   run_maintenance_cleanup_helper --install
 }
 
+finalize_bootstrap_source() {
+  if [[ ! -e "$BOOTSTRAP_SOURCE_FILE" && ! -L "$BOOTSTRAP_SOURCE_FILE" ]]; then
+    return
+  fi
+
+  release_marker_promote_bootstrap \
+    "$BOOTSTRAP_SOURCE_FILE" \
+    "$ACTIVE_SOURCE_FILE" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
 maintenance_cleanup_dry_run() {
   run_maintenance_cleanup_helper --dry-run
 }
@@ -1036,4 +1067,5 @@ run_step chatwoot_routing "Verify or enable tenant Chatwoot API Channel single-c
 run_step chatwoot_webhook_secret_sync "Configure tenant API Channel webhook URL and store secret" sync_chatwoot_webhook_secret
 run_step maintenance_cleanup_timer "Install daily portal maintenance cleanup timer" install_maintenance_cleanup_timer
 
+finalize_bootstrap_source
 print_summary
