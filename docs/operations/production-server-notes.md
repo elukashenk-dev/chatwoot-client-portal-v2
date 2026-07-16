@@ -214,9 +214,16 @@ verified backup/restore plan.
 
 ## План Развертывания
 
-Обычный feature deploy идет через `scripts/deploy-production-archive.sh` из
-clean reviewed commit. Clean reinstall нужен только для пересоздания или
-глубокой reconfigure portal-owned production stack.
+Обычный feature deploy использует только staged authority из
+`docs/operations/production-deployment.md`: сначала clean reviewed `main`
+готовит exact candidate, затем отдельное approval разрешает activation. Этот
+файл не дублирует release-команды. Direct service rebuild, bridge-only release
+или WIP/device preview на production не являются допустимыми путями.
+
+Clean reinstall нужен только для пересоздания или глубокой reconfigure
+portal-owned production stack. Его отдельный `bootstrap` допускается лишь для
+пустого inactive root после собственных approvals и backups; bootstrap не
+запускает production.
 
 Clean reinstall коротко:
 

@@ -5,6 +5,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$ROOT_DIR/.github/workflows/deploy-production.yml"
 PACKAGE_JSON="$ROOT_DIR/package.json"
+CANONICAL_DEPLOYMENT_GUIDE="$ROOT_DIR/docs/operations/production-deployment.md"
+NEW_LAPTOP_GUIDE="$ROOT_DIR/docs/operations/continue-on-new-laptop.md"
+ACTIVE_OPERATIONS_FILES=(
+  "$CANONICAL_DEPLOYMENT_GUIDE"
+  "$ROOT_DIR/docs/operations/production-clean-reinstall.md"
+  "$ROOT_DIR/docs/operations/mt-10-deployment-runbooks.md"
+  "$ROOT_DIR/docs/operations/continue-on-new-laptop.md"
+  "$ROOT_DIR/docs/operations/production-server-notes.md"
+  "$ROOT_DIR/docs/operations/telegram-bridge.md"
+  "$ROOT_DIR/docs/operations/mt-10a-tenant-lifecycle-rehearsal.md"
+)
 failures=0
 
 fail() {
@@ -153,6 +164,70 @@ assert_workflow_secret_guards_before_staged_call() {
   done
 }
 
+assert_active_operations_absent() {
+  local pattern="$1"
+  local matches
+
+  matches="$(rg -n -F -- "$pattern" "${ACTIVE_OPERATIONS_FILES[@]}" 2>/dev/null || true)"
+  if [[ -n "$matches" ]]; then
+    fail "active operations guidance must not contain $pattern: $matches"
+  else
+    pass "active operations guidance does not contain $pattern"
+  fi
+}
+
+assert_active_operations_have_no_executable_ssh_keyscan() {
+  local matches
+
+  matches="$(awk '
+    /^[[:space:]]*(```|~~~)/ {
+      in_code_fence = !in_code_fence
+      next
+    }
+    /^[[:space:]]*(\$[[:space:]]+)?ssh-keyscan([^[:alnum:]_]|$)/ {
+      line = tolower($0)
+      if (in_code_fence || line !~ /forbidden/) {
+        printf "%s:%d:%s\\n", FILENAME, FNR, $0
+      }
+    }
+  ' "${ACTIVE_OPERATIONS_FILES[@]}")"
+  if [[ -n "$matches" ]]; then
+    fail "active operations guidance must not execute ssh-keyscan: $matches"
+  else
+    pass "active operations guidance has no executable ssh-keyscan command"
+  fi
+}
+
+assert_ssh_keyscan_guard_rejects_fenced_forbidden_command() {
+  local fixture
+  local output
+
+  fixture="$(mktemp)"
+  printf '%s\n' '```bash' 'ssh-keyscan host # forbidden' '```' >"$fixture"
+  output="$(
+    ACTIVE_OPERATIONS_FILES=("$fixture")
+    assert_active_operations_have_no_executable_ssh_keyscan 2>&1
+  )"
+  rm -f "$fixture"
+
+  if [[ "$output" == *'FAIL: active operations guidance must not execute ssh-keyscan:'* ]]; then
+    pass 'ssh-keyscan guard rejects a fenced command with a forbidden comment'
+  else
+    fail 'ssh-keyscan guard must reject a fenced command with a forbidden comment'
+  fi
+}
+
+assert_file_contains() {
+  local path="$1"
+  local pattern="$2"
+
+  if rg -Fq -- "$pattern" "$path"; then
+    pass "$(basename "$path") contains $pattern"
+  else
+    fail "$(basename "$path") must contain $pattern"
+  fi
+}
+
 assert_file_missing scripts/deploy-production-archive.sh
 assert_json_script deploy:staged 'bash ./scripts/deploy-production-staged.sh'
 assert_json_script_missing deploy:archive
@@ -166,6 +241,19 @@ assert_repo_absent ssh-keyscan
 assert_workflow_absent 'git checkout' 'git fetch' 'docker compose' 'up -d' 'bootstrap'
 assert_workflow_contains 'actions/checkout@v4' 'fetch-depth: 0' 'ref: main' 'runs-on: ubuntu-24.04' 'environment: production' 'group: production' 'cancel-in-progress: false' 'PRODUCTION_SSH_KNOWN_HOSTS'
 assert_workflow_secret_guards_before_staged_call
+assert_active_operations_absent scripts/deploy-production-archive.sh
+assert_active_operations_absent --allow-dirty-preview
+assert_active_operations_absent --preview-label
+assert_active_operations_absent 'docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build'
+assert_active_operations_have_no_executable_ssh_keyscan
+assert_ssh_keyscan_guard_rejects_fenced_forbidden_command
+assert_file_contains "$NEW_LAPTOP_GUIDE" 'Fail closed: env drift fails `prepare`; use separate approved remediation.'
+for required_pattern in prepare activate --no-build '--pull never' PRODUCTION_SSH_KNOWN_HOSTS backward-compatible forward-only candidate_failed_rollback_succeeded '100 active tenants' 'five-worker'; do
+  assert_file_contains "$CANONICAL_DEPLOYMENT_GUIDE" "$required_pattern"
+done
+for required_pattern in bootstrap BOOTSTRAP_SOURCE.txt 'empty root' 'portal-project container' 'does not start production'; do
+  assert_file_contains "$ROOT_DIR/docs/operations/production-clean-reinstall.md" "$required_pattern"
+done
 
 if (( failures > 0 )); then
   printf 'Production deploy contract test failed with %s assertion(s).\n' "$failures" >&2

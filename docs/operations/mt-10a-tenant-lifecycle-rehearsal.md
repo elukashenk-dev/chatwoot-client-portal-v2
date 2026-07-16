@@ -101,14 +101,18 @@ run_backend() {
 Confirm the deployed source and containers:
 
 ```bash
-cat DEPLOY_SOURCE.txt
+source_commit="$(sed -n 's/^source_commit=//p' DEPLOY_SOURCE.txt)"
+staged_current="$(cat .release-state/current)"
+test -n "$source_commit"
+test "$source_commit" = "$staged_current"
 docker compose --env-file .env.production -f infra/production/compose.yaml ps
 curl -fsS https://lk.provgroup.ru/api/health
 ```
 
 Expected:
 
-- `DEPLOY_SOURCE.txt` points to the intended clean commit;
+- the active `key=value` marker has exactly one `source_commit=` value and it
+  agrees with staged `.release-state/current`;
 - portal containers are running or healthy;
 - health returns `status: ok`.
 
@@ -367,7 +371,7 @@ Record:
 
 ```text
 date
-portal commit from DEPLOY_SOURCE.txt
+portal `source_commit=` from DEPLOY_SOURCE.txt and matching staged current
 domain mode
 TENANT_SLUG
 TENANT_HOST

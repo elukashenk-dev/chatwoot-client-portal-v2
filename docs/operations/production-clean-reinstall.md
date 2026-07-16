@@ -267,31 +267,42 @@ Keep `chatwoot-client-portal-v2_portal-object-storage-data` unless the operator
 explicitly accepts losing branding/PWA assets. This volume does not contain
 customer auth/session/chat runtime rows.
 
-### Upload Code, Restore Env And Start Fresh Schema
+### Bootstrap Exact Source, Restore Env And Run Fresh Installer
 
-From the local reviewed `main`:
+The destructive clean-reinstall approval and verified backups happen before
+this step. From a local clean reviewed `main`, bootstrap the exact source into
+the now empty inactive root:
 
 ```bash
-scripts/deploy-production-archive.sh \
+scripts/deploy-production-staged.sh bootstrap \
   --host=ubuntu@93.77.166.238 \
-  --app-path=/opt/chatwoot-client-portal-v2
+  --ssh-port=22 \
+  --identity-file="$HOME/.ssh/production_deploy_key" \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --commit="$(git rev-parse HEAD)" \
+  --known-hosts-file="$HOME/.ssh/production_known_hosts" \
+  --approval-ref=clean-reinstall-2026-07-16-user-approved
 ```
 
-Then on the VM:
+`bootstrap` refuses any non-empty app root and refuses if a stopped or running
+portal-project container exists. It copies the exact source and writes only
+`BOOTSTRAP_SOURCE.txt`; it never writes production environment values, runs the
+installer or Compose, and does not start production.
+
+Then on the VM, restore the approved backup and run the existing installer:
 
 ```bash
 cd /opt/chatwoot-client-portal-v2
-
 cp -a "$BACKUP_DIR/.env.production" .env.production
 chmod 600 .env.production
-
-scripts/ensure-production-object-storage-env.sh --env-file .env.production
-
-docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build
+scripts/install-production.sh --install --reconfigure
 ```
 
-The backend starts against a new `portal-db-data` volume and runs current
-migrations before accepting health checks.
+When `BOOTSTRAP_SOURCE.txt` exists, the installer rejects
+`--skip-public-health`. It must complete its public health and tenant checks;
+only complete installer success promotes the exact source to
+`DEPLOY_SOURCE.txt`. Routine future releases use `prepare` then `activate`,
+never `bootstrap`.
 
 ### Restore Preserved Config Rows
 
@@ -439,74 +450,50 @@ docker volume ls --format '{{.Name}}' \
   | xargs -r docker volume rm
 ```
 
-## Step 4. Upload The New Portal Code
+## Step 4. Bootstrap The New Portal Source
 
-From local development machine:
+This is an exceptional clean-install source delivery, not a routine production
+release. The destructive approval and backups in Steps 1–3 are prerequisites;
+do not use it for device review, WIP code, a reconfigure of an existing root,
+or a normal feature deploy.
 
-First choose the release source mode.
-
-Clean production source:
-
-```bash
-git status --short
-git branch --show-current
-git rev-parse --short HEAD
-```
-
-Expected: `git status --short` is empty, and the current commit is the reviewed
-source you want to deploy.
-
-Device-review preview source:
+From the local development machine, confirm the reviewed clean source and the
+document checks:
 
 ```bash
 git status --short
 git branch --show-current
-git rev-parse --short HEAD
-```
-
-Expected: the dirty files are intentionally part of the current UI preview
-iteration. Use an explicit preview label in the archive command below.
-
-```bash
+git rev-parse HEAD
 pnpm exec prettier --check infra/production/compose.yaml docs/operations/production-clean-reinstall.md
 bash -n scripts/install-production.sh scripts/install-maintenance-cleanup-timer.sh
 git diff --check
-
-scripts/deploy-production-archive.sh \
-  --host=ubuntu@93.77.166.238 \
-  --app-path=/opt/chatwoot-client-portal-v2
 ```
 
-For an intentional WIP device-review deploy, use:
+Expected: `git status --short` is empty, the branch is `main`, and the full SHA
+is the reviewed source. Then run the separately approved bootstrap:
 
 ```bash
-scripts/deploy-production-archive.sh \
+scripts/deploy-production-staged.sh bootstrap \
   --host=ubuntu@93.77.166.238 \
+  --ssh-port=22 \
+  --identity-file="$HOME/.ssh/production_deploy_key" \
   --app-path=/opt/chatwoot-client-portal-v2 \
-  --allow-dirty-preview \
-  --preview-label=mt-8-5-auth-ui-mobile
+  --commit="$(git rev-parse HEAD)" \
+  --known-hosts-file="$HOME/.ssh/production_known_hosts" \
+  --approval-ref=clean-reinstall-2026-07-16-user-approved
 ```
 
-The deploy helper refuses dirty working tree deploys unless
-`--allow-dirty-preview` and `--preview-label` are provided. Every archive writes
-`DEPLOY_SOURCE.txt` into the deployed app directory with branch, commit, dirty
-status, preview label and `git status --short`.
+The root must be absent or an empty root, and there must be no stopped or
+running portal-project container. Any existing source/env/release marker or
+container causes refusal. Successful bootstrap writes only
+`BOOTSTRAP_SOURCE.txt`; it does not configure, install, build, run Compose, or
+start production.
 
-If `/opt/chatwoot-client-portal-v2` no longer exists after cleanup, the deploy
-helper creates it on the VM and assigns it to the SSH user. This requires `sudo`
-on the VM.
-
-When `--activate` is used, the deploy helper preserves `.env.production` but
-runs `scripts/ensure-production-object-storage-env.sh` before compose startup.
-This upgrades older production env files with missing portal object-storage
-keys, preserves existing values and writes a timestamped env backup before the
-first change.
-
-On the VM:
+On the VM, inspect only non-secret marker metadata before beginning Step 5:
 
 ```bash
 cd /opt/chatwoot-client-portal-v2
-cat DEPLOY_SOURCE.txt
+sed -n '1,12p' BOOTSTRAP_SOURCE.txt
 ```
 
 ## Step 5. Run Tenant-Aware Installer
@@ -679,33 +666,13 @@ Then test with a known Chatwoot contact:
 - send reply from Chatwoot;
 - confirm portal receives realtime update.
 
-## Step 10A. MT-8.5 Device Preview Iteration Loop
+## Step 10A. Device Review Boundary
 
-After the first clean reinstall is complete, MT-8.5 UI/device review can use
-small repeated preview deploys without reinstalling the whole portal.
-
-Local workflow:
-
-```bash
-git status --short
-
-scripts/deploy-production-archive.sh \
-  --host=ubuntu@93.77.166.238 \
-  --app-path=/opt/chatwoot-client-portal-v2 \
-  --activate \
-  --allow-dirty-preview \
-  --preview-label=mt-8-5-auth-ui-mobile
-```
-
-Then open `https://lk.provgroup.ru` on real devices and record what changed.
-
-Rules for preview deploys:
-
-- use a short, meaningful `--preview-label`;
-- deploy only changes that are intentionally part of the current preview;
-- check `DEPLOY_SOURCE.txt` on the VM when the visible UI does not match what
-  you expected;
-- make a normal checkpoint commit when a preview slice becomes accepted.
+Do not use this clean-reinstall procedure or production release authority for
+WIP/device preview iterations. Review device UI in local development or a
+separately designed non-production environment. Once an accepted change is a
+clean reviewed `main` commit, use the routine `prepare` then separately approved
+`activate` process in `production-deployment.md`.
 
 ## Step 11. Webhook Delivery Check
 
@@ -779,8 +746,10 @@ The clean reinstall is complete when:
 - destructive clean reset has an explicit warning and requires operator
   approval after backup;
 - new portal app exists at `/opt/chatwoot-client-portal-v2`;
-- `DEPLOY_SOURCE.txt` exists and matches the intended clean release or explicit
-  preview deploy;
+- before installer completion, `BOOTSTRAP_SOURCE.txt` records only the approved
+  exact clean source and bootstrap did not start production;
+- after complete installer health success, `DEPLOY_SOURCE.txt` is promoted from
+  that bootstrap evidence and matches the intended clean release;
 - `.env.production` contains `PORTAL_TENANT_SECRET_KEY` and
   `DEFAULT_TENANT_*`;
 - backend compose does not require global `CHATWOOT_*` as runtime authority;

@@ -16,7 +16,7 @@ runbooks instead of duplicating every low-level command.
 ### Ready Now
 
 - dedicated one-tenant production install on the current one-VM stack;
-- routine deploy from a clean reviewed commit;
+- routine staged deploy from a clean reviewed commit;
 - clean reinstall/reconfigure of portal-owned runtime;
 - operator CLI tenant creation through Chatwoot Platform API and portal DB;
 - operator CLI tenant archive/deprovision flow with explicit confirmation;
@@ -213,7 +213,13 @@ PostgreSQL data or portal object-storage data as part of cache cleanup.
 ## Routine Dedicated Deploy
 
 Use this path for ordinary feature/fix deploys when production is already
-bootstrapped.
+bootstrapped. The canonical commands, exact SSH host authentication procedure,
+migration decision, state/status interpretation and post-activation evidence
+are maintained in:
+
+```text
+docs/operations/production-deployment.md
+```
 
 Prerequisites:
 
@@ -225,32 +231,16 @@ Prerequisites:
 - `pnpm build`, `pnpm lint` and `git diff --check` pass, or a blocker is
   explicitly recorded.
 
-Deploy command:
+Routine operation is exactly two separate approvals: `prepare` proves a bounded
+candidate while current containers keep serving; only a later approved
+`activate` can cut over that same candidate. A successful prepare never
+authorizes activation. The staged release reports status and completes
+all-tenant public smoke before success; do not replace it with direct service
+rebuild/restart commands or a tenant spot check.
 
-```bash
-scripts/deploy-production-archive.sh \
-  --host=ubuntu@93.77.166.238 \
-  --app-path=/opt/chatwoot-client-portal-v2 \
-  --activate
-```
-
-After deploy, verify:
-
-```bash
-ssh ubuntu@93.77.166.238
-cd /opt/chatwoot-client-portal-v2
-cat DEPLOY_SOURCE.txt
-docker compose --env-file .env.production -f infra/production/compose.yaml ps
-curl -fsS https://lk.provgroup.ru/api/health
-curl -fsS https://lk.provgroup.ru/api/tenant
-```
-
-Then run the tenant Chatwoot verification:
-
-```bash
-docker compose --env-file .env.production -f infra/production/compose.yaml exec -T portal-backend \
-  node backend/dist/scripts/verify-tenant-chatwoot-connection.js --tenant=provgroup
-```
+Telegram bridge code is part of the same three-service staged candidate. Its
+webhook setup remains a separate tenant operator operation and is not an
+activation option.
 
 ## Clean Reinstall Or Reconfigure
 
@@ -701,10 +691,11 @@ Before deploy:
 
 After deploy:
 
-- `DEPLOY_SOURCE.txt` matches the intended commit;
-- compose services are healthy/running;
-- `/api/health` returns ok;
-- `/api/tenant` returns the intended tenant;
+- `status=activation_succeeded` was returned, or a non-zero status was handled
+  as a failure/rollback result;
+- `source_commit=` in `DEPLOY_SOURCE.txt` and staged
+  `.release-state/current` agree with the intended commit;
+- bounded Compose and all-tenant public smoke passed;
 - tenant Chatwoot verification passes;
 - API Channel webhook configure/check passes when required;
 - login, email-code access and password reset flows work;

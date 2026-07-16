@@ -264,38 +264,27 @@ docs/operations/production-clean-reinstall.md
 docs/operations/mt-10-deployment-runbooks.md
 ```
 
-Routine deploy from clean reviewed `main`:
+On a new laptop, provision the local deploy key and a dedicated mode-0600
+`$HOME/.ssh/production_known_hosts` file before any release. Verify the host
+fingerprint independently through the hosting-provider console or another
+trusted administrative channel, then write the exact offline host-key entry.
+Do not use trust-on-first-use: the command `ssh-keyscan` is forbidden for this
+file.
 
-```bash
-scripts/deploy-production-archive.sh \
-  --host=ubuntu@93.77.166.238 \
-  --app-path=/opt/chatwoot-client-portal-v2 \
-  --activate
-```
+Routine release is the canonical two-step staged procedure in
+`docs/operations/production-deployment.md`. Follow its `prepare` command from
+clean reviewed `main`, inspect the returned candidate evidence, then obtain a
+separate approval before its `activate` command. Do not use a local laptop to
+perform a WIP/device preview or a bridge-only production activation.
 
-After deploy:
-
-```bash
-ssh ubuntu@93.77.166.238 \
-  'cd /opt/chatwoot-client-portal-v2 && sed -n "1,12p" DEPLOY_SOURCE.txt && docker compose --env-file .env.production -f infra/production/compose.yaml ps'
-
-curl -fsS https://lk.provgroup.ru/api/health
-curl -fsS https://lk.provgroup.ru/api/tenant
-```
-
-Expected:
-
-- `DEPLOY_SOURCE.txt` points to the intended clean commit;
-- `portal-backend` is healthy;
-- `portal-web` is running;
-- `portal-db` and `portal-object-storage` are healthy;
-- health returns `status: ok`;
-- tenant returns `provgroup`.
+After a successful activation, use the canonical status and active
+`.release-state/current` evidence. The staged all-tenant smoke, rather than a
+manual SSH/Compose sequence from the laptop, is the completion criterion.
 
 ## Current Production-Specific Notes
 
-- Production deploy script already preserves `.env.production` and upgrades
-  missing portal object-storage keys.
+- Fail closed: env drift fails `prepare`; use separate approved remediation.
+  A release never silently rewrites `.env.production` values.
 - Branding assets are stored in portal-owned object storage.
 - Legal PDF/DOCX upload is part of admin branding controls.
 - Auth startup surface uses `/startup-surface.js` to avoid a white flash under
