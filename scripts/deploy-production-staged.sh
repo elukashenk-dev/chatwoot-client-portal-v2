@@ -17,6 +17,8 @@ STAGED_SSH_KEYGEN_BIN_RESOLVED=''
 STAGED_PYTHON_BIN_RESOLVED=''
 STAGED_SSH_OPTIONS=()
 STAGED_SCP_OPTIONS=()
+STAGED_INSPECTED_CURRENT=''
+STAGED_INSPECTED_IS_STAGED=''
 
 staged_usage() {
   cat <<'EOF'
@@ -201,13 +203,48 @@ staged_count_remote_status() {
   grep -Ec '^status=' <<<"$output" || true
 }
 
+staged_validate_inspection_record() {
+  local output="$1"
+  local -a lines=()
+
+  mapfile -t lines <<<"$output"
+  (( ${#lines[@]} == 4 )) || return 1
+  [[ "${lines[0]}" == "protocol_version=$STAGED_PROTOCOL_VERSION" ]] || return 1
+  [[ "${lines[1]}" == 'record_kind=current_inspection' ]] || return 1
+  [[ "${lines[2]}" =~ ^current_commit=([0-9a-f]{40})$ ]] || return 1
+  STAGED_INSPECTED_CURRENT="${BASH_REMATCH[1]}"
+  [[ "${lines[3]}" =~ ^staged_current=(true|false)$ ]] || return 1
+  STAGED_INSPECTED_IS_STAGED="${BASH_REMATCH[1]}"
+}
+
+staged_run_remote() {
+  local command_text="$1"
+  local output_variable="$2"
+  local exit_variable="$3"
+  local captured exit_code
+
+  if captured="$(
+    "$STAGED_SSH_BIN_RESOLVED" \
+      "${STAGED_SSH_OPTIONS[@]}" \
+      "$STAGED_SSH_TARGET" \
+      "$command_text" 2>&1
+  )"; then
+    exit_code=0
+  else
+    exit_code=$?
+  fi
+  printf -v "$output_variable" '%s' "$captured"
+  printf -v "$exit_variable" '%s' "$exit_code"
+}
+
 staged_main() {
   local phase="${1:-}"
   shift || true
   local repo_root script_dir
   local ssh_target='' ssh_port='' identity_file='' app_path='' commit=''
   local known_hosts_file='' migration_policy='' approval_ref=''
-  local argument name value host lookup archive_path archive_sha
+  local argument name value host lookup archive_path archive_sha archive_name
+  local current_archive_path current_archive_sha orchestrator_commit inspection_output inspection_exit
   local remote_output remote_exit remote_status remote_command
   local remote_script records_script remote_count
   local -A seen=()
@@ -257,7 +294,6 @@ staged_main() {
     [[ -n "$approval_ref" ]] || staged_fail 'Bootstrap requires --approval-ref.' 2
   elif [[ "$phase" == 'prepare' ]]; then
     [[ -z "$migration_policy" && -z "$approval_ref" ]] || staged_fail 'Prepare does not accept activation decisions.' 2
-    staged_fail 'Prepare is unavailable until its complete invariant set is installed.' 1 prepare_failed
   else
     staged_fail 'Activate is unavailable until its complete invariant set is installed.' 1 activation_refused_state_changed
   fi
@@ -268,7 +304,9 @@ staged_main() {
     staged_fail 'SSH port must be in 1..65535.' 2
   [[ "$ssh_target" =~ ^[A-Za-z_][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*$ ]] ||
     staged_fail 'SSH target must use validated user@host form.' 2
-  [[ "$approval_ref" =~ ^[A-Za-z0-9._:/-]{1,128}$ ]] || staged_fail 'Approval reference is invalid.' 2
+  if [[ -n "$approval_ref" ]]; then
+    [[ "$approval_ref" =~ ^[A-Za-z0-9._:/-]{1,128}$ ]] || staged_fail 'Approval reference is invalid.' 2
+  fi
 
   script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
   repo_root="$(cd -- "$script_dir/.." >/dev/null 2>&1 && pwd)"
@@ -320,7 +358,9 @@ staged_main() {
 
   umask 077
   STAGED_LOCAL_TEMP="$(mktemp -d /tmp/chatwoot-client-portal-v2-local.XXXXXX)"
-  archive_path="$STAGED_LOCAL_TEMP/source.tar.gz"
+  archive_name='candidate.tar.gz'
+  [[ "$phase" != 'bootstrap' ]] || archive_name='source.tar.gz'
+  archive_path="$STAGED_LOCAL_TEMP/$archive_name"
   staged_create_archive "$repo_root" "$commit" "$archive_path"
   staged_validate_archive "$archive_path" || staged_fail 'Candidate archive contains an unsafe member.'
   archive_sha="$(sha256sum "$archive_path" | awk '{print $1}')"
@@ -336,25 +376,66 @@ staged_main() {
 
   remote_script="$script_dir/production-staged-release-remote.sh"
   records_script="$script_dir/production-release-records.sh"
-  "$STAGED_SCP_BIN_RESOLVED" \
-    "${STAGED_SCP_OPTIONS[@]}" \
-    "$archive_path" "$remote_script" "$records_script" \
-    "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged release inputs.'
 
-  staged_shell_join remote_command \
-    "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
-    bootstrap \
-    "--app-path=$app_path" \
-    "--archive-path=$STAGED_REMOTE_TEMP/source.tar.gz" \
-    "--archive-sha256=$archive_sha" \
-    "--commit=$commit" \
-    "--approval-ref=$approval_ref"
+  if [[ "$phase" == 'prepare' ]]; then
+    "$STAGED_SCP_BIN_RESOLVED" \
+      "${STAGED_SCP_OPTIONS[@]}" \
+      "$remote_script" "$records_script" \
+      "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged inspection helpers.'
 
-  if remote_output="$("$STAGED_SSH_BIN_RESOLVED" "${STAGED_SSH_OPTIONS[@]}" "$STAGED_SSH_TARGET" "$remote_command" 2>&1)"; then
-    remote_exit=0
+    staged_shell_join remote_command \
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
+      inspect \
+      "--app-path=$app_path"
+    staged_run_remote "$remote_command" inspection_output inspection_exit
+    (( inspection_exit == 0 )) || staged_fail 'Unable to inspect the current production release.'
+    staged_validate_inspection_record "$inspection_output" || staged_fail 'Remote current inspection record is invalid.'
+
+    git -C "$repo_root" cat-file -e "${STAGED_INSPECTED_CURRENT}^{commit}" 2>/dev/null ||
+      staged_fail 'Inspected current commit does not exist locally.'
+    git -C "$repo_root" merge-base --is-ancestor "$STAGED_INSPECTED_CURRENT" origin/main ||
+      staged_fail 'Inspected current commit is not contained in origin/main.'
+    current_archive_path="$STAGED_LOCAL_TEMP/current.tar.gz"
+    staged_create_archive "$repo_root" "$STAGED_INSPECTED_CURRENT" "$current_archive_path"
+    staged_validate_archive "$current_archive_path" || staged_fail 'Current archive contains an unsafe member.'
+    current_archive_sha="$(sha256sum "$current_archive_path" | awk '{print $1}')"
+    [[ "$current_archive_sha" =~ ^[0-9a-f]{64}$ ]] || staged_fail 'Unable to calculate current archive checksum.'
+
+    "$STAGED_SCP_BIN_RESOLVED" \
+      "${STAGED_SCP_OPTIONS[@]}" \
+      "$archive_path" "$current_archive_path" \
+      "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload exact release archives.'
+
+    orchestrator_commit="$(git -C "$repo_root" rev-parse HEAD)"
+    staged_shell_join remote_command \
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
+      prepare \
+      "--app-path=$app_path" \
+      "--candidate-archive-path=$STAGED_REMOTE_TEMP/candidate.tar.gz" \
+      "--candidate-sha256=$archive_sha" \
+      "--candidate-commit=$commit" \
+      "--current-archive-path=$STAGED_REMOTE_TEMP/current.tar.gz" \
+      "--current-sha256=$current_archive_sha" \
+      "--current-commit=$STAGED_INSPECTED_CURRENT" \
+      "--orchestrator-commit=$orchestrator_commit" \
+      "--orchestrator-protocol-version=$STAGED_PROTOCOL_VERSION"
   else
-    remote_exit=$?
+    "$STAGED_SCP_BIN_RESOLVED" \
+      "${STAGED_SCP_OPTIONS[@]}" \
+      "$archive_path" "$remote_script" "$records_script" \
+      "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged release inputs.'
+
+    staged_shell_join remote_command \
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
+      bootstrap \
+      "--app-path=$app_path" \
+      "--archive-path=$STAGED_REMOTE_TEMP/source.tar.gz" \
+      "--archive-sha256=$archive_sha" \
+      "--commit=$commit" \
+      "--approval-ref=$approval_ref"
   fi
+
+  staged_run_remote "$remote_command" remote_output remote_exit
   remote_count="$(staged_count_remote_status "$remote_output")"
   [[ "$remote_count" == '1' ]] || staged_fail 'Remote helper returned an invalid status record.'
   remote_status="$(grep -E '^status=' <<<"$remote_output" | cut -d= -f2-)"
@@ -363,17 +444,31 @@ staged_main() {
   staged_cleanup_remote || staged_fail 'Remote delivery cleanup failed.'
   staged_cleanup_local
 
-  if (( remote_exit == 0 )) && [[ "$remote_status" == 'bootstrap_completed' ]]; then
-    staged_emit_status bootstrap_completed
+  if (( remote_exit == 0 )) && {
+    [[ "$phase" == 'bootstrap' && "$remote_status" == 'bootstrap_completed' ]] ||
+      [[ "$phase" == 'prepare' && "$remote_status" == 'prepared' ]]
+  }; then
+    if [[ "$phase" == 'prepare' ]]; then
+      printf 'Activation command:\n'
+      printf '  %q' scripts/deploy-production-staged.sh activate \
+        "--host=$ssh_target" \
+        "--ssh-port=$ssh_port" \
+        "--identity-file=$identity_file" \
+        "--app-path=$app_path" \
+        "--commit=$commit" \
+        "--known-hosts-file=$known_hosts_file"
+      printf '\n'
+    fi
+    staged_emit_status "$remote_status"
     return 0
   fi
 
   case "$remote_status" in
-    bootstrap_refused_nonempty|bootstrap_failed)
+    bootstrap_refused_nonempty|bootstrap_failed|prepare_failed)
       staged_emit_status "$remote_status"
       ;;
     *)
-      staged_emit_status bootstrap_failed
+      staged_emit_status "$STAGED_FAILURE_STATUS"
       ;;
   esac
   return 1
