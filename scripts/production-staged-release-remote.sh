@@ -67,6 +67,8 @@ REMOTE_SUPERSEDED_ARCHIVE_SHA=''
 REMOTE_SUPERSEDED_BACKEND_ID=''
 REMOTE_SUPERSEDED_WEB_ID=''
 REMOTE_SUPERSEDED_TELEGRAM_ID=''
+REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH=''
+REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED=''
 
 remote_emit_status() {
   local status="$1"
@@ -330,7 +332,10 @@ remote_select_activation_tools() {
       -f "$REMOTE_EVENT_RECORDER" && ! -L "$REMOTE_EVENT_RECORDER" && -x "$REMOTE_EVENT_RECORDER" ]] || return 1
   else
     [[ -z "${STAGED_TEST_EVENT_RECORDER:-}" && -z "${STAGED_TEST_EVENT_LOG:-}" &&
-      -z "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" && -z "${STAGED_TEST_CUTOVER_NOW_EPOCH:-}" ]] || return 1
+      -z "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" && -z "${STAGED_TEST_CUTOVER_NOW_EPOCH:-}" &&
+      -z "${STAGED_TEST_FAIL_DECISION_FSYNC:-}" &&
+      -z "${STAGED_TEST_FAIL_SUCCESS_OUTCOME_AT:-}" &&
+      -z "${STAGED_TEST_TAMPER_ROLLBACK_MARKER_ARCHIVE:-}" ]] || return 1
     REMOTE_EVENT_RECORDER=''
   fi
 }
@@ -2019,6 +2024,18 @@ remote_validate_activation_decision() {
     release_record_is_timestamp "$recorded_at"
 }
 
+remote_fsync_activation_decision() {
+  local path="$1"
+  local fail_fsync="${STAGED_TEST_FAIL_DECISION_FSYNC:-false}"
+
+  [[ "$fail_fsync" == 'false' || "$fail_fsync" == 'true' ]] || return 1
+  if [[ "$fail_fsync" == 'true' ]]; then
+    remote_is_test_mode || return 1
+    return 1
+  fi
+  remote_fsync_path_and_parent "$path"
+}
+
 remote_ensure_activation_decision() {
   local state_dir="$1"
   local candidate="$2"
@@ -2030,6 +2047,7 @@ remote_ensure_activation_decision() {
   REMOTE_ACTIVATION_DECISION_PATH="$path"
   if [[ -e "$path" || -L "$path" ]]; then
     remote_validate_activation_decision "$path" "$candidate" "$policy" "$approval" || return 1
+    remote_fsync_activation_decision "$path" || return 1
     remote_record_test_event decision_reuse "$policy"
     return
   fi
@@ -2044,7 +2062,7 @@ remote_ensure_activation_decision() {
     "recorded_at_utc=$recorded_at" |
     release_record_write_atomic create "$path" || return 1
   remote_validate_activation_decision "$path" "$candidate" "$policy" "$approval" || return 1
-  remote_fsync_path_and_parent "$path" || return 1
+  remote_fsync_activation_decision "$path" || return 1
   remote_record_test_event decision_write "$policy"
 }
 
@@ -2871,12 +2889,40 @@ remote_outcome_transaction_started_at() {
   printf '%s\n' "$started"
 }
 
+remote_success_outcome_tail_checkpoint() {
+  local checkpoint="$1"
+  local requested="${STAGED_TEST_FAIL_SUCCESS_OUTCOME_AT:-}"
+
+  [[ -n "$requested" ]] || return 0
+  case "$requested" in validation|fsync|event) ;; *) return 1 ;; esac
+  remote_is_test_mode || return 1
+  [[ "$requested" != "$checkpoint" ]]
+}
+
+remote_visible_success_outcome_is_exact() {
+  local state_dir="$1"
+  local candidate="$2"
+  local previous="$3"
+  local path="$REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH"
+  local started epoch expected_path
+
+  [[ -n "$path" && -n "$REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED" ]] || return 1
+  started="$(remote_outcome_transaction_started_at "$state_dir" "$candidate" "$previous")" || return 1
+  [[ "$REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED" == "$started" ]] || return 1
+  epoch="$(release_record_get_unique "$path" recorded_at_epoch)" || return 1
+  expected_path="$state_dir/history/$epoch-$candidate-activation_succeeded.txt"
+  [[ "$path" == "$expected_path" ]] || return 1
+  remote_validate_outcome "$path" "$candidate" activation_succeeded "$previous" "$started"
+}
+
 remote_write_success_outcome() {
   local state_dir="$1"
   local candidate="$2"
   local previous="$3"
   local epoch timestamp started path
 
+  REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH=''
+  REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED=''
   started="$(remote_outcome_transaction_started_at "$state_dir" "$candidate" "$previous")" || return 1
   epoch="$(remote_now_epoch)" || return 1
   timestamp="$(remote_epoch_to_utc "$epoch")" || return 1
@@ -2892,8 +2938,13 @@ remote_write_success_outcome() {
     "recorded_at_utc=$timestamp" \
     "recorded_at_epoch=$epoch" |
     release_record_write_atomic create "$path" || return 1
+  REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH="$path"
+  REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED="$started"
+  remote_success_outcome_tail_checkpoint validation || return 1
   remote_validate_outcome "$path" "$candidate" activation_succeeded "$previous" "$started" || return 1
+  remote_success_outcome_tail_checkpoint fsync || return 1
   remote_fsync_path_and_parent "$path" || return 1
+  remote_success_outcome_tail_checkpoint event || return 1
   remote_record_test_event outcome_write activation_succeeded
 }
 
@@ -3238,6 +3289,9 @@ remote_restore_previous_markers() {
   local first_adoption="$5"
   local state_dir="$app_path/.release-state"
   local epoch activated_at adoption_missing='false'
+  local tamper_archive="${STAGED_TEST_TAMPER_ROLLBACK_MARKER_ARCHIVE:-false}"
+  local marker_path="$app_path/DEPLOY_SOURCE.txt"
+  local tamper_temp wrong_archive
 
   if [[ "$first_adoption" == 'true' ]]; then
     if [[ -f "$state_dir/adoption" ]]; then
@@ -3284,8 +3338,32 @@ remote_restore_previous_markers() {
       remote_fsync_path_and_parent "$state_dir" || return 1
     fi
   fi
+  [[ "$tamper_archive" == 'false' || "$tamper_archive" == 'true' ]] || return 1
+  if [[ "$tamper_archive" == 'true' ]]; then
+    remote_is_test_mode || return 1
+    wrong_archive="$(printf 'f%.0s' {1..64})"
+    [[ "$wrong_archive" != "$archive_sha" ]] || return 1
+    tamper_temp="$(mktemp "$app_path/.rollback-marker-tamper.XXXXXX")" || return 1
+    if ! awk -F= -v checksum="$wrong_archive" \
+      '$1 == "archive_sha256" { print "archive_sha256=" checksum; next } { print }' \
+      "$marker_path" >"$tamper_temp"; then
+      rm -f -- "$tamper_temp"
+      return 1
+    fi
+    chmod 0600 "$tamper_temp" || {
+      rm -f -- "$tamper_temp"
+      return 1
+    }
+    mv -T -- "$tamper_temp" "$marker_path" || {
+      rm -f -- "$tamper_temp"
+      return 1
+    }
+    remote_fsync_path_and_parent "$marker_path" || return 1
+    remote_record_test_event rollback_marker_archive_tamper "$wrong_archive" || return 1
+  fi
   [[ "$(remote_pointer_read "$state_dir/current")" == "$previous_commit" ]] || return 1
-  [[ "$(release_marker_read_active_commit "$app_path/DEPLOY_SOURCE.txt")" == "$previous_commit" ]] || return 1
+  [[ "$(release_marker_read_active_commit "$marker_path")" == "$previous_commit" ]] || return 1
+  [[ "$(release_record_get_unique "$marker_path" archive_sha256)" == "$archive_sha" ]] || return 1
   if [[ -n "$previous_before" ]]; then
     [[ "$(remote_pointer_read "$state_dir/previous")" == "$previous_before" ]] || return 1
   else
@@ -3298,8 +3376,14 @@ remote_run_exact_rollback() {
   local stage="$2"
   local previous_commit="$REMOTE_ACTIVATION_PREVIOUS_COMMIT"
   local previous_dir="$app_path/.releases/$previous_commit"
-  local saved_candidate_ids
+  local candidate_tenants="$app_path/.releases/$REMOTE_ACTIVATION_CANDIDATE_COMMIT/tenants.tsv"
+  local actual_tenant_sha actual_tenant_count saved_candidate_ids
 
+  release_record_require_private_file "$candidate_tenants" || return 1
+  actual_tenant_sha="$(sha256sum "$candidate_tenants" | awk '{print $1}')" || return 1
+  actual_tenant_count="$(wc -l <"$candidate_tenants" | tr -d ' ')" || return 1
+  [[ "$actual_tenant_sha" == "$REMOTE_ACTIVATION_TENANT_SHA" &&
+    "$actual_tenant_count" == "$REMOTE_ACTIVATION_TENANT_COUNT" ]] || return 1
   remote_load_release_evidence "$previous_dir" "$previous_commit" || return 1
   [[ "$REMOTE_ROLLBACK_ARCHIVE_SHA" == "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" &&
     "$REMOTE_ROLLBACK_BACKEND_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[0]}" &&
@@ -3666,8 +3750,19 @@ remote_locked_activate() {
 
   remote_validate_activation_commit_point "$app_path" ||
     handle_candidate_failure marker_publish
-  remote_write_success_outcome "$state_dir" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
+  if ! remote_write_success_outcome \
+    "$state_dir" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT"; then
+    if remote_visible_success_outcome_is_exact \
+      "$state_dir" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT"; then
+      REMOTE_CRITICAL_STATUS='activation_succeeded'
+      REMOTE_CRITICAL_OUTCOME_PATH="$REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH"
+      remote_print_critical_evidence "$app_path" "$candidate_commit" activation_succeeded
+      printf 'Warning: activation is committed, but outcome finalization requires operator review.\n' >&2
+      remote_emit_status activation_succeeded
+      return 0
+    fi
     handle_candidate_failure marker_publish
+  fi
 
   if ! remote_cleanup_committed_activation "$app_path"; then
     remote_find_critical_outcome "$state_dir" "$candidate_commit" || true

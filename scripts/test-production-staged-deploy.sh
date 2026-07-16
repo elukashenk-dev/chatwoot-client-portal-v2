@@ -519,6 +519,15 @@ case "${1:-}" in
           "$FAKE_BIN/record-event" transaction_phase_tamper "$FAKE_TAMPER_TRANSACTION_PHASE"
         fi
         if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          "${FAKE_TAMPER_CANDIDATE_TENANTS_SAME_COUNT:-false}" == 'true' ]]; then
+          tenant_matrix="$release_dir/tenants.tsv"
+          awk '{ printf "tampered-%03d\thttps://tampered-%03d.example.test\n", NR, NR }' \
+            "$tenant_matrix" >"$tenant_matrix.tmp"
+          chmod 0600 "$tenant_matrix.tmp"
+          mv "$tenant_matrix.tmp" "$tenant_matrix"
+          "$FAKE_BIN/record-event" tenant_matrix_tamper same_count
+        fi
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
           "${FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" == 'true' ]]; then
           exit 82
         fi
@@ -2737,6 +2746,48 @@ successful_activation_records_outcome_then_clears_journal() {
     fail 'failed superseded cleanup removed its retained evidence directory'
 }
 
+visible_success_outcome_tail_failure_never_rolls_back() {
+  local boundary output state history outcome compose_count
+  local -a outcomes=()
+
+  for boundary in validation fsync event; do
+    setup_activation_fixture "$FUNCNAME-$boundary"
+    output="$CASE_ROOT/output"
+    state="$(task5_state_dir)"
+    history="$state/history"
+    export STAGED_TEST_FAIL_SUCCESS_OUTCOME_AT="$boundary"
+    assert_activation_success "$output"
+    unset STAGED_TEST_FAIL_SUCCESS_OUTCOME_AT
+
+    mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+      -name "*-$PREPARED_COMMIT-activation_succeeded.txt")
+    (( ${#outcomes[@]} == 1 )) ||
+      fail "visible success tail failure did not preserve one exact outcome: $boundary"
+    outcome="${outcomes[0]}"
+    [[ -f "$state/prepared" && -f "$state/transaction" ]] ||
+      fail "visible success tail failure did not preserve inspectable state: $boundary"
+    grep -Fxq 'phase=markers_published' "$state/transaction" ||
+      fail "visible success tail failure changed its committed journal phase: $boundary"
+    [[ "$(<"$state/current")" == "$PREPARED_COMMIT" ]] ||
+      fail "visible success tail failure rolled current back: $boundary"
+    task5_assert_runtime_release "$PREPARED_COMMIT"
+    compose_count="$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")"
+    [[ "$compose_count" == '1' ]] ||
+      fail "visible success tail failure started previous Compose: $boundary"
+    ! find "$history" -maxdepth 1 -type f \
+      -name "*-$PREPARED_COMMIT-candidate_failed_*.txt" | grep -q . ||
+      fail "visible success tail failure wrote a contradictory rollback outcome: $boundary"
+    grep -Fq 'activation is committed, but outcome finalization requires operator review' "$output" ||
+      fail "visible success tail failure omitted its committed warning: $boundary"
+    grep -Fq 'critical_status=activation_succeeded' "$output" ||
+      fail "visible success tail failure omitted exact committed evidence: $boundary"
+    grep -Fq "manual_outcome_path=$outcome" "$output" ||
+      fail "visible success tail failure omitted its outcome path: $boundary"
+    ! grep -q 'do-not-leak\|root-secret\|branding-secret' "$output" ||
+      fail "visible success tail failure leaked secret fixture data: $boundary"
+  done
+}
+
 root_sync_preserves_runtime_owned_paths() {
   local output app path checksum index root_mode_before
   local -a protected_paths=() protected_checksums=()
@@ -3110,6 +3161,42 @@ migration_decision_is_immutable_and_precedes_cutover() {
     fail 'activation decision changed after cutover failure'
 }
 
+decision_reuse_repeats_failed_durability_barrier_before_cutover() {
+  local output state decision checksum
+
+  setup_activation_fixture "$FUNCNAME" backend/drizzle/0001_decision_durability.sql
+  state="$(task5_state_dir)"
+  decision="$(task5_decision_path)"
+  export STAGED_TEST_FAIL_DECISION_FSYNC=true
+
+  output="$CASE_ROOT/create-failure-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  [[ -f "$decision" && ! -L "$decision" && ! -e "$state/transaction" ]] ||
+    fail 'decision fsync failure did not preserve only the visible decision'
+  checksum="$(sha256sum "$decision" | awk '{print $1}')"
+  assert_no_compose_cutover
+
+  output="$CASE_ROOT/reuse-failure-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  [[ "$(sha256sum "$decision" | awk '{print $1}')" == "$checksum" && ! -e "$state/transaction" ]] ||
+    fail 'failed decision reuse changed immutable evidence or wrote a transaction'
+  assert_no_compose_cutover
+  assert_no_event decision_reuse
+
+  unset STAGED_TEST_FAIL_DECISION_FSYNC
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL=true
+  output="$CASE_ROOT/durable-reuse-output"
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL
+  assert_events_in_order \
+    'decision_reuse|forward-only' \
+    'journal_write|cutover_started' \
+    "compose_release|$PREPARED_COMMIT"
+}
+
 repeated_decision_must_match_existing_policy_and_approval() {
   local output decision checksum state tamper old_epoch old_utc old_started history
 
@@ -3225,6 +3312,53 @@ backward_compatible_failure_rolls_back_and_exits_nonzero() {
     --migration-policy=backward-compatible --approval-ref=OPS-5
   unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
   task5_assert_staged_state_restored
+}
+
+rollback_rejects_same_count_tenant_snapshot_tamper_before_previous_compose() {
+  local output state history compose_count
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  export FAKE_TAMPER_CANDIDATE_TENANTS_SAME_COUNT=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_failed
+  unset FAKE_TAMPER_CANDIDATE_TENANTS_SAME_COUNT
+
+  compose_count="$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")"
+  [[ "$compose_count" == '1' ]] ||
+    fail 'tenant snapshot tamper started previous Compose'
+  assert_no_event smoke_xargs
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'tenant snapshot tamper did not preserve candidate and journal evidence'
+  find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_failed.txt" | grep -q . ||
+    fail 'tenant snapshot tamper omitted rollback-failed outcome'
+}
+
+rollback_rejects_restored_marker_archive_mismatch() {
+  local output state marker_archive expected_archive
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  expected_archive="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$CURRENT_COMMIT/manifest.txt" archive_sha256)"
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
+  export STAGED_TEST_TAMPER_ROLLBACK_MARKER_ARCHIVE=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_failed
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING STAGED_TEST_TAMPER_ROLLBACK_MARKER_ARCHIVE
+
+  marker_archive="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt" archive_sha256)"
+  [[ "$marker_archive" != "$expected_archive" ]] ||
+    fail 'rollback marker archive mismatch injection did not alter the checksum'
+  [[ -f "$state/prepared" && -f "$state/transaction" ]] ||
+    fail 'rollback marker archive mismatch did not preserve critical evidence'
+  grep -Fxq 'phase=cutover_started' "$state/transaction" ||
+    fail 'rollback marker archive mismatch changed its unresolved journal phase'
+  assert_no_event outcome_write candidate_failed_rollback_succeeded
 }
 
 first_adoption_rollback_promotes_adopted_release_to_current() {
@@ -3632,6 +3766,7 @@ run_activate_success_cases() {
   run_case activation_does_not_publish_source_or_markers_before_all_smoke_passes
   run_case successful_publication_advances_journal_and_writes_markers_last
   run_case successful_activation_records_outcome_then_clears_journal
+  run_case visible_success_outcome_tail_failure_never_rolls_back
   run_case root_sync_preserves_runtime_owned_paths
   run_case root_sync_or_marker_failure_never_reports_success
 }
@@ -3640,9 +3775,12 @@ run_rollback_cases() {
   run_case migration_prepare_requires_policy_and_approval_pair
   run_case nonmigration_rejects_explicit_migration_policy
   run_case migration_decision_is_immutable_and_precedes_cutover
+  run_case decision_reuse_repeats_failed_durability_barrier_before_cutover
   run_case repeated_decision_must_match_existing_policy_and_approval
   run_case nonmigration_failure_rolls_back_exact_previous_and_exits_nonzero
   run_case backward_compatible_failure_rolls_back_and_exits_nonzero
+  run_case rollback_rejects_same_count_tenant_snapshot_tamper_before_previous_compose
+  run_case rollback_rejects_restored_marker_archive_mismatch
   run_case first_adoption_rollback_promotes_adopted_release_to_current
   run_case publication_failure_restores_previous_root_source_and_markers
   run_case rollback_repeats_all_tenant_smoke_before_clearing_journal
