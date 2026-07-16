@@ -29,6 +29,38 @@ REMOTE_PREPARE_ADOPTION_VERIFIED='false'
 REMOTE_PREPARE_ADOPTION_CREATED_TAGS=()
 REMOTE_PREPARE_ENV_TEMP=''
 REMOTE_EXIT_CLEANUP_RUNNING='false'
+REMOTE_CURL_BIN=''
+REMOTE_RSYNC_BIN=''
+REMOTE_TIMEOUT_BIN=''
+REMOTE_XARGS_BIN=''
+REMOTE_EVENT_RECORDER=''
+REMOTE_ACTIVATION_CONTAINER_IDS=()
+REMOTE_ACTIVATION_CONTAINER_IMAGES=()
+REMOTE_ACTIVATION_CONTAINER_RESTARTS=()
+REMOTE_ACTIVATION_CONTAINER_STARTED=()
+REMOTE_SMOKE_HEALTH_BODY=''
+REMOTE_SMOKE_TENANT_BODY=''
+REMOTE_PUBLICATION_MARKER_TEMP=''
+REMOTE_PUBLICATION_PREVIOUS_TEMP=''
+REMOTE_PUBLICATION_CURRENT_TEMP=''
+REMOTE_ACTIVATION_RAW_TENANTS=''
+REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+REMOTE_SMOKE_RESULT_DIR=''
+REMOTE_ACTIVATION_CANDIDATE_COMMIT=''
+REMOTE_ACTIVATION_PREVIOUS_COMMIT=''
+REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA=''
+REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA=''
+REMOTE_ACTIVATION_ENV_SHA=''
+REMOTE_ACTIVATION_MIGRATION=''
+REMOTE_ACTIVATION_TENANT_COUNT=''
+REMOTE_ACTIVATION_TENANT_SHA=''
+REMOTE_ACTIVATION_CANDIDATE_IDS=()
+REMOTE_ACTIVATION_PREVIOUS_IDS=()
+REMOTE_RESOLVED_CONTAINER_ID=''
+REMOTE_SUPERSEDED_ARCHIVE_SHA=''
+REMOTE_SUPERSEDED_BACKEND_ID=''
+REMOTE_SUPERSEDED_WEB_ID=''
+REMOTE_SUPERSEDED_TELEGRAM_ID=''
 
 remote_emit_status() {
   local status="$1"
@@ -62,19 +94,104 @@ remote_on_error() {
 }
 
 remote_cleanup_env_temp() {
-  if [[ -n "$REMOTE_PREPARE_ENV_TEMP" ]]; then
-    if [[ "$REMOTE_PREPARE_ENV_TEMP" == /tmp/chatwoot-client-portal-v2-env-check.* &&
-      -d "$REMOTE_PREPARE_ENV_TEMP" && ! -L "$REMOTE_PREPARE_ENV_TEMP" ]]; then
-      rm -rf -- "$REMOTE_PREPARE_ENV_TEMP"
-    fi
+  local path="$REMOTE_PREPARE_ENV_TEMP"
+
+  [[ -n "$path" ]] || return 0
+  if [[ ! -e "$path" && ! -L "$path" ]]; then
     REMOTE_PREPARE_ENV_TEMP=''
+    return 0
   fi
+  [[ "$path" == /tmp/chatwoot-client-portal-v2-env-check.* && -d "$path" && ! -L "$path" ]] || return 1
+  rm -rf -- "$path" || return 1
+  [[ ! -e "$path" && ! -L "$path" ]] || return 1
+  REMOTE_PREPARE_ENV_TEMP=''
+}
+
+remote_cleanup_smoke_bodies() {
+  local variable path cleanup_status=0
+
+  for variable in REMOTE_SMOKE_HEALTH_BODY REMOTE_SMOKE_TENANT_BODY; do
+    path="${!variable}"
+    [[ -n "$path" ]] || continue
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+      printf -v "$variable" '%s' ''
+    elif [[ "$path" == /tmp/chatwoot-client-portal-v2-smoke.*/* && -f "$path" && ! -L "$path" ]]; then
+      if rm -f -- "$path" && [[ ! -e "$path" && ! -L "$path" ]]; then
+        printf -v "$variable" '%s' ''
+      else
+        cleanup_status=1
+      fi
+    else
+      cleanup_status=1
+    fi
+  done
+  return "$cleanup_status"
+}
+
+remote_cleanup_publication_temps() {
+  local variable path cleanup_status=0
+
+  for variable in REMOTE_PUBLICATION_MARKER_TEMP REMOTE_PUBLICATION_PREVIOUS_TEMP \
+    REMOTE_PUBLICATION_CURRENT_TEMP; do
+    path="${!variable}"
+    [[ -n "$path" ]] || continue
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+      printf -v "$variable" '%s' ''
+    elif [[ "$path" == */.release-activation.* && -f "$path" && ! -L "$path" ]]; then
+      if rm -f -- "$path" && [[ ! -e "$path" && ! -L "$path" ]]; then
+        printf -v "$variable" '%s' ''
+      else
+        cleanup_status=1
+      fi
+    else
+      cleanup_status=1
+    fi
+  done
+  return "$cleanup_status"
+}
+
+remote_cleanup_activation_temps() {
+  local variable path cleanup_status=0
+
+  for variable in REMOTE_ACTIVATION_RAW_TENANTS REMOTE_ACTIVATION_RECOMPUTED_TENANTS; do
+    path="${!variable}"
+    [[ -n "$path" ]] || continue
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+      printf -v "$variable" '%s' ''
+    elif [[ "$path" == /tmp/chatwoot-client-portal-v2-activate-* && -f "$path" && ! -L "$path" ]]; then
+      if rm -f -- "$path" && [[ ! -e "$path" && ! -L "$path" ]]; then
+        printf -v "$variable" '%s' ''
+      else
+        cleanup_status=1
+      fi
+    else
+      cleanup_status=1
+    fi
+  done
+  path="$REMOTE_SMOKE_RESULT_DIR"
+  if [[ -n "$path" ]]; then
+    if [[ ! -e "$path" && ! -L "$path" ]]; then
+      REMOTE_SMOKE_RESULT_DIR=''
+    elif [[ "$path" == /tmp/chatwoot-client-portal-v2-smoke.* && -d "$path" && ! -L "$path" ]]; then
+      if rm -rf -- "$path" && [[ ! -e "$path" && ! -L "$path" ]]; then
+        REMOTE_SMOKE_RESULT_DIR=''
+      else
+        cleanup_status=1
+      fi
+    else
+      cleanup_status=1
+    fi
+  fi
+  return "$cleanup_status"
 }
 
 remote_exit_cleanup() {
   [[ "$REMOTE_EXIT_CLEANUP_RUNNING" == 'false' ]] || return 0
   REMOTE_EXIT_CLEANUP_RUNNING='true'
   remote_cleanup_env_temp || true
+  remote_cleanup_smoke_bodies || true
+  remote_cleanup_publication_temps || true
+  remote_cleanup_activation_temps || true
   if [[ "$REMOTE_FAILURE_STATUS" == 'prepare_failed' && "$REMOTE_PREPARE_PUBLISHED" == 'false' ]] &&
     declare -F remote_prepare_cleanup_attempt >/dev/null; then
     remote_prepare_cleanup_attempt || true
@@ -175,6 +292,77 @@ remote_select_docker() {
   command -v sudo >/dev/null || return 1
   sudo -n docker info >/dev/null 2>&1 || return 1
   REMOTE_DOCKER=(sudo -n docker)
+}
+
+remote_select_command() {
+  local override_name="$1"
+  local default_name="$2"
+  local override="${!override_name:-}"
+  local resolved
+
+  if remote_is_test_mode; then
+    [[ -n "$override" && "$override" == /tmp/* && -f "$override" && ! -L "$override" && -x "$override" ]] ||
+      return 1
+    printf '%s\n' "$override"
+    return
+  fi
+  [[ -z "$override" ]] || return 1
+  resolved="$(command -v "$default_name")" || return 1
+  [[ -n "$resolved" && -x "$resolved" ]] || return 1
+  printf '%s\n' "$resolved"
+}
+
+remote_select_activation_tools() {
+  REMOTE_CURL_BIN="$(remote_select_command STAGED_CURL_BIN curl)" || return 1
+  REMOTE_RSYNC_BIN="$(remote_select_command STAGED_RSYNC_BIN rsync)" || return 1
+  REMOTE_TIMEOUT_BIN="$(remote_select_command STAGED_TIMEOUT_BIN timeout)" || return 1
+  REMOTE_XARGS_BIN="$(remote_select_command STAGED_XARGS_BIN xargs)" || return 1
+
+  if remote_is_test_mode; then
+    REMOTE_EVENT_RECORDER="${STAGED_TEST_EVENT_RECORDER:-}"
+    [[ -n "$REMOTE_EVENT_RECORDER" && "$REMOTE_EVENT_RECORDER" == /tmp/* &&
+      -f "$REMOTE_EVENT_RECORDER" && ! -L "$REMOTE_EVENT_RECORDER" && -x "$REMOTE_EVENT_RECORDER" ]] || return 1
+  else
+    [[ -z "${STAGED_TEST_EVENT_RECORDER:-}" && -z "${STAGED_TEST_EVENT_LOG:-}" &&
+      -z "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" && -z "${STAGED_TEST_CUTOVER_NOW_EPOCH:-}" ]] || return 1
+    REMOTE_EVENT_RECORDER=''
+  fi
+}
+
+remote_record_test_event() {
+  local event="$1"
+  local detail="${2:-}"
+
+  [[ "$event" =~ ^[a-z0-9_.:-]+$ && "$detail" != *$'\n'* && "$detail" != *$'\t'* ]] || return 1
+  [[ -n "$REMOTE_EVENT_RECORDER" ]] || return 0
+  "$REMOTE_EVENT_RECORDER" "$event" "$detail"
+}
+
+remote_fsync_path_and_parent() {
+  local path="$1"
+  local parent
+
+  [[ -e "$path" && ! -L "$path" ]] || return 1
+  parent="$(dirname -- "$path")"
+  "$REMOTE_PYTHON_BIN" - "$path" "$parent" <<'PY'
+import os
+import sys
+
+path, parent = sys.argv[1:]
+flags = os.O_RDONLY
+if os.path.isdir(path):
+    flags |= getattr(os, "O_DIRECTORY", 0)
+fd = os.open(path, flags)
+try:
+    os.fsync(fd)
+finally:
+    os.close(fd)
+parent_fd = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(parent_fd)
+finally:
+    os.close(parent_fd)
+PY
 }
 
 remote_validate_archive() {
@@ -504,6 +692,64 @@ remote_write_release_override() {
   chmod 0600 "$path"
 }
 
+remote_validate_release_override() {
+  local release_dir="$1"
+  local commit="$2"
+  local path="$release_dir/compose.release.yaml"
+
+  release_record_is_sha "$commit" || return 1
+  release_record_require_private_file "$path" || return 1
+  "$REMOTE_PYTHON_BIN" - "$path" "$REMOTE_APP_NAME" "$commit" <<'PY'
+import pathlib
+import sys
+
+path, app, commit = sys.argv[1:]
+expected = (
+    "services:\n"
+    "  portal-backend:\n"
+    f"    image: {app}-portal-backend:{commit}\n"
+    "  portal-web:\n"
+    f"    image: {app}-portal-web:{commit}\n"
+    "  telegram-bridge:\n"
+    f"    image: {app}-telegram-bridge:{commit}\n"
+).encode()
+if pathlib.Path(path).read_bytes() != expected:
+    raise SystemExit(1)
+PY
+}
+
+remote_validate_compose_images() {
+  local manifest="$1"
+  local images_output="$2"
+
+  "$REMOTE_PYTHON_BIN" - "$manifest" "$images_output" <<'PY'
+import pathlib
+import sys
+
+manifest_path, output = sys.argv[1:]
+fields = {}
+for line in pathlib.Path(manifest_path).read_text(encoding="utf-8").splitlines():
+    key, value = line.split("=", 1)
+    fields[key] = value
+try:
+    external_count = int(fields["external_image_count"])
+except (KeyError, ValueError):
+    raise SystemExit(1)
+expected = {
+    fields.get("backend_image_tag", ""),
+    fields.get("web_image_tag", ""),
+    fields.get("telegram_image_tag", ""),
+}
+for index in range(1, external_count + 1):
+    expected.add(fields.get(f"external_image_{index:03d}_ref", ""))
+actual_lines = output.splitlines()
+if not actual_lines or any(not value or value.startswith("-") or any(char.isspace() for char in value) for value in actual_lines):
+    raise SystemExit(1)
+if "" in expected or set(actual_lines) != expected:
+    raise SystemExit(1)
+PY
+}
+
 REMOTE_COMPOSE=()
 remote_configure_compose() {
   local app_path="$1"
@@ -653,6 +899,32 @@ remote_run_inspect() {
     'record_kind=current_inspection' \
     "current_commit=$REMOTE_INSPECT_CURRENT" \
     "staged_current=$REMOTE_INSPECT_STAGED"
+}
+
+remote_run_prepared_inspect() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local state_dir="$app_path/.release-state"
+  local release_dir="$app_path/.releases/$candidate_commit"
+  local manifest="$release_dir/manifest.txt"
+  local prepared orchestrator protocol
+
+  REMOTE_PYTHON_BIN="$(remote_select_python)" || return 1
+  remote_validate_state_layout "$app_path" || return 1
+  prepared="$(remote_pointer_read "$state_dir/prepared")" || return 1
+  [[ "$prepared" == "$candidate_commit" ]] || return 1
+  remote_validate_prepared_manifest "$manifest" "$candidate_commit" || return 1
+  orchestrator="$(release_record_get_unique "$manifest" orchestrator_commit)" || return 1
+  protocol="$(release_record_get_unique "$manifest" orchestrator_protocol_version)" || return 1
+  release_record_is_sha "$orchestrator" || return 1
+  [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" ]] || return 1
+
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=prepared_inspection' \
+    "candidate_commit=$candidate_commit" \
+    "orchestrator_commit=$orchestrator" \
+    "orchestrator_protocol_version=$protocol"
 }
 
 remote_validate_prepared_manifest() {
@@ -820,6 +1092,9 @@ remote_validate_state_layout() {
   [[ ! -e "$state_dir/previous" ]] || previous="$(remote_pointer_read "$state_dir/previous")"
   [[ ! -e "$state_dir/adoption" ]] || adoption="$(remote_pointer_read "$state_dir/adoption")"
   [[ ! -e "$state_dir/prepared" ]] || prepared="$(remote_pointer_read "$state_dir/prepared")"
+  for pointer in "$current" "$previous" "$adoption" "$prepared"; do
+    [[ -z "$pointer" ]] || remote_require_private_directory "$releases_dir/$pointer" || return 1
+  done
   if [[ -n "$current" ]]; then
     [[ -z "$adoption" ]] || return 1
   else
@@ -916,15 +1191,21 @@ remote_validate_production_env_copy() {
   release_record_require_private_file "$env_file" || return 1
   [[ -x "$helper" && -f "$helper" && ! -L "$helper" ]] || return 1
   temporary="$(mktemp -d /tmp/chatwoot-client-portal-v2-env-check.XXXXXX)" || return 1
-  chmod 0700 "$temporary"
   REMOTE_PREPARE_ENV_TEMP="$temporary"
+  chmod 0700 "$temporary" || {
+    remote_cleanup_env_temp || true
+    return 1
+  }
   copy="$temporary/.env.production"
   helper_log="$temporary/helper.log"
   cp -- "$env_file" "$copy" || {
     remote_cleanup_env_temp
     return 1
   }
-  chmod 0600 "$copy"
+  chmod 0600 "$copy" || {
+    remote_cleanup_env_temp || true
+    return 1
+  }
   if remote_is_test_mode && [[ "${STAGED_TEST_INTERRUPT_AFTER_ENV_COPY:-false}" == 'true' ]]; then
     local marker="${STAGED_TEST_ENV_TEMP_MARKER:-}"
     [[ -n "$marker" && "$marker" == "${STAGED_TEST_ROOT%/}/"* &&
@@ -972,11 +1253,11 @@ PY
       remote_cleanup_env_temp
       return 1
     }
-    remote_cleanup_env_temp
+    remote_cleanup_env_temp || return 1
     [[ -n "$changes" ]] && printf '%s\n' "$changes" >&2
     return 1
   fi
-  remote_cleanup_env_temp
+  remote_cleanup_env_temp || return 1
   REMOTE_PRODUCTION_ENV_SHA="$(sha256sum "$env_file" | awk '{print $1}')" || return 1
   release_record_is_checksum "$REMOTE_PRODUCTION_ENV_SHA"
 }
@@ -1121,10 +1402,12 @@ remote_revalidate_all_images() {
 
 REMOTE_TENANT_COUNT=''
 REMOTE_TENANT_MATRIX_SHA=''
-readonly REMOTE_TENANT_SQL="SELECT slug, public_base_url
+readonly REMOTE_TENANT_SQL="SELECT
+  CASE WHEN octet_length(slug) <= 63 THEN slug ELSE repeat('x', 64) END,
+  CASE WHEN octet_length(public_base_url) <= 2048 THEN public_base_url ELSE repeat('x', 2049) END
 FROM portal_tenants
 WHERE status = 'active'
-ORDER BY slug
+ORDER BY portal_tenants.slug
 LIMIT 101;"
 remote_query_tenant_matrix() {
   local output_path="$1"
@@ -1133,13 +1416,15 @@ remote_query_tenant_matrix() {
   "${REMOTE_COMPOSE[@]}" exec -T portal-db sh -ceu \
     'exec psql -X -v ON_ERROR_STOP=1 -A -t -F "$(printf "\t")" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' \
     sh "$REMOTE_TENANT_SQL" >"$raw_path" || return 1
-  "$REMOTE_PYTHON_BIN" - "$raw_path" "$output_path" <<'PY'
+  "$REMOTE_PYTHON_BIN" - "$raw_path" "$output_path" <<'PY' || return 1
 import pathlib
 import re
 import sys
 import urllib.parse
 
 source, destination = map(pathlib.Path, sys.argv[1:])
+if source.stat().st_size > 262144:
+    raise SystemExit(1)
 raw = source.read_text(encoding="utf-8")
 if "\r" in raw or any(ord(char) < 9 or (13 < ord(char) < 32) or ord(char) == 127 for char in raw):
     raise SystemExit(1)
@@ -1150,12 +1435,16 @@ for line in raw.splitlines():
     if len(parts) != 2:
         raise SystemExit(1)
     slug, origin = parts
-    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug) or slug in seen:
+    if len(slug) > 63 or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug) or slug in seen:
+        raise SystemExit(1)
+    if len(origin.encode("utf-8")) > 2048:
         raise SystemExit(1)
     try:
         parsed = urllib.parse.urlsplit(origin)
         port = parsed.port
     except ValueError:
+        raise SystemExit(1)
+    if port is not None and not (1 <= port <= 65535):
         raise SystemExit(1)
     if (
         parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or
@@ -1171,13 +1460,16 @@ for line in raw.splitlines():
 if not (1 <= len(rows) <= 100):
     raise SystemExit(1)
 rows.sort()
-destination.write_text("".join(f"{slug}\t{origin}\n" for slug, origin in rows), encoding="utf-8")
+serialized = "".join(f"{slug}\t{origin}\n" for slug, origin in rows).encode("utf-8")
+if len(serialized) > 262144:
+    raise SystemExit(1)
+destination.write_bytes(serialized)
 PY
-  chmod 0600 "$output_path"
-  REMOTE_TENANT_COUNT="$(wc -l <"$output_path" | tr -d ' ')"
+  chmod 0600 "$output_path" || return 1
+  REMOTE_TENANT_COUNT="$(wc -l <"$output_path" | tr -d ' ')" || return 1
   [[ "$REMOTE_TENANT_COUNT" =~ ^[0-9]+$ ]] || return 1
   (( REMOTE_TENANT_COUNT >= 1 && REMOTE_TENANT_COUNT <= 100 )) || return 1
-  REMOTE_TENANT_MATRIX_SHA="$(sha256sum "$output_path" | awk '{print $1}')"
+  REMOTE_TENANT_MATRIX_SHA="$(sha256sum "$output_path" | awk '{print $1}')" || return 1
   release_record_is_checksum "$REMOTE_TENANT_MATRIX_SHA"
 }
 
@@ -1192,6 +1484,18 @@ remote_now_epoch() {
   fi
   [[ "$value" =~ ^[0-9]+$ && "$value" != '0' ]] || return 1
   printf '%s\n' "$value"
+}
+
+remote_cutover_now_epoch() {
+  local value="${STAGED_TEST_CUTOVER_NOW_EPOCH:-}"
+
+  if remote_is_test_mode && [[ -n "$value" ]]; then
+    [[ "$value" =~ ^[0-9]+$ && "$value" != '0' ]] || return 1
+    printf '%s\n' "$value"
+    return
+  fi
+  [[ -z "$value" ]] || return 1
+  remote_now_epoch
 }
 
 remote_epoch_to_utc() {
@@ -1581,6 +1885,1105 @@ remote_run_prepare_with_lock() {
   return "$lock_exit"
 }
 
+remote_validate_release_source_snapshot() {
+  local release_dir="$1"
+  local expected_checksum="$2"
+  local archive="$release_dir/source.tar.gz"
+  local source_dir="$release_dir/source"
+  local actual_checksum
+
+  [[ -f "$archive" && ! -L "$archive" && -d "$source_dir" && ! -L "$source_dir" ]] || return 1
+  actual_checksum="$(sha256sum "$archive" | awk '{print $1}')" || return 1
+  [[ "$actual_checksum" == "$expected_checksum" ]] || return 1
+  remote_validate_archive "$archive" || return 1
+  "$REMOTE_PYTHON_BIN" - "$archive" "$source_dir" <<'PY'
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+import tarfile
+
+archive_path, source_path = sys.argv[1:]
+source_root = pathlib.Path(source_path)
+
+def digest_stream(stream):
+    digest = hashlib.sha256()
+    while True:
+        chunk = stream.read(1024 * 1024)
+        if not chunk:
+            return digest.hexdigest()
+        digest.update(chunk)
+
+expected = {}
+with tarfile.open(archive_path, "r:gz") as archive:
+    for member in archive.getmembers():
+        relative = pathlib.PurePosixPath(member.name)
+        if member.isdir():
+            expected[str(relative)] = ("dir", None)
+        elif member.isfile():
+            body = archive.extractfile(member)
+            if body is None:
+                raise SystemExit(1)
+            digest = digest_stream(body)
+            expected[str(relative)] = ("file", bool(member.mode & 0o111), digest)
+        else:
+            raise SystemExit(1)
+
+actual = {}
+for root, directories, files in os.walk(source_root, followlinks=False):
+    root_path = pathlib.Path(root)
+    for name in directories:
+        path = root_path / name
+        if path.is_symlink():
+            raise SystemExit(1)
+        relative = path.relative_to(source_root).as_posix()
+        actual[relative] = ("dir", None)
+    for name in files:
+        path = root_path / name
+        if path.is_symlink() or not path.is_file():
+            raise SystemExit(1)
+        relative = path.relative_to(source_root).as_posix()
+        with path.open("rb") as body:
+            digest = digest_stream(body)
+        actual[relative] = ("file", bool(stat.S_IMODE(path.stat().st_mode) & 0o111), digest)
+
+if expected != actual:
+    raise SystemExit(1)
+PY
+}
+
+remote_activation_refuse() {
+  local message="$1"
+  local status="${2:-activation_refused_state_changed}"
+
+  remote_fail "$message" "$status"
+}
+
+remote_activation_preflight() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local prepared_orchestrator="$3"
+  local current_orchestrator="$4"
+  local orchestrator_protocol="$5"
+  local migration_policy="$6"
+  local approval_ref="$7"
+  local state_dir="$app_path/.release-state"
+  local candidate_dir="$app_path/.releases/$candidate_commit"
+  local manifest="$candidate_dir/manifest.txt"
+  local prepared_pointer manifest_orchestrator manifest_protocol expires_epoch now_epoch
+  local observed_current rollback_dir marker_archive_sha actual_env_sha raw_tenants recomputed_tenants
+  local manifest_tag manifest_id actual_id service key_prefix external_count index key_index
+  local expected_rollback_id migration_classification images_output
+
+  remote_validate_state_layout "$app_path" ||
+    remote_activation_refuse 'Release state is incomplete or an earlier transaction is unresolved.'
+  prepared_pointer="$(remote_pointer_read "$state_dir/prepared")" ||
+    remote_activation_refuse 'Prepared release pointer is missing or invalid.'
+  [[ "$prepared_pointer" == "$candidate_commit" ]] ||
+    remote_activation_refuse 'Requested candidate is not the prepared release.'
+  remote_validate_prepared_manifest "$manifest" "$candidate_commit" ||
+    remote_activation_refuse 'Prepared release manifest is invalid.'
+
+  manifest_orchestrator="$(release_record_get_unique "$manifest" orchestrator_commit)" ||
+    remote_activation_refuse 'Prepared orchestrator evidence is missing.'
+  manifest_protocol="$(release_record_get_unique "$manifest" orchestrator_protocol_version)" ||
+    remote_activation_refuse 'Prepared protocol evidence is missing.'
+  [[ "$manifest_orchestrator" == "$prepared_orchestrator" ]] ||
+    remote_activation_refuse 'Prepared orchestrator evidence changed after inspection.'
+  [[ "$manifest_protocol" == "$REMOTE_PROTOCOL_VERSION" &&
+    "$orchestrator_protocol" == "$REMOTE_PROTOCOL_VERSION" ]] ||
+    remote_activation_refuse 'Prepared and current orchestrator protocols are incompatible.'
+  release_record_is_sha "$current_orchestrator" ||
+    remote_activation_refuse 'Current orchestrator identity is invalid.'
+
+  now_epoch="$(remote_now_epoch)" || remote_activation_refuse 'Unable to determine activation time.'
+  expires_epoch="$(release_record_get_unique "$manifest" expires_at_epoch)" ||
+    remote_activation_refuse 'Prepared expiry evidence is missing.'
+  [[ "$expires_epoch" =~ ^[0-9]+$ ]] || remote_activation_refuse 'Prepared expiry evidence is invalid.'
+  (( now_epoch < expires_epoch )) ||
+    remote_activation_refuse 'Prepared release has expired.' activation_refused_expired
+
+  observed_current="$(release_record_get_unique "$manifest" observed_current_commit)" ||
+    remote_activation_refuse 'Observed current release evidence is missing.'
+  remote_inspect_current "$app_path" || remote_activation_refuse 'Active release evidence is invalid.'
+  [[ "$REMOTE_INSPECT_CURRENT" == "$observed_current" ]] ||
+    remote_activation_refuse 'Active release changed after preparation.'
+  REMOTE_ACTIVATION_PREVIOUS_COMMIT="$observed_current"
+  rollback_dir="$app_path/.releases/$observed_current"
+  remote_load_release_evidence "$rollback_dir" "$observed_current" ||
+    remote_activation_refuse 'Rollback release evidence is invalid.'
+
+  REMOTE_ACTIVATION_CANDIDATE_COMMIT="$candidate_commit"
+  REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA="$(release_record_get_unique "$manifest" candidate_archive_sha256)" ||
+    remote_activation_refuse 'Candidate archive evidence is missing.'
+  REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA="$(release_record_get_unique "$manifest" rollback_archive_sha256)" ||
+    remote_activation_refuse 'Rollback archive evidence is missing.'
+  [[ "$REMOTE_ROLLBACK_ARCHIVE_SHA" == "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" ]] ||
+    remote_activation_refuse 'Rollback archive evidence changed.'
+  if [[ "$REMOTE_INSPECT_STAGED" == 'true' ]]; then
+    marker_archive_sha="$REMOTE_INSPECT_ARCHIVE_SHA"
+    [[ "$marker_archive_sha" == "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" ]] ||
+      remote_activation_refuse 'Active source marker checksum disagrees with rollback evidence.'
+  else
+    [[ ! -e "$state_dir/current" && -f "$state_dir/adoption" ]] ||
+      remote_activation_refuse 'First activation adoption pointers are incomplete.'
+    [[ "$(remote_pointer_read "$state_dir/adoption")" == "$observed_current" ]] ||
+      remote_activation_refuse 'First activation adoption pointer changed.'
+    [[ "$(release_marker_read_active_commit "$app_path/DEPLOY_SOURCE.txt" true)" == "$observed_current" ]] ||
+      remote_activation_refuse 'First activation legacy marker changed.'
+  fi
+
+  remote_validate_release_source_snapshot "$candidate_dir" "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" ||
+    remote_activation_refuse 'Candidate source no longer matches its exact archive.'
+  remote_validate_release_source_snapshot "$rollback_dir" "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" ||
+    remote_activation_refuse 'Rollback source no longer matches its exact archive.'
+
+  REMOTE_ACTIVATION_ENV_SHA="$(release_record_get_unique "$manifest" production_env_sha256)" ||
+    remote_activation_refuse 'Production env evidence is missing.'
+  release_record_require_private_file "$app_path/.env.production" ||
+    remote_activation_refuse 'Production env permissions or ownership changed after preparation.'
+  actual_env_sha="$(sha256sum "$app_path/.env.production" | awk '{print $1}')" ||
+    remote_activation_refuse 'Production env cannot be re-hashed.'
+  [[ "$actual_env_sha" == "$REMOTE_ACTIVATION_ENV_SHA" ]] ||
+    remote_activation_refuse 'Production env changed after preparation.'
+
+  remote_configure_compose "$app_path" "$candidate_dir" ||
+    remote_activation_refuse 'Candidate Compose inputs are incomplete.'
+  remote_validate_release_override "$candidate_dir" "$candidate_commit" ||
+    remote_activation_refuse 'Candidate Compose override changed after preparation.'
+  "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 ||
+    remote_activation_refuse 'Candidate Compose config is no longer valid.'
+  images_output="$("${REMOTE_COMPOSE[@]}" config --images 2>/dev/null)" ||
+    remote_activation_refuse 'Candidate Compose image list is unavailable.'
+  remote_validate_compose_images "$manifest" "$images_output" ||
+    remote_activation_refuse 'Candidate Compose image set changed after preparation.'
+
+  REMOTE_ACTIVATION_CANDIDATE_IDS=()
+  REMOTE_ACTIVATION_PREVIOUS_IDS=()
+  for service in backend web telegram; do
+    case "$service" in
+      backend) key_prefix='backend'; expected_rollback_id="$REMOTE_ROLLBACK_BACKEND_ID" ;;
+      web) key_prefix='web'; expected_rollback_id="$REMOTE_ROLLBACK_WEB_ID" ;;
+      telegram) key_prefix='telegram'; expected_rollback_id="$REMOTE_ROLLBACK_TELEGRAM_ID" ;;
+    esac
+    manifest_tag="$(release_record_get_unique "$manifest" "${key_prefix}_image_tag")" ||
+      remote_activation_refuse 'Candidate image tag evidence is missing.'
+    manifest_id="$(release_record_get_unique "$manifest" "${key_prefix}_image_id")" ||
+      remote_activation_refuse 'Candidate image ID evidence is missing.'
+    actual_id="$(remote_image_id "$manifest_tag")" ||
+      remote_activation_refuse 'Candidate image tag is unavailable.'
+    [[ "$actual_id" == "$manifest_id" ]] || remote_activation_refuse 'Candidate image identity changed.'
+    REMOTE_ACTIVATION_CANDIDATE_IDS+=("$manifest_id")
+
+    manifest_tag="$(release_record_get_unique "$manifest" "rollback_${key_prefix}_image_tag")" ||
+      remote_activation_refuse 'Rollback image tag evidence is missing.'
+    manifest_id="$(release_record_get_unique "$manifest" "rollback_${key_prefix}_image_id")" ||
+      remote_activation_refuse 'Rollback image ID evidence is missing.'
+    actual_id="$(remote_image_id "$manifest_tag")" ||
+      remote_activation_refuse 'Rollback image tag is unavailable.'
+    [[ "$actual_id" == "$manifest_id" && "$manifest_id" == "$expected_rollback_id" ]] ||
+      remote_activation_refuse 'Rollback image identity changed.'
+    REMOTE_ACTIVATION_PREVIOUS_IDS+=("$manifest_id")
+  done
+
+  REMOTE_EXTERNAL_REFS=()
+  REMOTE_EXTERNAL_IDS=()
+  external_count="$(release_record_get_unique "$manifest" external_image_count)" ||
+    remote_activation_refuse 'External image count is missing.'
+  for (( index = 1; index <= external_count; index++ )); do
+    printf -v key_index '%03d' "$index"
+    manifest_tag="$(release_record_get_unique "$manifest" "external_image_${key_index}_ref")" ||
+      remote_activation_refuse 'External image reference is missing.'
+    manifest_id="$(release_record_get_unique "$manifest" "external_image_${key_index}_id")" ||
+      remote_activation_refuse 'External image ID is missing.'
+    actual_id="$(remote_image_id "$manifest_tag")" ||
+      remote_activation_refuse 'External image is unavailable.'
+    [[ "$actual_id" == "$manifest_id" ]] || remote_activation_refuse 'External image identity changed.'
+    REMOTE_EXTERNAL_REFS+=("$manifest_tag")
+    REMOTE_EXTERNAL_IDS+=("$manifest_id")
+  done
+
+  raw_tenants="$(mktemp /tmp/chatwoot-client-portal-v2-activate-tenants.XXXXXX)" ||
+    remote_activation_refuse 'Unable to create tenant verification input.'
+  REMOTE_ACTIVATION_RAW_TENANTS="$raw_tenants"
+  recomputed_tenants="$(mktemp /tmp/chatwoot-client-portal-v2-activate-matrix.XXXXXX)" || {
+    rm -f -- "$raw_tenants"
+    REMOTE_ACTIVATION_RAW_TENANTS=''
+    remote_activation_refuse 'Unable to create tenant verification matrix.'
+  }
+  REMOTE_ACTIVATION_RECOMPUTED_TENANTS="$recomputed_tenants"
+  chmod 0600 "$raw_tenants" "$recomputed_tenants"
+  if ! remote_query_tenant_matrix "$recomputed_tenants" "$raw_tenants"; then
+    rm -f -- "$raw_tenants" "$recomputed_tenants"
+    REMOTE_ACTIVATION_RAW_TENANTS=''
+    REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+    remote_activation_refuse 'Active tenant matrix is invalid or outside the 1..100 bound.'
+  fi
+  rm -f -- "$raw_tenants"
+  REMOTE_ACTIVATION_RAW_TENANTS=''
+  REMOTE_ACTIVATION_TENANT_COUNT="$(release_record_get_unique "$manifest" tenant_count)" || {
+    rm -f -- "$recomputed_tenants"
+    REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+    remote_activation_refuse 'Prepared tenant count is missing.'
+  }
+  REMOTE_ACTIVATION_TENANT_SHA="$(release_record_get_unique "$manifest" tenant_matrix_sha256)" || {
+    rm -f -- "$recomputed_tenants"
+    REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+    remote_activation_refuse 'Prepared tenant checksum is missing.'
+  }
+  if [[ "$REMOTE_TENANT_COUNT" != "$REMOTE_ACTIVATION_TENANT_COUNT" ||
+    "$REMOTE_TENANT_MATRIX_SHA" != "$REMOTE_ACTIVATION_TENANT_SHA" ]] ||
+    ! cmp -s -- "$candidate_dir/tenants.tsv" "$recomputed_tenants"; then
+    rm -f -- "$recomputed_tenants"
+    REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+    remote_activation_refuse 'Active tenant matrix changed after preparation.'
+  fi
+  rm -f -- "$recomputed_tenants"
+  REMOTE_ACTIVATION_RECOMPUTED_TENANTS=''
+
+  migration_classification="$(release_record_get_unique "$manifest" migration_classification)" ||
+    remote_activation_refuse 'Migration classification is missing.'
+  REMOTE_ACTIVATION_MIGRATION="$migration_classification"
+  if [[ "$migration_classification" == 'migration' || -n "$migration_policy" || -n "$approval_ref" ]]; then
+    remote_activation_refuse 'Migration activation decisions are not available in this task.' \
+      activation_refused_migration_policy
+  fi
+}
+
+remote_revalidate_activation_cutover_inputs() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local candidate_dir="$app_path/.releases/$candidate_commit"
+  local actual_env_sha actual_tenant_sha images_output
+
+  (( ${#REMOTE_ACTIVATION_CANDIDATE_IDS[@]} == 3 )) || return 1
+  release_record_require_private_file "$app_path/.env.production" || return 1
+  actual_env_sha="$(sha256sum "$app_path/.env.production" | awk '{print $1}')" || return 1
+  [[ "$actual_env_sha" == "$REMOTE_ACTIVATION_ENV_SHA" ]] || return 1
+  remote_validate_release_source_snapshot "$candidate_dir" "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" || return 1
+  release_record_require_private_file "$candidate_dir/tenants.tsv" || return 1
+  actual_tenant_sha="$(sha256sum "$candidate_dir/tenants.tsv" | awk '{print $1}')" || return 1
+  [[ "$actual_tenant_sha" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] || return 1
+  remote_validate_release_override "$candidate_dir" "$candidate_commit" || return 1
+  "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  images_output="$("${REMOTE_COMPOSE[@]}" config --images 2>/dev/null)" || return 1
+  remote_validate_compose_images "$candidate_dir/manifest.txt" "$images_output" || return 1
+  remote_revalidate_all_images \
+    "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" \
+    "${REMOTE_ACTIVATION_CANDIDATE_IDS[0]}" \
+    "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]}" \
+    "${REMOTE_ACTIVATION_CANDIDATE_IDS[2]}"
+}
+
+remote_validate_transaction() {
+  local path="$1"
+  local expected_candidate="$2"
+  local expected_previous="$3"
+  local protocol kind candidate previous policy phase started updated
+
+  release_record_validate_keys "$path" \
+    protocol_version record_kind candidate_commit previous_commit migration_policy \
+    phase started_at_utc updated_at_utc || return 1
+  protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
+  kind="$(release_record_get_unique "$path" record_kind)" || return 1
+  candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
+  previous="$(release_record_get_unique "$path" previous_commit)" || return 1
+  policy="$(release_record_get_unique "$path" migration_policy)" || return 1
+  phase="$(release_record_get_unique "$path" phase)" || return 1
+  started="$(release_record_get_unique "$path" started_at_utc)" || return 1
+  updated="$(release_record_get_unique "$path" updated_at_utc)" || return 1
+  [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'activation_transaction' &&
+    "$candidate" == "$expected_candidate" && "$previous" == "$expected_previous" &&
+    "$policy" == 'automatic' ]] || return 1
+  case "$phase" in
+    cutover_started|candidate_healthy|root_sync_started|root_sync_completed|markers_published) ;;
+    *) return 1 ;;
+  esac
+  release_record_is_timestamp "$started" && release_record_is_timestamp "$updated"
+}
+
+remote_write_transaction() {
+  local mode="$1"
+  local path="$2"
+  local candidate="$3"
+  local previous="$4"
+  local phase="$5"
+  local started_at="$6"
+  local updated_at="$7"
+
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=activation_transaction' \
+    "candidate_commit=$candidate" \
+    "previous_commit=$previous" \
+    'migration_policy=automatic' \
+    "phase=$phase" \
+    "started_at_utc=$started_at" \
+    "updated_at_utc=$updated_at" |
+    release_record_write_atomic "$mode" "$path" || return 1
+  remote_validate_transaction "$path" "$candidate" "$previous" || return 1
+  remote_fsync_path_and_parent "$path" || return 1
+  remote_record_test_event journal_write "$phase"
+}
+
+remote_update_transaction() {
+  local path="$1"
+  local candidate="$2"
+  local previous="$3"
+  local phase="$4"
+  local started_at updated_epoch updated_at
+
+  remote_validate_transaction "$path" "$candidate" "$previous" || return 1
+  started_at="$(release_record_get_unique "$path" started_at_utc)" || return 1
+  updated_epoch="$(remote_now_epoch)" || return 1
+  updated_at="$(remote_epoch_to_utc "$updated_epoch")" || return 1
+  remote_write_transaction replace "$path" "$candidate" "$previous" "$phase" "$started_at" "$updated_at"
+}
+
+remote_resolve_single_service_container() {
+  local service="$1"
+  local output line
+  local -a container_ids=()
+
+  output="$("${REMOTE_COMPOSE[@]}" ps -q "$service")" || return 1
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && container_ids+=("$line")
+  done <<<"$output"
+  (( ${#container_ids[@]} == 1 )) || return 1
+  [[ "${container_ids[0]}" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]*$ ]] || return 1
+  REMOTE_RESOLVED_CONTAINER_ID="${container_ids[0]}"
+}
+
+remote_capture_candidate_services() {
+  local service index container_id details image running health restarts started
+
+  REMOTE_ACTIVATION_CONTAINER_IDS=()
+  REMOTE_ACTIVATION_CONTAINER_IMAGES=()
+  REMOTE_ACTIVATION_CONTAINER_RESTARTS=()
+  REMOTE_ACTIVATION_CONTAINER_STARTED=()
+  index=0
+  for service in portal-backend portal-web telegram-bridge; do
+    remote_resolve_single_service_container "$service" || return 1
+    container_id="$REMOTE_RESOLVED_CONTAINER_ID"
+    details="$("${REMOTE_DOCKER[@]}" inspect --format \
+      '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+      "$container_id" 2>/dev/null)" || return 1
+    IFS='|' read -r image running health restarts started <<<"$details"
+    [[ "$image" == "${REMOTE_ACTIVATION_CANDIDATE_IDS[$index]}" && "$running" == 'true' ]] || return 1
+    [[ "$health" == 'healthy' || "$health" == 'none' ]] || return 1
+    [[ "$restarts" =~ ^[0-9]+$ && "$restarts" == '0' ]] || return 1
+    [[ "$started" =~ ^[0-9][0-9T:._+-]*Z$ ]] || return 1
+    REMOTE_ACTIVATION_CONTAINER_IDS+=("$container_id")
+    REMOTE_ACTIVATION_CONTAINER_IMAGES+=("$image")
+    REMOTE_ACTIVATION_CONTAINER_RESTARTS+=("$restarts")
+    REMOTE_ACTIVATION_CONTAINER_STARTED+=("$started")
+    index=$((index + 1))
+  done
+}
+
+remote_recheck_candidate_services() {
+  local index service container_id details image running health restarts started
+
+  (( ${#REMOTE_ACTIVATION_CONTAINER_IDS[@]} == 3 )) || return 1
+  for index in 0 1 2; do
+    case "$index" in
+      0) service='portal-backend' ;;
+      1) service='portal-web' ;;
+      2) service='telegram-bridge' ;;
+    esac
+    container_id="${REMOTE_ACTIVATION_CONTAINER_IDS[$index]}"
+    remote_resolve_single_service_container "$service" || return 1
+    [[ "$REMOTE_RESOLVED_CONTAINER_ID" == "$container_id" ]] || return 1
+    details="$("${REMOTE_DOCKER[@]}" inspect --format \
+      '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+      "$container_id" 2>/dev/null)" || return 1
+    IFS='|' read -r image running health restarts started <<<"$details"
+    [[ "$image" == "${REMOTE_ACTIVATION_CONTAINER_IMAGES[$index]}" && "$running" == 'true' ]] || return 1
+    [[ "$health" == 'healthy' || "$health" == 'none' ]] || return 1
+    [[ "$restarts" == "${REMOTE_ACTIVATION_CONTAINER_RESTARTS[$index]}" ]] || return 1
+    [[ "$started" == "${REMOTE_ACTIVATION_CONTAINER_STARTED[$index]}" ]] || return 1
+  done
+}
+
+remote_write_smoke_result() {
+  local result_dir="$1"
+  local slug="$2"
+  local status="$3"
+  local path="$result_dir/result.$slug"
+
+  [[ "$status" == 'pass' || "$status" == 'fail' ]] || return 1
+  [[ ! -e "$path" && ! -L "$path" ]] || return 1
+  umask 077
+  printf '%s\t%s\n' "$slug" "$status" >"$path"
+  chmod 0600 "$path"
+}
+
+remote_smoke_one() {
+  local expected_slug="$1"
+  local origin="$2"
+  local result_dir="$3"
+  local base_origin health_size tenant_size
+
+  [[ "$expected_slug" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || return 2
+  [[ "$origin" != *$'\n'* && "$origin" != *$'\r'* && "$origin" != *$'\t'* ]] || return 2
+  [[ "$result_dir" == /tmp/chatwoot-client-portal-v2-smoke.* ]] || return 2
+  remote_require_private_directory "$result_dir" || return 2
+  REMOTE_PYTHON_BIN="$(remote_select_python)" || return 2
+  REMOTE_CURL_BIN="$(remote_select_command STAGED_CURL_BIN curl)" || return 2
+  if remote_is_test_mode; then
+    REMOTE_EVENT_RECORDER="${STAGED_TEST_EVENT_RECORDER:-}"
+    [[ -n "$REMOTE_EVENT_RECORDER" && "$REMOTE_EVENT_RECORDER" == /tmp/* &&
+      -f "$REMOTE_EVENT_RECORDER" && ! -L "$REMOTE_EVENT_RECORDER" && -x "$REMOTE_EVENT_RECORDER" ]] || return 2
+  else
+    [[ -z "${STAGED_TEST_EVENT_RECORDER:-}" && -z "${STAGED_TEST_EVENT_LOG:-}" ]] || return 2
+  fi
+  "$REMOTE_PYTHON_BIN" - "$origin" <<'PY' || return 2
+import sys
+import urllib.parse
+
+value = sys.argv[1]
+if len(value.encode("utf-8")) > 2048:
+    raise SystemExit(1)
+parsed = urllib.parse.urlsplit(value)
+if (
+    parsed.scheme != "https"
+    or not parsed.hostname
+    or parsed.username is not None
+    or parsed.password is not None
+    or parsed.path not in {"", "/"}
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(1)
+try:
+    port = parsed.port
+except ValueError:
+    raise SystemExit(1)
+if port is not None and not (1 <= port <= 65535):
+    raise SystemExit(1)
+PY
+  base_origin="${origin%/}"
+
+  REMOTE_SMOKE_HEALTH_BODY="$(mktemp "$result_dir/.health.$expected_slug.XXXXXX")" || return 1
+  REMOTE_SMOKE_TENANT_BODY="$(mktemp "$result_dir/.tenant.$expected_slug.XXXXXX")" || {
+    remote_cleanup_smoke_bodies
+    return 1
+  }
+  chmod 0600 "$REMOTE_SMOKE_HEALTH_BODY" "$REMOTE_SMOKE_TENANT_BODY" || {
+    remote_cleanup_smoke_bodies
+    return 1
+  }
+
+  if ! ( ulimit -f 64 && "$REMOTE_CURL_BIN" --fail --silent --show-error \
+    --connect-timeout 5 --max-time 15 --retry 2 --retry-delay 3 --retry-all-errors \
+    --max-filesize 65536 \
+    --output "$REMOTE_SMOKE_HEALTH_BODY" "$base_origin/api/health" >/dev/null ); then
+    remote_cleanup_smoke_bodies
+    remote_write_smoke_result "$result_dir" "$expected_slug" fail || true
+    return 1
+  fi
+  health_size="$(stat -c '%s' -- "$REMOTE_SMOKE_HEALTH_BODY")" || health_size='invalid'
+  [[ "$health_size" =~ ^[0-9]+$ ]] && (( health_size <= 65536 )) || {
+    remote_cleanup_smoke_bodies
+    remote_write_smoke_result "$result_dir" "$expected_slug" fail || true
+    return 1
+  }
+  if ! ( ulimit -f 64 && "$REMOTE_CURL_BIN" --fail --silent --show-error \
+    --connect-timeout 5 --max-time 15 --retry 2 --retry-delay 3 --retry-all-errors \
+    --max-filesize 65536 \
+    --output "$REMOTE_SMOKE_TENANT_BODY" "$base_origin/api/tenant" >/dev/null ); then
+    remote_cleanup_smoke_bodies
+    remote_write_smoke_result "$result_dir" "$expected_slug" fail || true
+    return 1
+  fi
+  tenant_size="$(stat -c '%s' -- "$REMOTE_SMOKE_TENANT_BODY")" || tenant_size='invalid'
+  [[ "$tenant_size" =~ ^[0-9]+$ ]] && (( tenant_size <= 65536 )) || {
+    remote_cleanup_smoke_bodies
+    remote_write_smoke_result "$result_dir" "$expected_slug" fail || true
+    return 1
+  }
+  if ! "$REMOTE_PYTHON_BIN" - "$REMOTE_SMOKE_TENANT_BODY" "$expected_slug" <<'PY'
+import json
+import pathlib
+import sys
+
+path, expected = sys.argv[1:]
+try:
+    payload = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(1)
+if not isinstance(payload, dict):
+    raise SystemExit(1)
+tenant = payload.get("tenant")
+if not isinstance(tenant, dict) or tenant.get("slug") != expected:
+    raise SystemExit(1)
+PY
+  then
+    remote_cleanup_smoke_bodies
+    remote_write_smoke_result "$result_dir" "$expected_slug" fail || true
+    return 1
+  fi
+  remote_cleanup_smoke_bodies || return 1
+  remote_write_smoke_result "$result_dir" "$expected_slug" pass
+}
+
+remote_run_tenant_smoke() {
+  local tenant_file="$1"
+  local expected_count="$2"
+  local tenant_file_size result_dir pairs_file bash_bin slug origin result_file result_slug result_status
+  local pair_count=0 result_count=0
+  local -a result_files=()
+
+  release_record_require_private_file "$tenant_file" || return 1
+  [[ "$expected_count" =~ ^[0-9]+$ ]] || return 1
+  (( expected_count >= 1 && expected_count <= 100 )) || return 1
+  tenant_file_size="$(stat -c '%s' -- "$tenant_file")" || return 1
+  [[ "$tenant_file_size" =~ ^[0-9]+$ ]] || return 1
+  (( tenant_file_size <= 262144 )) || return 1
+  result_dir="$(mktemp -d /tmp/chatwoot-client-portal-v2-smoke.XXXXXX)" || return 1
+  REMOTE_SMOKE_RESULT_DIR="$result_dir"
+  chmod 0700 "$result_dir" || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  pairs_file="$result_dir/pairs.bin"
+  : >"$pairs_file" || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  chmod 0600 "$pairs_file" || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  while IFS=$'\t' read -r slug origin; do
+    [[ -n "$slug" && -n "$origin" ]] || {
+      remote_cleanup_activation_temps
+      return 1
+    }
+    pair_count=$((pair_count + 1))
+    (( pair_count <= expected_count )) || {
+      remote_cleanup_activation_temps
+      return 1
+    }
+    printf '%s\0%s\0' "$slug" "$origin" >>"$pairs_file" || {
+      remote_cleanup_activation_temps
+      return 1
+    }
+  done <"$tenant_file" || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  (( pair_count == expected_count )) || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  bash_bin="$(command -v bash)" || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  if ! "$REMOTE_TIMEOUT_BIN" 600 "$REMOTE_XARGS_BIN" -0 -n 2 -P 5 \
+    "$bash_bin" -c 'exec "$1" __smoke-one "$3" "$4" "$2"' \
+    _ "$SELF_PATH" "$result_dir" <"$pairs_file"; then
+    remote_cleanup_activation_temps
+    return 1
+  fi
+  remote_find_paths result_files "$result_dir" -mindepth 1 -maxdepth 1 -type f -name 'result.*' || {
+    remote_cleanup_activation_temps
+    return 1
+  }
+  result_count="${#result_files[@]}"
+  if (( result_count != expected_count )); then
+    remote_cleanup_activation_temps
+    return 1
+  fi
+  for result_file in "${result_files[@]}"; do
+    IFS=$'\t' read -r result_slug result_status <"$result_file" || {
+      remote_cleanup_activation_temps
+      return 1
+    }
+    [[ "$result_slug" =~ ^[a-z0-9][a-z0-9-]{0,62}$ && "$result_status" == 'pass' ]] || {
+      remote_cleanup_activation_temps
+      return 1
+    }
+  done
+  remote_cleanup_activation_temps
+}
+
+remote_sync_root_source() {
+  local app_path="$1"
+  local candidate_dir="$2"
+  local root_mode root_uid root_gid
+
+  if remote_is_test_mode && [[ -n "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" ]]; then
+    case "$STAGED_TEST_FAIL_PUBLICATION_AT" in
+      root_sync) return 1 ;;
+      marker|previous|current|marker_after_deploy) ;;
+      *) return 1 ;;
+    esac
+  elif [[ -n "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" ]]; then
+    return 1
+  fi
+
+  root_mode="$(stat -c '%a' -- "$app_path")" || return 1
+  root_uid="$(stat -c '%u' -- "$app_path")" || return 1
+  root_gid="$(stat -c '%g' -- "$app_path")" || return 1
+  [[ "$root_mode" =~ ^[0-7]{3,4}$ && "$root_uid" =~ ^[0-9]+$ && "$root_gid" =~ ^[0-9]+$ ]] || return 1
+
+  if ! "$REMOTE_RSYNC_BIN" -a --delete --checksum --no-owner --no-group \
+    --exclude=/.env \
+    --exclude=/.env.production \
+    '--exclude=/.env.production.backup.*' \
+    --exclude=/.git \
+    --exclude=/.codex \
+    --exclude=/.install \
+    --exclude=/.release-state \
+    --exclude=/.releases \
+    --exclude=/logs \
+    --exclude=/backups \
+    --exclude=/BOOTSTRAP_SOURCE.txt \
+    --exclude=/DEPLOY_SOURCE.txt \
+    "$candidate_dir/source/" "$app_path/"; then
+    chmod "$root_mode" "$app_path" >/dev/null 2>&1 || true
+    return 1
+  fi
+  chmod "$root_mode" "$app_path" || return 1
+  [[ "$(stat -c '%a' -- "$app_path")" == "$root_mode" &&
+    "$(stat -c '%u' -- "$app_path")" == "$root_uid" &&
+    "$(stat -c '%g' -- "$app_path")" == "$root_gid" ]]
+}
+
+remote_stage_active_marker() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local archive_sha="$3"
+  local activated_at="$4"
+
+  REMOTE_PUBLICATION_MARKER_TEMP="$(mktemp "$app_path/.release-activation.marker.XXXXXX")" || return 1
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=active_source' \
+    "app=$REMOTE_APP_NAME" \
+    "source_commit=$candidate_commit" \
+    "archive_sha256=$archive_sha" \
+    "activated_at_utc=$activated_at" >"$REMOTE_PUBLICATION_MARKER_TEMP"
+  chmod 0600 "$REMOTE_PUBLICATION_MARKER_TEMP"
+  release_marker_validate_active "$REMOTE_PUBLICATION_MARKER_TEMP" || return 1
+  remote_fsync_path_and_parent "$REMOTE_PUBLICATION_MARKER_TEMP"
+}
+
+remote_stage_pointer_temp() {
+  local state_dir="$1"
+  local commit="$2"
+  local output_name="$3"
+  local temporary
+
+  release_record_is_sha "$commit" || return 1
+  temporary="$(mktemp "$state_dir/.release-activation.pointer.XXXXXX")" || return 1
+  printf '%s\n' "$commit" >"$temporary"
+  chmod 0600 "$temporary"
+  [[ "$(remote_pointer_read "$temporary")" == "$commit" ]] || {
+    rm -f -- "$temporary"
+    return 1
+  }
+  remote_fsync_path_and_parent "$temporary" || {
+    rm -f -- "$temporary"
+    return 1
+  }
+  printf -v "$output_name" '%s' "$temporary"
+}
+
+remote_publish_activation_markers() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local previous_commit="$3"
+  local archive_sha="$4"
+  local activated_at="$5"
+  local first_adoption="$6"
+  local state_dir="$app_path/.release-state"
+
+  remote_stage_active_marker "$app_path" "$candidate_commit" "$archive_sha" "$activated_at" || return 1
+  remote_stage_pointer_temp "$state_dir" "$previous_commit" REMOTE_PUBLICATION_PREVIOUS_TEMP || return 1
+  remote_stage_pointer_temp "$state_dir" "$candidate_commit" REMOTE_PUBLICATION_CURRENT_TEMP || return 1
+
+  mv -T -- "$REMOTE_PUBLICATION_MARKER_TEMP" "$app_path/DEPLOY_SOURCE.txt" || return 1
+  REMOTE_PUBLICATION_MARKER_TEMP=''
+  remote_fsync_path_and_parent "$app_path/DEPLOY_SOURCE.txt" || return 1
+  remote_record_test_event marker_rename DEPLOY_SOURCE.txt || return 1
+  if remote_is_test_mode && [[ "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" == 'marker' ||
+    "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" == 'marker_after_deploy' ]]; then
+    return 1
+  fi
+
+  mv -T -- "$REMOTE_PUBLICATION_PREVIOUS_TEMP" "$state_dir/previous" || return 1
+  REMOTE_PUBLICATION_PREVIOUS_TEMP=''
+  remote_fsync_path_and_parent "$state_dir/previous" || return 1
+  remote_record_test_event marker_rename previous || return 1
+  if remote_is_test_mode && [[ "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" == 'previous' ]]; then
+    return 1
+  fi
+
+  mv -T -- "$REMOTE_PUBLICATION_CURRENT_TEMP" "$state_dir/current" || return 1
+  REMOTE_PUBLICATION_CURRENT_TEMP=''
+  remote_fsync_path_and_parent "$state_dir/current" || return 1
+  remote_record_test_event marker_rename current || return 1
+  if remote_is_test_mode && [[ "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" == 'current' ]]; then
+    return 1
+  fi
+
+  if [[ "$first_adoption" == 'true' ]]; then
+    [[ "$(remote_pointer_read "$state_dir/adoption")" == "$previous_commit" ]] || return 1
+    rm -f -- "$state_dir/adoption" || return 1
+    remote_fsync_path_and_parent "$state_dir" || return 1
+  fi
+}
+
+remote_validate_outcome() {
+  local path="$1"
+  local expected_candidate="$2"
+  local expected_status="$3"
+  local protocol kind candidate previous status stage timestamp epoch
+
+  release_record_validate_keys "$path" protocol_version record_kind candidate_commit previous_commit \
+    status failure_stage recorded_at_utc recorded_at_epoch || return 1
+  protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
+  kind="$(release_record_get_unique "$path" record_kind)" || return 1
+  candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
+  previous="$(release_record_get_unique "$path" previous_commit)" || return 1
+  status="$(release_record_get_unique "$path" status)" || return 1
+  stage="$(release_record_get_unique "$path" failure_stage)" || return 1
+  timestamp="$(release_record_get_unique "$path" recorded_at_utc)" || return 1
+  epoch="$(release_record_get_unique "$path" recorded_at_epoch)" || return 1
+  [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'deployment_outcome' &&
+    "$candidate" == "$expected_candidate" && "$status" == "$expected_status" ]] || return 1
+  release_record_is_sha "$previous" || [[ "$previous" == 'none' ]] || return 1
+  case "$status" in
+    activation_succeeded|candidate_failed_rollback_succeeded|candidate_failed_rollback_failed|candidate_failed_forward_only) ;;
+    *) return 1 ;;
+  esac
+  case "$stage" in none|compose_wait|service_state|tenant_smoke|root_sync|marker_publish) ;;
+    *) return 1 ;;
+  esac
+  [[ "$status" != 'activation_succeeded' || "$stage" == 'none' ]] || return 1
+  release_record_is_timestamp "$timestamp" || return 1
+  [[ "$epoch" =~ ^[0-9]+$ && "$epoch" -ge 1 ]]
+}
+
+remote_write_success_outcome() {
+  local state_dir="$1"
+  local candidate="$2"
+  local previous="$3"
+  local epoch timestamp path
+
+  epoch="$(remote_now_epoch)" || return 1
+  timestamp="$(remote_epoch_to_utc "$epoch")" || return 1
+  path="$state_dir/history/$epoch-$candidate-activation_succeeded.txt"
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=deployment_outcome' \
+    "candidate_commit=$candidate" \
+    "previous_commit=$previous" \
+    'status=activation_succeeded' \
+    'failure_stage=none' \
+    "recorded_at_utc=$timestamp" \
+    "recorded_at_epoch=$epoch" |
+    release_record_write_atomic create "$path" || return 1
+  remote_validate_outcome "$path" "$candidate" activation_succeeded || return 1
+  remote_fsync_path_and_parent "$path" || return 1
+  remote_record_test_event outcome_write activation_succeeded
+}
+
+remote_cleanup_superseded_release() {
+  local app_path="$1"
+  local superseded="$2"
+  local current="$3"
+  local previous="$4"
+  local release_dir="$app_path/.releases/$superseded"
+  local index
+  local -a tags=() ids=()
+
+  remote_validate_superseded_release_cleanup "$app_path" "$superseded" "$current" "$previous" || return 1
+  [[ -n "$superseded" ]] || return 0
+  tags=(
+    "$(remote_release_tag portal-backend "$superseded")"
+    "$(remote_release_tag portal-web "$superseded")"
+    "$(remote_release_tag telegram-bridge "$superseded")"
+  )
+  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID" "$REMOTE_SUPERSEDED_TELEGRAM_ID")
+  for index in 0 1 2; do
+    remote_remove_exact_tag "${tags[$index]}" "${ids[$index]}" || return 1
+  done
+  rm -rf -- "$release_dir"
+}
+
+remote_validate_superseded_release_cleanup() {
+  local app_path="$1"
+  local superseded="$2"
+  local current="$3"
+  local previous="$4"
+  local release_dir="$app_path/.releases/$superseded"
+  local saved_archive saved_backend saved_web saved_telegram actual_id index
+  local -a tags=() ids=()
+
+  [[ -n "$superseded" ]] || return 0
+  release_record_is_sha "$superseded" || return 1
+  [[ "$superseded" != "$current" && "$superseded" != "$previous" ]] || return 1
+  remote_require_private_directory "$release_dir" || return 1
+  saved_archive="$REMOTE_ROLLBACK_ARCHIVE_SHA"
+  saved_backend="$REMOTE_ROLLBACK_BACKEND_ID"
+  saved_web="$REMOTE_ROLLBACK_WEB_ID"
+  saved_telegram="$REMOTE_ROLLBACK_TELEGRAM_ID"
+  if ! remote_load_release_evidence "$release_dir" "$superseded"; then
+    REMOTE_ROLLBACK_ARCHIVE_SHA="$saved_archive"
+    REMOTE_ROLLBACK_BACKEND_ID="$saved_backend"
+    REMOTE_ROLLBACK_WEB_ID="$saved_web"
+    REMOTE_ROLLBACK_TELEGRAM_ID="$saved_telegram"
+    return 1
+  fi
+  REMOTE_SUPERSEDED_ARCHIVE_SHA="$REMOTE_ROLLBACK_ARCHIVE_SHA"
+  REMOTE_SUPERSEDED_BACKEND_ID="$REMOTE_ROLLBACK_BACKEND_ID"
+  REMOTE_SUPERSEDED_WEB_ID="$REMOTE_ROLLBACK_WEB_ID"
+  REMOTE_SUPERSEDED_TELEGRAM_ID="$REMOTE_ROLLBACK_TELEGRAM_ID"
+  REMOTE_ROLLBACK_ARCHIVE_SHA="$saved_archive"
+  REMOTE_ROLLBACK_BACKEND_ID="$saved_backend"
+  REMOTE_ROLLBACK_WEB_ID="$saved_web"
+  REMOTE_ROLLBACK_TELEGRAM_ID="$saved_telegram"
+  remote_validate_release_source_snapshot "$release_dir" "$REMOTE_SUPERSEDED_ARCHIVE_SHA" || return 1
+  tags=(
+    "$(remote_release_tag portal-backend "$superseded")"
+    "$(remote_release_tag portal-web "$superseded")"
+    "$(remote_release_tag telegram-bridge "$superseded")"
+  )
+  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID" "$REMOTE_SUPERSEDED_TELEGRAM_ID")
+  for index in 0 1 2; do
+    actual_id="$(remote_image_id "${tags[$index]}")" || return 1
+    [[ "$actual_id" == "${ids[$index]}" ]] || return 1
+  done
+}
+
+remote_cleanup_history() {
+  local history_dir="$1"
+  local entry epoch candidate status index sorted_output
+  local -a entries=() sorted=()
+
+  remote_find_paths entries "$history_dir" -mindepth 1 -maxdepth 1 -type f || return 1
+  for entry in "${entries[@]}"; do
+    [[ "$(basename -- "$entry")" =~ ^([0-9]+)-([0-9a-f]{40})-([a-z_]+)\.txt$ ]] || return 1
+    epoch="${BASH_REMATCH[1]}"
+    candidate="${BASH_REMATCH[2]}"
+    status="${BASH_REMATCH[3]}"
+    remote_validate_outcome "$entry" "$candidate" "$status" || return 1
+    [[ "$(release_record_get_unique "$entry" recorded_at_epoch)" == "$epoch" ]] || return 1
+    sorted+=("$epoch"$'\t'"$entry")
+  done
+  (( ${#sorted[@]} <= 20 )) && return 0
+  sorted_output="$(printf '%s\n' "${sorted[@]}" | sort -t $'\t' -k1,1nr)" || return 1
+  mapfile -t sorted <<<"$sorted_output"
+  for (( index = 20; index < ${#sorted[@]}; index++ )); do
+    entry="${sorted[$index]#*$'\t'}"
+    rm -f -- "$entry" || return 1
+  done
+  remote_fsync_path_and_parent "$history_dir"
+}
+
+remote_locked_activate() {
+  local app_path="$1"
+  local candidate_commit="$2"
+  local prepared_orchestrator="$3"
+  local current_orchestrator="$4"
+  local orchestrator_protocol="$5"
+  local migration_policy="$6"
+  local approval_ref="$7"
+  local state_dir="$app_path/.release-state"
+  local candidate_dir="$app_path/.releases/$candidate_commit"
+  local transaction="$state_dir/transaction"
+  local old_previous='' first_adoption='false'
+  local expires_epoch started_epoch started_at activated_epoch activated_at
+
+  REMOTE_FAILURE_STATUS='activation_refused_state_changed'
+  remote_select_docker || remote_activation_refuse 'Docker access is unavailable.'
+  REMOTE_PYTHON_BIN="$(remote_select_python)" || remote_activation_refuse 'Python 3 is unavailable.'
+  remote_select_activation_tools || remote_activation_refuse 'Activation tools are unavailable or unsafe.'
+  for required in tar sha256sum find stat flock cmp date awk sort grep mktemp chmod cp rm mv; do
+    command -v "$required" >/dev/null || remote_activation_refuse "Required activation command is missing: $required"
+  done
+
+  remote_activation_preflight \
+    "$app_path" "$candidate_commit" "$prepared_orchestrator" "$current_orchestrator" \
+    "$orchestrator_protocol" "$migration_policy" "$approval_ref"
+
+  if [[ -f "$state_dir/previous" ]]; then
+    old_previous="$(remote_pointer_read "$state_dir/previous")" ||
+      remote_activation_refuse 'Previous release pointer is invalid.'
+  fi
+  remote_validate_superseded_release_cleanup \
+    "$app_path" "$old_previous" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
+    remote_activation_refuse 'Superseded release cleanup evidence is invalid.'
+  remote_revalidate_activation_cutover_inputs "$app_path" "$candidate_commit" ||
+    remote_activation_refuse 'Activation inputs changed before cutover.'
+  [[ -f "$state_dir/current" ]] || first_adoption='true'
+  expires_epoch="$(release_record_get_unique "$candidate_dir/manifest.txt" expires_at_epoch)" ||
+    remote_activation_refuse 'Prepared expiry evidence changed before cutover.'
+  [[ "$expires_epoch" =~ ^[0-9]+$ ]] ||
+    remote_activation_refuse 'Prepared expiry evidence is invalid.'
+  started_epoch="$(remote_cutover_now_epoch)" || remote_activation_refuse 'Unable to determine transaction time.'
+  (( started_epoch < expires_epoch )) ||
+    remote_activation_refuse 'Prepared release expired before cutover.' activation_refused_expired
+  started_at="$(remote_epoch_to_utc "$started_epoch")" || remote_activation_refuse 'Unable to format transaction time.'
+  REMOTE_FAILURE_STATUS='activation_failed_publication'
+  remote_write_transaction create "$transaction" "$candidate_commit" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" cutover_started "$started_at" "$started_at" ||
+    remote_activation_refuse 'Activation transaction could not be persisted.'
+
+  "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1 ||
+    remote_fail 'Candidate Compose wait failed.' activation_failed_publication
+  remote_capture_candidate_services ||
+    remote_fail 'Candidate service state is invalid.' activation_failed_publication
+  [[ "$(sha256sum "$candidate_dir/tenants.tsv" | awk '{print $1}')" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] ||
+    remote_fail 'Tenant smoke matrix changed before smoke.' activation_failed_publication
+  remote_run_tenant_smoke "$candidate_dir/tenants.tsv" "$REMOTE_ACTIVATION_TENANT_COUNT" ||
+    remote_fail 'Tenant smoke failed.' activation_failed_publication
+  remote_recheck_candidate_services ||
+    remote_fail 'Candidate service restarted or became unhealthy during smoke.' activation_failed_publication
+
+  remote_update_transaction "$transaction" "$candidate_commit" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" candidate_healthy ||
+    remote_fail 'Candidate health journal update failed.' activation_failed_publication
+  remote_validate_release_source_snapshot "$candidate_dir" "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" ||
+    remote_fail 'Candidate source changed before root publication.' activation_failed_publication
+  remote_update_transaction "$transaction" "$candidate_commit" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" root_sync_started ||
+    remote_fail 'Root sync journal start failed.' activation_failed_publication
+  remote_sync_root_source "$app_path" "$candidate_dir" ||
+    remote_fail 'Candidate root source publication failed.' activation_failed_publication
+  remote_update_transaction "$transaction" "$candidate_commit" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" root_sync_completed ||
+    remote_fail 'Root sync journal completion failed.' activation_failed_publication
+
+  activated_epoch="$(remote_now_epoch)" || remote_fail 'Unable to determine activation time.' activation_failed_publication
+  activated_at="$(remote_epoch_to_utc "$activated_epoch")" ||
+    remote_fail 'Unable to format activation time.' activation_failed_publication
+  remote_publish_activation_markers \
+    "$app_path" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" \
+    "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" "$activated_at" "$first_adoption" ||
+    remote_fail 'Activation marker publication failed.' activation_failed_publication
+  remote_update_transaction "$transaction" "$candidate_commit" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" markers_published ||
+    remote_fail 'Marker publication journal update failed.' activation_failed_publication
+
+  remote_write_success_outcome "$state_dir" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
+    remote_fail 'Successful activation outcome could not be persisted.' activation_failed_publication
+
+  [[ "$(remote_pointer_read "$state_dir/prepared")" == "$candidate_commit" ]] ||
+    remote_fail 'Prepared pointer changed before success finalization.' activation_failed_publication
+  rm -f -- "$state_dir/prepared" || remote_fail 'Prepared pointer removal failed.' activation_failed_publication
+  remote_fsync_path_and_parent "$state_dir" || remote_fail 'Prepared pointer removal was not durable.' activation_failed_publication
+  remote_record_test_event prepared_remove "$candidate_commit" ||
+    remote_fail 'Prepared pointer removal event failed.' activation_failed_publication
+
+  remote_validate_transaction "$transaction" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
+    remote_fail 'Activation transaction changed before success finalization.' activation_failed_publication
+  rm -f -- "$transaction" || remote_fail 'Activation transaction removal failed.' activation_failed_publication
+  remote_fsync_path_and_parent "$state_dir" || remote_fail 'Activation transaction removal was not durable.' activation_failed_publication
+  remote_record_test_event journal_remove activation_succeeded ||
+    remote_fail 'Activation transaction removal event failed.' activation_failed_publication
+
+  if ! remote_cleanup_superseded_release \
+    "$app_path" "$old_previous" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT"; then
+    printf 'Warning: activation succeeded, but bounded cleanup requires operator review.\n' >&2
+  fi
+  if ! remote_cleanup_history "$state_dir/history"; then
+    printf 'Warning: activation succeeded but bounded history cleanup requires operator review.\n' >&2
+  fi
+  remote_emit_status activation_succeeded
+}
+
+remote_run_activate_with_lock() {
+  local app_path="$1"
+  shift
+  local state_dir="$app_path/.release-state"
+  local lock_path="$state_dir/deploy.lock"
+  local lock_exit
+
+  REMOTE_FAILURE_STATUS='activation_refused_state_changed'
+  remote_require_private_directory "$state_dir" ||
+    remote_fail 'Release state directory is unavailable or unsafe.' activation_refused_state_changed
+  remote_require_private_directory "$app_path/.releases" ||
+    remote_fail 'Release directory is unavailable or unsafe.' activation_refused_state_changed
+  remote_lock_file_is_safe "$lock_path" ||
+    remote_fail 'Release lock file is unsafe.' activation_refused_state_changed
+
+  REMOTE_FAILURE_STATUS='activation_failed_publication'
+  set +e
+  flock --nonblock --close --conflict-exit-code 75 "$lock_path" \
+    "$SELF_PATH" __locked-activate \
+    "--app-path=$REMOTE_APP_PATH" \
+    "$@"
+  lock_exit=$?
+  set -e
+  if (( lock_exit == 75 )); then
+    remote_fail 'Another staged release operation is already running.' activation_refused_state_changed
+  fi
+  return "$lock_exit"
+}
+
+remote_parse_activate_options() {
+  local prefix="$1"
+  shift
+  local argument name value
+  local app_path='' candidate_commit='' prepared_orchestrator='' current_orchestrator=''
+  local orchestrator_protocol='' migration_policy='' approval_ref=''
+  local -A seen=()
+  local -a locked_arguments=()
+
+  for argument in "$@"; do
+    [[ "$argument" == --*=* ]] || return 2
+    name="${argument%%=*}"
+    name="${name#--}"
+    value="${argument#*=}"
+    [[ -n "$value" && -z "${seen[$name]:-}" ]] || return 2
+    seen[$name]='true'
+    case "$name" in
+      app-path) app_path="$value" ;;
+      candidate-commit) candidate_commit="$value" ;;
+      prepared-orchestrator-commit) prepared_orchestrator="$value" ;;
+      orchestrator-commit) current_orchestrator="$value" ;;
+      orchestrator-protocol-version) orchestrator_protocol="$value" ;;
+      migration-policy) migration_policy="$value" ;;
+      approval-ref) approval_ref="$value" ;;
+      *) return 2 ;;
+    esac
+  done
+  [[ "$app_path" == "$REMOTE_APP_PATH" ]] || return 2
+  release_record_is_sha "$candidate_commit" || return 2
+  release_record_is_sha "$prepared_orchestrator" || return 2
+  release_record_is_sha "$current_orchestrator" || return 2
+  [[ "$orchestrator_protocol" == "$REMOTE_PROTOCOL_VERSION" ]] || return 2
+  if [[ -n "$migration_policy" || -n "$approval_ref" ]]; then
+    [[ -n "$migration_policy" && -n "$approval_ref" ]] || return 2
+    [[ "$migration_policy" == 'backward-compatible' || "$migration_policy" == 'forward-only' ]] || return 2
+    release_record_is_approval_ref "$approval_ref" || return 2
+  fi
+  REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app_path")" || return 2
+
+  if [[ "$prefix" == 'locked' ]]; then
+    remote_locked_activate \
+      "$REMOTE_EFFECTIVE_APP_PATH" "$candidate_commit" "$prepared_orchestrator" \
+      "$current_orchestrator" "$orchestrator_protocol" "$migration_policy" "$approval_ref"
+  else
+    locked_arguments=(
+      "--candidate-commit=$candidate_commit"
+      "--prepared-orchestrator-commit=$prepared_orchestrator"
+      "--orchestrator-commit=$current_orchestrator"
+      "--orchestrator-protocol-version=$orchestrator_protocol"
+    )
+    if [[ -n "$migration_policy" ]]; then
+      locked_arguments+=("--migration-policy=$migration_policy" "--approval-ref=$approval_ref")
+    fi
+    remote_run_activate_with_lock "$REMOTE_EFFECTIVE_APP_PATH" "${locked_arguments[@]}"
+  fi
+}
+
 remote_parse_prepare_options() {
   local prefix="$1"
   shift
@@ -1651,6 +3054,31 @@ remote_parse_inspect_options() {
   [[ "$app_path" == "$REMOTE_APP_PATH" ]] || return 2
   REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app_path")" || return 2
   remote_run_inspect "$REMOTE_EFFECTIVE_APP_PATH"
+}
+
+remote_parse_prepared_inspect_options() {
+  local argument name value
+  local app_path='' candidate_commit=''
+  local -A seen=()
+
+  (( $# == 2 )) || return 2
+  for argument in "$@"; do
+    [[ "$argument" == --*=* ]] || return 2
+    name="${argument%%=*}"
+    name="${name#--}"
+    value="${argument#*=}"
+    [[ -n "$value" && -z "${seen[$name]:-}" ]] || return 2
+    seen[$name]='true'
+    case "$name" in
+      app-path) app_path="$value" ;;
+      candidate-commit) candidate_commit="$value" ;;
+      *) return 2 ;;
+    esac
+  done
+  [[ "$app_path" == "$REMOTE_APP_PATH" ]] || return 2
+  release_record_is_sha "$candidate_commit" || return 2
+  REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app_path")" || return 2
+  remote_run_prepared_inspect "$REMOTE_EFFECTIVE_APP_PATH" "$candidate_commit"
 }
 
 remote_parse_options() {
@@ -1745,8 +3173,50 @@ remote_main() {
       fi
       exit 0
       ;;
-    activate|__locked-activate|__smoke-one)
-      remote_fail "Remote phase is not available yet: $phase" activation_refused_state_changed
+    inspect-prepared)
+      trap - ERR
+      if ! remote_parse_prepared_inspect_options "$@"; then
+        printf 'Prepared release inspection failed.\n' >&2
+        exit 1
+      fi
+      exit 0
+      ;;
+    activate)
+      REMOTE_FAILURE_STATUS='activation_refused_state_changed'
+      if remote_parse_activate_options public "$@"; then
+        :
+      else
+        parse_exit=$?
+        if (( parse_exit == 2 )); then
+          remote_fail 'Invalid remote activation arguments.' activation_refused_state_changed 2
+        fi
+        exit "$parse_exit"
+      fi
+      ;;
+    __locked-activate)
+      REMOTE_FAILURE_STATUS='activation_refused_state_changed'
+      remote_parse_activate_options locked "$@" || {
+        parse_exit=$?
+        if (( parse_exit == 2 )); then
+          remote_fail 'Invalid locked activation arguments.' activation_refused_state_changed 2
+        fi
+        exit "$parse_exit"
+      }
+      ;;
+    __smoke-one)
+      trap - ERR
+      trap 'remote_cleanup_smoke_bodies || true; exit 129' HUP
+      trap 'remote_cleanup_smoke_bodies || true; exit 130' INT
+      trap 'remote_cleanup_smoke_bodies || true; exit 143' TERM
+      if (( $# != 3 )); then
+        exit 2
+      fi
+      set +e
+      remote_smoke_one "$1" "$2" "$3"
+      parse_exit=$?
+      set -e
+      remote_cleanup_smoke_bodies || true
+      exit "$parse_exit"
       ;;
     *)
       remote_fail 'Unknown remote staged phase.' bootstrap_failed 2

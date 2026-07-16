@@ -9,6 +9,10 @@ FILTER="${1:-all}"
 TMP_DIR="$(mktemp -d)"
 
 cleanup() {
+  if [[ "${STAGED_TEST_KEEP_TMP:-false}" == '1' ]]; then
+    printf 'KEPT_TEST_TMP=%s\n' "$TMP_DIR" >&2
+    return
+  fi
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
@@ -47,6 +51,11 @@ CURRENT_COMMIT=''
 FAKE_DOCKER_STATE_DIR=''
 FAKE_TENANTS_FILE=''
 FAKE_TENANTS_QUERY_COUNT_FILE=''
+FAKE_EVENT_LOG=''
+FAKE_EVENT_COUNTER=''
+FAKE_CURL_STATE_DIR=''
+FAKE_CONTAINER_STATE_FILE=''
+PREPARED_COMMIT=''
 FAKE_NOW_EPOCH='1784203200'
 
 readonly CURRENT_BACKEND_ID="sha256:$(printf '1%.0s' {1..64})"
@@ -61,6 +70,23 @@ export CANDIDATE_BACKEND_ID CANDIDATE_WEB_ID CANDIDATE_TELEGRAM_ID EXTERNAL_POST
 
 write_fake_tools() {
   mkdir -p "$FAKE_BIN"
+
+  cat >"$FAKE_BIN/record-event" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+event="${1:-}"
+detail="${2:-}"
+[[ "$event" =~ ^[a-z0-9_.:-]+$ && "$detail" != *$'\n'* && "$detail" != *$'\t'* ]] || exit 90
+mkdir -p "$(dirname -- "$FAKE_EVENT_LOG")"
+touch "$FAKE_EVENT_LOG" "$FAKE_EVENT_COUNTER"
+exec 9>"$FAKE_EVENT_COUNTER.lock"
+flock -x 9
+sequence=0
+[[ ! -s "$FAKE_EVENT_COUNTER" ]] || sequence="$(<"$FAKE_EVENT_COUNTER")"
+sequence=$((sequence + 1))
+printf '%s\n' "$sequence" >"$FAKE_EVENT_COUNTER"
+printf '%08d\t%s\t%s\t%s\n' "$sequence" "$(date -u +%s%N)" "$event" "$detail" >>"$FAKE_EVENT_LOG"
+SH
 
   cat >"$FAKE_BIN/ssh-keygen" <<'SH'
 #!/usr/bin/env bash
@@ -146,6 +172,17 @@ if [[ "$command_text" == 'umask 077; mktemp -d /tmp/chatwoot-client-portal-v2-st
   exit 0
 fi
 
+if [[ "${FAKE_SSH_FAIL_CLEANUP:-false}" == 'true' &&
+  "$command_text" == rm\ -rf\ --\ /tmp/chatwoot-client-portal-v2-staged.* ]]; then
+  exit 88
+fi
+
+if [[ "$command_text" == *"/production-staged-release-remote.sh activate "* &&
+  -n "${FAKE_SSH_FINAL_ACTIVATE_EXIT:-}" ]]; then
+  [[ "$FAKE_SSH_FINAL_ACTIVATE_EXIT" == '130' || "$FAKE_SSH_FINAL_ACTIVATE_EXIT" == '255' ]] || exit 87
+  exit "$FAKE_SSH_FINAL_ACTIVATE_EXIT"
+fi
+
 bash -c "$command_text"
 SH
 
@@ -161,6 +198,62 @@ set -Eeuo pipefail
 mkdir -p "$FAKE_DOCKER_STATE_DIR"
 tag_file="$FAKE_DOCKER_STATE_DIR/tags.tsv"
 touch "$tag_file"
+container_file="$FAKE_CONTAINER_STATE_FILE"
+container_lock="$FAKE_DOCKER_STATE_DIR/containers.lock"
+
+initialize_containers() {
+  [[ -s "$container_file" ]] && return 0
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    container-backend portal-backend "$CURRENT_BACKEND_ID" true healthy 0 2026-07-16T12:00:00Z \
+    container-web portal-web "$CURRENT_WEB_ID" true healthy 0 2026-07-16T12:00:00Z \
+    container-telegram telegram-bridge "$CURRENT_TELEGRAM_ID" true none 0 2026-07-16T12:00:00Z \
+    >"$container_file"
+}
+
+container_field() {
+  local container_id="$1"
+  local field="$2"
+  local column
+  case "$field" in
+    service) column=2 ;;
+    image) column=3 ;;
+    running) column=4 ;;
+    health) column=5 ;;
+    restarts) column=6 ;;
+    started_at) column=7 ;;
+    *) return 1 ;;
+  esac
+  awk -F '\t' -v wanted="$container_id" -v column="$column" '$1 == wanted { print $column }' "$container_file" | tail -n1
+}
+
+set_candidate_containers() {
+  local service health running restarts
+  : >"$container_file.tmp"
+  for service in portal-backend portal-web telegram-bridge; do
+    running=true
+    [[ "$service" != "${FAKE_SERVICE_NOT_RUNNING:-}" ]] || running=false
+    health=healthy
+    [[ "$service" != 'telegram-bridge' ]] || health=none
+    [[ "$service" != "${FAKE_SERVICE_WITHOUT_HEALTHCHECK:-}" ]] || health=none
+    [[ "$service" != "${FAKE_SERVICE_UNHEALTHY:-}" ]] || health=unhealthy
+    restarts=0
+    [[ "$service" != "${FAKE_SERVICE_RESTARTED:-}" ]] || restarts=1
+    case "$service" in
+      portal-backend)
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-backend "$service" "$CANDIDATE_BACKEND_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        ;;
+      portal-web)
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-web "$service" "$CANDIDATE_WEB_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        ;;
+      telegram-bridge)
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-telegram "$service" "$CANDIDATE_TELEGRAM_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        ;;
+    esac >>"$container_file.tmp"
+  done
+  mv "$container_file.tmp" "$container_file"
+}
+
+initialize_containers
 
 tag_set() {
   local reference="$1"
@@ -193,12 +286,7 @@ tag_lookup() {
 }
 
 container_image() {
-  case "$1" in
-    container-backend) printf '%s\n' "$CURRENT_BACKEND_ID" ;;
-    container-web) printf '%s\n' "$CURRENT_WEB_ID" ;;
-    container-telegram) printf '%s\n' "$CURRENT_TELEGRAM_ID" ;;
-    *) return 1 ;;
-  esac
+  container_field "$1" image
 }
 
 case "${1:-}" in
@@ -210,9 +298,25 @@ case "${1:-}" in
     exit 0
     ;;
   inspect)
-    [[ "${2:-}" == '--format' && "${3:-}" == '{{.Image}}' && $# == 4 ]] || exit 78
+    [[ "${2:-}" == '--format' && $# == 4 ]] || exit 78
+    format="${3:-}"
     target="${@: -1}"
-    container_image "$target"
+    case "$format" in
+      '{{.Image}}') container_image "$target" ;;
+      '{{.State.Running}}') container_field "$target" running ;;
+      '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}') container_field "$target" health ;;
+      '{{.RestartCount}}') container_field "$target" restarts ;;
+      '{{.State.StartedAt}}') container_field "$target" started_at ;;
+      '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}')
+        printf '%s|%s|%s|%s|%s\n' \
+          "$(container_field "$target" image)" \
+          "$(container_field "$target" running)" \
+          "$(container_field "$target" health)" \
+          "$(container_field "$target" restarts)" \
+          "$(container_field "$target" started_at)"
+        ;;
+      *) exit 78 ;;
+    esac
     ;;
   tag)
     tag_set "${3:-}" "${2:-}"
@@ -238,6 +342,7 @@ case "${1:-}" in
         ;;
       rm)
         reference="${3:-}"
+        [[ "${FAKE_IMAGE_RM_FAIL_REF:-}" != "$reference" ]] || exit 88
         awk -F '\t' -v ref="$reference" '$1 != ref' "$tag_file" >"$tag_file.tmp"
         mv "$tag_file.tmp" "$tag_file"
         exit 0
@@ -285,16 +390,23 @@ case "${1:-}" in
         service="${2:-}"
         [[ "$service" != "${FAKE_MISSING_RUNNING_SERVICE:-}" ]] || exit 0
         case "$service" in
-          portal-backend) printf '%s\n' 'container-backend' ;;
-          portal-web) printf '%s\n' 'container-web' ;;
-          telegram-bridge) printf '%s\n' 'container-telegram' ;;
+          portal-backend) container_id='container-backend' ;;
+          portal-web) container_id='container-web' ;;
+          telegram-bridge) container_id='container-telegram' ;;
           *) exit 1 ;;
         esac
+        printf '%s\n' "$container_id"
+        [[ "$service" != "${FAKE_COMPOSE_PS_FAIL_SERVICE:-}" ]] || exit 87
+        if [[ "$service" == "${FAKE_DUPLICATE_SERVICE_CONTAINER:-}" ||
+          ( "$service" == "${FAKE_SCALE_SERVICE_AFTER_CURL:-}" &&
+            -e "$FAKE_CURL_STATE_DIR/scale-triggered" ) ]]; then
+          printf '%s\n' "$container_id-duplicate"
+        fi
         ;;
       exec)
         [[ $# == 7 && "${1:-}" == '-T' && "${2:-}" == 'portal-db' && "${3:-}" == 'sh' &&
           "${4:-}" == '-ceu' && "${6:-}" == 'sh' ]] || exit 78
-        [[ "${7:-}" == $'SELECT slug, public_base_url\nFROM portal_tenants\nWHERE status = \'active\'\nORDER BY slug\nLIMIT 101;' ]] || exit 78
+        [[ "${7:-}" == $'SELECT\n  CASE WHEN octet_length(slug) <= 63 THEN slug ELSE repeat(\'x\', 64) END,\n  CASE WHEN octet_length(public_base_url) <= 2048 THEN public_base_url ELSE repeat(\'x\', 2049) END\nFROM portal_tenants\nWHERE status = \'active\'\nORDER BY portal_tenants.slug\nLIMIT 101;' ]] || exit 78
         count=0
         [[ ! -f "$FAKE_TENANTS_QUERY_COUNT_FILE" ]] || count="$(<"$FAKE_TENANTS_QUERY_COUNT_FILE")"
         printf '%s\n' "$((count + 1))" >"$FAKE_TENANTS_QUERY_COUNT_FILE"
@@ -312,8 +424,14 @@ case "${1:-}" in
           fi
           exit 0
         fi
-        echo 'compose up mutation is forbidden in prepare/bootstrap tests' >&2
-        exit 82
+        [[ "$*" == '-d --no-build --pull never --wait --wait-timeout 120' ]] || exit 82
+        "$FAKE_BIN/record-event" compose_up "$*"
+        [[ "${FAKE_COMPOSE_UP_FAIL:-false}" != 'true' ]] || exit 82
+        exec 9>"$container_lock"
+        flock -x 9
+        set_candidate_containers
+        [[ "${FAKE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" != 'true' ]] || exit 82
+        exit 0
         ;;
       *)
         echo "unexpected fake compose invocation: $compose_command $*" >&2
@@ -328,7 +446,181 @@ case "${1:-}" in
 esac
 SH
 
-  chmod +x "$FAKE_BIN/ssh-keygen" "$FAKE_BIN/scp" "$FAKE_BIN/ssh" "$FAKE_BIN/docker"
+  cat >"$FAKE_BIN/curl" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exec 7>"$FAKE_COMMAND_LOG.lock"
+flock -x 7
+{
+  printf 'curl\0'
+  printf '%s\0' "$@"
+  printf '\0'
+} >>"$FAKE_COMMAND_LOG"
+flock -u 7
+
+[[ $# == 17 ]] || exit 83
+[[ "$1" == '--fail' && "$2" == '--silent' && "$3" == '--show-error' ]] || exit 83
+[[ "$4" == '--connect-timeout' && "$5" == '5' ]] || exit 83
+[[ "$6" == '--max-time' && "$7" == '15' ]] || exit 83
+[[ "$8" == '--retry' && "$9" == '2' ]] || exit 83
+[[ "${10}" == '--retry-delay' && "${11}" == '3' && "${12}" == '--retry-all-errors' ]] || exit 83
+[[ "${13}" == '--max-filesize' && "${14}" == '65536' && "${15}" == '--output' ]] || exit 83
+output="${16}"
+url="${17}"
+[[ "$url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/api/(health|tenant)$ ]] || exit 83
+mkdir -p "$FAKE_CURL_STATE_DIR"
+touch "$FAKE_CURL_STATE_DIR/current" "$FAKE_CURL_STATE_DIR/max"
+
+finish() {
+  local current
+  exec 9>"$FAKE_CURL_STATE_DIR/concurrency.lock"
+  flock -x 9
+  current=0
+  [[ ! -s "$FAKE_CURL_STATE_DIR/current" ]] || current="$(<"$FAKE_CURL_STATE_DIR/current")"
+  (( current > 0 )) && current=$((current - 1))
+  printf '%s\n' "$current" >"$FAKE_CURL_STATE_DIR/current"
+}
+trap finish EXIT
+
+exec 9>"$FAKE_CURL_STATE_DIR/concurrency.lock"
+flock -x 9
+current=0
+maximum=0
+[[ ! -s "$FAKE_CURL_STATE_DIR/current" ]] || current="$(<"$FAKE_CURL_STATE_DIR/current")"
+[[ ! -s "$FAKE_CURL_STATE_DIR/max" ]] || maximum="$(<"$FAKE_CURL_STATE_DIR/max")"
+current=$((current + 1))
+(( current <= maximum )) || maximum="$current"
+printf '%s\n' "$current" >"$FAKE_CURL_STATE_DIR/current"
+printf '%s\n' "$maximum" >"$FAKE_CURL_STATE_DIR/max"
+flock -u 9
+
+"$FAKE_BIN/record-event" curl_start "$url"
+sleep "${FAKE_CURL_DELAY_SECONDS:-0.02}"
+failures=0
+if [[ -n "${FAKE_CURL_FAIL_PATTERN:-}" && "$url" == *"$FAKE_CURL_FAIL_PATTERN"* ]]; then
+  failures="${FAKE_CURL_FAILURES_BEFORE_SUCCESS:-3}"
+fi
+[[ "$failures" =~ ^[0-3]$ ]] || exit 83
+for attempt in 1 2 3; do
+  "$FAKE_BIN/record-event" curl_attempt "$url#$attempt"
+  if (( attempt <= failures )); then
+    (( attempt < 3 )) && continue
+    "$FAKE_BIN/record-event" curl_failed "$url"
+    exit 22
+  fi
+  break
+done
+
+if [[ -n "${FAKE_RESTART_SERVICE_AFTER_CURL:-}" ]]; then
+  exec 8>"$FAKE_DOCKER_STATE_DIR/containers.lock"
+  flock -x 8
+  if [[ ! -e "$FAKE_CURL_STATE_DIR/restart-triggered" ]]; then
+    touch "$FAKE_CURL_STATE_DIR/restart-triggered"
+    awk -F '\t' -v OFS='\t' -v service="$FAKE_RESTART_SERVICE_AFTER_CURL" \
+      '$2 == service { $6 = $6 + 1; $7 = "2026-07-16T12:11:00Z" } { print }' \
+      "$FAKE_CONTAINER_STATE_FILE" >"$FAKE_CONTAINER_STATE_FILE.tmp"
+    mv "$FAKE_CONTAINER_STATE_FILE.tmp" "$FAKE_CONTAINER_STATE_FILE"
+  fi
+fi
+if [[ -n "${FAKE_SCALE_SERVICE_AFTER_CURL:-}" ]]; then
+  touch "$FAKE_CURL_STATE_DIR/scale-triggered"
+fi
+
+mkdir -p "$(dirname -- "$output")"
+if [[ "$url" == */api/health ]]; then
+  if [[ -n "${FAKE_CURL_HEALTH_BODY_BYTES:-}" ]]; then
+    [[ "$FAKE_CURL_HEALTH_BODY_BYTES" =~ ^[0-9]+$ ]] || exit 83
+    python3 - "$output" "$FAKE_CURL_HEALTH_BODY_BYTES" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+size = int(sys.argv[2])
+if not 1 <= size <= 1048576:
+    raise SystemExit(1)
+path.write_bytes(b"h" * size)
+PY
+  else
+    printf '%s\n' '{"status":"ok","private":"health-body-must-not-be-logged"}' >"$output"
+  fi
+else
+  host="${url#https://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  slug="${host%%.*}"
+  if [[ -n "${FAKE_CURL_SLUG_MISMATCH_PATTERN:-}" && "$url" == *"$FAKE_CURL_SLUG_MISMATCH_PATTERN"* ]]; then
+    slug='wrong-tenant'
+  fi
+  if [[ -n "${FAKE_CURL_TENANT_BODY_BYTES:-}" ]]; then
+    [[ "$FAKE_CURL_TENANT_BODY_BYTES" =~ ^[0-9]+$ ]] || exit 83
+    python3 - "$output" "$FAKE_CURL_TENANT_BODY_BYTES" "$slug" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+size = int(sys.argv[2])
+slug = sys.argv[3]
+prefix = ('{"tenant":{"slug":' + json.dumps(slug) + '},"padding":"').encode()
+suffix = b'"}\n'
+if not len(prefix) + len(suffix) <= size <= 1048576:
+    raise SystemExit(1)
+body = prefix + (b"x" * (size - len(prefix) - len(suffix))) + suffix
+if len(body) != size:
+    raise SystemExit(1)
+path.write_bytes(body)
+PY
+  else
+    printf '{"tenant":{"slug":"%s"},"private":"tenant-body-must-not-be-logged"}\n' "$slug" >"$output"
+  fi
+fi
+"$FAKE_BIN/record-event" curl_success "$url"
+SH
+
+  cat >"$FAKE_BIN/rsync" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+{
+  printf 'rsync\0'
+  printf '%s\0' "$@"
+  printf '\0'
+} >>"$FAKE_COMMAND_LOG"
+"$FAKE_BIN/record-event" root_sync "$*"
+[[ "${FAKE_RSYNC_FAIL:-false}" != 'true' ]] || exit 84
+"${REAL_RSYNC_BIN:-/usr/bin/rsync}" "$@"
+[[ "${FAKE_RSYNC_FAIL_AFTER_COPY:-false}" != 'true' ]] || exit 84
+SH
+
+  cat >"$FAKE_BIN/timeout" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+{
+  printf 'timeout\0'
+  printf '%s\0' "$@"
+  printf '\0'
+} >>"$FAKE_COMMAND_LOG"
+[[ "${1:-}" == '600' ]] || exit 85
+"$FAKE_BIN/record-event" smoke_timeout "$1"
+shift
+exec /usr/bin/timeout 600 "$@"
+SH
+
+  cat >"$FAKE_BIN/xargs" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+{
+  printf 'xargs\0'
+  printf '%s\0' "$@"
+  printf '\0'
+} >>"$FAKE_COMMAND_LOG"
+[[ "${1:-}" == '-0' && "${2:-}" == '-n' && "${3:-}" == '2' && "${4:-}" == '-P' && "${5:-}" == '5' ]] || exit 86
+"$FAKE_BIN/record-event" smoke_xargs '-0 -n 2 -P 5'
+exec /usr/bin/xargs "$@"
+SH
+
+  chmod +x \
+    "$FAKE_BIN/record-event" "$FAKE_BIN/ssh-keygen" "$FAKE_BIN/scp" "$FAKE_BIN/ssh" \
+    "$FAKE_BIN/docker" "$FAKE_BIN/curl" "$FAKE_BIN/rsync" "$FAKE_BIN/timeout" "$FAKE_BIN/xargs"
 }
 
 setup_fixture() {
@@ -344,13 +636,23 @@ setup_fixture() {
   FAKE_DOCKER_STATE_DIR="$CASE_ROOT/docker-state"
   FAKE_TENANTS_FILE="$CASE_ROOT/tenants.tsv"
   FAKE_TENANTS_QUERY_COUNT_FILE="$CASE_ROOT/tenant-query-count"
+  FAKE_EVENT_LOG="$CASE_ROOT/events.tsv"
+  FAKE_EVENT_COUNTER="$CASE_ROOT/event-counter"
+  FAKE_CURL_STATE_DIR="$CASE_ROOT/curl-state"
+  FAKE_CONTAINER_STATE_FILE="$FAKE_DOCKER_STATE_DIR/containers.tsv"
+  PREPARED_COMMIT=''
   IDENTITY_FILE="$CASE_ROOT/identity"
   KNOWN_HOSTS_FILE="$CASE_ROOT/known-hosts"
   FAKE_NOW_EPOCH='1784203200'
 
-  mkdir -p "$CASE_ROOT" "$REMOTE_TEST_ROOT" "$CASE_ROOT/home" "$FAKE_DOCKER_STATE_DIR"
+  mkdir -p \
+    "$CASE_ROOT" "$REMOTE_TEST_ROOT" "$CASE_ROOT/home" "$FAKE_DOCKER_STATE_DIR" \
+    "$FAKE_CURL_STATE_DIR"
   : >"$FAKE_COMMAND_LOG"
   : >"$FAKE_REMOTE_DIR_LOG"
+  : >"$FAKE_EVENT_LOG"
+  : >"$FAKE_EVENT_COUNTER"
+  : >"$FAKE_CONTAINER_STATE_FILE"
   printf '%s\n' 'fake-private-key' >"$IDENTITY_FILE"
   printf '%s\n' 'example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeVerifiedHostKey' >"$KNOWN_HOSTS_FILE"
   chmod 0600 "$IDENTITY_FILE" "$KNOWN_HOSTS_FILE"
@@ -444,6 +746,7 @@ ENV
 
 deploy_command() {
   local phase="$1"
+  local requested_commit="${DEPLOY_COMMIT_OVERRIDE:-$FIXTURE_COMMIT}"
   shift
 
   STAGED_TEST_MODE=1 \
@@ -452,14 +755,28 @@ deploy_command() {
     STAGED_SCP_BIN="$FAKE_BIN/scp" \
     STAGED_SSH_KEYGEN_BIN="$FAKE_BIN/ssh-keygen" \
     STAGED_DOCKER_BIN="$FAKE_BIN/docker" \
+    STAGED_CURL_BIN="$FAKE_BIN/curl" \
+    STAGED_RSYNC_BIN="$FAKE_BIN/rsync" \
+    STAGED_TIMEOUT_BIN="$FAKE_BIN/timeout" \
+    STAGED_XARGS_BIN="$FAKE_BIN/xargs" \
+    STAGED_TEST_EVENT_LOG="$FAKE_EVENT_LOG" \
+    STAGED_TEST_EVENT_RECORDER="$FAKE_BIN/record-event" \
+    FAKE_BIN="$FAKE_BIN" \
     FAKE_COMMAND_LOG="$FAKE_COMMAND_LOG" \
     FAKE_REMOTE_DIR_LOG="$FAKE_REMOTE_DIR_LOG" \
     FAKE_DOCKER_STATE_DIR="$FAKE_DOCKER_STATE_DIR" \
+    FAKE_CONTAINER_STATE_FILE="$FAKE_CONTAINER_STATE_FILE" \
+    FAKE_EVENT_LOG="$FAKE_EVENT_LOG" \
+    FAKE_EVENT_COUNTER="$FAKE_EVENT_COUNTER" \
+    FAKE_CURL_STATE_DIR="$FAKE_CURL_STATE_DIR" \
     FAKE_TENANTS_FILE="$FAKE_TENANTS_FILE" \
     FAKE_TENANTS_QUERY_COUNT_FILE="$FAKE_TENANTS_QUERY_COUNT_FILE" \
-    FAKE_CANDIDATE_COMMIT="$FIXTURE_COMMIT" \
+    FAKE_CANDIDATE_COMMIT="$requested_commit" \
     FAKE_EXTERNAL_IMAGES="${FAKE_EXTERNAL_IMAGES:-postgres:16-alpine}" \
+    FAKE_SSH_FAIL_CLEANUP="${FAKE_SSH_FAIL_CLEANUP:-false}" \
+    FAKE_SSH_FINAL_ACTIVATE_EXIT="${FAKE_SSH_FINAL_ACTIVATE_EXIT:-}" \
     STAGED_TEST_NOW_EPOCH="$FAKE_NOW_EPOCH" \
+    STAGED_TEST_CUTOVER_NOW_EPOCH="${STAGED_TEST_CUTOVER_NOW_EPOCH:-}" \
     STAGED_TEST_AVAILABLE_BYTES="${STAGED_TEST_AVAILABLE_BYTES:-17179869184}" \
     HOME="$CASE_ROOT/home" \
     "$FIXTURE_REPO/scripts/deploy-production-staged.sh" \
@@ -468,9 +785,168 @@ deploy_command() {
     --ssh-port=22 \
     --identity-file="$IDENTITY_FILE" \
     --app-path=/opt/chatwoot-client-portal-v2 \
-    --commit="$FIXTURE_COMMIT" \
+    --commit="$requested_commit" \
     --known-hosts-file="$KNOWN_HOSTS_FILE" \
     "$@"
+}
+
+reset_activation_observation() {
+  : >"$FAKE_COMMAND_LOG"
+  : >"$FAKE_EVENT_LOG"
+  : >"$FAKE_EVENT_COUNTER"
+  : >"$FAKE_TENANTS_QUERY_COUNT_FILE"
+  rm -rf -- "$FAKE_CURL_STATE_DIR"
+  mkdir -p "$FAKE_CURL_STATE_DIR"
+}
+
+setup_activation_fixture() {
+  local name="$1"
+  local migration_path="${2:-}"
+
+  setup_prepare_fixture "$name" "$migration_path"
+  complete_activation_fixture_prepare
+}
+
+complete_activation_fixture_prepare() {
+  deploy_command prepare >"$CASE_ROOT/prepare-output" 2>&1 || {
+    sed 's/^/  prepare: /' "$CASE_ROOT/prepare-output" >&2
+    fail 'activation fixture prepare did not complete'
+  }
+  assert_status_once "$CASE_ROOT/prepare-output" prepared
+  PREPARED_COMMIT="$FIXTURE_COMMIT"
+  reset_activation_observation
+}
+
+activate_command() {
+  DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" deploy_command activate "$@"
+}
+
+assert_activation_refusal() {
+  local output="$1"
+  local expected_status="$2"
+  shift 2
+
+  if activate_command "$@" >"$output" 2>&1; then
+    sed 's/^/  output: /' "$output" >&2
+    fail 'activation unexpectedly succeeded'
+  fi
+  assert_status_once "$output" "$expected_status"
+}
+
+assert_activation_failure() {
+  local output="$1"
+  shift
+
+  if activate_command "$@" >"$output" 2>&1; then
+    sed 's/^/  output: /' "$output" >&2
+    fail 'activation unexpectedly succeeded'
+  fi
+  [[ "$(grep -Ec '^status=' "$output" || true)" == '1' ]] || {
+    sed 's/^/  output: /' "$output" >&2
+    fail 'failed activation did not emit exactly one status line'
+  }
+  ! grep -Fxq 'status=activation_succeeded' "$output" ||
+    fail 'failed activation reported success'
+}
+
+assert_activation_success() {
+  local output="$1"
+  shift
+
+  if ! activate_command "$@" >"$output" 2>&1; then
+    sed 's/^/  output: /' "$output" >&2
+    fail 'activation did not complete'
+  fi
+  assert_status_once "$output" activation_succeeded
+}
+
+activation_manifest_path() {
+  printf '%s/.releases/%s/manifest.txt\n' "$REMOTE_TEST_ROOT/app" "$PREPARED_COMMIT"
+}
+
+assert_no_compose_cutover() {
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker" and "compose" in fields and "up" in fields and "--help" not in fields:
+        raise SystemExit(f"unexpected compose cutover: {fields}")
+PY
+}
+
+assert_exact_compose_cutover() {
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker":
+        records.append(fields[1:])
+
+cutovers = [record for record in records if "compose" in record and "up" in record and "--help" not in record]
+if len(cutovers) != 1:
+    raise SystemExit(f"expected one compose cutover, got {cutovers}")
+record = cutovers[0]
+expected_tail = ["up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "120"]
+if record[-len(expected_tail):] != expected_tail:
+    raise SystemExit(f"compose cutover tail mismatch: {record}")
+for record in records:
+    if record and record[0] == "pull":
+        raise SystemExit(f"activation pulled an image: {record}")
+    if "compose" in record and "build" in record:
+        raise SystemExit(f"activation built an image: {record}")
+PY
+}
+
+assert_events_in_order() {
+  local expected
+  local -a expectations=("$@")
+
+  expected="$(printf '%s\n' "${expectations[@]}")"
+  EXPECTED_EVENTS="$expected" python3 - "$FAKE_EVENT_LOG" <<'PY'
+import os
+import pathlib
+import sys
+
+events = []
+for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    fields = line.split("\t", 3)
+    if len(fields) != 4:
+        raise SystemExit(f"invalid event line: {line!r}")
+    events.append((int(fields[0]), fields[2], fields[3]))
+
+cursor = -1
+for wanted in os.environ["EXPECTED_EVENTS"].splitlines():
+    name, separator, detail = wanted.partition("|")
+    matches = [sequence for sequence, event, value in events if sequence > cursor and event == name and (not separator or value == detail)]
+    if not matches:
+        raise SystemExit(f"missing ordered event {wanted!r} after {cursor}; events={events}")
+    cursor = matches[0]
+PY
+}
+
+assert_no_event() {
+  local event="$1"
+  local detail="${2:-}"
+  if awk -F '\t' -v event="$event" -v detail="$detail" \
+    '$3 == event && (detail == "" || $4 == detail) { found = 1 } END { exit found ? 0 : 1 }' \
+    "$FAKE_EVENT_LOG"; then
+    fail "unexpected event: $event${detail:+|$detail}"
+  fi
+}
+
+replace_fake_tag_id() {
+  local reference="$1"
+  local image_id="$2"
+  local tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+
+  awk -F '\t' -v ref="$reference" '$1 != ref' "$tags" >"$tags.tmp"
+  printf '%s\t%s\n' "$reference" "$image_id" >>"$tags.tmp"
+  mv "$tags.tmp" "$tags"
 }
 
 assert_no_transport() {
@@ -1140,7 +1616,7 @@ prepare_resolves_and_records_bounded_external_images() {
 }
 
 prepare_rejects_zero_duplicate_invalid_or_more_than_100_tenants() {
-  local output index invalid_url
+  local output index invalid_url matrix
 
   setup_prepare_fixture "$FUNCNAME-zero"
   output="$CASE_ROOT/output"
@@ -1162,9 +1638,15 @@ prepare_rejects_zero_duplicate_invalid_or_more_than_100_tenants() {
   printf '%s\t%s\n' 'Bad_Slug' https://alpha.example.test >"$FAKE_TENANTS_FILE"
   assert_prepare_failure "$output"
 
+  setup_prepare_fixture "$FUNCNAME-long-slug"
+  output="$CASE_ROOT/output"
+  printf '%s\t%s\n' "$(printf 'a%.0s' {1..64})" https://alpha.example.test >"$FAKE_TENANTS_FILE"
+  assert_prepare_failure "$output"
+
   for invalid_url in \
     http://alpha.example.test \
     https://user@alpha.example.test \
+    https://alpha.example.test:0 \
     https://alpha.example.test/path \
     'https://alpha.example.test?query=1' \
     'https://alpha.example.test#fragment'; do
@@ -1173,6 +1655,64 @@ prepare_rejects_zero_duplicate_invalid_or_more_than_100_tenants() {
     printf '%s\t%s\n' alpha "$invalid_url" >"$FAKE_TENANTS_FILE"
     assert_prepare_failure "$output"
   done
+
+  setup_prepare_fixture "$FUNCNAME-max-valid-bytes"
+  output="$CASE_ROOT/output"
+  python3 - "$FAKE_TENANTS_FILE" <<'PY'
+import pathlib
+
+path = pathlib.Path(__import__("sys").argv[1])
+prefix = "https://"
+origin = prefix + ("é" * ((2048 - len(prefix.encode())) // 2))
+if len(origin.encode()) != 2048:
+    raise SystemExit(1)
+rows = []
+for index in range(100):
+    seed = f"tenant-{index:03d}-"
+    slug = seed + ("a" * (63 - len(seed)))
+    rows.append(f"{slug}\t{origin}\n")
+body = "".join(rows).encode()
+if len(body) > 262144:
+    raise SystemExit(1)
+path.write_bytes(body)
+PY
+  deploy_command prepare >"$output" 2>&1 || {
+    sed 's/^/  output: /' "$output" >&2
+    fail 'prepare rejected the maximum valid UTF-8 tenant matrix'
+  }
+  assert_status_once "$output" prepared
+  matrix="$REMOTE_TEST_ROOT/app/.releases/$FIXTURE_COMMIT/tenants.tsv"
+  [[ "$(stat -c '%s' "$matrix")" -le 262144 ]] || fail 'accepted tenant matrix exceeded its byte bound'
+
+  setup_prepare_fixture "$FUNCNAME-origin-over-byte-bound"
+  output="$CASE_ROOT/output"
+  python3 - "$FAKE_TENANTS_FILE" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+prefix = "https://"
+origin = prefix + ("é" * ((2048 - len(prefix.encode())) // 2)) + "a"
+if len(origin.encode()) != 2049:
+    raise SystemExit(1)
+path.write_text(f"alpha\t{origin}\n", encoding="utf-8")
+PY
+  assert_prepare_failure "$output"
+
+  setup_prepare_fixture "$FUNCNAME-raw-matrix-over-byte-bound"
+  output="$CASE_ROOT/output"
+  python3 - "$FAKE_TENANTS_FILE" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+prefix = b"alpha\thttps://"
+body = prefix + (b"a" * (262145 - len(prefix) - 1)) + b"\n"
+if len(body) != 262145:
+    raise SystemExit(1)
+path.write_bytes(body)
+PY
+  assert_prepare_failure "$output"
 
   setup_prepare_fixture "$FUNCNAME-over-100"
   output="$CASE_ROOT/output"
@@ -1292,6 +1832,966 @@ prepare_artifacts_and_logs_contain_no_fixture_secret() {
     fail 'interrupted prepare retained a partial candidate directory'
 }
 
+activate_rejects_missing_expired_mismatched_or_incomplete_prepare() {
+  local output manifest checksum_before state old_previous
+
+  setup_activation_fixture "$FUNCNAME-missing"
+  output="$CASE_ROOT/output"
+  manifest="$(activation_manifest_path)"
+  checksum_before="$(sha256sum "$manifest" | awk '{print $1}')"
+  rm -f -- "$REMOTE_TEST_ROOT/app/.release-state/prepared"
+
+  assert_activation_refusal "$output" activation_refused_state_changed
+  [[ "$(sha256sum "$manifest" | awk '{print $1}')" == "$checksum_before" ]] ||
+    fail 'activation refusal rewrote the immutable prepared manifest'
+  grep -aq 'ssh' "$FAKE_COMMAND_LOG" ||
+    fail 'activation did not reach the remote prepared-state inspection boundary'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-expired"
+  output="$CASE_ROOT/output"
+  FAKE_NOW_EPOCH="$((FAKE_NOW_EPOCH + 86400))"
+  assert_activation_refusal "$output" activation_refused_expired
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/prepared" ]] ||
+    fail 'expired activation removed the prepared pointer'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-mismatched"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  printf '%s\n' "$CURRENT_COMMIT" >"$state/prepared"
+  chmod 0600 "$state/prepared"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-incomplete"
+  output="$CASE_ROOT/output"
+  rm -f -- "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/tenants.tsv"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-archive"
+  output="$CASE_ROOT/output"
+  printf '%s\n' 'corrupt archive evidence' >>"$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/source.tar.gz"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-missing-old-previous"
+  assert_activation_success "$CASE_ROOT/first-activation-output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  old_previous="$(<"$state/previous")"
+  advance_candidate_commit 'candidate after missing old previous'
+  complete_activation_fixture_prepare
+  rm -rf -- "$REMOTE_TEST_ROOT/app/.releases/$old_previous"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  [[ ! -e "$state/transaction" ]] || fail 'missing old previous created an activation transaction'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-corrupt-old-previous"
+  assert_activation_success "$CASE_ROOT/first-activation-output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  old_previous="$(<"$state/previous")"
+  advance_candidate_commit 'candidate after corrupt old previous'
+  complete_activation_fixture_prepare
+  printf '%s\n' 'post-prepare corruption' \
+    >>"$REMOTE_TEST_ROOT/app/.releases/$old_previous/source/release-content.txt"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  [[ ! -e "$state/transaction" ]] || fail 'corrupt old previous created an activation transaction'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-policy-on-none"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal \
+    "$output" activation_refused_migration_policy \
+    --migration-policy=backward-compatible --approval-ref=OPS-TEST-1
+  assert_no_compose_cutover
+}
+
+activate_rejects_active_env_image_or_tenant_matrix_drift() {
+  local output tag
+
+  setup_activation_fixture "$FUNCNAME-active"
+  output="$CASE_ROOT/output"
+  sed -i \
+    "s/source_commit=$CURRENT_COMMIT/source_commit=$PREPARED_COMMIT/" \
+    "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-env"
+  output="$CASE_ROOT/output"
+  printf '%s\n' 'POST_PREPARE_DRIFT=true' >>"$REMOTE_TEST_ROOT/app/.env.production"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-env-mode"
+  output="$CASE_ROOT/output"
+  chmod 0644 "$REMOTE_TEST_ROOT/app/.env.production"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-image"
+  output="$CASE_ROOT/output"
+  tag="chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT"
+  replace_fake_tag_id "$tag" "$CURRENT_BACKEND_ID"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-rollback-image"
+  output="$CASE_ROOT/output"
+  tag="chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT"
+  replace_fake_tag_id "$tag" "$CANDIDATE_BACKEND_ID"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_prepare_fixture "$FUNCNAME-external-image"
+  export FAKE_EXTERNAL_IMAGES='redis:7-alpine'
+  complete_activation_fixture_prepare
+  output="$CASE_ROOT/output"
+  replace_fake_tag_id 'redis:7-alpine' "$CURRENT_BACKEND_ID"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  unset FAKE_EXTERNAL_IMAGES
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-candidate-source"
+  output="$CASE_ROOT/output"
+  printf '%s\n' 'post-prepare candidate source drift' \
+    >"$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/source/release-content.txt"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-compose-override"
+  output="$CASE_ROOT/output"
+  printf '%s\n' \
+    '  portal-db:' \
+    '    image: attacker-controlled:latest' \
+    >>"$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/compose.release.yaml"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-tenants"
+  output="$CASE_ROOT/output"
+  printf '%s\t%s\n' \
+    alpha https://alpha.example.test \
+    zulu https://zulu.example.test >"$FAKE_TENANTS_FILE"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+}
+
+activate_accepts_newer_compatible_origin_main_orchestrator() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  advance_candidate_commit 'newer compatible activation orchestrator'
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+  [[ "$(<"$REMOTE_TEST_ROOT/app/.release-state/current")" == "$PREPARED_COMMIT" ]] ||
+    fail 'newer compatible orchestrator did not activate the prepared candidate'
+}
+
+activate_rejects_prepare_orchestrator_missing_from_origin_main() {
+  local output candidate orchestrator
+
+  setup_prepare_fixture "$FUNCNAME"
+  candidate="$FIXTURE_COMMIT"
+  advance_candidate_commit 'prepare-time orchestrator commit'
+  orchestrator="$FIXTURE_COMMIT"
+  DEPLOY_COMMIT_OVERRIDE="$candidate" deploy_command prepare >"$CASE_ROOT/prepare-output" 2>&1 ||
+    fail 'special orchestrator fixture did not prepare'
+  PREPARED_COMMIT="$candidate"
+  grep -Fxq "orchestrator_commit=$orchestrator" "$(activation_manifest_path)" ||
+    fail 'fixture did not record the newer prepare-time orchestrator'
+  reset_activation_observation
+
+  git -C "$FIXTURE_REPO" reset -q --hard "$candidate"
+  git -C "$FIXTURE_REPO" push -q --force origin main
+  FIXTURE_COMMIT="$candidate"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+}
+
+activate_rejects_incompatible_orchestrator_protocol() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  sed -i \
+    "s/readonly STAGED_PROTOCOL_VERSION='1'/readonly STAGED_PROTOCOL_VERSION='2'/" \
+    "$FIXTURE_REPO/scripts/deploy-production-staged.sh"
+  git -C "$FIXTURE_REPO" add scripts/deploy-production-staged.sh
+  git -C "$FIXTURE_REPO" commit -q -m 'incompatible activation orchestrator protocol'
+  git -C "$FIXTURE_REPO" push -q origin main
+  FIXTURE_COMMIT="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+  grep -aq 'ssh' "$FAKE_COMMAND_LOG" ||
+    fail 'protocol compatibility was not checked against prepared remote evidence'
+}
+
+first_activation_requires_matching_adoption_and_legacy_marker() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME-valid"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  assert_activation_success "$output"
+  [[ "$(<"$state/current")" == "$PREPARED_COMMIT" ]] || fail 'first activation current pointer mismatch'
+  [[ "$(<"$state/previous")" == "$CURRENT_COMMIT" ]] || fail 'first activation previous pointer mismatch'
+  [[ ! -e "$state/adoption" ]] || fail 'first activation retained the adoption pointer'
+  grep -Fxq 'record_kind=active_source' "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt" ||
+    fail 'first activation did not replace the legacy active marker'
+
+  setup_activation_fixture "$FUNCNAME-adoption-mismatch"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  printf '%s\n' "$PREPARED_COMMIT" >"$state/adoption"
+  chmod 0600 "$state/adoption"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-marker-missing"
+  output="$CASE_ROOT/output"
+  rm -f -- "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+}
+
+activate_rejects_unresolved_transaction_before_compose() {
+  local output transaction
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  transaction="$REMOTE_TEST_ROOT/app/.release-state/transaction"
+  printf '%s\n' \
+    'protocol_version=1' \
+    'record_kind=activation_transaction' \
+    "candidate_commit=$PREPARED_COMMIT" \
+    "previous_commit=$CURRENT_COMMIT" \
+    'migration_policy=automatic' \
+    'phase=cutover_started' \
+    'started_at_utc=2026-07-16T12:00:00Z' \
+    'updated_at_utc=2026-07-16T12:00:00Z' >"$transaction"
+  chmod 0600 "$transaction"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  assert_no_compose_cutover
+  [[ -f "$transaction" ]] || fail 'refused activation removed unresolved transaction evidence'
+}
+
+activation_transport_or_cleanup_failure_preserves_conservative_status() {
+  local output remote_dir state transport_exit
+
+  setup_activation_fixture "$FUNCNAME-cleanup"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  export FAKE_COMPOSE_UP_FAIL=true
+  export FAKE_SSH_FAIL_CLEANUP=true
+  assert_activation_failure "$output"
+  unset FAKE_COMPOSE_UP_FAIL FAKE_SSH_FAIL_CLEANUP
+  assert_status_once "$output" activation_failed_publication
+  grep -Fq 'Candidate Compose wait failed.' "$output" ||
+    fail 'cleanup-failure fixture did not receive an explicit publication failure'
+  grep -Fq 'remote delivery cleanup requires operator review' "$output" ||
+    fail 'cleanup SSH failure did not warn the operator'
+  [[ -f "$state/transaction" ]] || fail 'cleanup SSH failure lost activation transaction evidence'
+  remote_dir="$(tail -n 1 "$FAKE_REMOTE_DIR_LOG")"
+  [[ -n "$remote_dir" && -d "$remote_dir" ]] ||
+    fail 'cleanup SSH failure fixture did not retain its remote delivery directory'
+
+  setup_activation_fixture "$FUNCNAME-local-cleanup"
+  output="$CASE_ROOT/output"
+  rm() {
+    local argument
+    for argument in "$@"; do
+      [[ "$argument" != /tmp/chatwoot-client-portal-v2-local.* ]] || return 91
+    done
+    command rm "$@"
+  }
+  export -f rm
+  if ! deploy_command activate >"$output" 2>&1; then
+    export -n -f rm
+    unset -f rm
+    sed 's/^/  output: /' "$output" >&2
+    fail 'local cleanup failure changed a successful activation result'
+  fi
+  export -n -f rm
+  unset -f rm
+  assert_status_once "$output" activation_succeeded
+  grep -Fq 'local delivery cleanup requires operator review' "$output" ||
+    fail 'local cleanup failure did not warn the operator'
+
+  for transport_exit in 255 130; do
+    setup_activation_fixture "$FUNCNAME-final-$transport_exit"
+    output="$CASE_ROOT/output"
+    state="$REMOTE_TEST_ROOT/app/.release-state"
+    export FAKE_SSH_FINAL_ACTIVATE_EXIT="$transport_exit"
+    assert_activation_failure "$output"
+    unset FAKE_SSH_FINAL_ACTIVATE_EXIT
+    assert_status_once "$output" activation_failed_publication
+    grep -Fq 'Remote helper returned an invalid status record.' "$output" ||
+      fail "final activation SSH exit $transport_exit did not take the conservative transport-failure path"
+    [[ ! -e "$state/transaction" ]] ||
+      fail "final activation SSH exit $transport_exit unexpectedly created a transaction"
+    assert_no_compose_cutover
+    assert_remote_delivery_cleaned
+    python3 - "$FAKE_COMMAND_LOG" "$transport_exit" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "ssh":
+        records.append(fields[-1])
+inspect = [index for index, command in enumerate(records) if " inspect-prepared " in f" {command} "]
+activate = [
+    index
+    for index, command in enumerate(records)
+    if "/production-staged-release-remote.sh activate " in command
+]
+if len(inspect) != 1 or len(activate) != 1 or inspect[0] >= activate[0]:
+    raise SystemExit(
+        f"final SSH exit {sys.argv[2]} did not occur after one successful prepared inspection: {records}"
+    )
+PY
+  done
+}
+
+candidate_expiry_at_transaction_boundary_is_refused() {
+  local expires_epoch manifest output state
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  manifest="$(activation_manifest_path)"
+  expires_epoch="$(release_record_get_unique "$manifest" expires_at_epoch)" ||
+    fail 'expiry-boundary fixture could not read candidate expiry'
+  [[ "$expires_epoch" =~ ^[0-9]+$ ]] || fail 'expiry-boundary fixture has invalid expiry'
+
+  export STAGED_TEST_CUTOVER_NOW_EPOCH="$expires_epoch"
+  assert_activation_refusal "$output" activation_refused_expired
+  unset STAGED_TEST_CUTOVER_NOW_EPOCH
+  [[ ! -e "$state/transaction" ]] ||
+    fail 'candidate expiry at the transaction boundary created a journal'
+  assert_no_compose_cutover
+}
+
+activate_writes_cutover_journal_before_compose_up() {
+  local output transaction
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  transaction="$REMOTE_TEST_ROOT/app/.release-state/transaction"
+  export FAKE_COMPOSE_UP_FAIL=true
+  assert_activation_failure "$output"
+  unset FAKE_COMPOSE_UP_FAIL
+
+  [[ -f "$transaction" && ! -L "$transaction" ]] ||
+    fail 'Compose failure did not preserve the activation transaction'
+  grep -Fxq 'record_kind=activation_transaction' "$transaction" || fail 'transaction kind mismatch'
+  grep -Fxq "candidate_commit=$PREPARED_COMMIT" "$transaction" || fail 'transaction candidate mismatch'
+  grep -Fxq "previous_commit=$CURRENT_COMMIT" "$transaction" || fail 'transaction previous mismatch'
+  grep -Fxq 'migration_policy=automatic' "$transaction" || fail 'transaction automatic policy missing'
+  grep -Fxq 'phase=cutover_started' "$transaction" || fail 'transaction cutover phase mismatch'
+  [[ "$(stat -c '%a' "$transaction")" == '600' ]] || fail 'transaction is not private'
+  assert_events_in_order 'journal_write|cutover_started' 'compose_up|-d --no-build --pull never --wait --wait-timeout 120'
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/prepared" ]] ||
+    fail 'post-journal failure removed the prepared pointer'
+}
+
+activate_uses_no_build_pull_never_wait_120_exactly() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+  assert_exact_compose_cutover
+}
+
+activate_checks_built_service_running_health_and_restart_state() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME-not-running"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_NOT_RUNNING=portal-web
+  assert_activation_failure "$output"
+  unset FAKE_SERVICE_NOT_RUNNING
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  [[ -f "$state/transaction" ]] || fail 'not-running service failure lost its transaction'
+  [[ ! -e "$state/current" ]] || fail 'not-running service was published current'
+
+  setup_activation_fixture "$FUNCNAME-unhealthy"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_UNHEALTHY=portal-backend
+  assert_activation_failure "$output"
+  unset FAKE_SERVICE_UNHEALTHY
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'unhealthy service failure lost its transaction'
+
+  setup_activation_fixture "$FUNCNAME-duplicate"
+  output="$CASE_ROOT/output"
+  export FAKE_DUPLICATE_SERVICE_CONTAINER=telegram-bridge
+  assert_activation_failure "$output"
+  unset FAKE_DUPLICATE_SERVICE_CONTAINER
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'duplicate service container failure lost its transaction'
+
+  setup_activation_fixture "$FUNCNAME-restarted-at-capture"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_RESTARTED=portal-web
+  assert_activation_failure "$output"
+  unset FAKE_SERVICE_RESTARTED
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'initial service restart evidence lost its transaction'
+
+  setup_activation_fixture "$FUNCNAME-restart-after-smoke"
+  output="$CASE_ROOT/output"
+  export FAKE_RESTART_SERVICE_AFTER_CURL=portal-backend
+  assert_activation_failure "$output"
+  unset FAKE_RESTART_SERVICE_AFTER_CURL
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'post-start restart failure lost its transaction'
+  assert_no_event marker_rename current
+
+  setup_activation_fixture "$FUNCNAME-ps-command-failure"
+  output="$CASE_ROOT/output"
+  export FAKE_COMPOSE_PS_FAIL_SERVICE=portal-web
+  assert_activation_failure "$output"
+  unset FAKE_COMPOSE_PS_FAIL_SERVICE
+  assert_no_event marker_rename current
+
+  setup_activation_fixture "$FUNCNAME-scaled-after-smoke"
+  output="$CASE_ROOT/output"
+  export FAKE_SCALE_SERVICE_AFTER_CURL=portal-backend
+  assert_activation_failure "$output"
+  unset FAKE_SCALE_SERVICE_AFTER_CURL
+  assert_no_event marker_rename current
+
+  setup_activation_fixture "$FUNCNAME-no-healthcheck"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_WITHOUT_HEALTHCHECK=portal-web
+  assert_activation_success "$output"
+  unset FAKE_SERVICE_WITHOUT_HEALTHCHECK
+}
+
+smoke_checks_health_and_exact_tenant_slug_for_every_active_tenant() {
+  local output
+
+  setup_prepare_fixture "$FUNCNAME"
+  printf '%s\t%s\n' \
+    zulu https://zulu.example.test \
+    alpha https://alpha.example.test \
+    bravo https://bravo.example.test/ >"$FAKE_TENANTS_FILE"
+  complete_activation_fixture_prepare
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+urls = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "curl":
+        urls.append(fields[-1])
+expected = sorted(
+    f"https://{slug}.example.test/api/{endpoint}"
+    for slug in ("alpha", "bravo", "zulu")
+    for endpoint in ("health", "tenant")
+)
+if sorted(urls) != expected:
+    raise SystemExit(f"tenant smoke URL set mismatch: {urls}")
+PY
+  ! grep -q 'health-body-must-not-be-logged\|tenant-body-must-not-be-logged' "$output" ||
+    fail 'activation printed a public response body'
+  ! grep -R -q 'health-body-must-not-be-logged\|tenant-body-must-not-be-logged' \
+    "$REMOTE_TEST_ROOT/app/.release-state" "$REMOTE_TEST_ROOT/app/.releases" ||
+    fail 'activation persisted a public response body'
+
+  setup_activation_fixture "$FUNCNAME-slug-mismatch"
+  output="$CASE_ROOT/output"
+  export FAKE_CURL_SLUG_MISMATCH_PATTERN='alpha.example.test/api/tenant'
+  assert_activation_failure "$output"
+  unset FAKE_CURL_SLUG_MISMATCH_PATTERN
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'tenant slug mismatch lost the activation transaction'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/current" ]] ||
+    fail 'tenant slug mismatch published current'
+  assert_no_event root_sync
+  assert_no_event outcome_write activation_succeeded
+
+  setup_activation_fixture "$FUNCNAME-max-body-bytes"
+  output="$CASE_ROOT/output"
+  export FAKE_CURL_HEALTH_BODY_BYTES=65536
+  export FAKE_CURL_TENANT_BODY_BYTES=65536
+  assert_activation_success "$output"
+  unset FAKE_CURL_HEALTH_BODY_BYTES FAKE_CURL_TENANT_BODY_BYTES
+
+  setup_activation_fixture "$FUNCNAME-health-body-over-bound"
+  output="$CASE_ROOT/output"
+  export FAKE_CURL_HEALTH_BODY_BYTES=65537
+  assert_activation_failure "$output"
+  unset FAKE_CURL_HEALTH_BODY_BYTES
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'oversized health body lost the activation transaction'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/current" ]] ||
+    fail 'oversized health body published current'
+  assert_no_event root_sync
+
+  setup_activation_fixture "$FUNCNAME-tenant-body-over-bound"
+  output="$CASE_ROOT/output"
+  export FAKE_CURL_TENANT_BODY_BYTES=65537
+  assert_activation_failure "$output"
+  unset FAKE_CURL_TENANT_BODY_BYTES
+  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'oversized tenant body lost the activation transaction'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/current" ]] ||
+    fail 'oversized tenant body published current'
+  assert_no_event root_sync
+
+  setup_activation_fixture "$FUNCNAME-invalid-origin-direct"
+  (
+    local result_dir
+    result_dir="$(mktemp -d /tmp/chatwoot-client-portal-v2-smoke.XXXXXX)"
+    trap 'rm -rf -- "$result_dir"' EXIT
+    chmod 0700 "$result_dir"
+    if STAGED_TEST_MODE=1 \
+      STAGED_TEST_ROOT="$REMOTE_TEST_ROOT" \
+      STAGED_CURL_BIN="$FAKE_BIN/curl" \
+      STAGED_TEST_EVENT_RECORDER="$FAKE_BIN/record-event" \
+      FAKE_BIN="$FAKE_BIN" \
+      FAKE_COMMAND_LOG="$FAKE_COMMAND_LOG" \
+      FAKE_EVENT_LOG="$FAKE_EVENT_LOG" \
+      FAKE_EVENT_COUNTER="$FAKE_EVENT_COUNTER" \
+      FAKE_CURL_STATE_DIR="$FAKE_CURL_STATE_DIR" \
+      "$REMOTE_SCRIPT" __smoke-one alpha 'https://alpha.example.test/not-origin-only' "$result_dir"; then
+      fail 'direct smoke worker accepted a non-origin URL'
+    fi
+    [[ -z "$(find "$result_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]] ||
+      fail 'invalid direct smoke origin retained a response or result file'
+  )
+  assert_no_event curl_start
+}
+
+smoke_never_exceeds_five_workers_or_three_attempts() {
+  local output index maximum
+
+  setup_prepare_fixture "$FUNCNAME"
+  : >"$FAKE_TENANTS_FILE"
+  for index in $(seq -w 1 12); do
+    printf 'tenant-%s\thttps://tenant-%s.example.test\n' "$index" "$index" >>"$FAKE_TENANTS_FILE"
+  done
+  complete_activation_fixture_prepare
+  output="$CASE_ROOT/output"
+  export FAKE_CURL_DELAY_SECONDS=0.05
+  export FAKE_CURL_FAIL_PATTERN='tenant-03.example.test/api/health'
+  export FAKE_CURL_FAILURES_BEFORE_SUCCESS=2
+  assert_activation_success "$output"
+  unset FAKE_CURL_DELAY_SECONDS FAKE_CURL_FAIL_PATTERN FAKE_CURL_FAILURES_BEFORE_SUCCESS
+
+  maximum="$(<"$FAKE_CURL_STATE_DIR/max")"
+  [[ "$maximum" =~ ^[0-9]+$ && "$maximum" -ge 2 && "$maximum" -le 5 ]] ||
+    fail "fake curl concurrency was $maximum, expected 2..5"
+  python3 - "$FAKE_EVENT_LOG" <<'PY'
+import collections
+import pathlib
+import sys
+
+attempts = collections.Counter()
+for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    fields = line.split("\t", 3)
+    if len(fields) == 4 and fields[2] == "curl_attempt":
+        url, _, attempt = fields[3].rpartition("#")
+        attempts[url] = max(attempts[url], int(attempt))
+if not attempts or max(attempts.values()) > 3:
+    raise SystemExit(f"curl attempt bound violated: {attempts}")
+target = "https://tenant-03.example.test/api/health"
+if attempts[target] != 3:
+    raise SystemExit(f"retry fixture did not make exactly three attempts: {attempts[target]}")
+PY
+}
+
+smoke_uses_connect_5_total_15_delay_3_and_timeout_600() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields:
+        records.append(fields)
+timeout = [record for record in records if record[0] == "timeout"]
+xargs = [record for record in records if record[0] == "xargs"]
+curl = [record for record in records if record[0] == "curl"]
+if len(timeout) != 1 or timeout[0][1] != "600":
+    raise SystemExit(f"timeout invocation mismatch: {timeout}")
+if len(xargs) != 1 or xargs[0][1:6] != ["-0", "-n", "2", "-P", "5"]:
+    raise SystemExit(f"xargs invocation mismatch: {xargs}")
+expected_prefix = [
+    "curl", "--fail", "--silent", "--show-error", "--connect-timeout", "5",
+    "--max-time", "15", "--retry", "2", "--retry-delay", "3", "--retry-all-errors",
+    "--max-filesize", "65536",
+]
+if len(curl) != 2 or any(record[:len(expected_prefix)] != expected_prefix for record in curl):
+    raise SystemExit(f"curl invocation mismatch: {curl}")
+PY
+}
+
+activation_does_not_publish_source_or_markers_before_all_smoke_passes() {
+  local output marker_before source_before state
+
+  setup_prepare_fixture "$FUNCNAME"
+  printf '%s\t%s\n' \
+    alpha https://alpha.example.test \
+    zulu https://zulu.example.test >"$FAKE_TENANTS_FILE"
+  complete_activation_fixture_prepare
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  marker_before="$(sha256sum "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt" | awk '{print $1}')"
+  source_before="$(sha256sum "$REMOTE_TEST_ROOT/app/release-content.txt" | awk '{print $1}')"
+  export FAKE_CURL_FAIL_PATTERN='zulu.example.test/api/tenant'
+  export FAKE_CURL_FAILURES_BEFORE_SUCCESS=3
+  assert_activation_failure "$output"
+  unset FAKE_CURL_FAIL_PATTERN FAKE_CURL_FAILURES_BEFORE_SUCCESS
+
+  [[ "$(sha256sum "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt" | awk '{print $1}')" == "$marker_before" ]] ||
+    fail 'failed tenant smoke changed the active marker'
+  [[ "$(sha256sum "$REMOTE_TEST_ROOT/app/release-content.txt" | awk '{print $1}')" == "$source_before" ]] ||
+    fail 'failed tenant smoke changed the active root source'
+  [[ ! -e "$state/current" && ! -e "$state/previous" ]] ||
+    fail 'failed tenant smoke published staged pointers'
+  [[ -f "$state/transaction" && -f "$state/prepared" ]] ||
+    fail 'failed tenant smoke did not preserve prepared transaction evidence'
+  assert_no_event root_sync
+  assert_no_event marker_rename
+  assert_no_event outcome_write activation_succeeded
+}
+
+successful_publication_advances_journal_and_writes_markers_last() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  assert_activation_success "$output"
+  assert_events_in_order \
+    'journal_write|cutover_started' \
+    'compose_up|-d --no-build --pull never --wait --wait-timeout 120' \
+    'curl_success|https://alpha.example.test/api/health' \
+    'curl_success|https://alpha.example.test/api/tenant' \
+    'journal_write|candidate_healthy' \
+    'journal_write|root_sync_started' \
+    'root_sync' \
+    'journal_write|root_sync_completed' \
+    'marker_rename|DEPLOY_SOURCE.txt' \
+    'marker_rename|previous' \
+    'marker_rename|current' \
+    'journal_write|markers_published'
+  python3 - "$FAKE_EVENT_LOG" <<'PY'
+import pathlib
+import sys
+
+markers = []
+for line in pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    fields = line.split("\t", 3)
+    if len(fields) == 4 and fields[2] == "marker_rename":
+        markers.append(fields[3])
+if markers != ["DEPLOY_SOURCE.txt", "previous", "current"]:
+    raise SystemExit(f"authority marker order mismatch: {markers}")
+PY
+  [[ "$(<"$state/current")" == "$PREPARED_COMMIT" ]] || fail 'published current pointer mismatch'
+  [[ "$(<"$state/previous")" == "$CURRENT_COMMIT" ]] || fail 'published previous pointer mismatch'
+}
+
+successful_activation_records_outcome_then_clears_journal() {
+  local output state history outcome index epoch utc other_sha oldest_path retained_path
+  local original_commit first_candidate second_candidate cleanup_candidate cleanup_fail_ref tags
+  local -a outcomes=()
+
+  setup_activation_fixture "$FUNCNAME"
+  original_commit="$CURRENT_COMMIT"
+  first_candidate="$PREPARED_COMMIT"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  history="$state/history"
+  for index in $(seq 1 20); do
+    epoch="$((FAKE_NOW_EPOCH - 100 + index))"
+    utc="$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
+    printf -v other_sha '%040x' "$index"
+    printf '%s\n' \
+      'protocol_version=1' \
+      'record_kind=deployment_outcome' \
+      "candidate_commit=$other_sha" \
+      'previous_commit=none' \
+      'status=activation_succeeded' \
+      'failure_stage=none' \
+      "recorded_at_utc=$utc" \
+      "recorded_at_epoch=$epoch" \
+      >"$history/$epoch-$other_sha-activation_succeeded.txt"
+    chmod 0600 "$history/$epoch-$other_sha-activation_succeeded.txt"
+    [[ "$index" != '1' ]] || oldest_path="$history/$epoch-$other_sha-activation_succeeded.txt"
+    [[ "$index" != '2' ]] || retained_path="$history/$epoch-$other_sha-activation_succeeded.txt"
+  done
+
+  assert_activation_success "$output"
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f -name "*-$PREPARED_COMMIT-activation_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'successful activation outcome count mismatch'
+  outcome="${outcomes[0]}"
+  [[ "$(stat -c '%a' "$outcome")" == '600' ]] || fail 'activation outcome is not private'
+  grep -Fxq 'protocol_version=1' "$outcome" || fail 'outcome protocol mismatch'
+  grep -Fxq 'record_kind=deployment_outcome' "$outcome" || fail 'outcome kind mismatch'
+  grep -Fxq "candidate_commit=$PREPARED_COMMIT" "$outcome" || fail 'outcome candidate mismatch'
+  grep -Fxq "previous_commit=$CURRENT_COMMIT" "$outcome" || fail 'outcome previous mismatch'
+  grep -Fxq 'status=activation_succeeded' "$outcome" || fail 'outcome success status missing'
+  grep -Fxq 'failure_stage=none' "$outcome" || fail 'successful outcome has a failure stage'
+  [[ ! -e "$state/prepared" ]] || fail 'successful activation retained prepared pointer'
+  [[ ! -e "$state/transaction" ]] || fail 'successful activation retained transaction journal'
+  [[ "$(find "$history" -maxdepth 1 -type f | wc -l | tr -d ' ')" == '20' ]] ||
+    fail 'activation history retention did not keep exactly 20 records'
+  [[ ! -e "$oldest_path" ]] || fail 'activation history retained the oldest record'
+  [[ -f "$retained_path" ]] || fail 'activation history removed a newer retained record'
+  assert_events_in_order \
+    'journal_write|markers_published' \
+    'outcome_write|activation_succeeded' \
+    "prepared_remove|$PREPARED_COMMIT" \
+    'journal_remove|activation_succeeded'
+
+  advance_candidate_commit 'second staged activation candidate'
+  complete_activation_fixture_prepare
+  second_candidate="$PREPARED_COMMIT"
+  output="$CASE_ROOT/second-activation-output"
+  assert_activation_success "$output"
+  [[ "$(<"$state/current")" == "$second_candidate" ]] || fail 'second activation current pointer mismatch'
+  [[ "$(<"$state/previous")" == "$first_candidate" ]] || fail 'second activation previous pointer mismatch'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.releases/$original_commit" ]] ||
+    fail 'second activation retained the superseded original release'
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  ! grep -Fq ":$original_commit" "$tags" || fail 'second activation retained superseded full-SHA tags'
+  [[ -d "$REMOTE_TEST_ROOT/app/.releases/$first_candidate" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$second_candidate" ]] ||
+    fail 'second activation removed current or previous release evidence'
+
+  advance_candidate_commit 'cleanup warning activation candidate'
+  complete_activation_fixture_prepare
+  cleanup_candidate="$PREPARED_COMMIT"
+  cleanup_fail_ref="chatwoot-client-portal-v2-portal-backend:$first_candidate"
+  output="$CASE_ROOT/cleanup-warning-output"
+  export FAKE_IMAGE_RM_FAIL_REF="$cleanup_fail_ref"
+  assert_activation_success "$output"
+  unset FAKE_IMAGE_RM_FAIL_REF
+  grep -Fq 'bounded cleanup requires operator review' "$output" ||
+    fail 'post-success cleanup failure did not warn the operator'
+  [[ "$(<"$state/current")" == "$cleanup_candidate" &&
+    "$(<"$state/previous")" == "$second_candidate" ]] ||
+    fail 'cleanup warning activation did not retain truthful current/previous pointers'
+  [[ ! -e "$state/transaction" && ! -e "$state/prepared" ]] ||
+    fail 'post-success cleanup failure retained a resolved activation transaction'
+  [[ -d "$REMOTE_TEST_ROOT/app/.releases/$first_candidate" ]] ||
+    fail 'failed superseded cleanup removed its retained evidence directory'
+}
+
+root_sync_preserves_runtime_owned_paths() {
+  local output app path checksum index root_mode_before
+  local -a protected_paths=() protected_checksums=()
+
+  setup_prepare_fixture "$FUNCNAME"
+  mkdir -p "$FIXTURE_REPO/docs"
+  printf '%s\n' 'candidate env example' >"$FIXTURE_REPO/.env.example"
+  printf '%s\n' 'candidate nested dot-env' >"$FIXTURE_REPO/docs/.env"
+  git -C "$FIXTURE_REPO" add .env.example docs/.env
+  git -C "$FIXTURE_REPO" commit -q -m 'candidate tracked sync fixtures'
+  git -C "$FIXTURE_REPO" push -q origin main
+  FIXTURE_COMMIT="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
+  complete_activation_fixture_prepare
+
+  app="$REMOTE_TEST_ROOT/app"
+  chmod 0751 "$app"
+  root_mode_before="$(stat -c '%a' "$app")"
+  mkdir -p "$app/.git" "$app/.codex" "$app/.install" "$app/logs" "$app/backups"
+  printf '%s\n' runtime-env >"$app/.env"
+  printf '%s\n' runtime-backup >"$app/.env.production.backup.keep"
+  printf '%s\n' runtime-git >"$app/.git/keep"
+  printf '%s\n' runtime-codex >"$app/.codex/keep"
+  printf '%s\n' runtime-install >"$app/.install/keep"
+  printf '%s\n' runtime-log >"$app/logs/keep"
+  printf '%s\n' runtime-backup-dir >"$app/backups/keep"
+  printf '%s\n' runtime-bootstrap-marker >"$app/BOOTSTRAP_SOURCE.txt"
+  printf '%s\n' stale-root-file >"$app/stale-root-only.txt"
+  protected_paths=(
+    "$app/.env"
+    "$app/.env.production"
+    "$app/.env.production.backup.keep"
+    "$app/.git/keep"
+    "$app/.codex/keep"
+    "$app/.install/keep"
+    "$app/logs/keep"
+    "$app/backups/keep"
+    "$app/BOOTSTRAP_SOURCE.txt"
+  )
+  for path in "${protected_paths[@]}"; do
+    protected_checksums+=("$(sha256sum "$path" | awk '{print $1}')")
+  done
+
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+  [[ "$(stat -c '%a' "$app")" == "$root_mode_before" ]] ||
+    fail 'root sync changed the application root mode'
+  for index in "${!protected_paths[@]}"; do
+    path="${protected_paths[$index]}"
+    checksum="$(sha256sum "$path" | awk '{print $1}')"
+    [[ "$checksum" == "${protected_checksums[$index]}" ]] || fail "root sync changed runtime path: $path"
+  done
+  [[ ! -e "$app/stale-root-only.txt" ]] || fail 'root sync did not delete an obsolete tracked-root file'
+  grep -Fxq 'candidate env example' "$app/.env.example" || fail 'tracked env example was not updated'
+  grep -Fxq 'candidate nested dot-env' "$app/docs/.env" || fail 'root-only .env exclusion matched a nested file'
+  grep -Fxq 'candidate-content' "$app/release-content.txt" || fail 'candidate root source was not published'
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "rsync":
+        records.append(fields[1:])
+if len(records) != 1:
+    raise SystemExit(f"expected one root rsync: {records}")
+args = records[0]
+if args[:2] != ["-a", "--delete"]:
+    raise SystemExit(f"root rsync flags mismatch: {args}")
+exclusions = set()
+index = 0
+while index < len(args):
+    if args[index] == "--exclude" and index + 1 < len(args):
+        exclusions.add(args[index + 1])
+        index += 2
+    elif args[index].startswith("--exclude="):
+        exclusions.add(args[index].split("=", 1)[1])
+        index += 1
+    else:
+        index += 1
+expected = {
+    "/.env", "/.env.production", "/.env.production.backup.*", "/.git", "/.codex",
+    "/.install", "/.release-state", "/.releases", "/logs", "/backups",
+    "/BOOTSTRAP_SOURCE.txt", "/DEPLOY_SOURCE.txt",
+}
+if exclusions != expected:
+    raise SystemExit(f"root rsync exclusions mismatch: {sorted(exclusions)}")
+PY
+}
+
+root_sync_or_marker_failure_never_reports_success() {
+  local output state history
+
+  setup_activation_fixture "$FUNCNAME-rsync"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  history="$state/history"
+  export FAKE_RSYNC_FAIL=true
+  assert_activation_failure "$output"
+  unset FAKE_RSYNC_FAIL
+  assert_status_once "$output" activation_failed_publication
+  [[ -f "$state/transaction" ]] || fail 'root sync failure lost transaction evidence'
+  grep -Fxq 'phase=root_sync_started' "$state/transaction" || fail 'root sync failure journal phase mismatch'
+  [[ ! -e "$state/current" ]] || fail 'root sync failure published current'
+  ! find "$history" -maxdepth 1 -type f -name '*-activation_succeeded.txt' | grep -q . ||
+    fail 'root sync failure wrote a success outcome'
+
+  setup_activation_fixture "$FUNCNAME-rsync-after-copy"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  history="$state/history"
+  export FAKE_RSYNC_FAIL_AFTER_COPY=true
+  assert_activation_failure "$output"
+  unset FAKE_RSYNC_FAIL_AFTER_COPY
+  assert_status_once "$output" activation_failed_publication
+  [[ -f "$state/transaction" ]] || fail 'partial root sync failure lost transaction evidence'
+  grep -Fxq 'phase=root_sync_started' "$state/transaction" ||
+    fail 'partial root sync failure journal phase mismatch'
+  grep -Fxq 'candidate-content' "$REMOTE_TEST_ROOT/app/release-content.txt" ||
+    fail 'partial root sync fixture did not copy candidate source before failing'
+  [[ ! -e "$state/current" ]] || fail 'partial root sync failure published current'
+  ! find "$history" -maxdepth 1 -type f -name '*-activation_succeeded.txt' | grep -q . ||
+    fail 'partial root sync failure wrote a success outcome'
+  assert_no_event marker_rename
+  assert_no_event journal_remove activation_succeeded
+
+  setup_activation_fixture "$FUNCNAME-marker"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  history="$state/history"
+  export STAGED_TEST_FAIL_PUBLICATION_AT=previous
+  assert_activation_failure "$output"
+  unset STAGED_TEST_FAIL_PUBLICATION_AT
+  assert_status_once "$output" activation_failed_publication
+  [[ -f "$state/transaction" ]] || fail 'marker failure lost transaction evidence'
+  grep -Fxq 'phase=root_sync_completed' "$state/transaction" || fail 'marker failure journal phase mismatch'
+  [[ ! -e "$state/current" ]] || fail 'marker failure published current authority'
+  ! find "$history" -maxdepth 1 -type f -name '*-activation_succeeded.txt' | grep -q . ||
+    fail 'marker failure wrote a success outcome'
+  assert_no_event outcome_write activation_succeeded
+  assert_no_event journal_remove activation_succeeded
+}
+
+cleanup_helpers_propagate_removal_failure() {
+  STAGED_TEST_MODE=1 bash -Eeuo pipefail -s -- "$REMOTE_SCRIPT" <<'SH'
+remote_script="$1"
+root="$(mktemp -d /tmp/chatwoot-client-portal-v2-cleanup-test.XXXXXX)"
+library_dir="$root/library"
+mkdir -p "$library_dir"
+cp -- "$(dirname -- "$remote_script")/production-release-records.sh" "$library_dir/"
+python3 - "$remote_script" "$library_dir/production-staged-release-remote.sh" <<'PY'
+import pathlib
+import sys
+
+source, destination = map(pathlib.Path, sys.argv[1:])
+text = source.read_text(encoding="utf-8")
+marker = "\ntrap 'remote_on_error"
+boundary = text.rfind(marker)
+if boundary < 0:
+    raise SystemExit(1)
+destination.write_text(text[:boundary] + "\n", encoding="utf-8")
+PY
+# shellcheck source=/dev/null
+source "$library_dir/production-staged-release-remote.sh"
+
+smoke_dir="$(mktemp -d /tmp/chatwoot-client-portal-v2-smoke.XXXXXX)"
+env_dir="$(mktemp -d /tmp/chatwoot-client-portal-v2-env-check.XXXXXX)"
+activation_file="$(mktemp /tmp/chatwoot-client-portal-v2-activate-matrix.XXXXXX)"
+publication_file="$root/.release-activation.marker.test"
+health_body="$smoke_dir/.health.alpha.test"
+touch "$publication_file" "$health_body"
+trap 'command rm -rf -- "$root" "$smoke_dir" "$env_dir" "$activation_file"' EXIT
+
+REMOTE_PREPARE_ENV_TEMP="$env_dir"
+REMOTE_SMOKE_HEALTH_BODY="$health_body"
+REMOTE_PUBLICATION_MARKER_TEMP="$publication_file"
+REMOTE_ACTIVATION_RAW_TENANTS="$activation_file"
+REMOTE_SMOKE_RESULT_DIR="$smoke_dir"
+
+rm() { return 91; }
+
+if remote_cleanup_env_temp; then exit 1; fi
+[[ "$REMOTE_PREPARE_ENV_TEMP" == "$env_dir" && -d "$env_dir" ]] || exit 1
+if remote_cleanup_smoke_bodies; then exit 1; fi
+[[ "$REMOTE_SMOKE_HEALTH_BODY" == "$health_body" && -f "$health_body" ]] || exit 1
+if remote_cleanup_publication_temps; then exit 1; fi
+[[ "$REMOTE_PUBLICATION_MARKER_TEMP" == "$publication_file" && -f "$publication_file" ]] || exit 1
+if remote_cleanup_activation_temps; then exit 1; fi
+[[ "$REMOTE_ACTIVATION_RAW_TENANTS" == "$activation_file" && -f "$activation_file" ]] || exit 1
+[[ "$REMOTE_SMOKE_RESULT_DIR" == "$smoke_dir" && -d "$smoke_dir" ]] || exit 1
+SH
+}
+
 assert_all_prepare_outputs_are_redacted() {
   python3 - "$TMP_DIR" <<'PY'
 import pathlib
@@ -1360,10 +2860,35 @@ run_prepare_cases() {
   run_case prepare_artifacts_and_logs_contain_no_fixture_secret
 }
 
+run_activate_success_cases() {
+  run_case activate_rejects_missing_expired_mismatched_or_incomplete_prepare
+  run_case activate_rejects_active_env_image_or_tenant_matrix_drift
+  run_case activate_accepts_newer_compatible_origin_main_orchestrator
+  run_case activate_rejects_prepare_orchestrator_missing_from_origin_main
+  run_case activate_rejects_incompatible_orchestrator_protocol
+  run_case first_activation_requires_matching_adoption_and_legacy_marker
+  run_case activate_rejects_unresolved_transaction_before_compose
+  run_case activation_transport_or_cleanup_failure_preserves_conservative_status
+  run_case candidate_expiry_at_transaction_boundary_is_refused
+  run_case cleanup_helpers_propagate_removal_failure
+  run_case activate_writes_cutover_journal_before_compose_up
+  run_case activate_uses_no_build_pull_never_wait_120_exactly
+  run_case activate_checks_built_service_running_health_and_restart_state
+  run_case smoke_checks_health_and_exact_tenant_slug_for_every_active_tenant
+  run_case smoke_never_exceeds_five_workers_or_three_attempts
+  run_case smoke_uses_connect_5_total_15_delay_3_and_timeout_600
+  run_case activation_does_not_publish_source_or_markers_before_all_smoke_passes
+  run_case successful_publication_advances_journal_and_writes_markers_last
+  run_case successful_activation_records_outcome_then_clears_journal
+  run_case root_sync_preserves_runtime_owned_paths
+  run_case root_sync_or_marker_failure_never_reports_success
+}
+
 case "$FILTER" in
   all)
     run_bootstrap_cases
     run_prepare_cases
+    run_activate_success_cases
     ;;
   bootstrap)
     run_bootstrap_cases
@@ -1374,7 +2899,10 @@ case "$FILTER" in
   case:*)
     run_case "${FILTER#case:}"
     ;;
-  activate-success|rollback)
+  activate-success)
+    run_activate_success_cases
+    ;;
+  rollback)
     echo "No $FILTER cases registered yet."
     ;;
   *)

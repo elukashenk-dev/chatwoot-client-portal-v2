@@ -19,6 +19,9 @@ STAGED_SSH_OPTIONS=()
 STAGED_SCP_OPTIONS=()
 STAGED_INSPECTED_CURRENT=''
 STAGED_INSPECTED_IS_STAGED=''
+STAGED_PREPARED_CANDIDATE=''
+STAGED_PREPARED_ORCHESTRATOR=''
+STAGED_PREPARED_PROTOCOL=''
 
 staged_usage() {
   cat <<'EOF'
@@ -56,6 +59,15 @@ staged_on_error() {
     printf 'Staged deployment stopped unexpectedly at line %s.\n' "$line" >&2
     staged_emit_status "$STAGED_FAILURE_STATUS"
   fi
+  exit "$exit_code"
+}
+
+staged_on_signal() {
+  local exit_code="$1"
+  local signal_name="$2"
+
+  printf 'Staged deployment interrupted by %s.\n' "$signal_name" >&2
+  staged_emit_status "$STAGED_FAILURE_STATUS"
   exit "$exit_code"
 }
 
@@ -154,9 +166,16 @@ staged_validate_owned_file() {
 }
 
 staged_cleanup_local() {
-  if [[ -n "$STAGED_LOCAL_TEMP" && -d "$STAGED_LOCAL_TEMP" && "$STAGED_LOCAL_TEMP" == /tmp/* ]]; then
-    rm -rf -- "$STAGED_LOCAL_TEMP"
+  local path="$STAGED_LOCAL_TEMP"
+
+  [[ -n "$path" ]] || return 0
+  if [[ ! -e "$path" && ! -L "$path" ]]; then
+    STAGED_LOCAL_TEMP=''
+    return 0
   fi
+  [[ "$path" == /tmp/* && "$path" != '/tmp' && -d "$path" && ! -L "$path" ]] || return 1
+  rm -rf -- "$path" || return 1
+  [[ ! -e "$path" && ! -L "$path" ]] || return 1
   STAGED_LOCAL_TEMP=''
 }
 
@@ -174,7 +193,7 @@ staged_cleanup_remote() {
   "$STAGED_SSH_BIN_RESOLVED" \
     "${STAGED_SSH_OPTIONS[@]}" \
     "$STAGED_SSH_TARGET" \
-    "$command_text" >/dev/null
+    "$command_text" >/dev/null || return 1
   STAGED_REMOTE_TEMP=''
 }
 
@@ -217,6 +236,25 @@ staged_validate_inspection_record() {
   STAGED_INSPECTED_IS_STAGED="${BASH_REMATCH[1]}"
 }
 
+staged_validate_prepared_inspection_record() {
+  local output="$1"
+  local expected_candidate="$2"
+  local -a lines=()
+
+  mapfile -t lines <<<"$output"
+  (( ${#lines[@]} == 5 )) || return 1
+  [[ "${lines[0]}" == "protocol_version=$STAGED_PROTOCOL_VERSION" ]] || return 1
+  [[ "${lines[1]}" == 'record_kind=prepared_inspection' ]] || return 1
+  [[ "${lines[2]}" =~ ^candidate_commit=([0-9a-f]{40})$ ]] || return 1
+  STAGED_PREPARED_CANDIDATE="${BASH_REMATCH[1]}"
+  [[ "$STAGED_PREPARED_CANDIDATE" == "$expected_candidate" ]] || return 1
+  [[ "${lines[3]}" =~ ^orchestrator_commit=([0-9a-f]{40})$ ]] || return 1
+  STAGED_PREPARED_ORCHESTRATOR="${BASH_REMATCH[1]}"
+  [[ "${lines[4]}" =~ ^orchestrator_protocol_version=([0-9]+)$ ]] || return 1
+  STAGED_PREPARED_PROTOCOL="${BASH_REMATCH[1]}"
+  [[ "$STAGED_PREPARED_PROTOCOL" == "$STAGED_PROTOCOL_VERSION" ]]
+}
+
 staged_run_remote() {
   local command_text="$1"
   local output_variable="$2"
@@ -245,6 +283,7 @@ staged_main() {
   local known_hosts_file='' migration_policy='' approval_ref=''
   local argument name value host lookup archive_path archive_sha archive_name
   local current_archive_path current_archive_sha orchestrator_commit inspection_output inspection_exit
+  local prepared_inspection_output prepared_inspection_exit
   local remote_output remote_exit remote_status remote_command
   local remote_script records_script remote_count
   local -A seen=()
@@ -295,7 +334,12 @@ staged_main() {
   elif [[ "$phase" == 'prepare' ]]; then
     [[ -z "$migration_policy" && -z "$approval_ref" ]] || staged_fail 'Prepare does not accept activation decisions.' 2
   else
-    staged_fail 'Activate is unavailable until its complete invariant set is installed.' 1 activation_refused_state_changed
+    if [[ -n "$migration_policy" || -n "$approval_ref" ]]; then
+      [[ -n "$migration_policy" && -n "$approval_ref" ]] ||
+        staged_fail 'Activate requires migration policy and approval reference together.' 2
+      [[ "$migration_policy" == 'backward-compatible' || "$migration_policy" == 'forward-only' ]] ||
+        staged_fail 'Migration policy must be backward-compatible or forward-only.' 2
+    fi
   fi
 
   [[ "$app_path" == "$STAGED_APP_PATH" ]] || staged_fail "Application path must be $STAGED_APP_PATH." 2
@@ -358,13 +402,15 @@ staged_main() {
 
   umask 077
   STAGED_LOCAL_TEMP="$(mktemp -d /tmp/chatwoot-client-portal-v2-local.XXXXXX)"
-  archive_name='candidate.tar.gz'
-  [[ "$phase" != 'bootstrap' ]] || archive_name='source.tar.gz'
-  archive_path="$STAGED_LOCAL_TEMP/$archive_name"
-  staged_create_archive "$repo_root" "$commit" "$archive_path"
-  staged_validate_archive "$archive_path" || staged_fail 'Candidate archive contains an unsafe member.'
-  archive_sha="$(sha256sum "$archive_path" | awk '{print $1}')"
-  [[ "$archive_sha" =~ ^[0-9a-f]{64}$ ]] || staged_fail 'Unable to calculate archive checksum.'
+  if [[ "$phase" != 'activate' ]]; then
+    archive_name='candidate.tar.gz'
+    [[ "$phase" != 'bootstrap' ]] || archive_name='source.tar.gz'
+    archive_path="$STAGED_LOCAL_TEMP/$archive_name"
+    staged_create_archive "$repo_root" "$commit" "$archive_path"
+    staged_validate_archive "$archive_path" || staged_fail 'Candidate archive contains an unsafe member.'
+    archive_sha="$(sha256sum "$archive_path" | awk '{print $1}')"
+    [[ "$archive_sha" =~ ^[0-9a-f]{64}$ ]] || staged_fail 'Unable to calculate archive checksum.'
+  fi
 
   STAGED_REMOTE_TEMP="$(
     "$STAGED_SSH_BIN_RESOLVED" \
@@ -419,7 +465,7 @@ staged_main() {
       "--current-commit=$STAGED_INSPECTED_CURRENT" \
       "--orchestrator-commit=$orchestrator_commit" \
       "--orchestrator-protocol-version=$STAGED_PROTOCOL_VERSION"
-  else
+  elif [[ "$phase" == 'bootstrap' ]]; then
     "$STAGED_SCP_BIN_RESOLVED" \
       "${STAGED_SCP_OPTIONS[@]}" \
       "$archive_path" "$remote_script" "$records_script" \
@@ -433,20 +479,79 @@ staged_main() {
       "--archive-sha256=$archive_sha" \
       "--commit=$commit" \
       "--approval-ref=$approval_ref"
+  else
+    "$STAGED_SCP_BIN_RESOLVED" \
+      "${STAGED_SCP_OPTIONS[@]}" \
+      "$remote_script" "$records_script" \
+      "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged activation helpers.'
+
+    staged_shell_join remote_command \
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
+      inspect-prepared \
+      "--app-path=$app_path" \
+      "--candidate-commit=$commit"
+    staged_run_remote "$remote_command" prepared_inspection_output prepared_inspection_exit
+    (( prepared_inspection_exit == 0 )) || staged_fail 'Unable to inspect the prepared production release.'
+    staged_validate_prepared_inspection_record "$prepared_inspection_output" "$commit" ||
+      staged_fail 'Remote prepared inspection record is invalid.'
+    git -C "$repo_root" cat-file -e "${STAGED_PREPARED_ORCHESTRATOR}^{commit}" 2>/dev/null ||
+      staged_fail 'Prepared orchestrator commit does not exist locally.'
+    git -C "$repo_root" merge-base --is-ancestor "$STAGED_PREPARED_ORCHESTRATOR" origin/main ||
+      staged_fail 'Prepared orchestrator commit is no longer contained in origin/main.'
+
+    orchestrator_commit="$(git -C "$repo_root" rev-parse HEAD)"
+    local -a activation_arguments=(
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh"
+      activate
+      "--app-path=$app_path"
+      "--candidate-commit=$commit"
+      "--prepared-orchestrator-commit=$STAGED_PREPARED_ORCHESTRATOR"
+      "--orchestrator-commit=$orchestrator_commit"
+      "--orchestrator-protocol-version=$STAGED_PROTOCOL_VERSION"
+    )
+    if [[ -n "$migration_policy" ]]; then
+      activation_arguments+=("--migration-policy=$migration_policy" "--approval-ref=$approval_ref")
+    fi
+    staged_shell_join remote_command "${activation_arguments[@]}"
+    STAGED_FAILURE_STATUS='activation_failed_publication'
   fi
 
   staged_run_remote "$remote_command" remote_output remote_exit
   remote_count="$(staged_count_remote_status "$remote_output")"
   [[ "$remote_count" == '1' ]] || staged_fail 'Remote helper returned an invalid status record.'
   remote_status="$(grep -E '^status=' <<<"$remote_output" | cut -d= -f2-)"
+  if [[ "$phase" == 'activate' ]]; then
+    case "$remote_status" in
+      activation_succeeded) ;;
+      activation_refused_state_changed|activation_refused_expired|\
+        activation_refused_migration_policy|activation_failed_publication|\
+        candidate_failed_rollback_succeeded|candidate_failed_rollback_failed|\
+        candidate_failed_forward_only)
+        STAGED_FAILURE_STATUS="$remote_status"
+        ;;
+    esac
+  fi
   staged_print_remote_output_without_status "$remote_output"
 
-  staged_cleanup_remote || staged_fail 'Remote delivery cleanup failed.'
-  staged_cleanup_local
+  if ! staged_cleanup_remote; then
+    if [[ "$phase" == 'activate' ]]; then
+      printf 'Warning: activation result is unchanged, but remote delivery cleanup requires operator review.\n' >&2
+    else
+      staged_fail 'Remote delivery cleanup failed.'
+    fi
+  fi
+  if ! staged_cleanup_local; then
+    if [[ "$phase" == 'activate' ]]; then
+      printf 'Warning: activation result is unchanged, but local delivery cleanup requires operator review.\n' >&2
+    else
+      staged_fail 'Local delivery cleanup failed.'
+    fi
+  fi
 
   if (( remote_exit == 0 )) && {
     [[ "$phase" == 'bootstrap' && "$remote_status" == 'bootstrap_completed' ]] ||
-      [[ "$phase" == 'prepare' && "$remote_status" == 'prepared' ]]
+      [[ "$phase" == 'prepare' && "$remote_status" == 'prepared' ]] ||
+      [[ "$phase" == 'activate' && "$remote_status" == 'activation_succeeded' ]]
   }; then
     if [[ "$phase" == 'prepare' ]]; then
       printf 'Activation command:\n'
@@ -464,7 +569,11 @@ staged_main() {
   fi
 
   case "$remote_status" in
-    bootstrap_refused_nonempty|bootstrap_failed|prepare_failed)
+    bootstrap_refused_nonempty|bootstrap_failed|prepare_failed|\
+      activation_refused_state_changed|activation_refused_expired|\
+      activation_refused_migration_policy|activation_failed_publication|\
+      candidate_failed_rollback_succeeded|candidate_failed_rollback_failed|\
+      candidate_failed_forward_only)
       staged_emit_status "$remote_status"
       ;;
     *)
@@ -476,6 +585,9 @@ staged_main() {
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   trap 'staged_on_error "$?" "$LINENO"' ERR
+  trap 'staged_on_signal 129 HUP' HUP
+  trap 'staged_on_signal 130 INT' INT
+  trap 'staged_on_signal 143 TERM' TERM
   trap 'staged_cleanup_all || true' EXIT
   staged_main "$@"
 fi
