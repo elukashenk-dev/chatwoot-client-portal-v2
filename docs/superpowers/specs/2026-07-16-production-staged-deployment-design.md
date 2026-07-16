@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: revision pending confirmation
+Status: approved
 
 Confirmed follow-up: replace the one-step production activation path with one
 mandatory, testable staged deployment authority and add one fail-closed source
@@ -175,6 +175,8 @@ following:
 
 - the current local branch is `main`;
 - `git status --short` is empty;
+- after the required fetch, local `HEAD` exactly equals `origin/main`, so the
+  orchestrator/helper code itself is reviewed published source;
 - `--commit` is exactly 40 lowercase hexadecimal characters and resolves to a
   commit;
 - the commit is contained in the freshly fetched `origin/main` history;
@@ -189,6 +191,8 @@ SHA-256 before the remote helper accepts it.
 Each immutable prepared-release manifest records only non-secret evidence:
 
 - deploy protocol version;
+- orchestrator commit used for preparation;
+- orchestrator protocol version;
 - candidate commit and archive SHA-256;
 - preparation timestamp and expiry timestamp;
 - current production commit observed during preparation;
@@ -236,10 +240,10 @@ archive and writes a mode-0600 `BOOTSTRAP_SOURCE.txt` containing only protocol
 version, application name, full `source_commit`, archive checksum, timestamp
 and approval reference. It does not write `DEPLOY_SOURCE.txt`, create
 `.env.production`, invoke the installer, run Compose or start a container. The
-separately approved clean-install
-procedure performs configuration and startup. Only after that procedure's
-health checks pass may `scripts/install-production.sh` promote the bootstrap
-commit to `DEPLOY_SOURCE.txt` and remove `BOOTSTRAP_SOURCE.txt`.
+separately approved clean-install procedure performs configuration and startup.
+Only after that procedure's health checks pass may
+`scripts/install-production.sh` promote the bootstrap commit to
+`DEPLOY_SOURCE.txt` and remove `BOOTSTRAP_SOURCE.txt`.
 When a bootstrap marker exists, the installer must reject
 `--skip-public-health`; both the public health and tenant-resolution checks and
 the remaining install steps must complete before marker promotion.
@@ -265,6 +269,7 @@ backups and logs. Staged release state is kept under bounded hidden paths:
 .release-state/
   deploy.lock
   transaction
+  adoption
   current
   previous
   prepared
@@ -273,6 +278,7 @@ backups and logs. Staged release state is kept under bounded hidden paths:
 .releases/
   <full-commit-sha>/
     source/
+    source.tar.gz
     compose.release.yaml
     manifest.txt
     tenants.tsv
@@ -297,6 +303,21 @@ it proves the exact application, a full clean commit, `source_dirty=false` and
 no preview override. Once `.release-state/current` exists, the legacy format is
 rejected; this one-time reader is removed from the normal state path rather
 than becoming permanent compatibility behavior.
+
+During first staged preparation only, `.release-state/adoption` may point to
+the exact imported currently running clean commit while `current` remains
+absent and the root legacy marker remains unchanged. Activation requires that
+pointer, imported manifest, running image evidence and legacy marker to agree.
+On successful first activation, `current` becomes the candidate, `previous`
+becomes the adopted release, `adoption` is removed and the new active marker is
+published. No later staged state may contain `adoption` or read the legacy
+marker.
+
+If that first candidate fails but exact automatic rollback succeeds, the
+rechecked adopted release becomes `current`, a new active marker for that same
+commit is published, `adoption` is removed and no synthetic previous release is
+created. The candidate command still exits non-zero and records recovered
+failure.
 
 The active and previous release source directories remain present because
 Compose bind mounts and an exact rollback must not depend on a deleted source
@@ -366,7 +387,11 @@ the exact running release. Mutable upstream inputs remain separately open under
 entire cutover, smoke and possible rollback:
 
 1. Require a non-expired prepared manifest for the exact requested commit and
-   matching deploy protocol version.
+   matching deploy protocol version, and require that no unresolved transaction
+   journal exists. The prepare-time orchestrator commit must still be contained
+   in the freshly fetched `origin/main` history. The activating orchestrator may
+   be a newer reviewed `origin/main` tip, but its protocol version must equal the
+   one recorded by prepare; an incompatible protocol requires a new prepare.
 2. Re-read the active marker and refuse activation if production changed since
    preparation.
 3. Revalidate archive checksum, production env SHA-256, candidate/rollback
@@ -376,8 +401,10 @@ entire cutover, smoke and possible rollback:
    When a migration decision is required, write its policy and approval
    reference to a separate immutable activation-decision record before cutover;
    do not mutate the prepared manifest.
-4. Start the prepared release with the production project name and exact base
-   plus release override files using:
+4. Before any container mutation, atomically persist a transaction journal with
+   the exact old/new release IDs, migration policy and
+   `phase=cutover_started`. Then start the prepared release with the production
+   project name and exact base plus release override files using:
 
    ```text
    docker compose up -d --no-build --pull never --wait --wait-timeout 120
@@ -386,15 +413,18 @@ entire cutover, smoke and possible rollback:
 5. Check container health and restart counts.
 6. Check `/api/health` and `/api/tenant` for every active tenant public base URL.
    The returned tenant slug must equal the database-derived expected slug.
-7. Only after every check passes, publish the root source copy and active
-   markers through a recoverable transaction. First persist a transaction
-   journal containing the exact old/new release IDs and publication phase,
-   then synchronize the candidate source while preserving runtime-owned files,
-   and finally write `DEPLOY_SOURCE.txt`, `current` and `previous` via
-   mode-safe temporary files plus same-directory rename. Markers are published
-   last; the tool does not claim that a multi-file source synchronization is
-   filesystem-atomic.
+7. Only after every check passes, advance the journal through
+   `candidate_healthy`, `root_sync_started` and `root_sync_completed`, publish
+   the root source copy while preserving runtime-owned files, and finally write
+   `DEPLOY_SOURCE.txt`, `current` and `previous` via mode-safe temporary files
+   plus same-directory rename. Markers are published last; the tool does not
+   claim that a multi-file source synchronization is filesystem-atomic.
 8. Run bounded release cleanup and record a successful outcome.
+
+After the success outcome is durable, remove the transaction journal. An
+automatic rollback removes it only after the exact previous runtime, root
+source and markers are restored and rechecked. Forward-only failure, rollback
+failure or interruption preserves it.
 
 Any publication failure invokes the same migration-policy-aware recovery as a
 runtime failure. Automatic-rollback releases restore the exact previous
@@ -554,8 +584,8 @@ Every refusal and failure status exits non-zero. `prepared`,
 `activation_succeeded` and `bootstrap_completed` exit zero; the prepare and
 bootstrap successes state explicitly that production was not activated. Logs
 may include service names, tenant slugs, public base URLs, commit SHAs,
-checksums and image IDs.
-They must redact or omit environment values, tokens, cookies, database URLs,
+checksums and image IDs. They must redact or omit environment values, tokens,
+cookies, database URLs,
 customer identifiers and response bodies beyond the expected public tenant
 slug.
 
@@ -578,6 +608,8 @@ Required TDD scenarios:
 - dirty tree, non-main branch, incomplete SHA, unknown commit and commit outside
   `origin/main` fail before archive or network work;
 - archive content comes from the requested commit and its SHA-256 is verified;
+- archive inspection rejects absolute/traversing names and every symlink,
+  hardlink, device or FIFO member before extraction;
 - missing/unusable known-hosts input fails before SSH/SCP;
 - all SSH/SCP calls use strict host-key options and no script/workflow contains
   `ssh-keyscan`;
@@ -592,20 +624,25 @@ Required TDD scenarios:
   marker;
 - prepare requires exact candidate and rollback tags/IDs and rejects low disk;
 - first adoption accepts the existing source marker only for an exact clean
-  full commit and rejects legacy marker parsing after staged current state
+  full commit, uses the temporary `adoption` pointer without publishing
+  `current`, and rejects legacy marker parsing after staged current state
   exists;
 - a second or expired prepared candidate follows the bounded retention rules;
 - migration tree differences produce a gated manifest;
 - activate rejects expired, mismatched, state-changed or incompletely prepared
   candidates;
+- activation remains possible after a newer reviewed commit advances
+  `origin/main`, but rejects a prepare-time orchestrator commit no longer in
+  that history or an incompatible orchestrator protocol;
 - activation uses `--no-build --pull never --wait --wait-timeout 120`;
 - the remote lock rejects overlapping prepare/activate work;
 - success checks multiple tenant URLs and commits active state only after every
   tenant passes;
 - prepared manifests remain immutable while activation decisions and outcomes
   are written separately;
-- failure injection across root-source and marker publication proves the
-  transaction journal, exact rollback/restore and unresolved-state blocking;
+- failure injection before/after cutover, root-source synchronization and
+  marker publication proves the transaction journal, exact rollback/restore
+  and unresolved-state blocking;
 - tenant checks never exceed concurrency five and use the specified timeout and
   retry limits;
 - non-migration candidate failure performs exact rollback and exits non-zero;
@@ -664,6 +701,12 @@ acceptance criteria:
 - `F-OPS-004` production env propagation;
 - `F-SUPPLY-001` production advisory gate;
 - `F-SUPPLY-002` immutable upstream build and CI inputs.
+
+Create `F-OPS-007` for the deliberately time-boxed reader of the current
+pre-staged `DEPLOY_SOURCE.txt` format. Its removal trigger is the first
+successful real staged production activation with `.release-state/current`
+established; removal requires a later separately approved follow-up and must
+not be bundled into the implementation-only closure.
 
 Update `docs/roadmap/work-log.md` only after the complete implementation,
 review and verification establish the new stable operations baseline.
