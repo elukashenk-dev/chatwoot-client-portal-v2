@@ -526,3 +526,22 @@
   an eligible Chatwoot contact. A unified code-first flow reduces UI branching,
   keeps browser tokens out of the flow, preserves tenant/backend authority and
   avoids extra Chatwoot calls or DB writes on ordinary session checks.
+
+## D-030. Production code deploy uses one staged authority
+
+- дата: `2026-07-16`
+- решение:
+  Local operators and GitHub Actions use one exact-commit staged orchestrator.
+  Routine releases are prepared without cutover, then activated separately
+  from already-built images with bounded all-tenant smoke, a pre-cutover
+  transaction journal and policy-aware exact rollback. Clean reinstall source
+  delivery is a separately approved empty-root bootstrap that cannot start the
+  portal.
+- граница:
+  This decision does not authorize a real production rehearsal or deploy. The
+  temporary pre-staged source-marker reader remains tracked by `F-OPS-007`;
+  dependency/image digest and env-propagation findings remain separate.
+- причина:
+  The previous archive helper and independent workflow could replace/build the
+  active runtime without one immutable provenance, completion and rollback
+  contract.

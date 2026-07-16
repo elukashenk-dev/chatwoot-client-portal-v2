@@ -89,7 +89,7 @@ PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN
 On the portal VM:
 
 ```bash
-ssh ubuntu@93.77.166.238
+ssh -p 22 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/production_known_hosts" -o IdentitiesOnly=yes -i "$HOME/.ssh/production_deploy_key" ubuntu@93.77.166.238
 cd /opt/chatwoot-client-portal-v2
 
 run_backend() {

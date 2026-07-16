@@ -23,7 +23,6 @@ REMOTE_PREPARE_CANDIDATE_COMMIT=''
 REMOTE_PREPARE_CANDIDATE_DIR=''
 REMOTE_PREPARE_PUBLISHED='false'
 REMOTE_PREPARE_CREATED_TAGS=()
-REMOTE_PREPARE_OWNED_TAG_REFS=()
 REMOTE_PREPARE_ADOPTION_DIR=''
 REMOTE_PREPARE_ADOPTION_VERIFIED='false'
 REMOTE_PREPARE_ADOPTION_CREATED_TAGS=()
@@ -681,9 +680,11 @@ remote_remove_exact_tag() {
   local expected_id="$2"
   local actual
 
+  [[ "$expected_id" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   actual="$(remote_image_id "$reference")" || return 1
   [[ "$actual" == "$expected_id" ]] || return 1
-  "${REMOTE_DOCKER[@]}" image rm "$reference" >/dev/null || return 1
+  "${REMOTE_DOCKER[@]}" image rm "$expected_id" >/dev/null
+  ! remote_image_id "$reference" >/dev/null 2>&1
 }
 
 remote_write_release_override() {
@@ -1175,18 +1176,16 @@ remote_prepare_cleanup_attempt() {
   local item reference expected_id
 
   if (( ${#REMOTE_DOCKER[@]} > 0 )); then
-    for reference in "${REMOTE_PREPARE_OWNED_TAG_REFS[@]}"; do
-      if remote_image_id "$reference" >/dev/null 2>&1; then
-        "${REMOTE_DOCKER[@]}" image rm "$reference" >/dev/null 2>&1 || true
-      fi
+    for item in "${REMOTE_PREPARE_CREATED_TAGS[@]}"; do
+      reference="${item%%=*}"
+      expected_id="${item#*=}"
+      remote_remove_exact_tag "$reference" "$expected_id" >/dev/null 2>&1 || true
     done
     if [[ "$REMOTE_PREPARE_ADOPTION_VERIFIED" == 'false' ]]; then
       for item in "${REMOTE_PREPARE_ADOPTION_CREATED_TAGS[@]}"; do
         reference="${item%%=*}"
         expected_id="${item#*=}"
-        if [[ "$(remote_image_id "$reference" 2>/dev/null || true)" == "$expected_id" ]]; then
-          "${REMOTE_DOCKER[@]}" image rm "$reference" >/dev/null 2>&1 || true
-        fi
+        remote_remove_exact_tag "$reference" "$expected_id" >/dev/null 2>&1 || true
       done
     fi
   fi
@@ -1765,7 +1764,6 @@ remote_locked_prepare() {
   REMOTE_PREPARE_CANDIDATE_DIR=''
   REMOTE_PREPARE_PUBLISHED='false'
   REMOTE_PREPARE_CREATED_TAGS=()
-  REMOTE_PREPARE_OWNED_TAG_REFS=()
   REMOTE_PREPARE_ADOPTION_DIR=''
   REMOTE_PREPARE_ADOPTION_VERIFIED='false'
   REMOTE_PREPARE_ADOPTION_CREATED_TAGS=()
@@ -1829,7 +1827,6 @@ remote_locked_prepare() {
     if remote_image_id "$tag" >/dev/null 2>&1; then
       remote_prepare_abort 'A candidate full-SHA image tag already exists.'
     fi
-    REMOTE_PREPARE_OWNED_TAG_REFS+=("$tag")
   done
   "${REMOTE_COMPOSE[@]}" build portal-backend portal-web telegram-bridge >/dev/null 2>&1 ||
     remote_prepare_abort 'Candidate portal image build failed.'

@@ -166,7 +166,11 @@ Exit criteria:
 Status:
 
 - dedicated one-tenant clean reinstall flow exists and has been used;
-- routine clean archive deploy flow exists for already bootstrapped production;
+- local operators and GitHub Actions use one exact-commit staged deployment
+  authority: non-cutover prepare produces release evidence and prebuilt images,
+  while separate activate uses bounded all-tenant smoke, bounded release
+  retention and policy-aware exact rollback;
+- the first real staged rehearsal is still pending separate explicit approval;
 - central MT-10 operations index links routine deploy, clean reinstall,
   provisioning boundaries, domain rules, secret rotation, backup/restore and
   acceptance checklist;

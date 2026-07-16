@@ -386,8 +386,20 @@ case "${1:-}" in
         ;;
       rm)
         reference="${3:-}"
-        [[ "${FAKE_IMAGE_RM_FAIL_REF:-}" != "$reference" ]] || exit 88
-        awk -F '\t' -v ref="$reference" '$1 != ref' "$tag_file" >"$tag_file.tmp"
+        [[ "${FAKE_IMAGE_RM_FAIL_TARGET:-}" != "$reference" ]] || exit 88
+        if [[ -n "${FAKE_IMAGE_RM_RETAG_CANDIDATE_REF:-}" &&
+          ! -e "$FAKE_DOCKER_STATE_DIR/retagged-candidate-ref-on-image-rm" ]]; then
+          : >"$FAKE_DOCKER_STATE_DIR/retagged-candidate-ref-on-image-rm"
+          tag_set "$FAKE_IMAGE_RM_RETAG_CANDIDATE_REF" \
+            "${FAKE_IMAGE_RM_RETAG_IMAGE_ID:-$CURRENT_BACKEND_ID}"
+        fi
+        if [[ "$reference" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+          matches="$(awk -F '\t' -v image_id="$reference" '$2 == image_id { count += 1 } END { print count + 0 }' "$tag_file")"
+          (( matches <= 1 )) || exit 89
+          awk -F '\t' -v image_id="$reference" '$2 != image_id' "$tag_file" >"$tag_file.tmp"
+        else
+          awk -F '\t' -v ref="$reference" '$1 != ref' "$tag_file" >"$tag_file.tmp"
+        fi
         mv "$tag_file.tmp" "$tag_file"
         exit 0
         ;;
@@ -414,6 +426,7 @@ case "${1:-}" in
           exit 0
         fi
         if [[ "${1:-}" == '--images' ]]; then
+          [[ "${FAKE_COMPOSE_CONFIG_IMAGES_FAIL:-false}" != 'true' ]] || exit 80
           printf '%s\n' \
             "chatwoot-client-portal-v2-portal-backend:$release_commit" \
             "chatwoot-client-portal-v2-portal-web:$release_commit" \
@@ -430,6 +443,10 @@ case "${1:-}" in
         [[ "${FAKE_COMPOSE_BUILD_FAIL:-false}" != 'true' ]] || exit 81
         tag_set "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" \
           "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-backend)"
+        if [[ "${FAKE_COMPOSE_BUILD_RACE_CONFLICT_AFTER_BACKEND:-false}" == 'true' ]]; then
+          tag_set "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" \
+            "$CURRENT_BACKEND_ID"
+        fi
         [[ "${FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND:-false}" != 'true' ]] || exit 81
         tag_set "chatwoot-client-portal-v2-portal-web:$FAKE_CANDIDATE_COMMIT" \
           "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-web)"
@@ -1684,7 +1701,7 @@ prepare_classifies_each_migration_sensitive_path() {
 }
 
 prepare_builds_three_full_sha_tags_and_records_exact_ids() {
-  local output manifest tags candidate_backend_id candidate_web_id candidate_telegram_id
+  local output manifest tags candidate_backend_id candidate_web_id candidate_telegram_id partial_backend_id
   setup_prepare_fixture "$FUNCNAME"
   output="$CASE_ROOT/output"
   deploy_command prepare >"$output" 2>&1
@@ -1717,11 +1734,111 @@ prepare_builds_three_full_sha_tags_and_records_exact_ids() {
   setup_prepare_fixture "$FUNCNAME-partial-build"
   output="$CASE_ROOT/output"
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  partial_backend_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-backend)"
   export FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND=true
   assert_prepare_failure "$output"
   unset FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND
-  ! grep -Fq "chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT" "$tags" ||
-    fail 'partial candidate build left a full-SHA tag behind'
+  grep -Fqx "chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"$'\t'"$partial_backend_id" "$tags" ||
+    fail 'prepare abort removed a partial candidate tag whose image ID was not proven by this attempt'
+}
+
+prepare_abort_preserves_raced_unproven_candidate_tag() {
+  local output tags candidate_backend_tag
+
+  setup_prepare_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"
+  export FAKE_COMPOSE_BUILD_RACE_CONFLICT_AFTER_BACKEND=true
+  export FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND=true
+  assert_prepare_failure "$output"
+  unset FAKE_COMPOSE_BUILD_RACE_CONFLICT_AFTER_BACKEND FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND
+
+  grep -Fqx "$candidate_backend_tag"$'\t'"$CURRENT_BACKEND_ID" "$tags" ||
+    fail 'prepare abort removed or changed a raced candidate tag not proven by this attempt'
+}
+
+prepare_abort_cleanup_preserves_ref_retagged_after_exact_check() {
+  local output tags candidate_backend_tag candidate_web_tag candidate_telegram_tag
+  local candidate_backend_id candidate_web_id candidate_telegram_id
+
+  setup_prepare_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"
+  candidate_web_tag="chatwoot-client-portal-v2-portal-web:$FIXTURE_COMMIT"
+  candidate_telegram_tag="chatwoot-client-portal-v2-telegram-bridge:$FIXTURE_COMMIT"
+  candidate_backend_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-backend)"
+  candidate_web_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-web)"
+  candidate_telegram_id="$(fake_release_image_id "$FIXTURE_COMMIT" telegram-bridge)"
+  export FAKE_COMPOSE_CONFIG_IMAGES_FAIL=true
+  export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$candidate_backend_tag"
+  assert_prepare_failure "$output"
+  unset FAKE_COMPOSE_CONFIG_IMAGES_FAIL FAKE_IMAGE_RM_RETAG_CANDIDATE_REF
+
+  grep -Fqx "$candidate_backend_tag"$'\t'"$CURRENT_BACKEND_ID" "$tags" ||
+    fail 'prepare cleanup removed a candidate ref retagged after its exact-ID check'
+  ! grep -Fq "$candidate_web_tag" "$tags" ||
+    fail 'prepare cleanup retained a proven web candidate tag'
+  ! grep -Fq "$candidate_telegram_tag" "$tags" ||
+    fail 'prepare cleanup retained a proven Telegram candidate tag'
+  python3 - "$FAKE_COMMAND_LOG" \
+    "$candidate_backend_tag" "$candidate_backend_id" "$candidate_web_id" "$candidate_telegram_id" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker" and fields[1:3] == ["image", "rm"]:
+        records.append(fields[-1])
+
+retagged_ref, *expected_ids = sys.argv[2:]
+if retagged_ref in records:
+    raise SystemExit(f"cleanup removed mutable retagged ref: {records}")
+if sorted(records) != sorted(expected_ids):
+    raise SystemExit(f"cleanup did not target exactly the proven candidate IDs: {records}")
+PY
+}
+
+prepare_abort_cleanup_preserves_unverified_adoption_ref_retagged_after_check() {
+  local output tags adoption_backend_tag adoption_web_tag
+
+  setup_prepare_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  adoption_backend_tag="chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT"
+  adoption_web_tag="chatwoot-client-portal-v2-portal-web:$CURRENT_COMMIT"
+  export FAKE_MISSING_RUNNING_SERVICE=telegram-bridge
+  export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$adoption_backend_tag"
+  export FAKE_IMAGE_RM_RETAG_IMAGE_ID="$CANDIDATE_BACKEND_ID"
+  assert_prepare_failure "$output"
+  unset FAKE_MISSING_RUNNING_SERVICE FAKE_IMAGE_RM_RETAG_CANDIDATE_REF \
+    FAKE_IMAGE_RM_RETAG_IMAGE_ID
+
+  grep -Fqx "$adoption_backend_tag"$'\t'"$CANDIDATE_BACKEND_ID" "$tags" ||
+    fail 'prepare cleanup removed an unverified adoption ref retagged after its exact-ID check'
+  ! grep -Fq "$adoption_web_tag" "$tags" ||
+    fail 'prepare cleanup retained an unchanged proven adoption web tag'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/adoption" ]] ||
+    fail 'prepare published an unverified adoption pointer'
+  python3 - "$FAKE_COMMAND_LOG" \
+    "$adoption_backend_tag" "$CURRENT_BACKEND_ID" "$CURRENT_WEB_ID" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker" and fields[1:3] == ["image", "rm"]:
+        records.append(fields[-1])
+
+retagged_ref, *expected_ids = sys.argv[2:]
+if retagged_ref in records:
+    raise SystemExit(f"adoption cleanup removed mutable retagged ref: {records}")
+if sorted(records) != sorted(expected_ids):
+    raise SystemExit(f"adoption cleanup did not target exactly proven IDs: {records}")
+PY
 }
 
 prepare_resolves_and_records_bounded_external_images() {
@@ -1913,6 +2030,48 @@ prepare_rejects_second_candidate_and_safely_replaces_expired_candidate() {
     fail 'expired candidate backend tag was retained'
   grep -Fq "chatwoot-client-portal-v2-portal-backend:$second_candidate" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
     fail 'replacement candidate backend tag is missing'
+}
+
+prepare_expired_candidate_cleanup_preserves_retagged_ref_and_release_evidence() {
+  local output first_candidate state release_dir candidate_backend_tag candidate_backend_id
+
+  setup_prepare_fixture "$FUNCNAME"
+  deploy_command prepare >"$CASE_ROOT/first-output" 2>&1
+  first_candidate="$FIXTURE_COMMIT"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  release_dir="$REMOTE_TEST_ROOT/app/.releases/$first_candidate"
+  candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$first_candidate"
+  candidate_backend_id="$(fake_release_image_id "$first_candidate" portal-backend)"
+  FAKE_NOW_EPOCH="$((FAKE_NOW_EPOCH + 86400))"
+  advance_candidate_commit 'candidate after expired cleanup retag race'
+  output="$CASE_ROOT/output"
+  export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$candidate_backend_tag"
+  export FAKE_IMAGE_RM_RETAG_IMAGE_ID="$CURRENT_BACKEND_ID"
+  assert_prepare_failure "$output"
+  unset FAKE_IMAGE_RM_RETAG_CANDIDATE_REF FAKE_IMAGE_RM_RETAG_IMAGE_ID
+
+  [[ "$(<"$state/prepared")" == "$first_candidate" ]] ||
+    fail 'expired cleanup discarded prepared evidence after a retag race'
+  [[ -d "$release_dir" ]] || fail 'expired cleanup removed release evidence after a retag race'
+  grep -Fqx "$candidate_backend_tag"$'\t'"$CURRENT_BACKEND_ID" \
+    "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
+    fail 'expired cleanup removed the candidate ref retagged after its exact-ID check'
+  python3 - "$FAKE_COMMAND_LOG" "$candidate_backend_tag" "$candidate_backend_id" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker" and fields[1:3] == ["image", "rm"]:
+        records.append(fields[-1])
+
+retagged_ref, expected_id = sys.argv[2:]
+if retagged_ref in records:
+    raise SystemExit(f"expired cleanup removed mutable retagged ref: {records}")
+if expected_id not in records:
+    raise SystemExit(f"expired cleanup did not target the proven image ID: {records}")
+PY
 }
 
 prepare_never_calls_compose_up_or_changes_active_source() {
@@ -2658,7 +2817,7 @@ PY
 
 successful_activation_records_outcome_then_clears_journal() {
   local output state history outcome index epoch utc other_sha oldest_path retained_path
-  local original_commit first_candidate second_candidate cleanup_candidate cleanup_fail_ref tags
+  local original_commit first_candidate second_candidate cleanup_candidate cleanup_fail_id tags
   local -a outcomes=()
 
   setup_activation_fixture "$FUNCNAME"
@@ -2730,11 +2889,12 @@ successful_activation_records_outcome_then_clears_journal() {
   advance_candidate_commit 'cleanup warning activation candidate'
   complete_activation_fixture_prepare
   cleanup_candidate="$PREPARED_COMMIT"
-  cleanup_fail_ref="chatwoot-client-portal-v2-portal-backend:$first_candidate"
+  cleanup_fail_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$first_candidate/manifest.txt" backend_image_id)"
   output="$CASE_ROOT/cleanup-warning-output"
-  export FAKE_IMAGE_RM_FAIL_REF="$cleanup_fail_ref"
+  export FAKE_IMAGE_RM_FAIL_TARGET="$cleanup_fail_id"
   assert_activation_success "$output"
-  unset FAKE_IMAGE_RM_FAIL_REF
+  unset FAKE_IMAGE_RM_FAIL_TARGET
   grep -Fq 'bounded cleanup requires operator review' "$output" ||
     fail 'post-success cleanup failure did not warn the operator'
   [[ "$(<"$state/current")" == "$cleanup_candidate" &&
@@ -3434,7 +3594,7 @@ rollback_repeats_all_tenant_smoke_before_clearing_journal() {
 }
 
 successful_rollback_records_candidate_failed_rollback_succeeded() {
-  local output state history outcome candidate_tag
+  local output state history outcome candidate_web_id candidate_tag
   local -a outcomes=()
 
   setup_activation_fixture "$FUNCNAME"
@@ -3456,15 +3616,23 @@ successful_rollback_records_candidate_failed_rollback_succeeded() {
     fail 'successful rollback retained prepared or journal state'
   [[ ! -e "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
     fail 'successful rollback retained failed candidate artifacts'
+  for candidate_tag in \
+    "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    ! grep -Fq "$candidate_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
+      fail 'normal rollback cleanup retained a proven candidate tag'
+  done
 
   setup_activation_fixture "$FUNCNAME-cleanup-interrupted"
   output="$CASE_ROOT/output"
   state="$(task5_state_dir)"
-  candidate_tag="chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"
+  candidate_web_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" web_image_id)"
   export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
-  export FAKE_IMAGE_RM_FAIL_REF="$candidate_tag"
+  export FAKE_IMAGE_RM_FAIL_TARGET="$candidate_web_id"
   task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
-  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING FAKE_IMAGE_RM_FAIL_REF
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING FAKE_IMAGE_RM_FAIL_TARGET
   grep -Fq 'cleanup requires operator review' "$output" ||
     fail 'interrupted rollback cleanup omitted its operator warning'
   [[ -f "$state/prepared" && -f "$state/transaction" &&
@@ -3639,11 +3807,12 @@ critical_state_blocks_later_prepare_and_activate() {
     fail 'standalone terminal outcome allowed a new cutover'
 }
 
-recovered_candidate_is_removed_only_by_exact_owned_ids() {
-  local output tags unrelated_ref candidate_backend_id
+rollback_cleanup_retains_evidence_when_foreign_tag_shares_candidate_id() {
+  local output tags unrelated_ref candidate_backend_id state candidate_tag
 
   setup_activation_fixture "$FUNCNAME"
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  state="$(task5_state_dir)"
   unrelated_ref='operator-unrelated:keep'
   candidate_backend_id="$(release_record_get_unique \
     "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" backend_image_id)"
@@ -3652,8 +3821,61 @@ recovered_candidate_is_removed_only_by_exact_owned_ids() {
   export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
   task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
   unset FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
-  ! grep -Fq ":$PREPARED_COMMIT" "$tags" || fail 'recovered rollback retained candidate full-SHA tags'
+  grep -Fq 'cleanup requires operator review' "$output" ||
+    fail 'foreign tag collision omitted its operator recovery warning'
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'foreign tag collision discarded candidate cleanup evidence'
+  for candidate_tag in \
+    "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    grep -Fq "$candidate_tag" "$tags" ||
+      fail 'foreign tag collision removed a candidate tag without safe proof'
+  done
   grep -Fq "$unrelated_ref" "$tags" || fail 'rollback cleanup removed an unrelated image tag'
+}
+
+rollback_cleanup_preserves_ref_retagged_after_exact_check() {
+  local output tags state candidate_backend_tag candidate_backend_id
+
+  setup_activation_fixture "$FUNCNAME"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  state="$(task5_state_dir)"
+  candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT"
+  candidate_backend_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" backend_image_id)"
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$candidate_backend_tag"
+  export FAKE_IMAGE_RM_RETAG_IMAGE_ID="$CURRENT_BACKEND_ID"
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION \
+    FAKE_IMAGE_RM_RETAG_CANDIDATE_REF FAKE_IMAGE_RM_RETAG_IMAGE_ID
+
+  grep -Fq 'cleanup requires operator review' "$output" ||
+    fail 'retagged rollback cleanup omitted its operator recovery warning'
+  grep -Fqx "$candidate_backend_tag"$'\t'"$CURRENT_BACKEND_ID" "$tags" ||
+    fail 'rollback cleanup removed a candidate ref retagged after its exact-ID check'
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'retagged rollback cleanup discarded candidate cleanup evidence'
+  python3 - "$FAKE_COMMAND_LOG" "$candidate_backend_tag" "$candidate_backend_id" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields and fields[0] == "docker" and fields[1:3] == ["image", "rm"]:
+        records.append(fields[-1])
+
+retagged_ref, expected_id = sys.argv[2:]
+if retagged_ref in records:
+    raise SystemExit(f"rollback cleanup removed mutable retagged ref: {records}")
+if records != [expected_id]:
+    raise SystemExit(f"rollback cleanup did not target only the proven image ID: {records}")
+PY
 }
 
 no_failure_path_runs_down_migration_restore_prune_or_volume_delete() {
@@ -3788,10 +4010,14 @@ run_prepare_cases() {
   run_case prepare_rejects_compose_without_required_activation_flags
   run_case prepare_classifies_each_migration_sensitive_path
   run_case prepare_builds_three_full_sha_tags_and_records_exact_ids
+  run_case prepare_abort_preserves_raced_unproven_candidate_tag
+  run_case prepare_abort_cleanup_preserves_ref_retagged_after_exact_check
+  run_case prepare_abort_cleanup_preserves_unverified_adoption_ref_retagged_after_check
   run_case prepare_resolves_and_records_bounded_external_images
   run_case prepare_rejects_zero_duplicate_invalid_or_more_than_100_tenants
   run_case prepare_writes_sorted_matrix_and_immutable_manifest
   run_case prepare_rejects_second_candidate_and_safely_replaces_expired_candidate
+  run_case prepare_expired_candidate_cleanup_preserves_retagged_ref_and_release_evidence
   run_case prepare_never_calls_compose_up_or_changes_active_source
   run_case prepare_lock_rejects_overlap
   run_case prepare_artifacts_and_logs_contain_no_fixture_secret
@@ -3840,7 +4066,8 @@ run_rollback_cases() {
   run_case forward_only_failure_never_starts_previous_code
   run_case forward_only_failure_preserves_decision_candidate_runtime_and_journal
   run_case critical_state_blocks_later_prepare_and_activate
-  run_case recovered_candidate_is_removed_only_by_exact_owned_ids
+  run_case rollback_cleanup_retains_evidence_when_foreign_tag_shares_candidate_id
+  run_case rollback_cleanup_preserves_ref_retagged_after_exact_check
   run_case no_failure_path_runs_down_migration_restore_prune_or_volume_delete
 }
 

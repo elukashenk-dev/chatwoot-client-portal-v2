@@ -198,6 +198,47 @@ assert_active_operations_have_no_executable_ssh_keyscan() {
   fi
 }
 
+assert_active_operations_have_strict_executable_ssh() {
+  local matches
+
+  matches="$(awk '
+    /^[[:space:]]*(```|~~~)/ {
+      if (in_code_fence) {
+        in_code_fence = 0
+        next
+      }
+
+      in_code_fence = 1
+      shell_code_fence = $0 ~ /^[[:space:]]*(```|~~~)(bash|sh|shell|zsh|console)[[:space:]]*$/
+      next
+    }
+    !in_code_fence || !shell_code_fence { next }
+    {
+      line = $0
+      sub(/^[[:space:]]*(\$[[:space:]]+)?/, "", line)
+      if (line !~ /^ssh([[:space:]]|$)/) {
+        next
+      }
+
+      has_port = line ~ /(^|[[:space:]])-p[[:space:]]+22([[:space:]]|$)/
+      has_batch_mode = index(line, "-o BatchMode=yes")
+      has_strict_host_key_checking = index(line, "-o StrictHostKeyChecking=yes")
+      has_known_hosts = index(line, "-o UserKnownHostsFile=\"$HOME/.ssh/production_known_hosts\"")
+      has_identities_only = index(line, "-o IdentitiesOnly=yes")
+      has_identity_file = index(line, "-i \"$HOME/.ssh/production_deploy_key\"")
+
+      if (!(has_port && has_batch_mode && has_strict_host_key_checking && has_known_hosts && has_identities_only && has_identity_file)) {
+        printf "%s:%d:%s\\n", FILENAME, FNR, $0
+      }
+    }
+  ' "${ACTIVE_OPERATIONS_FILES[@]}")"
+  if [[ -n "$matches" ]]; then
+    fail "active operations guidance must use strict SSH options: $matches"
+  else
+    pass "active operations guidance uses strict SSH options"
+  fi
+}
+
 assert_ssh_keyscan_guard_rejects_fenced_forbidden_command() {
   local fixture
   local output
@@ -214,6 +255,25 @@ assert_ssh_keyscan_guard_rejects_fenced_forbidden_command() {
     pass 'ssh-keyscan guard rejects a fenced command with a forbidden comment'
   else
     fail 'ssh-keyscan guard must reject a fenced command with a forbidden comment'
+  fi
+}
+
+assert_ssh_guard_rejects_fenced_bare_command() {
+  local fixture
+  local output
+
+  fixture="$(mktemp)"
+  printf '%s\n' '```bash' 'ssh ubuntu@example.test' '```' >"$fixture"
+  output="$(
+    ACTIVE_OPERATIONS_FILES=("$fixture")
+    assert_active_operations_have_strict_executable_ssh 2>&1
+  )"
+  rm -f "$fixture"
+
+  if [[ "$output" == *'FAIL: active operations guidance must use strict SSH options:'* ]]; then
+    pass 'SSH guard rejects a fenced bare command'
+  else
+    fail 'SSH guard must reject a fenced bare command'
   fi
 }
 
@@ -246,7 +306,9 @@ assert_active_operations_absent --allow-dirty-preview
 assert_active_operations_absent --preview-label
 assert_active_operations_absent 'docker compose --env-file .env.production -f infra/production/compose.yaml up -d --build'
 assert_active_operations_have_no_executable_ssh_keyscan
+assert_active_operations_have_strict_executable_ssh
 assert_ssh_keyscan_guard_rejects_fenced_forbidden_command
+assert_ssh_guard_rejects_fenced_bare_command
 assert_file_contains "$NEW_LAPTOP_GUIDE" 'Fail closed: env drift fails `prepare`; use separate approved remediation.'
 for required_pattern in prepare activate --no-build '--pull never' PRODUCTION_SSH_KNOWN_HOSTS backward-compatible forward-only candidate_failed_rollback_succeeded '100 active tenants' 'five-worker'; do
   assert_file_contains "$CANONICAL_DEPLOYMENT_GUIDE" "$required_pattern"

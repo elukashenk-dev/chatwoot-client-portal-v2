@@ -100,12 +100,14 @@ execution-plan детали здесь не хранятся.
   `scripts/configure-tenant-domain-ingress.sh`: it verifies DNS, prepares a
   dedicated host Nginx portal site, backs up changed files, issues/verifies
   Let’s Encrypt TLS and checks `/api/tenant` before and after `tenant:create`.
-- Production deploy source tracking is explicit: clean deploys come from
-  reviewed commits, `origin/main` is synced, and `DEPLOY_SOURCE.txt` records
-  branch, commit and dirty status.
-- Current production code source is tracked on the VM in
-  `/opt/chatwoot-client-portal-v2/DEPLOY_SOURCE.txt` after each clean archive
-  deploy from reviewed `origin/main`.
+- Production code deployment tooling now has one exact-commit staged authority
+  for local operators and GitHub Actions: prepare is non-cutover, activate uses
+  prebuilt images, bounded all-tenant smoke, a pre-cutover journal and
+  policy-aware exact rollback.
+- Clean reinstall source delivery uses a separately approved empty-root
+  bootstrap that cannot configure or start production. The staged tooling is
+  locally verified with fake runtime coverage; no real staged production
+  rehearsal has yet been performed.
 - `F-CHAT-012` production rollout is complete for both active tenants: ordinary
   portal contacts no longer require a manually selected type, while group
   contacts require the explicit `portal_is_group` checkbox. Operator smoke
@@ -292,5 +294,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Await explicit user approval before starting the deferred Deep security
-  audit; do not start it automatically after F-CHAT-012 closure.
+- Obtain explicit user approval for the first real staged `prepare` rehearsal
+  from an exact clean `main` commit. Do not run `activate` automatically; the
+  deferred Deep security audit also remains behind separate explicit approval.

@@ -339,7 +339,7 @@ curl -fsS http://127.0.0.1:3301/api/health
 If production access is configured, also confirm:
 
 ```bash
-ssh ubuntu@93.77.166.238 'hostname && date'
+ssh -p 22 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/production_known_hosts" -o IdentitiesOnly=yes -i "$HOME/.ssh/production_deploy_key" ubuntu@93.77.166.238 'hostname && date'
 curl -fsS https://lk.provgroup.ru/api/health
 ```
 
