@@ -106,6 +106,12 @@ execution-plan детали здесь не хранятся.
 - Current production code source is tracked on the VM in
   `/opt/chatwoot-client-portal-v2/DEPLOY_SOURCE.txt` after each clean archive
   deploy from reviewed `origin/main`.
+- `F-CHAT-012` production rollout is complete for both active tenants: ordinary
+  portal contacts no longer require a manually selected type, while group
+  contacts require the explicit `portal_is_group` checkbox. Operator smoke
+  confirmed the ordinary and group chat paths. The unused legacy Chatwoot
+  definition remains temporarily available only for rollback and is tracked by
+  `F-CHAT-013` for a separate approved retirement window.
 
 ## Current Baseline
 
@@ -286,6 +292,5 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Complete the operator-gated production rollout for F-CHAT-012, verify an
-  ordinary email-code login plus known group chats, and only then close the
-  finding. Do not start Deep without explicit user approval.
+- Await explicit user approval before starting the deferred Deep security
+  audit; do not start it automatically after F-CHAT-012 closure.
