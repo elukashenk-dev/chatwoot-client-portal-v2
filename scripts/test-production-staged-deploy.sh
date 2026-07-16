@@ -55,6 +55,7 @@ FAKE_EVENT_LOG=''
 FAKE_EVENT_COUNTER=''
 FAKE_CURL_STATE_DIR=''
 FAKE_CONTAINER_STATE_FILE=''
+FAKE_RUNTIME_COMMIT_FILE=''
 PREPARED_COMMIT=''
 FAKE_NOW_EPOCH='1784203200'
 
@@ -67,6 +68,13 @@ readonly CANDIDATE_TELEGRAM_ID="sha256:$(printf '6%.0s' {1..64})"
 readonly EXTERNAL_POSTGRES_ID="sha256:$(printf '7%.0s' {1..64})"
 export CURRENT_BACKEND_ID CURRENT_WEB_ID CURRENT_TELEGRAM_ID
 export CANDIDATE_BACKEND_ID CANDIDATE_WEB_ID CANDIDATE_TELEGRAM_ID EXTERNAL_POSTGRES_ID
+
+fake_release_image_id() {
+  local commit="$1"
+  local service="$2"
+
+  printf 'sha256:%s\n' "$(printf '%s:%s' "$commit" "$service" | sha256sum | awk '{print $1}')"
+}
 
 write_fake_tools() {
   mkdir -p "$FAKE_BIN"
@@ -210,6 +218,13 @@ initialize_containers() {
     >"$container_file"
 }
 
+release_image_id() {
+  local commit="$1"
+  local service="$2"
+
+  printf 'sha256:%s\n' "$(printf '%s:%s' "$commit" "$service" | sha256sum | awk '{print $1}')"
+}
+
 container_field() {
   local container_id="$1"
   local field="$2"
@@ -226,31 +241,55 @@ container_field() {
   awk -F '\t' -v wanted="$container_id" -v column="$column" '$1 == wanted { print $column }' "$container_file" | tail -n1
 }
 
-set_candidate_containers() {
-  local service health running restarts
+set_release_containers() {
+  local release_dir="$1"
+  local release_commit="$2"
+  local manifest="$release_dir/manifest.txt"
+  local service health running restarts image_id key container_id
+  local candidate='false'
+
+  [[ "$release_commit" != "$FAKE_CANDIDATE_COMMIT" ]] || candidate='true'
   : >"$container_file.tmp"
   for service in portal-backend portal-web telegram-bridge; do
     running=true
-    [[ "$service" != "${FAKE_SERVICE_NOT_RUNNING:-}" ]] || running=false
+    if [[ "$service" == "${FAKE_SERVICE_NOT_RUNNING:-}" ||
+      ( "$candidate" == 'true' && "$service" == "${FAKE_CANDIDATE_SERVICE_NOT_RUNNING:-}" ) ]]; then
+      running=false
+    fi
     health=healthy
     [[ "$service" != 'telegram-bridge' ]] || health=none
     [[ "$service" != "${FAKE_SERVICE_WITHOUT_HEALTHCHECK:-}" ]] || health=none
     [[ "$service" != "${FAKE_SERVICE_UNHEALTHY:-}" ]] || health=unhealthy
+    if [[ "$candidate" == 'true' && "$service" == "${FAKE_CANDIDATE_SERVICE_UNHEALTHY:-}" ]]; then
+      health=unhealthy
+    fi
     restarts=0
     [[ "$service" != "${FAKE_SERVICE_RESTARTED:-}" ]] || restarts=1
+    if [[ "$candidate" == 'true' && "$service" == "${FAKE_CANDIDATE_SERVICE_RESTARTED:-}" ]]; then
+      restarts=1
+    fi
     case "$service" in
       portal-backend)
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-backend "$service" "$CANDIDATE_BACKEND_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        key='backend_image_id'
+        container_id='container-backend'
         ;;
       portal-web)
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-web "$service" "$CANDIDATE_WEB_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        key='web_image_id'
+        container_id='container-web'
         ;;
       telegram-bridge)
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' container-telegram "$service" "$CANDIDATE_TELEGRAM_ID" "$running" "$health" "$restarts" 2026-07-16T12:10:00Z
+        key='telegram_image_id'
+        container_id='container-telegram'
         ;;
-    esac >>"$container_file.tmp"
+    esac
+    image_id="$(awk -F= -v key="$key" '$1 == key { print $2 }' "$manifest")"
+    [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 78
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$container_id" "$service" "$image_id" "$running" "$health" "$restarts" \
+      2026-07-16T12:10:00Z >>"$container_file.tmp"
   done
   mv "$container_file.tmp" "$container_file"
+  printf '%s\n' "$release_commit" >"$FAKE_RUNTIME_COMMIT_FILE"
 }
 
 initialize_containers
@@ -279,6 +318,11 @@ tag_lookup() {
       return
       ;;
   esac
+
+  if [[ "$reference" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    printf '%s\n' "$reference"
+    return
+  fi
 
   value="$(awk -F '\t' -v ref="$reference" '$1 == ref { print $2 }' "$tag_file" | tail -n1)"
   [[ -n "$value" ]] || return 1
@@ -356,6 +400,10 @@ case "${1:-}" in
     [[ "${3:-}" == '--env-file' && "${4:-}" == */app/.env.production ]] || exit 78
     [[ "${5:-}" == '-f' && "${6:-}" == */source/infra/production/compose.yaml ]] || exit 78
     [[ "${7:-}" == '-f' && "${8:-}" == */compose.release.yaml ]] || exit 78
+    release_dir="${6%/source/infra/production/compose.yaml}"
+    [[ "${8:-}" == "$release_dir/compose.release.yaml" ]] || exit 78
+    release_commit="${release_dir##*/}"
+    [[ "$release_commit" =~ ^[0-9a-f]{40}$ ]] || exit 78
     shift 8
     compose_command="${1:-}"
     shift || true
@@ -367,9 +415,9 @@ case "${1:-}" in
         fi
         if [[ "${1:-}" == '--images' ]]; then
           printf '%s\n' \
-            "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" \
-            "chatwoot-client-portal-v2-portal-web:$FAKE_CANDIDATE_COMMIT" \
-            "chatwoot-client-portal-v2-telegram-bridge:$FAKE_CANDIDATE_COMMIT"
+            "chatwoot-client-portal-v2-portal-backend:$release_commit" \
+            "chatwoot-client-portal-v2-portal-web:$release_commit" \
+            "chatwoot-client-portal-v2-telegram-bridge:$release_commit"
           if [[ -n "${FAKE_EXTERNAL_IMAGES:-}" ]]; then
             printf '%s\n' "$FAKE_EXTERNAL_IMAGES"
           fi
@@ -380,10 +428,13 @@ case "${1:-}" in
       build)
         [[ "$*" == 'portal-backend portal-web telegram-bridge' ]] || exit 78
         [[ "${FAKE_COMPOSE_BUILD_FAIL:-false}" != 'true' ]] || exit 81
-        tag_set "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" "$CANDIDATE_BACKEND_ID"
+        tag_set "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" \
+          "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-backend)"
         [[ "${FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND:-false}" != 'true' ]] || exit 81
-        tag_set "chatwoot-client-portal-v2-portal-web:$FAKE_CANDIDATE_COMMIT" "$CANDIDATE_WEB_ID"
-        tag_set "chatwoot-client-portal-v2-telegram-bridge:$FAKE_CANDIDATE_COMMIT" "$CANDIDATE_TELEGRAM_ID"
+        tag_set "chatwoot-client-portal-v2-portal-web:$FAKE_CANDIDATE_COMMIT" \
+          "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-web)"
+        tag_set "chatwoot-client-portal-v2-telegram-bridge:$FAKE_CANDIDATE_COMMIT" \
+          "$(release_image_id "$FAKE_CANDIDATE_COMMIT" telegram-bridge)"
         ;;
       ps)
         [[ "${1:-}" == '-q' ]] || exit 78
@@ -426,10 +477,51 @@ case "${1:-}" in
         fi
         [[ "$*" == '-d --no-build --pull never --wait --wait-timeout 120' ]] || exit 82
         "$FAKE_BIN/record-event" compose_up "$*"
+        "$FAKE_BIN/record-event" compose_release "$release_commit"
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          "${FAKE_CANDIDATE_COMPOSE_UP_FAIL:-false}" == 'true' ]]; then
+          exit 82
+        fi
+        if [[ "$release_commit" != "$FAKE_CANDIDATE_COMMIT" &&
+          "${FAKE_ROLLBACK_COMPOSE_UP_FAIL:-false}" == 'true' ]]; then
+          exit 82
+        fi
         [[ "${FAKE_COMPOSE_UP_FAIL:-false}" != 'true' ]] || exit 82
         exec 9>"$container_lock"
         flock -x 9
-        set_candidate_containers
+        set_release_containers "$release_dir" "$release_commit"
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          -n "${FAKE_TAMPER_TRANSACTION_POLICY:-}" ]]; then
+          transaction="$STAGED_TEST_ROOT/app/.release-state/transaction"
+          case "$FAKE_TAMPER_TRANSACTION_POLICY" in
+            missing)
+              awk -F= '$1 != "migration_policy"' "$transaction" >"$transaction.tmp"
+              ;;
+            automatic|backward-compatible|forward-only)
+              awk -F= -v policy="$FAKE_TAMPER_TRANSACTION_POLICY" \
+                '$1 == "migration_policy" { print "migration_policy=" policy; next } { print }' \
+                "$transaction" >"$transaction.tmp"
+              ;;
+            *) exit 78 ;;
+          esac
+          chmod 0600 "$transaction.tmp"
+          mv "$transaction.tmp" "$transaction"
+          "$FAKE_BIN/record-event" transaction_policy_tamper "$FAKE_TAMPER_TRANSACTION_POLICY"
+        fi
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          -n "${FAKE_TAMPER_TRANSACTION_PHASE:-}" ]]; then
+          transaction="$STAGED_TEST_ROOT/app/.release-state/transaction"
+          awk -F= -v phase="$FAKE_TAMPER_TRANSACTION_PHASE" \
+            '$1 == "phase" { print "phase=" phase; next } { print }' \
+            "$transaction" >"$transaction.tmp"
+          chmod 0600 "$transaction.tmp"
+          mv "$transaction.tmp" "$transaction"
+          "$FAKE_BIN/record-event" transaction_phase_tamper "$FAKE_TAMPER_TRANSACTION_PHASE"
+        fi
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          "${FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" == 'true' ]]; then
+          exit 82
+        fi
         [[ "${FAKE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" != 'true' ]] || exit 82
         exit 0
         ;;
@@ -499,6 +591,18 @@ sleep "${FAKE_CURL_DELAY_SECONDS:-0.02}"
 failures=0
 if [[ -n "${FAKE_CURL_FAIL_PATTERN:-}" && "$url" == *"$FAKE_CURL_FAIL_PATTERN"* ]]; then
   failures="${FAKE_CURL_FAILURES_BEFORE_SUCCESS:-3}"
+fi
+runtime_commit=''
+[[ ! -s "$FAKE_RUNTIME_COMMIT_FILE" ]] || runtime_commit="$(<"$FAKE_RUNTIME_COMMIT_FILE")"
+if [[ "$runtime_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+  -n "${FAKE_CANDIDATE_CURL_FAIL_PATTERN:-}" &&
+  "$url" == *"$FAKE_CANDIDATE_CURL_FAIL_PATTERN"* ]]; then
+  failures="${FAKE_CANDIDATE_CURL_FAILURES_BEFORE_SUCCESS:-3}"
+fi
+if [[ -n "$runtime_commit" && "$runtime_commit" != "$FAKE_CANDIDATE_COMMIT" &&
+  -n "${FAKE_ROLLBACK_CURL_FAIL_PATTERN:-}" &&
+  "$url" == *"$FAKE_ROLLBACK_CURL_FAIL_PATTERN"* ]]; then
+  failures="${FAKE_ROLLBACK_CURL_FAILURES_BEFORE_SUCCESS:-3}"
 fi
 [[ "$failures" =~ ^[0-3]$ ]] || exit 83
 for attempt in 1 2 3; do
@@ -585,9 +689,31 @@ set -Eeuo pipefail
   printf '%s\0' "$@"
   printf '\0'
 } >>"$FAKE_COMMAND_LOG"
-"$FAKE_BIN/record-event" root_sync "$*"
+dry_run='false'
+for argument in "$@"; do
+  [[ "$argument" != '--dry-run' ]] || dry_run='true'
+done
+if [[ "$dry_run" == 'true' ]]; then
+  "$FAKE_BIN/record-event" root_verify "$*"
+else
+  "$FAKE_BIN/record-event" root_sync "$*"
+fi
 [[ "${FAKE_RSYNC_FAIL:-false}" != 'true' ]] || exit 84
+source_path="${@: -2:1}"
+if [[ -n "${FAKE_CANDIDATE_RSYNC_FAIL:-}" &&
+  "$source_path" == *"/$FAKE_CANDIDATE_COMMIT/source/" ]]; then
+  exit 84
+fi
 "${REAL_RSYNC_BIN:-/usr/bin/rsync}" "$@"
+destination_path="${@: -1}"
+if [[ "$dry_run" == 'false' && "${FAKE_ROLLBACK_RSYNC_CORRUPT_AFTER_COPY:-false}" == 'true' &&
+  "$source_path" != *"/$FAKE_CANDIDATE_COMMIT/source/" ]]; then
+  printf '%s\n' 'corrupted-after-successful-rollback-rsync' >"$destination_path/release-content.txt"
+fi
+if [[ "${FAKE_CANDIDATE_RSYNC_FAIL_AFTER_COPY:-false}" == 'true' &&
+  "$source_path" == *"/$FAKE_CANDIDATE_COMMIT/source/" ]]; then
+  exit 84
+fi
 [[ "${FAKE_RSYNC_FAIL_AFTER_COPY:-false}" != 'true' ]] || exit 84
 SH
 
@@ -640,6 +766,7 @@ setup_fixture() {
   FAKE_EVENT_COUNTER="$CASE_ROOT/event-counter"
   FAKE_CURL_STATE_DIR="$CASE_ROOT/curl-state"
   FAKE_CONTAINER_STATE_FILE="$FAKE_DOCKER_STATE_DIR/containers.tsv"
+  FAKE_RUNTIME_COMMIT_FILE="$FAKE_DOCKER_STATE_DIR/runtime-commit"
   PREPARED_COMMIT=''
   IDENTITY_FILE="$CASE_ROOT/identity"
   KNOWN_HOSTS_FILE="$CASE_ROOT/known-hosts"
@@ -682,6 +809,7 @@ setup_fixture() {
   git -C "$FIXTURE_REPO" push -q -u origin main
   FIXTURE_COMMIT="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
   CURRENT_COMMIT="$FIXTURE_COMMIT"
+  printf '%s\n' "$CURRENT_COMMIT" >"$FAKE_RUNTIME_COMMIT_FILE"
   printf '%s\t%s\n' 'alpha' 'https://alpha.example.test' >"$FAKE_TENANTS_FILE"
 
   write_fake_tools
@@ -766,6 +894,7 @@ deploy_command() {
     FAKE_REMOTE_DIR_LOG="$FAKE_REMOTE_DIR_LOG" \
     FAKE_DOCKER_STATE_DIR="$FAKE_DOCKER_STATE_DIR" \
     FAKE_CONTAINER_STATE_FILE="$FAKE_CONTAINER_STATE_FILE" \
+    FAKE_RUNTIME_COMMIT_FILE="$FAKE_RUNTIME_COMMIT_FILE" \
     FAKE_EVENT_LOG="$FAKE_EVENT_LOG" \
     FAKE_EVENT_COUNTER="$FAKE_EVENT_COUNTER" \
     FAKE_CURL_STATE_DIR="$FAKE_CURL_STATE_DIR" \
@@ -1546,21 +1675,24 @@ prepare_classifies_each_migration_sensitive_path() {
 }
 
 prepare_builds_three_full_sha_tags_and_records_exact_ids() {
-  local output manifest tags
+  local output manifest tags candidate_backend_id candidate_web_id candidate_telegram_id
   setup_prepare_fixture "$FUNCNAME"
   output="$CASE_ROOT/output"
   deploy_command prepare >"$output" 2>&1
   manifest="$(prepare_manifest_path)"
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  candidate_backend_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-backend)"
+  candidate_web_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-web)"
+  candidate_telegram_id="$(fake_release_image_id "$FIXTURE_COMMIT" telegram-bridge)"
 
   grep -Fxq "backend_image_tag=chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT" "$manifest" ||
     fail 'candidate backend full-SHA tag is missing'
-  grep -Fxq "backend_image_id=$CANDIDATE_BACKEND_ID" "$manifest" || fail 'candidate backend ID mismatch'
-  grep -Fxq "web_image_id=$CANDIDATE_WEB_ID" "$manifest" || fail 'candidate web ID mismatch'
-  grep -Fxq "telegram_image_id=$CANDIDATE_TELEGRAM_ID" "$manifest" || fail 'candidate Telegram ID mismatch'
+  grep -Fxq "backend_image_id=$candidate_backend_id" "$manifest" || fail 'candidate backend ID mismatch'
+  grep -Fxq "web_image_id=$candidate_web_id" "$manifest" || fail 'candidate web ID mismatch'
+  grep -Fxq "telegram_image_id=$candidate_telegram_id" "$manifest" || fail 'candidate Telegram ID mismatch'
   grep -Fqx "chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT"$'\t'"$CURRENT_BACKEND_ID" "$tags" ||
     fail 'rollback backend tag does not map to the running image ID'
-  grep -Fqx "chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"$'\t'"$CANDIDATE_BACKEND_ID" "$tags" ||
+  grep -Fqx "chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"$'\t'"$candidate_backend_id" "$tags" ||
     fail 'candidate backend tag does not map to the built image ID'
 
   setup_prepare_fixture "$FUNCNAME-conflict"
@@ -2090,9 +2222,9 @@ activation_transport_or_cleanup_failure_preserves_conservative_status() {
   export FAKE_SSH_FAIL_CLEANUP=true
   assert_activation_failure "$output"
   unset FAKE_COMPOSE_UP_FAIL FAKE_SSH_FAIL_CLEANUP
-  assert_status_once "$output" activation_failed_publication
-  grep -Fq 'Candidate Compose wait failed.' "$output" ||
-    fail 'cleanup-failure fixture did not receive an explicit publication failure'
+  assert_status_once "$output" candidate_failed_rollback_failed
+  grep -Fq 'Candidate and automatic exact rollback both failed' "$output" ||
+    fail 'cleanup-failure fixture did not preserve critical rollback status'
   grep -Fq 'remote delivery cleanup requires operator review' "$output" ||
     fail 'cleanup SSH failure did not warn the operator'
   [[ -f "$state/transaction" ]] || fail 'cleanup SSH failure lost activation transaction evidence'
@@ -2251,8 +2383,11 @@ activate_checks_built_service_running_health_and_restart_state() {
   export FAKE_RESTART_SERVICE_AFTER_CURL=portal-backend
   assert_activation_failure "$output"
   unset FAKE_RESTART_SERVICE_AFTER_CURL
-  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
-    fail 'post-start restart failure lost its transaction'
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'post-start restart rollback retained its transaction'
+  [[ "$(<"$REMOTE_TEST_ROOT/app/.release-state/current")" == "$CURRENT_COMMIT" ]] ||
+    fail 'post-start restart rollback did not restore current runtime'
   assert_no_event marker_rename current
 
   setup_activation_fixture "$FUNCNAME-ps-command-failure"
@@ -2534,6 +2669,7 @@ successful_activation_records_outcome_then_clears_journal() {
       'previous_commit=none' \
       'status=activation_succeeded' \
       'failure_stage=none' \
+      "transaction_started_at_utc=$utc" \
       "recorded_at_utc=$utc" \
       "recorded_at_epoch=$epoch" \
       >"$history/$epoch-$other_sha-activation_succeeded.txt"
@@ -2553,6 +2689,8 @@ successful_activation_records_outcome_then_clears_journal() {
   grep -Fxq "previous_commit=$CURRENT_COMMIT" "$outcome" || fail 'outcome previous mismatch'
   grep -Fxq 'status=activation_succeeded' "$outcome" || fail 'outcome success status missing'
   grep -Fxq 'failure_stage=none' "$outcome" || fail 'successful outcome has a failure stage'
+  grep -Fxq "transaction_started_at_utc=$(date -u -d "@$FAKE_NOW_EPOCH" +%Y-%m-%dT%H:%M:%SZ)" "$outcome" ||
+    fail 'successful outcome is not bound to its activation attempt'
   [[ ! -e "$state/prepared" ]] || fail 'successful activation retained prepared pointer'
   [[ ! -e "$state/transaction" ]] || fail 'successful activation retained transaction journal'
   [[ "$(find "$history" -maxdepth 1 -type f | wc -l | tr -d ' ')" == '20' ]] ||
@@ -2663,11 +2801,18 @@ for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
     fields = [part.decode() for part in raw.split(b"\0") if part]
     if fields and fields[0] == "rsync":
         records.append(fields[1:])
-if len(records) != 1:
-    raise SystemExit(f"expected one root rsync: {records}")
-args = records[0]
+mutating = [args for args in records if "--dry-run" not in args]
+verifying = [args for args in records if "--dry-run" in args]
+if len(mutating) != 1:
+    raise SystemExit(f"expected exactly one mutating root rsync: {records}")
+if len(verifying) != 1:
+    raise SystemExit(f"expected exactly one bounded verification-only rsync: {records}")
+args = mutating[0]
 if args[:2] != ["-a", "--delete"]:
     raise SystemExit(f"root rsync flags mismatch: {args}")
+verification_base = [value for value in verifying[0] if value not in {"--dry-run", "--itemize-changes"}]
+if verification_base != args:
+    raise SystemExit(f"verification rsync does not reuse exact mutating arguments: {records}")
 exclusions = set()
 index = 0
 while index < len(args):
@@ -2699,7 +2844,7 @@ root_sync_or_marker_failure_never_reports_success() {
   export FAKE_RSYNC_FAIL=true
   assert_activation_failure "$output"
   unset FAKE_RSYNC_FAIL
-  assert_status_once "$output" activation_failed_publication
+  assert_status_once "$output" candidate_failed_rollback_failed
   [[ -f "$state/transaction" ]] || fail 'root sync failure lost transaction evidence'
   grep -Fxq 'phase=root_sync_started' "$state/transaction" || fail 'root sync failure journal phase mismatch'
   [[ ! -e "$state/current" ]] || fail 'root sync failure published current'
@@ -2713,12 +2858,13 @@ root_sync_or_marker_failure_never_reports_success() {
   export FAKE_RSYNC_FAIL_AFTER_COPY=true
   assert_activation_failure "$output"
   unset FAKE_RSYNC_FAIL_AFTER_COPY
-  assert_status_once "$output" activation_failed_publication
+  assert_status_once "$output" candidate_failed_rollback_failed
   [[ -f "$state/transaction" ]] || fail 'partial root sync failure lost transaction evidence'
   grep -Fxq 'phase=root_sync_started' "$state/transaction" ||
     fail 'partial root sync failure journal phase mismatch'
-  grep -Fxq 'candidate-content' "$REMOTE_TEST_ROOT/app/release-content.txt" ||
-    fail 'partial root sync fixture did not copy candidate source before failing'
+  cmp -s "$REMOTE_TEST_ROOT/app/release-content.txt" \
+    "$REMOTE_TEST_ROOT/app/.releases/$CURRENT_COMMIT/source/release-content.txt" ||
+    fail 'failed rollback rsync did not preserve its copied previous source evidence'
   [[ ! -e "$state/current" ]] || fail 'partial root sync failure published current'
   ! find "$history" -maxdepth 1 -type f -name '*-activation_succeeded.txt' | grep -q . ||
     fail 'partial root sync failure wrote a success outcome'
@@ -2732,14 +2878,16 @@ root_sync_or_marker_failure_never_reports_success() {
   export STAGED_TEST_FAIL_PUBLICATION_AT=previous
   assert_activation_failure "$output"
   unset STAGED_TEST_FAIL_PUBLICATION_AT
-  assert_status_once "$output" activation_failed_publication
-  [[ -f "$state/transaction" ]] || fail 'marker failure lost transaction evidence'
-  grep -Fxq 'phase=root_sync_completed' "$state/transaction" || fail 'marker failure journal phase mismatch'
-  [[ ! -e "$state/current" ]] || fail 'marker failure published current authority'
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  [[ ! -e "$state/transaction" ]] || fail 'successful marker rollback retained transaction evidence'
+  [[ "$(<"$state/current")" == "$CURRENT_COMMIT" ]] || fail 'marker rollback did not restore current authority'
+  [[ ! -e "$state/adoption" && ! -e "$state/previous" ]] ||
+    fail 'first-adoption marker rollback retained stale pointers'
   ! find "$history" -maxdepth 1 -type f -name '*-activation_succeeded.txt' | grep -q . ||
     fail 'marker failure wrote a success outcome'
   assert_no_event outcome_write activation_succeeded
-  assert_no_event journal_remove activation_succeeded
+  assert_events_in_order 'outcome_write|candidate_failed_rollback_succeeded' \
+    'journal_remove|candidate_failed_rollback_succeeded'
 }
 
 cleanup_helpers_propagate_removal_failure() {
@@ -2790,6 +2938,610 @@ if remote_cleanup_activation_temps; then exit 1; fi
 [[ "$REMOTE_ACTIVATION_RAW_TENANTS" == "$activation_file" && -f "$activation_file" ]] || exit 1
 [[ "$REMOTE_SMOKE_RESULT_DIR" == "$smoke_dir" && -d "$smoke_dir" ]] || exit 1
 SH
+}
+
+ROLLBACK_TARGET_COMMIT=''
+ROLLBACK_OLDER_COMMIT=''
+
+task5_state_dir() {
+  printf '%s/app/.release-state\n' "$REMOTE_TEST_ROOT"
+}
+
+task5_decision_path() {
+  printf '%s/decisions/%s.txt\n' "$(task5_state_dir)" "$PREPARED_COMMIT"
+}
+
+task5_assert_candidate_failure() {
+  local output="$1"
+  local expected_status="$2"
+  shift 2
+
+  if activate_command "$@" >"$output" 2>&1; then
+    sed 's/^/  output: /' "$output" >&2
+    fail 'failed candidate request returned zero after recovery/preservation'
+  fi
+  assert_status_once "$output" "$expected_status"
+}
+
+task5_write_decision_fixture() {
+  local policy="$1"
+  local approval="$2"
+  local path
+
+  path="$(task5_decision_path)"
+  printf '%s\n' \
+    'protocol_version=1' \
+    'record_kind=activation_decision' \
+    "candidate_commit=$PREPARED_COMMIT" \
+    "migration_policy=$policy" \
+    "approval_ref=$approval" \
+    'recorded_at_utc=2026-07-16T12:00:00Z' >"$path"
+  chmod 0600 "$path"
+}
+
+task5_prepare_next_candidate() {
+  local classification="${1:-none}"
+
+  if [[ "$classification" == 'migration' ]]; then
+    printf '%s\n' 'task 5 migration' >"$FIXTURE_REPO/backend/drizzle/0001_task_5.sql"
+    git -C "$FIXTURE_REPO" add backend/drizzle/0001_task_5.sql
+    git -C "$FIXTURE_REPO" commit -q -m 'task 5 migration candidate'
+    git -C "$FIXTURE_REPO" push -q origin main
+    FIXTURE_COMMIT="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
+  else
+    advance_candidate_commit 'task 5 nonmigration candidate'
+  fi
+  complete_activation_fixture_prepare
+}
+
+task5_setup_staged_candidate() {
+  local name="$1"
+  local classification="${2:-none}"
+  local service key rollback_id candidate_id
+
+  setup_activation_fixture "$name-first"
+  ROLLBACK_OLDER_COMMIT="$CURRENT_COMMIT"
+  ROLLBACK_TARGET_COMMIT="$PREPARED_COMMIT"
+  assert_activation_success "$CASE_ROOT/first-activation-output"
+  task5_prepare_next_candidate "$classification"
+  for service in backend web telegram; do
+    key="${service}_image_id"
+    rollback_id="$(release_record_get_unique \
+      "$REMOTE_TEST_ROOT/app/.releases/$ROLLBACK_TARGET_COMMIT/manifest.txt" "$key")"
+    candidate_id="$(release_record_get_unique \
+      "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" "$key")"
+    [[ "$rollback_id" != "$candidate_id" ]] ||
+      fail "sequential candidate reused rollback $service image ID"
+  done
+}
+
+task5_assert_runtime_release() {
+  local commit="$1"
+  local release_dir="$REMOTE_TEST_ROOT/app/.releases/$commit"
+  local service key container expected actual
+
+  [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$commit" ]] ||
+    fail "runtime commit is not exact release $commit"
+  for service in backend web telegram; do
+    case "$service" in
+      backend) key='backend_image_id'; container='container-backend' ;;
+      web) key='web_image_id'; container='container-web' ;;
+      telegram) key='telegram_image_id'; container='container-telegram' ;;
+    esac
+    expected="$(release_record_get_unique "$release_dir/manifest.txt" "$key")" ||
+      fail "missing $service image evidence for $commit"
+    actual="$(awk -F '\t' -v wanted="$container" '$1 == wanted { print $3 }' "$FAKE_CONTAINER_STATE_FILE")"
+    [[ "$actual" == "$expected" ]] || fail "$service runtime image is not the exact rollback ID"
+  done
+}
+
+task5_assert_staged_state_restored() {
+  local state
+  state="$(task5_state_dir)"
+  [[ "$(<"$state/current")" == "$ROLLBACK_TARGET_COMMIT" ]] ||
+    fail 'rollback did not restore current pointer'
+  [[ "$(<"$state/previous")" == "$ROLLBACK_OLDER_COMMIT" ]] ||
+    fail 'rollback did not restore previous pointer'
+  [[ "$(release_marker_read_active_commit "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt")" == "$ROLLBACK_TARGET_COMMIT" ]] ||
+    fail 'rollback did not restore the active source marker'
+  cmp -s \
+    "$REMOTE_TEST_ROOT/app/release-content.txt" \
+    "$REMOTE_TEST_ROOT/app/.releases/$ROLLBACK_TARGET_COMMIT/source/release-content.txt" ||
+    fail 'rollback did not restore exact previous root source'
+  task5_assert_runtime_release "$ROLLBACK_TARGET_COMMIT"
+}
+
+migration_prepare_requires_policy_and_approval_pair() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME" backend/drizzle/0001_policy.sql
+  output="$CASE_ROOT/missing-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy
+  assert_no_compose_cutover
+
+  output="$CASE_ROOT/policy-only-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=backward-compatible
+  output="$CASE_ROOT/approval-only-output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --approval-ref=OPS-5
+
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL=true
+  output="$CASE_ROOT/paired-output"
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL
+}
+
+nonmigration_rejects_explicit_migration_policy() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  [[ ! -e "$(task5_decision_path)" ]] || fail 'nonmigration activation wrote a decision'
+  assert_no_compose_cutover
+}
+
+migration_decision_is_immutable_and_precedes_cutover() {
+  local output decision checksum
+
+  setup_activation_fixture "$FUNCNAME" backend/drizzle/0001_decision.sql
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL=true
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL
+  decision="$(task5_decision_path)"
+  [[ -f "$decision" && ! -L "$decision" && "$(stat -c '%a' "$decision")" == '600' ]] ||
+    fail 'activation decision is missing or not private'
+  grep -Fxq 'protocol_version=1' "$decision" || fail 'decision protocol mismatch'
+  grep -Fxq 'record_kind=activation_decision' "$decision" || fail 'decision kind mismatch'
+  grep -Fxq "candidate_commit=$PREPARED_COMMIT" "$decision" || fail 'decision candidate mismatch'
+  grep -Fxq 'migration_policy=forward-only' "$decision" || fail 'decision policy mismatch'
+  grep -Fxq 'approval_ref=OPS-5' "$decision" || fail 'decision approval mismatch'
+  checksum="$(sha256sum "$decision" | awk '{print $1}')"
+  assert_events_in_order \
+    'decision_write|forward-only' \
+    'journal_write|cutover_started' \
+    "compose_release|$PREPARED_COMMIT"
+  [[ "$(sha256sum "$decision" | awk '{print $1}')" == "$checksum" ]] ||
+    fail 'activation decision changed after cutover failure'
+}
+
+repeated_decision_must_match_existing_policy_and_approval() {
+  local output decision checksum state tamper old_epoch old_utc old_started history
+
+  setup_activation_fixture "$FUNCNAME-match" backend/drizzle/0001_retry.sql
+  task5_write_decision_fixture backward-compatible OPS-5
+  decision="$(task5_decision_path)"
+  checksum="$(sha256sum "$decision" | awk '{print $1}')"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  output="$CASE_ROOT/output"
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
+  [[ "$(sha256sum "$decision" | awk '{print $1}')" == "$checksum" ]] ||
+    fail 'matching retry overwrote its immutable decision'
+
+  setup_activation_fixture "$FUNCNAME-policy-mismatch" backend/drizzle/0001_retry.sql
+  task5_write_decision_fixture forward-only OPS-5
+  decision="$(task5_decision_path)"
+  checksum="$(sha256sum "$decision" | awk '{print $1}')"
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  [[ "$(sha256sum "$decision" | awk '{print $1}')" == "$checksum" ]] ||
+    fail 'policy mismatch overwrote activation decision'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-approval-mismatch" backend/drizzle/0001_retry.sql
+  task5_write_decision_fixture forward-only OPS-5
+  output="$CASE_ROOT/output"
+  assert_activation_refusal "$output" activation_refused_migration_policy \
+    --migration-policy=forward-only --approval-ref=OPS-6
+  assert_no_compose_cutover
+
+  for tamper in forward-only missing; do
+    setup_activation_fixture "$FUNCNAME-transaction-$tamper" backend/drizzle/0001_retry.sql
+    output="$CASE_ROOT/output"
+    state="$(task5_state_dir)"
+    export FAKE_TAMPER_TRANSACTION_POLICY="$tamper"
+    export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+    task5_assert_candidate_failure "$output" candidate_failed_rollback_failed \
+      --migration-policy=backward-compatible --approval-ref=OPS-5
+    unset FAKE_TAMPER_TRANSACTION_POLICY FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
+    [[ "$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")" == '1' ]] ||
+      fail "tampered transaction policy started previous Compose: $tamper"
+    [[ -f "$state/prepared" && -f "$state/transaction" && -f "$(task5_decision_path)" &&
+      -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+      fail "tampered transaction policy did not preserve critical evidence: $tamper"
+    output="$CASE_ROOT/retry-output"
+    assert_activation_refusal "$output" activation_refused_state_changed \
+      --migration-policy=backward-compatible --approval-ref=OPS-5
+    grep -Fq 'critical_status=candidate_failed_rollback_failed' "$output" ||
+      fail "tampered transaction retry omitted critical outcome: $tamper"
+    grep -Fq "manual_transaction_path=$state/transaction" "$output" ||
+      fail "tampered transaction retry omitted exact journal path: $tamper"
+  done
+
+  setup_activation_fixture "$FUNCNAME-forbidden-phase" backend/drizzle/0001_retry.sql
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export FAKE_TAMPER_TRANSACTION_PHASE=prepared_removed
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_failed \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  unset FAKE_TAMPER_TRANSACTION_PHASE FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
+  [[ "$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")" == '1' ]] ||
+    fail 'forbidden journal transition started previous Compose'
+  grep -Fxq 'phase=prepared_removed' "$state/transaction" ||
+    fail 'forbidden journal transition evidence was not preserved'
+
+  setup_activation_fixture "$FUNCNAME-stale-success"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  old_epoch="$((FAKE_NOW_EPOCH - 120))"
+  old_utc="$(date -u -d "@$old_epoch" +%Y-%m-%dT%H:%M:%SZ)"
+  old_started="$(date -u -d "@$((old_epoch - 30))" +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s\n' \
+    'protocol_version=1' \
+    'record_kind=deployment_outcome' \
+    "candidate_commit=$PREPARED_COMMIT" \
+    "previous_commit=$CURRENT_COMMIT" \
+    'status=candidate_failed_rollback_succeeded' \
+    'failure_stage=service_state' \
+    "transaction_started_at_utc=$old_started" \
+    "recorded_at_utc=$old_utc" \
+    "recorded_at_epoch=$old_epoch" \
+    >"$history/$old_epoch-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt"
+  chmod 0600 "$history/$old_epoch-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt"
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+}
+
+nonmigration_failure_rolls_back_exact_previous_and_exits_nonzero() {
+  local output
+
+  task5_setup_staged_candidate "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
+  task5_assert_staged_state_restored
+  assert_events_in_order \
+    "compose_release|$PREPARED_COMMIT" \
+    "compose_release|$ROLLBACK_TARGET_COMMIT"
+}
+
+backward_compatible_failure_rolls_back_and_exits_nonzero() {
+  local output
+
+  task5_setup_staged_candidate "$FUNCNAME" migration
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
+  task5_assert_staged_state_restored
+}
+
+first_adoption_rollback_promotes_adopted_release_to_current() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export STAGED_TEST_FAIL_ADOPTION_AFTER_UNLINK=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset STAGED_TEST_FAIL_ADOPTION_AFTER_UNLINK
+  [[ "$(<"$state/current")" == "$CURRENT_COMMIT" ]] ||
+    fail 'first-adoption rollback did not promote adopted release to current'
+  [[ ! -e "$state/adoption" && ! -e "$state/previous" ]] ||
+    fail 'first-adoption rollback retained adoption or previous pointer'
+  [[ "$(release_marker_read_active_commit "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt")" == "$CURRENT_COMMIT" ]] ||
+    fail 'first-adoption rollback did not publish the adopted active marker'
+  task5_assert_runtime_release "$CURRENT_COMMIT"
+}
+
+publication_failure_restores_previous_root_source_and_markers() {
+  local point output state
+
+  for point in root_sync marker_after_deploy previous current; do
+    task5_setup_staged_candidate "$FUNCNAME-$point"
+    output="$CASE_ROOT/output"
+    if [[ "$point" == 'root_sync' ]]; then
+      export FAKE_CANDIDATE_RSYNC_FAIL_AFTER_COPY=true
+    else
+      export STAGED_TEST_FAIL_PUBLICATION_AT="$point"
+    fi
+    task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+    unset FAKE_CANDIDATE_RSYNC_FAIL_AFTER_COPY STAGED_TEST_FAIL_PUBLICATION_AT
+    task5_assert_staged_state_restored
+  done
+
+  task5_setup_staged_candidate "$FUNCNAME-rollback-root-corruption"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export STAGED_TEST_FAIL_PUBLICATION_AT=marker_after_deploy
+  export FAKE_ROLLBACK_RSYNC_CORRUPT_AFTER_COPY=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_failed
+  unset STAGED_TEST_FAIL_PUBLICATION_AT FAKE_ROLLBACK_RSYNC_CORRUPT_AFTER_COPY
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'post-rsync rollback corruption did not preserve critical evidence'
+  grep -Fq $'\troot_verify\t' "$FAKE_EVENT_LOG" ||
+    fail 'rollback did not perform a post-rsync root verification'
+}
+
+rollback_repeats_all_tenant_smoke_before_clearing_journal() {
+  local output state
+
+  setup_prepare_fixture "$FUNCNAME"
+  printf '%s\t%s\n' \
+    alpha https://alpha.example.test \
+    bravo https://bravo.example.test \
+    zulu https://zulu.example.test >"$FAKE_TENANTS_FILE"
+  complete_activation_fixture_prepare
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export FAKE_CANDIDATE_CURL_FAIL_PATTERN='zulu.example.test/api/tenant'
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_CURL_FAIL_PATTERN
+  [[ ! -e "$state/transaction" ]] || fail 'successful rollback retained transaction after smoke'
+  [[ "$(grep -c $'\tsmoke_xargs\t' "$FAKE_EVENT_LOG")" == '2' ]] ||
+    fail 'rollback did not repeat the bounded all-tenant smoke matrix'
+  assert_events_in_order \
+    'curl_failed|https://zulu.example.test/api/tenant' \
+    "compose_release|$CURRENT_COMMIT" \
+    'curl_success|https://alpha.example.test/api/health' \
+    'journal_remove|candidate_failed_rollback_succeeded'
+}
+
+successful_rollback_records_candidate_failed_rollback_succeeded() {
+  local output state history outcome candidate_tag
+  local -a outcomes=()
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'successful rollback outcome count mismatch'
+  outcome="${outcomes[0]}"
+  grep -Fxq 'status=candidate_failed_rollback_succeeded' "$outcome" || fail 'rollback outcome status missing'
+  grep -Fxq 'failure_stage=service_state' "$outcome" || fail 'rollback outcome stage mismatch'
+  grep -Fxq "transaction_started_at_utc=$(date -u -d "@$FAKE_NOW_EPOCH" +%Y-%m-%dT%H:%M:%SZ)" "$outcome" ||
+    fail 'rollback outcome is not bound to its activation attempt'
+  [[ ! -e "$state/prepared" && ! -e "$state/transaction" ]] ||
+    fail 'successful rollback retained prepared or journal state'
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'successful rollback retained failed candidate artifacts'
+
+  setup_activation_fixture "$FUNCNAME-cleanup-interrupted"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  candidate_tag="chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
+  export FAKE_IMAGE_RM_FAIL_REF="$candidate_tag"
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING FAKE_IMAGE_RM_FAIL_REF
+  grep -Fq 'cleanup requires operator review' "$output" ||
+    fail 'interrupted rollback cleanup omitted its operator warning'
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'interrupted rollback cleanup destroyed candidate evidence'
+  for candidate_tag in \
+    "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
+    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    grep -Fq "$candidate_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
+      fail 'interrupted rollback cleanup did not compensate removed candidate tags'
+  done
+
+  setup_activation_fixture "$FUNCNAME-artifact-remove-interrupted"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
+  export STAGED_TEST_FAIL_ROLLBACK_CLEANUP_AT=after_candidate_artifact_remove
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING STAGED_TEST_FAIL_ROLLBACK_CLEANUP_AT
+  grep -Fq 'cleanup requires operator review' "$output" ||
+    fail 'post-artifact rollback cleanup interruption omitted its warning'
+  [[ -f "$state/prepared" && -f "$state/transaction" &&
+    ! -e "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'post-artifact rollback cleanup interruption left an incoherent topology'
+  grep -Fxq 'phase=candidate_artifact_removal_started' "$state/transaction" ||
+    fail 'artifact removal was not durably announced before deletion'
+  output="$CASE_ROOT/retry-output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  grep -Fq 'critical_status=candidate_failed_rollback_succeeded' "$output" ||
+    fail 'partial rollback cleanup retry omitted committed recovery outcome'
+  grep -Fq "manual_transaction_path=$state/transaction" "$output" ||
+    fail 'partial rollback cleanup retry omitted exact journal path'
+}
+
+rollback_failure_preserves_current_previous_candidate_and_journal() {
+  local output state decision
+
+  task5_setup_staged_candidate "$FUNCNAME" migration
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  export FAKE_ROLLBACK_COMPOSE_UP_FAIL=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_failed \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY FAKE_ROLLBACK_COMPOSE_UP_FAIL
+  decision="$(task5_decision_path)"
+  [[ -f "$state/current" && -f "$state/previous" && -f "$state/prepared" &&
+    -f "$state/transaction" && -f "$decision" ]] ||
+    fail 'rollback failure did not preserve pointers, decision and journal'
+  [[ "$(find "$REMOTE_TEST_ROOT/app/.releases" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" == '3' ]] ||
+    fail 'rollback failure did not preserve exactly three releases'
+}
+
+forward_only_failure_never_starts_previous_code() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME" backend/drizzle/0001_forward.sql
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
+  [[ "$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")" == '1' ]] ||
+    fail 'forward-only failure started previous Compose'
+  [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$PREPARED_COMMIT" ]] ||
+    fail 'forward-only failure replaced candidate runtime'
+}
+
+forward_only_failure_preserves_decision_candidate_runtime_and_journal() {
+  local output state decision
+
+  task5_setup_staged_candidate "$FUNCNAME" migration
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  export FAKE_CANDIDATE_CURL_FAIL_PATTERN='alpha.example.test/api/tenant'
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_CURL_FAIL_PATTERN
+  decision="$(task5_decision_path)"
+  [[ -f "$decision" && -f "$state/prepared" && -f "$state/transaction" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'forward-only failure did not preserve decision, candidate and journal'
+  task5_assert_runtime_release "$PREPARED_COMMIT"
+  grep -Fq "candidate_commit=$PREPARED_COMMIT" "$output" ||
+    fail 'forward-only output omitted exact candidate evidence'
+  ! grep -q 'health-body-must-not-be-logged\|tenant-body-must-not-be-logged\|do-not-leak' "$output" ||
+    fail 'forward-only output leaked response or env bodies'
+
+  task5_setup_staged_candidate "$FUNCNAME-history-retention" migration
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  printf 'invalid retained history fixture\n' >"$state/history/unexpected.txt"
+  chmod 0600 "$state/history/unexpected.txt"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
+  grep -Fq 'history cleanup requires operator review' "$output" ||
+    fail 'forward-only history retention failure omitted its operator warning'
+}
+
+critical_state_blocks_later_prepare_and_activate() {
+  local output state release_count outcome compose_count
+
+  setup_activation_fixture "$FUNCNAME-success-cleanup"
+  state="$(task5_state_dir)"
+  output="$CASE_ROOT/success-output"
+  export STAGED_TEST_FAIL_FINALIZATION_AT=after_prepared_remove
+  assert_activation_success "$output"
+  unset STAGED_TEST_FAIL_FINALIZATION_AT
+  grep -Fq 'cleanup requires operator review' "$output" ||
+    fail 'committed activation cleanup failure omitted its warning'
+  [[ ! -e "$state/prepared" && -f "$state/transaction" ]] ||
+    fail 'committed activation cleanup failure did not retain authoritative journal state'
+  output="$CASE_ROOT/success-retry-output"
+  assert_activation_refusal "$output" activation_refused_state_changed
+  grep -Fq 'critical_status=activation_succeeded' "$output" ||
+    fail 'activation retry did not surface its committed success outcome'
+  grep -Fq "manual_transaction_path=$state/transaction" "$output" ||
+    fail 'activation retry omitted committed transaction evidence path'
+
+  task5_setup_staged_candidate "$FUNCNAME-marker-critical" migration
+  state="$(task5_state_dir)"
+  export STAGED_TEST_FAIL_PUBLICATION_AT=previous
+  output="$CASE_ROOT/failure-output"
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset STAGED_TEST_FAIL_PUBLICATION_AT
+  release_count="$(find "$REMOTE_TEST_ROOT/app/.releases" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  [[ "$release_count" == '3' ]] || fail 'critical fixture did not preserve three releases'
+
+  output="$CASE_ROOT/retry-output"
+  assert_activation_refusal "$output" activation_refused_state_changed \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  grep -Fq 'critical_status=candidate_failed_forward_only' "$output" ||
+    fail 'later activate did not print preserved critical status'
+  grep -Fq "manual_transaction_path=$state/transaction" "$output" ||
+    fail 'later activate did not print exact transaction evidence path'
+
+  advance_candidate_commit 'fourth transient release attempt'
+  output="$CASE_ROOT/prepare-output"
+  if deploy_command prepare >"$output" 2>&1; then
+    fail 'prepare accepted a fourth release while critical evidence was active'
+  fi
+  assert_status_once "$output" prepare_failed
+  grep -Fq 'critical_status=candidate_failed_forward_only' "$output" ||
+    fail 'later prepare did not print preserved critical status'
+  [[ "$(find "$REMOTE_TEST_ROOT/app/.releases" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" == '3' ]] ||
+    fail 'blocked fourth release changed preserved release count'
+
+  setup_activation_fixture "$FUNCNAME-standalone-outcome" backend/drizzle/0001_standalone.sql
+  state="$(task5_state_dir)"
+  output="$CASE_ROOT/failure-output"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  task5_assert_candidate_failure "$output" candidate_failed_forward_only \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
+  outcome="$(find "$state/history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_forward_only.txt" -print -quit)"
+  [[ -f "$outcome" ]] || fail 'standalone critical fixture omitted its durable outcome'
+  rm -f -- "$state/transaction"
+  compose_count="$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")"
+  output="$CASE_ROOT/retry-output"
+  assert_activation_refusal "$output" activation_refused_state_changed \
+    --migration-policy=forward-only --approval-ref=OPS-5
+  grep -Fq 'critical_status=candidate_failed_forward_only' "$output" ||
+    fail 'standalone terminal outcome did not block a later activation'
+  grep -Fq "manual_outcome_path=$outcome" "$output" ||
+    fail 'standalone terminal outcome retry omitted its exact evidence path'
+  [[ "$(grep -c $'\tcompose_release\t' "$FAKE_EVENT_LOG")" == "$compose_count" ]] ||
+    fail 'standalone terminal outcome allowed a new cutover'
+}
+
+recovered_candidate_is_removed_only_by_exact_owned_ids() {
+  local output tags unrelated_ref candidate_backend_id
+
+  setup_activation_fixture "$FUNCNAME"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  unrelated_ref='operator-unrelated:keep'
+  candidate_backend_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" backend_image_id)"
+  printf '%s\t%s\n' "$unrelated_ref" "$candidate_backend_id" >>"$tags"
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION
+  ! grep -Fq ":$PREPARED_COMMIT" "$tags" || fail 'recovered rollback retained candidate full-SHA tags'
+  grep -Fq "$unrelated_ref" "$tags" || fail 'rollback cleanup removed an unrelated image tag'
+}
+
+no_failure_path_runs_down_migration_restore_prune_or_volume_delete() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME" backend/drizzle/0001_no_down.sql
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded \
+    --migration-policy=backward-compatible --approval-ref=OPS-5
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    lowered = [field.lower() for field in fields]
+    forbidden = {"down", "prune", "volume", "pg_restore", "restore"}
+    if forbidden.intersection(lowered):
+        raise SystemExit(f"failure path used a destructive recovery command: {fields}")
+PY
 }
 
 assert_all_prepare_outputs_are_redacted() {
@@ -2884,11 +3636,31 @@ run_activate_success_cases() {
   run_case root_sync_or_marker_failure_never_reports_success
 }
 
+run_rollback_cases() {
+  run_case migration_prepare_requires_policy_and_approval_pair
+  run_case nonmigration_rejects_explicit_migration_policy
+  run_case migration_decision_is_immutable_and_precedes_cutover
+  run_case repeated_decision_must_match_existing_policy_and_approval
+  run_case nonmigration_failure_rolls_back_exact_previous_and_exits_nonzero
+  run_case backward_compatible_failure_rolls_back_and_exits_nonzero
+  run_case first_adoption_rollback_promotes_adopted_release_to_current
+  run_case publication_failure_restores_previous_root_source_and_markers
+  run_case rollback_repeats_all_tenant_smoke_before_clearing_journal
+  run_case successful_rollback_records_candidate_failed_rollback_succeeded
+  run_case rollback_failure_preserves_current_previous_candidate_and_journal
+  run_case forward_only_failure_never_starts_previous_code
+  run_case forward_only_failure_preserves_decision_candidate_runtime_and_journal
+  run_case critical_state_blocks_later_prepare_and_activate
+  run_case recovered_candidate_is_removed_only_by_exact_owned_ids
+  run_case no_failure_path_runs_down_migration_restore_prune_or_volume_delete
+}
+
 case "$FILTER" in
   all)
     run_bootstrap_cases
     run_prepare_cases
     run_activate_success_cases
+    run_rollback_cases
     ;;
   bootstrap)
     run_bootstrap_cases
@@ -2903,7 +3675,7 @@ case "$FILTER" in
     run_activate_success_cases
     ;;
   rollback)
-    echo "No $FILTER cases registered yet."
+    run_rollback_cases
     ;;
   *)
     fail "unknown staged deploy test filter: $FILTER"

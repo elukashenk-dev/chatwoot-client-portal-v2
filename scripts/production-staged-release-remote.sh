@@ -52,6 +52,12 @@ REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA=''
 REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA=''
 REMOTE_ACTIVATION_ENV_SHA=''
 REMOTE_ACTIVATION_MIGRATION=''
+REMOTE_ACTIVATION_POLICY='automatic'
+REMOTE_ACTIVATION_APPROVAL_REF=''
+REMOTE_ACTIVATION_DECISION_PATH=''
+REMOTE_ACTIVATION_OLD_PREVIOUS_COMMIT=''
+REMOTE_ACTIVATION_FIRST_ADOPTION='false'
+REMOTE_ACTIVATION_FAILURE_STAGE=''
 REMOTE_ACTIVATION_TENANT_COUNT=''
 REMOTE_ACTIVATION_TENANT_SHA=''
 REMOTE_ACTIVATION_CANDIDATE_IDS=()
@@ -893,6 +899,7 @@ remote_inspect_current() {
 remote_run_inspect() {
   local app_path="$1"
 
+  remote_block_on_critical_state "$app_path" prepare || return 1
   remote_inspect_current "$app_path" || return 1
   printf '%s\n' \
     "protocol_version=$REMOTE_PROTOCOL_VERSION" \
@@ -907,24 +914,28 @@ remote_run_prepared_inspect() {
   local state_dir="$app_path/.release-state"
   local release_dir="$app_path/.releases/$candidate_commit"
   local manifest="$release_dir/manifest.txt"
-  local prepared orchestrator protocol
+  local prepared orchestrator protocol migration
 
   REMOTE_PYTHON_BIN="$(remote_select_python)" || return 1
+  remote_block_on_critical_state "$app_path" activate || return 1
   remote_validate_state_layout "$app_path" || return 1
   prepared="$(remote_pointer_read "$state_dir/prepared")" || return 1
   [[ "$prepared" == "$candidate_commit" ]] || return 1
   remote_validate_prepared_manifest "$manifest" "$candidate_commit" || return 1
   orchestrator="$(release_record_get_unique "$manifest" orchestrator_commit)" || return 1
   protocol="$(release_record_get_unique "$manifest" orchestrator_protocol_version)" || return 1
+  migration="$(release_record_get_unique "$manifest" migration_classification)" || return 1
   release_record_is_sha "$orchestrator" || return 1
   [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" ]] || return 1
+  [[ "$migration" == 'none' || "$migration" == 'migration' ]] || return 1
 
   printf '%s\n' \
     "protocol_version=$REMOTE_PROTOCOL_VERSION" \
     'record_kind=prepared_inspection' \
     "candidate_commit=$candidate_commit" \
     "orchestrator_commit=$orchestrator" \
-    "orchestrator_protocol_version=$protocol"
+    "orchestrator_protocol_version=$protocol" \
+    "migration_classification=$migration"
 }
 
 remote_validate_prepared_manifest() {
@@ -1060,6 +1071,8 @@ remote_load_release_evidence() {
 
 remote_validate_state_layout() {
   local app_path="$1"
+  local allow_transaction="${2:-false}"
+  local allow_critical_layout="${3:-false}"
   local state_dir="$app_path/.release-state"
   local releases_dir="$app_path/.releases"
   local entry name count=0 pointer current='' previous='' adoption='' prepared=''
@@ -1071,13 +1084,19 @@ remote_validate_state_layout() {
   remote_require_private_directory "$state_dir/history" || return 1
   remote_find_paths links "$state_dir" "$releases_dir" -type l || return 1
   (( ${#links[@]} == 0 )) || return 1
-  [[ ! -e "$state_dir/transaction" && ! -L "$state_dir/transaction" ]] || return 1
+  [[ "$allow_transaction" == 'false' || "$allow_transaction" == 'true' ]] || return 1
+  [[ "$allow_critical_layout" == 'false' || "$allow_critical_layout" == 'true' ]] || return 1
+  [[ "$allow_critical_layout" == 'false' || "$allow_transaction" == 'true' ]] || return 1
+  if [[ -e "$state_dir/transaction" || -L "$state_dir/transaction" ]]; then
+    [[ "$allow_transaction" == 'true' ]] || return 1
+    release_record_require_private_file "$state_dir/transaction" || return 1
+  fi
 
   remote_find_paths state_entries "$state_dir" -mindepth 1 -maxdepth 1 || return 1
   for entry in "${state_entries[@]}"; do
     name="$(basename -- "$entry")"
     case "$name" in
-      deploy.lock|adoption|current|previous|prepared) [[ -f "$entry" && ! -L "$entry" ]] || return 1 ;;
+      deploy.lock|adoption|current|previous|prepared|transaction) [[ -f "$entry" && ! -L "$entry" ]] || return 1 ;;
       decisions|history) remote_require_private_directory "$entry" || return 1 ;;
       *) return 1 ;;
     esac
@@ -1095,20 +1114,26 @@ remote_validate_state_layout() {
   for pointer in "$current" "$previous" "$adoption" "$prepared"; do
     [[ -z "$pointer" ]] || remote_require_private_directory "$releases_dir/$pointer" || return 1
   done
-  if [[ -n "$current" ]]; then
-    [[ -z "$adoption" ]] || return 1
+  if [[ "$allow_critical_layout" == 'false' ]]; then
+    if [[ -n "$current" ]]; then
+      [[ -z "$adoption" ]] || return 1
+    else
+      [[ -z "$previous" ]] || return 1
+    fi
+    [[ -z "$current" || -z "$previous" || "$current" != "$previous" ]] || return 1
   else
-    [[ -z "$previous" ]] || return 1
+    [[ -f "$state_dir/transaction" ]] || return 1
   fi
-  [[ -z "$current" || -z "$previous" || "$current" != "$previous" ]] || return 1
 
   remote_find_paths release_entries "$releases_dir" -mindepth 1 -maxdepth 1 || return 1
   for entry in "${release_entries[@]}"; do
     name="$(basename -- "$entry")"
     remote_require_private_directory "$entry" || return 1
     release_record_is_sha "$name" || return 1
-    [[ "$name" == "$current" || "$name" == "$previous" || "$name" == "$adoption" ||
-      "$name" == "$prepared" ]] || return 1
+    if [[ "$allow_critical_layout" == 'false' ]]; then
+      [[ "$name" == "$current" || "$name" == "$previous" || "$name" == "$adoption" ||
+        "$name" == "$prepared" ]] || return 1
+    fi
     count=$((count + 1))
   done
   (( count <= 3 ))
@@ -1534,6 +1559,7 @@ remote_remove_expired_candidate() {
   local releases_dir="$app_path/.releases"
   local prepared_path="$state_dir/prepared"
   local candidate manifest expires pointer value service tag_key id_key tag image_id index history_result
+  local decision policy approval
   local -a tags=() image_ids=()
 
   [[ -e "$prepared_path" || -L "$prepared_path" ]] || return 0
@@ -1560,6 +1586,13 @@ remote_remove_expired_candidate() {
   esac
   [[ -d "$releases_dir/$candidate" && ! -L "$releases_dir/$candidate" ]] || return 1
 
+  decision="$state_dir/decisions/$candidate.txt"
+  if [[ -e "$decision" || -L "$decision" ]]; then
+    policy="$(release_record_get_unique "$decision" migration_policy)" || return 1
+    approval="$(release_record_get_unique "$decision" approval_ref)" || return 1
+    remote_validate_activation_decision "$decision" "$candidate" "$policy" "$approval" || return 1
+  fi
+
   for service in backend web telegram; do
     tag_key="${service}_image_tag"
     id_key="${service}_image_id"
@@ -1574,6 +1607,7 @@ remote_remove_expired_candidate() {
   done
   rm -rf -- "$releases_dir/$candidate" || return 1
   rm -f -- "$prepared_path" || return 1
+  [[ ! -e "$decision" && ! -L "$decision" ]] || rm -f -- "$decision" || return 1
 }
 
 remote_import_or_validate_current_release() {
@@ -1736,6 +1770,8 @@ remote_locked_prepare() {
   for required in tar sha256sum find stat flock diff cmp date df awk sort wc tr grep mktemp chmod cp rm; do
     command -v "$required" >/dev/null || remote_prepare_abort "Required command is missing: $required"
   done
+  remote_block_on_critical_state "$app_path" prepare ||
+    remote_prepare_abort 'Critical deployment evidence is invalid.'
   remote_validate_state_layout "$app_path" || remote_prepare_abort 'Release state layout is invalid or unresolved.'
   remote_inspect_current "$app_path" || remote_prepare_abort 'Active release evidence is invalid.'
   [[ "$REMOTE_INSPECT_CURRENT" == "$current_commit" ]] ||
@@ -1960,6 +1996,58 @@ remote_activation_refuse() {
   remote_fail "$message" "$status"
 }
 
+remote_validate_activation_decision() {
+  local path="$1"
+  local expected_candidate="$2"
+  local expected_policy="$3"
+  local expected_approval="$4"
+  local protocol kind candidate policy approval recorded_at
+
+  release_record_validate_keys "$path" \
+    protocol_version record_kind candidate_commit migration_policy approval_ref recorded_at_utc || return 1
+  protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
+  kind="$(release_record_get_unique "$path" record_kind)" || return 1
+  candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
+  policy="$(release_record_get_unique "$path" migration_policy)" || return 1
+  approval="$(release_record_get_unique "$path" approval_ref)" || return 1
+  recorded_at="$(release_record_get_unique "$path" recorded_at_utc)" || return 1
+  [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'activation_decision' &&
+    "$candidate" == "$expected_candidate" && "$policy" == "$expected_policy" &&
+    "$approval" == "$expected_approval" ]] || return 1
+  [[ "$policy" == 'backward-compatible' || "$policy" == 'forward-only' ]] || return 1
+  release_record_is_sha "$candidate" && release_record_is_approval_ref "$approval" &&
+    release_record_is_timestamp "$recorded_at"
+}
+
+remote_ensure_activation_decision() {
+  local state_dir="$1"
+  local candidate="$2"
+  local policy="$3"
+  local approval="$4"
+  local path="$state_dir/decisions/$candidate.txt"
+  local epoch recorded_at
+
+  REMOTE_ACTIVATION_DECISION_PATH="$path"
+  if [[ -e "$path" || -L "$path" ]]; then
+    remote_validate_activation_decision "$path" "$candidate" "$policy" "$approval" || return 1
+    remote_record_test_event decision_reuse "$policy"
+    return
+  fi
+  epoch="$(remote_now_epoch)" || return 1
+  recorded_at="$(remote_epoch_to_utc "$epoch")" || return 1
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=activation_decision' \
+    "candidate_commit=$candidate" \
+    "migration_policy=$policy" \
+    "approval_ref=$approval" \
+    "recorded_at_utc=$recorded_at" |
+    release_record_write_atomic create "$path" || return 1
+  remote_validate_activation_decision "$path" "$candidate" "$policy" "$approval" || return 1
+  remote_fsync_path_and_parent "$path" || return 1
+  remote_record_test_event decision_write "$policy"
+}
+
 remote_activation_preflight() {
   local app_path="$1"
   local candidate_commit="$2"
@@ -1976,6 +2064,8 @@ remote_activation_preflight() {
   local manifest_tag manifest_id actual_id service key_prefix external_count index key_index
   local expected_rollback_id migration_classification images_output
 
+  remote_block_on_critical_state "$app_path" activate ||
+    remote_activation_refuse 'Critical deployment evidence is invalid.'
   remote_validate_state_layout "$app_path" ||
     remote_activation_refuse 'Release state is incomplete or an earlier transaction is unresolved.'
   prepared_pointer="$(remote_pointer_read "$state_dir/prepared")" ||
@@ -2145,10 +2235,32 @@ remote_activation_preflight() {
   migration_classification="$(release_record_get_unique "$manifest" migration_classification)" ||
     remote_activation_refuse 'Migration classification is missing.'
   REMOTE_ACTIVATION_MIGRATION="$migration_classification"
-  if [[ "$migration_classification" == 'migration' || -n "$migration_policy" || -n "$approval_ref" ]]; then
-    remote_activation_refuse 'Migration activation decisions are not available in this task.' \
-      activation_refused_migration_policy
-  fi
+  REMOTE_ACTIVATION_POLICY='automatic'
+  REMOTE_ACTIVATION_APPROVAL_REF=''
+  REMOTE_ACTIVATION_DECISION_PATH=''
+  case "$migration_classification" in
+    none)
+      [[ -z "$migration_policy" && -z "$approval_ref" ]] ||
+        remote_activation_refuse 'Nonmigration activation forbids migration decision fields.' \
+          activation_refused_migration_policy
+      ;;
+    migration)
+      [[ "$migration_policy" == 'backward-compatible' || "$migration_policy" == 'forward-only' ]] ||
+        remote_activation_refuse 'Migration activation requires an explicit policy.' \
+          activation_refused_migration_policy
+      release_record_is_approval_ref "$approval_ref" ||
+        remote_activation_refuse 'Migration activation requires a valid approval reference.' \
+          activation_refused_migration_policy
+      remote_ensure_activation_decision "$state_dir" "$candidate_commit" "$migration_policy" "$approval_ref" ||
+        remote_activation_refuse 'Activation decision conflicts with immutable evidence.' \
+          activation_refused_migration_policy
+      REMOTE_ACTIVATION_POLICY="$migration_policy"
+      REMOTE_ACTIVATION_APPROVAL_REF="$approval_ref"
+      ;;
+    *)
+      remote_activation_refuse 'Migration classification is invalid.'
+      ;;
+  esac
 }
 
 remote_revalidate_activation_cutover_inputs() {
@@ -2180,6 +2292,7 @@ remote_validate_transaction() {
   local path="$1"
   local expected_candidate="$2"
   local expected_previous="$3"
+  local expected_policy="$4"
   local protocol kind candidate previous policy phase started updated
 
   release_record_validate_keys "$path" \
@@ -2195,9 +2308,12 @@ remote_validate_transaction() {
   updated="$(release_record_get_unique "$path" updated_at_utc)" || return 1
   [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'activation_transaction' &&
     "$candidate" == "$expected_candidate" && "$previous" == "$expected_previous" &&
-    "$policy" == 'automatic' ]] || return 1
+    "$policy" == "$expected_policy" ]] || return 1
+  case "$policy" in automatic|backward-compatible|forward-only) ;; *) return 1 ;; esac
   case "$phase" in
-    cutover_started|candidate_healthy|root_sync_started|root_sync_completed|markers_published) ;;
+    cutover_started|candidate_healthy|root_sync_started|root_sync_completed|markers_published|\
+      rollback_recovered|rollback_cleanup_started|candidate_tags_removed|\
+      candidate_artifact_removal_started|candidate_artifacts_removed|prepared_removed) ;;
     *) return 1 ;;
   esac
   release_record_is_timestamp "$started" && release_record_is_timestamp "$updated"
@@ -2208,21 +2324,24 @@ remote_write_transaction() {
   local path="$2"
   local candidate="$3"
   local previous="$4"
-  local phase="$5"
-  local started_at="$6"
-  local updated_at="$7"
+  local policy="$5"
+  local phase="$6"
+  local started_at="$7"
+  local updated_at="$8"
+
+  case "$policy" in automatic|backward-compatible|forward-only) ;; *) return 2 ;; esac
 
   printf '%s\n' \
     "protocol_version=$REMOTE_PROTOCOL_VERSION" \
     'record_kind=activation_transaction' \
     "candidate_commit=$candidate" \
     "previous_commit=$previous" \
-    'migration_policy=automatic' \
+    "migration_policy=$policy" \
     "phase=$phase" \
     "started_at_utc=$started_at" \
     "updated_at_utc=$updated_at" |
     release_record_write_atomic "$mode" "$path" || return 1
-  remote_validate_transaction "$path" "$candidate" "$previous" || return 1
+  remote_validate_transaction "$path" "$candidate" "$previous" "$policy" || return 1
   remote_fsync_path_and_parent "$path" || return 1
   remote_record_test_event journal_write "$phase"
 }
@@ -2231,14 +2350,34 @@ remote_update_transaction() {
   local path="$1"
   local candidate="$2"
   local previous="$3"
-  local phase="$4"
-  local started_at updated_epoch updated_at
+  local expected_policy="$4"
+  local phase="$5"
+  local current_phase started_at updated_epoch updated_at
 
-  remote_validate_transaction "$path" "$candidate" "$previous" || return 1
+  remote_validate_transaction "$path" "$candidate" "$previous" "$expected_policy" || return 1
+  current_phase="$(release_record_get_unique "$path" phase)" || return 1
+  case "$current_phase:$phase" in
+    cutover_started:candidate_healthy|\
+      candidate_healthy:root_sync_started|\
+      root_sync_started:root_sync_completed|\
+      root_sync_completed:markers_published|\
+      cutover_started:rollback_recovered|\
+      candidate_healthy:rollback_recovered|\
+      root_sync_started:rollback_recovered|\
+      root_sync_completed:rollback_recovered|\
+      markers_published:rollback_recovered|\
+      rollback_recovered:rollback_cleanup_started|\
+      rollback_cleanup_started:candidate_tags_removed|\
+      candidate_tags_removed:candidate_artifact_removal_started|\
+      candidate_artifact_removal_started:candidate_artifacts_removed|\
+      candidate_artifacts_removed:prepared_removed) ;;
+    *) return 1 ;;
+  esac
   started_at="$(release_record_get_unique "$path" started_at_utc)" || return 1
   updated_epoch="$(remote_now_epoch)" || return 1
   updated_at="$(remote_epoch_to_utc "$updated_epoch")" || return 1
-  remote_write_transaction replace "$path" "$candidate" "$previous" "$phase" "$started_at" "$updated_at"
+  remote_write_transaction replace "$path" "$candidate" "$previous" \
+    "$expected_policy" "$phase" "$started_at" "$updated_at"
 }
 
 remote_resolve_single_service_container() {
@@ -2510,10 +2649,36 @@ remote_run_tenant_smoke() {
   remote_cleanup_activation_temps
 }
 
+remote_root_rsync_arguments() {
+  local output_name="$1"
+  local -n output_arguments="$output_name"
+
+  output_arguments=(
+    -a
+    --delete
+    --checksum
+    --no-owner
+    --no-group
+    --exclude=/.env
+    --exclude=/.env.production
+    '--exclude=/.env.production.backup.*'
+    --exclude=/.git
+    --exclude=/.codex
+    --exclude=/.install
+    --exclude=/.release-state
+    --exclude=/.releases
+    --exclude=/logs
+    --exclude=/backups
+    --exclude=/BOOTSTRAP_SOURCE.txt
+    --exclude=/DEPLOY_SOURCE.txt
+  )
+}
+
 remote_sync_root_source() {
   local app_path="$1"
   local candidate_dir="$2"
   local root_mode root_uid root_gid
+  local -a rsync_arguments=()
 
   if remote_is_test_mode && [[ -n "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" ]]; then
     case "$STAGED_TEST_FAIL_PUBLICATION_AT" in
@@ -2530,20 +2695,8 @@ remote_sync_root_source() {
   root_gid="$(stat -c '%g' -- "$app_path")" || return 1
   [[ "$root_mode" =~ ^[0-7]{3,4}$ && "$root_uid" =~ ^[0-9]+$ && "$root_gid" =~ ^[0-9]+$ ]] || return 1
 
-  if ! "$REMOTE_RSYNC_BIN" -a --delete --checksum --no-owner --no-group \
-    --exclude=/.env \
-    --exclude=/.env.production \
-    '--exclude=/.env.production.backup.*' \
-    --exclude=/.git \
-    --exclude=/.codex \
-    --exclude=/.install \
-    --exclude=/.release-state \
-    --exclude=/.releases \
-    --exclude=/logs \
-    --exclude=/backups \
-    --exclude=/BOOTSTRAP_SOURCE.txt \
-    --exclude=/DEPLOY_SOURCE.txt \
-    "$candidate_dir/source/" "$app_path/"; then
+  remote_root_rsync_arguments rsync_arguments
+  if ! "$REMOTE_RSYNC_BIN" "${rsync_arguments[@]}" "$candidate_dir/source/" "$app_path/"; then
     chmod "$root_mode" "$app_path" >/dev/null 2>&1 || true
     return 1
   fi
@@ -2551,6 +2704,23 @@ remote_sync_root_source() {
   [[ "$(stat -c '%a' -- "$app_path")" == "$root_mode" &&
     "$(stat -c '%u' -- "$app_path")" == "$root_uid" &&
     "$(stat -c '%g' -- "$app_path")" == "$root_gid" ]]
+}
+
+remote_verify_root_source() {
+  local app_path="$1"
+  local release_dir="$2"
+  local differences line
+  local -a rsync_arguments=()
+
+  remote_root_rsync_arguments rsync_arguments
+  differences="$(
+    "$REMOTE_RSYNC_BIN" "${rsync_arguments[@]}" --dry-run --itemize-changes \
+      "$release_dir/source/" "$app_path/"
+  )" || return 1
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "${line#* }" == './' ]] || return 1
+  done <<<"$differences"
 }
 
 remote_stage_active_marker() {
@@ -2634,6 +2804,11 @@ remote_publish_activation_markers() {
   if [[ "$first_adoption" == 'true' ]]; then
     [[ "$(remote_pointer_read "$state_dir/adoption")" == "$previous_commit" ]] || return 1
     rm -f -- "$state_dir/adoption" || return 1
+    if remote_is_test_mode && [[ "${STAGED_TEST_FAIL_ADOPTION_AFTER_UNLINK:-false}" == 'true' ]]; then
+      return 1
+    elif [[ "${STAGED_TEST_FAIL_ADOPTION_AFTER_UNLINK:-false}" != 'false' ]]; then
+      return 1
+    fi
     remote_fsync_path_and_parent "$state_dir" || return 1
   fi
 }
@@ -2642,39 +2817,67 @@ remote_validate_outcome() {
   local path="$1"
   local expected_candidate="$2"
   local expected_status="$3"
-  local protocol kind candidate previous status stage timestamp epoch
+  local expected_previous="${4:-}"
+  local expected_started="${5:-}"
+  local protocol kind candidate previous status stage started timestamp epoch
 
   release_record_validate_keys "$path" protocol_version record_kind candidate_commit previous_commit \
-    status failure_stage recorded_at_utc recorded_at_epoch || return 1
+    status failure_stage transaction_started_at_utc recorded_at_utc recorded_at_epoch || return 1
   protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
   kind="$(release_record_get_unique "$path" record_kind)" || return 1
   candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
   previous="$(release_record_get_unique "$path" previous_commit)" || return 1
   status="$(release_record_get_unique "$path" status)" || return 1
   stage="$(release_record_get_unique "$path" failure_stage)" || return 1
+  started="$(release_record_get_unique "$path" transaction_started_at_utc)" || return 1
   timestamp="$(release_record_get_unique "$path" recorded_at_utc)" || return 1
   epoch="$(release_record_get_unique "$path" recorded_at_epoch)" || return 1
   [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'deployment_outcome' &&
     "$candidate" == "$expected_candidate" && "$status" == "$expected_status" ]] || return 1
+  [[ -z "$expected_previous" || "$previous" == "$expected_previous" ]] || return 1
+  [[ -z "$expected_started" || "$started" == "$expected_started" ]] || return 1
   release_record_is_sha "$previous" || [[ "$previous" == 'none' ]] || return 1
   case "$status" in
     activation_succeeded|candidate_failed_rollback_succeeded|candidate_failed_rollback_failed|candidate_failed_forward_only) ;;
     *) return 1 ;;
   esac
-  case "$stage" in none|compose_wait|service_state|tenant_smoke|root_sync|marker_publish) ;;
-    *) return 1 ;;
+  case "$status" in
+    activation_succeeded) [[ "$stage" == 'none' ]] || return 1 ;;
+    *)
+      case "$stage" in compose_wait|service_state|tenant_smoke|root_sync|marker_publish) ;;
+        *) return 1 ;;
+      esac
+      ;;
   esac
-  [[ "$status" != 'activation_succeeded' || "$stage" == 'none' ]] || return 1
+  release_record_is_timestamp "$started" || return 1
   release_record_is_timestamp "$timestamp" || return 1
+  [[ "$started" > "$timestamp" ]] && return 1
   [[ "$epoch" =~ ^[0-9]+$ && "$epoch" -ge 1 ]]
+}
+
+remote_outcome_transaction_started_at() {
+  local state_dir="$1"
+  local candidate="$2"
+  local previous="$3"
+  local transaction="$state_dir/transaction"
+  local transaction_candidate transaction_previous started
+
+  release_record_require_private_file "$transaction" || return 1
+  transaction_candidate="$(release_record_get_unique "$transaction" candidate_commit)" || return 1
+  transaction_previous="$(release_record_get_unique "$transaction" previous_commit)" || return 1
+  started="$(release_record_get_unique "$transaction" started_at_utc)" || return 1
+  [[ "$transaction_candidate" == "$candidate" && "$transaction_previous" == "$previous" ]] || return 1
+  release_record_is_timestamp "$started" || return 1
+  printf '%s\n' "$started"
 }
 
 remote_write_success_outcome() {
   local state_dir="$1"
   local candidate="$2"
   local previous="$3"
-  local epoch timestamp path
+  local epoch timestamp started path
 
+  started="$(remote_outcome_transaction_started_at "$state_dir" "$candidate" "$previous")" || return 1
   epoch="$(remote_now_epoch)" || return 1
   timestamp="$(remote_epoch_to_utc "$epoch")" || return 1
   path="$state_dir/history/$epoch-$candidate-activation_succeeded.txt"
@@ -2685,10 +2888,11 @@ remote_write_success_outcome() {
     "previous_commit=$previous" \
     'status=activation_succeeded' \
     'failure_stage=none' \
+    "transaction_started_at_utc=$started" \
     "recorded_at_utc=$timestamp" \
     "recorded_at_epoch=$epoch" |
     release_record_write_atomic create "$path" || return 1
-  remote_validate_outcome "$path" "$candidate" activation_succeeded || return 1
+  remote_validate_outcome "$path" "$candidate" activation_succeeded "$previous" "$started" || return 1
   remote_fsync_path_and_parent "$path" || return 1
   remote_record_test_event outcome_write activation_succeeded
 }
@@ -2786,6 +2990,592 @@ remote_cleanup_history() {
   remote_fsync_path_and_parent "$history_dir"
 }
 
+remote_write_failure_outcome() {
+  local state_dir="$1"
+  local candidate="$2"
+  local previous="$3"
+  local status="$4"
+  local stage="$5"
+  local epoch timestamp started path
+
+  case "$status" in
+    candidate_failed_rollback_succeeded|candidate_failed_rollback_failed|candidate_failed_forward_only) ;;
+    *) return 2 ;;
+  esac
+  case "$stage" in compose_wait|service_state|tenant_smoke|root_sync|marker_publish) ;; *) return 2 ;; esac
+  started="$(remote_outcome_transaction_started_at "$state_dir" "$candidate" "$previous")" || return 1
+  epoch="$(remote_now_epoch)" || return 1
+  timestamp="$(remote_epoch_to_utc "$epoch")" || return 1
+  path="$state_dir/history/$epoch-$candidate-$status.txt"
+  printf '%s\n' \
+    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+    'record_kind=deployment_outcome' \
+    "candidate_commit=$candidate" \
+    "previous_commit=$previous" \
+    "status=$status" \
+    "failure_stage=$stage" \
+    "transaction_started_at_utc=$started" \
+    "recorded_at_utc=$timestamp" \
+    "recorded_at_epoch=$epoch" |
+    release_record_write_atomic create "$path" || return 1
+  remote_validate_outcome "$path" "$candidate" "$status" "$previous" "$started" || return 1
+  remote_fsync_path_and_parent "$path" || return 1
+  remote_record_test_event outcome_write "$status"
+}
+
+REMOTE_CRITICAL_STATUS=''
+REMOTE_CRITICAL_OUTCOME_PATH=''
+remote_find_critical_outcome() {
+  local state_dir="$1"
+  local candidate="$2"
+  local expected_previous="${3:-}"
+  local expected_started="${4:-}"
+  local transaction="$state_dir/transaction"
+  local entry status record_candidate record_started
+  local -a entries=() matches=()
+
+  REMOTE_CRITICAL_STATUS=''
+  REMOTE_CRITICAL_OUTCOME_PATH=''
+  if [[ -f "$transaction" ]]; then
+    [[ -n "$expected_previous" ]] ||
+      expected_previous="$(release_record_get_unique "$transaction" previous_commit)" || return 1
+    [[ -n "$expected_started" ]] ||
+      expected_started="$(release_record_get_unique "$transaction" started_at_utc)" || return 1
+  fi
+  [[ -n "$expected_started" ]] || return 0
+  release_record_is_sha "$expected_previous" || [[ "$expected_previous" == 'none' ]] || return 1
+  release_record_is_timestamp "$expected_started" || return 1
+  remote_require_private_directory "$state_dir/history" || return 1
+  remote_find_paths entries "$state_dir/history" -mindepth 1 -maxdepth 1 -type f || return 1
+  for entry in "${entries[@]}"; do
+    record_candidate="$(release_record_get_unique "$entry" candidate_commit 2>/dev/null)" || continue
+    [[ "$record_candidate" == "$candidate" ]] || continue
+    record_started="$(release_record_get_unique "$entry" transaction_started_at_utc 2>/dev/null)" || continue
+    [[ "$record_started" == "$expected_started" ]] || continue
+    status="$(release_record_get_unique "$entry" status 2>/dev/null)" || return 1
+    case "$status" in
+      activation_succeeded|candidate_failed_rollback_succeeded|\
+        candidate_failed_rollback_failed|candidate_failed_forward_only)
+        remote_validate_outcome \
+          "$entry" "$candidate" "$status" "$expected_previous" "$expected_started" || return 1
+        matches+=("$status"$'\t'"$entry")
+        ;;
+    esac
+  done
+  (( ${#matches[@]} <= 1 )) || return 1
+  if (( ${#matches[@]} == 1 )); then
+    REMOTE_CRITICAL_STATUS="${matches[0]%%$'\t'*}"
+    REMOTE_CRITICAL_OUTCOME_PATH="${matches[0]#*$'\t'}"
+  fi
+  return 0
+}
+
+remote_find_standalone_critical_outcome() {
+  local state_dir="$1"
+  local candidate="$2"
+  local entry status record_candidate
+  local -a entries=() matches=()
+
+  REMOTE_CRITICAL_STATUS=''
+  REMOTE_CRITICAL_OUTCOME_PATH=''
+  remote_require_private_directory "$state_dir/history" || return 1
+  remote_find_paths entries "$state_dir/history" -mindepth 1 -maxdepth 1 -type f || return 1
+  for entry in "${entries[@]}"; do
+    record_candidate="$(release_record_get_unique "$entry" candidate_commit 2>/dev/null)" || continue
+    [[ "$record_candidate" == "$candidate" ]] || continue
+    status="$(release_record_get_unique "$entry" status 2>/dev/null)" || return 1
+    case "$status" in
+      candidate_failed_rollback_failed|candidate_failed_forward_only)
+        remote_validate_outcome "$entry" "$candidate" "$status" || return 1
+        matches+=("$status"$'\t'"$entry")
+        ;;
+    esac
+  done
+  (( ${#matches[@]} <= 1 )) || return 1
+  if (( ${#matches[@]} == 1 )); then
+    REMOTE_CRITICAL_STATUS="${matches[0]%%$'\t'*}"
+    REMOTE_CRITICAL_OUTCOME_PATH="${matches[0]#*$'\t'}"
+  fi
+  return 0
+}
+
+remote_print_critical_evidence() {
+  local app_path="$1"
+  local candidate="$2"
+  local status="$3"
+  local state_dir="$app_path/.release-state"
+  local current='none' previous='none'
+
+  if [[ -f "$state_dir/current" ]]; then
+    current="$(remote_pointer_read "$state_dir/current")" || current='invalid'
+  elif [[ -f "$state_dir/adoption" ]]; then
+    current="$(remote_pointer_read "$state_dir/adoption")" || current='invalid'
+  fi
+  [[ ! -f "$state_dir/previous" ]] || previous="$(remote_pointer_read "$state_dir/previous")" || previous='invalid'
+  printf 'critical_status=%s\n' "$status"
+  printf 'critical_candidate_commit=%s\n' "$candidate"
+  printf 'critical_current_commit=%s\n' "$current"
+  printf 'critical_previous_commit=%s\n' "$previous"
+  [[ ! -f "$state_dir/transaction" ]] || printf 'manual_transaction_path=%s\n' "$state_dir/transaction"
+  [[ ! -f "$state_dir/prepared" ]] || printf 'manual_prepared_path=%s\n' "$state_dir/prepared"
+  [[ ! -f "$state_dir/decisions/$candidate.txt" ]] ||
+    printf 'manual_decision_path=%s\n' "$state_dir/decisions/$candidate.txt"
+  [[ -z "$REMOTE_CRITICAL_OUTCOME_PATH" ]] || printf 'manual_outcome_path=%s\n' "$REMOTE_CRITICAL_OUTCOME_PATH"
+  printf 'manual_candidate_path=%s\n' "$app_path/.releases/$candidate"
+}
+
+remote_block_on_critical_state() {
+  local app_path="$1"
+  local operation="$2"
+  local state_dir="$app_path/.release-state"
+  local transaction="$state_dir/transaction"
+  local candidate='' prepared_candidate='' transaction_candidate='' transaction_previous=''
+  local transaction_policy='' transaction_started='' status=''
+  local prepared_valid='true' transaction_present='false' transaction_valid='false'
+
+  [[ "$operation" == 'prepare' || "$operation" == 'activate' ]] || return 2
+  if [[ -e "$state_dir/prepared" || -L "$state_dir/prepared" ]]; then
+    if prepared_candidate="$(remote_pointer_read "$state_dir/prepared" 2>/dev/null)"; then
+      candidate="$prepared_candidate"
+    else
+      prepared_valid='false'
+    fi
+  fi
+  if [[ -e "$transaction" || -L "$transaction" ]]; then
+    transaction_present='true'
+    if release_record_require_private_file "$transaction"; then
+      transaction_candidate="$(release_record_get_unique "$transaction" candidate_commit 2>/dev/null || true)"
+      transaction_previous="$(release_record_get_unique "$transaction" previous_commit 2>/dev/null || true)"
+      transaction_policy="$(release_record_get_unique "$transaction" migration_policy 2>/dev/null || true)"
+      transaction_started="$(release_record_get_unique "$transaction" started_at_utc 2>/dev/null || true)"
+      if release_record_is_sha "$transaction_candidate"; then
+        candidate="$transaction_candidate"
+      fi
+      if release_record_is_sha "$transaction_candidate" &&
+        release_record_is_sha "$transaction_previous" &&
+        release_record_is_timestamp "$transaction_started" &&
+        remote_validate_transaction "$transaction" "$transaction_candidate" \
+          "$transaction_previous" "$transaction_policy" &&
+        [[ "$prepared_valid" == 'true' &&
+          ( -z "$prepared_candidate" || "$prepared_candidate" == "$transaction_candidate" ) ]]; then
+        transaction_valid='true'
+      fi
+    fi
+  fi
+  if [[ "$transaction_present" == 'false' ]]; then
+    [[ "$prepared_valid" == 'true' ]] || return 1
+    [[ -n "$candidate" ]] || return 0
+    if remote_find_standalone_critical_outcome "$state_dir" "$candidate"; then
+      status="$REMOTE_CRITICAL_STATUS"
+    else
+      status='critical_outcome_ambiguous'
+    fi
+    [[ -n "$status" ]] || return 0
+    remote_print_critical_evidence "$app_path" "$candidate" "$status"
+    if [[ "$operation" == 'prepare' ]]; then
+      remote_fail 'Prepared candidate has unresolved critical deployment evidence.' prepare_failed
+    fi
+    remote_activation_refuse 'Prepared candidate has unresolved critical deployment evidence.'
+  fi
+  [[ -n "$candidate" ]] || return 1
+  if release_record_is_sha "$transaction_previous" &&
+    release_record_is_timestamp "$transaction_started"; then
+    if remote_find_critical_outcome \
+      "$state_dir" "$candidate" "$transaction_previous" "$transaction_started"; then
+      status="$REMOTE_CRITICAL_STATUS"
+    else
+      transaction_valid='false'
+    fi
+  fi
+  if [[ -z "$status" ]]; then
+    if [[ "$transaction_valid" == 'true' ]]; then
+      status='transaction_unresolved'
+    else
+      status='transaction_invalid'
+    fi
+  fi
+  remote_print_critical_evidence "$app_path" "$candidate" "$status"
+  if [[ "$operation" == 'prepare' ]]; then
+    remote_fail 'Prepared candidate has unresolved critical deployment evidence.' prepare_failed
+  fi
+  remote_activation_refuse 'Prepared candidate has unresolved critical deployment evidence.'
+}
+
+remote_print_candidate_evidence() {
+  local app_path="$1"
+  local status="$2"
+  local stage="$3"
+  local state_dir="$app_path/.release-state"
+  local service details='unavailable' current='none' previous='none'
+
+  [[ ! -f "$state_dir/current" ]] || current="$(remote_pointer_read "$state_dir/current" 2>/dev/null || printf invalid)"
+  [[ ! -f "$state_dir/previous" ]] || previous="$(remote_pointer_read "$state_dir/previous" 2>/dev/null || printf invalid)"
+  printf 'failure_status=%s\n' "$status"
+  printf 'failure_stage=%s\n' "$stage"
+  printf 'candidate_commit=%s\n' "$REMOTE_ACTIVATION_CANDIDATE_COMMIT"
+  printf 'current_commit=%s\n' "$current"
+  printf 'previous_commit=%s\n' "$previous"
+  printf 'candidate_backend_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-unavailable}"
+  printf 'candidate_web_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-unavailable}"
+  printf 'candidate_telegram_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[2]:-unavailable}"
+  for service in portal-backend portal-web telegram-bridge; do
+    if remote_resolve_single_service_container "$service"; then
+      details="$("${REMOTE_DOCKER[@]}" inspect --format \
+        '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+        "$REMOTE_RESOLVED_CONTAINER_ID" 2>/dev/null || printf unavailable)"
+    else
+      details='unavailable'
+    fi
+    printf 'container_%s=%s\n' "${service//-/_}" "$details"
+  done
+}
+
+remote_restore_previous_markers() {
+  local app_path="$1"
+  local previous_commit="$2"
+  local archive_sha="$3"
+  local previous_before="$4"
+  local first_adoption="$5"
+  local state_dir="$app_path/.release-state"
+  local epoch activated_at adoption_missing='false'
+
+  if [[ "$first_adoption" == 'true' ]]; then
+    if [[ -f "$state_dir/adoption" ]]; then
+      [[ "$(remote_pointer_read "$state_dir/adoption")" == "$previous_commit" ]] || return 1
+    else
+      [[ ! -e "$state_dir/adoption" && ! -L "$state_dir/adoption" ]] || return 1
+      remote_validate_failure_policy_evidence "$app_path" || return 1
+      [[ "$(remote_pointer_read "$state_dir/current")" == "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" ]] || return 1
+      [[ "$(remote_pointer_read "$state_dir/previous")" == "$previous_commit" ]] || return 1
+      [[ "$(release_marker_read_active_commit "$app_path/DEPLOY_SOURCE.txt")" == \
+        "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" ]] || return 1
+      adoption_missing='true'
+    fi
+  fi
+
+  epoch="$(remote_now_epoch)" || return 1
+  activated_at="$(remote_epoch_to_utc "$epoch")" || return 1
+  remote_stage_active_marker "$app_path" "$previous_commit" "$archive_sha" "$activated_at" || return 1
+  if [[ -n "$previous_before" ]]; then
+    remote_stage_pointer_temp "$state_dir" "$previous_before" REMOTE_PUBLICATION_PREVIOUS_TEMP || return 1
+  fi
+  remote_stage_pointer_temp "$state_dir" "$previous_commit" REMOTE_PUBLICATION_CURRENT_TEMP || return 1
+
+  mv -T -- "$REMOTE_PUBLICATION_MARKER_TEMP" "$app_path/DEPLOY_SOURCE.txt" || return 1
+  REMOTE_PUBLICATION_MARKER_TEMP=''
+  remote_fsync_path_and_parent "$app_path/DEPLOY_SOURCE.txt" || return 1
+  remote_record_test_event rollback_marker_rename DEPLOY_SOURCE.txt || return 1
+  if [[ -n "$previous_before" ]]; then
+    mv -T -- "$REMOTE_PUBLICATION_PREVIOUS_TEMP" "$state_dir/previous" || return 1
+    REMOTE_PUBLICATION_PREVIOUS_TEMP=''
+    remote_fsync_path_and_parent "$state_dir/previous" || return 1
+  else
+    rm -f -- "$state_dir/previous" || return 1
+    remote_fsync_path_and_parent "$state_dir" || return 1
+  fi
+  mv -T -- "$REMOTE_PUBLICATION_CURRENT_TEMP" "$state_dir/current" || return 1
+  REMOTE_PUBLICATION_CURRENT_TEMP=''
+  remote_fsync_path_and_parent "$state_dir/current" || return 1
+  remote_record_test_event rollback_marker_rename current || return 1
+  if [[ "$first_adoption" == 'true' ]]; then
+    if [[ "$adoption_missing" == 'false' ]]; then
+      [[ "$(remote_pointer_read "$state_dir/adoption")" == "$previous_commit" ]] || return 1
+      rm -f -- "$state_dir/adoption" || return 1
+      remote_fsync_path_and_parent "$state_dir" || return 1
+    fi
+  fi
+  [[ "$(remote_pointer_read "$state_dir/current")" == "$previous_commit" ]] || return 1
+  [[ "$(release_marker_read_active_commit "$app_path/DEPLOY_SOURCE.txt")" == "$previous_commit" ]] || return 1
+  if [[ -n "$previous_before" ]]; then
+    [[ "$(remote_pointer_read "$state_dir/previous")" == "$previous_before" ]] || return 1
+  else
+    [[ ! -e "$state_dir/previous" && ! -L "$state_dir/previous" ]] || return 1
+  fi
+}
+
+remote_run_exact_rollback() {
+  local app_path="$1"
+  local stage="$2"
+  local previous_commit="$REMOTE_ACTIVATION_PREVIOUS_COMMIT"
+  local previous_dir="$app_path/.releases/$previous_commit"
+  local saved_candidate_ids
+
+  remote_load_release_evidence "$previous_dir" "$previous_commit" || return 1
+  [[ "$REMOTE_ROLLBACK_ARCHIVE_SHA" == "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" &&
+    "$REMOTE_ROLLBACK_BACKEND_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[0]}" &&
+    "$REMOTE_ROLLBACK_WEB_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[1]}" &&
+    "$REMOTE_ROLLBACK_TELEGRAM_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[2]}" ]] || return 1
+  remote_validate_release_source_snapshot "$previous_dir" "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" || return 1
+  remote_validate_release_override "$previous_dir" "$previous_commit" || return 1
+  [[ "$(remote_image_id "$(remote_release_tag portal-backend "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[0]}" ]] || return 1
+  [[ "$(remote_image_id "$(remote_release_tag portal-web "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[1]}" ]] || return 1
+  [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[2]}" ]] || return 1
+  remote_configure_compose "$app_path" "$previous_dir" || return 1
+  "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1 || return 1
+
+  saved_candidate_ids="$(printf '%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}")"
+  REMOTE_ACTIVATION_CANDIDATE_IDS=("${REMOTE_ACTIVATION_PREVIOUS_IDS[@]}")
+  if ! remote_capture_candidate_services ||
+    ! remote_run_tenant_smoke \
+      "$app_path/.releases/$REMOTE_ACTIVATION_CANDIDATE_COMMIT/tenants.tsv" \
+      "$REMOTE_ACTIVATION_TENANT_COUNT" ||
+    ! remote_recheck_candidate_services; then
+    mapfile -t REMOTE_ACTIVATION_CANDIDATE_IDS <<<"$saved_candidate_ids"
+    return 1
+  fi
+  mapfile -t REMOTE_ACTIVATION_CANDIDATE_IDS <<<"$saved_candidate_ids"
+
+  if [[ "$stage" == 'root_sync' || "$stage" == 'marker_publish' ||
+    "$REMOTE_ACTIVATION_FIRST_ADOPTION" == 'true' ]]; then
+    remote_sync_root_source "$app_path" "$previous_dir" || return 1
+    remote_verify_root_source "$app_path" "$previous_dir" || return 1
+    remote_restore_previous_markers \
+      "$app_path" "$previous_commit" "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" \
+      "$REMOTE_ACTIVATION_OLD_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_FIRST_ADOPTION" || return 1
+  fi
+  remote_record_test_event rollback_runtime_healthy "$previous_commit"
+}
+
+remote_cleanup_failed_candidate() {
+  local app_path="$1"
+  local candidate="$2"
+  local state_dir="$app_path/.release-state"
+  local release_dir="$app_path/.releases/$candidate"
+  local manifest="$release_dir/manifest.txt"
+  local transaction="$state_dir/transaction"
+  local service tag image_id index removed_count=0
+  local -a tags=() ids=()
+
+  release_record_is_sha "$candidate" || return 2
+  [[ "$release_dir" == "$app_path/.releases/$candidate" &&
+    "$release_dir" == "$app_path/.releases/"* && -d "$release_dir" && ! -L "$release_dir" ]] || return 1
+  [[ "$(remote_pointer_read "$state_dir/prepared")" == "$candidate" ]] || return 1
+  remote_validate_prepared_manifest "$manifest" "$candidate" || return 1
+  for service in backend web telegram; do
+    tag="$(release_record_get_unique "$manifest" "${service}_image_tag")" || return 1
+    image_id="$(release_record_get_unique "$manifest" "${service}_image_id")" || return 1
+    [[ "$(remote_image_id "$tag")" == "$image_id" ]] || return 1
+    tags+=("$tag")
+    ids+=("$image_id")
+  done
+  remote_update_transaction "$transaction" "$candidate" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" rollback_cleanup_started || return 1
+  for index in 0 1 2; do
+    if ! remote_remove_exact_tag "${tags[$index]}" "${ids[$index]}"; then
+      while (( removed_count > 0 )); do
+        removed_count=$((removed_count - 1))
+        remote_tag_exact_image "${ids[$removed_count]}" "${tags[$removed_count]}" || true
+      done
+      return 1
+    fi
+    removed_count=$((removed_count + 1))
+  done
+  if ! remote_update_transaction "$transaction" "$candidate" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_tags_removed; then
+    for index in 0 1 2; do
+      remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
+    done
+    return 1
+  fi
+  if ! remote_update_transaction "$transaction" "$candidate" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_artifact_removal_started; then
+    for index in 0 1 2; do
+      remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
+    done
+    return 1
+  fi
+  if ! rm -rf -- "$release_dir"; then
+    for index in 0 1 2; do
+      remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
+    done
+    return 1
+  fi
+  remote_fsync_path_and_parent "$app_path/.releases" || return 1
+  if [[ -n "${STAGED_TEST_FAIL_ROLLBACK_CLEANUP_AT:-}" ]]; then
+    remote_is_test_mode || return 1
+    [[ "$STAGED_TEST_FAIL_ROLLBACK_CLEANUP_AT" == 'after_candidate_artifact_remove' ]] || return 1
+    return 1
+  fi
+  remote_update_transaction "$transaction" "$candidate" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_artifacts_removed || return 1
+  rm -f -- "$state_dir/prepared" || return 1
+  remote_fsync_path_and_parent "$state_dir" || return 1
+  remote_record_test_event prepared_remove "$candidate" || return 1
+  remote_update_transaction "$transaction" "$candidate" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" prepared_removed
+}
+
+remote_validate_failure_policy_evidence() {
+  local app_path="$1"
+  local state_dir="$app_path/.release-state"
+  local decision="$state_dir/decisions/$REMOTE_ACTIVATION_CANDIDATE_COMMIT.txt"
+  local phase
+
+  remote_validate_transaction \
+    "$state_dir/transaction" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" || return 1
+  phase="$(release_record_get_unique "$state_dir/transaction" phase)" || return 1
+  case "$phase" in
+    cutover_started|candidate_healthy|root_sync_started|root_sync_completed|markers_published) ;;
+    *) return 1 ;;
+  esac
+  case "$REMOTE_ACTIVATION_MIGRATION" in
+    none)
+      [[ "$REMOTE_ACTIVATION_POLICY" == 'automatic' &&
+        -z "$REMOTE_ACTIVATION_APPROVAL_REF" &&
+        ! -e "$decision" && ! -L "$decision" ]] || return 1
+      ;;
+    migration)
+      [[ "$REMOTE_ACTIVATION_POLICY" == 'backward-compatible' ||
+        "$REMOTE_ACTIVATION_POLICY" == 'forward-only' ]] || return 1
+      [[ "$REMOTE_ACTIVATION_DECISION_PATH" == "$decision" ]] || return 1
+      remote_validate_activation_decision \
+        "$decision" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+        "$REMOTE_ACTIVATION_POLICY" "$REMOTE_ACTIVATION_APPROVAL_REF" || return 1
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+handle_candidate_failure() {
+  local stage="$1"
+  local app_path="$REMOTE_EFFECTIVE_APP_PATH"
+  local state_dir="$app_path/.release-state"
+  local status
+
+  case "$stage" in compose_wait|service_state|tenant_smoke|root_sync|marker_publish) ;; *) return 2 ;; esac
+  REMOTE_ACTIVATION_FAILURE_STAGE="$stage"
+
+  if ! remote_validate_failure_policy_evidence "$app_path"; then
+    status='candidate_failed_rollback_failed'
+    remote_write_failure_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+      "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$status" "$stage" || true
+    remote_cleanup_history "$state_dir/history" || true
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    remote_fail 'Activation policy evidence changed after cutover; previous code was not started.' "$status"
+  fi
+
+  if [[ "$REMOTE_ACTIVATION_POLICY" == 'forward-only' ]]; then
+    status='candidate_failed_forward_only'
+    remote_write_failure_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+      "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$status" "$stage" ||
+      remote_fail 'Forward-only failure outcome could not be persisted.' activation_failed_publication
+    if ! remote_cleanup_history "$state_dir/history"; then
+      printf 'Warning: forward-only history cleanup requires operator review.\n' >&2
+    fi
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    remote_fail 'Candidate failed under forward-only policy; preserved evidence requires operator action.' "$status"
+  fi
+
+  if ! remote_run_exact_rollback "$app_path" "$stage"; then
+    status='candidate_failed_rollback_failed'
+    remote_write_failure_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+      "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$status" "$stage" || true
+    remote_cleanup_history "$state_dir/history" || true
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    remote_fail 'Candidate and automatic exact rollback both failed; preserved evidence requires operator action.' "$status"
+  fi
+
+  status='candidate_failed_rollback_succeeded'
+  remote_write_failure_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$status" "$stage" ||
+    remote_fail 'Recovered runtime, but rollback outcome could not be persisted.' candidate_failed_rollback_failed
+  if ! remote_update_transaction "$state_dir/transaction" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" rollback_recovered; then
+    remote_find_critical_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" || true
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    printf 'Warning: recovered runtime journal finalization requires operator review.\n' >&2
+    remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+  fi
+  if ! remote_cleanup_history "$state_dir/history"; then
+    remote_find_critical_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" || true
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    printf 'Warning: recovered runtime history cleanup requires operator review.\n' >&2
+    remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+  fi
+  if ! remote_cleanup_failed_candidate "$app_path" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT"; then
+    remote_find_critical_outcome "$state_dir" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" || true
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    printf 'Warning: recovered runtime candidate cleanup requires operator review.\n' >&2
+    remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+  fi
+  remote_validate_transaction "$state_dir/transaction" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" || {
+      remote_print_candidate_evidence "$app_path" "$status" "$stage"
+      printf 'Warning: recovered runtime journal validation requires operator review.\n' >&2
+      remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+    }
+  if ! rm -f -- "$state_dir/transaction" || ! remote_fsync_path_and_parent "$state_dir" ||
+    ! remote_record_test_event journal_remove "$status"; then
+    remote_print_candidate_evidence "$app_path" "$status" "$stage"
+    printf 'Warning: recovered runtime journal cleanup requires operator review.\n' >&2
+    remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+  fi
+  remote_print_candidate_evidence "$app_path" "$status" "$stage"
+  remote_fail 'Candidate failed; exact previous runtime was restored.' "$status"
+}
+
+remote_validate_activation_commit_point() {
+  local app_path="$1"
+  local state_dir="$app_path/.release-state"
+  local transaction="$state_dir/transaction"
+
+  remote_validate_transaction "$transaction" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" || return 1
+  [[ "$(release_record_get_unique "$transaction" phase)" == 'markers_published' ]] || return 1
+  [[ "$(remote_pointer_read "$state_dir/current")" == "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" ]] || return 1
+  [[ "$(remote_pointer_read "$state_dir/previous")" == "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ]] || return 1
+  [[ "$(release_marker_read_active_commit "$app_path/DEPLOY_SOURCE.txt")" == \
+    "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" ]] || return 1
+  [[ "$(release_record_get_unique "$app_path/DEPLOY_SOURCE.txt" archive_sha256)" == \
+    "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" ]] || return 1
+  remote_verify_root_source "$app_path" "$app_path/.releases/$REMOTE_ACTIVATION_CANDIDATE_COMMIT"
+}
+
+remote_finalization_checkpoint() {
+  local checkpoint="$1"
+  local requested="${STAGED_TEST_FAIL_FINALIZATION_AT:-}"
+
+  [[ -n "$requested" ]] || return 0
+  case "$requested" in
+    before_prepared_validation|before_prepared_remove|after_prepared_remove|\
+      after_prepared_durable|after_prepared_event|before_transaction_validation|\
+      before_transaction_remove|after_transaction_remove|after_transaction_durable|\
+      after_transaction_event) ;;
+    *) return 1 ;;
+  esac
+  remote_is_test_mode || return 1
+  [[ "$requested" != "$checkpoint" ]]
+}
+
+remote_cleanup_committed_activation() {
+  local app_path="$1"
+  local state_dir="$app_path/.release-state"
+  local transaction="$state_dir/transaction"
+
+  remote_finalization_checkpoint before_prepared_validation || return 1
+  [[ "$(remote_pointer_read "$state_dir/prepared")" == "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" ]] || return 1
+  remote_finalization_checkpoint before_prepared_remove || return 1
+  rm -f -- "$state_dir/prepared" || return 1
+  remote_finalization_checkpoint after_prepared_remove || return 1
+  remote_fsync_path_and_parent "$state_dir" || return 1
+  remote_finalization_checkpoint after_prepared_durable || return 1
+  remote_record_test_event prepared_remove "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" || return 1
+  remote_finalization_checkpoint after_prepared_event || return 1
+
+  remote_finalization_checkpoint before_transaction_validation || return 1
+  remote_validate_transaction "$transaction" "$REMOTE_ACTIVATION_CANDIDATE_COMMIT" \
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" || return 1
+  remote_finalization_checkpoint before_transaction_remove || return 1
+  rm -f -- "$transaction" || return 1
+  remote_finalization_checkpoint after_transaction_remove || return 1
+  remote_fsync_path_and_parent "$state_dir" || return 1
+  remote_finalization_checkpoint after_transaction_durable || return 1
+  remote_record_test_event journal_remove activation_succeeded || return 1
+  remote_finalization_checkpoint after_transaction_event || return 1
+}
+
 remote_locked_activate() {
   local app_path="$1"
   local candidate_commit="$2"
@@ -2822,6 +3612,8 @@ remote_locked_activate() {
   remote_revalidate_activation_cutover_inputs "$app_path" "$candidate_commit" ||
     remote_activation_refuse 'Activation inputs changed before cutover.'
   [[ -f "$state_dir/current" ]] || first_adoption='true'
+  REMOTE_ACTIVATION_OLD_PREVIOUS_COMMIT="$old_previous"
+  REMOTE_ACTIVATION_FIRST_ADOPTION="$first_adoption"
   expires_epoch="$(release_record_get_unique "$candidate_dir/manifest.txt" expires_at_epoch)" ||
     remote_activation_refuse 'Prepared expiry evidence changed before cutover.'
   [[ "$expires_epoch" =~ ^[0-9]+$ ]] ||
@@ -2832,61 +3624,58 @@ remote_locked_activate() {
   started_at="$(remote_epoch_to_utc "$started_epoch")" || remote_activation_refuse 'Unable to format transaction time.'
   REMOTE_FAILURE_STATUS='activation_failed_publication'
   remote_write_transaction create "$transaction" "$candidate_commit" \
-    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" cutover_started "$started_at" "$started_at" ||
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" \
+    cutover_started "$started_at" "$started_at" ||
     remote_activation_refuse 'Activation transaction could not be persisted.'
 
   "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1 ||
-    remote_fail 'Candidate Compose wait failed.' activation_failed_publication
+    handle_candidate_failure compose_wait
   remote_capture_candidate_services ||
-    remote_fail 'Candidate service state is invalid.' activation_failed_publication
+    handle_candidate_failure service_state
   [[ "$(sha256sum "$candidate_dir/tenants.tsv" | awk '{print $1}')" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] ||
-    remote_fail 'Tenant smoke matrix changed before smoke.' activation_failed_publication
+    handle_candidate_failure tenant_smoke
   remote_run_tenant_smoke "$candidate_dir/tenants.tsv" "$REMOTE_ACTIVATION_TENANT_COUNT" ||
-    remote_fail 'Tenant smoke failed.' activation_failed_publication
+    handle_candidate_failure tenant_smoke
   remote_recheck_candidate_services ||
-    remote_fail 'Candidate service restarted or became unhealthy during smoke.' activation_failed_publication
+    handle_candidate_failure service_state
 
   remote_update_transaction "$transaction" "$candidate_commit" \
-    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" candidate_healthy ||
-    remote_fail 'Candidate health journal update failed.' activation_failed_publication
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_healthy ||
+    handle_candidate_failure service_state
   remote_validate_release_source_snapshot "$candidate_dir" "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" ||
-    remote_fail 'Candidate source changed before root publication.' activation_failed_publication
+    handle_candidate_failure root_sync
   remote_update_transaction "$transaction" "$candidate_commit" \
-    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" root_sync_started ||
-    remote_fail 'Root sync journal start failed.' activation_failed_publication
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" root_sync_started ||
+    handle_candidate_failure root_sync
   remote_sync_root_source "$app_path" "$candidate_dir" ||
-    remote_fail 'Candidate root source publication failed.' activation_failed_publication
+    handle_candidate_failure root_sync
   remote_update_transaction "$transaction" "$candidate_commit" \
-    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" root_sync_completed ||
-    remote_fail 'Root sync journal completion failed.' activation_failed_publication
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" root_sync_completed ||
+    handle_candidate_failure root_sync
 
-  activated_epoch="$(remote_now_epoch)" || remote_fail 'Unable to determine activation time.' activation_failed_publication
+  activated_epoch="$(remote_now_epoch)" || handle_candidate_failure marker_publish
   activated_at="$(remote_epoch_to_utc "$activated_epoch")" ||
-    remote_fail 'Unable to format activation time.' activation_failed_publication
+    handle_candidate_failure marker_publish
   remote_publish_activation_markers \
     "$app_path" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" \
     "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" "$activated_at" "$first_adoption" ||
-    remote_fail 'Activation marker publication failed.' activation_failed_publication
+    handle_candidate_failure marker_publish
   remote_update_transaction "$transaction" "$candidate_commit" \
-    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" markers_published ||
-    remote_fail 'Marker publication journal update failed.' activation_failed_publication
+    "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" markers_published ||
+    handle_candidate_failure marker_publish
 
+  remote_validate_activation_commit_point "$app_path" ||
+    handle_candidate_failure marker_publish
   remote_write_success_outcome "$state_dir" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
-    remote_fail 'Successful activation outcome could not be persisted.' activation_failed_publication
+    handle_candidate_failure marker_publish
 
-  [[ "$(remote_pointer_read "$state_dir/prepared")" == "$candidate_commit" ]] ||
-    remote_fail 'Prepared pointer changed before success finalization.' activation_failed_publication
-  rm -f -- "$state_dir/prepared" || remote_fail 'Prepared pointer removal failed.' activation_failed_publication
-  remote_fsync_path_and_parent "$state_dir" || remote_fail 'Prepared pointer removal was not durable.' activation_failed_publication
-  remote_record_test_event prepared_remove "$candidate_commit" ||
-    remote_fail 'Prepared pointer removal event failed.' activation_failed_publication
-
-  remote_validate_transaction "$transaction" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" ||
-    remote_fail 'Activation transaction changed before success finalization.' activation_failed_publication
-  rm -f -- "$transaction" || remote_fail 'Activation transaction removal failed.' activation_failed_publication
-  remote_fsync_path_and_parent "$state_dir" || remote_fail 'Activation transaction removal was not durable.' activation_failed_publication
-  remote_record_test_event journal_remove activation_succeeded ||
-    remote_fail 'Activation transaction removal event failed.' activation_failed_publication
+  if ! remote_cleanup_committed_activation "$app_path"; then
+    remote_find_critical_outcome "$state_dir" "$candidate_commit" || true
+    remote_print_critical_evidence "$app_path" "$candidate_commit" activation_succeeded
+    printf 'Warning: activation is committed, but cleanup requires operator review.\n' >&2
+    remote_emit_status activation_succeeded
+    return 0
+  fi
 
   if ! remote_cleanup_superseded_release \
     "$app_path" "$old_previous" "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT"; then

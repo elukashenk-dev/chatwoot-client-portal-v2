@@ -22,6 +22,7 @@ STAGED_INSPECTED_IS_STAGED=''
 STAGED_PREPARED_CANDIDATE=''
 STAGED_PREPARED_ORCHESTRATOR=''
 STAGED_PREPARED_PROTOCOL=''
+STAGED_PREPARED_MIGRATION=''
 
 staged_usage() {
   cat <<'EOF'
@@ -242,7 +243,7 @@ staged_validate_prepared_inspection_record() {
   local -a lines=()
 
   mapfile -t lines <<<"$output"
-  (( ${#lines[@]} == 5 )) || return 1
+  (( ${#lines[@]} == 6 )) || return 1
   [[ "${lines[0]}" == "protocol_version=$STAGED_PROTOCOL_VERSION" ]] || return 1
   [[ "${lines[1]}" == 'record_kind=prepared_inspection' ]] || return 1
   [[ "${lines[2]}" =~ ^candidate_commit=([0-9a-f]{40})$ ]] || return 1
@@ -252,7 +253,9 @@ staged_validate_prepared_inspection_record() {
   STAGED_PREPARED_ORCHESTRATOR="${BASH_REMATCH[1]}"
   [[ "${lines[4]}" =~ ^orchestrator_protocol_version=([0-9]+)$ ]] || return 1
   STAGED_PREPARED_PROTOCOL="${BASH_REMATCH[1]}"
-  [[ "$STAGED_PREPARED_PROTOCOL" == "$STAGED_PROTOCOL_VERSION" ]]
+  [[ "$STAGED_PREPARED_PROTOCOL" == "$STAGED_PROTOCOL_VERSION" ]] || return 1
+  [[ "${lines[5]}" =~ ^migration_classification=(none|migration)$ ]] || return 1
+  STAGED_PREPARED_MIGRATION="${BASH_REMATCH[1]}"
 }
 
 staged_run_remote() {
@@ -336,9 +339,11 @@ staged_main() {
   else
     if [[ -n "$migration_policy" || -n "$approval_ref" ]]; then
       [[ -n "$migration_policy" && -n "$approval_ref" ]] ||
-        staged_fail 'Activate requires migration policy and approval reference together.' 2
+        staged_fail 'Activate requires migration policy and approval reference together.' 2 \
+          activation_refused_migration_policy
       [[ "$migration_policy" == 'backward-compatible' || "$migration_policy" == 'forward-only' ]] ||
-        staged_fail 'Migration policy must be backward-compatible or forward-only.' 2
+        staged_fail 'Migration policy must be backward-compatible or forward-only.' 2 \
+          activation_refused_migration_policy
     fi
   fi
 
@@ -434,7 +439,13 @@ staged_main() {
       inspect \
       "--app-path=$app_path"
     staged_run_remote "$remote_command" inspection_output inspection_exit
-    (( inspection_exit == 0 )) || staged_fail 'Unable to inspect the current production release.'
+    if (( inspection_exit != 0 )); then
+      if [[ "$(staged_count_remote_status "$inspection_output")" == '1' ]] &&
+        grep -Fxq 'status=prepare_failed' <<<"$inspection_output"; then
+        staged_print_remote_output_without_status "$inspection_output"
+      fi
+      staged_fail 'Unable to inspect the current production release.'
+    fi
     staged_validate_inspection_record "$inspection_output" || staged_fail 'Remote current inspection record is invalid.'
 
     git -C "$repo_root" cat-file -e "${STAGED_INSPECTED_CURRENT}^{commit}" 2>/dev/null ||
@@ -491,9 +502,25 @@ staged_main() {
       "--app-path=$app_path" \
       "--candidate-commit=$commit"
     staged_run_remote "$remote_command" prepared_inspection_output prepared_inspection_exit
-    (( prepared_inspection_exit == 0 )) || staged_fail 'Unable to inspect the prepared production release.'
+    if (( prepared_inspection_exit != 0 )); then
+      if [[ "$(staged_count_remote_status "$prepared_inspection_output")" == '1' ]] &&
+        grep -Fxq 'status=activation_refused_state_changed' <<<"$prepared_inspection_output"; then
+        staged_print_remote_output_without_status "$prepared_inspection_output"
+        staged_fail 'Unable to inspect the prepared production release.' 1 activation_refused_state_changed
+      fi
+      staged_fail 'Unable to inspect the prepared production release.'
+    fi
     staged_validate_prepared_inspection_record "$prepared_inspection_output" "$commit" ||
       staged_fail 'Remote prepared inspection record is invalid.'
+    if [[ "$STAGED_PREPARED_MIGRATION" == 'migration' ]]; then
+      [[ -n "$migration_policy" && -n "$approval_ref" ]] ||
+        staged_fail 'Migration activation requires policy and approval reference.' 2 \
+          activation_refused_migration_policy
+    else
+      [[ -z "$migration_policy" && -z "$approval_ref" ]] ||
+        staged_fail 'Nonmigration activation forbids migration decision fields.' 2 \
+          activation_refused_migration_policy
+    fi
     git -C "$repo_root" cat-file -e "${STAGED_PREPARED_ORCHESTRATOR}^{commit}" 2>/dev/null ||
       staged_fail 'Prepared orchestrator commit does not exist locally.'
     git -C "$repo_root" merge-base --is-ancestor "$STAGED_PREPARED_ORCHESTRATOR" origin/main ||
