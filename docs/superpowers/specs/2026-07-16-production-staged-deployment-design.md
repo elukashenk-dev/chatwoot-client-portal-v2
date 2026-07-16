@@ -2,11 +2,12 @@
 
 Date: 2026-07-16
 
-Status: approved
+Status: revision pending confirmation
 
 Confirmed follow-up: replace the one-step production activation path with one
-mandatory, testable staged deployment authority. This design does not authorize
-a production deployment.
+mandatory, testable staged deployment authority and add one fail-closed source
+bootstrap for an explicitly approved empty-root clean reinstall. This design
+does not authorize a production deployment or clean reinstall.
 
 ## Problem
 
@@ -45,6 +46,9 @@ artifacts to accumulate indefinitely.
 - Keep permanent release storage bounded to current plus one previous stable
   release, with at most one temporary prepared candidate.
 - Require preverified SSH host authentication in both local and GitHub paths.
+- Preserve the clean-reinstall procedure through a separately approved,
+  empty-root-only bootstrap that delivers one exact clean `origin/main` commit
+  but cannot start or activate the portal.
 - Add a fake-runtime test harness that proves orchestration behavior without
   accessing production.
 
@@ -63,6 +67,8 @@ artifacts to accumulate indefinitely.
 - Do not add a dependency-advisory release gate tracked by `F-SUPPLY-001`.
 - Do not run a global Docker prune or delete artifacts not owned by this portal
   release process.
+- Do not expose clean-reinstall bootstrap through GitHub Actions, allow it on an
+  active/non-empty application root, or use it for dirty/WIP previews.
 
 ## Chosen Architecture
 
@@ -87,12 +93,11 @@ Both helpers use explicit phase arguments and validated scalar values. They do
 not evaluate manifest content as shell code and never `source` a remote release
 manifest.
 
-The existing `scripts/deploy-production-archive.sh` remains available only to
-build and upload a reviewed archive into a remote temporary delivery directory.
-It must no longer unpack into the active application root. Its activation,
-active-root replacement and webhook-sync activation flags are retired in the
-same scope. Attempting an old form must fail with an actionable command for the
-staged orchestrator.
+The existing `scripts/deploy-production-archive.sh` and its package command are
+retired in the same scope. Exact archive creation and transfer move into the
+staged orchestrator, including the separately guarded clean-install bootstrap,
+so the old helper cannot remain a second source-delivery or activation path.
+Active documentation must contain no command that invokes the retired helper.
 
 `.github/workflows/deploy-production.yml` becomes a thin caller of the same
 public orchestrator. It must not contain its own remote Git checkout, Docker
@@ -105,6 +110,8 @@ Preparation is a non-cutover operation:
 ```bash
 scripts/deploy-production-staged.sh prepare \
   --host=ubuntu@93.77.166.238 \
+  --ssh-port=22 \
+  --identity-file=<approved-private-key-file> \
   --app-path=/opt/chatwoot-client-portal-v2 \
   --commit=<full-40-character-sha> \
   --known-hosts-file=<preverified-known-hosts-file>
@@ -115,6 +122,8 @@ Activation is a separate production mutation:
 ```bash
 scripts/deploy-production-staged.sh activate \
   --host=ubuntu@93.77.166.238 \
+  --ssh-port=22 \
+  --identity-file=<approved-private-key-file> \
   --app-path=/opt/chatwoot-client-portal-v2 \
   --commit=<same-full-40-character-sha> \
   --known-hosts-file=<preverified-known-hosts-file>
@@ -133,6 +142,32 @@ preparation prints the candidate SHA, current SHA, migration classification,
 release expiry, exact image IDs and the activation command. It does not invoke
 that command automatically.
 
+An exceptional clean-reinstall bootstrap uses the same provenance and SSH
+boundary but is a third, separately approved phase:
+
+```bash
+scripts/deploy-production-staged.sh bootstrap \
+  --host=ubuntu@93.77.166.238 \
+  --ssh-port=22 \
+  --identity-file=<approved-private-key-file> \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --commit=<full-40-character-sha> \
+  --known-hosts-file=<preverified-known-hosts-file> \
+  --approval-ref=<clean-reinstall-approval-label>
+```
+
+`bootstrap` only delivers exact source into a proven-empty, inactive
+application root. It never creates production env values, runs Compose, starts
+containers or activates a release. Routine deployments therefore remain the
+two-command `prepare` then `activate` process.
+
+All operator arguments are data, never shell fragments. The production tool
+accepts only the allowlisted canonical application root
+`/opt/chatwoot-client-portal-v2`, a host in validated `user@host` form, a
+numeric port in `1..65535`, exact lowercase full SHAs and approval references
+matching `[A-Za-z0-9._:/-]{1,128}`. It rejects control characters, option-like
+host values, path traversal and symlinked application roots.
+
 ## Release Provenance
 
 Before creating a candidate archive, the orchestrator must prove all of the
@@ -143,27 +178,77 @@ following:
 - `--commit` is exactly 40 lowercase hexadecimal characters and resolves to a
   commit;
 - the commit is contained in the freshly fetched `origin/main` history;
-- no preview/dirty override can be combined with `prepare` or `activate`.
+- no preview/dirty override can be combined with `prepare`, `activate` or
+  `bootstrap`.
 
 The archive is created from the immutable Git commit object, not copied from
 the working tree. A working-tree change after the cleanliness check therefore
 cannot enter the archive. The orchestrator records and verifies the archive's
 SHA-256 before the remote helper accepts it.
 
-Each release manifest records only non-secret evidence:
+Each immutable prepared-release manifest records only non-secret evidence:
 
 - deploy protocol version;
 - candidate commit and archive SHA-256;
 - preparation timestamp and expiry timestamp;
 - current production commit observed during preparation;
 - SHA-256 of the production env file, without recording any env value;
-- migration classification and any explicit policy/approval reference;
+- migration classification;
 - exact image tags and Docker image IDs for backend, web and Telegram bridge;
 - expected active tenant slugs and public base URLs;
-- final prepare/activate/rollback outcome.
+
+Migration policy and approval are activation-time decisions, so they are
+written to a separate immutable decision record before cutover. Final
+prepare/activate/rollback outcomes are written to separate bounded history
+records. Neither operation mutates the prepared manifest.
 
 `.env.production`, tokens, cookie values, database credentials, customer data
 and message data must never be copied into a manifest or command log.
+
+## Empty-Root Bootstrap
+
+`bootstrap` exists only so a separately approved clean reinstall can receive
+the installer source before the staged runtime exists. It is not a deployment
+shortcut and is never called by GitHub Actions.
+
+The local orchestrator applies the same clean-`main`, exact full SHA,
+fresh-`origin/main`, commit-object archive, checksum and strict SSH checks used
+by `prepare`. It additionally requires a non-secret `--approval-ref`; there is
+no dirty-tree, WIP, branch or mutable-ref mode.
+
+Before accepting source, the remote bootstrap helper takes a non-blocking lock
+outside the not-yet-created application root and proves all of the following:
+
+- the application root is absent or is a genuinely empty directory;
+- it contains no `.env.production`, `DEPLOY_SOURCE.txt`,
+  `BOOTSTRAP_SOURCE.txt`, `.release-state`, `.releases`, install state or any
+  other file or directory;
+- no container exists with the portal Compose project label, whether running
+  or stopped.
+
+Existing named volumes do not by themselves make the source root active and
+are neither inspected for content nor deleted. Any non-empty root or matching
+container makes bootstrap fail closed; the tool never overwrites, merges with
+or repairs an existing installation.
+
+On success, bootstrap creates the application root, extracts the exact source
+archive and writes a mode-0600 `BOOTSTRAP_SOURCE.txt` containing only protocol
+version, application name, full `source_commit`, archive checksum, timestamp
+and approval reference. It does not write `DEPLOY_SOURCE.txt`, create
+`.env.production`, invoke the installer, run Compose or start a container. The
+separately approved clean-install
+procedure performs configuration and startup. Only after that procedure's
+health checks pass may `scripts/install-production.sh` promote the bootstrap
+commit to `DEPLOY_SOURCE.txt` and remove `BOOTSTRAP_SOURCE.txt`.
+When a bootstrap marker exists, the installer must reject
+`--skip-public-health`; both the public health and tenant-resolution checks and
+the remaining install steps must complete before marker promotion.
+
+If bootstrap fails after creating a previously absent root, its error trap may
+remove only the partial root it created after proving no pre-existing content
+or portal container appeared. If safe cleanup cannot be proved, it preserves
+the partial evidence and exits non-zero; a later bootstrap still refuses that
+non-empty root and requires an explicit operator recovery decision.
 
 ## Remote Layout And Active Marker
 
@@ -179,15 +264,18 @@ backups and logs. Staged release state is kept under bounded hidden paths:
 ```text
 .release-state/
   deploy.lock
+  transaction
   current
   previous
   prepared
+  decisions/
   history/
 .releases/
   <full-commit-sha>/
     source/
     compose.release.yaml
     manifest.txt
+    tenants.tsv
 ```
 
 `compose.release.yaml` assigns immutable release tags to only the three
@@ -198,8 +286,17 @@ portal-built services:
 - `chatwoot-client-portal-v2-telegram-bridge:<full-sha>`.
 
 The root source copy and `DEPLOY_SOURCE.txt` continue to describe the active
-runtime. They are updated from candidate source only after Compose health and
+runtime. They are published from candidate source only after Compose health and
 all public tenant checks pass. Candidate preparation must not change them.
+
+New active-source markers use a deterministic, mode-0600, non-secret
+`key=value` protocol containing at least protocol version, application name,
+full `source_commit`, archive checksum and activation timestamp. The existing
+pre-staged marker format may be read only during first adoption and only when
+it proves the exact application, a full clean commit, `source_dirty=false` and
+no preview override. Once `.release-state/current` exists, the legacy format is
+rejected; this one-time reader is removed from the normal state path rather
+than becoming permanent compatibility behavior.
 
 The active and previous release source directories remain present because
 Compose bind mounts and an exact rollback must not depend on a deleted source
@@ -276,6 +373,9 @@ entire cutover, smoke and possible rollback:
    image tags and exact image IDs, candidate Compose config, tenant smoke matrix
    and migration policy. If the env file or active tenant matrix changed after
    prepare, activation refuses the stale release and requires a new prepare.
+   When a migration decision is required, write its policy and approval
+   reference to a separate immutable activation-decision record before cutover;
+   do not mutate the prepared manifest.
 4. Start the prepared release with the production project name and exact base
    plus release override files using:
 
@@ -286,9 +386,22 @@ entire cutover, smoke and possible rollback:
 5. Check container health and restart counts.
 6. Check `/api/health` and `/api/tenant` for every active tenant public base URL.
    The returned tenant slug must equal the database-derived expected slug.
-7. Only after every check passes, update the root source copy,
-   `DEPLOY_SOURCE.txt`, `current` and `previous` state atomically.
+7. Only after every check passes, publish the root source copy and active
+   markers through a recoverable transaction. First persist a transaction
+   journal containing the exact old/new release IDs and publication phase,
+   then synchronize the candidate source while preserving runtime-owned files,
+   and finally write `DEPLOY_SOURCE.txt`, `current` and `previous` via
+   mode-safe temporary files plus same-directory rename. Markers are published
+   last; the tool does not claim that a multi-file source synchronization is
+   filesystem-atomic.
 8. Run bounded release cleanup and record a successful outcome.
+
+Any publication failure invokes the same migration-policy-aware recovery as a
+runtime failure. Automatic-rollback releases restore the exact previous
+runtime and root source. A `forward-only` release preserves the candidate
+runtime and transaction evidence for explicit recovery rather than starting
+old code. An unresolved transaction journal blocks every later `prepare` or
+`activate`; neither command may guess which release is active.
 
 Public checks use no more than five concurrent workers and have a 10-minute
 overall deadline. Each request uses a 5-second connect timeout, a 15-second
@@ -366,19 +479,30 @@ archives/directories are removed through error-safe traps.
 Docker BuildKit cache is not a release artifact and is not globally pruned by
 this workflow. Existing operator disk-maintenance guidance remains separate.
 
+Bootstrap source is not an additional retained release: it exists only in the
+application root during an approved clean install and becomes that install's
+active source after successful health checks. It cannot coexist with an active
+staged release root.
+
 ## SSH Host Authentication
 
 Every SSH and SCP call requires a caller-provided regular file containing a
 preverified host-key entry for the exact host and port. The orchestrator uses:
 
 ```text
+BatchMode=yes
 StrictHostKeyChecking=yes
 UserKnownHostsFile=<approved-file>
+IdentitiesOnly=yes
+IdentityFile=<approved-private-key-file>
+Port=<explicit-port>
 ```
 
 Missing, empty, world-writable or non-matching known-hosts input is a hard
-failure. The workflow and scripts must not call `ssh-keyscan` or silently use
-trust-on-first-use.
+failure. The identity file must be a non-empty regular file that is not
+group/world-readable, and the explicit SSH port must be a valid integer in
+`1..65535`. The workflow and scripts must not call `ssh-keyscan` or silently
+use trust-on-first-use.
 
 GitHub Actions writes the required `PRODUCTION_SSH_KNOWN_HOSTS` secret to a
 mode-0600 temporary file. An absent secret fails before any network call. The
@@ -400,6 +524,9 @@ the same `scripts/deploy-production-staged.sh` interface. It contains no
 fallback host-key scan, remote Git mutation, direct Docker build, direct
 Compose activation or alternative completion criteria.
 
+The workflow has no `bootstrap` phase. Clean reinstall remains an exceptional
+local operator procedure requiring its own explicit approval.
+
 GitHub `prepare` and `activate` are separate workflow runs. The production
 environment protection remains applicable to activation; successful prepare
 does not authorize activation.
@@ -415,13 +542,19 @@ operator text:
 - `activation_refused_state_changed`;
 - `activation_refused_expired`;
 - `activation_refused_migration_policy`;
+- `activation_failed_publication`;
 - `candidate_failed_rollback_succeeded`;
 - `candidate_failed_rollback_failed`;
-- `candidate_failed_forward_only`.
+- `candidate_failed_forward_only`;
+- `bootstrap_completed`;
+- `bootstrap_refused_nonempty`;
+- `bootstrap_failed`.
 
-All failures exit non-zero except a completed `prepare`, which exits zero but
-states explicitly that production was not activated. Logs may include service
-names, tenant slugs, public base URLs, commit SHAs, checksums and image IDs.
+Every refusal and failure status exits non-zero. `prepared`,
+`activation_succeeded` and `bootstrap_completed` exit zero; the prepare and
+bootstrap successes state explicitly that production was not activated. Logs
+may include service names, tenant slugs, public base URLs, commit SHAs,
+checksums and image IDs.
 They must redact or omit environment values, tokens, cookies, database URLs,
 customer identifiers and response bodies beyond the expected public tenant
 slug.
@@ -448,9 +581,19 @@ Required TDD scenarios:
 - missing/unusable known-hosts input fails before SSH/SCP;
 - all SSH/SCP calls use strict host-key options and no script/workflow contains
   `ssh-keyscan`;
+- bootstrap accepts only an absent/empty inactive root with a separate approval
+  reference, installs exact commit-object source and never invokes Compose;
+- bootstrap rejects any root content, env/source/release marker or running or
+  stopped portal-project container, and safely handles partial-copy failure;
+- clean install promotes `BOOTSTRAP_SOURCE.txt` to `DEPLOY_SOURCE.txt` only
+  after successful health checks and rejects `--skip-public-health` while the
+  bootstrap marker exists;
 - prepare does not call Compose `up`, restart containers or change the active
   marker;
 - prepare requires exact candidate and rollback tags/IDs and rejects low disk;
+- first adoption accepts the existing source marker only for an exact clean
+  full commit and rejects legacy marker parsing after staged current state
+  exists;
 - a second or expired prepared candidate follows the bounded retention rules;
 - migration tree differences produce a gated manifest;
 - activate rejects expired, mismatched, state-changed or incompletely prepared
@@ -459,6 +602,10 @@ Required TDD scenarios:
 - the remote lock rejects overlapping prepare/activate work;
 - success checks multiple tenant URLs and commits active state only after every
   tenant passes;
+- prepared manifests remain immutable while activation decisions and outcomes
+  are written separately;
+- failure injection across root-source and marker publication proves the
+  transaction journal, exact rollback/restore and unresolved-state blocking;
 - tenant checks never exceed concurrency five and use the specified timeout and
   retry limits;
 - non-migration candidate failure performs exact rollback and exits non-zero;
@@ -467,9 +614,11 @@ Required TDD scenarios:
 - cleanup retains only current, previous and at most one prepared candidate,
   without broad image/volume deletion;
 - logs and manifests contain no fixture secrets;
-- the old archive helper refuses activation and active-root replacement;
+- the old archive helper/package entry is removed and active documentation
+  contains no reference to it;
 - GitHub Actions delegates both phases to the staged orchestrator and has no
-  alternate SSH trust or Docker activation path.
+  alternate SSH trust or Docker activation path, and exposes no bootstrap
+  phase.
 
 Closure gates are:
 
@@ -489,10 +638,18 @@ operator approval.
 
 ## Documentation And Finding Closure
 
-Update the routine deploy guide and MT-10 operations index so they describe one
-staged authority, the two explicit commands, migration decision, all-tenant
-smoke, bounded retention and rollback statuses. Remove active instructions that
-recommend full `up -d --build` activation.
+Update `docs/operations/production-deployment.md`, the MT-10 runbooks,
+`docs/operations/continue-on-new-laptop.md`, production server notes and the
+Telegram bridge production guidance so they describe one staged authority, the
+two routine commands, migration decision, all-tenant smoke, bounded retention
+and rollback statuses. Remove active instructions that recommend full
+`up -d --build`, dirty/WIP production preview or direct Telegram-only bypass
+activation.
+
+Update `docs/operations/production-clean-reinstall.md` to use only the bounded
+empty-root bootstrap before its separately approved install procedure. It must
+state that bootstrap neither configures nor starts production and cannot be
+used against an existing installation.
 
 After implementation, tests and independent review satisfy their acceptance:
 
@@ -515,6 +672,9 @@ review and verification establish the new stable operations baseline.
 
 - Full production activation has one supported authority used locally and by
   GitHub Actions.
+- Clean reinstall source bootstrap uses that same authority, accepts only an
+  empty inactive root and cannot start or activate production; it is absent
+  from the routine workflow.
 - `prepare` cannot change the active runtime and produces exact candidate plus
   rollback evidence.
 - `activate` cannot build or pull during cutover and cannot proceed from stale,
@@ -524,6 +684,8 @@ review and verification establish the new stable operations baseline.
 - Non-migration failure automatically restores the exact previous release;
   migration rollback follows only an explicit reviewed policy.
 - A candidate or rollback failure can never be reported as successful.
+- Root-source and marker publication is journaled and recoverable; an
+  unresolved transaction blocks later deployment work.
 - Stable release artifacts remain bounded to current and previous, with at most
   one 24-hour prepared candidate and 20 small outcome manifests.
 - SSH host authentication fails closed without preverified known-hosts.
@@ -532,3 +694,4 @@ review and verification establish the new stable operations baseline.
 - Required automated tests, full project gates and independent review pass
   before local merge.
 - Production remains unchanged until a separate approved rehearsal or deploy.
+- A clean reinstall remains unchanged until its own separate explicit approval.
