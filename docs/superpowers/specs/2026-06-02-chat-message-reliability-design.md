@@ -65,12 +65,14 @@ follow-up tracked in
 
 ## Relationship To Customer Read And Typing
 
-Customer-read sync and typing are now implemented baseline behavior documented
-in:
+Customer-read sync and typing are now implemented baseline behavior. The
+current contract is documented in stable work-log entries and in the focused
+chat/offline source and tests:
 
 ```text
-docs/product/chat-message-send-ui-scenarios.md
 docs/roadmap/work-log.md
+frontend/src/features/chat/
+frontend/src/features/offline/
 ```
 
 This reliability slice must prepare the status model for future receipts and
@@ -343,9 +345,11 @@ Recommended fallback interval:
   when realtime is unhealthy/unavailable;
 - unread/thread refresh: keep existing 30 seconds foreground refresh.
 
-## Target Scenario Table Updates
+## Validation And Automated Coverage Updates
 
-`docs/product/chat-message-send-ui-scenarios.md` should be expanded to include:
+The standalone manual scenario table was intentionally removed because it
+duplicated test-case documentation. Changes in this slice must instead add or
+update focused automated coverage for:
 
 - overlong text before send;
 - overlong text already in outbox from older/bad local state;
@@ -369,8 +373,7 @@ Recommended fallback interval:
 - Offline queue for files and voice.
 - Upload progress bars for attachments.
 - Customer-read and typing implementation. It is now implemented baseline
-  behavior covered by `docs/product/chat-message-send-ui-scenarios.md` and
-  `docs/roadmap/work-log.md`.
+  behavior covered by the current source/tests and `docs/roadmap/work-log.md`.
 - Portal-visible two-check read receipts for user-sent messages.
 - Delivered-to-agent/device receipts as a send-state replacement.
 - Message editing.

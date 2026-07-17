@@ -12,12 +12,14 @@
 
 ## Relationship To Customer Read And Typing
 
-Customer-read sync and typing are now implemented baseline behavior documented
-in:
+Customer-read sync and typing are now implemented baseline behavior. The
+current contract is documented in stable work-log entries and in focused
+chat/offline source and tests:
 
 ```text
-docs/product/chat-message-send-ui-scenarios.md
 docs/roadmap/work-log.md
+frontend/src/features/chat/
+frontend/src/features/offline/
 ```
 
 Historical implementation dependency:
@@ -75,13 +77,11 @@ Still active:
 Closed by the customer read/two-way typing prerequisite work:
 
 - bounded realtime health and snapshot fallback when visible realtime becomes
-  stale; see `docs/product/chat-message-send-ui-scenarios.md`.
+  stale; see the current chat source and focused tests.
 
-The current scenario matrix is:
-
-```text
-docs/product/chat-message-send-ui-scenarios.md
-```
+The standalone manual scenario matrix was intentionally removed because it
+duplicated test-case documentation. Do not recreate it; cover changed branches
+in the closest focused automated test instead.
 
 ---
 
@@ -123,8 +123,6 @@ docs/product/chat-message-send-ui-scenarios.md
   - Unit tests for fallback refresh.
 - Modify `frontend/src/features/chat/pages/ChatPage.tsx`
   - Wire realtime health and fallback refresh.
-- Modify `docs/product/chat-message-send-ui-scenarios.md`
-  - Expand scenario table with final target behavior.
 
 ## Task 1: Add Send Constraints And Validation
 
@@ -1043,49 +1041,12 @@ pnpm -C frontend vitest run src/features/chat/pages/useChatRealtimeFallbackRefre
 
 Expected: pass.
 
-## Task 7: Update Scenario Documentation
+## Task 7: Maintain Focused Automated Coverage
 
-**Files:**
-
-- Modify: `docs/product/chat-message-send-ui-scenarios.md`
-
-- [ ] **Step 1: Update existing rows**
-
-Change the successful text row to use `Отправлено` instead of `Доставлено`.
-
-Change attachment/voice rows to explicitly say online-only.
-
-- [ ] **Step 2: Add missing scenarios**
-
-Add rows for:
-
-- overlong text blocked before outbox;
-- overlong/stale text from old local outbox becomes `Не отправлено`;
-- stale reply target becomes `Не отправлено`;
-- file too large;
-- empty file;
-- unsupported attachment type;
-- caption too long;
-- selected file then offline, text still sends and file remains;
-- voice conversion/preparation failure;
-- voice file too large;
-- session expired while queued;
-- group access removed while queued;
-- realtime unsupported;
-- realtime unhealthy with fallback snapshot refresh;
-- app sleeping/background differences on Android and iOS;
-- local storage unavailable/evicted.
-
-- [ ] **Step 3: Check formatting**
-
-Run:
-
-```bash
-pnpm exec prettier --check docs/product/chat-message-send-ui-scenarios.md
-git diff --check
-```
-
-Expected: pass.
+The manual scenario matrix was removed because it duplicated test-case
+documentation. Do not recreate it. For every changed send/retry/attachment or
+realtime branch, add or update the closest focused unit/component test and
+describe the operator-visible result in the finding closure or final report.
 
 ## Task 8: Final Verification
 
