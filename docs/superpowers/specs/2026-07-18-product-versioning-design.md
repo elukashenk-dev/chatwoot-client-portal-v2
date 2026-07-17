@@ -3,12 +3,10 @@
 ## Status
 
 Approved direction, rewritten on 2026-07-18 after the previous broad release
-management scope was explicitly cancelled. This document supersedes the
-earlier versioning design and the unimplemented broad plan
-`docs/superpowers/plans/2026-07-18-product-versioning.md`.
-
-Implementation requires a new, maximum-three-task plan and explicit approval
-of that rewritten plan.
+management scope was explicitly cancelled. The broad prior scope is
+superseded. The current narrowed two-task plan lives at
+`docs/superpowers/plans/2026-07-18-product-versioning.md`; Tasks 1 and 2 are
+implemented, so this design and plan are complete.
 
 ## Goal
 

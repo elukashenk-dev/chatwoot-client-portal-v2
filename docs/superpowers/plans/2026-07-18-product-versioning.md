@@ -33,7 +33,7 @@
 - Produces compile-time constant import.meta.env.VITE_PRODUCT_VERSION for frontend code and Vitest.
 - Does not create an endpoint, environment contract, release workflow, or deployment input.
 
-- [ ] **Step 1: Add root version**
+- [x] **Step 1: Add root version**
 
   In root package.json, add one top-level field next to name/private:
 
@@ -41,7 +41,7 @@
   "version": "0.1.0"
   ```
 
-- [ ] **Step 2: Hand the value to Vite**
+- [x] **Step 2: Hand the value to Vite**
 
   In frontend/vite.config.ts add the Node import:
 
@@ -67,13 +67,13 @@
 
   Keep existing build, plugins, server, and test configuration unchanged.
 
-- [ ] **Step 3: Run the focused build check**
+- [x] **Step 3: Run the focused build check**
 
   Run: pnpm --dir frontend build
 
   Expected: PASS. The build has read root package version and produced frontend assets without an external service.
 
-- [ ] **Step 4: Commit Task 1**
+- [x] **Step 4: Commit Task 1**
 
   ```bash
   git add package.json frontend/vite.config.ts
@@ -94,7 +94,7 @@
 - Produces one read-only DetailRow in the existing profile definition list.
 - Makes no profile-client call and changes no backend contract.
 
-- [ ] **Step 1: Write failing profile assertion**
+- [x] **Step 1: Write failing profile assertion**
 
   In first existing UserProfilePage rendering test, after contact-field assertions, add:
 
@@ -103,7 +103,7 @@
   expect(screen.getByText('0.1.0')).toBeInTheDocument()
   ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
   Run:
 
@@ -113,7 +113,7 @@
 
   Expected: FAIL because profile page has no version row.
 
-- [ ] **Step 3: Render static build value**
+- [x] **Step 3: Render static build value**
 
   Add this existing-row-compatible JSX after Телефон inside UserProfilePage definition list:
 
@@ -123,7 +123,7 @@
 
   Do not add state, effect, request, route, link, form control, or fallback value.
 
-- [ ] **Step 4: Run focused checks**
+- [x] **Step 4: Run focused checks**
 
   Run:
 
@@ -136,7 +136,7 @@
 
   Expected: every command exits 0.
 
-- [ ] **Step 5: Focused review and one feature commit**
+- [x] **Step 5: Focused review and one feature commit**
 
   Review only package.json, frontend/vite.config.ts, UserProfilePage.tsx, and UserProfilePage.test.tsx for wrong version source, changed profile API behavior, extra request, or incorrect copy.
 
