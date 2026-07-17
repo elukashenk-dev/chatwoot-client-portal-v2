@@ -24,6 +24,10 @@ page:
 The root `package.json` receives one product version, initially `0.1.0`.
 Before a future production release, an operator manually changes that one
 value according to SemVer, for example `1.0.0`, `1.0.1`, `1.1.0`, or `2.0.0`.
+Before proposing that manual change, the agent analyses the release changes and
+recommends patch, minor, or major. The operator must explicitly confirm the
+recommendation before the agent changes the root version and performs the
+separately approved release process.
 
 The frontend build reads the root package version once through existing Vite
 build configuration and embeds it as a static value. The existing profile page
