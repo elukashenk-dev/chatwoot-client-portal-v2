@@ -232,6 +232,10 @@ export function UserProfilePage() {
                 label="Телефон"
                 value={profile.phoneNumber ?? 'Не указан'}
               />
+              <DetailRow
+                label="версия:"
+                value={import.meta.env.VITE_PRODUCT_VERSION}
+              />
             </dl>
           </section>
 
