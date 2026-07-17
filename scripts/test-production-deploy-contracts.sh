@@ -6,12 +6,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$ROOT_DIR/.github/workflows/deploy-production.yml"
 PACKAGE_JSON="$ROOT_DIR/package.json"
 CANONICAL_DEPLOYMENT_GUIDE="$ROOT_DIR/docs/operations/production-deployment.md"
-NEW_LAPTOP_GUIDE="$ROOT_DIR/docs/operations/continue-on-new-laptop.md"
 ACTIVE_OPERATIONS_FILES=(
   "$CANONICAL_DEPLOYMENT_GUIDE"
   "$ROOT_DIR/docs/operations/production-clean-reinstall.md"
   "$ROOT_DIR/docs/operations/mt-10-deployment-runbooks.md"
-  "$ROOT_DIR/docs/operations/continue-on-new-laptop.md"
   "$ROOT_DIR/docs/operations/production-server-notes.md"
   "$ROOT_DIR/docs/operations/telegram-bridge.md"
   "$ROOT_DIR/docs/operations/mt-10a-tenant-lifecycle-rehearsal.md"
@@ -309,7 +307,7 @@ assert_active_operations_have_no_executable_ssh_keyscan
 assert_active_operations_have_strict_executable_ssh
 assert_ssh_keyscan_guard_rejects_fenced_forbidden_command
 assert_ssh_guard_rejects_fenced_bare_command
-assert_file_contains "$NEW_LAPTOP_GUIDE" 'Fail closed: env drift fails `prepare`; use separate approved remediation.'
+assert_file_contains "$CANONICAL_DEPLOYMENT_GUIDE" 'Environment drift is a separate approved remediation'
 for required_pattern in prepare activate --no-build '--pull never' PRODUCTION_SSH_KNOWN_HOSTS backward-compatible forward-only candidate_failed_rollback_succeeded '100 active tenants' 'five-worker'; do
   assert_file_contains "$CANONICAL_DEPLOYMENT_GUIDE" "$required_pattern"
 done
