@@ -119,8 +119,7 @@ execution-plan детали здесь не хранятся.
 
 - Main source-of-truth docs are `docs/architecture/overview.md`,
   `docs/architecture/decisions.md`, `docs/roadmap/implementation-plan.md`,
-  `docs/roadmap/work-log.md`, `docs/design/portal-ui-ux-baseline.md` and
-  `docs/findings/`.
+  `docs/roadmap/work-log.md` and `docs/findings/`.
 - `docs/superpowers/` execution artifacts are not stable source of truth after
   implementation; completed artifacts were removed during the current docs
   cleanup, while still-relevant deferred/partial artifacts remain there with

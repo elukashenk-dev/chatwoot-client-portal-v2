@@ -13,7 +13,6 @@
 ## Reference
 
 - [architecture/multi-tenant-reference.md](architecture/multi-tenant-reference.md) - подробный multi-tenant reference.
-- [design/portal-ui-ux-baseline.md](design/portal-ui-ux-baseline.md) - UI/UX baseline.
 - [operations/local-testing.md](operations/local-testing.md) - локальный запуск.
 - [operations/local-cross-tenant-test-data.md](operations/local-cross-tenant-test-data.md) - подготовка локальных Chatwoot contacts/users/groups для cross-tenant mutating тестов.
 - [operations/production-deployment.md](operations/production-deployment.md) - production guardrails.

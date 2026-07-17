@@ -27,7 +27,6 @@ Chatwoot CE `v4.13.0-1-g38c6b79b4` выполнена 2026-06-06.
 - `docs/roadmap/implementation-plan.md`
 - `docs/architecture/decisions.md`
 - `docs/architecture/multi-tenant-reference.md`
-- `docs/design/portal-ui-ux-baseline.md`
 - `docs/spikes/2026-06-06-chatwoot-admin-agents-permissions.md`
 
 Текущий код:
