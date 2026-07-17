@@ -110,6 +110,8 @@ describe('UserProfilePage', () => {
     expect(screen.getByText('Иван Петров')).toBeInTheDocument()
     expect(screen.getByText('ivan@example.com')).toBeInTheDocument()
     expect(screen.getByText('+79991234567')).toBeInTheDocument()
+    expect(screen.getByText('версия:')).toBeInTheDocument()
+    expect(screen.getByText('0.1.0')).toBeInTheDocument()
     expect(screen.getByLabelText('Заменить аватар')).toBeInTheDocument()
     expect(screen.getByText('Аватар').closest('section')).toHaveClass(
       'chat-glass-card-surface',
