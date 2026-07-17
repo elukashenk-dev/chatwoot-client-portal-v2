@@ -68,8 +68,9 @@ automation around:
   `docs/operations/local-cross-tenant-test-data.md`
 - Chatwoot account lifecycle and portal provisioning research:
   `docs/operations/chatwoot-account-lifecycle-portal-provisioning-research.md`
-- Chatwoot production upgrade lessons and maintenance-window decision:
-  `docs/operations/chatwoot-4-13-upgrade-notes.md`
+- Chatwoot core upgrades are external maintenance, not portal deployment work.
+  Use the official Chatwoot upgrade runbook and record a separate approved
+  maintenance window.
 - MT-10A tenant lifecycle production rehearsal:
   `docs/operations/mt-10a-tenant-lifecycle-rehearsal.md`
 - Custom client-domain ingress/cert helper:

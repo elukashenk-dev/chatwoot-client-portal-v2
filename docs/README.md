@@ -15,10 +15,12 @@
 - [architecture/multi-tenant-reference.md](architecture/multi-tenant-reference.md) - подробный multi-tenant reference.
 - [operations/local-testing.md](operations/local-testing.md) - локальный запуск.
 - [operations/local-cross-tenant-test-data.md](operations/local-cross-tenant-test-data.md) - подготовка локальных Chatwoot contacts/users/groups для cross-tenant mutating тестов.
+- [operations/mt-10-deployment-runbooks.md](operations/mt-10-deployment-runbooks.md) - карта текущих production-операций.
 - [operations/production-deployment.md](operations/production-deployment.md) - production guardrails.
 - [operations/production-clean-reinstall.md](operations/production-clean-reinstall.md) - clean reinstall runbook.
 - [operations/production-server-notes.md](operations/production-server-notes.md) - факты о production VM.
-- [operations/chatwoot-4-13-upgrade-notes.md](operations/chatwoot-4-13-upgrade-notes.md) - Chatwoot 4.13 notes.
+- [operations/mt-10a-tenant-lifecycle-rehearsal.md](operations/mt-10a-tenant-lifecycle-rehearsal.md) - обязательная rehearsal перед broad shared SaaS rollout.
+- [operations/telegram-bridge.md](operations/telegram-bridge.md) - эксплуатация Telegram bridge.
 - [findings/](findings/) - открытые review findings.
 
 ## Execution Artifacts

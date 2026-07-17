@@ -8,9 +8,9 @@ validation promotes the underlying behavior to a finding.
 
 ## Finding-Backed Hardening Boundaries
 
-The generated
-[security hardening portfolio](/tmp/codex-security-scans/chatwoot-client-portal-v2-audit-source-2026-07-13/a61b4975ae7b59e244c0b5bbc4efd02466aa075c_20260713T191131Z/hardening/hardening.md)
-qualifies two structural opportunities:
+The generated security hardening portfolio lived in a temporary scanner
+worktree and is not stored in this repository. Its conclusions qualify two
+structural opportunities:
 
 - generation-aware authority lifecycle across proof, session, SSE and push
   state;
@@ -32,8 +32,8 @@ audit and must no longer be treated as optional modernization:
   `docs/findings/F-SUPPLY-002-immutable-build-inputs.md`;
 - production environment propagation —
   `docs/findings/F-OPS-004-production-env-propagation.md`;
-- deploy authority/completion —
-  `docs/findings/F-OPS-005-deploy-authority-completion.md`.
+- deploy authority/completion — closed by the staged deployment authority in
+  `docs/operations/production-deployment.md`.
 
 ## Supported-version Changes
 
@@ -75,8 +75,9 @@ audit and must no longer be treated as optional modernization:
 - After closing `F-SUPPLY-002`, add minimal workflow `permissions` and automated
   digest-refresh pull requests so immutability does not turn into permanent
   staleness.
-- After closing `F-OPS-005`, extend immutable artifact promotion with retained
-  provenance and release-to-runtime traceability.
+- A future separately approved release-provenance scope may extend immutable
+  artifact promotion with retained provenance and release-to-runtime
+  traceability.
 - Generate and retain an SBOM and build provenance/attestation for release
   artifacts. This improves incident response and dependency traceability; it
   is not a substitute for vulnerability reachability review.

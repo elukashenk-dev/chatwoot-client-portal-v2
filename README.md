@@ -28,7 +28,8 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - tenant resolution middleware;
 - tenant-aware Chatwoot client;
 - tenant-scoped persistence;
-- tenant-aware auth/session/registration/password reset;
+- tenant-aware email-code access, optional password login/setup and password
+  reset;
 - tenant-aware chat runtime;
 - tenant-aware webhooks/provisioning;
 - tenant-aware frontend/PWA metadata, manifest and icons;
@@ -48,11 +49,9 @@ Tenant-aware клиентский PWA-портал поверх Chatwoot для 
 - production portal tenants include `https://lk.provgroup.ru` and
   `https://lk.pronalogi.pro`.
 
-Текущий active operations scope:
-
-```text
-MT-10 Deployment And Runbook Update
-```
+Текущий operations baseline: exact-commit staged release с отдельными
+`prepare` и `activate`; первая реальная production rehearsal требует отдельного
+явного одобрения.
 
 ## Карта документации
 

@@ -290,6 +290,9 @@ execution-plan детали здесь не хранятся.
 - Profile security UI now lets passwordless users set their first password while
   logged in through a protected email-code challenge and rotated authenticated
   session handoff; configured-password users see status only.
+- Mandatory entry documentation and the production-operations map are
+  reconciled with the completed MT-9 and exact-commit staged deployment
+  baseline; historical audit evidence remains preserved separately.
 
 ## Recommended Next Step
 

@@ -542,12 +542,12 @@ chatwoot-client-portal-v2/
 - `pwa` - service worker registration and PWA runtime support;
 - `shared` - reusable non-domain UI/lib helpers.
 
-## Next Architecture Work
+## Implemented Architecture And Future Work
 
-### MT-9 Tenant Admin And Branding
+### MT-9 Tenant Admin And Branding (Completed)
 
-Текущая крупная зона - tenant-owned admin и branding поверх уже готового
-tenant-aware runtime.
+`MT-9` завершён. Ниже зафиксирован реализованный tenant-owned admin/branding
+baseline; новый branding scope требует отдельного feature intake.
 
 Зафиксированное направление:
 

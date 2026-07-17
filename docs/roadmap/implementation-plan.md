@@ -59,14 +59,12 @@ stable docs.
 - clean production source is tracked through `origin/main` and
   `DEPLOY_SOURCE.txt`.
 
-## Active Roadmap
+## Current Roadmap
 
-### MT-9. Tenant Admin And Branding Rebuild
+### MT-9. Tenant Admin And Branding Rebuild (Completed)
 
-Цель:
-
-Вернуть admin/branding только как tenant-owned feature поверх готовой
-multi-tenant foundation и утвержденного customer-facing UI baseline.
+Status: completed. The section records the closed tenant-owned admin/branding
+baseline; new branding work requires a separate feature intake.
 
 Completed gates:
 
