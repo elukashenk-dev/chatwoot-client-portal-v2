@@ -1,8 +1,7 @@
 # Local Cross-Tenant Test Data Runbook
 
 Этот документ описывает подготовку test data для повторного local
-cross-tenant цикла из
-[`production-mcp-playwright-test-cycle.md`](production-mcp-playwright-test-cycle.md).
+cross-tenant цикла.
 
 Цель: быстро завести тестовых клиентов в Chatwoot, зарегистрировать их в
 портале через Mailpit, проверить личные и групповые чаты и не тратить время на

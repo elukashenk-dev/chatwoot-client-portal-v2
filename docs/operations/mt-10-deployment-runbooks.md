@@ -25,7 +25,6 @@ runbooks instead of duplicating every low-level command.
 - portal-owned object storage for branding assets;
 - custom client-domain host ingress/cert preparation after DNS points to the
   production VM;
-- production smoke checklist for portal auth, chat, admin branding and PWA.
 
 ### Ready As Operator CLI, Not Yet Self-Service
 
@@ -63,10 +62,6 @@ automation around:
   `docs/operations/production-clean-reinstall.md`
 - Stable production VM facts:
   `docs/operations/production-server-notes.md`
-- Production browser QA cycle:
-  `docs/operations/production-mcp-playwright-test-cycle.md`
-- Installed PWA smoke:
-  `docs/operations/installed-pwa-smoke.md`
 - Local runtime testing:
   `docs/operations/local-testing.md`
 - Local cross-tenant data:

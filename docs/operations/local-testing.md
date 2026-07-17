@@ -575,13 +575,6 @@ http://stroyfirma.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 http://zubi.127.0.0.1.nip.io:5173/api/tenant/manifest.webmanifest
 ```
 
-Installed PWA smoke для реальных Android/iOS устройств описан отдельно:
-`docs/operations/installed-pwa-smoke.md`.
-
-Полные MCP Playwright сценарии для production, staging и local
-production-like окружений:
-`docs/operations/production-mcp-playwright-test-cycle.md`.
-
 Подготовка Chatwoot contacts, portal email-code access test users, group contacts,
 обязательных `portal_*` custom attributes и Mailpit email-code flow описана
 отдельно:
