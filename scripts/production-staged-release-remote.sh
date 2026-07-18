@@ -4,6 +4,8 @@ set -Eeuo pipefail
 readonly REMOTE_APP_NAME='chatwoot-client-portal-v2'
 readonly REMOTE_APP_PATH='/opt/chatwoot-client-portal-v2'
 readonly REMOTE_PROTOCOL_VERSION='1'
+readonly REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS=360
+readonly REMOTE_SERVICE_READINESS_POLL_SECONDS=2
 
 SELF_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
 RECORDS_LIB="$(dirname -- "$SELF_PATH")/production-release-records.sh"
@@ -61,6 +63,8 @@ REMOTE_ACTIVATION_TENANT_COUNT=''
 REMOTE_ACTIVATION_TENANT_SHA=''
 REMOTE_ACTIVATION_CANDIDATE_IDS=()
 REMOTE_ACTIVATION_PREVIOUS_IDS=()
+REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+REMOTE_SERVICE_READINESS_CAPTURE_FAILED='false'
 REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
@@ -337,10 +341,14 @@ remote_select_command() {
 }
 
 remote_select_activation_tools() {
+  local timeout_help
+
   REMOTE_CURL_BIN="$(remote_select_command STAGED_CURL_BIN curl)" || return 1
   REMOTE_RSYNC_BIN="$(remote_select_command STAGED_RSYNC_BIN rsync)" || return 1
   REMOTE_TIMEOUT_BIN="$(remote_select_command STAGED_TIMEOUT_BIN timeout)" || return 1
   REMOTE_XARGS_BIN="$(remote_select_command STAGED_XARGS_BIN xargs)" || return 1
+  timeout_help="$("$REMOTE_TIMEOUT_BIN" --help 2>&1)" || return 1
+  grep -Fq -- '--kill-after' <<<"$timeout_help" || return 1
 
   if remote_is_test_mode; then
     REMOTE_EVENT_RECORDER="${STAGED_TEST_EVENT_RECORDER:-}"
@@ -2024,7 +2032,7 @@ remote_locked_prepare() {
     remote_prepare_abort 'Candidate Compose config validation failed.'
   help_output="$("${REMOTE_COMPOSE[@]}" up --help 2>/dev/null)" ||
     remote_prepare_abort 'Docker Compose up help is unavailable.'
-  for required in --no-build --pull --wait --wait-timeout; do
+  for required in --no-build --pull; do
     grep -Eq -- "(^|[[:space:],])${required}([[:space:],]|$)" <<<"$help_output" ||
       remote_prepare_abort "Docker Compose lacks required activation flag: $required"
   done
@@ -2608,7 +2616,7 @@ remote_update_transaction() {
 remote_resolve_single_service_container() {
   local service="$1"
   local include_stopped="${2:-false}"
-  local output line
+  local output line resolve_exit
   local -a container_ids=()
   local -a compose_ps=("${REMOTE_COMPOSE[@]}" ps)
 
@@ -2618,7 +2626,16 @@ remote_resolve_single_service_container() {
     *) return 1 ;;
   esac
   compose_ps+=(-q "$service")
-  output="$("${compose_ps[@]}" 2>/dev/null)" || return 1
+  if [[ -n "$REMOTE_SERVICE_READINESS_DEADLINE_SECONDS" ]]; then
+    if output="$(remote_run_with_readiness_deadline "${compose_ps[@]}" 2>/dev/null)"; then
+      :
+    else
+      resolve_exit=$?
+      return "$resolve_exit"
+    fi
+  else
+    output="$("${compose_ps[@]}" 2>/dev/null)" || return 1
+  fi
   while IFS= read -r line; do
     [[ -n "$line" ]] && container_ids+=("$line")
   done <<<"$output"
@@ -2628,7 +2645,7 @@ remote_resolve_single_service_container() {
 }
 
 remote_capture_candidate_services() {
-  local service index container_id details image running health restarts started
+  local service index container_id details image inspect_exit resolve_exit running health restarts started
 
   REMOTE_ACTIVATION_CONTAINER_IDS=()
   REMOTE_ACTIVATION_CONTAINER_IMAGES=()
@@ -2636,11 +2653,27 @@ remote_capture_candidate_services() {
   REMOTE_ACTIVATION_CONTAINER_STARTED=()
   index=0
   for service in portal-backend portal-web telegram-bridge; do
-    remote_resolve_single_service_container "$service" || return 1
+    if remote_resolve_single_service_container "$service"; then
+      :
+    else
+      resolve_exit=$?
+      return "$resolve_exit"
+    fi
     container_id="$REMOTE_RESOLVED_CONTAINER_ID"
-    details="$("${REMOTE_DOCKER[@]}" inspect --format \
-      '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
-      "$container_id" 2>/dev/null)" || return 1
+    if [[ -n "$REMOTE_SERVICE_READINESS_DEADLINE_SECONDS" ]]; then
+      if details="$(remote_run_with_readiness_deadline "${REMOTE_DOCKER[@]}" inspect --format \
+        '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+        "$container_id" 2>/dev/null)"; then
+        :
+      else
+        inspect_exit=$?
+        return "$inspect_exit"
+      fi
+    else
+      details="$("${REMOTE_DOCKER[@]}" inspect --format \
+        '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
+        "$container_id" 2>/dev/null)" || return 1
+    fi
     IFS='|' read -r image running health restarts started <<<"$details"
     [[ "$image" == "${REMOTE_ACTIVATION_CANDIDATE_IDS[$index]}" && "$running" == 'true' ]] || return 1
     [[ "$health" == 'healthy' || "$health" == 'none' ]] || return 1
@@ -2654,9 +2687,86 @@ remote_capture_candidate_services() {
   done
 }
 
-remote_recheck_candidate_services() {
+remote_readiness_remaining_seconds() {
+  local remaining
+
+  [[ "$REMOTE_SERVICE_READINESS_DEADLINE_SECONDS" =~ ^[0-9]+$ ]] || return 1
+  remaining=$((REMOTE_SERVICE_READINESS_DEADLINE_SECONDS - SECONDS))
+  (( remaining > 0 )) || return 124
+  printf '%s\n' "$remaining"
+}
+
+remote_run_with_readiness_deadline() {
+  local remaining
+
+  remaining="$(remote_readiness_remaining_seconds)" || return $?
+  "$REMOTE_TIMEOUT_BIN" --kill-after=5 "$remaining" "$@"
+}
+
+remote_start_and_wait_for_services() {
+  local capture_exit compose_exit deadline now expected_id remaining sleep_seconds
+  local -a expected_ids=("$@")
+  local -a original_expected_ids=("${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}")
+
+  (( ${#expected_ids[@]} == 3 )) || return 1
+  REMOTE_SERVICE_READINESS_CAPTURE_FAILED='false'
+  for expected_id in "${expected_ids[@]}"; do
+    [[ "$expected_id" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+  done
+  deadline=$((SECONDS + REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS))
+  "$REMOTE_TIMEOUT_BIN" --kill-after=5 "$REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS" \
+    "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never >/dev/null 2>&1 || {
+    compose_exit=$?
+    return "$compose_exit"
+  }
+  REMOTE_ACTIVATION_CANDIDATE_IDS=("${expected_ids[@]}")
+  REMOTE_SERVICE_READINESS_DEADLINE_SECONDS="$deadline"
+  while true; do
+    now=$SECONDS
+    if (( now >= deadline )); then
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      return 1
+    fi
+    if remote_capture_candidate_services; then
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      return 0
+    else
+      capture_exit=$?
+    fi
+    if (( capture_exit == 124 )); then
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      return 124
+    fi
+    if remote_is_test_mode; then
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      REMOTE_SERVICE_READINESS_CAPTURE_FAILED='true'
+      return 1
+    fi
+    now=$SECONDS
+    remaining=$((deadline - now))
+    if (( remaining <= 0 )); then
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      return 1
+    fi
+    sleep_seconds="$REMOTE_SERVICE_READINESS_POLL_SECONDS"
+    (( sleep_seconds > remaining )) && sleep_seconds="$remaining"
+    sleep "$sleep_seconds" || {
+      REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=''
+      REMOTE_ACTIVATION_CANDIDATE_IDS=("${original_expected_ids[@]}")
+      return 1
+    }
+  done
+}
+
+remote_recheck_candidate_services() (
   local index service container_id details image running health restarts started
 
+  REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=$((SECONDS + REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS))
   (( ${#REMOTE_ACTIVATION_CONTAINER_IDS[@]} == 3 )) || return 1
   for index in 0 1 2; do
     case "$index" in
@@ -2667,16 +2777,16 @@ remote_recheck_candidate_services() {
     container_id="${REMOTE_ACTIVATION_CONTAINER_IDS[$index]}"
     remote_resolve_single_service_container "$service" || return 1
     [[ "$REMOTE_RESOLVED_CONTAINER_ID" == "$container_id" ]] || return 1
-    details="$("${REMOTE_DOCKER[@]}" inspect --format \
+    details="$(remote_run_with_readiness_deadline "${REMOTE_DOCKER[@]}" inspect --format \
       '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
-      "$container_id" 2>/dev/null)" || return 1
+      "$container_id" 2>/dev/null)" || return $?
     IFS='|' read -r image running health restarts started <<<"$details"
     [[ "$image" == "${REMOTE_ACTIVATION_CONTAINER_IMAGES[$index]}" && "$running" == 'true' ]] || return 1
     [[ "$health" == 'healthy' || "$health" == 'none' ]] || return 1
     [[ "$restarts" == "${REMOTE_ACTIVATION_CONTAINER_RESTARTS[$index]}" ]] || return 1
     [[ "$started" == "${REMOTE_ACTIVATION_CONTAINER_STARTED[$index]}" ]] || return 1
   done
-}
+)
 
 remote_write_smoke_result() {
   local result_dir="$1"
@@ -3951,12 +4061,11 @@ remote_run_exact_rollback() {
   [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[2]}" ]] || return 1
   remote_configure_compose "$app_path" "$previous_dir" || return 1
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
-  "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1 || return 1
+  remote_start_and_wait_for_services "${REMOTE_ACTIVATION_PREVIOUS_IDS[@]}" || return 1
 
   saved_candidate_ids="$(printf '%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}")"
   REMOTE_ACTIVATION_CANDIDATE_IDS=("${REMOTE_ACTIVATION_PREVIOUS_IDS[@]}")
-  if ! remote_capture_candidate_services ||
-    ! remote_run_tenant_smoke \
+  if ! remote_run_tenant_smoke \
       "$app_path/.releases/$REMOTE_ACTIVATION_CANDIDATE_COMMIT/tenants.tsv" \
       "$REMOTE_ACTIVATION_TENANT_COUNT" ||
     ! remote_recheck_candidate_services; then
@@ -4268,16 +4377,17 @@ remote_locked_activate() {
     remote_activation_refuse 'Activation transaction could not be persisted.'
 
   remote_capture_pre_cutover_service_container_ids
-  if "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1; then
+  if remote_start_and_wait_for_services "${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}"; then
     :
   else
     compose_exit=$?
+    if [[ "$REMOTE_SERVICE_READINESS_CAPTURE_FAILED" == 'true' ]]; then
+      handle_candidate_failure service_state
+    fi
     remote_capture_compose_wait_failure_evidence "$compose_exit" ||
       remote_reset_compose_wait_failure_evidence "$compose_exit"
     handle_candidate_failure compose_wait
   fi
-  remote_capture_candidate_services ||
-    handle_candidate_failure service_state
   [[ "$(sha256sum "$candidate_dir/tenants.tsv" | awk '{print $1}')" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] ||
     handle_candidate_failure tenant_smoke
   remote_run_tenant_smoke "$candidate_dir/tenants.tsv" "$REMOTE_ACTIVATION_TENANT_COUNT" ||

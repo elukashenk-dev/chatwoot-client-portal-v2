@@ -577,9 +577,15 @@ case "${1:-}" in
           fi
           exit 0
         fi
-        [[ "$*" == '-d --no-build --pull never --wait --wait-timeout 120' ]] || exit 82
+        [[ "$*" == '-d --no-build --pull never' ||
+          "$*" == '-d --no-build --pull never --wait --wait-timeout 120' ]] || exit 82
         "$FAKE_BIN/record-event" compose_up "$*"
         "$FAKE_BIN/record-event" compose_release "$release_commit"
+        if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
+          "${FAKE_COMPLETED_INIT_SERVICE:-false}" == 'true' && "$*" == *'--wait'* ]]; then
+          printf '%s\n' 'dependency failed to start: container portal-object-storage-init exited (0)' >&2
+          exit 82
+        fi
         if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
           "${FAKE_CANDIDATE_COMPOSE_UP_FAIL:-false}" == 'true' ]]; then
           exit 82
@@ -839,10 +845,67 @@ set -Eeuo pipefail
   printf '%s\0' "$@"
   printf '\0'
 } >>"$FAKE_COMMAND_LOG"
-[[ "${1:-}" == '600' ]] || exit 85
-"$FAKE_BIN/record-event" smoke_timeout "$1"
+if [[ "${1:-}" == '--help' ]]; then
+  if [[ "${FAKE_TIMEOUT_NO_KILL_AFTER:-false}" == 'true' ]]; then
+    printf '%s\n' 'Usage: timeout DURATION COMMAND [ARG]...'
+  else
+    printf '%s\n' 'Usage: timeout [--kill-after=DURATION] DURATION COMMAND [ARG]...'
+  fi
+  exit 0
+fi
+case "${1:-}" in
+  --kill-after=5)
+    kill_after="$1"
+    shift
+    ;;
+  *)
+    kill_after=''
+    ;;
+esac
+case "${1:-}" in
+  600)
+    "$FAKE_BIN/record-event" smoke_timeout "$1"
+    ;;
+  360)
+    "$FAKE_BIN/record-event" compose_readiness_timeout "$1"
+    ;;
+  *)
+    [[ "${1:-}" =~ ^[1-9][0-9]*$ && "${1:-}" -le 360 ]] || exit 85
+    ;;
+esac
+timeout_seconds="$1"
 shift
-exec /usr/bin/timeout 600 "$@"
+if [[ "$timeout_seconds" == '360' && -n "$kill_after" &&
+  "${FAKE_COMPOSE_READINESS_TIMEOUT:-false}" == 'true' &&
+  ! -e "$FAKE_DOCKER_STATE_DIR/compose-readiness-timeout-triggered" ]]; then
+  : >"$FAKE_DOCKER_STATE_DIR/compose-readiness-timeout-triggered"
+  exit 124
+fi
+if [[ "$timeout_seconds" == '360' && -n "$kill_after" &&
+  "${FAKE_COMPOSE_READINESS_EXIT_CODE:-}" =~ ^[1-9][0-9]*$ &&
+  ! -e "$FAKE_DOCKER_STATE_DIR/compose-readiness-exit-triggered" ]]; then
+  : >"$FAKE_DOCKER_STATE_DIR/compose-readiness-exit-triggered"
+  exit "$FAKE_COMPOSE_READINESS_EXIT_CODE"
+fi
+if [[ -n "$kill_after" && "${FAKE_SERVICE_READINESS_QUERY_TIMEOUT:-false}" == 'true' &&
+  "$*" == *'compose'* && "$*" == *'ps'* &&
+  ! -e "$FAKE_DOCKER_STATE_DIR/service-readiness-query-timeout-triggered" ]]; then
+  : >"$FAKE_DOCKER_STATE_DIR/service-readiness-query-timeout-triggered"
+  exit 124
+fi
+if [[ -n "$kill_after" && "${FAKE_SERVICE_RECHECK_QUERY_TIMEOUT:-false}" == 'true' &&
+  "$*" == *'compose'* && "$*" == *'ps'* ]]; then
+  count_file="$FAKE_DOCKER_STATE_DIR/service-readiness-query-count"
+  count=0
+  [[ ! -f "$count_file" ]] || count="$(<"$count_file")"
+  count=$((count + 1))
+  printf '%s\n' "$count" >"$count_file"
+  if [[ "$count" == '4' && ! -e "$FAKE_DOCKER_STATE_DIR/service-recheck-query-timeout-triggered" ]]; then
+    : >"$FAKE_DOCKER_STATE_DIR/service-recheck-query-timeout-triggered"
+    exit 124
+  fi
+fi
+exec /usr/bin/timeout "$timeout_seconds" "$@"
 SH
 
   cat >"$FAKE_BIN/xargs" <<'SH'
@@ -1134,7 +1197,7 @@ cutovers = [record for record in records if "compose" in record and "up" in reco
 if len(cutovers) != 1:
     raise SystemExit(f"expected one compose cutover, got {cutovers}")
 record = cutovers[0]
-expected_tail = ["up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "120"]
+expected_tail = ["up", "-d", "--no-build", "--pull", "never"]
 if record[-len(expected_tail):] != expected_tail:
     raise SystemExit(f"compose cutover tail mismatch: {record}")
 for record in records:
@@ -1756,7 +1819,7 @@ prepare_rejects_compose_config_error_and_low_disk() {
 
 prepare_rejects_compose_without_required_activation_flags() {
   local output flag
-  for flag in --no-build --pull --wait --wait-timeout; do
+  for flag in --no-build --pull; do
     setup_prepare_fixture "$FUNCNAME-${flag#--}"
     output="$CASE_ROOT/output"
     export FAKE_COMPOSE_MISSING_HELP_FLAG="$flag"
@@ -2584,18 +2647,164 @@ activate_writes_cutover_journal_before_compose_up() {
   grep -Fxq 'migration_policy=automatic' "$transaction" || fail 'transaction automatic policy missing'
   grep -Fxq 'phase=cutover_started' "$transaction" || fail 'transaction cutover phase mismatch'
   [[ "$(stat -c '%a' "$transaction")" == '600' ]] || fail 'transaction is not private'
-  assert_events_in_order 'journal_write|cutover_started' 'compose_up|-d --no-build --pull never --wait --wait-timeout 120'
+  assert_events_in_order 'journal_write|cutover_started' 'compose_up|-d --no-build --pull never'
   [[ -f "$REMOTE_TEST_ROOT/app/.release-state/prepared" ]] ||
     fail 'post-journal failure removed the prepared pointer'
 }
 
-activate_uses_no_build_pull_never_wait_120_exactly() {
+activate_uses_no_build_pull_never_exactly() {
   local output
 
   setup_activation_fixture "$FUNCNAME"
   output="$CASE_ROOT/output"
   assert_activation_success "$output"
   assert_exact_compose_cutover
+}
+
+activate_tolerates_successful_one_shot_initializer() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_COMPLETED_INIT_SERVICE=true
+  assert_activation_success "$output"
+  unset FAKE_COMPLETED_INIT_SERVICE
+  assert_exact_compose_cutover
+}
+
+activate_readiness_timeout_covers_supported_dependency_chain() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  assert_activation_success "$output"
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib
+import sys
+
+records = []
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
+    fields = [part.decode() for part in raw.split(b"\0") if part]
+    if fields:
+        records.append(fields)
+
+readiness = [
+    record for record in records
+    if record[:3] == ["timeout", "--kill-after=5", "360"] and "compose" in record and "up" in record
+]
+if len(readiness) != 1:
+    raise SystemExit(f"expected one bounded Compose readiness timeout, got {readiness}")
+record = readiness[0]
+expected_tail = ["up", "-d", "--no-build", "--pull", "never"]
+if "compose" not in record or record[-len(expected_tail):] != expected_tail:
+    raise SystemExit(f"unexpected bounded Compose command: {record}")
+PY
+}
+
+activate_rollback_uses_targeted_readiness_without_global_compose_wait() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_CANDIDATE_CURL_FAIL_PATTERN='alpha.example.test/api/health'
+  assert_activation_failure "$output"
+  unset FAKE_CANDIDATE_CURL_FAIL_PATTERN
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  python3 - "$FAKE_EVENT_LOG" "$PREPARED_COMMIT" "$CURRENT_COMMIT" <<'PY'
+import pathlib
+import sys
+
+path, candidate, previous = sys.argv[1:]
+events = [line.split("\t", 3) for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines()]
+compose_up = [fields[3] for fields in events if len(fields) == 4 and fields[2] == "compose_up"]
+compose_releases = [fields[3] for fields in events if len(fields) == 4 and fields[2] == "compose_release"]
+
+if compose_up != ["-d --no-build --pull never", "-d --no-build --pull never"]:
+    raise SystemExit(f"unexpected compose starts: {compose_up}")
+if compose_releases != [candidate, previous]:
+    raise SystemExit(f"unexpected compose release order: {compose_releases}")
+PY
+}
+
+activate_compose_readiness_timeout_rolls_back_safely() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  export FAKE_COMPOSE_READINESS_TIMEOUT=true
+  assert_activation_failure "$output"
+  unset FAKE_COMPOSE_READINESS_TIMEOUT
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  grep -Fxq 'compose_wait_exit_code=124' "$output" ||
+    fail 'Compose readiness timeout did not preserve exit code 124'
+  [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$CURRENT_COMMIT" ]] ||
+    fail 'Compose readiness timeout did not restore the previous runtime'
+  [[ "$(<"$state/current")" == "$CURRENT_COMMIT" ]] ||
+    fail 'Compose readiness timeout did not restore the current pointer'
+  [[ ! -e "$state/adoption" && ! -e "$state/previous" ]] ||
+    fail 'Compose readiness timeout retained a staged pointer'
+  [[ "$(release_marker_read_active_commit "$REMOTE_TEST_ROOT/app/DEPLOY_SOURCE.txt")" == "$CURRENT_COMMIT" ]] ||
+    fail 'Compose readiness timeout published the candidate marker'
+  assert_no_event marker_rename
+}
+
+activate_compose_exit_70_preserves_compose_wait_diagnostics() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_COMPOSE_READINESS_EXIT_CODE=70
+  assert_activation_failure "$output"
+  unset FAKE_COMPOSE_READINESS_EXIT_CODE
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  grep -Fxq 'compose_wait_exit_code=70' "$output" ||
+    fail 'Compose exit 70 did not preserve compose-wait diagnostics'
+  assert_no_event marker_rename
+}
+
+activate_service_readiness_query_timeout_rolls_back_safely() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_READINESS_QUERY_TIMEOUT=true
+  assert_activation_failure "$output"
+  unset FAKE_SERVICE_READINESS_QUERY_TIMEOUT
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  grep -Fxq 'compose_wait_exit_code=124' "$output" ||
+    fail 'service readiness query timeout did not preserve exit code 124'
+  [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$CURRENT_COMMIT" ]] ||
+    fail 'service readiness query timeout did not restore the previous runtime'
+  assert_no_event marker_rename
+}
+
+activate_refuses_timeout_without_kill_after_before_cutover() {
+  local output state
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$REMOTE_TEST_ROOT/app/.release-state"
+  export FAKE_TIMEOUT_NO_KILL_AFTER=true
+  assert_activation_refusal "$output" activation_refused_state_changed
+  unset FAKE_TIMEOUT_NO_KILL_AFTER
+  [[ ! -e "$state/transaction" && ! -L "$state/transaction" ]] ||
+    fail 'unsupported timeout option created an activation transaction'
+  assert_no_compose_cutover
+}
+
+activate_recheck_timeout_rolls_back_safely() {
+  local output
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  export FAKE_SERVICE_RECHECK_QUERY_TIMEOUT=true
+  assert_activation_failure "$output"
+  unset FAKE_SERVICE_RECHECK_QUERY_TIMEOUT
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$CURRENT_COMMIT" ]] ||
+    fail 'bounded post-smoke recheck timeout did not restore the previous runtime'
+  assert_no_event marker_rename
 }
 
 activate_checks_built_service_running_health_and_restart_state() {
@@ -2820,7 +3029,7 @@ for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
     fields = [part.decode() for part in raw.split(b"\0") if part]
     if fields:
         records.append(fields)
-timeout = [record for record in records if record[0] == "timeout"]
+timeout = [record for record in records if record[0] == "timeout" and record[1] == "600"]
 xargs = [record for record in records if record[0] == "xargs"]
 curl = [record for record in records if record[0] == "curl"]
 if len(timeout) != 1 or timeout[0][1] != "600":
@@ -2876,7 +3085,7 @@ successful_publication_advances_journal_and_writes_markers_last() {
   assert_activation_success "$output"
   assert_events_in_order \
     'journal_write|cutover_started' \
-    'compose_up|-d --no-build --pull never --wait --wait-timeout 120' \
+    'compose_up|-d --no-build --pull never' \
     'curl_success|https://alpha.example.test/api/health' \
     'curl_success|https://alpha.example.test/api/tenant' \
     'journal_write|candidate_healthy' \
@@ -4515,7 +4724,15 @@ run_activate_success_cases() {
   run_case candidate_expiry_at_transaction_boundary_is_refused
   run_case cleanup_helpers_propagate_removal_failure
   run_case activate_writes_cutover_journal_before_compose_up
-  run_case activate_uses_no_build_pull_never_wait_120_exactly
+  run_case activate_uses_no_build_pull_never_exactly
+  run_case activate_tolerates_successful_one_shot_initializer
+  run_case activate_readiness_timeout_covers_supported_dependency_chain
+  run_case activate_rollback_uses_targeted_readiness_without_global_compose_wait
+  run_case activate_compose_readiness_timeout_rolls_back_safely
+  run_case activate_compose_exit_70_preserves_compose_wait_diagnostics
+  run_case activate_service_readiness_query_timeout_rolls_back_safely
+  run_case activate_refuses_timeout_without_kill_after_before_cutover
+  run_case activate_recheck_timeout_rolls_back_safely
   run_case activate_checks_built_service_running_health_and_restart_state
   run_case smoke_checks_health_and_exact_tenant_slug_for_every_active_tenant
   run_case smoke_never_exceeds_five_workers_or_three_attempts
