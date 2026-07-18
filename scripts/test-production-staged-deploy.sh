@@ -4062,6 +4062,7 @@ compose_wait_failure_records_safe_container_failure_signals() {
   export FAKE_CANDIDATE_RECREATES_CONTAINERS=true
   export FAKE_CANDIDATE_CONTAINER_EXIT_CODE_PORTAL_BACKEND=42
   export FAKE_CANDIDATE_CONTAINER_OOM_KILLED_PORTAL_BACKEND=true
+  export FAKE_CANDIDATE_SERVICE_RESTARTED=portal-web
   export FAKE_CANDIDATE_CONTAINER_LOG_TAIL_PORTAL_BACKEND=$'database connection failed: postgres://portal:do-not-leak-compose-log-secret@portal-db:5432/portal\nPORTAL_V2_POSTGRES_PASSWORD=do-not-leak-compose-log-secret\nAuthorization: Bearer short-bearer-secret\nJWT abcdefghijklmnopqrst\nJWT eyJhbGciOiJIUzI1NiJ9\nredis://:short-uri-secret@cache:6379/0\nstartup failed: EADDRINUSE'
   task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
   unset FAKE_CANDIDATE_SERVICE_UNHEALTHY \
@@ -4070,6 +4071,7 @@ compose_wait_failure_records_safe_container_failure_signals() {
     FAKE_CANDIDATE_RECREATES_CONTAINERS \
     FAKE_CANDIDATE_CONTAINER_EXIT_CODE_PORTAL_BACKEND \
     FAKE_CANDIDATE_CONTAINER_OOM_KILLED_PORTAL_BACKEND \
+    FAKE_CANDIDATE_SERVICE_RESTARTED \
     FAKE_CANDIDATE_CONTAINER_LOG_TAIL_PORTAL_BACKEND
 
   mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
@@ -4081,6 +4083,10 @@ compose_wait_failure_records_safe_container_failure_signals() {
       fail 'compose-wait container exit code was not retained'
     grep -Fxq 'compose_wait_portal_backend_oom_killed=true' "$path" ||
       fail 'compose-wait container OOM state was not retained'
+    grep -Fxq 'compose_wait_portal_backend_stop_classification=nonzero_exit' "$path" ||
+      fail 'nonzero candidate exit did not receive a fixed classification'
+    grep -Fxq 'compose_wait_portal_web_stop_classification=clean_exit' "$path" ||
+      fail 'zero candidate exit did not receive a fixed classification'
     grep -Fq 'compose_wait_portal_backend_log_tail=signals=' "$path" ||
       fail 'compose-wait container failure signals were not retained'
     grep -Fq 'EADDRINUSE' "$path" ||
@@ -4130,6 +4136,8 @@ compose_wait_diagnostic_capture_failure_still_rolls_back() {
       fail 'failed diagnostic capture retained an OOM state'
     grep -Fxq "compose_wait_${service}_log_tail=unavailable" "$outcome" ||
       fail 'failed diagnostic capture retained a log tail'
+    grep -Fxq "compose_wait_${service}_stop_classification=unavailable" "$outcome" ||
+      fail 'failed diagnostic capture did not mark classification unavailable'
   done
 }
 

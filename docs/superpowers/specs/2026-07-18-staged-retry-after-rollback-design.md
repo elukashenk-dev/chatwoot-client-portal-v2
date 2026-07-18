@@ -58,8 +58,9 @@ runtime, expired/missing candidate or ambiguous history remains blocked.
 
 For a failed `compose_wait`, retain only fixed safe classifications derived
 from Docker state: exit code, OOM state and one of `clean_exit`,
-`nonzero_exit`, `signal_termination` or `unavailable`. No arbitrary container
-log content is persisted or printed.
+`nonzero_exit` or `unavailable`. Docker state alone does not prove a Unix
+signal, so the process must not label one. No arbitrary container log content
+is persisted or printed.
 
 ## Verification
 
