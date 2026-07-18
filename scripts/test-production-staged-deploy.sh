@@ -347,6 +347,33 @@ container_image() {
   container_field "$1" image
 }
 
+container_failure_diagnostic() {
+  local container_id="$1"
+  local field="$2"
+  local service runtime_commit suffix variable default
+
+  service="$(container_field "$container_id" service)" || return 1
+  runtime_commit="$(<"$FAKE_RUNTIME_COMMIT_FILE")"
+  [[ "$runtime_commit" == "$FAKE_CANDIDATE_COMMIT" ]] || return 1
+  suffix="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
+  case "$field" in
+    exit_code)
+      variable="FAKE_CANDIDATE_CONTAINER_EXIT_CODE_$suffix"
+      default='0'
+      ;;
+    oom_killed)
+      variable="FAKE_CANDIDATE_CONTAINER_OOM_KILLED_$suffix"
+      default='false'
+      ;;
+    log_tail)
+      variable="FAKE_CANDIDATE_CONTAINER_LOG_TAIL_$suffix"
+      default=''
+      ;;
+    *) return 1 ;;
+  esac
+  printf '%s\n' "${!variable:-$default}"
+}
+
 case "${1:-}" in
   info)
     exit 0
@@ -365,6 +392,11 @@ case "${1:-}" in
       '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}') container_field "$target" health ;;
       '{{.RestartCount}}') container_field "$target" restarts ;;
       '{{.State.StartedAt}}') container_field "$target" started_at ;;
+      '{{.State.ExitCode}}|{{.State.OOMKilled}}')
+        printf '%s|%s\n' \
+          "$(container_failure_diagnostic "$target" exit_code)" \
+          "$(container_failure_diagnostic "$target" oom_killed)"
+        ;;
       '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}')
         printf '%s|%s|%s|%s|%s\n' \
           "$(container_field "$target" image)" \
@@ -382,6 +414,10 @@ case "${1:-}" in
         ;;
       *) exit 78 ;;
     esac
+    ;;
+  logs)
+    [[ "${2:-}" == '--tail' && "${3:-}" == '20' && $# == 4 ]] || exit 78
+    container_failure_diagnostic "${4:-}" log_tail
     ;;
   tag)
     tag_set "${3:-}" "${2:-}"
@@ -3800,6 +3836,91 @@ compose_wait_early_failure_rejects_previous_service_snapshot() {
   done
 }
 
+compose_wait_failure_records_safe_container_failure_signals() {
+  local output state history outcome path
+  local -a outcomes=()
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-backend
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  export FAKE_CANDIDATE_RECREATES_CONTAINERS=true
+  export FAKE_CANDIDATE_CONTAINER_EXIT_CODE_PORTAL_BACKEND=42
+  export FAKE_CANDIDATE_CONTAINER_OOM_KILLED_PORTAL_BACKEND=true
+  export FAKE_CANDIDATE_CONTAINER_LOG_TAIL_PORTAL_BACKEND=$'database connection failed: postgres://portal:do-not-leak-compose-log-secret@portal-db:5432/portal\nPORTAL_V2_POSTGRES_PASSWORD=do-not-leak-compose-log-secret\nAuthorization: Bearer short-bearer-secret\nJWT abcdefghijklmnopqrst\nJWT eyJhbGciOiJIUzI1NiJ9\nredis://:short-uri-secret@cache:6379/0\nstartup failed: EADDRINUSE'
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY \
+    FAKE_CANDIDATE_SERVICE_NOT_RUNNING \
+    FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION \
+    FAKE_CANDIDATE_RECREATES_CONTAINERS \
+    FAKE_CANDIDATE_CONTAINER_EXIT_CODE_PORTAL_BACKEND \
+    FAKE_CANDIDATE_CONTAINER_OOM_KILLED_PORTAL_BACKEND \
+    FAKE_CANDIDATE_CONTAINER_LOG_TAIL_PORTAL_BACKEND
+
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'compose-wait log diagnostic outcome count mismatch'
+  outcome="${outcomes[0]}"
+  for path in "$output" "$outcome"; do
+    grep -Fxq 'compose_wait_portal_backend_exit_code=42' "$path" ||
+      fail 'compose-wait container exit code was not retained'
+    grep -Fxq 'compose_wait_portal_backend_oom_killed=true' "$path" ||
+      fail 'compose-wait container OOM state was not retained'
+    grep -Fq 'compose_wait_portal_backend_log_tail=signals=' "$path" ||
+      fail 'compose-wait container failure signals were not retained'
+    grep -Fq 'EADDRINUSE' "$path" ||
+      fail 'compose-wait container failure signals omitted the startup cause'
+    ! grep -Fq 'do-not-leak-compose-log-secret' "$path" ||
+      fail 'compose-wait container log tail leaked a secret'
+    ! grep -Fq 'short-bearer-secret' "$path" ||
+      fail 'compose-wait container log tail leaked a bearer token'
+    ! grep -Fq 'short-uri-secret' "$path" ||
+      fail 'compose-wait container log tail leaked URI credentials'
+    ! grep -Fq 'abcdefghijklmnopqrst' "$path" ||
+      fail 'compose-wait container log tail leaked a short JWT-like credential'
+    ! grep -Fq 'eyJhbGciOiJIUzI1NiJ9' "$path" ||
+      fail 'compose-wait container log tail leaked a base64url JWT-like credential'
+  done
+}
+
+compose_wait_diagnostic_capture_failure_still_rolls_back() {
+  local output state history outcome service
+  local -a outcomes=()
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  export FAKE_CANDIDATE_RECREATES_CONTAINERS=true
+  export STAGED_TEST_FAIL_COMPOSE_WAIT_DIAGNOSTICS=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY \
+    FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION \
+    FAKE_CANDIDATE_RECREATES_CONTAINERS \
+    STAGED_TEST_FAIL_COMPOSE_WAIT_DIAGNOSTICS
+
+  [[ "$(<"$state/current")" == "$CURRENT_COMMIT" ]] ||
+    fail 'diagnostic-capture failure changed the current release pointer'
+  task5_assert_runtime_release "$CURRENT_COMMIT"
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'diagnostic-capture failure outcome count mismatch'
+  outcome="${outcomes[0]}"
+  for service in portal_backend portal_web telegram_bridge; do
+    grep -Fxq "compose_wait_${service}_exit_code=unavailable" "$outcome" ||
+      fail 'failed diagnostic capture retained a container exit code'
+    grep -Fxq "compose_wait_${service}_oom_killed=unavailable" "$outcome" ||
+      fail 'failed diagnostic capture retained an OOM state'
+    grep -Fxq "compose_wait_${service}_log_tail=unavailable" "$outcome" ||
+      fail 'failed diagnostic capture retained a log tail'
+  done
+}
+
 rollback_failure_preserves_current_previous_candidate_and_journal() {
   local output state decision
 
@@ -4196,6 +4317,8 @@ run_rollback_cases() {
   run_case successful_rollback_records_candidate_failed_rollback_succeeded
   run_case compose_wait_failure_persists_safe_diagnostics
   run_case compose_wait_early_failure_rejects_previous_service_snapshot
+  run_case compose_wait_failure_records_safe_container_failure_signals
+  run_case compose_wait_diagnostic_capture_failure_still_rolls_back
   run_case rollback_failure_preserves_current_previous_candidate_and_journal
   run_case forward_only_failure_never_starts_previous_code
   run_case forward_only_failure_preserves_decision_candidate_runtime_and_journal

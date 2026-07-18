@@ -65,6 +65,15 @@ REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
 REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE='unavailable'
+REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED='unavailable'
+REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL='unavailable'
+REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL='unavailable'
 REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS=()
 REMOTE_RESOLVED_CONTAINER_ID=''
 REMOTE_SUPERSEDED_ARCHIVE_SHA=''
@@ -2848,13 +2857,19 @@ remote_validate_outcome() {
   local expected_previous="${4:-}"
   local expected_started="${5:-}"
   local protocol kind candidate previous status stage started timestamp epoch key
-  local compose_wait_key_count=0 compose_wait_exit_code
+  local compose_wait_key_count=0 compose_wait_extended_key_count=0 compose_wait_exit_code
   local compose_wait_portal_backend compose_wait_portal_web compose_wait_telegram_bridge
+  local service compose_wait_service_exit_code compose_wait_service_oom_killed
+  local compose_wait_service_log_tail
 
   release_record_validate_keys "$path" protocol_version record_kind candidate_commit previous_commit \
     status failure_stage transaction_started_at_utc recorded_at_utc recorded_at_epoch \
     compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web \
-    compose_wait_telegram_bridge || return 1
+    compose_wait_telegram_bridge compose_wait_portal_backend_exit_code \
+    compose_wait_portal_web_exit_code compose_wait_telegram_bridge_exit_code \
+    compose_wait_portal_backend_oom_killed compose_wait_portal_web_oom_killed \
+    compose_wait_telegram_bridge_oom_killed compose_wait_portal_backend_log_tail \
+    compose_wait_portal_web_log_tail compose_wait_telegram_bridge_log_tail || return 1
   protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
   kind="$(release_record_get_unique "$path" record_kind)" || return 1
   candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
@@ -2892,12 +2907,25 @@ remote_validate_outcome() {
       compose_wait_key_count=$((compose_wait_key_count + 1))
     fi
   done
+  for key in compose_wait_portal_backend_exit_code compose_wait_portal_web_exit_code \
+    compose_wait_telegram_bridge_exit_code compose_wait_portal_backend_oom_killed \
+    compose_wait_portal_web_oom_killed compose_wait_telegram_bridge_oom_killed \
+    compose_wait_portal_backend_log_tail compose_wait_portal_web_log_tail \
+    compose_wait_telegram_bridge_log_tail; do
+    if grep -Eq "^${key}=" "$path"; then
+      compose_wait_extended_key_count=$((compose_wait_extended_key_count + 1))
+    fi
+  done
   if [[ "$stage" != 'compose_wait' ]]; then
-    (( compose_wait_key_count == 0 )) || return 1
+    (( compose_wait_key_count == 0 && compose_wait_extended_key_count == 0 )) || return 1
     return 0
   fi
   (( compose_wait_key_count == 0 || compose_wait_key_count == 4 )) || return 1
-  (( compose_wait_key_count == 0 )) && return 0
+  if (( compose_wait_key_count == 0 )); then
+    (( compose_wait_extended_key_count == 0 )) || return 1
+    return 0
+  fi
+  (( compose_wait_extended_key_count == 0 || compose_wait_extended_key_count == 9 )) || return 1
   compose_wait_exit_code="$(release_record_get_unique "$path" compose_wait_exit_code)" || return 1
   compose_wait_portal_backend="$(release_record_get_unique "$path" compose_wait_portal_backend)" || return 1
   compose_wait_portal_web="$(release_record_get_unique "$path" compose_wait_portal_web)" || return 1
@@ -2905,7 +2933,19 @@ remote_validate_outcome() {
   [[ "$compose_wait_exit_code" =~ ^[1-9][0-9]*$ ]] || return 1
   remote_compose_wait_snapshot_is_safe "$compose_wait_portal_backend" || return 1
   remote_compose_wait_snapshot_is_safe "$compose_wait_portal_web" || return 1
-  remote_compose_wait_snapshot_is_safe "$compose_wait_telegram_bridge"
+  remote_compose_wait_snapshot_is_safe "$compose_wait_telegram_bridge" || return 1
+  (( compose_wait_extended_key_count == 0 )) && return 0
+  for service in portal_backend portal_web telegram_bridge; do
+    compose_wait_service_exit_code="$(release_record_get_unique \
+      "$path" "compose_wait_${service}_exit_code")" || return 1
+    compose_wait_service_oom_killed="$(release_record_get_unique \
+      "$path" "compose_wait_${service}_oom_killed")" || return 1
+    compose_wait_service_log_tail="$(release_record_get_unique \
+      "$path" "compose_wait_${service}_log_tail")" || return 1
+    remote_compose_wait_container_exit_code_is_safe "$compose_wait_service_exit_code" || return 1
+    remote_compose_wait_container_oom_killed_is_safe "$compose_wait_service_oom_killed" || return 1
+    remote_compose_wait_log_tail_is_safe "$compose_wait_service_log_tail" || return 1
+  done
 }
 
 remote_outcome_transaction_started_at() {
@@ -3109,7 +3149,16 @@ remote_write_failure_outcome() {
         "compose_wait_exit_code=$REMOTE_COMPOSE_WAIT_EXIT_CODE" \
         "compose_wait_portal_backend=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND" \
         "compose_wait_portal_web=$REMOTE_COMPOSE_WAIT_PORTAL_WEB" \
-        "compose_wait_telegram_bridge=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE"
+        "compose_wait_telegram_bridge=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE" \
+        "compose_wait_portal_backend_exit_code=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE" \
+        "compose_wait_portal_web_exit_code=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE" \
+        "compose_wait_telegram_bridge_exit_code=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE" \
+        "compose_wait_portal_backend_oom_killed=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED" \
+        "compose_wait_portal_web_oom_killed=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED" \
+        "compose_wait_telegram_bridge_oom_killed=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED" \
+        "compose_wait_portal_backend_log_tail=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL" \
+        "compose_wait_portal_web_log_tail=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL" \
+        "compose_wait_telegram_bridge_log_tail=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL"
     fi
   } |
     release_record_write_atomic create "$path" || return 1
@@ -3318,6 +3367,15 @@ remote_print_candidate_evidence() {
     printf 'compose_wait_portal_backend=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND"
     printf 'compose_wait_portal_web=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB"
     printf 'compose_wait_telegram_bridge=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE"
+    printf 'compose_wait_portal_backend_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE"
+    printf 'compose_wait_portal_web_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE"
+    printf 'compose_wait_telegram_bridge_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE"
+    printf 'compose_wait_portal_backend_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED"
+    printf 'compose_wait_portal_web_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED"
+    printf 'compose_wait_telegram_bridge_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED"
+    printf 'compose_wait_portal_backend_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL"
+    printf 'compose_wait_portal_web_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL"
+    printf 'compose_wait_telegram_bridge_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL"
   fi
   for service in portal-backend portal-web telegram-bridge; do
     if remote_resolve_single_service_container "$service" 2>/dev/null; then
@@ -3337,6 +3395,100 @@ remote_compose_wait_snapshot_is_safe() {
   [[ "$value" == 'unavailable' || "$value" =~ ^sha256:[0-9a-f]{64}\|(true|false)\|(healthy|unhealthy|starting|none)\|[0-9]+$ ]]
 }
 
+remote_compose_wait_container_exit_code_is_safe() {
+  local value="${1:-}"
+
+  [[ "$value" == 'unavailable' || "$value" =~ ^[0-9]+$ ]]
+}
+
+remote_compose_wait_container_oom_killed_is_safe() {
+  local value="${1:-}"
+
+  [[ "$value" == 'unavailable' || "$value" == 'true' || "$value" == 'false' ]]
+}
+
+remote_compose_wait_log_tail_is_safe() {
+  local value="${1:-}"
+
+  [[ "$value" == 'unavailable' || "$value" == 'no_recognized_signal' ||
+    "$value" =~ ^signals=[A-Z0-9_,-]{1,500}$ ]]
+}
+
+remote_compose_wait_snapshot_requires_runtime_diagnostics() {
+  local value="$1"
+  local image running health restarts
+
+  remote_compose_wait_snapshot_is_safe "$value" || return 1
+  [[ "$value" == 'unavailable' ]] && return 1
+  IFS='|' read -r image running health restarts <<<"$value"
+  [[ "$running" != 'true' || "$health" == 'unhealthy' || "$health" == 'starting' ||
+    "$restarts" != '0' ]]
+}
+
+remote_capture_compose_wait_log_tail() {
+  local container_id="$1"
+  local output
+
+  output="$({ "${REMOTE_DOCKER[@]}" logs --tail 20 "$container_id" 2>&1 || true; } |
+    "$REMOTE_PYTHON_BIN" -c '
+import re
+import sys
+
+text = sys.stdin.buffer.read(8192).decode("utf-8", "replace")
+signals = []
+
+def add(signal):
+    if signal not in signals:
+        signals.append(signal)
+
+for errno in (
+    "EADDRINUSE", "EACCES", "EAI_AGAIN", "ECONNABORTED", "ECONNREFUSED",
+    "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "ENOSPC",
+    "ENOMEM", "ENOTFOUND", "EPERM", "EPIPE", "ETIMEDOUT",
+):
+    if re.search(r"\b" + errno + r"\b", text, re.IGNORECASE):
+        add(errno)
+
+for pattern, signal in (
+    (r"\bERR_[A-Z0-9_]+\b", "APPLICATION_ERROR"),
+    (r"\bOOM(?:KILLED)?\b", "OOM"),
+    (r"\bSIG(?:ABRT|BUS|FPE|HUP|ILL|INT|KILL|PIPE|QUIT|SEGV|TERM|TRAP|USR[12])\b", "SIGNAL"),
+    (r"\baddress already in use\b", "ADDRESS_IN_USE"),
+    (r"\b(?:connection refused|connection reset|connection timed out)\b", "CONNECTION_FAILED"),
+    (r"\b(?:database|postgres|redis)[ -](?:connection|authentication) (?:failed|refused)\b", "DEPENDENCY_FAILURE"),
+    (r"\b(?:permission denied|access denied)\b", "ACCESS_DENIED"),
+    (r"\b(?:no space left on device|disk quota exceeded)\b", "DISK_CAPACITY"),
+):
+    if re.search(pattern, text, re.IGNORECASE):
+        add(signal)
+
+print("signals=" + ",".join(signals[:32]) if signals else "no_recognized_signal")
+' 2>/dev/null)" || return 1
+  remote_compose_wait_log_tail_is_safe "$output" || return 1
+  printf '%s\n' "$output"
+}
+
+remote_capture_compose_wait_container_runtime_diagnostics() {
+  local container_id="$1"
+  local details exit_code oom_killed log_tail
+
+  REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE='unavailable'
+  REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED='unavailable'
+  REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL='unavailable'
+  details="$("${REMOTE_DOCKER[@]}" inspect --format \
+    '{{.State.ExitCode}}|{{.State.OOMKilled}}' "$container_id" 2>/dev/null || printf unavailable)"
+  if [[ "$details" =~ ^([0-9]+)\|(true|false)$ ]]; then
+    exit_code="${BASH_REMATCH[1]}"
+    oom_killed="${BASH_REMATCH[2]}"
+    REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE="$exit_code"
+    REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED="$oom_killed"
+  fi
+  log_tail="$(remote_capture_compose_wait_log_tail "$container_id" 2>/dev/null || printf unavailable)"
+  if remote_compose_wait_log_tail_is_safe "$log_tail"; then
+    REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL="$log_tail"
+  fi
+}
+
 remote_capture_pre_cutover_service_container_ids() {
   local service
 
@@ -3348,18 +3500,39 @@ remote_capture_pre_cutover_service_container_ids() {
   done
 }
 
+remote_reset_compose_wait_failure_evidence() {
+  local exit_code="${1:-}"
+
+  REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
+  [[ "$exit_code" =~ ^[1-9][0-9]*$ ]] && REMOTE_COMPOSE_WAIT_EXIT_CODE="$exit_code"
+  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
+  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE='unavailable'
+  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED='unavailable'
+  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL='unavailable'
+  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL='unavailable'
+}
+
 remote_capture_compose_wait_failure_evidence() {
   local exit_code="$1"
   local service details expected_image captured_image container_id pre_cutover_container_id
 
-  REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
-  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
-  REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
-  [[ "$exit_code" =~ ^[1-9][0-9]*$ ]] && REMOTE_COMPOSE_WAIT_EXIT_CODE="$exit_code"
+  remote_reset_compose_wait_failure_evidence "$exit_code"
+  if remote_is_test_mode && [[ "${STAGED_TEST_FAIL_COMPOSE_WAIT_DIAGNOSTICS:-false}" == 'true' ]]; then
+    return 1
+  fi
 
   for service in portal-backend portal-web telegram-bridge; do
     details='unavailable'
+    REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE='unavailable'
+    REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED='unavailable'
+    REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL='unavailable'
     case "$service" in
       portal-backend) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-}" ;;
       portal-web) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-}" ;;
@@ -3380,10 +3553,28 @@ remote_capture_compose_wait_failure_evidence() {
         [[ "$container_id" != "$pre_cutover_container_id" ]] || details='unavailable'
       done
     fi
+    if remote_compose_wait_snapshot_requires_runtime_diagnostics "$details"; then
+      remote_capture_compose_wait_container_runtime_diagnostics "$container_id"
+    fi
     case "$service" in
-      portal-backend) REMOTE_COMPOSE_WAIT_PORTAL_BACKEND="$details" ;;
-      portal-web) REMOTE_COMPOSE_WAIT_PORTAL_WEB="$details" ;;
-      telegram-bridge) REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE="$details" ;;
+      portal-backend)
+        REMOTE_COMPOSE_WAIT_PORTAL_BACKEND="$details"
+        REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE="$REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE"
+        REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED="$REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED"
+        REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL="$REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL"
+        ;;
+      portal-web)
+        REMOTE_COMPOSE_WAIT_PORTAL_WEB="$details"
+        REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE="$REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE"
+        REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED="$REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED"
+        REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL="$REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL"
+        ;;
+      telegram-bridge)
+        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE="$details"
+        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE="$REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE"
+        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED="$REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED"
+        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL="$REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL"
+        ;;
     esac
   done
 }
@@ -3824,7 +4015,8 @@ remote_locked_activate() {
     :
   else
     compose_exit=$?
-    remote_capture_compose_wait_failure_evidence "$compose_exit"
+    remote_capture_compose_wait_failure_evidence "$compose_exit" ||
+      remote_reset_compose_wait_failure_evidence "$compose_exit"
     handle_candidate_failure compose_wait
   fi
   remote_capture_candidate_services ||
