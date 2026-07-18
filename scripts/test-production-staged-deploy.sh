@@ -2259,6 +2259,10 @@ prepare_preserves_git_source_modes_for_container_builds() {
   assert_status_once "$output" prepared
   source="$REMOTE_TEST_ROOT/app/.releases/$FIXTURE_COMMIT/source"
 
+  [[ "$(stat -c '%a' "$source")" == '700' ]] ||
+    fail 'candidate source directory did not preserve private mode'
+  [[ "$(stat -c '%a' "${source%/source}/source.tar.gz")" == '600' ]] ||
+    fail 'candidate source archive did not preserve private mode'
   [[ "$(stat -c '%a' "$source/backend/drizzle")" == '755' ]] ||
     fail 'candidate migration directory did not preserve Git-readable mode'
   [[ "$(stat -c '%a' "$source/backend/drizzle/0000_base.sql")" == '644' ]] ||
