@@ -293,9 +293,12 @@ execution-plan детали здесь не хранятся.
 - Mandatory entry documentation and the production-operations map are
   reconciled with the completed MT-9 and exact-commit staged deployment
   baseline; historical audit evidence remains preserved separately.
+- Staged activation now retains bounded, non-secret Compose-readiness evidence
+  (exit code plus candidate service image, running, health and restart state)
+  before automatic rollback removes failed candidate artifacts.
 
 ## Recommended Next Step
 
-- Obtain explicit user approval for the first real staged `prepare` rehearsal
-  from an exact clean `main` commit. Do not run `activate` automatically; the
-  deferred Deep security audit also remains behind separate explicit approval.
+- Merge the Compose-readiness diagnostics fix, then obtain explicit approval
+  for a fresh staged `prepare` from clean `main`; `activate` remains a separate
+  approval after that candidate is reviewed.
