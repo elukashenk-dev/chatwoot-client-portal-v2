@@ -222,6 +222,16 @@ release_image_id() {
   local commit="$1"
   local service="$2"
 
+  if [[ "$commit" == "$FAKE_CANDIDATE_COMMIT" &&
+    "${FAKE_CANDIDATE_IMAGES_MATCH_CURRENT:-false}" == 'true' ]]; then
+    case "$service" in
+      portal-backend) printf '%s\n' "$CURRENT_BACKEND_ID" ;;
+      portal-web) printf '%s\n' "$CURRENT_WEB_ID" ;;
+      telegram-bridge) printf '%s\n' "$CURRENT_TELEGRAM_ID" ;;
+      *) exit 78 ;;
+    esac
+    return
+  fi
   printf 'sha256:%s\n' "$(printf '%s:%s' "$commit" "$service" | sha256sum | awk '{print $1}')"
 }
 
@@ -282,6 +292,10 @@ set_release_containers() {
         container_id='container-telegram'
         ;;
     esac
+    if [[ "$candidate" == 'true' &&
+      "${FAKE_CANDIDATE_RECREATES_CONTAINERS:-false}" == 'true' ]]; then
+      container_id="$container_id-candidate"
+    fi
     image_id="$(awk -F= -v key="$key" '$1 == key { print $2 }' "$manifest")"
     [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 78
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
@@ -358,6 +372,13 @@ case "${1:-}" in
           "$(container_field "$target" health)" \
           "$(container_field "$target" restarts)" \
           "$(container_field "$target" started_at)"
+        ;;
+      '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}')
+        printf '%s|%s|%s|%s\n' \
+          "$(container_field "$target" image)" \
+          "$(container_field "$target" running)" \
+          "$(container_field "$target" health)" \
+          "$(container_field "$target" restarts)"
         ;;
       *) exit 78 ;;
     esac
@@ -454,8 +475,23 @@ case "${1:-}" in
           "$(release_image_id "$FAKE_CANDIDATE_COMMIT" telegram-bridge)"
         ;;
       ps)
-        [[ "${1:-}" == '-q' ]] || exit 78
-        service="${2:-}"
+        include_stopped='false'
+        if [[ "${1:-}" == '--all' && "${2:-}" == '-q' ]]; then
+          include_stopped='true'
+          service="${3:-}"
+        else
+          [[ "${1:-}" == '-q' ]] || exit 78
+          service="${2:-}"
+        fi
+        if [[ -n "${FAKE_CANDIDATE_COMPOSE_PS_STDERR:-}" ]]; then
+          printf '%s\n' "$FAKE_CANDIDATE_COMPOSE_PS_STDERR" >&2
+        fi
+        if [[ "${FAKE_COMPOSE_PS_HIDE_STOPPED:-false}" == 'true' &&
+          "$service" == "${FAKE_CANDIDATE_SERVICE_NOT_RUNNING:-}" &&
+          "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$FAKE_CANDIDATE_COMMIT" &&
+          "$include_stopped" != 'true' ]]; then
+          exit 0
+        fi
         [[ "$service" != "${FAKE_MISSING_RUNNING_SERVICE:-}" ]] || exit 0
         case "$service" in
           portal-backend) container_id='container-backend' ;;
@@ -463,6 +499,10 @@ case "${1:-}" in
           telegram-bridge) container_id='container-telegram' ;;
           *) exit 1 ;;
         esac
+        if [[ "${FAKE_CANDIDATE_RECREATES_CONTAINERS:-false}" == 'true' &&
+          "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$FAKE_CANDIDATE_COMMIT" ]]; then
+          container_id="$container_id-candidate"
+        fi
         printf '%s\n' "$container_id"
         [[ "$service" != "${FAKE_COMPOSE_PS_FAIL_SERVICE:-}" ]] || exit 87
         if [[ "$service" == "${FAKE_DUPLICATE_SERVICE_CONTAINER:-}" ||
@@ -546,6 +586,9 @@ case "${1:-}" in
         fi
         if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
           "${FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" == 'true' ]]; then
+          if [[ -n "${FAKE_CANDIDATE_COMPOSE_UP_STDERR:-}" ]]; then
+            printf '%s\n' "$FAKE_CANDIDATE_COMPOSE_UP_STDERR" >&2
+          fi
           exit 82
         fi
         [[ "${FAKE_COMPOSE_UP_FAIL_AFTER_MUTATION:-false}" != 'true' ]] || exit 82
@@ -3668,6 +3711,95 @@ successful_rollback_records_candidate_failed_rollback_succeeded() {
     fail 'partial rollback cleanup retry omitted exact journal path'
 }
 
+compose_wait_failure_persists_safe_diagnostics() {
+  local output state history outcome candidate_backend_id candidate_web_id candidate_telegram_id
+  local -a outcomes=()
+
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  candidate_backend_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" backend_image_id)"
+  candidate_web_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" web_image_id)"
+  candidate_telegram_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" telegram_image_id)"
+  export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-backend
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
+  export FAKE_CANDIDATE_COMPOSE_UP_STDERR='do-not-leak-compose-output'
+  export FAKE_CANDIDATE_COMPOSE_PS_STDERR='do-not-leak-compose-ps-output'
+  export FAKE_COMPOSE_PS_HIDE_STOPPED=true
+  export FAKE_CANDIDATE_RECREATES_CONTAINERS=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_UNHEALTHY \
+    FAKE_CANDIDATE_SERVICE_NOT_RUNNING \
+    FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION \
+    FAKE_CANDIDATE_COMPOSE_UP_STDERR \
+    FAKE_CANDIDATE_COMPOSE_PS_STDERR \
+    FAKE_COMPOSE_PS_HIDE_STOPPED \
+    FAKE_CANDIDATE_RECREATES_CONTAINERS
+
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'compose-wait failure outcome count mismatch'
+  outcome="${outcomes[0]}"
+  grep -Fxq 'failure_stage=compose_wait' "$outcome" ||
+    fail 'compose-wait failure stage was not retained'
+  grep -Fxq 'compose_wait_exit_code=82' "$output" ||
+    fail 'compose-wait exit code was not printed'
+  grep -Fxq "compose_wait_portal_backend=$candidate_backend_id|false|unhealthy|0" "$output" ||
+    fail 'compose-wait backend snapshot was not printed'
+  grep -Fxq "compose_wait_portal_web=$candidate_web_id|true|healthy|0" "$output" ||
+    fail 'compose-wait web snapshot was not printed'
+  grep -Fxq "compose_wait_telegram_bridge=$candidate_telegram_id|true|none|0" "$output" ||
+    fail 'compose-wait telegram snapshot was not printed'
+  grep -Fxq 'compose_wait_exit_code=82' "$outcome" ||
+    fail 'compose-wait exit code was not retained'
+  grep -Fxq "compose_wait_portal_backend=$candidate_backend_id|false|unhealthy|0" "$outcome" ||
+    fail 'compose-wait backend snapshot was not retained'
+  grep -Fxq "compose_wait_portal_web=$candidate_web_id|true|healthy|0" "$outcome" ||
+    fail 'compose-wait web snapshot was not retained'
+  grep -Fxq "compose_wait_telegram_bridge=$candidate_telegram_id|true|none|0" "$outcome" ||
+    fail 'compose-wait telegram snapshot was not retained'
+  ! grep -Fq 'do-not-leak-compose-output' "$output" ||
+    fail 'compose-wait output leaked raw Compose stderr'
+  ! grep -Fq 'do-not-leak-compose-output' "$outcome" ||
+    fail 'compose-wait outcome leaked raw Compose stderr'
+  ! grep -Fq 'do-not-leak-compose-ps-output' "$output" ||
+    fail 'compose-wait output leaked raw Compose ps stderr'
+  ! grep -Fq 'do-not-leak-compose-ps-output' "$outcome" ||
+    fail 'compose-wait outcome leaked raw Compose ps stderr'
+}
+
+compose_wait_early_failure_rejects_previous_service_snapshot() {
+  local output state history outcome
+  local -a outcomes=()
+
+  export FAKE_CANDIDATE_IMAGES_MATCH_CURRENT=true
+  setup_activation_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  export FAKE_CANDIDATE_COMPOSE_UP_FAIL=true
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_COMPOSE_UP_FAIL FAKE_CANDIDATE_IMAGES_MATCH_CURRENT
+
+  mapfile -t outcomes < <(find "$history" -maxdepth 1 -type f \
+    -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
+  (( ${#outcomes[@]} == 1 )) || fail 'early compose-wait failure outcome count mismatch'
+  outcome="${outcomes[0]}"
+  grep -Fxq 'failure_stage=compose_wait' "$outcome" ||
+    fail 'early compose-wait failure stage was not retained'
+  for service in portal_backend portal_web telegram_bridge; do
+    grep -Fxq "compose_wait_${service}=unavailable" "$output" ||
+      fail "early compose-wait ${service} snapshot was not unavailable in output"
+    grep -Fxq "compose_wait_${service}=unavailable" "$outcome" ||
+      fail "early compose-wait ${service} snapshot was not unavailable in outcome"
+  done
+}
+
 rollback_failure_preserves_current_previous_candidate_and_journal() {
   local output state decision
 
@@ -4062,6 +4194,8 @@ run_rollback_cases() {
   run_case publication_failure_restores_previous_root_source_and_markers
   run_case rollback_repeats_all_tenant_smoke_before_clearing_journal
   run_case successful_rollback_records_candidate_failed_rollback_succeeded
+  run_case compose_wait_failure_persists_safe_diagnostics
+  run_case compose_wait_early_failure_rejects_previous_service_snapshot
   run_case rollback_failure_preserves_current_previous_candidate_and_journal
   run_case forward_only_failure_never_starts_previous_code
   run_case forward_only_failure_preserves_decision_candidate_runtime_and_journal

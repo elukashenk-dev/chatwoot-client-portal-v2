@@ -61,6 +61,11 @@ REMOTE_ACTIVATION_TENANT_COUNT=''
 REMOTE_ACTIVATION_TENANT_SHA=''
 REMOTE_ACTIVATION_CANDIDATE_IDS=()
 REMOTE_ACTIVATION_PREVIOUS_IDS=()
+REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
+REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
+REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
+REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS=()
 REMOTE_RESOLVED_CONTAINER_ID=''
 REMOTE_SUPERSEDED_ARCHIVE_SHA=''
 REMOTE_SUPERSEDED_BACKEND_ID=''
@@ -2397,10 +2402,18 @@ remote_update_transaction() {
 
 remote_resolve_single_service_container() {
   local service="$1"
+  local include_stopped="${2:-false}"
   local output line
   local -a container_ids=()
+  local -a compose_ps=("${REMOTE_COMPOSE[@]}" ps)
 
-  output="$("${REMOTE_COMPOSE[@]}" ps -q "$service")" || return 1
+  case "$include_stopped" in
+    false) ;;
+    true) compose_ps+=(--all) ;;
+    *) return 1 ;;
+  esac
+  compose_ps+=(-q "$service")
+  output="$("${compose_ps[@]}" 2>/dev/null)" || return 1
   while IFS= read -r line; do
     [[ -n "$line" ]] && container_ids+=("$line")
   done <<<"$output"
@@ -2834,10 +2847,14 @@ remote_validate_outcome() {
   local expected_status="$3"
   local expected_previous="${4:-}"
   local expected_started="${5:-}"
-  local protocol kind candidate previous status stage started timestamp epoch
+  local protocol kind candidate previous status stage started timestamp epoch key
+  local compose_wait_key_count=0 compose_wait_exit_code
+  local compose_wait_portal_backend compose_wait_portal_web compose_wait_telegram_bridge
 
   release_record_validate_keys "$path" protocol_version record_kind candidate_commit previous_commit \
-    status failure_stage transaction_started_at_utc recorded_at_utc recorded_at_epoch || return 1
+    status failure_stage transaction_started_at_utc recorded_at_utc recorded_at_epoch \
+    compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web \
+    compose_wait_telegram_bridge || return 1
   protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
   kind="$(release_record_get_unique "$path" record_kind)" || return 1
   candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
@@ -2867,7 +2884,28 @@ remote_validate_outcome() {
   release_record_is_timestamp "$started" || return 1
   release_record_is_timestamp "$timestamp" || return 1
   [[ "$started" > "$timestamp" ]] && return 1
-  [[ "$epoch" =~ ^[0-9]+$ && "$epoch" -ge 1 ]]
+  [[ "$epoch" =~ ^[0-9]+$ && "$epoch" -ge 1 ]] || return 1
+
+  for key in compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web \
+    compose_wait_telegram_bridge; do
+    if grep -Eq "^${key}=" "$path"; then
+      compose_wait_key_count=$((compose_wait_key_count + 1))
+    fi
+  done
+  if [[ "$stage" != 'compose_wait' ]]; then
+    (( compose_wait_key_count == 0 )) || return 1
+    return 0
+  fi
+  (( compose_wait_key_count == 0 || compose_wait_key_count == 4 )) || return 1
+  (( compose_wait_key_count == 0 )) && return 0
+  compose_wait_exit_code="$(release_record_get_unique "$path" compose_wait_exit_code)" || return 1
+  compose_wait_portal_backend="$(release_record_get_unique "$path" compose_wait_portal_backend)" || return 1
+  compose_wait_portal_web="$(release_record_get_unique "$path" compose_wait_portal_web)" || return 1
+  compose_wait_telegram_bridge="$(release_record_get_unique "$path" compose_wait_telegram_bridge)" || return 1
+  [[ "$compose_wait_exit_code" =~ ^[1-9][0-9]*$ ]] || return 1
+  remote_compose_wait_snapshot_is_safe "$compose_wait_portal_backend" || return 1
+  remote_compose_wait_snapshot_is_safe "$compose_wait_portal_web" || return 1
+  remote_compose_wait_snapshot_is_safe "$compose_wait_telegram_bridge"
 }
 
 remote_outcome_transaction_started_at() {
@@ -3055,16 +3093,25 @@ remote_write_failure_outcome() {
   epoch="$(remote_now_epoch)" || return 1
   timestamp="$(remote_epoch_to_utc "$epoch")" || return 1
   path="$state_dir/history/$epoch-$candidate-$status.txt"
-  printf '%s\n' \
-    "protocol_version=$REMOTE_PROTOCOL_VERSION" \
-    'record_kind=deployment_outcome' \
-    "candidate_commit=$candidate" \
-    "previous_commit=$previous" \
-    "status=$status" \
-    "failure_stage=$stage" \
-    "transaction_started_at_utc=$started" \
-    "recorded_at_utc=$timestamp" \
-    "recorded_at_epoch=$epoch" |
+  {
+    printf '%s\n' \
+      "protocol_version=$REMOTE_PROTOCOL_VERSION" \
+      'record_kind=deployment_outcome' \
+      "candidate_commit=$candidate" \
+      "previous_commit=$previous" \
+      "status=$status" \
+      "failure_stage=$stage" \
+      "transaction_started_at_utc=$started" \
+      "recorded_at_utc=$timestamp" \
+      "recorded_at_epoch=$epoch"
+    if [[ "$stage" == 'compose_wait' ]]; then
+      printf '%s\n' \
+        "compose_wait_exit_code=$REMOTE_COMPOSE_WAIT_EXIT_CODE" \
+        "compose_wait_portal_backend=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND" \
+        "compose_wait_portal_web=$REMOTE_COMPOSE_WAIT_PORTAL_WEB" \
+        "compose_wait_telegram_bridge=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE"
+    fi
+  } |
     release_record_write_atomic create "$path" || return 1
   remote_validate_outcome "$path" "$candidate" "$status" "$previous" "$started" || return 1
   remote_fsync_path_and_parent "$path" || return 1
@@ -3266,8 +3313,14 @@ remote_print_candidate_evidence() {
   printf 'candidate_backend_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-unavailable}"
   printf 'candidate_web_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-unavailable}"
   printf 'candidate_telegram_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[2]:-unavailable}"
+  if [[ "$stage" == 'compose_wait' ]]; then
+    printf 'compose_wait_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_EXIT_CODE"
+    printf 'compose_wait_portal_backend=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND"
+    printf 'compose_wait_portal_web=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB"
+    printf 'compose_wait_telegram_bridge=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE"
+  fi
   for service in portal-backend portal-web telegram-bridge; do
-    if remote_resolve_single_service_container "$service"; then
+    if remote_resolve_single_service_container "$service" 2>/dev/null; then
       details="$("${REMOTE_DOCKER[@]}" inspect --format \
         '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
         "$REMOTE_RESOLVED_CONTAINER_ID" 2>/dev/null || printf unavailable)"
@@ -3275,6 +3328,63 @@ remote_print_candidate_evidence() {
       details='unavailable'
     fi
     printf 'container_%s=%s\n' "${service//-/_}" "$details"
+  done
+}
+
+remote_compose_wait_snapshot_is_safe() {
+  local value="${1:-}"
+
+  [[ "$value" == 'unavailable' || "$value" =~ ^sha256:[0-9a-f]{64}\|(true|false)\|(healthy|unhealthy|starting|none)\|[0-9]+$ ]]
+}
+
+remote_capture_pre_cutover_service_container_ids() {
+  local service
+
+  REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS=()
+  for service in portal-backend portal-web telegram-bridge; do
+    if remote_resolve_single_service_container "$service" 2>/dev/null; then
+      REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS+=("$REMOTE_RESOLVED_CONTAINER_ID")
+    fi
+  done
+}
+
+remote_capture_compose_wait_failure_evidence() {
+  local exit_code="$1"
+  local service details expected_image captured_image container_id pre_cutover_container_id
+
+  REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
+  REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
+  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
+  [[ "$exit_code" =~ ^[1-9][0-9]*$ ]] && REMOTE_COMPOSE_WAIT_EXIT_CODE="$exit_code"
+
+  for service in portal-backend portal-web telegram-bridge; do
+    details='unavailable'
+    case "$service" in
+      portal-backend) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-}" ;;
+      portal-web) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-}" ;;
+      telegram-bridge) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[2]:-}" ;;
+    esac
+    if remote_resolve_single_service_container "$service" true 2>/dev/null; then
+      container_id="$REMOTE_RESOLVED_CONTAINER_ID"
+      details="$("${REMOTE_DOCKER[@]}" inspect --format \
+        '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}' \
+        "$container_id" 2>/dev/null || printf unavailable)"
+      if remote_compose_wait_snapshot_is_safe "$details"; then
+        captured_image="${details%%|*}"
+        [[ "$captured_image" == "$expected_image" ]] || details='unavailable'
+      else
+        details='unavailable'
+      fi
+      for pre_cutover_container_id in "${REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS[@]}"; do
+        [[ "$container_id" != "$pre_cutover_container_id" ]] || details='unavailable'
+      done
+    fi
+    case "$service" in
+      portal-backend) REMOTE_COMPOSE_WAIT_PORTAL_BACKEND="$details" ;;
+      portal-web) REMOTE_COMPOSE_WAIT_PORTAL_WEB="$details" ;;
+      telegram-bridge) REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE="$details" ;;
+    esac
   done
 }
 
@@ -3669,7 +3779,7 @@ remote_locked_activate() {
   local candidate_dir="$app_path/.releases/$candidate_commit"
   local transaction="$state_dir/transaction"
   local old_previous='' first_adoption='false'
-  local expires_epoch started_epoch started_at activated_epoch activated_at
+  local expires_epoch started_epoch started_at activated_epoch activated_at compose_exit
 
   REMOTE_FAILURE_STATUS='activation_refused_state_changed'
   remote_select_docker || remote_activation_refuse 'Docker access is unavailable.'
@@ -3709,8 +3819,14 @@ remote_locked_activate() {
     cutover_started "$started_at" "$started_at" ||
     remote_activation_refuse 'Activation transaction could not be persisted.'
 
-  "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1 ||
+  remote_capture_pre_cutover_service_container_ids
+  if "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never --wait --wait-timeout 120 >/dev/null 2>&1; then
+    :
+  else
+    compose_exit=$?
+    remote_capture_compose_wait_failure_evidence "$compose_exit"
     handle_candidate_failure compose_wait
+  fi
   remote_capture_candidate_services ||
     handle_candidate_failure service_state
   [[ "$(sha256sum "$candidate_dir/tenants.tsv" | awk '{print $1}')" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] ||
