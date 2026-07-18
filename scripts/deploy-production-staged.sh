@@ -27,7 +27,7 @@ STAGED_PREPARED_MIGRATION=''
 staged_usage() {
   cat <<'EOF'
 Usage:
-  scripts/deploy-production-staged.sh prepare --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH
+  scripts/deploy-production-staged.sh prepare --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH [--retry-after-rollback=FULL_SHA]
   scripts/deploy-production-staged.sh activate --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH [--migration-policy=backward-compatible|forward-only --approval-ref=REFERENCE]
   scripts/deploy-production-staged.sh bootstrap --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH --approval-ref=REFERENCE
 EOF
@@ -283,7 +283,7 @@ staged_main() {
   shift || true
   local repo_root script_dir
   local ssh_target='' ssh_port='' identity_file='' app_path='' commit=''
-  local known_hosts_file='' migration_policy='' approval_ref=''
+  local known_hosts_file='' migration_policy='' approval_ref='' retry_after_rollback=''
   local argument name value host lookup archive_path archive_sha archive_name
   local current_archive_path current_archive_sha orchestrator_commit inspection_output inspection_exit
   local prepared_inspection_output prepared_inspection_exit
@@ -324,6 +324,7 @@ staged_main() {
       known-hosts-file) known_hosts_file="$value" ;;
       migration-policy) migration_policy="$value" ;;
       approval-ref) approval_ref="$value" ;;
+      retry-after-rollback) retry_after_rollback="$value" ;;
       *) staged_fail "Unknown option: --$name" 2 ;;
     esac
   done
@@ -333,10 +334,16 @@ staged_main() {
 
   if [[ "$phase" == 'bootstrap' ]]; then
     [[ -z "$migration_policy" ]] || staged_fail 'Bootstrap does not accept a migration policy.' 2
+    [[ -z "$retry_after_rollback" ]] || staged_fail 'Only prepare accepts --retry-after-rollback.' 2
     [[ -n "$approval_ref" ]] || staged_fail 'Bootstrap requires --approval-ref.' 2
   elif [[ "$phase" == 'prepare' ]]; then
     [[ -z "$migration_policy" && -z "$approval_ref" ]] || staged_fail 'Prepare does not accept activation decisions.' 2
+    if [[ -n "$retry_after_rollback" ]]; then
+      [[ "$retry_after_rollback" =~ ^[0-9a-f]{40}$ && "$retry_after_rollback" == "$commit" ]] ||
+        staged_fail 'Retry acknowledgement must be the same full SHA as --commit.' 2
+    fi
   else
+    [[ -z "$retry_after_rollback" ]] || staged_fail 'Only prepare accepts --retry-after-rollback.' 2
     if [[ -n "$migration_policy" || -n "$approval_ref" ]]; then
       [[ -n "$migration_policy" && -n "$approval_ref" ]] ||
         staged_fail 'Activate requires migration policy and approval reference together.' 2 \
@@ -464,18 +471,22 @@ staged_main() {
       "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload exact release archives.'
 
     orchestrator_commit="$(git -C "$repo_root" rev-parse HEAD)"
-    staged_shell_join remote_command \
-      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" \
-      prepare \
-      "--app-path=$app_path" \
-      "--candidate-archive-path=$STAGED_REMOTE_TEMP/candidate.tar.gz" \
-      "--candidate-sha256=$archive_sha" \
-      "--candidate-commit=$commit" \
-      "--current-archive-path=$STAGED_REMOTE_TEMP/current.tar.gz" \
-      "--current-sha256=$current_archive_sha" \
-      "--current-commit=$STAGED_INSPECTED_CURRENT" \
-      "--orchestrator-commit=$orchestrator_commit" \
+    local -a prepare_arguments=(
+      "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh"
+      prepare
+      "--app-path=$app_path"
+      "--candidate-archive-path=$STAGED_REMOTE_TEMP/candidate.tar.gz"
+      "--candidate-sha256=$archive_sha"
+      "--candidate-commit=$commit"
+      "--current-archive-path=$STAGED_REMOTE_TEMP/current.tar.gz"
+      "--current-sha256=$current_archive_sha"
+      "--current-commit=$STAGED_INSPECTED_CURRENT"
+      "--orchestrator-commit=$orchestrator_commit"
       "--orchestrator-protocol-version=$STAGED_PROTOCOL_VERSION"
+    )
+    [[ -z "$retry_after_rollback" ]] ||
+      prepare_arguments+=("--retry-after-rollback=$retry_after_rollback")
+    staged_shell_join remote_command "${prepare_arguments[@]}"
   elif [[ "$phase" == 'bootstrap' ]]; then
     "$STAGED_SCP_BIN_RESOLVED" \
       "${STAGED_SCP_OPTIONS[@]}" \

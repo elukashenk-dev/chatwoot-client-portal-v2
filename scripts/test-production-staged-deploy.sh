@@ -433,12 +433,21 @@ case "${1:-}" in
       inspect)
         [[ "${3:-}" == '--format' && $# == 5 ]] || exit 78
         [[ "${4:-}" == '{{.Id}}' || "${4:-}" == '{{.Size}}' ]] || exit 78
-        [[ "${FAKE_MISSING_IMAGE_REF:-}" != "$target" ]] || exit 1
+        [[ "${FAKE_MISSING_IMAGE_REF:-}" != "$target" &&
+          "${FAKE_IMAGE_INSPECT_FAIL_REF:-}" != "$target" ]] || exit 1
         image_id="$(tag_lookup "$target")" || exit 1
         if [[ "$*" == *'.Size'* ]]; then
           printf '%s\n' '1073741824'
         else
           printf '%s\n' "$image_id"
+        fi
+        ;;
+      ls)
+        [[ "${3:-}" == '--no-trunc' && "${4:-}" == '--format' &&
+          "${5:-}" == '{{.Repository}}:{{.Tag}}|{{.ID}}' && $# == 6 ]] || exit 78
+        [[ "${FAKE_IMAGE_LS_FAIL_REF:-}" != "$target" ]] || exit 85
+        if image_id="$(tag_lookup "$target")"; then
+          printf '%s|%s\n' "$target" "$image_id"
         fi
         ;;
       rm)
@@ -3232,6 +3241,7 @@ SH
 
 ROLLBACK_TARGET_COMMIT=''
 ROLLBACK_OLDER_COMMIT=''
+RETRYABLE_ROLLBACK_OUTCOME=''
 
 task5_state_dir() {
   printf '%s/app/.release-state\n' "$REMOTE_TEST_ROOT"
@@ -3323,6 +3333,208 @@ task5_assert_runtime_release() {
     actual="$(awk -F '\t' -v wanted="$container" '$1 == wanted { print $3 }' "$FAKE_CONTAINER_STATE_FILE")"
     [[ "$actual" == "$expected" ]] || fail "$service runtime image is not the exact rollback ID"
   done
+}
+
+setup_retryable_rollback_fixture() {
+  local name="$1"
+  local state history epoch utc started
+
+  task5_setup_staged_candidate "$name"
+  state="$(task5_state_dir)"
+  history="$state/history"
+  epoch="$((FAKE_NOW_EPOCH - 120))"
+  utc="$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
+  started="$(date -u -d "@$((epoch - 30))" +%Y-%m-%dT%H:%M:%SZ)"
+  RETRYABLE_ROLLBACK_OUTCOME="$history/$epoch-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt"
+
+  [[ -f "$state/current" && ! -e "$state/transaction" ]] ||
+    fail 'retry fixture did not establish a settled staged runtime'
+  printf '%s\n' \
+    'protocol_version=1' \
+    'record_kind=deployment_outcome' \
+    "candidate_commit=$PREPARED_COMMIT" \
+    "previous_commit=$ROLLBACK_TARGET_COMMIT" \
+    'status=candidate_failed_rollback_succeeded' \
+    'failure_stage=service_state' \
+    "transaction_started_at_utc=$started" \
+    "recorded_at_utc=$utc" \
+    "recorded_at_epoch=$epoch" \
+    >"$RETRYABLE_ROLLBACK_OUTCOME"
+  chmod 0600 "$RETRYABLE_ROLLBACK_OUTCOME"
+  task5_assert_runtime_release "$ROLLBACK_TARGET_COMMIT"
+}
+
+prepare_retry_after_rollback_requires_exact_acknowledgement() {
+  local output
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  output="$CASE_ROOT/no-ack-output"
+  assert_prepare_failure "$output"
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" ]] ||
+    fail 'unacknowledged prepare removed rollback outcome'
+
+  reset_activation_observation
+  output="$CASE_ROOT/mismatched-ack-output"
+  if deploy_command prepare "--retry-after-rollback=$CURRENT_COMMIT" >"$output" 2>&1; then
+    fail 'prepare accepted a retry acknowledgement for another SHA'
+  fi
+  assert_status_once "$output" prepare_failed
+  assert_no_transport
+}
+
+prepare_retry_after_rollback_rebuilds_only_exact_candidate() {
+  local output state
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  output="$CASE_ROOT/retry-output"
+  DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1 ||
+    fail 'explicit rollback retry did not prepare the exact candidate'
+  assert_status_once "$output" prepared
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" ]] || fail 'retry removed durable rollback outcome'
+  [[ "$(<"$state/current")" == "$ROLLBACK_TARGET_COMMIT" ]] ||
+    fail 'retry changed active release pointer'
+  task5_assert_runtime_release "$ROLLBACK_TARGET_COMMIT"
+  [[ "$(<"$state/prepared")" == "$PREPARED_COMMIT" ]] ||
+    fail 'retry did not publish a fresh exact candidate'
+}
+
+prepare_retry_after_rollback_refuses_unproven_candidate_tags() {
+  local output state tags candidate_backend_tag
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT"
+  python3 - "$tags" "$candidate_backend_tag" "$CURRENT_BACKEND_ID" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+tag, replacement = sys.argv[2:]
+rows = []
+for line in path.read_text(encoding="utf-8").splitlines():
+    fields = line.split("\t")
+    if fields[0] == tag:
+        fields[1] = replacement
+    rows.append("\t".join(fields))
+path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+PY
+  output="$CASE_ROOT/retry-output"
+  if DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1; then
+    fail 'retry removed a candidate tag without proving its immutable image ID'
+  fi
+  assert_status_once "$output" prepare_failed
+  grep -Fq 'Retained rollback candidate cannot be retried safely.' "$output" ||
+    fail 'retry did not report rejected candidate identity evidence'
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" && -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'rejected retry removed retained candidate evidence'
+  [[ "$(<"$state/prepared")" == "$PREPARED_COMMIT" ]] ||
+    fail 'rejected retry removed prepared pointer'
+}
+
+prepare_retry_after_rollback_refuses_unconfirmed_tag_absence() {
+  local output state backend_tag
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  backend_tag="chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT"
+  export FAKE_IMAGE_INSPECT_FAIL_REF="$backend_tag"
+  output="$CASE_ROOT/retry-output"
+  if DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1; then
+    fail 'retry accepted a candidate tag whose identity inspection failed'
+  fi
+  unset FAKE_IMAGE_INSPECT_FAIL_REF
+  assert_status_once "$output" prepare_failed
+  grep -Fq 'Retained rollback candidate cannot be retried safely.' "$output" ||
+    fail 'retry did not report unconfirmed candidate-tag absence'
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" && -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" &&
+    "$(<"$state/prepared")" == "$PREPARED_COMMIT" ]] ||
+    fail 'inspect failure removed retained candidate evidence'
+  grep -Fq "$backend_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
+    fail 'inspect failure removed the still-present candidate tag'
+}
+
+prepare_retry_after_rollback_refuses_tampered_tenant_matrix() {
+  local output state tenants
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  tenants="$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/tenants.tsv"
+  printf '%s\t%s\n' alpha https://tampered.example.test >"$tenants"
+  chmod 0600 "$tenants"
+  output="$CASE_ROOT/retry-output"
+  if DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1; then
+    fail 'retry accepted a tenant matrix that differs from prepared evidence'
+  fi
+  assert_status_once "$output" prepare_failed
+  grep -Fq 'Retained rollback candidate cannot be retried safely.' "$output" ||
+    fail 'retry did not report rejected tenant evidence'
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" && -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'tenant-matrix rejection removed retained candidate evidence'
+  [[ "$(<"$state/prepared")" == "$PREPARED_COMMIT" ]] ||
+    fail 'tenant-matrix rejection removed prepared pointer'
+}
+
+prepare_retry_after_rollback_resumes_partial_tag_cleanup() {
+  local output state web_id backend_tag
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  web_id="$(release_record_get_unique \
+    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" web_image_id)"
+  backend_tag="chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT"
+  export FAKE_IMAGE_RM_FAIL_TARGET="$web_id"
+  output="$CASE_ROOT/partial-cleanup-output"
+  if DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1; then
+    fail 'retry unexpectedly completed after a candidate-tag removal failure'
+  fi
+  unset FAKE_IMAGE_RM_FAIL_TARGET
+  assert_status_once "$output" prepare_failed
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" && -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" &&
+    "$(<"$state/prepared")" == "$PREPARED_COMMIT" ]] ||
+    fail 'partial cleanup did not retain retryable candidate evidence'
+  ! grep -Fq "$backend_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
+    fail 'partial cleanup fixture did not remove the first exact candidate tag'
+
+  output="$CASE_ROOT/resumed-cleanup-output"
+  DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1 ||
+    fail 'retry did not resume a safely retained partial cleanup'
+  assert_status_once "$output" prepared
+  [[ -f "$RETRYABLE_ROLLBACK_OUTCOME" && "$(<"$state/current")" == "$ROLLBACK_TARGET_COMMIT" ]] ||
+    fail 'resumed cleanup changed durable outcome or active runtime'
+}
+
+prepare_retry_after_rollback_fsyncs_removed_decision_before_pointer() {
+  local output state decision
+
+  setup_retryable_rollback_fixture "$FUNCNAME"
+  state="$(task5_state_dir)"
+  task5_write_decision_fixture backward-compatible OPS-RETRY
+  decision="$(task5_decision_path)"
+  export STAGED_TEST_FAIL_FSYNC_PATH="$state/decisions"
+  output="$CASE_ROOT/decision-fsync-output"
+  if DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1; then
+    fail 'retry unexpectedly completed after decision-directory fsync failure'
+  fi
+  unset STAGED_TEST_FAIL_FSYNC_PATH
+  assert_status_once "$output" prepare_failed
+  [[ -f "$state/prepared" && ! -e "$decision" &&
+    -d "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT" ]] ||
+    fail 'decision-directory fsync failure advanced the prepared pointer cleanup'
+
+  output="$CASE_ROOT/resumed-decision-cleanup-output"
+  DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" \
+    deploy_command prepare "--retry-after-rollback=$PREPARED_COMMIT" >"$output" 2>&1 ||
+    fail 'retry did not resume after decision-directory fsync failure'
+  assert_status_once "$output" prepared
 }
 
 task5_assert_staged_state_restored() {
@@ -4271,6 +4483,13 @@ run_prepare_cases() {
   run_case prepare_writes_sorted_matrix_and_immutable_manifest
   run_case prepare_rejects_second_candidate_and_safely_replaces_expired_candidate
   run_case prepare_expired_candidate_cleanup_preserves_retagged_ref_and_release_evidence
+  run_case prepare_retry_after_rollback_requires_exact_acknowledgement
+  run_case prepare_retry_after_rollback_rebuilds_only_exact_candidate
+  run_case prepare_retry_after_rollback_refuses_unproven_candidate_tags
+  run_case prepare_retry_after_rollback_refuses_unconfirmed_tag_absence
+  run_case prepare_retry_after_rollback_refuses_tampered_tenant_matrix
+  run_case prepare_retry_after_rollback_resumes_partial_tag_cleanup
+  run_case prepare_retry_after_rollback_fsyncs_removed_decision_before_pointer
   run_case prepare_never_calls_compose_up_or_changes_active_source
   run_case prepare_lock_rejects_overlap
   run_case prepare_artifacts_and_logs_contain_no_fixture_secret

@@ -347,6 +347,7 @@ remote_select_activation_tools() {
     [[ -z "${STAGED_TEST_EVENT_RECORDER:-}" && -z "${STAGED_TEST_EVENT_LOG:-}" &&
       -z "${STAGED_TEST_FAIL_PUBLICATION_AT:-}" && -z "${STAGED_TEST_CUTOVER_NOW_EPOCH:-}" &&
       -z "${STAGED_TEST_FAIL_DECISION_FSYNC:-}" &&
+      -z "${STAGED_TEST_FAIL_FSYNC_PATH:-}" &&
       -z "${STAGED_TEST_FAIL_SUCCESS_OUTCOME_AT:-}" &&
       -z "${STAGED_TEST_TAMPER_ROLLBACK_MARKER_ARCHIVE:-}" ]] || return 1
     REMOTE_EVENT_RECORDER=''
@@ -367,6 +368,10 @@ remote_fsync_path_and_parent() {
   local parent
 
   [[ -e "$path" && ! -L "$path" ]] || return 1
+  if [[ -n "${STAGED_TEST_FAIL_FSYNC_PATH:-}" ]]; then
+    remote_is_test_mode || return 1
+    [[ "$STAGED_TEST_FAIL_FSYNC_PATH" != "$path" ]] || return 1
+  fi
   parent="$(dirname -- "$path")"
   "$REMOTE_PYTHON_BIN" - "$path" "$parent" <<'PY'
 import os
@@ -665,6 +670,16 @@ remote_image_id() {
   image_id="$("${REMOTE_DOCKER[@]}" image inspect --format '{{.Id}}' "$reference" 2>/dev/null)" || return 1
   [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   printf '%s\n' "$image_id"
+}
+
+remote_image_tag_is_confirmed_absent() {
+  local reference="$1"
+  local listing
+
+  [[ "$reference" != -* && ${#reference} -le 255 && "$reference" != *[[:space:]]* ]] || return 1
+  listing="$("${REMOTE_DOCKER[@]}" image ls --no-trunc \
+    --format '{{.Repository}}:{{.Tag}}|{{.ID}}' "$reference")" || return 1
+  [[ -z "$listing" ]]
 }
 
 remote_tag_exact_image() {
@@ -1570,13 +1585,189 @@ remote_history_blocks_candidate_cleanup() {
   return 1
 }
 
+REMOTE_RETRY_OUTCOME_PATH=''
+REMOTE_RETRY_OUTCOME_PREVIOUS=''
+REMOTE_PREPARED_CANDIDATE_TAGS=()
+REMOTE_PREPARED_CANDIDATE_IMAGE_IDS=()
+REMOTE_PREPARED_CANDIDATE_TAG_STATES=()
+
+remote_find_latest_retryable_rollback_outcome() {
+  local history_dir="$1"
+  local candidate="$2"
+  local path record_candidate status epoch previous latest_epoch='' latest_status=''
+  local -a entries=()
+
+  release_record_is_sha "$candidate" || return 1
+  REMOTE_RETRY_OUTCOME_PATH=''
+  REMOTE_RETRY_OUTCOME_PREVIOUS=''
+  remote_require_private_directory "$history_dir" || return 1
+  remote_find_paths entries "$history_dir" -mindepth 1 -maxdepth 1 -type f || return 1
+  for path in "${entries[@]}"; do
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    record_candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
+    [[ "$record_candidate" == "$candidate" ]] || continue
+    status="$(release_record_get_unique "$path" status)" || return 1
+    remote_validate_outcome "$path" "$candidate" "$status" || return 1
+    epoch="$(release_record_get_unique "$path" recorded_at_epoch)" || return 1
+    [[ "$(basename -- "$path")" == "$epoch-$candidate-$status.txt" ]] || return 1
+    previous="$(release_record_get_unique "$path" previous_commit)" || return 1
+    if [[ -z "$latest_epoch" || "$epoch" -gt "$latest_epoch" ]]; then
+      latest_epoch="$epoch"
+      latest_status="$status"
+      REMOTE_RETRY_OUTCOME_PATH="$path"
+      REMOTE_RETRY_OUTCOME_PREVIOUS="$previous"
+    elif [[ "$epoch" == "$latest_epoch" ]]; then
+      return 1
+    fi
+  done
+  [[ -n "$REMOTE_RETRY_OUTCOME_PATH" &&
+    "$latest_status" == 'candidate_failed_rollback_succeeded' ]] || return 1
+}
+
+remote_collect_exact_prepared_candidate_images() {
+  local manifest="$1"
+  local candidate="$2"
+  local allow_absent="${3:-false}"
+  local service tag image_id actual_id
+
+  [[ "$allow_absent" == 'false' || "$allow_absent" == 'true' ]] || return 1
+  remote_validate_prepared_manifest "$manifest" "$candidate" || return 1
+  REMOTE_PREPARED_CANDIDATE_TAGS=()
+  REMOTE_PREPARED_CANDIDATE_IMAGE_IDS=()
+  REMOTE_PREPARED_CANDIDATE_TAG_STATES=()
+  for service in backend web telegram; do
+    tag="$(release_record_get_unique "$manifest" "${service}_image_tag")" || return 1
+    image_id="$(release_record_get_unique "$manifest" "${service}_image_id")" || return 1
+    if actual_id="$(remote_image_id "$tag" 2>/dev/null)"; then
+      [[ "$actual_id" == "$image_id" ]] || return 1
+      REMOTE_PREPARED_CANDIDATE_TAG_STATES+=('exact')
+    elif [[ "$allow_absent" == 'true' ]] && remote_image_tag_is_confirmed_absent "$tag"; then
+      REMOTE_PREPARED_CANDIDATE_TAG_STATES+=('absent')
+    else
+      return 1
+    fi
+    REMOTE_PREPARED_CANDIDATE_TAGS+=("$tag")
+    REMOTE_PREPARED_CANDIDATE_IMAGE_IDS+=("$image_id")
+  done
+}
+
+remote_validate_retry_candidate_tenant_matrix() {
+  local candidate_dir="$1"
+  local candidate="$2"
+  local manifest="$candidate_dir/manifest.txt"
+  local tenants="$candidate_dir/tenants.tsv"
+  local expected_count expected_sha actual_count actual_sha
+
+  remote_validate_prepared_manifest "$manifest" "$candidate" || return 1
+  release_record_require_private_file "$tenants" || return 1
+  expected_count="$(release_record_get_unique "$manifest" tenant_count)" || return 1
+  expected_sha="$(release_record_get_unique "$manifest" tenant_matrix_sha256)" || return 1
+  actual_count="$(wc -l <"$tenants" | tr -d ' ')" || return 1
+  actual_sha="$(sha256sum "$tenants" | awk '{print $1}')" || return 1
+  [[ "$expected_count" =~ ^[0-9]+$ && "$expected_count" -ge 1 && "$expected_count" -le 100 ]] || return 1
+  [[ "$actual_count" == "$expected_count" && "$actual_sha" == "$expected_sha" ]]
+}
+
+remote_validate_retry_active_runtime() {
+  local app_path="$1"
+  local current_commit="$2"
+  local candidate_dir="$3"
+  local current_dir="$app_path/.releases/$current_commit"
+  local candidate_manifest="$candidate_dir/manifest.txt"
+  local tenant_count service tag actual_id
+
+  remote_load_release_evidence "$current_dir" "$current_commit" || return 1
+  [[ "$REMOTE_INSPECT_ARCHIVE_SHA" == "$REMOTE_ROLLBACK_ARCHIVE_SHA" ]] || return 1
+  remote_validate_release_source_snapshot "$current_dir" "$REMOTE_ROLLBACK_ARCHIVE_SHA" || return 1
+  remote_validate_release_override "$current_dir" "$current_commit" || return 1
+  remote_select_activation_tools || return 1
+  remote_verify_root_source "$app_path" "$current_dir" || return 1
+  for service in portal-backend portal-web telegram-bridge; do
+    tag="$(remote_release_tag "$service" "$current_commit")" || return 1
+    actual_id="$(remote_image_id "$tag")" || return 1
+    case "$service" in
+      portal-backend) [[ "$actual_id" == "$REMOTE_ROLLBACK_BACKEND_ID" ]] || return 1 ;;
+      portal-web) [[ "$actual_id" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1 ;;
+      telegram-bridge) [[ "$actual_id" == "$REMOTE_ROLLBACK_TELEGRAM_ID" ]] || return 1 ;;
+    esac
+  done
+  tenant_count="$(release_record_get_unique "$candidate_manifest" tenant_count)" || return 1
+  [[ "$tenant_count" =~ ^[0-9]+$ && "$tenant_count" -ge 1 && "$tenant_count" -le 100 ]] || return 1
+  remote_configure_compose "$app_path" "$current_dir" || return 1
+  "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  REMOTE_ACTIVATION_CANDIDATE_IDS=(
+    "$REMOTE_ROLLBACK_BACKEND_ID"
+    "$REMOTE_ROLLBACK_WEB_ID"
+    "$REMOTE_ROLLBACK_TELEGRAM_ID"
+  )
+  remote_capture_candidate_services || return 1
+  remote_run_tenant_smoke "$candidate_dir/tenants.tsv" "$tenant_count" || return 1
+  remote_recheck_candidate_services
+}
+
+remote_remove_retryable_candidate() {
+  local app_path="$1"
+  local candidate="$2"
+  local state_dir="$app_path/.release-state"
+  local releases_dir="$app_path/.releases"
+  local release_dir="$releases_dir/$candidate"
+  local prepared_path="$state_dir/prepared"
+  local decision="$state_dir/decisions/$candidate.txt"
+  local policy approval index
+
+  [[ "$(remote_pointer_read "$prepared_path")" == "$candidate" ]] || return 1
+  [[ -d "$release_dir" && ! -L "$release_dir" ]] || return 1
+  remote_collect_exact_prepared_candidate_images "$release_dir/manifest.txt" "$candidate" true || return 1
+  if [[ -e "$decision" || -L "$decision" ]]; then
+    policy="$(release_record_get_unique "$decision" migration_policy)" || return 1
+    approval="$(release_record_get_unique "$decision" approval_ref)" || return 1
+    remote_validate_activation_decision "$decision" "$candidate" "$policy" "$approval" || return 1
+  fi
+  for index in 0 1 2; do
+    [[ "${REMOTE_PREPARED_CANDIDATE_TAG_STATES[$index]}" == 'absent' ]] && continue
+    remote_remove_exact_tag "${REMOTE_PREPARED_CANDIDATE_TAGS[$index]}" \
+      "${REMOTE_PREPARED_CANDIDATE_IMAGE_IDS[$index]}" || return 1
+  done
+  if [[ -e "$decision" || -L "$decision" ]]; then
+    rm -f -- "$decision" || return 1
+    remote_fsync_path_and_parent "$state_dir/decisions" || return 1
+  fi
+  rm -rf -- "$release_dir" || return 1
+  remote_fsync_path_and_parent "$releases_dir" || return 1
+  rm -f -- "$prepared_path" || return 1
+  remote_fsync_path_and_parent "$state_dir"
+}
+
+remote_retry_after_rollback_candidate() {
+  local app_path="$1"
+  local candidate="$2"
+  local current_commit="$3"
+  local state_dir="$app_path/.release-state"
+  local release_dir="$app_path/.releases/$candidate"
+  local rollback_commit observed_current
+
+  release_record_is_sha "$candidate" && release_record_is_sha "$current_commit" || return 1
+  [[ ! -e "$state_dir/transaction" && ! -L "$state_dir/transaction" ]] || return 1
+  remote_find_latest_retryable_rollback_outcome "$state_dir/history" "$candidate" || return 1
+  [[ "$REMOTE_RETRY_OUTCOME_PREVIOUS" == "$current_commit" ]] || return 1
+  remote_validate_state_layout "$app_path" || return 1
+  remote_inspect_current "$app_path" || return 1
+  [[ "$REMOTE_INSPECT_CURRENT" == "$current_commit" ]] || return 1
+  remote_validate_retry_candidate_tenant_matrix "$release_dir" "$candidate" || return 1
+  rollback_commit="$(release_record_get_unique "$release_dir/manifest.txt" rollback_commit)" || return 1
+  observed_current="$(release_record_get_unique "$release_dir/manifest.txt" observed_current_commit)" || return 1
+  [[ "$rollback_commit" == "$current_commit" && "$observed_current" == "$current_commit" ]] || return 1
+  remote_validate_retry_active_runtime "$app_path" "$current_commit" "$release_dir" || return 1
+  remote_remove_retryable_candidate "$app_path" "$candidate"
+}
+
 remote_remove_expired_candidate() {
   local app_path="$1"
   local now_epoch="$2"
   local state_dir="$app_path/.release-state"
   local releases_dir="$app_path/.releases"
   local prepared_path="$state_dir/prepared"
-  local candidate manifest expires pointer value service tag_key id_key tag image_id index history_result
+  local candidate manifest expires pointer value index history_result
   local decision policy approval
   local -a tags=() image_ids=()
 
@@ -1611,15 +1802,9 @@ remote_remove_expired_candidate() {
     remote_validate_activation_decision "$decision" "$candidate" "$policy" "$approval" || return 1
   fi
 
-  for service in backend web telegram; do
-    tag_key="${service}_image_tag"
-    id_key="${service}_image_id"
-    tag="$(release_record_get_unique "$manifest" "$tag_key")" || return 1
-    image_id="$(release_record_get_unique "$manifest" "$id_key")" || return 1
-    [[ "$(remote_image_id "$tag")" == "$image_id" ]] || return 1
-    tags+=("$tag")
-    image_ids+=("$image_id")
-  done
+  remote_collect_exact_prepared_candidate_images "$manifest" "$candidate" || return 1
+  tags=("${REMOTE_PREPARED_CANDIDATE_TAGS[@]}")
+  image_ids=("${REMOTE_PREPARED_CANDIDATE_IMAGE_IDS[@]}")
   for index in "${!tags[@]}"; do
     remote_remove_exact_tag "${tags[$index]}" "${image_ids[$index]}" || return 1
   done
@@ -1764,6 +1949,7 @@ remote_locked_prepare() {
   local current_archive_sha="$6"
   local current_commit="$7"
   local orchestrator_commit="$8"
+  local retry_after_rollback="${9:-}"
   local state_dir="$app_path/.release-state"
   local releases_dir="$app_path/.releases"
   local candidate_dir="$releases_dir/$candidate_commit"
@@ -1795,6 +1981,13 @@ remote_locked_prepare() {
     remote_prepare_abort 'Active release changed after inspection.'
   [[ "$candidate_commit" != "$current_commit" ]] ||
     remote_prepare_abort 'Candidate commit already identifies the active release.'
+
+  if [[ -n "$retry_after_rollback" ]]; then
+    [[ "$retry_after_rollback" == "$candidate_commit" ]] ||
+      remote_prepare_abort 'Retry acknowledgement does not match the candidate commit.'
+    remote_retry_after_rollback_candidate "$app_path" "$candidate_commit" "$current_commit" ||
+      remote_prepare_abort 'Retained rollback candidate cannot be retried safely.'
+  fi
 
   now_epoch="$(remote_now_epoch)" || remote_prepare_abort 'Unable to determine preparation time.'
   now_utc="$(remote_epoch_to_utc "$now_epoch")" || remote_prepare_abort 'Unable to format preparation time.'
@@ -4179,6 +4372,7 @@ remote_parse_prepare_options() {
   local argument name value
   local app_path='' candidate_archive='' candidate_sha='' candidate_commit=''
   local current_archive='' current_sha='' current_commit='' orchestrator_commit='' orchestrator_protocol=''
+  local retry_after_rollback=''
   local candidate_parent current_parent
   local -A seen=()
 
@@ -4199,6 +4393,7 @@ remote_parse_prepare_options() {
       current-commit) current_commit="$value" ;;
       orchestrator-commit) orchestrator_commit="$value" ;;
       orchestrator-protocol-version) orchestrator_protocol="$value" ;;
+      retry-after-rollback) retry_after_rollback="$value" ;;
       *) return 2 ;;
     esac
   done
@@ -4213,15 +4408,19 @@ remote_parse_prepare_options() {
   release_record_is_sha "$candidate_commit" || return 2
   release_record_is_sha "$current_commit" || return 2
   release_record_is_sha "$orchestrator_commit" || return 2
+  [[ -z "$retry_after_rollback" ||
+    ( "$retry_after_rollback" == "$candidate_commit" &&
+      "$retry_after_rollback" =~ ^[0-9a-f]{40}$ ) ]] || return 2
   [[ "$candidate_commit" != "$current_commit" && "$orchestrator_protocol" == "$REMOTE_PROTOCOL_VERSION" ]] || return 2
   REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app_path")" || return 2
 
   if [[ "$prefix" == 'locked' ]]; then
     remote_locked_prepare \
       "$REMOTE_EFFECTIVE_APP_PATH" "$candidate_archive" "$candidate_sha" "$candidate_commit" \
-      "$current_archive" "$current_sha" "$current_commit" "$orchestrator_commit"
+      "$current_archive" "$current_sha" "$current_commit" "$orchestrator_commit" \
+      "$retry_after_rollback"
   else
-    remote_run_prepare_with_lock "$REMOTE_EFFECTIVE_APP_PATH" \
+    local -a prepare_arguments=(
       "--candidate-archive-path=$candidate_archive" \
       "--candidate-sha256=$candidate_sha" \
       "--candidate-commit=$candidate_commit" \
@@ -4230,6 +4429,10 @@ remote_parse_prepare_options() {
       "--current-commit=$current_commit" \
       "--orchestrator-commit=$orchestrator_commit" \
       "--orchestrator-protocol-version=$orchestrator_protocol"
+    )
+    [[ -z "$retry_after_rollback" ]] ||
+      prepare_arguments+=("--retry-after-rollback=$retry_after_rollback")
+    remote_run_prepare_with_lock "$REMOTE_EFFECTIVE_APP_PATH" "${prepare_arguments[@]}"
   fi
 }
 

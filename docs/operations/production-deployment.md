@@ -41,6 +41,21 @@ prepare result and is not a cutover. A prepared candidate expires after 24
 hours; changed active state, missing rollback evidence, low disk budget or an
 invalid/expired candidate must be resolved by a new approved preparation.
 
+If `activate` returns `candidate_failed_rollback_succeeded`, production is
+already back on the previous release. Do not edit server files. After checking
+the printed outcome, deliberately prepare the same full SHA again with:
+
+```bash
+scripts/deploy-production-staged.sh prepare ... \
+  --commit=<FULL_SHA> --retry-after-rollback=<THE_SAME_FULL_SHA>
+```
+
+The acknowledgement removes only that retained candidate after the script has
+rechecked the active release, public tenant smoke and exact image identities.
+It keeps the failure outcome in history. Any changed runtime, unresolved
+transaction, different SHA, invalid evidence or ambiguous history remains
+blocked.
+
 Only after a separate approval, activate that exact prepared SHA:
 
 ```bash
