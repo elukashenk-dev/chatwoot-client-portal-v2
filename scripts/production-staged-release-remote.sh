@@ -833,7 +833,10 @@ remote_extract_release_archive() {
   mkdir -m 0700 -- "$release_dir" "$release_dir/source" || return 1
   cp -- "$archive_path" "$release_dir/source.tar.gz" || return 1
   chmod 0600 "$release_dir/source.tar.gz"
-  tar -xzf "$release_dir/source.tar.gz" -C "$release_dir/source" || return 1
+  (
+    umask 022
+    tar -xzf "$release_dir/source.tar.gz" -C "$release_dir/source"
+  ) || return 1
   [[ -f "$release_dir/source/package.json" &&
     -f "$release_dir/source/infra/production/compose.yaml" &&
     -f "$release_dir/source/scripts/ensure-production-object-storage-env.sh" ]] || return 1

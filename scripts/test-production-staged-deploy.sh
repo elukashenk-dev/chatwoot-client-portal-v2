@@ -2247,6 +2247,24 @@ for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b"\0\0"):
 PY
 }
 
+prepare_preserves_git_source_modes_for_container_builds() {
+  local output source
+
+  setup_prepare_fixture "$FUNCNAME"
+  output="$CASE_ROOT/output"
+  deploy_command prepare >"$output" 2>&1 || {
+    sed 's/^/  prepare: /' "$output" >&2
+    fail 'prepare did not complete while checking candidate source modes'
+  }
+  assert_status_once "$output" prepared
+  source="$REMOTE_TEST_ROOT/app/.releases/$FIXTURE_COMMIT/source"
+
+  [[ "$(stat -c '%a' "$source/backend/drizzle")" == '755' ]] ||
+    fail 'candidate migration directory did not preserve Git-readable mode'
+  [[ "$(stat -c '%a' "$source/backend/drizzle/0000_base.sql")" == '644' ]] ||
+    fail 'candidate migration file did not preserve Git-readable mode'
+}
+
 prepare_lock_rejects_overlap() {
   local output lock lock_fd
   setup_prepare_fixture "$FUNCNAME"
@@ -4708,6 +4726,7 @@ run_prepare_cases() {
   run_case prepare_retry_after_rollback_resumes_partial_tag_cleanup
   run_case prepare_retry_after_rollback_fsyncs_removed_decision_before_pointer
   run_case prepare_never_calls_compose_up_or_changes_active_source
+  run_case prepare_preserves_git_source_modes_for_container_builds
   run_case prepare_lock_rejects_overlap
   run_case prepare_artifacts_and_logs_contain_no_fixture_secret
 }
