@@ -1,0 +1,14 @@
+# F-LOAD-008: Chat search amplifies reply history lookups
+
+- status: open
+- found_in: SEC-DEEP-001 targeted two-auditor disposition; `DEEP-R1-F09` on historical commit `a61b4975ae7b59e244c0b5bbc4efd02466aa075c` and reassessment commit `0c25c7575221ed19b21390abb8a5f1e364f2e06f`
+- risk: medium
+- urgency: Fix before the next chat-search expansion or multi-tenant load increase.
+- area: Chat search and Chatwoot history-call admission
+- confidence: high
+- evidence: `backend/src/modules/chat-messages/routes.ts:326-341`; `backend/src/modules/chat-messages/searchService.ts:26-27,139-270`; `backend/src/modules/chat-messages/messageMapping.ts:285-325`; `backend/src/integrations/chatwoot/messageClient.ts:64-198,221-278`; both independent reports and the bounded Auditor A reproduction under `docs/superpowers/audits/2026-07-13-full-application-risk-audit/follow-ups/sec-deep-001-two-auditor/`
+- failure_path: One authenticated search can scan eight 20-message pages and resolve every distinct off-page reply target through separate Chatwoot history lookups. The reproduced service shape issued eight page calls plus 160 reply-target calls; lower-level cursor/older-history probes can raise the total to 183 Chatwoot requests. The route has no search-specific admission limit, aggregate call budget, reply-target cache or bounded per-page lookup concurrency, so repeated concurrent searches multiply shared backend and Chatwoot load.
+- counterevidence: Session and thread authority are enforced, query length is bounded, one request scans at most eight pages and returns at most 20 results, Chatwoot calls have deadlines, and the worst reply fan-out requires suitable history. These controls cap one request but leave a high constant and unbounded aggregate concurrency.
+- load_impact: Work executes per search request and can reach 183 upstream calls. At 10x or 100x concurrent adversarial searches, the current shape can request roughly 1,830 or 18,300 upstream calls before provider throttling/failure, with bursts of reply lookups and no backpressure shared across tenants.
+- fix_short: Enforce an explicit per-request Chatwoot call budget, bounded reply-target lookup concurrency and deduplicated/cached reply resolution; add tenant/user/thread-scoped search admission so aggregate concurrent work has backpressure and controlled failure semantics.
+- acceptance: A synthetic eight-page fixture with 20 unique off-page reply targets per page stays within the documented total upstream-call and concurrency budgets, and 10x/100x concurrent searches cannot exceed the chosen tenant/runtime admission bounds. Repeated reply targets are deduplicated or served from a bounded cache, over-budget searches fail predictably without partial authority bypass, ordinary search/results/cursors remain correct, and targeted call-count/concurrency tests plus required lint/build/test/review gates pass.
