@@ -309,3 +309,29 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 Все выводы относятся только к frozen commit. Audit branch не merge, не push и
 не deploy; выбор и запуск первого fix scope требует отдельного решения
 пользователя.
+
+## 2026-07-19 SEC-DEEP-001 Reassessment Addendum
+
+This dated addendum updates one proof gate without rewriting the frozen audit
+history or verdict. Exactly two independent auditors dispositioned all nine
+unresolved or expanded `SEC-DEEP-001` families against the historical commit
+and current `main` baseline. The method was a targeted two-auditor disposition,
+not a canonical Deep Security Scan.
+
+The canonical result is 2 `confirmed_medium_or_low`, 4 `duplicate`, 3
+`needs_follow_up`, 0 `confirmed_critical_or_high`, 0 `rejected`, 0
+`fixed_on_current_baseline`, and zero open plausible-High records. The confirmed
+Medium risks are registered as
+[F-SEC-020](../../../findings/F-SEC-020-admin-session-revocation.md) and
+[F-LOAD-008](../../../findings/F-LOAD-008-chat-search-history-amplification.md).
+The three preserved follow-ups concern sibling-origin deployment evidence,
+the signed-webhook threat-source policy, and aggregate avatar-upload admission;
+both auditors bound every surviving interpretation below High.
+
+`SEC-DEEP-001` is now `closed_by_targeted_disposition`. The executive verdict
+above remains the historical frozen verdict, while the current blocker set no
+longer includes this security proof gap. This addendum does not grant `GO`:
+`OPS-009`, [F-OPS-002](../../../findings/F-OPS-002-mt10a-domain-ingress-readiness.md)
+and all other out-of-scope findings and evidence gates retain their status.
+See the complete
+[targeted final report](follow-ups/sec-deep-001-two-auditor/final-report.md).

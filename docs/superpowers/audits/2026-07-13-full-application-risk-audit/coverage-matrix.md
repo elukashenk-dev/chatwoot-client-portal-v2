@@ -24,3 +24,19 @@
 | Existing finding registry | Active review risks, wording, history and current disposition           | canonical_registry_complete | 58 validated / 11 follow-up / 2 rejected ledger rows        | Reported        | `stages/10-canonical-validation.md#canonical-outcome`                                                             | 53 new files registered; superseded F-E2E-001 retained pending preservation-safe cleanup                             |
 | Dynamic regression gate   | Fresh lint, build, unit/integration and browser evidence                | discovery_complete          | lint/build PASS; 1,574 tests PASS; 28 Playwright tests FAIL | Reported        | `stages/09-dynamic-validation.md#browser-validation`                                                              | 21 customer tests stop at stale auth; 7 admin tests use stale legal-doc fixture; 11 Chatwoot-dependent tests blocked |
 | Documentation alignment   | Code, architecture, roadmap and runbook consistency                     | inventory_complete          | branch absence confirmed                                    | Reported        | `stages/00-baseline.md#base-002-stable-roadmap-documents-describe-obsolete-next-work`                             | Full docs preservation review pending                                                                                |
+
+## 2026-07-19 SEC-DEEP-001 Coverage Addendum
+
+The historical Conditional backend Deep row remains accurate for the stopped
+Deep workflow: it never reached saturation or a canonical Deep final report.
+The separate targeted follow-up reviewed all nine unresolved or expanded
+families with exactly two independent auditors on both frozen commits.
+
+That follow-up produced 2 confirmed Medium findings, 4 duplicate mappings and
+3 lower-severity `needs_follow_up` records; no plausible Critical/High path
+remains. `SEC-DEEP-001` is therefore `closed_by_targeted_disposition`, not
+"Deep complete". See the
+[targeted final report](follow-ups/sec-deep-001-two-auditor/final-report.md).
+This coverage update does not change the remaining operations, browser,
+deployment or production-evidence limitations in this matrix and does not
+grant an overall `GO`.

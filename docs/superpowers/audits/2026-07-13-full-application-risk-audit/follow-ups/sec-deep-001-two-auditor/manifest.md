@@ -1,6 +1,6 @@
 # SEC-DEEP-001 Two-Auditor Disposition Manifest
 
-Status: prepared
+Status: complete — SEC-DEEP-001 closed by targeted disposition
 
 Method: targeted two-auditor disposition; not canonical Deep Security Scan
 
@@ -49,3 +49,18 @@ start the approved `SEC-DEEP-001` review with two independent auditors.
 
 Both source roots are detached, immutable review inputs. Auditors may read
 them but must not edit them.
+
+## Completion Receipt
+
+- Completed: `2026-07-19`.
+- Canonical counts: 2 `confirmed_medium_or_low`, 4 `duplicate`, 3
+  `needs_follow_up`, 0 `confirmed_critical_or_high`, 0 `rejected` and 0
+  `fixed_on_current_baseline`.
+- Registered findings: `F-SEC-020` and `F-LOAD-008`.
+- Existing duplicate mappings: `F-LOAD-006`, `F-AUTH-002`, `F-LOAD-002` and
+  `F-AUTH-001`.
+- Final report: [final-report.md](final-report.md).
+- SEC result: `closed_by_targeted_disposition`.
+
+This evidence closure is not a canonical Deep Security Scan and does not grant
+an overall product or production `GO`.

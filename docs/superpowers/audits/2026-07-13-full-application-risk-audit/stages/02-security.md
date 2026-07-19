@@ -2,7 +2,9 @@
 
 Status: complete
 
-Follow-up: `SEC-DEEP-001` remains `needs_follow_up` and blocks final `GO`.
+Historical follow-up at the frozen audit: `SEC-DEEP-001` was
+`needs_follow_up` and blocked final `GO`. See the dated reassessment addendum
+below for its current evidence status.
 
 Verdict effect: the completed Standard Security Scan is canonical for Task 4,
 but the unresolved conditional backend Deep gate prevents a final `GO` until
@@ -153,3 +155,24 @@ The generated hardening portfolio recommends two staged architectural themes:
 These are proposals, not hidden implementation work. Per-finding focused fixes
 and regression tests remain the first closure step; broader architecture should
 be selected only after later audit stages finish reconciliation.
+
+## 2026-07-19 SEC-DEEP-001 Reassessment Addendum
+
+The nine unresolved or expanded families from the recovered initial Deep merge
+were reviewed by exactly two independent auditors on the historical commit and
+current `main` baseline, then reconciled without a third audit lane. This was a
+targeted two-auditor disposition, not a canonical Deep Security Scan.
+
+Canonical results: 2 `confirmed_medium_or_low`, 4 `duplicate`, 3
+`needs_follow_up`, 0 `confirmed_critical_or_high`, 0 `rejected`, 0
+`fixed_on_current_baseline`, and zero records with `plausibleHighOpen=true`.
+The two confirmed Medium risks are registered as
+[F-SEC-020](../../../../findings/F-SEC-020-admin-session-revocation.md) and
+[F-LOAD-008](../../../../findings/F-LOAD-008-chat-search-history-amplification.md).
+
+Accordingly, the plausible-High proof gap `SEC-DEEP-001` is
+`closed_by_targeted_disposition`. The original incomplete Deep evidence and
+limitations above remain historical fact. Three lower-severity evidence
+questions remain open, and closing this security gate alone does not produce
+an overall `GO`. Full evidence and exact next actions are in the
+[two-auditor final report](../follow-ups/sec-deep-001-two-auditor/final-report.md).

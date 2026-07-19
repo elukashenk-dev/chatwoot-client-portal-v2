@@ -17,19 +17,19 @@ tie-break was used.
 
 ## Family-By-Family Results
 
-| Family        | Auditor A                                           | Auditor B                                                           | Canonical result                     | Finding mapping                |
-| ------------- | --------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------ | ------------------------------ |
-| `DEEP-R1-F01` | Confirmed Low                                       | `needs_follow_up`; sibling-origin ownership unknown                 | `needs_follow_up`; no plausible High | —                              |
-| `DEEP-R1-F02` | Rejected; no lower-privileged signed-request source | Confirmed Medium through compromised/misconfigured trusted upstream | `needs_follow_up`; no plausible High | —                              |
-| `DEEP-R1-F03` | Confirmed Medium                                    | Confirmed Medium                                                    | `confirmed_medium_or_low`            | New finding required in Task 6 |
-| `DEEP-R1-F04` | Duplicate, Medium                                   | Duplicate, Low                                                      | `duplicate`                          | `F-LOAD-006`                   |
-| `DEEP-R1-F05` | Duplicate, Medium                                   | Duplicate, Low                                                      | `duplicate`                          | `F-AUTH-002`                   |
-| `DEEP-R1-F06` | Rejected; proportional bounded self-profile work    | Confirmed Medium aggregate admission risk                           | `needs_follow_up`; no plausible High | —                              |
-| `DEEP-R1-F07` | Duplicate, Medium                                   | Duplicate, Medium                                                   | `duplicate`                          | `F-LOAD-002`                   |
-| `DEEP-R1-F08` | Duplicate, Low                                      | Duplicate, Low                                                      | `duplicate`                          | `F-AUTH-001`                   |
-| `DEEP-R1-F09` | Confirmed Medium                                    | Confirmed Medium                                                    | `confirmed_medium_or_low`            | New finding required in Task 6 |
+| Family        | Auditor A                                           | Auditor B                                                           | Canonical result                     | Finding mapping |
+| ------------- | --------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------ | --------------- |
+| `DEEP-R1-F01` | Confirmed Low                                       | `needs_follow_up`; sibling-origin ownership unknown                 | `needs_follow_up`; no plausible High | —               |
+| `DEEP-R1-F02` | Rejected; no lower-privileged signed-request source | Confirmed Medium through compromised/misconfigured trusted upstream | `needs_follow_up`; no plausible High | —               |
+| `DEEP-R1-F03` | Confirmed Medium                                    | Confirmed Medium                                                    | `confirmed_medium_or_low`            | `F-SEC-020`     |
+| `DEEP-R1-F04` | Duplicate, Medium                                   | Duplicate, Low                                                      | `duplicate`                          | `F-LOAD-006`    |
+| `DEEP-R1-F05` | Duplicate, Medium                                   | Duplicate, Low                                                      | `duplicate`                          | `F-AUTH-002`    |
+| `DEEP-R1-F06` | Rejected; proportional bounded self-profile work    | Confirmed Medium aggregate admission risk                           | `needs_follow_up`; no plausible High | —               |
+| `DEEP-R1-F07` | Duplicate, Medium                                   | Duplicate, Medium                                                   | `duplicate`                          | `F-LOAD-002`    |
+| `DEEP-R1-F08` | Duplicate, Low                                      | Duplicate, Low                                                      | `duplicate`                          | `F-AUTH-001`    |
+| `DEEP-R1-F09` | Confirmed Medium                                    | Confirmed Medium                                                    | `confirmed_medium_or_low`            | `F-LOAD-008`    |
 
-Canonical counts before Task 6 finding registration:
+Canonical counts after Task 6 finding registration:
 
 - `confirmed_medium_or_low`: 2;
 - `duplicate`: 4;
@@ -81,18 +81,18 @@ canonical result is `needs_follow_up`. Both calibrations remain below High.
 
 ## Confirmed Finding Registration
 
-`DEEP-R1-F03` and `DEEP-R1-F09` are independently confirmed Medium risks with
-no exact active finding. Task 6 must register one finding for each and then add
-their IDs to `canonical-dispositions.jsonl`. No product fix is authorized.
+`DEEP-R1-F03` and `DEEP-R1-F09` are independently confirmed Medium risks and
+are registered as `F-SEC-020` and `F-LOAD-008`. No product fix was authorized
+or performed.
 
 ## SEC-DEEP-001 Closure Decision
 
 `plausibleHighOpen=true` records: 0.
 
 No Critical or High path survived the two independent evidence sets. The
-plausible-High uncertainty represented by `SEC-DEEP-001` is therefore eligible
-to close through targeted disposition once Task 6 registers the confirmed
-Medium findings and updates the historical audit state. The three preserved
+plausible-High uncertainty represented by `SEC-DEEP-001` is closed through
+targeted disposition after Task 6 registered the confirmed Medium findings and
+updated the historical audit state. The three preserved
 `needs_follow_up` records remain lower-severity evidence questions and do not
 recreate a plausible High blocker.
 
