@@ -19,11 +19,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          cache: pnpm
           node-version: 24
 
       - name: Enable Corepack
         run: corepack enable
+
+      - name: Restore pnpm cache
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -7,6 +7,7 @@ WORK_LOG="$ROOT_DIR/docs/roadmap/work-log.md"
 ARCHITECTURE_OVERVIEW="$ROOT_DIR/docs/architecture/overview.md"
 IMPLEMENTATION_PLAN="$ROOT_DIR/docs/roadmap/implementation-plan.md"
 DOCS_INDEX="$ROOT_DIR/docs/README.md"
+CI_WORKFLOW="$ROOT_DIR/.github/workflows/ci.yml"
 failures=0
 
 fail() {
@@ -57,6 +58,19 @@ assert_exact_count() {
   fi
 }
 
+assert_ci_corepack_precedes_pnpm_cache() {
+  local corepack_line cache_line
+
+  corepack_line="$(rg -n -m1 -F 'run: corepack enable' "$CI_WORKFLOW" | cut -d: -f1 || true)"
+  cache_line="$(rg -n -m1 -F 'cache: pnpm' "$CI_WORKFLOW" | cut -d: -f1 || true)"
+
+  if [[ -n "$corepack_line" && -n "$cache_line" && "$corepack_line" -lt "$cache_line" ]]; then
+    pass 'CI enables Corepack before resolving the pnpm cache'
+  else
+    fail 'CI enables Corepack before resolving the pnpm cache'
+  fi
+}
+
 assert_contains "$ARCHITECTURE_OVERVIEW" \
   '### MT-9 Tenant Admin And Branding (Completed)' \
   'architecture overview records MT-9 as completed'
@@ -77,10 +91,12 @@ assert_absent "$IMPLEMENTATION_PLAN" \
   'feature/auth-email-code-primary' \
   'implementation plan does not direct work to the absent auth branch'
 
+assert_ci_corepack_precedes_pnpm_cache
+
 assert_exact_count "$WORK_LOG" '^## Recommended Next Step$' '1' \
   'work log has exactly one current recommended next step'
 assert_contains "$WORK_LOG" \
-  'first real staged `prepare` rehearsal' \
+  'fresh staged `prepare` from clean `main`' \
   'work log points to the current staged-deployment next step'
 
 assert_contains "$DOCS_INDEX" \
