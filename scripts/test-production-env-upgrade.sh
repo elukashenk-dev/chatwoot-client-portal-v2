@@ -61,6 +61,45 @@ assert_env_key_once() {
   fi
 }
 
+assert_compose_service_env_keys() {
+  local compose_file="$1"
+  local service="$2"
+  shift 2
+
+  local configured_keys
+  local key
+  configured_keys="$(
+    awk -v service="$service" '
+      $0 == "  " service ":" {
+        in_service = 1
+        next
+      }
+      in_service && /^  [^ ]/ {
+        exit
+      }
+      in_service && $0 == "    environment:" {
+        in_environment = 1
+        next
+      }
+      in_environment && /^    [^ ]/ {
+        exit
+      }
+      in_environment && /^      [A-Z][A-Z0-9_]*:/ {
+        key = $0
+        sub(/^      /, "", key)
+        sub(/:.*/, "", key)
+        print key
+      }
+    ' "$compose_file"
+  )"
+
+  for key in "$@"; do
+    if ! grep -Fxq "$key" <<<"$configured_keys"; then
+      fail "expected compose service $service to receive env key: $key"
+    fi
+  done
+}
+
 if [[ ! -x "$HELPER" ]]; then
   fail "missing executable helper: $HELPER"
 fi
@@ -77,6 +116,14 @@ assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_MAX_BODY_BYTES:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PROCESSING_STALE_MS:"
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PHONE_PROMPT_TEXT:"
 assert_contains "$COMPOSE_FILE" "portal-backend:"
+assert_compose_service_env_keys \
+  "$COMPOSE_FILE" \
+  portal-backend \
+  ADMIN_SESSION_COOKIE_NAME \
+  CHATWOOT_PLATFORM_API_ACCESS_TOKEN \
+  CHATWOOT_REQUEST_TIMEOUT_MS \
+  PORTAL_PROVIDER_TENANT_DOMAIN_SUFFIX \
+  PORTAL_PROVISIONING_SERVICE_EMAIL_DOMAIN
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS: \${TELEGRAM_BRIDGE_REQUEST_TIMEOUT_MS:-10000}"
 assert_contains "$COMPOSE_FILE" 'http://127.0.0.1:${TELEGRAM_BRIDGE_PORT:-3401}/telegram-bridge/health'
 assert_contains "$COMPOSE_FILE" "TELEGRAM_BRIDGE_PORT: \${TELEGRAM_BRIDGE_PORT:-3401}"
