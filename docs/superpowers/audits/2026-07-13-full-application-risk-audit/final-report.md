@@ -119,6 +119,9 @@ evidence, counterevidence и validation action для каждой строки.
 | needs follow-up | `F-CHAT-008`, `F-PWA-003`, `F-IOS-001`, `F-CHAT-UI-003`, `F-OPS-002`, `F-OPS-003` | Код и countercontrols уточнены, но закрытие требует device/deployment/product evidence. `F-PWA-003` в canonical ledger понижен с исходного High до Medium hypothesis.                                                                                       |
 | superseded      | `F-E2E-001`                                                                       | Старый registration-fixture диагноз больше не соответствует продукту; заменившая его проблема `F-E2E-002` закрыта 2026-07-28. Старый файл сохранён до отдельного preservation-safe cleanup. |
 
+`F-CI-001` удалён из активного реестра 2026-07-28 по явному решению владельца
+продукта: обязательный браузерный CI-gate не требуется.
+
 История, ссылки и причины сохранения описаны в
 [Stage 08](stages/08-existing-findings.md).
 
@@ -191,7 +194,6 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 | ----------------------------------------------------------------------------- | ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | [F-OPS-004](../../../findings/F-OPS-004-production-env-propagation.md)        | `fix/ops-`    | production compose/env contract tests, lint/build      | Все required runtime variables реально доходят в соответствующий container; lifecycle wrapper проходит. |
 | `F-E2E-002` (закрыт 2026-07-28)                                             | `fix/e2e-`    | affected customer Playwright + auth unit/integration   | Все 21 текущих сценария проходят current email-code login и достигают своих целевых assertions.         |
-| [F-CI-001](../../../findings/F-CI-001-critical-playwright-gate.md)            | `fix/ci-`     | workflow validation + bounded critical Playwright pack | Required CI check реально блокирует merge при поломке auth/session/chat critical path.                  |
 | [F-E2E-003](../../../findings/F-E2E-003-admin-branding-legal-fixture.md)      | `fix/e2e-`    | 7 admin-branding Playwright scenarios                  | Fixture мокает актуальный legal contract; 7/7 доходят до branding assertions.                           |
 
 ### 2. Medium authority, session and data integrity
@@ -277,9 +279,9 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
    RPO/RTO/retention и monitoring.
 3. F-OPS-004 исправлен, затем F-OPS-002 подтверждён или закрыт public
    production-like ingress/lifecycle rehearsal.
-4. F-E2E-002, F-CI-001 и F-E2E-003 закрыты; intended Playwright assertions
-   реально выполняются. Chatwoot-зависимые 11 сценариев запускаются только на
-   безопасном локальном/disposable fixture.
+4. F-E2E-002 и F-E2E-003 закрыты; intended Playwright assertions реально
+   выполняются. Chatwoot-зависимые 11 сценариев запускаются только на безопасном
+   локальном/disposable fixture.
 5. Для оставшихся Medium/Low рисков записаны владельцы, порядок и явные
    operational limits. До F-AUTH-001/F-LOAD-003 сохраняется single-backend
    topology; любые numeric 10×/100× limits задаются после измерений, а не
