@@ -1,7 +1,10 @@
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
+import { REALTIME_SESSION_AUTHORITY_BATCH_SIZE } from '../auth/realtimeSessionAuthority.js'
 
 type RealtimeSubscription = {
+  close: () => void
   send: (event: ChatRealtimeEvent) => void
+  sessionId: number
   tenantId: number
   threadId: string
   userId: number
@@ -39,6 +42,11 @@ export type ChatTypingEvent = {
   threadId: string
 }
 
+type ResolveActiveSessions = (input: {
+  candidates: Array<{ sessionId: number; userId: number }>
+  tenantId: number
+}) => Promise<Array<{ sessionId: number; userId: number }>>
+
 function buildThreadKey({
   tenantId,
   threadId,
@@ -61,7 +69,43 @@ function buildSubscriptionKey({
   return `${tenantId}:${threadId}:${userId}`
 }
 
-export function createChatRealtimeHub() {
+function buildAuthorityBatches(subscriptions: RealtimeSubscription[]) {
+  const subscriptionsByUser = new Map<number, RealtimeSubscription[]>()
+
+  for (const subscription of subscriptions) {
+    const userSubscriptions = subscriptionsByUser.get(subscription.userId) ?? []
+    userSubscriptions.push(subscription)
+    subscriptionsByUser.set(subscription.userId, userSubscriptions)
+  }
+
+  const batches: RealtimeSubscription[][] = []
+  let currentBatch: RealtimeSubscription[] = []
+
+  for (const userSubscriptions of subscriptionsByUser.values()) {
+    if (
+      currentBatch.length > 0 &&
+      currentBatch.length + userSubscriptions.length >
+        REALTIME_SESSION_AUTHORITY_BATCH_SIZE
+    ) {
+      batches.push(currentBatch)
+      currentBatch = []
+    }
+
+    currentBatch.push(...userSubscriptions)
+  }
+
+  if (currentBatch.length > 0) {
+    batches.push(currentBatch)
+  }
+
+  return batches
+}
+
+export function createChatRealtimeHub({
+  resolveActiveSessions,
+}: {
+  resolveActiveSessions: ResolveActiveSessions
+}) {
   const subscriptionsByKey = new Map<string, Set<RealtimeSubscription>>()
   const subscriptionsByThreadKey = new Map<string, Set<RealtimeSubscription>>()
 
@@ -88,6 +132,40 @@ export function createChatRealtimeHub() {
     }
   }
 
+  async function authorizeSubscriptions(subscriptions: RealtimeSubscription[]) {
+    const tenantId = subscriptions[0]?.tenantId
+
+    if (tenantId === undefined) {
+      return []
+    }
+
+    const activeSessions = await resolveActiveSessions({
+      candidates: subscriptions.map(({ sessionId, userId }) => ({
+        sessionId,
+        userId,
+      })),
+      tenantId,
+    })
+    const activeUserBySession = new Map(
+      activeSessions.map(({ sessionId, userId }) => [sessionId, userId]),
+    )
+    const authorizedSubscriptions: RealtimeSubscription[] = []
+
+    for (const subscription of subscriptions) {
+      if (
+        activeUserBySession.get(subscription.sessionId) === subscription.userId
+      ) {
+        authorizedSubscriptions.push(subscription)
+        continue
+      }
+
+      unsubscribe(subscription)
+      subscription.close()
+    }
+
+    return authorizedSubscriptions
+  }
+
   return {
     async publishThreadMessages({
       createSnapshotForUser,
@@ -108,24 +186,43 @@ export function createChatRealtimeHub() {
 
       let delivered = 0
 
-      for (const subscription of subscriptions) {
-        const snapshot = await createSnapshotForUser(subscription.userId)
+      for (const batch of buildAuthorityBatches([...subscriptions])) {
+        const initiallyAuthorized = await authorizeSubscriptions(batch)
 
-        if (snapshot.result !== 'ready') {
+        if (initiallyAuthorized.length === 0) {
           continue
         }
 
-        subscription.send({
-          data: snapshot,
-          type: 'messages',
-        })
-        delivered += 1
+        const snapshotsByUser = new Map<number, ChatMessagesSnapshot>()
+
+        for (const { userId } of initiallyAuthorized) {
+          if (!snapshotsByUser.has(userId)) {
+            snapshotsByUser.set(userId, await createSnapshotForUser(userId))
+          }
+        }
+
+        const finallyAuthorized =
+          await authorizeSubscriptions(initiallyAuthorized)
+
+        for (const subscription of finallyAuthorized) {
+          const snapshot = snapshotsByUser.get(subscription.userId)
+
+          if (!snapshot || snapshot.result !== 'ready') {
+            continue
+          }
+
+          subscription.send({
+            data: snapshot,
+            type: 'messages',
+          })
+          delivered += 1
+        }
       }
 
       return delivered
     },
 
-    publishThreadTyping({
+    async publishThreadTyping({
       isTyping,
       tenantId,
       threadId,
@@ -144,16 +241,20 @@ export function createChatRealtimeHub() {
 
       let delivered = 0
 
-      for (const subscription of subscriptions) {
-        subscription.send({
-          data: {
-            actor: 'agent',
-            isTyping,
-            threadId,
-          },
-          type: 'typing',
-        })
-        delivered += 1
+      for (const batch of buildAuthorityBatches([...subscriptions])) {
+        const authorizedSubscriptions = await authorizeSubscriptions(batch)
+
+        for (const subscription of authorizedSubscriptions) {
+          subscription.send({
+            data: {
+              actor: 'agent',
+              isTyping,
+              threadId,
+            },
+            type: 'typing',
+          })
+          delivered += 1
+        }
       }
 
       return delivered

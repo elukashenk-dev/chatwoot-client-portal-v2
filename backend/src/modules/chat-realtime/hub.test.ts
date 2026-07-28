@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { REALTIME_SESSION_AUTHORITY_BATCH_SIZE } from '../auth/realtimeSessionAuthority.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import {
   CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
@@ -20,20 +21,37 @@ const readySnapshot: ChatMessagesSnapshot = {
   result: 'ready',
 }
 
+function createAuthorizedRealtimeHub() {
+  return createChatRealtimeHub({
+    resolveActiveSessions: async ({ candidates }) => candidates,
+  })
+}
+
 describe('createChatRealtimeHub', () => {
   it('publishes a group thread event to every subscriber on that thread', async () => {
-    const hub = createChatRealtimeHub()
+    const resolveActiveSessions = vi.fn(
+      async ({
+        candidates,
+      }: Parameters<
+        Parameters<typeof createChatRealtimeHub>[0]['resolveActiveSessions']
+      >[0]) => candidates,
+    )
+    const hub = createChatRealtimeHub({ resolveActiveSessions })
     const firstSend = vi.fn()
     const secondSend = vi.fn()
 
     hub.subscribe({
+      close: vi.fn(),
       send: firstSend,
+      sessionId: 71,
       tenantId: 1,
       threadId: 'group:154',
       userId: 7,
     })
     hub.subscribe({
+      close: vi.fn(),
       send: secondSend,
+      sessionId: 81,
       tenantId: 1,
       threadId: 'group:154',
       userId: 8,
@@ -69,21 +87,124 @@ describe('createChatRealtimeHub', () => {
       data: groupReadySnapshot,
       type: 'messages',
     })
+    expect(resolveActiveSessions).toHaveBeenCalledTimes(2)
+    expect(resolveActiveSessions).toHaveBeenNthCalledWith(1, {
+      candidates: [
+        { sessionId: 71, userId: 7 },
+        { sessionId: 81, userId: 8 },
+      ],
+      tenantId: 1,
+    })
+    expect(resolveActiveSessions).toHaveBeenNthCalledWith(2, {
+      candidates: [
+        { sessionId: 71, userId: 7 },
+        { sessionId: 81, userId: 8 },
+      ],
+      tenantId: 1,
+    })
+  })
+
+  it('bounds message authority and snapshot work to fixed-size batches', async () => {
+    const resolveActiveSessions = vi.fn(
+      async ({
+        candidates,
+      }: Parameters<
+        Parameters<typeof createChatRealtimeHub>[0]['resolveActiveSessions']
+      >[0]) => candidates,
+    )
+    const hub = createChatRealtimeHub({ resolveActiveSessions })
+
+    for (
+      let index = 0;
+      index < REALTIME_SESSION_AUTHORITY_BATCH_SIZE + 1;
+      index += 1
+    ) {
+      hub.subscribe({
+        close: vi.fn(),
+        send: vi.fn(),
+        sessionId: index + 1,
+        tenantId: 1,
+        threadId: 'group:154',
+        userId: index + 1,
+      })
+    }
+
+    const createSnapshotForUser = vi.fn().mockResolvedValue(readySnapshot)
+
+    await expect(
+      hub.publishThreadMessages({
+        createSnapshotForUser,
+        tenantId: 1,
+        threadId: 'group:154',
+      }),
+    ).resolves.toBe(REALTIME_SESSION_AUTHORITY_BATCH_SIZE + 1)
+
+    expect(resolveActiveSessions).toHaveBeenCalledTimes(4)
+    expect(
+      resolveActiveSessions.mock.calls.map(
+        ([{ candidates }]) => candidates.length,
+      ),
+    ).toEqual([
+      REALTIME_SESSION_AUTHORITY_BATCH_SIZE,
+      REALTIME_SESSION_AUTHORITY_BATCH_SIZE,
+      1,
+      1,
+    ])
+    expect(createSnapshotForUser).toHaveBeenCalledTimes(
+      REALTIME_SESSION_AUTHORITY_BATCH_SIZE + 1,
+    )
+  })
+
+  it('rechecks session authority after snapshot work and before sending', async () => {
+    const resolveActiveSessions = vi
+      .fn()
+      .mockImplementationOnce(async ({ candidates }) => candidates)
+      .mockResolvedValueOnce([])
+    const hub = createChatRealtimeHub({ resolveActiveSessions })
+    const close = vi.fn()
+    const send = vi.fn()
+    const createSnapshotForUser = vi.fn().mockResolvedValue(readySnapshot)
+
+    hub.subscribe({
+      close,
+      send,
+      sessionId: 71,
+      tenantId: 1,
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    await expect(
+      hub.publishThreadMessages({
+        createSnapshotForUser,
+        tenantId: 1,
+        threadId: 'private:me',
+      }),
+    ).resolves.toBe(0)
+
+    expect(createSnapshotForUser).toHaveBeenCalledTimes(1)
+    expect(resolveActiveSessions).toHaveBeenCalledTimes(2)
+    expect(send).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
   })
 
   it('skips a subscribed user after group thread access is revoked', async () => {
-    const hub = createChatRealtimeHub()
+    const hub = createAuthorizedRealtimeHub()
     const firstSend = vi.fn()
     const secondSend = vi.fn()
 
     hub.subscribe({
+      close: vi.fn(),
       send: firstSend,
+      sessionId: 71,
       tenantId: 1,
       threadId: 'group:154',
       userId: 7,
     })
     hub.subscribe({
+      close: vi.fn(),
       send: secondSend,
+      sessionId: 81,
       tenantId: 1,
       threadId: 'group:154',
       userId: 8,
@@ -129,18 +250,22 @@ describe('createChatRealtimeHub', () => {
   })
 
   it('fans out only to subscribers in the same tenant and thread', async () => {
-    const hub = createChatRealtimeHub()
+    const hub = createAuthorizedRealtimeHub()
     const sendTenantA = vi.fn()
     const sendTenantB = vi.fn()
 
     hub.subscribe({
+      close: vi.fn(),
       send: sendTenantA,
+      sessionId: 71,
       tenantId: 1,
       threadId: 'private:me',
       userId: 7,
     })
     hub.subscribe({
+      close: vi.fn(),
       send: sendTenantB,
+      sessionId: 72,
       tenantId: 2,
       threadId: 'private:me',
       userId: 7,
@@ -160,31 +285,35 @@ describe('createChatRealtimeHub', () => {
     expect(sendTenantB).not.toHaveBeenCalled()
   })
 
-  it('publishes agent typing events without building message snapshots', () => {
-    const hub = createChatRealtimeHub()
+  it('publishes agent typing events without building message snapshots', async () => {
+    const hub = createAuthorizedRealtimeHub()
     const sendTenantA = vi.fn()
     const sendTenantB = vi.fn()
 
     hub.subscribe({
+      close: vi.fn(),
       send: sendTenantA,
+      sessionId: 71,
       tenantId: 1,
       threadId: 'private:me',
       userId: 7,
     })
     hub.subscribe({
+      close: vi.fn(),
       send: sendTenantB,
+      sessionId: 72,
       tenantId: 2,
       threadId: 'private:me',
       userId: 7,
     })
 
-    expect(
+    await expect(
       hub.publishThreadTyping({
         isTyping: true,
         tenantId: 1,
         threadId: 'private:me',
       }),
-    ).toBe(1)
+    ).resolves.toBe(1)
 
     expect(sendTenantA).toHaveBeenCalledWith({
       data: {
@@ -197,8 +326,88 @@ describe('createChatRealtimeHub', () => {
     expect(sendTenantB).not.toHaveBeenCalled()
   })
 
+  it('closes a revoked session instead of publishing a typing event', async () => {
+    const resolveActiveSessions = vi.fn().mockResolvedValue([])
+    const hub = createChatRealtimeHub({ resolveActiveSessions })
+    const close = vi.fn()
+    const send = vi.fn()
+
+    hub.subscribe({
+      close,
+      send,
+      sessionId: 71,
+      tenantId: 1,
+      threadId: 'private:me',
+      userId: 7,
+    })
+
+    await expect(
+      hub.publishThreadTyping({
+        isTyping: true,
+        tenantId: 1,
+        threadId: 'private:me',
+      }),
+    ).resolves.toBe(0)
+
+    expect(resolveActiveSessions).toHaveBeenCalledWith({
+      candidates: [{ sessionId: 71, userId: 7 }],
+      tenantId: 1,
+    })
+    expect(send).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+
+    await expect(
+      hub.publishThreadTyping({
+        isTyping: true,
+        tenantId: 1,
+        threadId: 'private:me',
+      }),
+    ).resolves.toBe(0)
+    expect(resolveActiveSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('checks and sends typing events in fixed-size authority batches', async () => {
+    const resolveActiveSessions = vi.fn(
+      async ({
+        candidates,
+      }: Parameters<
+        Parameters<typeof createChatRealtimeHub>[0]['resolveActiveSessions']
+      >[0]) => candidates,
+    )
+    const hub = createChatRealtimeHub({ resolveActiveSessions })
+
+    for (
+      let index = 0;
+      index < REALTIME_SESSION_AUTHORITY_BATCH_SIZE + 1;
+      index += 1
+    ) {
+      hub.subscribe({
+        close: vi.fn(),
+        send: vi.fn(),
+        sessionId: index + 1,
+        tenantId: 1,
+        threadId: 'group:154',
+        userId: index + 1,
+      })
+    }
+
+    await expect(
+      hub.publishThreadTyping({
+        isTyping: true,
+        tenantId: 1,
+        threadId: 'group:154',
+      }),
+    ).resolves.toBe(REALTIME_SESSION_AUTHORITY_BATCH_SIZE + 1)
+
+    expect(
+      resolveActiveSessions.mock.calls.map(
+        ([{ candidates }]) => candidates.length,
+      ),
+    ).toEqual([REALTIME_SESSION_AUTHORITY_BATCH_SIZE, 1])
+  })
+
   it('rejects subscriptions above the per user conversation limit and allows another after cleanup', () => {
-    const hub = createChatRealtimeHub()
+    const hub = createAuthorizedRealtimeHub()
     const subscriptions: Array<() => void> = []
 
     for (
@@ -207,7 +416,9 @@ describe('createChatRealtimeHub', () => {
       index += 1
     ) {
       const result = hub.subscribe({
+        close: vi.fn(),
         send: vi.fn(),
+        sessionId: index + 1,
         tenantId: 1,
         threadId: 'private:me',
         userId: 7,
@@ -222,7 +433,9 @@ describe('createChatRealtimeHub', () => {
 
     expect(
       hub.subscribe({
+        close: vi.fn(),
         send: vi.fn(),
+        sessionId: 99,
         tenantId: 1,
         threadId: 'private:me',
         userId: 7,
@@ -235,7 +448,9 @@ describe('createChatRealtimeHub', () => {
     subscriptions[0]?.()
 
     const afterCleanup = hub.subscribe({
+      close: vi.fn(),
       send: vi.fn(),
+      sessionId: 100,
       tenantId: 1,
       threadId: 'private:me',
       userId: 7,

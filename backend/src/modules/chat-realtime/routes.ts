@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import type { AppEnv } from '../../config/env.js'
 import { ApiError } from '../../lib/errors.js'
-import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
+import { resolveAuthenticatedPortalSession } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import { requireTenantContext } from '../tenants/routes.js'
@@ -42,12 +42,13 @@ export function registerChatRealtimeRoutes(
   }: RegisterChatRealtimeRoutesOptions,
 ) {
   app.get('/api/chat/realtime', async (request, reply) => {
-    const user = await resolveAuthenticatedPortalUser({
+    const session = await resolveAuthenticatedPortalSession({
       authService,
       env,
       reply,
       request,
     })
+    const user = session.user
     const query = chatRealtimeQuerySchema.parse(request.query)
 
     const tenant = requireTenantContext(request)
@@ -70,9 +71,13 @@ export function registerChatRealtimeRoutes(
     }
 
     const subscriptionResult = realtimeHub.subscribe({
+      close: () => {
+        reply.raw.end()
+      },
       send: (event) => {
         writeSseEvent(reply.raw, event)
       },
+      sessionId: session.sessionId,
       tenantId: tenant.id,
       threadId: context.activeThread.id,
       userId: user.id,

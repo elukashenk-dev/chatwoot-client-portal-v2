@@ -721,17 +721,23 @@ describe('createChatwootWebhookService', () => {
   })
 
   it('fans out a group webhook only to active subscribers whose thread access is still ready', async () => {
-    const realtimeHub = createChatRealtimeHub()
+    const realtimeHub = createChatRealtimeHub({
+      resolveActiveSessions: async ({ candidates }) => candidates,
+    })
     const firstSend = vi.fn()
     const secondSend = vi.fn()
     realtimeHub.subscribe({
+      close: vi.fn(),
       send: firstSend,
+      sessionId: 71,
       tenantId: 1,
       threadId: 'group:154',
       userId: 7,
     })
     realtimeHub.subscribe({
+      close: vi.fn(),
       send: secondSend,
+      sessionId: 81,
       tenantId: 1,
       threadId: 'group:154',
       userId: 8,

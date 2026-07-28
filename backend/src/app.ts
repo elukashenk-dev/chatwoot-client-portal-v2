@@ -134,7 +134,9 @@ export function buildApp({
     chatwootFetchFn,
     env,
   })
-  const chatRealtimeHub = createChatRealtimeHub()
+  const chatRealtimeHub = createChatRealtimeHub({
+    resolveActiveSessions: authService.resolveActiveSessions,
+  })
   const chatReadSyncThrottleStore = new Map<string, number>()
   const chatTypingThrottleStore = new Map<string, number>()
   const vapidConfig = createVapidConfig(env)

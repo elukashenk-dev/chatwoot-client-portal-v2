@@ -14,6 +14,9 @@ execution-plan детали здесь не хранятся.
 - Password reset keeps a tenant/user-scoped current recovery generation:
   завершение нового reset атомарно лишает силы более старые pending/verified
   продолжения, не затрагивая более новые поколения.
+- Realtime message and typing delivery is bound to the exact customer session
+  that opened each SSE stream: inactive, expired or logged-out sessions are
+  removed before delivery through bounded authority batches.
 - Browser не получает Chatwoot authority; portal backend остается единственной
   authority-зоной для auth, session, profile, send, realtime, webhooks,
   notifications, read/typing sync и Chatwoot access.

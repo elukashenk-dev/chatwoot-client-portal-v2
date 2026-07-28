@@ -5,6 +5,7 @@ import type { AppDatabase } from '../../db/client.js'
 import { normalizeEmail } from '../../lib/email.js'
 import { ApiError } from '../../lib/errors.js'
 import { verifyPassword as defaultVerifyPasswordHash } from '../../lib/password.js'
+import { REALTIME_SESSION_AUTHORITY_BATCH_SIZE } from './realtimeSessionAuthority.js'
 import { createAuthRepository } from './repository.js'
 
 export type PublicPortalUser = {
@@ -23,6 +24,7 @@ export type PublicPortalSession = {
 }
 
 export type CurrentPortalSession = PublicPortalSession & {
+  sessionId: number
   sessionRefreshed: boolean
 }
 
@@ -183,6 +185,7 @@ export function createAuthService({
       return {
         expiresAt: session.expiresAt,
         emailProofExpiresAt: session.emailProofExpiresAt,
+        sessionId: session.sessionId,
         sessionRefreshed: false,
         user,
       }
@@ -204,6 +207,7 @@ export function createAuthService({
       return {
         expiresAt: refreshedSession.expiresAt,
         emailProofExpiresAt: session.emailProofExpiresAt,
+        sessionId: session.sessionId,
         sessionRefreshed: true,
         user,
       }
@@ -222,6 +226,7 @@ export function createAuthService({
     return {
       expiresAt: latestSession.expiresAt,
       emailProofExpiresAt: latestSession.emailProofExpiresAt,
+      sessionId: latestSession.sessionId,
       sessionRefreshed: false,
       user: {
         ...toAuthenticatedPortalUser(latestSession.user),
@@ -231,6 +236,39 @@ export function createAuthService({
 
   return {
     issueSessionForUser,
+
+    async resolveActiveSessions({
+      candidates,
+      tenantId,
+    }: {
+      candidates: Array<{ sessionId: number; userId: number }>
+      tenantId: number
+    }) {
+      const resolvedAt = now()
+      const sessionIds = [
+        ...new Set(candidates.map(({ sessionId }) => sessionId)),
+      ]
+      const activeSessions: Array<{ sessionId: number; userId: number }> = []
+
+      for (
+        let offset = 0;
+        offset < sessionIds.length;
+        offset += REALTIME_SESSION_AUTHORITY_BATCH_SIZE
+      ) {
+        activeSessions.push(
+          ...(await repository.findActiveSessionsByIds({
+            now: resolvedAt,
+            sessionIds: sessionIds.slice(
+              offset,
+              offset + REALTIME_SESSION_AUTHORITY_BATCH_SIZE,
+            ),
+            tenantId,
+          })),
+        )
+      }
+
+      return activeSessions
+    },
 
     async getCurrentSession({
       allowRenewal = false,

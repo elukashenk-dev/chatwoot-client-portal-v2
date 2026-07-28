@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import { portalSessions, portalUsers } from '../../db/schema.js'
@@ -157,6 +157,37 @@ export function createAuthRepository(db: AppDatabase) {
           passwordConfigured: session.passwordConfigured,
         },
       }
+    },
+
+    async findActiveSessionsByIds({
+      now,
+      sessionIds,
+      tenantId,
+    }: {
+      now: Date
+      sessionIds: number[]
+      tenantId: number
+    }) {
+      if (sessionIds.length === 0) {
+        return []
+      }
+
+      return db
+        .select({
+          sessionId: portalSessions.id,
+          userId: portalSessions.userId,
+        })
+        .from(portalSessions)
+        .innerJoin(portalUsers, eq(portalSessions.userId, portalUsers.id))
+        .where(
+          and(
+            eq(portalSessions.tenantId, tenantId),
+            inArray(portalSessions.id, sessionIds),
+            gt(portalSessions.expiresAt, now),
+            eq(portalUsers.tenantId, tenantId),
+            eq(portalUsers.isActive, true),
+          ),
+        )
     },
 
     async recordSuccessfulLogin({

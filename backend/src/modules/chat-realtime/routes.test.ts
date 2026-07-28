@@ -107,12 +107,21 @@ async function buildRealtimeRoutesTestApp({
   context?: CurrentUserChatThreadContext
 } = {}) {
   const app = Fastify({ logger: false })
-  const realtimeHub = createChatRealtimeHub()
+  const realtimeHub = createChatRealtimeHub({
+    resolveActiveSessions: async ({ candidates }) => candidates,
+  })
   const authService = {
-    getCurrentUser: vi.fn(async () => ({
-      email: 'user@example.test',
-      fullName: 'Portal User',
-      id: 7,
+    getCurrentSession: vi.fn(async () => ({
+      emailProofExpiresAt: null,
+      expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      sessionId: 71,
+      sessionRefreshed: false,
+      user: {
+        email: 'user@example.test',
+        fullName: 'Portal User',
+        id: 7,
+        passwordConfigured: true,
+      },
     })),
   } as unknown as AuthService
   const chatThreadsService = {
@@ -265,7 +274,9 @@ describe('registerChatRealtimeRoutes', () => {
     ) {
       expect(
         realtimeHub.subscribe({
+          close: vi.fn(),
           send: vi.fn(),
+          sessionId: index + 1,
           tenantId: tenant.id,
           threadId: 'group:154',
           userId: 7,

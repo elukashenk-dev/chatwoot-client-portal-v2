@@ -113,10 +113,10 @@ evidence, counterevidence и validation action для каждой строки.
 
 Все десять файлов, существовавших до аудита, проверены повторно:
 
-| Disposition     | Findings                                                                          | Решение                                                                                                                                                                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| validated       | `F-AUTH-001`, `F-CHAT-005`, `F-OPS-001`                                           | Риск остаётся; три файла включены в 56 канонических findings.                                                                                                                                                                                               |
-| needs follow-up | `F-CHAT-008`, `F-PWA-003`, `F-IOS-001`, `F-CHAT-UI-003`, `F-OPS-002`, `F-OPS-003` | Код и countercontrols уточнены, но закрытие требует device/deployment/product evidence. `F-PWA-003` в canonical ledger понижен с исходного High до Medium hypothesis.                                                                                       |
+| Disposition     | Findings                                                                          | Решение                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| validated       | `F-AUTH-001`, `F-CHAT-005`, `F-OPS-001`                                           | Риск остаётся; три файла включены в 56 канонических findings.                                                                                                                               |
+| needs follow-up | `F-CHAT-008`, `F-PWA-003`, `F-IOS-001`, `F-CHAT-UI-003`, `F-OPS-002`, `F-OPS-003` | Код и countercontrols уточнены, но закрытие требует device/deployment/product evidence. `F-PWA-003` в canonical ledger понижен с исходного High до Medium hypothesis.                       |
 | superseded      | `F-E2E-001`                                                                       | Старый registration-fixture диагноз больше не соответствует продукту; заменившая его проблема `F-E2E-002` закрыта 2026-07-28. Старый файл сохранён до отдельного preservation-safe cleanup. |
 
 `F-CI-001` удалён из активного реестра 2026-07-28 по явному решению владельца
@@ -194,11 +194,11 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 
 ### 1. High operations closure and regression safety net
 
-| Finding                                                                       | Branch prefix | Required tests                                         | Runtime acceptance gate                                                                                 |
-| ----------------------------------------------------------------------------- | ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| [F-OPS-004](../../../findings/F-OPS-004-production-env-propagation.md)        | `fix/ops-`    | production compose/env contract tests, lint/build      | Все required runtime variables реально доходят в соответствующий container; lifecycle wrapper проходит. |
-| `F-E2E-002` (закрыт 2026-07-28)                                             | `fix/e2e-`    | affected customer Playwright + auth unit/integration   | Все 21 текущих сценария проходят current email-code login и достигают своих целевых assertions.         |
-| [F-E2E-003](../../../findings/F-E2E-003-admin-branding-legal-fixture.md) (отложен 2026-07-28) | `fix/e2e-` | 7 admin-branding Playwright scenarios | Fixture мокает актуальный legal contract; 7/7 доходят до branding assertions. |
+| Finding                                                                                       | Branch prefix | Required tests                                       | Runtime acceptance gate                                                                                 |
+| --------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [F-OPS-004](../../../findings/F-OPS-004-production-env-propagation.md)                        | `fix/ops-`    | production compose/env contract tests, lint/build    | Все required runtime variables реально доходят в соответствующий container; lifecycle wrapper проходит. |
+| `F-E2E-002` (закрыт 2026-07-28)                                                               | `fix/e2e-`    | affected customer Playwright + auth unit/integration | Все 21 текущих сценария проходят current email-code login и достигают своих целевых assertions.         |
+| [F-E2E-003](../../../findings/F-E2E-003-admin-branding-legal-fixture.md) (отложен 2026-07-28) | `fix/e2e-`    | 7 admin-branding Playwright scenarios                | Fixture мокает актуальный legal contract; 7/7 доходят до branding assertions.                           |
 
 ### 2. Medium authority, session and data integrity
 
@@ -208,7 +208,7 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 | `F-SEC-003` (закрыт 2026-07-28)                                              | `fix/security-` | admin-auth integration with role downgrade         | Downgrade между request/verify не создаёт session/cookie и оставляет audit denial.                     |
 | [F-SEC-004](../../../findings/F-SEC-004-passwordless-resend-cooldown.md)     | `fix/security-` | passwordless integration across terminal states    | Invalid/expired/consumed proof не сбрасывает bounded resend cooldown.                                  |
 | `F-SEC-005` (закрыт 2026-07-28)                                              | `fix/security-` | reset concurrency integration + saved PoC          | Старое verified continuation не работает после завершения более нового reset.                          |
-| [F-SEC-006](../../../findings/F-SEC-006-sse-session-lifecycle.md)            | `fix/security-` | SSE integration for expiry/logout/deactivation     | Поток закрывается либо не получает message/typing после утраты authority.                              |
+| `F-SEC-006` (закрыт 2026-07-28)                                              | `fix/security-` | SSE integration for expiry/logout/deactivation     | Поток закрывается либо не получает message/typing после утраты authority.                              |
 | [F-SEC-009](../../../findings/F-SEC-009-push-subscription-cardinality.md)    | `fix/security-` | subscription repository/integration + cap boundary | Один user не может превысить объявленный active-subscription limit; fanout bounded.                    |
 | [F-SEC-010](../../../findings/F-SEC-010-attachment-prebuffer-limit.md)       | `fix/security-` | multipart integration + memory/admission probe     | Over-limit request отклоняется до полного 40 MiB buffering и внешнего вызова.                          |
 | [F-SEC-018](../../../findings/F-SEC-018-chatwoot-redirect-ssrf.md)           | `fix/security-` | redirect-chain unit/integration + SSRF PoC         | Каждый redirect target заново валидируется; private/link-local destination не достигается.             |

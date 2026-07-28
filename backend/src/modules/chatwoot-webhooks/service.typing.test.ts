@@ -116,7 +116,8 @@ function createService(
     overrides.publishThreadMessages ??
     vi.fn<PublishThreadMessages>().mockResolvedValue(2)
   const publishThreadTyping =
-    overrides.publishThreadTyping ?? vi.fn<PublishThreadTyping>(() => 2)
+    overrides.publishThreadTyping ??
+    vi.fn<PublishThreadTyping>().mockResolvedValue(2)
   const recordDelivery =
     overrides.recordDelivery ??
     vi.fn<RecordDelivery>().mockResolvedValue('recorded')

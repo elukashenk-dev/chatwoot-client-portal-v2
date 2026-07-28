@@ -231,7 +231,7 @@ export async function handleChatwootTypingWebhook({
   let deliveredClients = 0
 
   try {
-    deliveredClients = realtimeHub.publishThreadTyping({
+    deliveredClients = await realtimeHub.publishThreadTyping({
       isTyping: eventName === 'conversation_typing_on',
       tenantId,
       threadId: mapping.threadId,

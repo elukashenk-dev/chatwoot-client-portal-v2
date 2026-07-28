@@ -6,6 +6,38 @@ import { requireTenantContext } from '../tenants/routes.js'
 import type { AuthService, PublicPortalUser } from './service.js'
 import { clearSessionCookie, getSessionToken } from './sessionCookie.js'
 
+export async function resolveAuthenticatedPortalSession({
+  authService,
+  env,
+  reply,
+  request,
+}: {
+  authService: AuthService
+  env: AppEnv
+  reply: FastifyReply
+  request: FastifyRequest
+}) {
+  const sessionToken = getSessionToken(request, env)
+
+  if (!sessionToken) {
+    clearSessionCookie(reply, env)
+    throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
+  }
+
+  const tenant = requireTenantContext(request)
+  const session = await authService.getCurrentSession({
+    sessionToken,
+    tenantId: tenant.id,
+  })
+
+  if (!session) {
+    clearSessionCookie(reply, env)
+    throw new ApiError(401, 'UNAUTHORIZED', 'Требуется вход.')
+  }
+
+  return session
+}
+
 export async function resolveAuthenticatedPortalUser({
   authService,
   env,
