@@ -122,6 +122,10 @@ evidence, counterevidence и validation action для каждой строки.
 `F-CI-001` удалён из активного реестра 2026-07-28 по явному решению владельца
 продукта: обязательный браузерный CI-gate не требуется.
 
+`F-E2E-003` отложен владельцем продукта 2026-07-28. Он не является текущим
+блокером и должен быть пересмотрен до использования admin-branding browser
+suite как release evidence.
+
 История, ссылки и причины сохранения описаны в
 [Stage 08](stages/08-existing-findings.md).
 
@@ -194,7 +198,7 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 | ----------------------------------------------------------------------------- | ------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | [F-OPS-004](../../../findings/F-OPS-004-production-env-propagation.md)        | `fix/ops-`    | production compose/env contract tests, lint/build      | Все required runtime variables реально доходят в соответствующий container; lifecycle wrapper проходит. |
 | `F-E2E-002` (закрыт 2026-07-28)                                             | `fix/e2e-`    | affected customer Playwright + auth unit/integration   | Все 21 текущих сценария проходят current email-code login и достигают своих целевых assertions.         |
-| [F-E2E-003](../../../findings/F-E2E-003-admin-branding-legal-fixture.md)      | `fix/e2e-`    | 7 admin-branding Playwright scenarios                  | Fixture мокает актуальный legal contract; 7/7 доходят до branding assertions.                           |
+| [F-E2E-003](../../../findings/F-E2E-003-admin-branding-legal-fixture.md) (отложен 2026-07-28) | `fix/e2e-` | 7 admin-branding Playwright scenarios | Fixture мокает актуальный legal contract; 7/7 доходят до branding assertions. |
 
 ### 2. Medium authority, session and data integrity
 
@@ -279,8 +283,9 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
    RPO/RTO/retention и monitoring.
 3. F-OPS-004 исправлен, затем F-OPS-002 подтверждён или закрыт public
    production-like ingress/lifecycle rehearsal.
-4. F-E2E-002 и F-E2E-003 закрыты; intended Playwright assertions реально
-   выполняются. Chatwoot-зависимые 11 сценариев запускаются только на безопасном
+4. F-E2E-002 закрыт; F-E2E-003 явно отложен до момента, когда
+   admin-branding browser suite потребуется как release evidence.
+   Chatwoot-зависимые 11 сценариев запускаются только на безопасном
    локальном/disposable fixture.
 5. Для оставшихся Medium/Low рисков записаны владельцы, порядок и явные
    operational limits. До F-AUTH-001/F-LOAD-003 сохраняется single-backend

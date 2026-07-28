@@ -1,9 +1,9 @@
 # F-E2E-003: Admin branding browser fixture
 
-- status: open
+- status: deferred
 - found_in: Full application risk audit 2026-07-13; candidate DYN-001 at frozen commit a61b4975ae7b59e244c0b5bbc4efd02466aa075c
 - risk: low
-- urgency: Schedule a bounded maintenance fix before this control is relied on as regression evidence.
+- urgency: Deferred by the product owner on 2026-07-28; revisit before the admin-branding browser suite is relied on as release evidence.
 - area: Admin branding browser fixture
 - confidence: high
 - evidence: `frontend/src/features/admin-shell/pages/AdminBrandingPage.tsx:98-116`; `frontend/src/features/admin-branding/api/adminBrandingClient.ts:204-207`; `tests/e2e/admin-branding-settings.spec.ts:125-188`; `stages/09-dynamic-validation.md#browser-validation`
