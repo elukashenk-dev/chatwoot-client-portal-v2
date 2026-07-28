@@ -46,36 +46,38 @@ export async function requestLoginCode({
     await passwordlessLoginRepository.transactionWithScopedLock(
       normalizedEmail,
       async (tx) => {
-        const existingPendingLogin =
-          await passwordlessLoginRepository.findLatestPendingLoginByEmail(
+        const latestLogin =
+          await passwordlessLoginRepository.findLatestLoginByEmail(
             normalizedEmail,
             tx,
           )
 
-        if (!existingPendingLogin) {
+        if (!latestLogin) {
           return null
         }
 
-        if (isExpired(existingPendingLogin, requestedAt)) {
+        if (isResendLocked(latestLogin, requestedAt)) {
+          return {
+            loginCode: null,
+            loginRecord: latestLogin,
+            previousPendingLogin:
+              latestLogin.status === 'pending' ? latestLogin : null,
+            shouldSendEmail: false,
+          }
+        }
+
+        if (
+          latestLogin.status === 'pending' &&
+          isExpired(latestLogin, requestedAt)
+        ) {
           await passwordlessLoginRepository.expireLoginRecord(
-            existingPendingLogin.id,
+            latestLogin.id,
             requestedAt,
             tx,
           )
-
-          return null
         }
 
-        if (!isResendLocked(existingPendingLogin, requestedAt)) {
-          return null
-        }
-
-        return {
-          loginCode: null,
-          loginRecord: existingPendingLogin,
-          previousPendingLogin: existingPendingLogin,
-          shouldSendEmail: false,
-        }
+        return null
       },
     )
 
@@ -110,24 +112,26 @@ export async function requestLoginCode({
         tx,
       )
       const activeUser = user?.isActive ? user : null
-      const existingPendingLogin =
-        await passwordlessLoginRepository.findLatestPendingLoginByEmail(
+      const latestLogin =
+        await passwordlessLoginRepository.findLatestLoginByEmail(
           normalizedEmail,
           tx,
         )
+      const existingPendingLogin =
+        latestLogin?.status === 'pending' ? latestLogin : null
       let previousPendingLogin: typeof existingPendingLogin | null = null
+
+      if (latestLogin && isResendLocked(latestLogin, requestedAt)) {
+        return {
+          loginCode: null,
+          loginRecord: latestLogin,
+          previousPendingLogin: existingPendingLogin,
+          shouldSendEmail: false,
+        }
+      }
 
       if (existingPendingLogin) {
         if (!isExpired(existingPendingLogin, requestedAt)) {
-          if (isResendLocked(existingPendingLogin, requestedAt)) {
-            return {
-              loginCode: null,
-              loginRecord: existingPendingLogin,
-              previousPendingLogin: existingPendingLogin,
-              shouldSendEmail: false,
-            }
-          }
-
           previousPendingLogin = existingPendingLogin
         } else {
           await passwordlessLoginRepository.expireLoginRecord(

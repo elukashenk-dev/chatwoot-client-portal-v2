@@ -14,6 +14,9 @@ execution-plan детали здесь не хранятся.
 - Password reset keeps a tenant/user-scoped current recovery generation:
   завершение нового reset атомарно лишает силы более старые pending/verified
   продолжения, не затрагивая более новые поколения.
+- Passwordless email-code resend cooldown belongs to tenant, normalized email
+  and purpose: invalidating, verifying or consuming the current proof does not
+  permit another Chatwoot lookup or email before the stored deadline.
 - Realtime message and typing delivery is bound to the exact customer session
   that opened each SSE stream: inactive, expired or logged-out sessions are
   removed before delivery through bounded authority batches.
