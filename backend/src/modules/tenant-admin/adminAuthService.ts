@@ -336,7 +336,7 @@ export function createTenantAdminAuthService({
       const normalizedEmail = normalizeEmail(email)
       const verifiedAt = now()
 
-      return repository.transactionWithScopedLock(
+      const verificationResult = await repository.transactionWithScopedLock(
         normalizedEmail,
         async (tx) => {
           const challenge = await repository.findLatestPendingChallengeByEmail(
@@ -354,7 +354,7 @@ export function createTenantAdminAuthService({
               userAgent,
             })
 
-            throw createChallengeNotFoundOrInvalidatedError()
+            return { outcome: 'challenge_not_found_or_invalidated' as const }
           }
 
           if (challenge.expiresAt.getTime() <= verifiedAt.getTime()) {
@@ -369,7 +369,7 @@ export function createTenantAdminAuthService({
               userAgent,
             })
 
-            throw createCodeExpiredError()
+            return { outcome: 'expired' as const }
           }
 
           if (challenge.attemptsCount >= challenge.maxAttempts) {
@@ -384,7 +384,7 @@ export function createTenantAdminAuthService({
               userAgent,
             })
 
-            throw createTooManyAttemptsError()
+            return { outcome: 'too_many_attempts' as const }
           }
 
           const isCodeValid = await verifyPassword(
@@ -410,13 +410,12 @@ export function createTenantAdminAuthService({
               userAgent,
             })
 
-            if (
-              updatedChallenge.attemptsCount >= updatedChallenge.maxAttempts
-            ) {
-              throw createTooManyAttemptsError()
+            return {
+              outcome:
+                updatedChallenge.attemptsCount >= updatedChallenge.maxAttempts
+                  ? ('too_many_attempts' as const)
+                  : ('invalid_code' as const),
             }
-
-            throw createInvalidCodeError()
           }
 
           const verifiedChallenge = await repository.markChallengeVerified({
@@ -454,12 +453,33 @@ export function createTenantAdminAuthService({
           })
 
           return {
-            admin,
-            expiresAt,
-            sessionToken,
+            outcome: 'verified' as const,
+            response: {
+              admin,
+              expiresAt,
+              sessionToken,
+            },
           }
         },
       )
+
+      if (verificationResult.outcome === 'verified') {
+        return verificationResult.response
+      }
+
+      if (verificationResult.outcome === 'expired') {
+        throw createCodeExpiredError()
+      }
+
+      if (verificationResult.outcome === 'too_many_attempts') {
+        throw createTooManyAttemptsError()
+      }
+
+      if (verificationResult.outcome === 'invalid_code') {
+        throw createInvalidCodeError()
+      }
+
+      throw createChallengeNotFoundOrInvalidatedError()
     },
 
     async logout({

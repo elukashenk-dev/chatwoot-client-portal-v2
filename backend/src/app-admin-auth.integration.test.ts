@@ -1,9 +1,13 @@
-import { eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildApp } from './app.js'
 import type { DatabaseClient } from './db/client.js'
-import { portalTenants } from './db/schema.js'
+import {
+  portalAdminAuditEvents,
+  portalAdminLoginChallenges,
+  portalTenants,
+} from './db/schema.js'
 import type { EmailMessage } from './integrations/email/smtp.js'
 import {
   decodeTenantSecretKey,
@@ -261,6 +265,113 @@ describe('buildApp tenant admin auth integration', () => {
         message: 'Требуется вход администратора.',
       },
     })
+  })
+
+  it('persists invalid admin-code attempts and blocks the challenge at its limit', async () => {
+    const requestResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        email: 'admin@example.test',
+      },
+      url: '/api/admin/auth/request',
+    })
+
+    expect(requestResponse.statusCode).toBe(200)
+
+    const validCode = extractCode(sentEmails[0])
+    const invalidCode = validCode === '000000' ? '000001' : '000000'
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const response = await app.inject({
+        headers: {
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          code: invalidCode,
+          email: 'admin@example.test',
+        },
+        url: '/api/admin/auth/verify',
+      })
+
+      expect(response.statusCode).toBe(attempt === 5 ? 409 : 400)
+      expect(response.json()).toMatchObject({
+        error: {
+          code:
+            attempt === 5
+              ? 'TENANT_ADMIN_TOO_MANY_ATTEMPTS'
+              : 'TENANT_ADMIN_INVALID_CODE',
+        },
+      })
+    }
+
+    const [challenge] = await database.db
+      .select({
+        attemptsCount: portalAdminLoginChallenges.attemptsCount,
+        status: portalAdminLoginChallenges.status,
+      })
+      .from(portalAdminLoginChallenges)
+      .where(
+        and(
+          eq(portalAdminLoginChallenges.tenantId, tenantId),
+          eq(portalAdminLoginChallenges.email, 'admin@example.test'),
+        ),
+      )
+
+    expect(challenge).toEqual({
+      attemptsCount: 5,
+      status: 'pending',
+    })
+
+    const invalidAttemptEvents = await database.db
+      .select({
+        metadata: portalAdminAuditEvents.metadata,
+        outcome: portalAdminAuditEvents.outcome,
+      })
+      .from(portalAdminAuditEvents)
+      .where(
+        and(
+          eq(portalAdminAuditEvents.tenantId, tenantId),
+          eq(portalAdminAuditEvents.action, 'admin_login_verified'),
+          eq(portalAdminAuditEvents.outcome, 'invalid_code'),
+        ),
+      )
+      .orderBy(asc(portalAdminAuditEvents.id))
+
+    expect(invalidAttemptEvents).toEqual(
+      Array.from({ length: 5 }, (_, index) => ({
+        metadata: { attemptsCount: index + 1 },
+        outcome: 'invalid_code',
+      })),
+    )
+
+    const validCodeAfterLimitResponse = await app.inject({
+      headers: {
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: {
+        code: validCode,
+        email: 'admin@example.test',
+      },
+      remoteAddress: '127.0.0.2',
+      url: '/api/admin/auth/verify',
+    })
+
+    expect(validCodeAfterLimitResponse.statusCode).toBe(409)
+    expect(validCodeAfterLimitResponse.json()).toMatchObject({
+      error: {
+        code: 'TENANT_ADMIN_TOO_MANY_ATTEMPTS',
+      },
+    })
+    expect(
+      validCodeAfterLimitResponse.cookies.find(
+        (cookie) => cookie.name === testEnv.ADMIN_SESSION_COOKIE_NAME,
+      ),
+    ).toBeUndefined()
   })
 
   it('rejects an agent email and does not send a code', async () => {

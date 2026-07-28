@@ -131,7 +131,8 @@ execution-plan детали здесь не хранятся.
   lookup/decryption boundary and fail-closed Agents API parser/service.
 - `MT-9B` is closed: tenant admin auth backend foundation has tenant-scoped
   login challenges, separate admin sessions/cookie, email code verification,
-  logout and tenant-scoped audit events without Chatwoot authority in browser.
+  durable invalid-code attempt limits, logout and tenant-scoped audit events
+  without Chatwoot authority in browser.
 - `MT-9C` is closed: React admin login/session UI uses the separate admin
   auth boundary, `/admin/branding` is a protected read-only console shell, and
   browser admin runtime stores no Chatwoot tokens or offline admin session data.
