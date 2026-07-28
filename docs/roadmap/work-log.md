@@ -11,6 +11,9 @@ execution-plan детали здесь не хранятся.
 - Собран рабочий customer portal baseline: auth/session, primary email-code
   access, secondary password login, password reset, protected app shell, chat
   read/send, attachments, realtime, notifications, profile и PWA foundation.
+- Password reset keeps a tenant/user-scoped current recovery generation:
+  завершение нового reset атомарно лишает силы более старые pending/verified
+  продолжения, не затрагивая более новые поколения.
 - Browser не получает Chatwoot authority; portal backend остается единственной
   authority-зоной для auth, session, profile, send, realtime, webhooks,
   notifications, read/typing sync и Chatwoot access.

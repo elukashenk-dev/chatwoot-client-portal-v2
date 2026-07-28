@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -400,7 +400,7 @@ export function createPasswordResetRepository(
       return updatedRecord ?? null
     },
 
-    async consumeVerifiedReset(
+    async consumeVerifiedResetGeneration(
       recordId: number,
       updatedAt: Date,
       executor: AppDatabase = db,
@@ -422,7 +422,30 @@ export function createPasswordResetRepository(
         )
         .returning(baseResetRecordSelection())
 
-      return updatedRecord ?? null
+      if (!updatedRecord?.portalUserId) {
+        return updatedRecord ?? null
+      }
+
+      await executor
+        .update(verificationRecords)
+        .set({
+          continuationTokenExpiresAt: null,
+          continuationTokenHash: null,
+          status: 'invalidated',
+          updatedAt,
+        })
+        .where(
+          and(
+            eq(verificationRecords.tenantId, tenantId),
+            sql`lower(${verificationRecords.email}) = ${normalizeEmail(updatedRecord.email)}`,
+            eq(verificationRecords.purpose, PASSWORD_RESET_PURPOSE),
+            eq(verificationRecords.portalUserId, updatedRecord.portalUserId),
+            lt(verificationRecords.id, updatedRecord.id),
+            inArray(verificationRecords.status, ['pending', 'verified']),
+          ),
+        )
+
+      return updatedRecord
     },
 
     async updatePortalUserPassword(

@@ -436,6 +436,97 @@ describe('password reset service', () => {
     })
   })
 
+  it('does not let an older continuation reset the password after a newer reset completes', async () => {
+    const sendEmail = vi.fn().mockResolvedValue(undefined)
+    const portalUsersRepository = createPortalUsersRepository(database.db)
+    const passwordResetRepository = createPasswordResetRepository(database.db, {
+      tenantId,
+    })
+
+    await portalUsersRepository.create({
+      email: 'name@company.ru',
+      fullName: 'Portal User',
+      passwordHash: await hashPassword('OldPass123'),
+      tenantId,
+    })
+
+    const service = createPasswordResetService({
+      emailDelivery: {
+        send: sendEmail,
+      },
+      now: () => new Date('2026-04-21T12:00:00.000Z'),
+      passwordResetRepository,
+    })
+
+    await service.requestPasswordReset({
+      email: 'name@company.ru',
+    })
+    await waitForBackgroundDelivery()
+    const olderVerification = await service.confirmPasswordReset({
+      code: extractResetCode(sendEmail.mock.calls[0]?.[0]?.text ?? ''),
+      email: 'name@company.ru',
+    })
+
+    await service.requestPasswordReset({
+      email: 'name@company.ru',
+    })
+    await waitForBackgroundDelivery()
+    const newerVerification = await service.confirmPasswordReset({
+      code: extractResetCode(sendEmail.mock.calls[1]?.[0]?.text ?? ''),
+      email: 'name@company.ru',
+    })
+
+    await expect(
+      service.setPassword({
+        continuationToken: newerVerification.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'CurrentPass123',
+      }),
+    ).resolves.toMatchObject({
+      result: 'password_reset_completed',
+    })
+
+    await expect(
+      service.setPassword({
+        continuationToken: olderVerification.continuationToken,
+        email: 'name@company.ru',
+        newPassword: 'StalePass123',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PASSWORD_RESET_NOT_FOUND_OR_INVALIDATED',
+      statusCode: 409,
+    })
+
+    const user = await portalUsersRepository.findByEmail({
+      email: 'name@company.ru',
+      tenantId,
+    })
+    const resetRecords = await database.db
+      .select({
+        continuationTokenHash: verificationRecords.continuationTokenHash,
+        status: verificationRecords.status,
+      })
+      .from(verificationRecords)
+      .orderBy(verificationRecords.id)
+
+    expect(
+      await verifyPassword('CurrentPass123', user?.passwordHash ?? ''),
+    ).toBe(true)
+    expect(await verifyPassword('StalePass123', user?.passwordHash ?? '')).toBe(
+      false,
+    )
+    expect(resetRecords).toEqual([
+      {
+        continuationTokenHash: null,
+        status: 'invalidated',
+      },
+      {
+        continuationTokenHash: null,
+        status: 'consumed',
+      },
+    ])
+  })
+
   it('rejects set-password when password misses a letter or number', async () => {
     const sendEmail = vi.fn().mockResolvedValue(undefined)
     const portalUsersRepository = createPortalUsersRepository(database.db)

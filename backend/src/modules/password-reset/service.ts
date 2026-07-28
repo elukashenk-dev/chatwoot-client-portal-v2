@@ -694,7 +694,7 @@ export function createPasswordResetService({
             }
 
             const consumedRecord =
-              await passwordResetRepository.consumeVerifiedReset(
+              await passwordResetRepository.consumeVerifiedResetGeneration(
                 verifiedRecord.id,
                 completedAt,
                 tx,
