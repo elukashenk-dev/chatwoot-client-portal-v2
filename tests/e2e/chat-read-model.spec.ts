@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 
 import { expect, type Page, test } from '@playwright/test'
 
-import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -51,11 +51,11 @@ function createReadySnapshot({
   }
 }
 
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
+async function loginPortalUser(page: Page) {
+  await seedAndLoginCustomerWithEmailCode({
+    page,
+    prefix: 'e2e.chat-read-model',
+  })
 }
 
 async function routePrivateThreads(page: Page) {
@@ -251,9 +251,7 @@ test('renders the ready chat transcript and loads older history through the back
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByRole('heading', { name: 'Личный чат' })).toBeVisible()
@@ -381,9 +379,7 @@ test('opens group chat info from the chat menu and returns to the transcript', a
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page.getByRole('button', { name: 'Открыть навигацию' }).click()
@@ -564,9 +560,7 @@ test('opens group chat media and files through portal-authorized attachment URLs
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page.getByRole('button', { name: 'Открыть навигацию' }).click()
@@ -674,9 +668,7 @@ test('sends text through the backend chat contract and renders the canonical res
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page
@@ -685,7 +677,7 @@ test('sends text through the backend chat contract and renders the canonical res
   await page.getByRole('button', { name: 'Отправить' }).click()
 
   await expect(page.getByText('Сообщение из портала')).toBeVisible()
-  expect(chatMessageRequests).toHaveLength(2)
+  await expect.poll(() => chatMessageRequests.length).toBe(2)
   expect(chatMessageRequests[0]).toMatchObject({
     method: 'GET',
     path: '/api/chat/messages?threadId=private%3Ame',
@@ -780,9 +772,7 @@ test('selects a message as reply target and sends reply metadata through the bac
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page.getByText('Вопрос от агента.').click({ button: 'right' })
@@ -877,9 +867,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page.locator('input[type="file"]').setInputFiles({
@@ -961,9 +949,7 @@ test('renders new backend realtime messages without a manual transcript refresh'
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByText('Текущее сообщение в истории.')).toBeVisible()

@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 
-import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
 const groupThread = {
   id: 'group:154',
@@ -9,11 +9,11 @@ const groupThread = {
   type: 'group',
 } as const
 
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
+async function loginPortalUser(page: Page) {
+  await seedAndLoginCustomerWithEmailCode({
+    page,
+    prefix: 'e2e.group-support-badge',
+  })
 }
 
 async function routeGroupChat(page: Page) {
@@ -142,9 +142,7 @@ test('shows support badges only on first messages of group support blocks', asyn
 }) => {
   await routeGroupChat(page)
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByText('Проверила документы.')).toBeVisible()

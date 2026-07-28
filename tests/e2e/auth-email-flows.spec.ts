@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { expect, type Page, test } from '@playwright/test'
 
 import { createChatwootContactForE2e } from './support/chatwoot.ts'
+import { fillOtpCode } from './support/customerAuth.ts'
 import { waitForMailpitCode } from './support/mailpit.ts'
 import {
   findPortalUserContactLinkForE2e,
   seedPortalUserForE2e,
 } from './support/portalUsers.ts'
 
-const REGISTRATION_EMAIL_SUBJECT = 'Код подтверждения для Client Portal'
+const LOGIN_EMAIL_SUBJECT = 'Код входа в Client Portal'
 const PASSWORD_RESET_EMAIL_SUBJECT =
   'Код восстановления пароля для Client Portal'
 const PASSWORD_SETUP_EMAIL_SUBJECT = 'Код для создания пароля в Client Portal'
@@ -23,17 +24,8 @@ function createUniqueEmail(prefix: string) {
   return `${prefix}.${Date.now()}.${randomUUID().slice(0, 8)}@example.test`
 }
 
-async function fillOtpCode(page: Page, code: string) {
-  for (const [index, digit] of Array.from(code).entries()) {
-    const label =
-      index === 0 ? 'Код из письма' : `Код из письма, цифра ${index + 1}`
-
-    await page.getByLabel(label, { exact: true }).fill(digit)
-  }
-}
-
 async function loginAs(page: Page, email: string, password: string) {
-  await page.goto('/auth/login')
+  await page.goto('/auth/login/password')
   await page.getByLabel('Email').fill(email)
   await page.getByRole('textbox', { name: 'Пароль' }).fill(password)
   await page.getByRole('button', { name: 'Войти' }).click()
@@ -47,15 +39,26 @@ async function expectProtectedChatShell(page: Page) {
   ).toBeVisible()
 }
 
-async function logoutFromProtectedChat(page: Page) {
+async function logoutFromProtectedChat(
+  page: Page,
+  { confirmPasswordless = false } = {},
+) {
   await page.goto('/app/chat')
   await expectProtectedChatShell(page)
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
-  await page.getByRole('menuitem', { name: 'Завершить диалог' }).click()
+  await page.getByRole('menuitem', { name: 'Выход' }).click()
+
+  if (confirmPasswordless) {
+    const dialog = page.getByRole('dialog', { name: 'Выйти из аккаунта?' })
+
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: 'Выйти' }).click()
+  }
+
   await expect(page).toHaveURL(/\/auth\/login$/)
 }
 
-async function requestRegistrationVerification({
+async function requestFirstAccessLogin({
   email,
   fullName,
   page,
@@ -69,17 +72,14 @@ async function requestRegistrationVerification({
     name: fullName,
   })
 
-  await page.goto('/auth/register')
-  await expect(
-    page.getByRole('heading', { name: 'Создать аккаунт' }),
-  ).toBeVisible()
+  await page.goto('/auth/login')
+  await expect(page.getByLabel('Email')).toBeVisible()
 
   const requestedAt = new Date()
-  await page.getByLabel('Имя и фамилия').fill(fullName)
   await page.getByLabel('Email').fill(email)
-  await page.getByRole('button', { name: 'Продолжить' }).click()
+  await page.getByRole('button', { name: 'Получить код' }).click()
 
-  await expect(page).toHaveURL(/\/auth\/register\/verify$/, {
+  await expect(page).toHaveURL(/\/auth\/login\/verify$/, {
     timeout: EMAIL_FLOW_TIMEOUT,
   })
   await expect(page.getByText(email)).toBeVisible()
@@ -90,7 +90,7 @@ async function requestRegistrationVerification({
   }
 }
 
-async function confirmRegistrationEmail({
+async function confirmFirstAccessLogin({
   email,
   page,
   requestedAt,
@@ -101,31 +101,43 @@ async function confirmRegistrationEmail({
 }) {
   const code = await waitForMailpitCode({
     sentAfter: requestedAt,
-    subject: REGISTRATION_EMAIL_SUBJECT,
+    subject: LOGIN_EMAIL_SUBJECT,
     timeoutMs: EMAIL_FLOW_TIMEOUT,
     to: email,
   })
 
   await fillOtpCode(page, code)
-  await page.getByRole('button', { name: 'Продолжить' }).click()
+  await page.getByRole('button', { name: 'Войти' }).click()
 
-  await expect(page).toHaveURL(/\/auth\/register\/set-password$/)
+  await expect(page).toHaveURL(/\/auth\/login\/legal$/)
   await expect(
-    page.getByRole('heading', { name: 'Завершение регистрации' }),
+    page.getByRole('heading', { name: 'Принять условия' }),
   ).toBeVisible()
+
+  await page
+    .getByRole('checkbox', {
+      name: /Я принимаю условия Пользовательского соглашения/i,
+    })
+    .check()
+  await page
+    .getByRole('checkbox', {
+      name: /Я даю согласие на обработку персональных данных/i,
+    })
+    .check()
+  await page.getByRole('button', { name: 'Продолжить' }).click()
 }
 
-async function expectRegistrationFlowStorageCleared(page: Page) {
+async function expectCodeLoginFlowStorageCleared(page: Page) {
   await expect
     .poll(async () =>
       page.evaluate(() =>
-        window.sessionStorage.getItem('portal.registration-flow'),
+        window.sessionStorage.getItem('portal.passwordless-login-flow'),
       ),
     )
     .toBeNull()
 }
 
-async function registerAndSkipPassword({
+async function completeFirstAccess({
   email,
   fullName,
   page,
@@ -134,22 +146,20 @@ async function registerAndSkipPassword({
   fullName: string
   page: Page
 }) {
-  const { chatwootContact, requestedAt } =
-    await requestRegistrationVerification({
-      email,
-      fullName,
-      page,
-    })
+  const { chatwootContact, requestedAt } = await requestFirstAccessLogin({
+    email,
+    fullName,
+    page,
+  })
 
-  await confirmRegistrationEmail({
+  await confirmFirstAccessLogin({
     email,
     page,
     requestedAt,
   })
 
-  await page.getByRole('button', { name: 'Продолжить без пароля' }).click()
   await expectProtectedChatShell(page)
-  await expectRegistrationFlowStorageCleared(page)
+  await expectCodeLoginFlowStorageCleared(page)
 
   const persistedLink = await findPortalUserContactLinkForE2e(email)
 
@@ -164,32 +174,15 @@ async function registerAndSkipPassword({
   }
 }
 
-test('registers an eligible Chatwoot contact with a password and opens chat', async ({
+test('opens chat for an eligible Chatwoot contact through first-access code login', async ({
   page,
 }) => {
-  const email = createUniqueEmail('e2e.registration')
-  const fullName = 'E2E Registration User'
-  const password = 'PortalPass123!'
-  const { chatwootContact, requestedAt } =
-    await requestRegistrationVerification({
-      email,
-      fullName,
-      page,
-    })
-
-  await confirmRegistrationEmail({
+  const email = createUniqueEmail('e2e.first-access')
+  const { chatwootContact, persistedLink } = await completeFirstAccess({
     email,
+    fullName: 'E2E First Access User',
     page,
-    requestedAt,
   })
-
-  await page.getByLabel('Новый пароль').fill(password)
-  await page.getByLabel('Подтвердите пароль').fill(password)
-  await page.getByRole('button', { name: 'Сохранить пароль' }).click()
-  await expectProtectedChatShell(page)
-  await expectRegistrationFlowStorageCleared(page)
-
-  const persistedLink = await findPortalUserContactLinkForE2e(email)
 
   expect(persistedLink).toMatchObject({
     chatwootContactId: chatwootContact.id,
@@ -197,14 +190,14 @@ test('registers an eligible Chatwoot contact with a password and opens chat', as
   })
 })
 
-test('registers with password skip, sets first password from profile, and logs in with it', async ({
+test('sets a first password from profile after first-access code login', async ({
   page,
 }) => {
-  const email = createUniqueEmail('e2e.registration.skip.setup')
+  const email = createUniqueEmail('e2e.first-access.setup')
   const fullName = 'E2E Skip Then Setup User'
   const password = 'SetupPortalPass123!'
 
-  await registerAndSkipPassword({
+  await completeFirstAccess({
     email,
     fullName,
     page,
@@ -241,19 +234,19 @@ test('registers with password skip, sets first password from profile, and logs i
   await expectProtectedChatShell(page)
 })
 
-test('registers with password skip, resets password after logout, and logs in with it', async ({
+test('sets a first password through reset after first-access code login', async ({
   page,
 }) => {
-  const email = createUniqueEmail('e2e.registration.skip.reset')
+  const email = createUniqueEmail('e2e.first-access.reset')
   const fullName = 'E2E Skip Then Reset User'
   const password = 'ResetPortalPass123!'
 
-  await registerAndSkipPassword({
+  await completeFirstAccess({
     email,
     fullName,
     page,
   })
-  await logoutFromProtectedChat(page)
+  await logoutFromProtectedChat(page, { confirmPasswordless: true })
 
   await page.goto('/auth/password-reset/request')
   await expect(
@@ -344,7 +337,7 @@ test('resets a portal user password through Mailpit and rejects the old password
 
   await loginAs(page, email, oldPassword)
   await expect(page.getByText('Неверный email или пароль.')).toBeVisible()
-  await expect(page).toHaveURL(/\/auth\/login$/)
+  await expect(page).toHaveURL(/\/auth\/login\/password$/)
 
   await page.getByRole('textbox', { name: 'Пароль' }).fill(newPassword)
   await page.getByRole('button', { name: 'Войти' }).click()

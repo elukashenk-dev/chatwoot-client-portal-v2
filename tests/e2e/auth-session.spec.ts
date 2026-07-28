@@ -1,19 +1,19 @@
 import { expect, type Page, test } from '@playwright/test'
 
-import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import {
+  createIncorrectOtpCode,
+  requestCustomerLoginCode,
+  seedAndLoginCustomerWithEmailCode,
+  seedUniqueCustomerForCodeLogin,
+  submitCustomerLoginCode,
+} from './support/customerAuth.ts'
 
 async function expectLoginScreen(page: Page) {
   await expect(
-    page.getByRole('heading', { name: 'Центр поддержки' }),
+    page.getByRole('heading', { name: 'ВХОД ДЛЯ КЛИЕНТОВ' }),
   ).toBeVisible()
   await expect(page.getByLabel('Email')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Пароль' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible()
-}
-
-async function fillLoginForm(page: Page, password = E2E_PORTAL_USER.password) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page.getByRole('textbox', { name: 'Пароль' }).fill(password)
+  await expect(page.getByRole('button', { name: 'Получить код' })).toBeVisible()
 }
 
 async function expectProtectedChatShell(page: Page) {
@@ -26,20 +26,29 @@ async function expectProtectedChatShell(page: Page) {
 
 async function logoutFromProtectedChat(page: Page) {
   await page.getByRole('button', { name: 'Открыть меню чата' }).click()
-  await page.getByRole('menuitem', { name: 'Завершить диалог' }).click()
+  await page.getByRole('menuitem', { name: 'Выход' }).click()
 }
 
-test('rejects invalid credentials without opening the protected shell', async ({
+test('rejects an invalid login code without opening the protected shell', async ({
   page,
 }) => {
   await page.goto('/auth/login')
   await expectLoginScreen(page)
 
-  await fillLoginForm(page, 'WrongPortalPass123!')
-  await page.getByRole('button', { name: 'Войти' }).click()
+  const user = await seedUniqueCustomerForCodeLogin('e2e.auth.invalid-code')
+  const actualCode = await requestCustomerLoginCode({
+    email: user.email,
+    page,
+  })
+  await submitCustomerLoginCode({
+    code: createIncorrectOtpCode(actualCode),
+    page,
+  })
 
-  await expect(page.getByText('Неверный email или пароль.')).toBeVisible()
-  await expect(page).toHaveURL(/\/auth\/login$/)
+  await expect(
+    page.getByText('Неверный код входа. Проверьте код и попробуйте еще раз.'),
+  ).toBeVisible()
+  await expect(page).toHaveURL(/\/auth\/login\/verify$/)
   await expect(page.getByRole('textbox', { name: 'Сообщение' })).toHaveCount(0)
   await expect(page.getByText('Чат не подключен')).toHaveCount(0)
 })
@@ -50,8 +59,11 @@ test('logs in with the seeded portal user and opens the protected app shell', as
   await page.goto('/auth/login')
   await expectLoginScreen(page)
 
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await seedAndLoginCustomerWithEmailCode({
+    navigateToLogin: false,
+    page,
+    prefix: 'e2e.auth.login',
+  })
 
   await expectProtectedChatShell(page)
 })
@@ -64,8 +76,11 @@ test('returns to the requested protected route after login', async ({
   await expect(page).toHaveURL(/\/auth\/login$/)
   await expectLoginScreen(page)
 
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await seedAndLoginCustomerWithEmailCode({
+    navigateToLogin: false,
+    page,
+    prefix: 'e2e.auth.return-route',
+  })
 
   await expect(page).toHaveURL(/\/app\/chat\?from=e2e$/)
   await expectProtectedChatShell(page)
@@ -77,8 +92,11 @@ test('redirects authenticated users away from public auth routes', async ({
   await page.goto('/auth/login')
   await expectLoginScreen(page)
 
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await seedAndLoginCustomerWithEmailCode({
+    navigateToLogin: false,
+    page,
+    prefix: 'e2e.auth.public-redirect',
+  })
   await expectProtectedChatShell(page)
 
   await page.goto('/auth/password-reset/request')
@@ -89,8 +107,11 @@ test('logs out and blocks the protected route again', async ({ page }) => {
   await page.goto('/auth/login')
   await expectLoginScreen(page)
 
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await seedAndLoginCustomerWithEmailCode({
+    navigateToLogin: false,
+    page,
+    prefix: 'e2e.auth.logout',
+  })
   await expectProtectedChatShell(page)
 
   await logoutFromProtectedChat(page)

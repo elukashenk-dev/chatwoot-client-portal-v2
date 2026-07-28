@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 
-import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -9,11 +9,11 @@ const privateThread = {
   type: 'private',
 } as const
 
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
+async function loginPortalUser(page: Page) {
+  await seedAndLoginCustomerWithEmailCode({
+    page,
+    prefix: 'e2e.chat-notifications',
+  })
 }
 
 async function routeStoppedRealtime(page: Page) {
@@ -185,9 +185,7 @@ test('opens global and chat notification settings and toggles visible controls',
   await routeNotificationSettings(page)
   await routePushUnavailable(page)
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByText('Проверяем уведомления.')).toBeVisible()
@@ -202,7 +200,7 @@ test('opens global and chat notification settings and toggles visible controls',
     has: page.getByRole('heading', { name: 'Уведомления' }),
   })
   const globalMessagesSwitch = globalPage.getByRole('switch', {
-    name: /Новые сообщения/,
+    name: /Уведомления о новых сообщениях/,
   })
   const globalSoundSwitch = globalPage.getByRole('switch', { name: /Звук/ })
 
@@ -213,9 +211,10 @@ test('opens global and chat notification settings and toggles visible controls',
   await expect(globalMessagesSwitch).toHaveAttribute('aria-checked', 'true')
   await globalSoundSwitch.click()
   await expect(globalSoundSwitch).toHaveAttribute('aria-checked', 'false')
-  await expect(
-    globalPage.getByRole('switch', { name: /Push-уведомления/ }),
-  ).toBeDisabled()
+  await globalSoundSwitch.click()
+  await expect(globalSoundSwitch).toHaveAttribute('aria-checked', 'true')
+  await expect(globalPage.getByText('Push на этом устройстве')).toBeVisible()
+  await expect(globalPage.getByText('Недоступно в этом браузере')).toBeVisible()
 
   await page.goto('/app/chat')
   await expect(page.getByText('Проверяем уведомления.')).toBeVisible()

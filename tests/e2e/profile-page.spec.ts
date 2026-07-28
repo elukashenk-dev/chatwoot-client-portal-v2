@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -32,11 +33,11 @@ function createReadySnapshot() {
   }
 }
 
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
+async function loginPortalUser(page: Page) {
+  await seedAndLoginCustomerWithEmailCode({
+    page,
+    prefix: 'e2e.profile',
+  })
 }
 
 async function routeChatShell(page: Page) {
@@ -129,9 +130,7 @@ test('opens profile from the right chat menu and uploads an avatar through porta
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(
@@ -191,7 +190,9 @@ test('opens profile from the right chat menu and uploads an avatar through porta
   await expect(profilePage.getByText(E2E_PORTAL_USER.email)).toBeVisible()
   await expect(profilePage.getByText('+79991234567')).toBeVisible()
   await expect(profilePage.getByRole('textbox')).toHaveCount(0)
-  const profileGlassCard = profilePage.locator('.chat-glass-card-surface')
+  const profileGlassCard = profilePage
+    .locator('.chat-glass-card-surface')
+    .first()
 
   await expect(profileGlassCard).toBeVisible()
   await expect(profileGlassCard).toHaveCSS(

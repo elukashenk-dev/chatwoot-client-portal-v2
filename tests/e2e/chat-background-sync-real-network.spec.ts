@@ -10,6 +10,12 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 import {
+  createCodeLoginCompletedResponse,
+  createCodeLoginRequestResponse,
+  E2E_LOGIN_CODE,
+  loginCustomerWithEmailCode,
+} from './support/customerAuth.ts'
+import {
   countPostsForClientMessageKey,
   createSeededOutboxRecord,
   readLastActiveIdentity,
@@ -29,6 +35,7 @@ const portalUser = {
   email: E2E_PORTAL_USER.email,
   fullName: E2E_PORTAL_USER.fullName,
   id: 7,
+  passwordConfigured: true,
 }
 
 const E2E_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000
@@ -280,16 +287,31 @@ async function startRuntimeServer(): Promise<RuntimeServer> {
       return
     }
 
-    if (pathname === '/api/auth/login' && request.method === 'POST') {
+    if (
+      pathname === '/api/auth/code-login/request' &&
+      request.method === 'POST'
+    ) {
+      writeJson(response, 200, createCodeLoginRequestResponse(portalUser.email))
+      return
+    }
+
+    if (
+      pathname === '/api/auth/code-login/verify' &&
+      request.method === 'POST'
+    ) {
       isAuthenticated = true
       response.setHeader(
         'set-cookie',
         'portal_session=e2e; Path=/; SameSite=Lax',
       )
-      writeJson(response, 200, {
-        session: createPortalSession(),
-        user: portalUser,
-      })
+      writeJson(
+        response,
+        200,
+        createCodeLoginCompletedResponse({
+          expiresAt: createPortalSession().expiresAt,
+          user: portalUser,
+        }),
+      )
       return
     }
 
@@ -455,11 +477,12 @@ async function startRuntimeServer(): Promise<RuntimeServer> {
 
 async function loginPortalUser(page: Page, origin: string) {
   await page.goto(`${origin}/auth/login`)
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginCustomerWithEmailCode({
+    code: E2E_LOGIN_CODE,
+    email: E2E_PORTAL_USER.email,
+    navigateToLogin: false,
+    page,
+  })
   await expect(page.getByText('Личный чат')).toBeVisible()
 }
 
@@ -648,7 +671,9 @@ test('service worker keeps queued text after a real network failure and sends af
     await page.close()
     server.setMessageEndpointAvailable(false)
 
-    await triggerServiceWorkerOutboxDrain(serviceWorker)
+    await expect(
+      triggerServiceWorkerOutboxDrain(serviceWorker),
+    ).rejects.toThrow('Text outbox has pending background work.')
 
     await expect.poll(() => server.failedMessageRequestCount() > 0).toBe(true)
     expect(

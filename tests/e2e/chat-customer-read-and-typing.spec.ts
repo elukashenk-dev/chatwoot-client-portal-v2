@@ -2,6 +2,12 @@ import { expect, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 import type { ChatMessagesSnapshot } from '../../frontend/src/features/chat/types.ts'
+import {
+  createCodeLoginCompletedResponse,
+  createCodeLoginRequestResponse,
+  E2E_LOGIN_CODE,
+  loginCustomerWithEmailCode,
+} from './support/customerAuth.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -227,6 +233,7 @@ async function routePortalRuntimeApi(
                 email: E2E_PORTAL_USER.email,
                 fullName: E2E_PORTAL_USER.fullName,
                 id: 7,
+                passwordConfigured: true,
               },
             })
           : createJsonResponse(
@@ -242,19 +249,28 @@ async function routePortalRuntimeApi(
       return
     }
 
-    if (path === '/api/auth/login' && method === 'POST') {
+    if (path === '/api/auth/code-login/request' && method === 'POST') {
+      await route.fulfill(
+        createJsonResponse(
+          createCodeLoginRequestResponse(E2E_PORTAL_USER.email),
+        ),
+      )
+      return
+    }
+
+    if (path === '/api/auth/code-login/verify' && method === 'POST') {
       isAuthenticated = true
       await route.fulfill(
-        createJsonResponse({
-          session: {
+        createJsonResponse(
+          createCodeLoginCompletedResponse({
             expiresAt: '2026-06-10T10:00:00.000Z',
-          },
-          user: {
-            email: E2E_PORTAL_USER.email,
-            fullName: E2E_PORTAL_USER.fullName,
-            id: 7,
-          },
-        }),
+            user: {
+              email: E2E_PORTAL_USER.email,
+              fullName: E2E_PORTAL_USER.fullName,
+              id: 7,
+            },
+          }),
+        ),
       )
       return
     }
@@ -373,12 +389,11 @@ async function routePortalRuntimeApi(
 }
 
 async function loginPortalUser(page: Page) {
-  await page.goto('/auth/login')
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginCustomerWithEmailCode({
+    code: E2E_LOGIN_CODE,
+    email: E2E_PORTAL_USER.email,
+    page,
+  })
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByText(oldAgentMessage.content)).toBeVisible()

@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { expect, type Page, test } from '@playwright/test'
 
 import { createChatwootContactForE2e } from './support/chatwoot.ts'
+import { createIncorrectOtpCode, fillOtpCode } from './support/customerAuth.ts'
 import {
   expectNoMailpitMessage,
   waitForMailpitCode,
 } from './support/mailpit.ts'
 import { seedPortalUserForE2e } from './support/portalUsers.ts'
 
-const REGISTRATION_EMAIL_SUBJECT = 'Код подтверждения для Client Portal'
+const LOGIN_EMAIL_SUBJECT = 'Код входа в Client Portal'
 const PASSWORD_RESET_EMAIL_SUBJECT =
   'Код восстановления пароля для Client Portal'
 
@@ -17,36 +18,20 @@ function createUniqueEmail(prefix: string) {
   return `${prefix}.${Date.now()}.${randomUUID().slice(0, 8)}@example.test`
 }
 
-function createIncorrectCode(actualCode: string) {
-  return actualCode === '000000' ? '111111' : '000000'
-}
-
-async function fillOtpCode(page: Page, code: string) {
-  for (const [index, digit] of Array.from(code).entries()) {
-    const label =
-      index === 0 ? 'Код из письма' : `Код из письма, цифра ${index + 1}`
-
-    await page.getByLabel(label, { exact: true }).fill(digit)
-  }
-}
-
-async function requestRegistrationVerification({
+async function requestLoginVerification({
   email,
-  fullName,
   page,
 }: {
   email: string
-  fullName: string
   page: Page
 }) {
   const requestedAt = new Date()
 
-  await page.goto('/auth/register')
-  await page.getByLabel('Имя и фамилия').fill(fullName)
+  await page.goto('/auth/login')
   await page.getByLabel('Email').fill(email)
-  await page.getByRole('button', { name: 'Продолжить' }).click()
+  await page.getByRole('button', { name: 'Получить код' }).click()
 
-  await expect(page).toHaveURL(/\/auth\/register\/verify$/)
+  await expect(page).toHaveURL(/\/auth\/login\/verify$/)
 
   return requestedAt
 }
@@ -69,38 +54,32 @@ async function requestPasswordReset({
   return requestedAt
 }
 
-test('shows a controlled registration verify guard when opened without request state', async ({
+test('shows a controlled code-login verify guard when opened without request state', async ({
   page,
 }) => {
-  await page.goto('/auth/register/verify')
+  await page.goto('/auth/login/verify')
 
   await expect(
-    page.getByRole('heading', { name: 'Подтверждение почты' }),
+    page.getByRole('heading', { name: 'Код из почты' }),
   ).toBeVisible()
   await expect(
-    page.getByText(
-      'Сначала начните регистрацию и запросите код подтверждения.',
-    ),
+    page.getByText('Сначала запросите код входа для уже созданного аккаунта.'),
   ).toBeVisible()
   await expect(
-    page.getByRole('link', { name: 'Перейти к регистрации' }),
+    page.getByRole('link', { name: 'Запросить код входа' }),
   ).toBeVisible()
 })
 
-test('shows a controlled registration set-password guard without verified state', async ({
+test('shows a controlled legal-consent guard without verified code-login state', async ({
   page,
 }) => {
-  await page.goto('/auth/register/set-password')
+  await page.goto('/auth/login/legal')
 
   await expect(
-    page.getByRole('heading', { name: 'Завершение регистрации' }),
+    page.getByRole('heading', { name: 'Принять условия' }),
   ).toBeVisible()
-  await expect(
-    page.getByText('Сначала подтвердите email, чтобы завершить регистрацию.'),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('link', { name: 'Вернуться к подтверждению' }).first(),
-  ).toBeVisible()
+  await expect(page.getByText('Сначала подтвердите email кодом.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Получить код' })).toBeVisible()
 })
 
 test('shows a controlled password reset verify guard when opened without request state', async ({
@@ -137,39 +116,35 @@ test('shows a controlled password reset set-password guard without verified stat
   ).toBeVisible()
 })
 
-test('keeps registration on verify step when the code is invalid', async ({
+test('keeps first-access login on verify step when the code is invalid', async ({
   page,
 }) => {
-  const email = createUniqueEmail('e2e.registration.invalid')
-  const fullName = 'E2E Invalid Registration User'
+  const email = createUniqueEmail('e2e.first-access.invalid')
 
   await createChatwootContactForE2e({
     email,
-    name: fullName,
+    name: 'E2E Invalid First Access User',
   })
 
-  const requestedAt = await requestRegistrationVerification({
+  const requestedAt = await requestLoginVerification({
     email,
-    fullName,
     page,
   })
   const actualCode = await waitForMailpitCode({
     sentAfter: requestedAt,
-    subject: REGISTRATION_EMAIL_SUBJECT,
+    subject: LOGIN_EMAIL_SUBJECT,
     to: email,
   })
 
-  await fillOtpCode(page, createIncorrectCode(actualCode))
-  await page.getByRole('button', { name: 'Продолжить' }).click()
+  await fillOtpCode(page, createIncorrectOtpCode(actualCode))
+  await page.getByRole('button', { name: 'Войти' }).click()
 
   await expect(
-    page.getByText(
-      'Неверный код подтверждения. Проверьте код и попробуйте еще раз.',
-    ),
+    page.getByText('Неверный код входа. Проверьте код и попробуйте еще раз.'),
   ).toBeVisible()
-  await expect(page).toHaveURL(/\/auth\/register\/verify$/)
+  await expect(page).toHaveURL(/\/auth\/login\/verify$/)
   await expect(
-    page.getByRole('heading', { name: 'Завершение регистрации' }),
+    page.getByRole('heading', { name: 'Принять условия' }),
   ).toHaveCount(0)
 })
 
@@ -195,7 +170,7 @@ test('keeps password reset on verify step when the code is invalid', async ({
     to: email,
   })
 
-  await fillOtpCode(page, createIncorrectCode(actualCode))
+  await fillOtpCode(page, createIncorrectOtpCode(actualCode))
   await page.getByRole('button', { name: 'Продолжить' }).click()
 
   await expect(

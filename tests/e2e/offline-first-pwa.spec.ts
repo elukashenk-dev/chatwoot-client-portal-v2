@@ -3,6 +3,12 @@ import { expect, type BrowserContext, type Page, test } from '@playwright/test'
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
 import { expectControlledStorageLossState } from './support/controlledStorageLoss.ts'
 import {
+  createCodeLoginCompletedResponse,
+  createCodeLoginRequestResponse,
+  E2E_LOGIN_CODE,
+  loginCustomerWithEmailCode,
+} from './support/customerAuth.ts'
+import {
   countPostsForClientMessageKey,
   createSeededOutboxRecord,
   deleteOfflineSavedData,
@@ -32,6 +38,7 @@ const portalUser = {
   email: E2E_PORTAL_USER.email,
   fullName: E2E_PORTAL_USER.fullName,
   id: 7,
+  passwordConfigured: true,
 }
 
 const E2E_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000
@@ -165,10 +172,23 @@ async function routePortalApi(
         }
       }
 
-      if (path === '/api/auth/login' && request.method === 'POST') {
+      if (
+        path === '/api/auth/code-login/request' &&
+        request.method === 'POST'
+      ) {
+        return {
+          body: createCodeLoginRequestResponse(portalUser.email),
+          status: 200,
+        }
+      }
+
+      if (path === '/api/auth/code-login/verify' && request.method === 'POST') {
         isAuthenticated = true
         return {
-          body: { session: createPortalSession(), user: portalUser },
+          body: createCodeLoginCompletedResponse({
+            expiresAt: createPortalSession().expiresAt,
+            user: portalUser,
+          }),
           status: 200,
         }
       }
@@ -401,12 +421,11 @@ async function routePortalApi(
 }
 
 async function loginPortalUser(page: Page) {
-  await page.goto('/auth/login')
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginCustomerWithEmailCode({
+    code: E2E_LOGIN_CODE,
+    email: E2E_PORTAL_USER.email,
+    page,
+  })
   await expect(page.getByText('Личный чат')).toBeVisible()
 }
 
@@ -673,7 +692,9 @@ test('opens saved chat from installed PWA start url when startup APIs hang', asy
   await expect(vpnLikePage.getByText('Личный чат')).toBeVisible()
   await expect(vpnLikePage.getByText('Cached online message')).toBeVisible()
   await expect(
-    vpnLikePage.getByText('Связь отвечает медленно. Проверяем сохраненные данные.'),
+    vpnLikePage.getByText(
+      'Связь отвечает медленно. Проверяем сохраненные данные.',
+    ),
   ).toHaveCount(0)
 })
 

@@ -3,6 +3,12 @@ import { Buffer } from 'node:buffer'
 import { expect, type Page, test } from '@playwright/test'
 
 import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import {
+  createCodeLoginCompletedResponse,
+  createCodeLoginRequestResponse,
+  E2E_LOGIN_CODE,
+  loginCustomerWithEmailCode,
+} from './support/customerAuth.ts'
 
 const groupThread = {
   id: 'group:154',
@@ -22,13 +28,6 @@ const avatarPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGSc9h4NwAAAABJRU5ErkJggg==',
   'base64',
 )
-
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
-}
 
 async function routeAuthBootstrap(page: Page) {
   let isAuthenticated = false
@@ -72,25 +71,31 @@ async function routeAuthBootstrap(page: Page) {
           email: E2E_PORTAL_USER.email,
           fullName: E2E_PORTAL_USER.fullName,
           id: 7,
+          passwordConfigured: true,
         },
       },
       status: 200,
     })
   })
-  await page.route('**/api/auth/login', async (route) => {
+  await page.route('**/api/auth/code-login/request', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: createCodeLoginRequestResponse(E2E_PORTAL_USER.email),
+      status: 200,
+    })
+  })
+  await page.route('**/api/auth/code-login/verify', async (route) => {
     isAuthenticated = true
     await route.fulfill({
       contentType: 'application/json',
-      json: {
-        session: {
-          expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
-        },
+      json: createCodeLoginCompletedResponse({
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
         user: {
           email: E2E_PORTAL_USER.email,
           fullName: E2E_PORTAL_USER.fullName,
           id: 7,
         },
-      },
+      }),
       status: 200,
     })
   })
@@ -248,9 +253,11 @@ test('shows group participant avatars through portal URLs', async ({
   await routeChatShell(page)
   await routeChatInfo(page)
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginCustomerWithEmailCode({
+    code: E2E_LOGIN_CODE,
+    email: E2E_PORTAL_USER.email,
+    page,
+  })
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(

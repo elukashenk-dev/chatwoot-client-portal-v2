@@ -306,6 +306,7 @@ test('applies public branding on the customer auth login screen', async ({
 }) => {
   await mockTenantAndBranding(page)
   await mockAuthState(page, 'unauthenticated')
+  await mockLoginFailure(page)
 
   await page.goto('/auth/login')
 
@@ -378,10 +379,6 @@ test('applies public branding on the customer auth login screen', async ({
       ),
     )
     .toBe('rgb(69, 97, 121)')
-  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
-    'background-color',
-    'rgb(196, 201, 210)',
-  )
   await firstAuthInput.fill('name@example.com')
   await expect(firstAuthInput).toHaveCSS('color', 'rgb(124, 45, 18)')
   await expect(firstAuthInput).toHaveAttribute('data-filled', 'true')
@@ -393,9 +390,17 @@ test('applies public branding on the customer auth login screen', async ({
     )
     .toBe('rgba(0, 0, 0, 0)')
 
-  await mockLoginFailure(page)
+  await page.getByRole('link', { name: 'Войти по паролю' }).click()
+  await expect(page).toHaveURL(/\/auth\/login\/password$/)
+  await expect(
+    page.getByRole('heading', { name: 'Вход по паролю' }),
+  ).toBeVisible()
+  await page.getByLabel('Email').fill('name@example.com')
   await page.locator('#login-password').fill('correct horse battery staple')
+  const loginResponse = page.waitForResponse('**/api/auth/login')
+
   await page.getByRole('button', { name: 'Войти' }).click()
+  expect((await loginResponse).status()).toBe(401)
   await expect(page.getByRole('alert')).toContainText('Тестовая ошибка входа.')
 })
 
@@ -444,9 +449,9 @@ test('applies dark auth color scheme defaults when auth colors are unchanged', a
     'border-color',
     'rgba(255, 255, 255, 0.34)',
   )
-  await expect(page.locator('.auth-link-separator').first()).toHaveCSS(
-    'background-color',
-    'rgba(255, 255, 255, 0.28)',
+  await expect(page.getByRole('link', { name: 'Войти по паролю' })).toHaveCSS(
+    'color',
+    'rgb(20, 184, 166)',
   )
 })
 
@@ -538,7 +543,7 @@ test('uses accent for auth links and volumetric primary gradient for auth button
 
   await page.goto('/auth/login')
 
-  const submitButton = page.getByRole('button', { name: 'Войти' })
+  const submitButton = page.getByRole('button', { name: 'Получить код' })
   const submitBackgroundImage = await submitButton.evaluate(
     (element) => getComputedStyle(element).backgroundImage,
   )
@@ -546,28 +551,19 @@ test('uses accent for auth links and volumetric primary gradient for auth button
   expect(submitBackgroundImage).toContain('linear-gradient')
   expect(submitBackgroundImage).toContain('rgb(16, 40, 74)')
   expect(submitBackgroundImage).not.toContain('rgb(255, 0, 80)')
-  await expect(page.getByRole('link', { name: 'Создать аккаунт' })).toHaveCSS(
+  await expect(page.getByRole('link', { name: 'Войти по паролю' })).toHaveCSS(
     'color',
     'rgb(255, 0, 80)',
   )
 
-  await page.goto('/auth/register')
-
   await expect(
-    page.getByRole('link', { name: 'Пользовательского соглашения' }),
+    page.getByRole('link', { name: 'Пользовательское соглашение' }),
   ).toHaveCSS('font-weight', '600')
   await expect(
     page.getByRole('link', {
       name: 'Политикой обработки персональных данных',
     }),
   ).toHaveCSS('font-weight', '600')
-
-  const termsCheckbox = page.getByRole('checkbox', {
-    name: /Я принимаю условия Пользовательского соглашения\./i,
-  })
-
-  await termsCheckbox.check()
-  await expect(termsCheckbox).toHaveCSS('color', 'rgb(255, 0, 80)')
 })
 
 test('applies public branding on the customer chat and info surfaces', async ({
@@ -697,16 +693,14 @@ async function expectAuthLoginGeometry({
 }) {
   const logo = page.locator('.auth-brand-mark--in-flow')
   const email = page.getByLabel('Email')
-  const password = page.locator('#login-password')
-  const submit = page.getByRole('button', { name: 'Войти' })
+  const submit = page.getByRole('button', { name: 'Получить код' })
 
   await expect(logo).toHaveCSS('width', '63px')
   await expect(logo).toHaveCSS('height', '63px')
   await expect(email).toHaveCSS('height', '50px')
-  await expect(password).toHaveCSS('height', '50px')
   await expect(submit).toHaveCSS('height', '47px')
   await expect(page.locator('.auth-support-block')).toBeVisible()
-  await expect(page.getByText('+7 (800) 000-00-00')).toBeVisible()
+  await expect(page.getByText('+7 (846) 211-11-11')).toBeVisible()
 
   const logoBox = await logo.boundingBox()
   const emailBox = await email.boundingBox()

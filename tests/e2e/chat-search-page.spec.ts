@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 
-import { E2E_PORTAL_USER } from '../../backend/src/test/e2ePortalUser.ts'
+import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -40,11 +40,11 @@ function createReadySnapshot({
   }
 }
 
-async function fillLoginForm(page: Page) {
-  await page.getByLabel('Email').fill(E2E_PORTAL_USER.email)
-  await page
-    .getByRole('textbox', { name: 'Пароль' })
-    .fill(E2E_PORTAL_USER.password)
+async function loginPortalUser(page: Page) {
+  await seedAndLoginCustomerWithEmailCode({
+    page,
+    prefix: 'e2e.chat-search',
+  })
 }
 
 async function routeThreads(page: Page, threads = [privateThread]) {
@@ -280,9 +280,7 @@ test('opens private chat search, finds a visible message, and returns to transcr
       status: 200,
     })
   })
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await expect(page.getByText('Договор готов к подписанию.')).toBeVisible()
@@ -432,9 +430,7 @@ test('opens group chat search with context preview and loads older results', asy
     })
   })
 
-  await page.goto('/auth/login')
-  await fillLoginForm(page)
-  await page.getByRole('button', { name: 'Войти' }).click()
+  await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
   await page.getByRole('button', { name: 'Открыть навигацию' }).click()
