@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DatabaseClient } from '../../db/client.js'
-import { portalTenants } from '../../db/schema.js'
+import type { AppDatabase, DatabaseClient } from '../../db/client.js'
+import {
+  portalAdminLoginChallenges,
+  portalAdminSessions,
+  portalTenants,
+} from '../../db/schema.js'
 import {
   type EmailMessage,
   SmtpEmailDeliveryError,
@@ -212,6 +216,71 @@ describe('createTenantAdminAuthService', () => {
       },
       expiresAt: new Date('2026-06-07T00:00:00.000Z'),
     })
+  })
+
+  it('rejects a code that expires while waiting for the finalization lock', async () => {
+    let currentNow = fixedNow
+    const emailDelivery = {
+      send: vi.fn(async (message: EmailMessage) => {
+        void message
+      }),
+    }
+    const repository = createTenantAdminAuthRepository(database.db, {
+      tenantId,
+    })
+    const transactionWithScopedLock =
+      repository.transactionWithScopedLock.bind(repository)
+    let scopedLockCount = 0
+
+    repository.transactionWithScopedLock = async <T>(
+      email: string,
+      handler: (executor: AppDatabase) => Promise<T>,
+    ) => {
+      scopedLockCount += 1
+
+      if (scopedLockCount === 4) {
+        currentNow = new Date(fixedNow.getTime() + 901_000)
+      }
+
+      return transactionWithScopedLock<T>(email, handler)
+    }
+
+    const service = createTenantAdminAuthService({
+      emailDelivery,
+      now: () => currentNow,
+      repository,
+      tenantAdminVerificationService: createVerificationServiceMock(),
+      tenantId,
+    })
+
+    await service.requestAdminLoginChallenge({
+      email: 'admin@example.test',
+      requestIp: null,
+      userAgent: null,
+    })
+    const code = extractCode(emailDelivery.send.mock.calls[0]?.[0])
+
+    await expect(
+      service.verifyAdminLoginCode({
+        code,
+        email: 'admin@example.test',
+        requestIp: null,
+        userAgent: null,
+      }),
+    ).rejects.toMatchObject({
+      code: 'TENANT_ADMIN_CODE_EXPIRED',
+      statusCode: 410,
+    })
+
+    const [challenge] = await database.db
+      .select({ status: portalAdminLoginChallenges.status })
+      .from(portalAdminLoginChallenges)
+    const sessions = await database.db
+      .select({ id: portalAdminSessions.id })
+      .from(portalAdminSessions)
+
+    expect(challenge).toEqual({ status: 'expired' })
+    expect(sessions).toEqual([])
   })
 
   it('keeps the previous pending code when resend delivery fails', async () => {

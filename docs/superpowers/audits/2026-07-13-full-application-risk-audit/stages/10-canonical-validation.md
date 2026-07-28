@@ -51,14 +51,14 @@ Every detailed source location, failure path, countercontrol, confidence and acc
 | `OPS-007`   | validated       | Medium          | `docs/findings/F-SUPPLY-001-production-advisory-gate.md`       | Distinct proof tuple and remediation; source, counterevidence and acceptance are preserved in the registered finding.    |
 | `OPS-008`   | validated       | Medium          | `docs/findings/F-SUPPLY-002-immutable-build-inputs.md`         | Distinct proof tuple and remediation; source, counterevidence and acceptance are preserved in the registered finding.    |
 | `ARCH-001`  | validated       | Medium          | `docs/findings/F-SEC-006-sse-session-lifecycle.md`             | Exact duplicate of canonical `SEC-STD-A09-001`; no second project finding.                                               |
-| `ARCH-003`  | validated       | Medium          | `docs/findings/F-SEC-003-admin-role-recheck.md`                | Exact duplicate of canonical `SEC-STD-A04-002`; no second project finding.                                               |
+| `ARCH-003`  | validated       | Medium          | `F-SEC-003` (closed 2026-07-28)                                | Exact duplicate of canonical `SEC-STD-A04-002`; no second project finding.                                               |
 | `ARCH-008`  | rejected        | High hypothesis | `F-SEC-012`, `F-SEC-013`, `F-SEC-014`                          | Fresh independent review downgraded the components and rejected the aggregate as three already-canonical proof tuples.   |
 | `DYN-002`   | needs_follow_up | Low             | No registry file                                               | One full-suite failure followed by four isolated passes cannot distinguish a flaky assertion from a brief UI-state race. |
 
 ## Existing And Security Finding Reconciliation
 
 - All 19 completed Codex Security Standard findings were imported into self-contained `F-SEC-001` through `F-SEC-019` registry files. Each wrapper records the canonical `SEC-STD-*` ID, generated writeup path, exact source/failure path, counterevidence, confidence and closure contract.
-- `ARCH-001` is subsumed by `SEC-STD-A09-001` / `F-SEC-006`; `ARCH-003` is subsumed by `SEC-STD-A04-002` / `F-SEC-003`.
+- `ARCH-001` is subsumed by `SEC-STD-A09-001` / `F-SEC-006`; `ARCH-003` is subsumed by closed `SEC-STD-A04-002` / `F-SEC-003`.
 - `ARCH-008` combined pre-dedupe unread work, synchronous realtime fanout and unqueued push fanout. Those are already separate `SEC-STD-A13-001`, `A13-003` and `A13-004` remediations. Registering a fourth aggregate would violate one-finding/one-risk and remediation-subsumption rules.
 - Existing validated `F-AUTH-001`, `F-CHAT-005` and `F-OPS-001` were retained. Six existing follow-up findings were retained. Superseded `F-E2E-001` was not deleted in this task; its preservation/removal rationale remains in Stage 08 and replacement `F-E2E-002` is now registered.
 
@@ -90,7 +90,7 @@ Current `main` stayed at `a61b4975ae7b59e244c0b5bbc4efd02466aa075c` throughout r
 | -------------- | ----------------- | -------------------------------------- | ------------------------------------------ | ------------------------------------------ | ----------------------------------------------------------------- |
 | `F-SEC-001`    | `SEC-STD-A03-001` | `fix/security-sec-std-a03-001`         | `400b4b75a6894c6449428b1db51949945cda7b85` | `3bdbb4d83e936722d99a116b580eb23e4df1331d` | `docs/findings/F-SEC-001-login-normalized-email-index.md`         |
 | `F-SEC-002`    | `SEC-STD-A04-001` | `fix/security-sec-std-a04-001`         | `2bf584653852315f30c980bc1d061b3a102f2ba7` | `4820a7d1ee6b2641a504b1c135f6802937033ee6` | Closed on 2026-07-28                                                 |
-| `F-SEC-003`    | `SEC-STD-A04-002` | `fix/security-sec-std-a04-002`         | `37fad9a19c8ad84a0f7140a42b41929ba038c4cb` | `6489c268f37761a81e654751bd28e8eb2c7d49a3` | `docs/findings/F-SEC-003-admin-role-recheck.md`                   |
+| `F-SEC-003`    | `SEC-STD-A04-002` | `fix/security-sec-std-a04-002`         | `37fad9a19c8ad84a0f7140a42b41929ba038c4cb` | `6489c268f37761a81e654751bd28e8eb2c7d49a3` | Closed on 2026-07-28                                                 |
 | `F-SEC-004`    | `SEC-STD-A05-001` | `fix/security-sec-std-a05-001`         | `b6f4b8f3841957adf71ae89ab0f1dd0e6d9cda3b` | `7b97b422240e39782605a301ef36ddb08865786d` | `docs/findings/F-SEC-004-passwordless-resend-cooldown.md`         |
 | `F-SEC-005`    | `SEC-STD-A07-001` | `fix/security-sec-std-a07-001`         | `54cf10ec81adfc1412db95aaaeb0ff027fdec14b` | `73bc62e2d44d380aa9b1c00117d6091783acfecb` | `docs/findings/F-SEC-005-password-reset-generation-fence.md`      |
 | `F-SEC-006`    | `SEC-STD-A09-001` | `fix/security-sec-std-a09-001`         | `47792ce3406e69e95719ffa16137f286ff3caed9` | `78f9b953ce212677f51d71d3e66317f840766b52` | `docs/findings/F-SEC-006-sse-session-lifecycle.md`                |

@@ -326,7 +326,28 @@ export function createTenantAdminAuthRepository(
           ),
         )
     },
+    async invalidateChallenge(
+      recordId: number,
+      at: Date,
+      executor: AppDatabase = db,
+    ) {
+      const [challenge] = await executor
+        .update(portalAdminLoginChallenges)
+        .set({
+          status: 'invalidated',
+          updatedAt: at,
+        })
+        .where(
+          and(
+            eq(portalAdminLoginChallenges.id, recordId),
+            eq(portalAdminLoginChallenges.tenantId, tenantId),
+            eq(portalAdminLoginChallenges.status, 'pending'),
+          ),
+        )
+        .returning(baseChallengeSelection())
 
+      return challenge ?? null
+    },
     async deleteChallenge(recordId: number, executor: AppDatabase = db) {
       await executor
         .delete(portalAdminLoginChallenges)

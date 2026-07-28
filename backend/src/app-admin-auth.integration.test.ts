@@ -6,6 +6,7 @@ import type { DatabaseClient } from './db/client.js'
 import {
   portalAdminAuditEvents,
   portalAdminLoginChallenges,
+  portalAdminSessions,
   portalTenants,
 } from './db/schema.js'
 import type { EmailMessage } from './integrations/email/smtp.js'
@@ -28,10 +29,16 @@ function extractCode(message: EmailMessage | undefined) {
   return code
 }
 
-function createAgentsFetch(getRole: () => 'administrator' | 'agent') {
+type TestChatwootAgent = {
+  email: string
+  id: number
+  role: 'administrator' | 'agent'
+}
+
+function createAgentsFetch(getAgent: () => TestChatwootAgent) {
   return vi.fn<typeof fetch>(async (requestUrl) => {
     const url = new URL(String(requestUrl))
-    const role = getRole()
+    const agent = getAgent()
 
     if (url.pathname === '/api/v1/accounts/1/agents') {
       return new Response(
@@ -39,12 +46,9 @@ function createAgentsFetch(getRole: () => 'administrator' | 'agent') {
           {
             account_id: 1,
             confirmed: true,
-            email:
-              role === 'administrator'
-                ? 'admin@example.test'
-                : 'agent@example.test',
-            id: role === 'administrator' ? 11 : 12,
-            role,
+            email: agent.email,
+            id: agent.id,
+            role: agent.role,
           },
         ]),
         {
@@ -126,9 +130,9 @@ async function seedSecondTenant(database: DatabaseClient) {
 }
 
 describe('buildApp tenant admin auth integration', () => {
+  let agent: TestChatwootAgent
   let app: ReturnType<typeof buildApp>
   let database: DatabaseClient
-  let role: 'administrator' | 'agent'
   let sentEmails: EmailMessage[]
   let tenantId: number
 
@@ -136,10 +140,14 @@ describe('buildApp tenant admin auth integration', () => {
     database = await createTestDatabase()
     tenantId = await seedDefaultTenant(database)
     await storeAdminVerificationToken({ database, tenantId })
-    role = 'administrator'
+    agent = {
+      email: 'admin@example.test',
+      id: 11,
+      role: 'administrator',
+    }
     sentEmails = []
     app = buildApp({
-      chatwootFetchFn: createAgentsFetch(() => role),
+      chatwootFetchFn: createAgentsFetch(() => agent),
       database,
       emailDelivery: {
         send: vi.fn(async (message: EmailMessage) => {
@@ -374,8 +382,116 @@ describe('buildApp tenant admin auth integration', () => {
     ).toBeUndefined()
   })
 
+  it.each([
+    {
+      currentAgentId: 11,
+      currentRole: 'agent',
+      scenario: 'role downgrade',
+    },
+    {
+      currentAgentId: 12,
+      currentRole: 'administrator',
+      scenario: 'administrator identity replacement',
+    },
+  ] as const)(
+    'rejects a valid code after Chatwoot $scenario',
+    async ({ currentAgentId, currentRole }) => {
+      const requestResponse = await app.inject({
+        headers: {
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          email: 'admin@example.test',
+        },
+        url: '/api/admin/auth/request',
+      })
+
+      expect(requestResponse.statusCode).toBe(200)
+
+      agent = {
+        email: 'admin@example.test',
+        id: currentAgentId,
+        role: currentRole,
+      }
+
+      const verifyResponse = await app.inject({
+        headers: {
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: {
+          code: extractCode(sentEmails[0]),
+          email: 'admin@example.test',
+        },
+        url: '/api/admin/auth/verify',
+      })
+
+      expect(verifyResponse.statusCode).toBe(403)
+      expect(verifyResponse.json()).toEqual({
+        error: {
+          code: 'TENANT_ADMIN_NOT_ELIGIBLE',
+          message: 'Нет прав администратора для этого портала.',
+        },
+      })
+      expect(
+        verifyResponse.cookies.find(
+          (cookie) => cookie.name === testEnv.ADMIN_SESSION_COOKIE_NAME,
+        ),
+      ).toBeUndefined()
+
+      const [challenge] = await database.db
+        .select({
+          status: portalAdminLoginChallenges.status,
+        })
+        .from(portalAdminLoginChallenges)
+        .where(
+          and(
+            eq(portalAdminLoginChallenges.tenantId, tenantId),
+            eq(portalAdminLoginChallenges.email, 'admin@example.test'),
+          ),
+        )
+
+      expect(challenge).toEqual({
+        status: 'invalidated',
+      })
+
+      const sessions = await database.db
+        .select({
+          id: portalAdminSessions.id,
+        })
+        .from(portalAdminSessions)
+        .where(eq(portalAdminSessions.tenantId, tenantId))
+
+      expect(sessions).toEqual([])
+
+      const denialEvents = await database.db
+        .select({
+          outcome: portalAdminAuditEvents.outcome,
+        })
+        .from(portalAdminAuditEvents)
+        .where(
+          and(
+            eq(portalAdminAuditEvents.tenantId, tenantId),
+            eq(portalAdminAuditEvents.action, 'admin_login_verified'),
+            eq(portalAdminAuditEvents.outcome, 'current_role_denied'),
+          ),
+        )
+
+      expect(denialEvents).toEqual([
+        {
+          outcome: 'current_role_denied',
+        },
+      ])
+    },
+  )
+
   it('rejects an agent email and does not send a code', async () => {
-    role = 'agent'
+    agent = {
+      email: 'agent@example.test',
+      id: 12,
+      role: 'agent',
+    }
 
     const response = await app.inject({
       headers: {

@@ -1,23 +1,18 @@
 import type { SmtpEmailDelivery } from '../../integrations/email/smtp.js'
 import { normalizeEmail } from '../../lib/email.js'
-import { hashPassword, verifyPassword } from '../../lib/password.js'
+import { hashPassword } from '../../lib/password.js'
 import type { TenantAdminVerificationService } from './adminVerification.js'
 import type { TenantAdminAuthRepository } from './adminAuthRepository.js'
 import { createTenantAdminAuditLogger } from './adminAuthAudit.js'
+import { verifyTenantAdminLoginCode } from './adminLoginVerification.js'
 import {
   ADMIN_LOGIN_CHALLENGE_TTL_SECONDS,
   ADMIN_LOGIN_RESEND_COOLDOWN_SECONDS,
-  ADMIN_SESSION_TTL_HOURS,
   buildAdminLoginEmail,
   buildChallengeRequestedResponse,
   createAdminLoginCode,
-  createAdminSessionToken,
-  createChallengeNotFoundOrInvalidatedError,
-  createCodeExpiredError,
   createDeliveryInProgressError,
   createDeliveryUnavailableError,
-  createInvalidCodeError,
-  createTooManyAttemptsError,
   hashValue,
   mapVerificationResultToError,
   type PublicTenantAdminSession,
@@ -333,153 +328,16 @@ export function createTenantAdminAuthService({
       code: string
       email: string
     }) {
-      const normalizedEmail = normalizeEmail(email)
-      const verifiedAt = now()
-
-      const verificationResult = await repository.transactionWithScopedLock(
-        normalizedEmail,
-        async (tx) => {
-          const challenge = await repository.findLatestPendingChallengeByEmail(
-            normalizedEmail,
-            tx,
-          )
-
-          if (!challenge) {
-            await audit({
-              action: 'admin_login_verified',
-              executor: tx,
-              outcome: 'challenge_not_found',
-              requestIp,
-              subjectEmail: normalizedEmail,
-              userAgent,
-            })
-
-            return { outcome: 'challenge_not_found_or_invalidated' as const }
-          }
-
-          if (challenge.expiresAt.getTime() <= verifiedAt.getTime()) {
-            await repository.expireChallenge(challenge.id, verifiedAt, tx)
-            await audit({
-              action: 'admin_login_verified',
-              actor: toPublicAdmin(challenge),
-              executor: tx,
-              outcome: 'expired',
-              requestIp,
-              subjectEmail: normalizedEmail,
-              userAgent,
-            })
-
-            return { outcome: 'expired' as const }
-          }
-
-          if (challenge.attemptsCount >= challenge.maxAttempts) {
-            await audit({
-              action: 'admin_login_verified',
-              actor: toPublicAdmin(challenge),
-              executor: tx,
-              metadata: { attemptsCount: challenge.attemptsCount },
-              outcome: 'too_many_attempts',
-              requestIp,
-              subjectEmail: normalizedEmail,
-              userAgent,
-            })
-
-            return { outcome: 'too_many_attempts' as const }
-          }
-
-          const isCodeValid = await verifyPassword(
-            code.trim(),
-            challenge.codeHash,
-          )
-
-          if (!isCodeValid) {
-            const updatedChallenge =
-              await repository.incrementChallengeAttempts({
-                executor: tx,
-                recordId: challenge.id,
-                updatedAt: verifiedAt,
-              })
-            await audit({
-              action: 'admin_login_verified',
-              actor: toPublicAdmin(challenge),
-              executor: tx,
-              metadata: { attemptsCount: updatedChallenge.attemptsCount },
-              outcome: 'invalid_code',
-              requestIp,
-              subjectEmail: normalizedEmail,
-              userAgent,
-            })
-
-            return {
-              outcome:
-                updatedChallenge.attemptsCount >= updatedChallenge.maxAttempts
-                  ? ('too_many_attempts' as const)
-                  : ('invalid_code' as const),
-            }
-          }
-
-          const verifiedChallenge = await repository.markChallengeVerified({
-            executor: tx,
-            recordId: challenge.id,
-            verifiedAt,
-          })
-          const sessionToken = createAdminSessionToken()
-          const expiresAt = new Date(
-            verifiedAt.getTime() + ADMIN_SESSION_TTL_HOURS * 60 * 60 * 1000,
-          )
-
-          await repository.createSession(
-            {
-              chatwootAgentId: verifiedChallenge.chatwootAgentId,
-              email: verifiedChallenge.email,
-              expiresAt,
-              lastSeenAt: verifiedAt,
-              role: 'administrator',
-              tokenHash: hashValue(sessionToken),
-            },
-            tx,
-          )
-
-          const admin = toPublicAdmin(verifiedChallenge)
-
-          await audit({
-            action: 'admin_login_verified',
-            actor: admin,
-            executor: tx,
-            outcome: 'success',
-            requestIp,
-            subjectEmail: normalizedEmail,
-            userAgent,
-          })
-
-          return {
-            outcome: 'verified' as const,
-            response: {
-              admin,
-              expiresAt,
-              sessionToken,
-            },
-          }
-        },
-      )
-
-      if (verificationResult.outcome === 'verified') {
-        return verificationResult.response
-      }
-
-      if (verificationResult.outcome === 'expired') {
-        throw createCodeExpiredError()
-      }
-
-      if (verificationResult.outcome === 'too_many_attempts') {
-        throw createTooManyAttemptsError()
-      }
-
-      if (verificationResult.outcome === 'invalid_code') {
-        throw createInvalidCodeError()
-      }
-
-      throw createChallengeNotFoundOrInvalidatedError()
+      return verifyTenantAdminLoginCode({
+        code,
+        email,
+        now,
+        repository,
+        requestIp,
+        tenantAdminVerificationService,
+        tenantId,
+        userAgent,
+      })
     },
 
     async logout({
