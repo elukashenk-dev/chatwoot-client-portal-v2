@@ -72,7 +72,6 @@ export function MessageComposer({
   const [voiceValidationErrorMessage, setVoiceValidationErrorMessage] =
     useState<string | null>(null)
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { focusTextarea, resizeTextarea, textareaRef } = useComposerTextarea()
   const attachmentSendRetryKey = useAttachmentSendRetryKey()
   const pendingClientMessageKeyRef = useRef<string | null>(null)
@@ -444,7 +443,6 @@ export function MessageComposer({
           canStartVoiceRecording={canStartVoiceRecording}
           disabled={disabled}
           draft={draft}
-          fileInputRef={fileInputRef}
           isAttachmentControlDisabled={isAttachmentControlDisabled}
           isAttachmentSelected={attachmentCount > 0}
           isSending={isSending}

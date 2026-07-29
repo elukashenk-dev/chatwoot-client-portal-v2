@@ -1,9 +1,12 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 import { cn } from '../../../../shared/lib/cn'
 
 type ComposerSideButtonProps = {
+  ariaExpanded?: boolean
+  ariaHaspopup?: 'dialog'
   ariaLabel: string
+  buttonRef?: RefObject<HTMLButtonElement | null>
   children: ReactNode
   disabled?: boolean
   onClick?: () => void
@@ -13,7 +16,10 @@ type ComposerSideButtonProps = {
 }
 
 export function ComposerSideButton({
+  ariaExpanded,
+  ariaHaspopup,
   ariaLabel,
+  buttonRef,
   children,
   disabled = false,
   onClick,
@@ -23,6 +29,8 @@ export function ComposerSideButton({
 }: ComposerSideButtonProps) {
   return (
     <button
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHaspopup}
       aria-label={ariaLabel}
       className={cn(
         'inline-flex h-10 w-10 items-center justify-center text-chat-outgoing transition hover:bg-white/55 hover:text-chat-outgoing/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:cursor-not-allowed disabled:text-slate-300',
@@ -30,6 +38,7 @@ export function ComposerSideButton({
       )}
       disabled={disabled}
       onClick={onClick}
+      ref={buttonRef}
       tabIndex={tabIndex}
       title={title}
       type="button"

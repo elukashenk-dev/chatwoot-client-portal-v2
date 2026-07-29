@@ -567,6 +567,29 @@ describe('MessageComposer', () => {
     })
   })
 
+  it('prepares a camera file without sending and preserves its source on explicit send', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(true)
+    const photo = new File(['photo'], 'camera.jpg', {
+      type: 'image/jpeg',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.upload(screen.getByLabelText('Камера'), photo)
+
+    expect(screen.getByText('camera.jpg')).toBeInTheDocument()
+    expect(onSendAttachmentBatch).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [expect.objectContaining({ file: photo, source: 'camera' })],
+      }),
+    )
+  })
+
   it('reuses one client message key while an unchanged batch retry fails', async () => {
     const user = userEvent.setup()
     const onSendAttachmentBatch = createAttachmentSendMock(false)

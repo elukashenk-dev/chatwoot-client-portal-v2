@@ -1,7 +1,8 @@
 import type { PointerEvent, RefObject } from 'react'
 
-import { MicrophoneIcon, PaperclipIcon } from '../../../../shared/ui/icons'
-import { COMPOSER_ATTACHMENT_ACCEPT } from '../../lib/attachmentDraft'
+import { MicrophoneIcon } from '../../../../shared/ui/icons'
+import type { AttachmentDraftSource } from '../../lib/attachmentDraft'
+import { ComposerAttachmentMenu } from './ComposerAttachmentMenu'
 import { ComposerSendButton } from './ComposerSendButton'
 import { ComposerSideButton } from './ComposerSideButton'
 import { ComposerSideControl } from './ComposerSideControl'
@@ -13,7 +14,6 @@ type ComposerInputRowProps = {
   canStartVoiceRecording: boolean
   disabled: boolean
   draft: string
-  fileInputRef: RefObject<HTMLInputElement | null>
   isAttachmentControlDisabled: boolean
   isAttachmentSelected: boolean
   isSending: boolean
@@ -21,7 +21,10 @@ type ComposerInputRowProps = {
   isVoiceRecorderBusy: boolean
   isVoiceRecorderStarting: boolean
   onDraftChange: (value: string) => void
-  onFilesSelect: (files: readonly File[]) => void
+  onFilesSelect: (
+    files: readonly File[],
+    source?: AttachmentDraftSource,
+  ) => void
   onPasteFiles: (files: readonly File[]) => boolean
   onSendButtonClick: () => void
   onSendButtonPointerDown: (event: PointerEvent<HTMLButtonElement>) => void
@@ -39,7 +42,6 @@ export function ComposerInputRow({
   canStartVoiceRecording,
   disabled,
   draft,
-  fileInputRef,
   isAttachmentControlDisabled,
   isAttachmentSelected,
   isSending,
@@ -60,37 +62,15 @@ export function ComposerInputRow({
 }: ComposerInputRowProps) {
   return (
     <div className="flex items-end gap-2" data-composer-input-row>
-      <input
-        accept={COMPOSER_ATTACHMENT_ACCEPT}
-        aria-label="Файл вложения"
-        className="sr-only"
-        disabled={isAttachmentControlDisabled}
-        onChange={(event) => {
-          const files = Array.from(event.currentTarget.files ?? [])
-
-          event.currentTarget.value = ''
-          onFilesSelect(files)
-        }}
-        multiple
-        ref={fileInputRef}
-        type="file"
-      />
       <ComposerSideControl
         control="attachment"
         isCollapsed={shouldPrioritizeTextDraft}
       >
-        <ComposerSideButton
-          ariaLabel="Прикрепить файл"
+        <ComposerAttachmentMenu
           disabled={isAttachmentControlDisabled}
-          onClick={() => {
-            fileInputRef.current?.click()
-          }}
-          shape="control"
+          onFilesSelected={onFilesSelect}
           tabIndex={shouldPrioritizeTextDraft ? -1 : undefined}
-          title="Прикрепить файл"
-        >
-          <PaperclipIcon className="h-5 w-5" />
-        </ComposerSideButton>
+        />
       </ComposerSideControl>
 
       <ComposerTextarea
