@@ -50,15 +50,33 @@ vi.mock('./message-composer/useVoiceRecorder', () => ({
   ),
 }))
 
+type MessageComposerViewProps = Parameters<typeof MessageComposerView>[0]
 type TestMessageComposerProps = Omit<
-  Parameters<typeof MessageComposerView>[0],
-  'attachmentDraft'
->
+  MessageComposerViewProps,
+  'attachmentDraft' | 'attachmentTransferState' | 'onCancelAttachmentUpload'
+> &
+  Partial<
+    Pick<
+      MessageComposerViewProps,
+      'attachmentTransferState' | 'onCancelAttachmentUpload'
+    >
+  >
 
-function MessageComposer(props: TestMessageComposerProps) {
+function MessageComposer({
+  attachmentTransferState = { percent: null, stage: 'idle' },
+  onCancelAttachmentUpload = () => {},
+  ...props
+}: TestMessageComposerProps) {
   const attachmentDraft = useAttachmentDraft()
 
-  return <MessageComposerView attachmentDraft={attachmentDraft} {...props} />
+  return (
+    <MessageComposerView
+      attachmentDraft={attachmentDraft}
+      attachmentTransferState={attachmentTransferState}
+      onCancelAttachmentUpload={onCancelAttachmentUpload}
+      {...props}
+    />
+  )
 }
 
 function renderComposer(
@@ -604,6 +622,61 @@ describe('MessageComposer', () => {
     await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
 
     expect(onSendAttachmentBatch).toHaveBeenCalledTimes(2)
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('keeps the attachment draft and retry key when upload is cancelled', async () => {
+    const user = userEvent.setup()
+    const onCancelAttachmentUpload = vi.fn()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const file = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+    const props = {
+      disabled: false,
+      errorMessage: null,
+      onCancelAttachmentUpload,
+      onCancelReply: vi.fn(),
+      onSend: vi.fn(async () => true),
+      onSendAttachmentBatch,
+      replyTarget: null,
+    }
+    const { rerender } = render(
+      <MessageComposer
+        {...props}
+        attachmentTransferState={{ percent: null, stage: 'idle' }}
+        isSending={false}
+      />,
+    )
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.type(textarea, 'Подпись')
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    rerender(
+      <MessageComposer
+        {...props}
+        attachmentTransferState={{ percent: 42, stage: 'uploading' }}
+        isSending
+      />,
+    )
+
+    expect(screen.getByText('Загрузка 42%')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Отменить загрузку' }))
+    expect(onCancelAttachmentUpload).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('invoice.pdf')).toBeVisible()
+    expect(textarea).toHaveValue('Подпись')
+
+    rerender(
+      <MessageComposer
+        {...props}
+        attachmentTransferState={{ percent: null, stage: 'idle' }}
+        isSending={false}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
     expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).toBe(
       onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
     )

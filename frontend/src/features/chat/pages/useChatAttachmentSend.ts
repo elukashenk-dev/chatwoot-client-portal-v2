@@ -3,17 +3,41 @@ import {
   type MutableRefObject,
   type SetStateAction,
   useCallback,
+  useEffect,
+  useRef,
   useState,
 } from 'react'
 
-import { sendChatAttachments } from '../api/chatClient'
+import { ChatApiClientError, sendChatAttachments } from '../api/chatClient'
+import type { AttachmentTransferState } from '../api/chatAttachmentTransport'
 import type { SendAttachmentBatchInput } from '../components/message-composer/types'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
   type ChatPageState,
 } from './chatPageState'
-import { withChatRecoveryRequestTimeout } from './chatRecoveryRequestTimeout'
+
+const IDLE_ATTACHMENT_TRANSFER_STATE = {
+  percent: null,
+  stage: 'idle',
+} satisfies AttachmentTransferState
+const ATTACHMENT_SEND_ERROR_MESSAGE =
+  'Не удалось загрузить файлы. Они остались в сообщении — попробуйте ещё раз.'
+
+function getAttachmentSendErrorMessage(error: unknown) {
+  const retryAfterSeconds =
+    error instanceof ChatApiClientError ? error.retryAfterSeconds : null
+
+  if (
+    retryAfterSeconds !== null &&
+    retryAfterSeconds >= 1 &&
+    retryAfterSeconds <= 3600
+  ) {
+    return `${ATTACHMENT_SEND_ERROR_MESSAGE} Попробуйте через ${retryAfterSeconds} сек.`
+  }
+
+  return ATTACHMENT_SEND_ERROR_MESSAGE
+}
 
 type UseChatAttachmentSendOptions = {
   handleConnectionUnavailableError: (error: unknown) => boolean
@@ -36,12 +60,43 @@ export function useChatAttachmentSend({
   pageState,
   setPageState,
 }: UseChatAttachmentSendOptions) {
+  const activeAbortControllerRef = useRef<AbortController | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
+  const [transferState, setTransferState] = useState<AttachmentTransferState>(
+    IDLE_ATTACHMENT_TRANSFER_STATE,
+  )
 
   const clearSendError = useCallback(() => {
     setSendErrorMessage(null)
+    setTransferState((currentState) =>
+      currentState.stage === 'error'
+        ? IDLE_ATTACHMENT_TRANSFER_STATE
+        : currentState,
+    )
   }, [])
+
+  const cancelAttachmentUpload = useCallback(() => {
+    const abortController = activeAbortControllerRef.current
+
+    if (!abortController || transferState.stage !== 'uploading') {
+      return
+    }
+
+    activeAbortControllerRef.current = null
+    abortController.abort()
+    setIsSending(false)
+    setSendErrorMessage(null)
+    setTransferState(IDLE_ATTACHMENT_TRANSFER_STATE)
+  }, [transferState.stage])
+
+  useEffect(
+    () => () => {
+      activeAbortControllerRef.current?.abort()
+      activeAbortControllerRef.current = null
+    },
+    [],
+  )
 
   const handleSendAttachmentBatch = useCallback(
     async ({
@@ -58,23 +113,36 @@ export function useChatAttachmentSend({
         return false
       }
 
-      const threadId = pageState.selectedThreadId
+      if (activeAbortControllerRef.current) {
+        return false
+      }
 
+      const threadId = pageState.selectedThreadId
+      const abortController = new AbortController()
+
+      activeAbortControllerRef.current = abortController
       onAttachmentSendStarted?.()
       setIsSending(true)
       setSendErrorMessage(null)
+      setTransferState({ percent: 0, stage: 'preparing' })
 
       try {
-        const sendResult = await withChatRecoveryRequestTimeout((signal) =>
-          sendChatAttachments({
-            attachments: items.map(({ file }) => file),
-            clientMessageKey,
-            content,
-            replyToMessageId,
-            signal,
-            threadId,
-          }),
-        )
+        const sendResult = await sendChatAttachments({
+          attachments: items.map(({ file }) => file),
+          clientMessageKey,
+          content,
+          onTransferStateChange: (nextTransferState) => {
+            if (
+              isMountedRef.current &&
+              activeAbortControllerRef.current === abortController
+            ) {
+              setTransferState(nextTransferState)
+            }
+          },
+          replyToMessageId,
+          signal: abortController.signal,
+          threadId,
+        })
 
         if (!isMountedRef.current) {
           return false
@@ -85,11 +153,13 @@ export function useChatAttachmentSend({
           !sendResult.sentMessage ||
           sendResult.activeThread?.id !== threadId
         ) {
-          setSendErrorMessage('Не удалось отправить файл. Попробуйте еще раз.')
+          setSendErrorMessage(ATTACHMENT_SEND_ERROR_MESSAGE)
+          setTransferState({ percent: null, stage: 'error' })
           return false
         }
 
         markBrowserOnline()
+        setTransferState(IDLE_ATTACHMENT_TRANSFER_STATE)
         setPageState((currentState) => {
           if (currentState.selectedThreadId !== threadId) {
             return currentState
@@ -112,28 +182,35 @@ export function useChatAttachmentSend({
 
         return true
       } catch (error) {
+        if (abortController.signal.aborted) {
+          return false
+        }
+
         if (!isMountedRef.current) {
           return false
         }
 
         if (await handleUnauthorizedChatError(error)) {
+          setSendErrorMessage(null)
+          setTransferState(IDLE_ATTACHMENT_TRANSFER_STATE)
           return false
         }
+
+        setSendErrorMessage(getAttachmentSendErrorMessage(error))
+        setTransferState({ percent: null, stage: 'error' })
 
         if (handleConnectionUnavailableError(error)) {
           return false
         }
 
-        setSendErrorMessage(
-          error instanceof Error
-            ? error.message
-            : 'Не удалось отправить файл. Попробуйте еще раз.',
-        )
-
         return false
       } finally {
-        if (isMountedRef.current) {
-          setIsSending(false)
+        if (activeAbortControllerRef.current === abortController) {
+          activeAbortControllerRef.current = null
+
+          if (isMountedRef.current) {
+            setIsSending(false)
+          }
         }
       }
     },
@@ -151,10 +228,12 @@ export function useChatAttachmentSend({
   )
 
   return {
+    cancelAttachmentUpload,
     clearSendError,
     handleSendAttachmentBatch,
     isSending,
     sendErrorMessage,
     setSendErrorMessage,
+    transferState,
   }
 }

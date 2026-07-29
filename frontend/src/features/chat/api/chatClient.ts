@@ -13,6 +13,14 @@ import type {
   PushPublicKeyResponse,
   UserNotificationSettings,
 } from '../types'
+import {
+  ChatApiClientError,
+  parseRetryAfterSeconds,
+  sendChatAttachmentRequest,
+  type AttachmentTransferState,
+} from './chatAttachmentTransport'
+
+export { ChatApiClientError, parseRetryAfterSeconds }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 const NETWORK_ERROR_MESSAGE =
@@ -22,31 +30,6 @@ type ApiErrorResponse = {
   error?: {
     code?: string
     message?: string
-  }
-}
-
-export class ChatApiClientError extends Error {
-  readonly code?: string
-  readonly retryAfterSeconds: number | null
-  readonly statusCode: number
-
-  constructor({
-    code,
-    message,
-    retryAfterSeconds = null,
-    statusCode,
-  }: {
-    code?: string
-    message: string
-    retryAfterSeconds?: number | null
-    statusCode: number
-  }) {
-    super(message)
-
-    this.name = 'ChatApiClientError'
-    this.code = code
-    this.retryAfterSeconds = retryAfterSeconds
-    this.statusCode = statusCode
   }
 }
 
@@ -64,41 +47,15 @@ async function parseJsonBody(response: Response) {
   }
 }
 
-function parseRetryAfterSeconds(response: Response) {
-  const retryAfter = response.headers.get('Retry-After')
-
-  if (!retryAfter) {
-    return null
-  }
-
-  const seconds = Number(retryAfter)
-
-  if (Number.isFinite(seconds) && seconds > 0) {
-    return Math.ceil(seconds)
-  }
-
-  const retryAtMs = Date.parse(retryAfter)
-
-  if (!Number.isFinite(retryAtMs)) {
-    return null
-  }
-
-  const delaySeconds = Math.ceil((retryAtMs - Date.now()) / 1000)
-
-  return delaySeconds > 0 ? delaySeconds : null
-}
-
 async function request<TResponse>(
   path: string,
   {
     body,
-    formData,
     method = 'GET',
     networkErrorMessage = NETWORK_ERROR_MESSAGE,
     signal,
   }: {
     body?: unknown
-    formData?: FormData
     method?: 'DELETE' | 'GET' | 'PATCH' | 'POST'
     networkErrorMessage?: string
     signal?: AbortSignal
@@ -110,18 +67,14 @@ async function request<TResponse>(
     response = await fetch(`${API_BASE_URL}${path}`, {
       credentials: 'include',
       headers:
-        body === undefined || formData !== undefined
+        body === undefined
           ? undefined
           : {
               'Content-Type': 'application/json',
             },
       method,
       signal,
-      ...(formData !== undefined
-        ? { body: formData }
-        : body === undefined
-          ? {}
-          : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
   } catch {
     throw new ChatApiClientError({
@@ -138,7 +91,9 @@ async function request<TResponse>(
     throw new ChatApiClientError({
       code: errorPayload?.error?.code,
       message: errorPayload?.error?.message ?? networkErrorMessage,
-      retryAfterSeconds: parseRetryAfterSeconds(response),
+      retryAfterSeconds: parseRetryAfterSeconds(
+        response.headers.get('Retry-After'),
+      ),
       statusCode: response.status,
     })
   }
@@ -182,9 +137,12 @@ export async function getChatThreads({
 export async function getChatSupportAvailability({
   signal,
 }: { signal?: AbortSignal } = {}) {
-  return request<ChatSupportAvailabilityResponse>('/chat/support-availability', {
-    signal,
-  })
+  return request<ChatSupportAvailabilityResponse>(
+    '/chat/support-availability',
+    {
+      signal,
+    },
+  )
 }
 
 export async function getUserNotificationSettings() {
@@ -400,6 +358,7 @@ export async function sendChatAttachments({
   attachments,
   clientMessageKey,
   content,
+  onTransferStateChange,
   replyToMessageId,
   signal,
   threadId,
@@ -407,6 +366,7 @@ export async function sendChatAttachments({
   attachments: readonly File[]
   clientMessageKey: string
   content?: string | null
+  onTransferStateChange?: (state: AttachmentTransferState) => void
   replyToMessageId?: number | null
   signal?: AbortSignal
   threadId: string
@@ -430,11 +390,12 @@ export async function sendChatAttachments({
     formData.append('attachments', file, file.name)
   }
 
-  return request<ChatSendResult>('/chat/messages/attachments', {
+  return sendChatAttachmentRequest({
     formData,
-    method: 'POST',
     networkErrorMessage:
       'Не удалось загрузить файлы. Они остались в сообщении — попробуйте ещё раз.',
+    onTransferStateChange,
     signal,
+    url: `${API_BASE_URL}/chat/messages/attachments`,
   })
 }

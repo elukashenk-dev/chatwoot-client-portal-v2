@@ -147,13 +147,9 @@ export function ChatPage() {
     selectedThreadId: pageState.selectedThreadId,
     setHistoryErrorMessage,
   })
-  const {
-    clearSendError,
-    handleSendAttachmentBatch,
-    isSending,
-    sendErrorMessage,
-    setSendErrorMessage,
-  } = useChatAttachmentSend({
+  const { cancelAttachmentUpload, clearSendError, handleSendAttachmentBatch,
+    isSending, sendErrorMessage, setSendErrorMessage, transferState } =
+    useChatAttachmentSend({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isBrowserOnline: canUseBackend,
@@ -494,7 +490,9 @@ export function ChatPage() {
         {shouldRenderTranscript ? (
           <ChatComposerDock
             attachmentDraft={attachmentDraft}
+            attachmentTransferState={transferState}
             canSend={canSend}
+            cancelAttachmentUpload={cancelAttachmentUpload}
             handleSendAttachmentBatch={handleSendAttachmentBatch}
             handleSendMessage={handleSendMessage}
             isBrowserOnline={canUseBackend}

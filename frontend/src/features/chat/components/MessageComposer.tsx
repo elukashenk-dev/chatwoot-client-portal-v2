@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
+import type { AttachmentTransferState } from '../api/chatAttachmentTransport'
 import { ComposerAttachmentTray } from './message-composer/ComposerAttachmentTray'
 import {
   ComposerFeedback,
@@ -41,9 +42,11 @@ export type { MessageComposerReplyTarget } from './message-composer/types'
 type MessageComposerProps = {
   attachmentDraft: ReturnType<typeof useAttachmentDraft>
   attachmentDisabled?: boolean
+  attachmentTransferState: AttachmentTransferState
   disabled: boolean
   errorMessage: string | null
   isSending: boolean
+  onCancelAttachmentUpload: () => void
   onCancelReply: () => void
   onDraftTypingChange?: (draft: string) => void
   onSend: (input: SendMessageInput) => Promise<boolean>
@@ -55,9 +58,11 @@ type MessageComposerProps = {
 export function MessageComposer({
   attachmentDraft,
   attachmentDisabled = false,
+  attachmentTransferState,
   disabled,
   errorMessage,
   isSending,
+  onCancelAttachmentUpload,
   onCancelReply,
   onDraftTypingChange,
   onSend,
@@ -471,8 +476,10 @@ export function MessageComposer({
         />
 
         <ComposerFeedback
+          attachmentTransferState={attachmentTransferState}
           errorMessage={composerErrorMessage}
           normalizedDraftLength={normalizedDraftLength}
+          onCancelAttachmentUpload={onCancelAttachmentUpload}
           shouldShowTextLengthCounter={shouldShowTextLengthCounter}
           textLengthErrorMessage={textLengthErrorMessage}
         />

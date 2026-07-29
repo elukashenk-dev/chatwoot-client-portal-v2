@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { sendChatAttachmentRequest } from '../api/chatAttachmentTransport'
 import type { ChatMessagesSnapshot } from '../types'
 import {
   MockEventSource,
@@ -10,7 +11,23 @@ import {
   setupOfflineChatTestEnvironment,
 } from '../../../test/chatPageTestHarness'
 import { offlineOutboxStore } from '../../offline/offlineOutboxStore'
+import {
+  createBatchAttachmentSendResult,
+  createVoiceAttachmentSendResult,
+} from './ChatPage.attachmentTestSupport'
 
+vi.mock('../api/chatAttachmentTransport', async () => {
+  const actual = await vi.importActual<
+    typeof import('../api/chatAttachmentTransport')
+  >('../api/chatAttachmentTransport')
+
+  return {
+    ...actual,
+    sendChatAttachmentRequest: vi.fn(),
+  }
+})
+
+const sendChatAttachmentRequestMock = vi.mocked(sendChatAttachmentRequest)
 const CHAT_PAGE_LOAD_TIMEOUT = {
   timeout: 5000,
 }
@@ -180,14 +197,6 @@ describe('ChatPage', () => {
     )
   }
 
-  function getAttachmentPostCalls() {
-    return fetchMock.mock.calls.filter(
-      ([url, options]) =>
-        String(url) === '/api/chat/messages/attachments' &&
-        options?.method === 'POST',
-    )
-  }
-
   beforeEach(async () => {
     await setupOfflineChatTestEnvironment()
     vi.spyOn(document, 'hasFocus').mockReturnValue(false)
@@ -203,6 +212,7 @@ describe('ChatPage', () => {
       value: originalNavigatorMediaDevices,
     })
     fetchMock.mockReset()
+    sendChatAttachmentRequestMock.mockReset()
     MockEventSource.instances = []
     MockMediaRecorder.instances = []
     MockMediaRecorder.isTypeSupported.mockClear()
@@ -550,42 +560,10 @@ describe('ChatPage', () => {
     const user = userEvent.setup()
 
     mockInitialReadyChatResponses()
-      .mockResolvedValueOnce(createTypingSyncResponse())
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          activeThread: privateThread,
-          reason: 'none',
-          result: 'ready',
-          sentMessage: {
-            attachments: [
-              {
-                fileSize: 1024,
-                fileType: 'file',
-                id: 77,
-                name: 'signed-act.pdf',
-                thumbUrl: '',
-                url: '/api/chat/threads/private%3Ame/attachments/601/77',
-              },
-              {
-                fileSize: 512,
-                fileType: 'file',
-                id: 78,
-                name: 'notes.txt',
-                thumbUrl: '',
-                url: '/api/chat/threads/private%3Ame/attachments/601/78',
-              },
-            ],
-            authorName: 'Вы',
-            authorRole: 'current_user',
-            content: 'Черновик остается',
-            contentType: 'text',
-            createdAt: '2026-04-21T09:35:00.000Z',
-            direction: 'outgoing',
-            id: 601,
-            status: 'sent',
-          },
-        }),
-      )
+    fetchMock.mockResolvedValue(createTypingSyncResponse())
+    sendChatAttachmentRequestMock.mockResolvedValueOnce(
+      createBatchAttachmentSendResult(),
+    )
 
     renderChatRoute()
 
@@ -624,18 +602,15 @@ describe('ChatPage', () => {
       expect(textarea).toHaveFocus()
     })
 
-    const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
-    const formData = requestOptions?.body as FormData
+    const request = sendChatAttachmentRequestMock.mock.calls[0]?.[0]
+    const formData = request?.formData as FormData
     const attachments = formData.getAll('attachments') as File[]
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat/messages/attachments',
+    expect(sendChatAttachmentRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        credentials: 'include',
-        method: 'POST',
+        url: '/api/chat/messages/attachments',
       }),
     )
-    expect(requestOptions?.headers).toBeUndefined()
     expect(formData.get('clientMessageKey')).toEqual(
       expect.stringMatching(/^portal-send:/),
     )
@@ -651,11 +626,11 @@ describe('ChatPage', () => {
     ])
   })
 
-  it('times out a hanging attachment send without queueing it in the text outbox', async () => {
+  it('cancels a hanging attachment upload without queueing it in the text outbox', async () => {
     const user = userEvent.setup()
     let attachmentSignal: AbortSignal | undefined
 
-    fetchMock.mockImplementation(async (input, options) => {
+    fetchMock.mockImplementation(async (input) => {
       const url = String(input)
 
       if (url === '/api/auth/me') {
@@ -678,23 +653,20 @@ describe('ChatPage', () => {
         return createSupportAvailabilityResponse()
       }
 
-      if (
-        url === '/api/chat/messages/attachments' &&
-        options?.method === 'POST'
-      ) {
-        attachmentSignal = options.signal ?? undefined
-
-        return new Promise<Response>((_resolve, reject) => {
-          attachmentSignal?.addEventListener(
-            'abort',
-            () => reject(new DOMException('Request timed out.', 'AbortError')),
-            { once: true },
-          )
-        })
-      }
-
       throw new Error(`Unexpected request: ${url}`)
     })
+    sendChatAttachmentRequestMock.mockImplementationOnce(
+      ({ onTransferStateChange, signal }) =>
+        new Promise((_resolve, reject) => {
+          attachmentSignal = signal
+          onTransferStateChange?.({ percent: 42, stage: 'uploading' })
+          signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Request aborted.', 'AbortError')),
+            { once: true },
+          )
+        }),
+    )
 
     renderChatRoute()
 
@@ -710,15 +682,12 @@ describe('ChatPage', () => {
 
     await user.upload(screen.getByLabelText('Файл вложения'), file)
 
-    vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Отправить файл' }))
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10_000)
-    })
+    await screen.findByText('Загрузка 42%')
+    await user.click(screen.getByRole('button', { name: 'Отменить загрузку' }))
 
     expect(attachmentSignal?.aborted).toBe(true)
-    vi.useRealTimers()
 
     await waitFor(() => {
       expect(
@@ -737,32 +706,10 @@ describe('ChatPage', () => {
     const user = userEvent.setup()
     const { getUserMedia, stopTrack } = stubMicrophoneAccess()
 
-    mockInitialReadyChatResponses().mockResolvedValueOnce(
-      createJsonResponse({
-        activeThread: privateThread,
-        reason: 'none',
-        result: 'ready',
-        sentMessage: {
-          attachments: [
-            {
-              fileSize: 11,
-              fileType: 'audio',
-              id: 78,
-              name: 'voice-message.webm',
-              thumbUrl: '',
-              url: '/api/chat/threads/private%3Ame/attachments/602/78',
-            },
-          ],
-          authorName: 'Вы',
-          authorRole: 'current_user',
-          content: null,
-          contentType: 'text',
-          createdAt: '2026-04-21T09:36:00.000Z',
-          direction: 'outgoing',
-          id: 602,
-          status: 'sent',
-        },
-      }),
+    mockInitialReadyChatResponses()
+    fetchMock.mockResolvedValue(createTypingSyncResponse())
+    sendChatAttachmentRequestMock.mockResolvedValueOnce(
+      createVoiceAttachmentSendResult(),
     )
 
     renderChatRoute()
@@ -787,15 +734,13 @@ describe('ChatPage', () => {
     expect(await screen.findByText('voice-message.webm')).toBeInTheDocument()
     expect(stopTrack).toHaveBeenCalledTimes(1)
 
-    const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
-    const formData = requestOptions?.body as FormData
+    const request = sendChatAttachmentRequestMock.mock.calls[0]?.[0]
+    const formData = request?.formData as FormData
     const [attachment] = formData.getAll('attachments') as File[]
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat/messages/attachments',
+    expect(sendChatAttachmentRequestMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        credentials: 'include',
-        method: 'POST',
+        url: '/api/chat/messages/attachments',
       }),
     )
     expect(formData.get('clientMessageKey')).toEqual(

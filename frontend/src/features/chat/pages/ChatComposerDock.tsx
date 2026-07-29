@@ -1,4 +1,5 @@
 import { MessageComposer } from '../components/MessageComposer'
+import type { AttachmentTransferState } from '../api/chatAttachmentTransport'
 import type {
   MessageComposerReplyTarget,
   SendAttachmentBatchInput,
@@ -10,7 +11,9 @@ import { useChatTypingSync } from './useChatTypingSync'
 
 type ChatComposerDockProps = {
   attachmentDraft: ReturnType<typeof useAttachmentDraft>
+  attachmentTransferState: AttachmentTransferState
   canSend: boolean
+  cancelAttachmentUpload: () => void
   handleSendAttachmentBatch: (
     input: SendAttachmentBatchInput,
   ) => Promise<boolean>
@@ -25,7 +28,9 @@ type ChatComposerDockProps = {
 
 export function ChatComposerDock({
   attachmentDraft,
+  attachmentTransferState,
   canSend,
+  cancelAttachmentUpload,
   handleSendAttachmentBatch,
   handleSendMessage,
   isBrowserOnline,
@@ -48,9 +53,11 @@ export function ChatComposerDock({
     <MessageComposer
       attachmentDraft={attachmentDraft}
       attachmentDisabled={!isBrowserOnline}
+      attachmentTransferState={attachmentTransferState}
       disabled={!canSend}
       errorMessage={sendErrorMessage}
       isSending={isSending}
+      onCancelAttachmentUpload={cancelAttachmentUpload}
       onCancelReply={() => {
         sendTypingOff()
         onCancelReply()

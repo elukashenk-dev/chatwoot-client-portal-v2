@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import { ChatApiClientError, sendChatMessage } from './chatClient'
+import {
+  ChatApiClientError,
+  parseRetryAfterSeconds,
+  sendChatMessage,
+} from './chatClient'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -110,4 +114,11 @@ it('falls back to null retry-after metadata when the header is invalid', async (
     retryAfterSeconds: null,
     statusCode: 429,
   } satisfies Partial<ChatApiClientError>)
+})
+
+it('parses an HTTP-date Retry-After value against an explicit clock', () => {
+  const nowMs = Date.parse('2026-07-29T12:00:00.000Z')
+
+  expect(parseRetryAfterSeconds('Wed, 29 Jul 2026 12:00:07 GMT', nowMs)).toBe(7)
+  expect(parseRetryAfterSeconds(null, nowMs)).toBeNull()
 })

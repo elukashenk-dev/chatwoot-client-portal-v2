@@ -1,16 +1,23 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 
+import { sendChatAttachmentRequest } from './chatAttachmentTransport'
 import { sendChatAttachments } from './chatClient'
 
-const fetchMock = vi.fn<typeof fetch>()
+vi.mock('./chatAttachmentTransport', async () => {
+  const actual = await vi.importActual<
+    typeof import('./chatAttachmentTransport')
+  >('./chatAttachmentTransport')
 
-beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
+  return {
+    ...actual,
+    sendChatAttachmentRequest: vi.fn(),
+  }
 })
 
+const sendChatAttachmentRequestMock = vi.mocked(sendChatAttachmentRequest)
+
 afterEach(() => {
-  vi.unstubAllGlobals()
-  fetchMock.mockReset()
+  sendChatAttachmentRequestMock.mockReset()
 })
 
 it('sends an ordered attachment batch as repeated multipart fields', async () => {
@@ -21,27 +28,17 @@ it('sends an ordered attachment batch as repeated multipart fields', async () =>
     type: 'text/plain',
   })
 
-  fetchMock.mockResolvedValueOnce(
-    new Response(
-      JSON.stringify({
-        activeThread: {
-          id: 'private:me',
-          subtitle: 'Вы и поддержка',
-          title: 'Личный чат',
-          type: 'private',
-        },
-        reason: 'none',
-        result: 'ready',
-        sentMessage: null,
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        status: 200,
-      },
-    ),
-  )
+  sendChatAttachmentRequestMock.mockResolvedValueOnce({
+    activeThread: {
+      id: 'private:me',
+      subtitle: 'Вы и поддержка',
+      title: 'Личный чат',
+      type: 'private',
+    },
+    reason: 'none',
+    result: 'ready',
+    sentMessage: null,
+  })
 
   await sendChatAttachments({
     attachments: [first, second],
@@ -51,19 +48,16 @@ it('sends an ordered attachment batch as repeated multipart fields', async () =>
     threadId: 'private:me',
   })
 
-  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(sendChatAttachmentRequestMock).toHaveBeenCalledTimes(1)
 
-  const [url, options] = fetchMock.mock.calls[0] ?? []
-  const formData = options?.body as FormData
+  const request = sendChatAttachmentRequestMock.mock.calls[0]?.[0]
+  const formData = request?.formData as FormData
 
-  expect(url).toBe('/api/chat/messages/attachments')
-  expect(options).toEqual(
+  expect(request).toEqual(
     expect.objectContaining({
-      credentials: 'include',
-      method: 'POST',
+      url: '/api/chat/messages/attachments',
     }),
   )
-  expect(options?.headers).toBeUndefined()
   expect(formData.getAll('attachments')).toHaveLength(2)
   expect(
     formData.getAll('attachments').map((file) => (file as File).name),
