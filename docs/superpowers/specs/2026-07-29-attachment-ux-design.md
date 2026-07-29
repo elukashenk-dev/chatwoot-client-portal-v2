@@ -3,23 +3,27 @@
 ## Status
 
 Direction approved by the user on `2026-07-29`. This document is the written
-design for review before an implementation plan is created.
+design and implementation source of truth.
 
 The feature is a confirmed chat follow-up, not a silent expansion of the
 current operations roadmap.
 
 ## Implementation Status
 
-Slices 1–2 were implemented, reviewed and verified on `2026-07-29`. They
-established the ordered five-file/40 MiB batch boundary, plural portal API,
-compact composer tray, early browser validation, paste and file-only drop,
-mobile attachment sources, aggregate upload progress, bounded cancellation and
-manual draft-preserving retry. One batch remains one canonical Chatwoot
-message. Slice 1 also closed `F-CHAT-005`.
+Slices 1–3 are code-complete, reviewed and covered by automated checks as of
+`2026-07-29`. They establish the ordered five-file/40 MiB batch boundary,
+plural portal API, compact composer tray, early browser validation, paste and
+file-only drop, mobile attachment sources, aggregate upload progress, bounded
+cancellation, manual draft-preserving retry and a 15-minute identity-scoped
+installed-PWA share handoff. One batch remains one canonical Chatwoot message;
+system share still requires live auth, explicit destination and the normal
+Send action. Slice 1 also closed `F-CHAT-005`.
 
-Slice 3, the installed PWA share target, remains planned. The
-`Current Baseline` section below preserves the pre-implementation state that
-motivated this design.
+The design is not marked fully platform-verified because real installed-PWA
+registration smoke on Android Chromium and Windows Edge/Chrome, plus the
+iPhone/iPad fallback check, is blocked by unavailable devices and tracked in
+`F-PWA-006`. The `Current Baseline` section below preserves the
+pre-implementation state that motivated this design.
 
 ## Goal
 

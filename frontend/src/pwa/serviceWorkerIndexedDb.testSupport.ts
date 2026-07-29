@@ -11,6 +11,11 @@ type IndexedDbDeleteCall = {
   storeName: string
 }
 
+type IndexedDbGetCall = {
+  key: IDBValidKey
+  storeName: string
+}
+
 type IndexedDbIndexLookup = {
   indexName: string
   key?: IDBValidKey | IDBKeyRange
@@ -36,6 +41,7 @@ export function createServiceWorkerIndexedDbFake({
 } = {}) {
   const putCalls: IndexedDbPutCall[] = []
   const deleteCalls: IndexedDbDeleteCall[] = []
+  const getCalls: IndexedDbGetCall[] = []
   const getAllCalls: string[] = []
   const primaryCursorCalls: string[] = []
   const indexLookups: IndexedDbIndexLookup[] = []
@@ -167,8 +173,11 @@ export function createServiceWorkerIndexedDbFake({
                     },
                   )
                 },
-                get: (key: IDBValidKey) =>
-                  createRequest(() => recordsForStore.get(String(key))),
+                get: (key: IDBValidKey) => {
+                  getCalls.push({ key, storeName })
+
+                  return createRequest(() => recordsForStore.get(String(key)))
+                },
                 getAll: () => {
                   getAllCalls.push(storeName)
 
@@ -333,6 +342,7 @@ export function createServiceWorkerIndexedDbFake({
     createdStoreOptions,
     createdStores,
     deleteCalls,
+    getCalls,
     getAllCalls,
     indexLookups,
     indexedDB,

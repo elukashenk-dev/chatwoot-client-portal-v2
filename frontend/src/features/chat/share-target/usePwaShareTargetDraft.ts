@@ -26,6 +26,7 @@ import {
   type PwaShareTargetStatus,
   type UsePwaShareTargetDraftOptions,
 } from './pwaShareTargetModel'
+import { useConfirmedShareDestinationImport } from './useConfirmedShareDestinationImport'
 import { usePendingShareDraftStorageRuntime } from './usePendingShareDraftStorageRuntime'
 
 export type { PwaShareTargetController } from './pwaShareTargetModel'
@@ -45,23 +46,24 @@ export function usePwaShareTargetDraft({
   const rawDraftId = params.get(SHARE_DRAFT_QUERY_PARAM)?.trim() ?? null
   const shareDraftId = parseShareDraftId(rawDraftId)
   const shareErrorCode = params.get(SHARE_ERROR_QUERY_PARAM)?.trim() ?? null
-  const liveIdentity = useMemo<LiveShareIdentity | null>(
+  const knownIdentity = useMemo<LiveShareIdentity | null>(
     () =>
-      sessionSource === 'online' && tenant && user
+      tenant && user
         ? {
             host: window.location.host,
             tenantSlug: tenant.slug,
             userId: user.id,
           }
         : null,
-    [sessionSource, tenant, user],
+    [tenant, user],
   )
+  const liveIdentity = sessionSource === 'online' ? knownIdentity : null
   const identityKey = getIdentityKey(liveIdentity)
   const [loadedDraft, setLoadedDraft] =
     useState<OfflinePendingShareDraftRecord | null>(null)
   const [status, setStatus] = useState<PwaShareTargetStatus>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [selectedDestinationThreadId, setSelectedDestinationThreadIdState] =
+  const [selectedDestinationThreadIdState, setSelectedDestinationThreadIdState] =
     useState<string | null>(null)
   const [confirmedDestinationThreadId, setConfirmedDestinationThreadId] =
     useState<string | null>(null)
@@ -70,30 +72,23 @@ export function usePwaShareTargetDraft({
   const importingDraftIdRef = useRef<string | null>(null)
   const persistedShareItemIdsRef = useRef<readonly string[]>([])
   const refreshAttemptedDraftIdRef = useRef<string | null>(null)
-  const { liveIdentityRef, queueDraftMutation } =
+  const { getLiveIdentity, queueDraftMutation } =
     usePendingShareDraftStorageRuntime(liveIdentity)
-  const locationRef = useRef(location)
-  const optionsRef = useRef({
-    canImport,
-    pageStatus,
-    selectedThreadId,
-    threads,
-  })
-  statusRef.current = status
-  locationRef.current = location
-  optionsRef.current = {
-    canImport,
-    pageStatus,
-    selectedThreadId,
-    threads,
-  }
 
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
   const pendingDraft =
     loadedDraft && liveIdentity && hasExactIdentity(loadedDraft, liveIdentity)
       ? loadedDraft
       : null
-  const pendingDraftRef = useRef(pendingDraft)
-  pendingDraftRef.current = pendingDraft
+  const selectedDestinationThreadId =
+    selectedDestinationThreadIdState &&
+    threads.some(({ id }) => id === selectedDestinationThreadIdState)
+      ? selectedDestinationThreadIdState
+      : threads.length === 1
+        ? (threads[0]?.id ?? null)
+        : null
   const updateShareLocation = useCallback(
     ({
       clearShareParams = false,
@@ -102,8 +97,7 @@ export function usePwaShareTargetDraft({
       clearShareParams?: boolean
       threadId?: string
     }) => {
-      const currentLocation = locationRef.current
-      const nextParams = new URLSearchParams(currentLocation.search)
+      const nextParams = new URLSearchParams(location.search)
 
       if (clearShareParams) {
         nextParams.delete(SHARE_DRAFT_QUERY_PARAM)
@@ -117,14 +111,14 @@ export function usePwaShareTargetDraft({
       const search = nextParams.toString()
       navigate(
         {
-          hash: currentLocation.hash,
-          pathname: currentLocation.pathname,
+          hash: location.hash,
+          pathname: location.pathname,
           search: search ? `?${search}` : '',
         },
         { replace: true },
       )
     },
-    [navigate],
+    [location.hash, location.pathname, location.search, navigate],
   )
   const resetActiveDraft = useCallback((draftId: string) => {
     if (activeDraftIdRef.current !== draftId) {
@@ -139,56 +133,70 @@ export function usePwaShareTargetDraft({
     setSelectedDestinationThreadIdState(null)
   }, [])
   useEffect(() => {
-    if (shareErrorCode && !rawDraftId) {
-      setLoadedDraft(null)
-      setErrorMessage(getShareErrorMessage(shareErrorCode))
-      setStatus('error')
-      return
-    }
+    let isCurrent = true
 
-    if (!rawDraftId) {
-      if (statusRef.current !== 'imported') {
-        setStatus('idle')
-        setErrorMessage(null)
+    const synchronizeDraft = async () => {
+      await Promise.resolve()
+
+      if (!isCurrent) {
+        return
       }
-      return
-    }
 
-    if (!shareDraftId) {
+      if (shareErrorCode && !rawDraftId) {
+        setLoadedDraft(null)
+        setErrorMessage(getShareErrorMessage(shareErrorCode))
+        setStatus('error')
+        return
+      }
+
+      if (!rawDraftId) {
+        if (statusRef.current !== 'imported') {
+          setStatus('idle')
+          setErrorMessage(null)
+        }
+        return
+      }
+
+      if (!shareDraftId) {
+        setLoadedDraft(null)
+        setErrorMessage(getGenericShareErrorMessage())
+        setStatus('error')
+        return
+      }
+
+      activeDraftIdRef.current = shareDraftId
+
+      if (!liveIdentity) {
+        setLoadedDraft(null)
+        setStatus('checking-session')
+        setErrorMessage(null)
+
+        if (refreshAttemptedDraftIdRef.current !== shareDraftId) {
+          refreshAttemptedDraftIdRef.current = shareDraftId
+          void refreshSession().catch(() => {
+            if (isCurrent) {
+              setErrorMessage(
+                'Не удалось проверить сессию. Попробуйте ещё раз.',
+              )
+              setStatus('error')
+            }
+          })
+        }
+        return
+      }
+
+      refreshAttemptedDraftIdRef.current = null
       setLoadedDraft(null)
-      setErrorMessage(getGenericShareErrorMessage())
-      setStatus('error')
-      return
-    }
-
-    activeDraftIdRef.current = shareDraftId
-
-    if (!liveIdentity) {
-      setLoadedDraft(null)
+      setSelectedDestinationThreadIdState(null)
       setStatus('checking-session')
       setErrorMessage(null)
 
-      if (refreshAttemptedDraftIdRef.current !== shareDraftId) {
-        refreshAttemptedDraftIdRef.current = shareDraftId
-        void refreshSession().catch(() => {
-          setErrorMessage('Не удалось проверить сессию. Попробуйте ещё раз.')
-          setStatus('error')
+      try {
+        const draft = await readPendingShareDraft({
+          ...liveIdentity,
+          draftId: shareDraftId,
         })
-      }
-      return
-    }
 
-    refreshAttemptedDraftIdRef.current = null
-    setLoadedDraft(null)
-    setStatus('checking-session')
-    setErrorMessage(null)
-    let isCurrent = true
-
-    void readPendingShareDraft({
-      ...liveIdentity,
-      draftId: shareDraftId,
-    })
-      .then(async (draft) => {
         if (!isCurrent) {
           return
         }
@@ -208,19 +216,16 @@ export function usePwaShareTargetDraft({
         }
 
         setLoadedDraft(draft)
-        setSelectedDestinationThreadIdState(
-          optionsRef.current.threads.length === 1
-            ? (optionsRef.current.threads[0]?.id ?? null)
-            : null,
-        )
         setStatus('choosing-destination')
-      })
-      .catch(() => {
+      } catch {
         if (isCurrent) {
           setErrorMessage('Не удалось открыть временно сохранённые файлы.')
           setStatus('error')
         }
-      })
+      }
+    }
+
+    void synchronizeDraft()
 
     return () => {
       isCurrent = false
@@ -235,49 +240,29 @@ export function usePwaShareTargetDraft({
     shareErrorCode,
   ])
 
-  useEffect(() => {
-    if (status !== 'choosing-destination') {
-      return
-    }
-
-    if (threads.length === 1) {
-      setSelectedDestinationThreadIdState(threads[0]?.id ?? null)
-      return
-    }
-
-    if (
-      selectedDestinationThreadId &&
-      !threads.some(({ id }) => id === selectedDestinationThreadId)
-    ) {
-      setSelectedDestinationThreadIdState(null)
-    }
-  }, [selectedDestinationThreadId, status, threads])
-
   const importPendingDraft = useCallback(
     async (threadId: string) => {
-      const draft = pendingDraftRef.current
-      const currentIdentity = liveIdentityRef.current
-      const currentOptions = optionsRef.current
+      const currentIdentity = getLiveIdentity()
 
       if (
-        !draft ||
+        !pendingDraft ||
         !currentIdentity ||
-        !hasExactIdentity(draft, currentIdentity) ||
-        !currentOptions.canImport ||
-        currentOptions.pageStatus !== 'ready' ||
-        currentOptions.selectedThreadId !== threadId ||
-        !currentOptions.threads.some(({ id }) => id === threadId) ||
-        importingDraftIdRef.current === draft.draftId
+        !hasExactIdentity(pendingDraft, currentIdentity) ||
+        !canImport ||
+        pageStatus !== 'ready' ||
+        selectedThreadId !== threadId ||
+        !threads.some(({ id }) => id === threadId) ||
+        importingDraftIdRef.current === pendingDraft.draftId
       ) {
         return
       }
 
-      importingDraftIdRef.current = draft.draftId
+      importingDraftIdRef.current = pendingDraft.draftId
       setErrorMessage(null)
 
       try {
         const admission = addFiles(
-          draft.files.map(toSharedFile),
+          pendingDraft.files.map(toSharedFile),
           'share-target',
         )
         const acceptedSharedItems = admission.accepted.filter(
@@ -294,16 +279,18 @@ export function usePwaShareTargetDraft({
           return
         }
 
-        await queueDraftMutation(draft.draftId, (scope) =>
+        await queueDraftMutation(pendingDraft.draftId, (scope) =>
           replacePendingShareDraftFiles({
             ...scope,
             files: acceptedSharedItems.map(({ file }) => file),
           }),
         )
 
+        const identityAfterWrite = getLiveIdentity()
+
         if (
-          !liveIdentityRef.current ||
-          !hasExactIdentity(draft, liveIdentityRef.current)
+          !identityAfterWrite ||
+          !hasExactIdentity(pendingDraft, identityAfterWrite)
         ) {
           setLoadedDraft(null)
           return
@@ -325,43 +312,35 @@ export function usePwaShareTargetDraft({
         importingDraftIdRef.current = null
       }
     },
-    [addFiles, queueDraftMutation, updateShareLocation],
+    [
+      addFiles,
+      canImport,
+      getLiveIdentity,
+      pageStatus,
+      pendingDraft,
+      queueDraftMutation,
+      selectedThreadId,
+      threads,
+      updateShareLocation,
+    ],
   )
 
-  useEffect(() => {
-    if (!confirmedDestinationThreadId) {
-      return
-    }
-
-    if (pageStatus === 'error') {
-      setConfirmedDestinationThreadId(null)
-      setErrorMessage('Не удалось открыть выбранный чат.')
-      return
-    }
-
-    if (
-      canImport &&
-      pageStatus === 'ready' &&
-      selectedThreadId === confirmedDestinationThreadId
-    ) {
-      void importPendingDraft(confirmedDestinationThreadId)
-    }
-  }, [
+  useConfirmedShareDestinationImport({
     canImport,
     confirmedDestinationThreadId,
     importPendingDraft,
     pageStatus,
     selectedThreadId,
-  ])
+    setConfirmedDestinationThreadId,
+    setErrorMessage,
+  })
 
   const confirmDestination = useCallback(
     async (threadId: string) => {
-      const currentOptions = optionsRef.current
-
       if (
-        !pendingDraftRef.current ||
-        !liveIdentityRef.current ||
-        !currentOptions.threads.some(({ id }) => id === threadId)
+        !pendingDraft ||
+        !getLiveIdentity() ||
+        !threads.some(({ id }) => id === threadId)
       ) {
         setErrorMessage('Выбранный чат недоступен.')
         return
@@ -370,21 +349,28 @@ export function usePwaShareTargetDraft({
       setSelectedDestinationThreadIdState(threadId)
 
       if (
-        currentOptions.selectedThreadId !== threadId ||
-        currentOptions.pageStatus !== 'ready' ||
-        !currentOptions.canImport
+        selectedThreadId !== threadId ||
+        pageStatus !== 'ready' ||
+        !canImport
       ) {
         setConfirmedDestinationThreadId(threadId)
-        setErrorMessage(
-          currentOptions.canImport ? null : 'Дождитесь подключения к сети.',
-        )
+        setErrorMessage(canImport ? null : 'Дождитесь подключения к сети.')
         updateShareLocation({ threadId })
         return
       }
 
       await importPendingDraft(threadId)
     },
-    [importPendingDraft, updateShareLocation],
+    [
+      canImport,
+      getLiveIdentity,
+      importPendingDraft,
+      pageStatus,
+      pendingDraft,
+      selectedThreadId,
+      threads,
+      updateShareLocation,
+    ],
   )
 
   const afterCanonicalAttachmentBatchSend = useCallback(
@@ -462,21 +448,34 @@ export function usePwaShareTargetDraft({
   const cancelShareDraft = useCallback(async () => {
     const draftId = activeDraftIdRef.current ?? shareDraftId
 
-    try {
-      if (draftId) {
-        await queueDraftMutation(draftId, deletePendingShareDraft)
-        resetActiveDraft(draftId)
+    if (draftId) {
+      if (!knownIdentity) {
+        setErrorMessage(
+          'Не удалось удалить переданные файлы без подтверждённой сессии.',
+        )
+        setStatus('error')
+        return
       }
-    } catch {
-      // The bounded record still expires even if local storage is unavailable.
-    } finally {
-      setLoadedDraft(null)
-      setErrorMessage(null)
-      setStatus('idle')
-      updateShareLocation({ clearShareParams: true })
+
+      try {
+        await deletePendingShareDraft({ ...knownIdentity, draftId })
+      } catch {
+        setErrorMessage(
+          'Не удалось удалить переданные файлы. Попробуйте ещё раз.',
+        )
+        setStatus('error')
+        return
+      }
+
+      resetActiveDraft(draftId)
     }
+
+    setLoadedDraft(null)
+    setErrorMessage(null)
+    setStatus('idle')
+    updateShareLocation({ clearShareParams: true })
   }, [
-    queueDraftMutation,
+    knownIdentity,
     resetActiveDraft,
     shareDraftId,
     updateShareLocation,

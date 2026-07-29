@@ -60,7 +60,6 @@ import { useOptimisticTextSend } from './useOptimisticTextSend'
 import { useTranscriptEdgeState } from './useTranscriptEdgeState'
 
 export function ChatPage() {
-  const attachmentDraft = useAttachmentDraft()
   const isMountedRef = useRef(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -69,6 +68,7 @@ export function ChatPage() {
   const { refreshSession, sessionSource, user } = useAuthSession()
   const tenantSlug = tenant?.slug ?? null
   const userId = user?.id ?? null
+  const attachmentDraft = useAttachmentDraft(JSON.stringify([tenantSlug, userId]))
   const requestedThreadId = readChatThreadIdFromSearch(location.search)
   const [startupChatFallback] = useState(() =>
     tenantSlug && userId !== null

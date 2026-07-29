@@ -9,12 +9,16 @@ export function usePendingShareDraftStorageRuntime(
 ) {
   const liveIdentityRef = useRef(liveIdentity)
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
-  liveIdentityRef.current = liveIdentity
+
+  useEffect(() => {
+    liveIdentityRef.current = liveIdentity
+  }, [liveIdentity])
 
   useEffect(() => {
     void pruneExpiredPendingShareDrafts().catch(() => undefined)
   }, [])
 
+  const getLiveIdentity = useCallback(() => liveIdentityRef.current, [])
   const queueDraftMutation = useCallback(
     (
       draftId: string,
@@ -39,5 +43,5 @@ export function usePendingShareDraftStorageRuntime(
     [],
   )
 
-  return { liveIdentityRef, queueDraftMutation }
+  return { getLiveIdentity, queueDraftMutation }
 }

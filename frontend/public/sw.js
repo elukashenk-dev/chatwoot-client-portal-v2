@@ -418,12 +418,37 @@ function isPwaShareFile(value) {
 async function stagePwaShareDraft({ files, host, identity, now }) {
   const database = await openPortalOfflineDatabase()
   const transaction = database.transaction(
-    'pending_share_drafts',
+    [
+      'last_active_identities',
+      'local_device_signouts',
+      'pending_share_drafts',
+    ],
     'readwrite',
   )
   const store = transaction.objectStore('pending_share_drafts')
 
   try {
+    const currentIdentity = await idbRequestToPromise(
+      transaction.objectStore('last_active_identities').get(host),
+    )
+    const currentSignout = await idbRequestToPromise(
+      transaction.objectStore('local_device_signouts').get(host),
+    )
+
+    if (
+      !isLastActiveIdentityRecord(currentIdentity) ||
+      currentIdentity.host !== host ||
+      currentIdentity.tenantSlug !== identity.tenantSlug ||
+      currentIdentity.userId !== identity.userId ||
+      (isLocalDeviceSignoutRecord(currentSignout) &&
+        currentSignout.host === host &&
+        currentSignout.tenantSlug === identity.tenantSlug &&
+        currentSignout.userId === identity.userId)
+    ) {
+      await idbTransactionDone(transaction)
+      return { draftId: null, errorCode: 'session_required' }
+    }
+
     await pruneExpiredPwaShareDraftKeys(store, now)
 
     const existingRecord = await idbRequestToPromise(

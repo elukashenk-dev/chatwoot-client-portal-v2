@@ -64,11 +64,14 @@ execution-plan детали здесь не хранятся.
 - Attachment upload admission runs before multipart body reads: each user has
   five starts per minute across chats, each backend process holds at most two
   active uploads, and complete request receipt is limited to five minutes.
-- Attachment batch and universal input UX is implemented: one message can
-  contain up to five ordered files within 40 MiB, while picker, clipboard,
-  file-only drag-and-drop and mobile photo/camera/file controls share one local
-  draft; aggregate upload progress, upload-only cancellation and manual
-  draft-preserving retry remain online-only.
+- Attachment UX program is implemented: one message can contain up to five
+  ordered files within 40 MiB; picker, clipboard, file-only drag-and-drop and
+  mobile photo/camera/file controls share one previewable local draft with
+  progress, upload-only cancellation and manual retry. Supported installed
+  PWAs can also receive PNG/JPEG/WebP through a bounded 15-minute
+  host/tenant/user share draft that still requires live auth, explicit
+  destination and `Отправить`; real-device share-sheet registration remains
+  tracked in `F-PWA-006`.
 - Group member avatars render in group info and transcript when backend can map
   a participant/contact; unknown group authors keep initials fallback.
 - Support messages in group transcripts are visually marked with compact
@@ -323,6 +326,6 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Merge the Compose-readiness diagnostics fix, then obtain explicit approval
-  for a fresh staged `prepare` from clean `main`; `activate` remains a separate
-  approval after that candidate is reviewed.
+- After explicit approval, merge the verified PWA share-target branch into
+  `main`, then complete the real-device platform smoke from `F-PWA-006` before
+  advertising or rolling out system sharing in production.

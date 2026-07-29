@@ -20,17 +20,42 @@ function summarizeRejections(
   return rejections.map((rejection) => rejection.message).join(' ')
 }
 
-export function useAttachmentDraft() {
+export function useAttachmentDraft(scopeKey: string | null = null) {
   const [items, setItems] = useState<AttachmentDraftItem[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [previewUrls, setPreviewUrls] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   )
+  const [draftScopeKey, setDraftScopeKey] = useState(scopeKey)
   const itemsRef = useRef(items)
   const previewUrlsRef = useRef(new Map<string, string>())
+  const draftScopeKeyRef = useRef(scopeKey)
+
+  const resetDraft = useCallback((nextScopeKey: string | null) => {
+    for (const previewUrl of previewUrlsRef.current.values()) {
+      URL.revokeObjectURL(previewUrl)
+    }
+
+    const nextItems: AttachmentDraftItem[] = []
+    const nextPreviewUrls = new Map<string, string>()
+
+    draftScopeKeyRef.current = nextScopeKey
+    itemsRef.current = nextItems
+    previewUrlsRef.current = nextPreviewUrls
+    setDraftScopeKey(nextScopeKey)
+    setErrorMessage(null)
+    setItems(nextItems)
+    setPreviewUrls(nextPreviewUrls)
+
+    return nextItems
+  }, [])
 
   const addFiles = useCallback(
     (files: readonly File[], source: AttachmentDraftSource) => {
+      if (draftScopeKeyRef.current !== scopeKey) {
+        resetDraft(scopeKey)
+      }
+
       const admission = admitAttachmentFiles({
         currentItems: itemsRef.current,
         files,
@@ -55,7 +80,7 @@ export function useAttachmentDraft() {
 
       return admission
     },
-    [],
+    [resetDraft, scopeKey],
   )
 
   const removeItem = useCallback((itemId: string) => {
@@ -78,23 +103,28 @@ export function useAttachmentDraft() {
     return nextItems
   }, [])
 
-  const clearItems = useCallback(() => {
-    for (const previewUrl of previewUrlsRef.current.values()) {
-      URL.revokeObjectURL(previewUrl)
+  const clearItems = useCallback(
+    () => resetDraft(scopeKey),
+    [resetDraft, scopeKey],
+  )
+
+  useEffect(() => {
+    if (draftScopeKey === scopeKey) {
+      return
     }
 
-    const nextPreviewUrls = new Map<string, string>()
+    let isCurrent = true
 
-    previewUrlsRef.current = nextPreviewUrls
-    const nextItems: AttachmentDraftItem[] = []
+    void Promise.resolve().then(() => {
+      if (isCurrent) {
+        resetDraft(scopeKey)
+      }
+    })
 
-    itemsRef.current = nextItems
-    setPreviewUrls(nextPreviewUrls)
-    setItems(nextItems)
-    setErrorMessage(null)
-
-    return nextItems
-  }, [])
+    return () => {
+      isCurrent = false
+    }
+  }, [draftScopeKey, resetDraft, scopeKey])
 
   useEffect(
     () => () => {
@@ -107,24 +137,29 @@ export function useAttachmentDraft() {
     [],
   )
 
+  const isCurrentScope = draftScopeKey === scopeKey
+  const visibleItems = useMemo(
+    () => (isCurrentScope ? items : []),
+    [isCurrentScope, items],
+  )
   const viewItems = useMemo<AttachmentDraftViewItem[]>(
     () =>
-      items.map((item) => ({
+      visibleItems.map((item) => ({
         ...item,
-        previewUrl: previewUrls.get(item.id) ?? null,
+        previewUrl: isCurrentScope ? (previewUrls.get(item.id) ?? null) : null,
       })),
-    [items, previewUrls],
+    [isCurrentScope, previewUrls, visibleItems],
   )
   const totalBytes = useMemo(
-    () => items.reduce((sum, item) => sum + item.file.size, 0),
-    [items],
+    () => visibleItems.reduce((sum, item) => sum + item.file.size, 0),
+    [visibleItems],
   )
 
   return {
     addFiles,
     clearItems,
-    errorMessage,
-    items,
+    errorMessage: isCurrentScope ? errorMessage : null,
+    items: visibleItems,
     removeItem,
     totalBytes,
     viewItems,

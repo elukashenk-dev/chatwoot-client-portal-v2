@@ -357,14 +357,20 @@
   Chatwoot access и final delivery status. Service worker кэширует app
   shell/assets и имеет только узкое исключение для scoped chat avatar proxy
   image routes из `/api`; остальные `/api/*`, attachments и authority routes
-  не перехватываются service-worker cache boundary.
+  не перехватываются service-worker cache boundary. A 15-minute
+  tenant/user-scoped pending system-share image draft is the only local binary
+  staging exception. It is not an outbox, requires live auth and explicit
+  destination/Send, and is deleted on success, cancel, signout, mismatch or
+  expiry.
 - граница:
   read-only cached auth/chat open offline only until backend `sessionExpiresAt`.
   Old browser auth cache fields/formats are not a compatibility contract and
-  may be discarded when the offline auth shape changes. attachments/voice
-  остаются online-only. Background Sync используется только как progressive
-  enhancement для text outbox drain; foreground drain on app
-  open/online/visibility остается primary path, особенно для iOS/iPadOS.
+  may be discarded when the offline auth shape changes. Attachment delivery и
+  voice остаются online-only; pending system-share draft только передает
+  bounded файлы в foreground composer и никогда не отправляет их. Background
+  Sync используется только как progressive enhancement для text outbox drain;
+  foreground drain on app open/online/visibility остается primary path,
+  особенно для iOS/iPadOS.
 - причина:
   offline-first нужен для устойчивого UX при плохой связи, но выдача Chatwoot
   или send authority в browser нарушила бы главный security boundary портала.

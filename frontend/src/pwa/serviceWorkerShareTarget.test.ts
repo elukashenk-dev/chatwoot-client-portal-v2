@@ -52,6 +52,33 @@ async function createShareRequest(files: File[]) {
   return createShareTargetNavigationRequest({ formData })
 }
 
+async function createDelayedShareRequest(files: File[]) {
+  const encodedRequest = await createShareRequest(files)
+  const encodedBody = new Uint8Array(await encodedRequest.arrayBuffer())
+  let releaseBody!: () => void
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encodedBody.slice(0, 1))
+      releaseBody = () => {
+        controller.enqueue(encodedBody.slice(1))
+        controller.close()
+      }
+    },
+  })
+
+  return {
+    releaseBody,
+    request: {
+      body,
+      destination: 'document',
+      headers: encodedRequest.headers,
+      method: 'POST',
+      mode: 'navigate',
+      url: SHARE_TARGET_URL,
+    } as Request,
+  }
+}
+
 async function dispatchFetch(
   listener: ServiceWorkerTestListener,
   request: Request,
@@ -311,6 +338,51 @@ describe('service worker PWA share target', () => {
 
     expect(getShareError(signedOutResponse!)).toBe('session_required')
     expect(signedOutWorker.indexedDbFake.putCalls).toEqual([])
+  })
+
+  it('rechecks identity and signout atomically after reading the shared body', async () => {
+    const { fetchListener, indexedDbFake } = loadShareWorker({
+      records: {
+        last_active_identities: {
+          [HOST]: createIdentity(),
+        },
+      },
+    })
+    const { releaseBody, request } = await createDelayedShareRequest([
+      createImageFile('screen.png'),
+    ])
+    let responsePromise: Promise<Response> | null = null
+
+    fetchListener({
+      request,
+      respondWith(response) {
+        responsePromise = Promise.resolve(response)
+      },
+    })
+    await vi.waitFor(() =>
+      expect(indexedDbFake.getCalls).toContainEqual({
+        key: HOST,
+        storeName: 'local_device_signouts',
+      }),
+    )
+    indexedDbFake.storeRecords
+      .get('local_device_signouts')
+      ?.set(HOST, {
+        createdAt: new Date().toISOString(),
+        host: HOST,
+        tenantSlug: TENANT_SLUG,
+        userId: USER_ID,
+      })
+    releaseBody()
+
+    const response = await responsePromise
+
+    expect(getShareError(response!)).toBe('session_required')
+    expect(
+      indexedDbFake.putCalls.filter(
+        ({ storeName }) => storeName === 'pending_share_drafts',
+      ),
+    ).toEqual([])
   })
 
   it('rejects unsupported types, a sixth file and aggregate overflow', async () => {

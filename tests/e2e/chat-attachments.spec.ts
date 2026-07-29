@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
 import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
+import { readLastActiveIdentity } from './support/offlinePwaStorage.ts'
 
 const privateThread = {
   id: 'private:me',
@@ -146,6 +147,102 @@ function readMultipartField(body: string, fieldName: string) {
     new RegExp(`name="${fieldName}"\\r\\n\\r\\n([^\\r\\n]+)`).exec(body)?.[1] ??
     null
   )
+}
+
+async function seedPendingShareDraft({
+  draftId,
+  fileName,
+  page,
+  userIdOffset = 0,
+}: {
+  draftId: string
+  fileName: string
+  page: Page
+  userIdOffset?: number
+}) {
+  const identity = await readLastActiveIdentity(page)
+
+  await page.evaluate(
+    async ({ draftId, fileName, identity, userIdOffset }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('portal-offline', 3)
+
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction(
+          'pending_share_drafts',
+          'readwrite',
+        )
+        const pngBytes = Uint8Array.from(
+          atob(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          ),
+          (character) => character.charCodeAt(0),
+        )
+
+        transaction.objectStore('pending_share_drafts').put({
+          createdAt: new Date().toISOString(),
+          draftId,
+          expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+          files: [
+            {
+              blob: new Blob([pngBytes], { type: 'image/png' }),
+              fileName,
+              lastModified: Date.now(),
+              mimeType: 'image/png',
+            },
+          ],
+          host: window.location.host,
+          tenantSlug: identity.tenantSlug,
+          userId: identity.userId + userIdOffset,
+        })
+        transaction.oncomplete = () => {
+          database.close()
+          resolve()
+        }
+        transaction.onerror = () => {
+          database.close()
+          reject(transaction.error)
+        }
+        transaction.onabort = () => {
+          database.close()
+          reject(transaction.error)
+        }
+      })
+    },
+    { draftId, fileName, identity, userIdOffset },
+  )
+
+  return identity
+}
+
+async function pendingShareDraftExists(page: Page, draftId: string) {
+  return page.evaluate(async (pendingDraftId) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('portal-offline', 3)
+
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+
+    return new Promise<boolean>((resolve, reject) => {
+      const transaction = database.transaction(
+        'pending_share_drafts',
+        'readonly',
+      )
+      const request = transaction
+        .objectStore('pending_share_drafts')
+        .get(pendingDraftId)
+
+      request.onsuccess = () => resolve(request.result !== undefined)
+      request.onerror = () => reject(request.error)
+      transaction.oncomplete = () => database.close()
+      transaction.onabort = () => database.close()
+    })
+  }, draftId)
 }
 
 test('prepares, edits and sends two files as one canonical attachment batch', async ({
@@ -324,6 +421,95 @@ test('prepares, edits and sends two files as one canonical attachment batch', as
       element.closest('[data-message-id]')?.getAttribute('data-message-id'),
     ),
   ).toBe('601')
+})
+
+test('imports a system-shared image only after destination confirmation and sends only on explicit submit', async ({
+  page,
+}) => {
+  const attachmentBodies: string[] = []
+
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      attachmentBodies.push(
+        route.request().postDataBuffer()?.toString('utf8') ?? '',
+      )
+      await fulfillAttachmentSuccess({
+        id: 703,
+        names: ['shared-screen.png'],
+        route,
+      })
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-system-share',
+  })
+  const draftId = '33333333-3333-4333-8333-333333333333'
+
+  await seedPendingShareDraft({
+    draftId,
+    fileName: 'shared-screen.png',
+    page,
+  })
+  await page.goto(`/app/chat?shareDraft=${draftId}&panel=media`)
+
+  const dialog = page.getByRole('dialog', { name: 'Куда добавить файлы?' })
+
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByText('shared-screen.png')).toBeVisible()
+  expect(attachmentBodies).toHaveLength(0)
+
+  await dialog.getByRole('button', { name: 'Продолжить' }).click()
+
+  const tray = page.locator('[data-composer-panel="attachments"]')
+
+  await expect(tray.getByText('shared-screen.png')).toBeVisible()
+  await expect(page).toHaveURL(/panel=media/)
+  await expect(page).not.toHaveURL(/shareDraft=/)
+  expect(attachmentBodies).toHaveLength(0)
+  await expect(pendingShareDraftExists(page, draftId)).resolves.toBe(true)
+
+  await page.getByRole('button', { name: 'Отправить файл' }).click()
+
+  await expect.poll(() => attachmentBodies.length).toBe(1)
+  expect(attachmentBodies[0]?.match(/name="attachments"/g)).toHaveLength(1)
+  expect(attachmentBodies[0]).toContain('filename="shared-screen.png"')
+  await expect.poll(() => pendingShareDraftExists(page, draftId)).toBe(false)
+})
+
+test('does not expose a system share draft owned by another portal user', async ({
+  page,
+}) => {
+  let attachmentPostCount = 0
+
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      attachmentPostCount += 1
+      await route.fulfill({ status: 500 })
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-system-share-mismatch',
+  })
+  const draftId = '44444444-4444-4444-8444-444444444444'
+
+  await seedPendingShareDraft({
+    draftId,
+    fileName: 'other-users-private-screen.png',
+    page,
+    userIdOffset: 1,
+  })
+  await page.goto(`/app/chat?shareDraft=${draftId}`)
+
+  await expect(page.getByRole('alert')).toContainText(
+    'принадлежат другой сессии',
+  )
+  await expect(page.getByText('other-users-private-screen.png')).toHaveCount(0)
+  expect(attachmentPostCount).toBe(0)
+  await expect.poll(() => pendingShareDraftExists(page, draftId)).toBe(false)
 })
 
 test('prepares pasted and dropped files without sending them automatically', async ({

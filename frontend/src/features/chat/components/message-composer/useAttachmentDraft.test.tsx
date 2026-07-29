@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAttachmentDraft } from './useAttachmentDraft'
@@ -132,5 +132,33 @@ describe('useAttachmentDraft', () => {
     ])
     expect(result.current.errorMessage).toContain('invalid.exe')
     expect(result.current.errorMessage).toContain('нельзя отправить')
+  })
+
+  it('hides and removes a previous users files when the draft scope changes', async () => {
+    const image = createFile({ name: 'private.png', type: 'image/png' })
+    const rejected = createFile({
+      name: 'private.exe',
+      type: 'application/x-msdownload',
+    })
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => useAttachmentDraft(scopeKey),
+      { initialProps: { scopeKey: 'tenant-a:user-7' } },
+    )
+
+    act(() => {
+      result.current.addFiles([image, rejected], 'share-target')
+    })
+
+    expect(result.current.items).toHaveLength(1)
+    expect(result.current.errorMessage).toContain('private.exe')
+
+    rerender({ scopeKey: 'tenant-a:user-8' })
+
+    expect(result.current.items).toEqual([])
+    expect(result.current.viewItems).toEqual([])
+    expect(result.current.errorMessage).toBeNull()
+    await waitFor(() =>
+      expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:preview-1'),
+    )
   })
 })

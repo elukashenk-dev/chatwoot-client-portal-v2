@@ -54,6 +54,12 @@ Tenant владеет:
 - backend загружает историю сообщений, отправляет текст, отправляет
   упорядоченную пачку до пяти файлов одним сообщением и доставляет
   realtime-обновления;
+- вложения можно подготовить через picker, буфер обмена, drag-and-drop или
+  понятные mobile actions; общий черновик показывает превью, количество,
+  размер, прогресс, отмену загрузки и ручной повтор после ошибки;
+- поддерживаемый установленный PWA может принять PNG/JPEG/WebP из системного
+  меню `Поделиться` только в 15-минутный tenant/user-scoped черновик; live auth,
+  явный выбор чата и обычная кнопка `Отправить` обязательны;
 - пользователь может открыть установленный PWA при плохой связи после
   предыдущего online входа, видеть сохраненный чат и ставить текстовые
   сообщения в локальную durable outbox;
@@ -357,9 +363,16 @@ Tenant-aware PWA endpoints:
 - service worker не кэширует tenant dynamic metadata;
 - production service worker кэширует только app shell/assets, не перехватывает
   `/api/*` и не становится source of truth для backend данных;
+- tenant manifest объявляет same-origin `POST /pwa/share-target` только для
+  PNG/JPEG/WebP; service worker ограничивает сырой запрос до декодирования,
+  допускает один активный разбор и никогда сам не отправляет вложения;
 - browser offline state хранится в scoped IndexedDB `portal-offline`; текстовая
   outbox является frontend-domain модулем, а backend остается authority для
   session, send и freshness;
+- единственное binary-staging исключение в IndexedDB — один 15-минутный
+  pending system-share draft на exact host/tenant/user: не более пяти файлов и
+  40 MiB, с удалением при success, cancel, signout, identity mismatch или
+  expiry;
 - offline auth snapshot хранит backend `sessionExpiresAt`; после успешного
   online `/api/auth/me` frontend сохраняет effective expiry из backend response,
   а cached auth не открывается после этого срока;
@@ -534,14 +547,19 @@ chatwoot-client-portal-v2/
   support phone/legal document/asset upload controls and live preview
   components;
 - `admin-shell` - protected admin console shell and `/admin/branding` page wiring;
-- `chat` - threads, transcript, composer, attachments, media, search, support availability, chat-level notifications and realtime updates;
+- `chat` - threads, transcript, composer, bounded multi-source attachment
+  drafts, installed-PWA share confirmation, media, search, support availability,
+  chat-level notifications and realtime updates;
 - `legal` - public terms/privacy reader pages backed by portal legal document
   API;
 - `profile` - protected read-only profile page, avatar upload flow and
   first-password setup UI for passwordless users;
-- `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal, durable text outbox and background outbox drain support;
+- `offline` - IndexedDB tenant/auth/chat snapshots, local device data removal,
+  durable text outbox, background outbox drain support and the bounded
+  short-lived system-share handoff;
 - `settings` - user-level notification settings;
-- `pwa` - service worker registration and PWA runtime support;
+- `pwa` - service worker registration, installed-app metadata and bounded Web
+  Share Target reception;
 - `shared` - reusable non-domain UI/lib helpers.
 
 ## Implemented Architecture And Future Work

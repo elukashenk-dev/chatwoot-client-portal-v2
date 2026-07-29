@@ -435,4 +435,47 @@ describe('usePwaShareTargetDraft', () => {
       }),
     )
   })
+
+  it('deletes a cancelled draft with the known exact identity before clearing its URL', async () => {
+    const hook = renderShareTargetHook({
+      authValue: createAuthValue({ sessionSource: 'cached' }),
+    })
+
+    await waitFor(() =>
+      expect(hook.result.current.controller.status).toBe('checking-session'),
+    )
+    await act(async () => {
+      await hook.result.current.controller.cancelShareDraft()
+    })
+
+    expect(deletePendingShareDraftMock).toHaveBeenCalledWith({
+      draftId: 'draft-123',
+      host: window.location.host,
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+    expect(hook.result.current.search).not.toContain('shareDraft')
+    expect(hook.result.current.controller.status).toBe('idle')
+  })
+
+  it('keeps a cancelled draft address visible when scoped deletion fails', async () => {
+    deletePendingShareDraftMock.mockRejectedValueOnce(
+      new Error('IndexedDB unavailable'),
+    )
+    const hook = renderShareTargetHook({
+      authValue: createAuthValue({ sessionSource: 'cached' }),
+    })
+
+    await waitFor(() =>
+      expect(hook.result.current.controller.status).toBe('checking-session'),
+    )
+    await act(async () => {
+      await hook.result.current.controller.cancelShareDraft()
+    })
+
+    expect(hook.result.current.search).toContain('shareDraft=draft-123')
+    expect(hook.result.current.controller.errorMessage).toContain(
+      'Не удалось удалить',
+    )
+  })
 })

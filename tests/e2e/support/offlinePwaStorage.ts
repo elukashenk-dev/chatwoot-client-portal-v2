@@ -11,6 +11,7 @@ const OFFLINE_STORE_NAMES = [
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
+  'pending_share_drafts',
 ] as const
 
 export type BrowserLastActiveIdentity = {
@@ -50,13 +51,27 @@ async function openOfflineDatabase(page: Page) {
   return page.evaluate(
     async ({ storeNames }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('portal-offline', 2)
+        const request = indexedDB.open('portal-offline', 3)
 
         request.onupgradeneeded = () => {
           const database = request.result
 
           for (const storeName of storeNames) {
             if (!database.objectStoreNames.contains(storeName)) {
+              if (storeName === 'pending_share_drafts') {
+                const store = database.createObjectStore(storeName, {
+                  keyPath: 'draftId',
+                })
+
+                store.createIndex(
+                  'by_identity',
+                  ['host', 'tenantSlug', 'userId'],
+                  { unique: true },
+                )
+                store.createIndex('by_expiry', 'expiresAt')
+                continue
+              }
+
               database.createObjectStore(storeName)
             }
           }
@@ -80,7 +95,7 @@ export async function readLastActiveIdentity(page: Page) {
 
   return page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 2)
+      const request = indexedDB.open('portal-offline', 3)
 
       request.onsuccess = () => {
         resolve(request.result)
@@ -131,7 +146,7 @@ export async function readOutboxRecord(page: Page, record: BrowserOutboxKey) {
 
   return page.evaluate(async (outboxRecord) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 2)
+      const request = indexedDB.open('portal-offline', 3)
 
       request.onsuccess = () => {
         resolve(request.result)
@@ -177,7 +192,7 @@ export async function readOutboxRecordByContent(
   return page.evaluate(
     async ({ expectedContent, userIdentity }) => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('portal-offline', 2)
+        const request = indexedDB.open('portal-offline', 3)
 
         request.onsuccess = () => {
           resolve(request.result)
@@ -235,7 +250,7 @@ export async function seedOutboxRecord(
 
   await page.evaluate(async (outboxRecord) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('portal-offline', 2)
+      const request = indexedDB.open('portal-offline', 3)
 
       request.onsuccess = () => {
         resolve(request.result)

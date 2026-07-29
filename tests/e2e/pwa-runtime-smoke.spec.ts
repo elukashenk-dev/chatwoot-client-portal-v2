@@ -35,6 +35,16 @@ test('serves the PWA manifest with installable app metadata', async ({
     id?: string
     icons?: Array<{ purpose?: string; sizes?: string; src?: string }>
     name?: string
+    share_target?: {
+      action?: string
+      enctype?: string
+      method?: string
+      params?: {
+        files?: Array<{ accept?: string[]; name?: string }>
+        text?: string
+        title?: string
+      }
+    }
     scope?: string
     short_name?: string
     start_url?: string
@@ -52,6 +62,29 @@ test('serves the PWA manifest with installable app metadata', async ({
   expect(manifest.id).toMatch(/\/$/)
   expect(manifest.name).toContain('Личный кабинет')
   expect(manifest.short_name).toBeTruthy()
+  expect(manifest.share_target).toEqual({
+    action: '/pwa/share-target',
+    enctype: 'multipart/form-data',
+    method: 'POST',
+    params: {
+      files: [
+        {
+          accept: [
+            'image/png',
+            'image/jpeg',
+            'image/webp',
+            '.png',
+            '.jpg',
+            '.jpeg',
+            '.webp',
+          ],
+          name: 'attachments',
+        },
+      ],
+      text: 'text',
+      title: 'title',
+    },
+  })
   expect(manifest.icons).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

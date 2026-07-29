@@ -42,6 +42,11 @@ stable docs.
 - Offline-first PWA MVP and follow-ups: app shell cache, scoped IndexedDB
   snapshots, durable text outbox, foreground drain, Background Sync progressive
   enhancement and unified startup/connection UX;
+- confirmed Attachment UX follow-up completed in three code slices: one
+  five-file/40 MiB message, picker/paste/drop/mobile inputs, preview/progress/
+  cancel/retry UX and a bounded installed-PWA system-share handoff with live
+  auth plus explicit destination and Send. Real-device share-sheet registration
+  remains tracked in `F-PWA-006` before production rollout;
 - read-only `Профиль` with avatar upload synced to the linked Chatwoot contact;
 - group member avatars and group support `Поддержка` badge in portal transcript.
 

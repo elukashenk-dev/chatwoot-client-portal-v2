@@ -620,7 +620,7 @@ async function readOutboxRecordFromServiceWorker(
 ) {
   return serviceWorker.evaluate(async (recordKey) => {
     const database = await new Promise<IDBDatabase>((resolveOpen, reject) => {
-      const request = indexedDB.open('portal-offline', 2)
+      const request = indexedDB.open('portal-offline', 3)
 
       request.onsuccess = () => resolveOpen(request.result)
       request.onerror = () => reject(request.error)

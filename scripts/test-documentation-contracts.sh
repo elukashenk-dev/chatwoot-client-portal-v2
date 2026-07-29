@@ -96,8 +96,8 @@ assert_ci_corepack_precedes_pnpm_cache
 assert_exact_count "$WORK_LOG" '^## Recommended Next Step$' '1' \
   'work log has exactly one current recommended next step'
 assert_contains "$WORK_LOG" \
-  'fresh staged `prepare` from clean `main`' \
-  'work log points to the current staged-deployment next step'
+  'complete the real-device platform smoke from `F-PWA-006`' \
+  'work log points to the current PWA share-target next step'
 
 assert_contains "$DOCS_INDEX" \
   'operations/mt-10-deployment-runbooks.md' \
