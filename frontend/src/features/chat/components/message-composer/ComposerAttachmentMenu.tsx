@@ -98,32 +98,38 @@ export function ComposerAttachmentMenu({
     <div className="relative">
       <input
         accept="image/*,video/*"
+        aria-hidden="true"
         aria-label="Фото и видео"
         className="sr-only"
         disabled={disabled}
         multiple
         onChange={(event) => handleFilesSelected(event, 'picker')}
         ref={mediaInputRef}
+        tabIndex={-1}
         type="file"
       />
       <input
         accept="image/*"
+        aria-hidden="true"
         aria-label="Камера"
         capture="environment"
         className="sr-only"
         disabled={disabled}
         onChange={(event) => handleFilesSelected(event, 'camera')}
         ref={cameraInputRef}
+        tabIndex={-1}
         type="file"
       />
       <input
         accept={COMPOSER_ATTACHMENT_ACCEPT}
+        aria-hidden="true"
         aria-label="Файл вложения"
         className="sr-only"
         disabled={disabled}
         multiple
         onChange={(event) => handleFilesSelected(event, 'picker')}
         ref={fileInputRef}
+        tabIndex={-1}
         type="file"
       />
 

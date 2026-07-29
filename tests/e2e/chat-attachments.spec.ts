@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page, type Route } from '@playwright/test'
 
 import { seedAndLoginCustomerWithEmailCode } from './support/customerAuth.ts'
 
@@ -10,6 +10,143 @@ const privateThread = {
   title: 'Личный чат',
   type: 'private',
 } as const
+
+type AttachmentPostHandler = (route: Route) => Promise<void>
+
+async function installEmptyChatRuntime({
+  onAttachmentPost,
+  page,
+}: {
+  onAttachmentPost: AttachmentPostHandler
+  page: Page
+}) {
+  await page.route('**/api/chat/threads', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        activeThreadId: privateThread.id,
+        threads: [privateThread],
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/realtime**', async (route) => {
+    await route.fulfill({ status: 204 })
+  })
+  await page.route('**/api/chat/support-availability', async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        currentStatus: 'online',
+        outOfOfficeMessage: null,
+        reason: 'none',
+        result: 'ready',
+        workingHours: {
+          enabled: false,
+          isWithinWorkingHours: true,
+          rows: [],
+          timezone: 'Europe/Samara',
+        },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+  await page.route('**/api/chat/messages**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+
+    if (
+      route.request().method() === 'POST' &&
+      requestUrl.pathname === '/api/chat/messages/attachments'
+    ) {
+      await onAttachmentPost(route)
+      return
+    }
+
+    await route.fulfill({
+      body: JSON.stringify({
+        activeThread: privateThread,
+        hasMoreOlder: false,
+        messages: [],
+        nextOlderCursor: null,
+        reason: 'none',
+        result: 'ready',
+      }),
+      contentType: 'application/json',
+      status: 200,
+    })
+  })
+}
+
+async function openMockedChat({
+  page,
+  prefix,
+}: {
+  page: Page
+  prefix: string
+}) {
+  await seedAndLoginCustomerWithEmailCode({ page, prefix })
+  await expect(page).toHaveURL(/\/app\/chat/)
+  await expect(page.getByRole('textbox', { name: 'Сообщение' })).toBeVisible()
+}
+
+function createAttachmentSendResult({
+  content = null,
+  id,
+  names,
+}: {
+  content?: string | null
+  id: number
+  names: string[]
+}) {
+  return {
+    activeThread: privateThread,
+    reason: 'none',
+    result: 'ready',
+    sentMessage: {
+      attachments: names.map((name, index) => ({
+        fileSize: null,
+        fileType: 'file',
+        id: 100 + index,
+        name,
+        thumbUrl: '',
+        url: `/api/chat/threads/private%3Ame/attachments/${id}/${100 + index}`,
+      })),
+      authorName: 'Вы',
+      authorRole: 'current_user',
+      content,
+      contentType: 'text',
+      createdAt: '2026-07-29T12:00:00.000Z',
+      direction: 'outgoing',
+      id,
+      status: 'sent',
+    },
+  }
+}
+
+async function fulfillAttachmentSuccess({
+  content,
+  id,
+  names,
+  route,
+}: {
+  content?: string | null
+  id: number
+  names: string[]
+  route: Route
+}) {
+  await route.fulfill({
+    body: JSON.stringify(createAttachmentSendResult({ content, id, names })),
+    contentType: 'application/json',
+    status: 200,
+  })
+}
+
+function readMultipartField(body: string, fieldName: string) {
+  return (
+    new RegExp(`name="${fieldName}"\\r\\n\\r\\n([^\\r\\n]+)`).exec(body)?.[1] ??
+    null
+  )
+}
 
 test('prepares, edits and sends two files as one canonical attachment batch', async ({
   page,
@@ -123,7 +260,7 @@ test('prepares, edits and sends two files as one canonical attachment batch', as
 
   await expect(page).toHaveURL(/\/app\/chat/)
 
-  const fileInput = page.locator('input[type="file"]')
+  const fileInput = page.getByLabel('Файл вложения')
 
   await fileInput.setInputFiles([
     {
@@ -146,9 +283,7 @@ test('prepares, edits and sends two files as one canonical attachment batch', as
     'second.txt',
   ])
 
-  await page
-    .getByRole('button', { name: 'Убрать файл second.txt' })
-    .click()
+  await page.getByRole('button', { name: 'Убрать файл second.txt' }).click()
   await expect(tray).toContainText('1/5 · 9 Б')
   await expect(tray).not.toContainText('second.txt')
 
@@ -189,4 +324,315 @@ test('prepares, edits and sends two files as one canonical attachment batch', as
       element.closest('[data-message-id]')?.getAttribute('data-message-id'),
     ),
   ).toBe('601')
+})
+
+test('prepares pasted and dropped files without sending them automatically', async ({
+  page,
+}) => {
+  let attachmentPostCount = 0
+
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      attachmentPostCount += 1
+      await route.fulfill({ status: 500 })
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-attachment-inputs',
+  })
+
+  await page
+    .getByRole('textbox', { name: 'Сообщение' })
+    .evaluate((textarea) => {
+      const clipboardData = new DataTransfer()
+
+      clipboardData.items.add(
+        new File([new Uint8Array([137, 80, 78, 71])], 'image.png', {
+          type: 'image/png',
+        }),
+      )
+      textarea.dispatchEvent(
+        new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData,
+        }),
+      )
+    })
+
+  const tray = page.locator('[data-composer-panel="attachments"]')
+
+  await expect(tray.locator('span[title^="screenshot-"]')).toHaveAttribute(
+    'title',
+    /^screenshot-\d{8}-\d{6}\.png$/,
+  )
+  expect(attachmentPostCount).toBe(0)
+
+  await page.getByRole('button', { name: 'Очистить файлы' }).click()
+  await page.locator('footer').evaluate((footer) => {
+    const zone = footer.parentElement
+
+    if (!zone) {
+      throw new Error('Missing active chat drop zone.')
+    }
+
+    const transfer = new DataTransfer()
+
+    transfer.items.add(
+      new File(['dropped'], 'dropped.pdf', {
+        type: 'application/pdf',
+      }),
+    )
+    zone.dispatchEvent(
+      new DragEvent('dragenter', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      }),
+    )
+  })
+
+  await expect(page.getByText('Перетащите файлы сюда')).toBeVisible()
+
+  await page.locator('footer').evaluate((footer) => {
+    const zone = footer.parentElement
+
+    if (!zone) {
+      throw new Error('Missing active chat drop zone.')
+    }
+
+    const transfer = new DataTransfer()
+
+    transfer.items.add(
+      new File(['dropped'], 'dropped.pdf', {
+        type: 'application/pdf',
+      }),
+    )
+    zone.dispatchEvent(
+      new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      }),
+    )
+  })
+
+  await expect(tray.getByText('dropped.pdf')).toBeVisible()
+  await expect(page.getByText('Перетащите файлы сюда')).toHaveCount(0)
+  expect(attachmentPostCount).toBe(0)
+
+  const draggedTextWasPrevented = await page
+    .locator('footer')
+    .evaluate((footer) => {
+      const zone = footer.parentElement
+
+      if (!zone) {
+        throw new Error('Missing active chat drop zone.')
+      }
+
+      const transfer = new DataTransfer()
+
+      transfer.setData('text/plain', 'Обычный текст')
+
+      return !zone.dispatchEvent(
+        new DragEvent('dragenter', {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: transfer,
+        }),
+      )
+    })
+
+  expect(draggedTextWasPrevented).toBe(false)
+  await expect(page.getByText('Перетащите файлы сюда')).toHaveCount(0)
+})
+
+test('keeps five previews and all attachment sources usable on a narrow screen', async ({
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 })
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      await route.fulfill({ status: 500 })
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-attachment-mobile',
+  })
+
+  await page.getByLabel('Файл вложения').setInputFiles(
+    Array.from({ length: 5 }, (_, index) => ({
+      buffer: Buffer.from(`file-${index + 1}`),
+      mimeType: 'text/plain',
+      name: `file-${index + 1}.txt`,
+    })),
+  )
+
+  const tray = page.locator('[data-composer-panel="attachments"]')
+  const previewScroller = tray.locator('.overflow-x-auto')
+
+  await expect(tray).toContainText('5/5')
+  await expect(tray.locator('span[title]')).toHaveCount(5)
+  expect(
+    await previewScroller.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+      scrollWidth: element.scrollWidth,
+    })),
+  ).toEqual(
+    expect.objectContaining({
+      overflowX: 'auto',
+    }),
+  )
+  expect(
+    await previewScroller.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    ),
+  ).toBe(true)
+
+  await page.getByRole('button', { name: 'Прикрепить файл' }).click()
+
+  const menu = page.getByRole('dialog', { name: 'Добавить вложение' })
+
+  await expect(menu.getByRole('button', { name: 'Фото и видео' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Камера' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Файл' })).toBeVisible()
+
+  const composerBox = await page.locator('footer').boundingBox()
+
+  expect(composerBox).not.toBeNull()
+  expect((composerBox?.x ?? 0) + (composerBox?.width ?? 0)).toBeLessThanOrEqual(
+    390,
+  )
+})
+
+test('shows progress, aborts an upload and keeps its draft', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(60_000)
+
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      await route.continue()
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-attachment-cancel',
+  })
+
+  const failedAttachmentRequests: string[] = []
+
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).pathname === '/api/chat/messages/attachments') {
+      failedAttachmentRequests.push(request.failure()?.errorText ?? 'failed')
+    }
+  })
+
+  const cdp = await context.newCDPSession(page)
+
+  await cdp.send('Network.enable')
+  await cdp.send('Network.emulateNetworkConditions', {
+    connectionType: 'cellular3g',
+    downloadThroughput: 512 * 1024,
+    latency: 100,
+    offline: false,
+    uploadThroughput: 256 * 1024,
+  })
+
+  const textarea = page.getByRole('textbox', { name: 'Сообщение' })
+
+  await page.getByLabel('Файл вложения').setInputFiles({
+    buffer: Buffer.alloc(2 * 1024 * 1024, 97),
+    mimeType: 'application/pdf',
+    name: 'large.pdf',
+  })
+  await textarea.fill('Важная подпись')
+  await page.getByRole('button', { name: 'Отправить файл' }).click()
+
+  await expect(page.getByText(/^Загрузка \d+%$/)).toBeVisible()
+  await page.getByRole('button', { name: 'Отменить загрузку' }).click()
+
+  await expect(page.getByText('large.pdf')).toBeVisible()
+  await expect(textarea).toHaveValue('Важная подпись')
+  await expect(
+    page.getByRole('button', { name: 'Отменить загрузку' }),
+  ).toHaveCount(0)
+  await expect.poll(() => failedAttachmentRequests.length).toBe(1)
+})
+
+test('keeps a failed draft and manually retries with the same message key', async ({
+  page,
+}) => {
+  const attachmentBodies: string[] = []
+
+  await installEmptyChatRuntime({
+    onAttachmentPost: async (route) => {
+      attachmentBodies.push(
+        route.request().postDataBuffer()?.toString('utf8') ?? '',
+      )
+
+      if (attachmentBodies.length === 1) {
+        await route.fulfill({
+          body: JSON.stringify({
+            error: {
+              code: 'CHAT_SEND_RATE_LIMITED',
+              message: 'Отправка временно ограничена.',
+            },
+          }),
+          contentType: 'application/json',
+          headers: {
+            'Retry-After': '7',
+          },
+          status: 503,
+        })
+        return
+      }
+
+      await fulfillAttachmentSuccess({
+        content: 'Подпись для повтора',
+        id: 702,
+        names: ['retry.pdf'],
+        route,
+      })
+    },
+    page,
+  })
+  await openMockedChat({
+    page,
+    prefix: 'e2e.chat-attachment-retry',
+  })
+
+  const textarea = page.getByRole('textbox', { name: 'Сообщение' })
+
+  await page.getByLabel('Файл вложения').setInputFiles({
+    buffer: Buffer.from('%PDF retry'),
+    mimeType: 'application/pdf',
+    name: 'retry.pdf',
+  })
+  await textarea.fill('Подпись для повтора')
+  await page.getByRole('button', { name: 'Отправить файл' }).click()
+
+  await expect(
+    page.getByText(/Они остались в сообщении — попробуйте ещё раз\./),
+  ).toBeVisible()
+  await expect(page.getByText(/Попробуйте через 7 сек\./)).toBeVisible()
+  await expect(page.getByText('retry.pdf')).toBeVisible()
+  await expect(textarea).toHaveValue('Подпись для повтора')
+  expect(attachmentBodies).toHaveLength(1)
+
+  await page.getByRole('button', { name: 'Отправить файл' }).click()
+
+  await expect.poll(() => attachmentBodies.length).toBe(2)
+  expect(
+    readMultipartField(attachmentBodies[1] ?? '', 'clientMessageKey'),
+  ).toBe(readMultipartField(attachmentBodies[0] ?? '', 'clientMessageKey'))
+  await expect(page.getByText('retry.pdf')).toBeVisible()
+  await expect(textarea).toHaveValue('')
 })

@@ -10,13 +10,16 @@ current operations roadmap.
 
 ## Implementation Status
 
-Slice 1 was implemented, independently reviewed and verified on `2026-07-29`.
-It established the ordered five-file/40 MiB batch boundary, plural portal API,
-compact composer tray, early browser validation and one canonical Chatwoot
-message per batch. It also closed `F-CHAT-005`.
+Slices 1–2 were implemented, reviewed and verified on `2026-07-29`. They
+established the ordered five-file/40 MiB batch boundary, plural portal API,
+compact composer tray, early browser validation, paste and file-only drop,
+mobile attachment sources, aggregate upload progress, bounded cancellation and
+manual draft-preserving retry. One batch remains one canonical Chatwoot
+message. Slice 1 also closed `F-CHAT-005`.
 
-Slices 2–3 remain planned. The `Current Baseline` section below preserves the
-pre-implementation state that motivated this design.
+Slice 3, the installed PWA share target, remains planned. The
+`Current Baseline` section below preserves the pre-implementation state that
+motivated this design.
 
 ## Goal
 

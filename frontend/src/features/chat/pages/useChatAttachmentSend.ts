@@ -62,13 +62,25 @@ export function useChatAttachmentSend({
 }: UseChatAttachmentSendOptions) {
   const activeAbortControllerRef = useRef<AbortController | null>(null)
   const [isSending, setIsSending] = useState(false)
-  const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null)
+  const [sendErrorMessage, setSendErrorMessageState] = useState<string | null>(
+    null,
+  )
   const [transferState, setTransferState] = useState<AttachmentTransferState>(
     IDLE_ATTACHMENT_TRANSFER_STATE,
   )
 
   const clearSendError = useCallback(() => {
-    setSendErrorMessage(null)
+    setSendErrorMessageState(null)
+    setTransferState((currentState) =>
+      currentState.stage === 'error'
+        ? IDLE_ATTACHMENT_TRANSFER_STATE
+        : currentState,
+    )
+  }, [])
+  const setSharedSendErrorMessage = useCallback<
+    Dispatch<SetStateAction<string | null>>
+  >((nextErrorMessage) => {
+    setSendErrorMessageState(nextErrorMessage)
     setTransferState((currentState) =>
       currentState.stage === 'error'
         ? IDLE_ATTACHMENT_TRANSFER_STATE
@@ -86,7 +98,7 @@ export function useChatAttachmentSend({
     activeAbortControllerRef.current = null
     abortController.abort()
     setIsSending(false)
-    setSendErrorMessage(null)
+    setSendErrorMessageState(null)
     setTransferState(IDLE_ATTACHMENT_TRANSFER_STATE)
   }, [transferState.stage])
 
@@ -123,7 +135,7 @@ export function useChatAttachmentSend({
       activeAbortControllerRef.current = abortController
       onAttachmentSendStarted?.()
       setIsSending(true)
-      setSendErrorMessage(null)
+      setSendErrorMessageState(null)
       setTransferState({ percent: 0, stage: 'preparing' })
 
       try {
@@ -153,7 +165,7 @@ export function useChatAttachmentSend({
           !sendResult.sentMessage ||
           sendResult.activeThread?.id !== threadId
         ) {
-          setSendErrorMessage(ATTACHMENT_SEND_ERROR_MESSAGE)
+          setSendErrorMessageState(ATTACHMENT_SEND_ERROR_MESSAGE)
           setTransferState({ percent: null, stage: 'error' })
           return false
         }
@@ -191,12 +203,12 @@ export function useChatAttachmentSend({
         }
 
         if (await handleUnauthorizedChatError(error)) {
-          setSendErrorMessage(null)
+          setSendErrorMessageState(null)
           setTransferState(IDLE_ATTACHMENT_TRANSFER_STATE)
           return false
         }
 
-        setSendErrorMessage(getAttachmentSendErrorMessage(error))
+        setSendErrorMessageState(getAttachmentSendErrorMessage(error))
         setTransferState({ percent: null, stage: 'error' })
 
         if (handleConnectionUnavailableError(error)) {
@@ -233,7 +245,7 @@ export function useChatAttachmentSend({
     handleSendAttachmentBatch,
     isSending,
     sendErrorMessage,
-    setSendErrorMessage,
+    setSendErrorMessage: setSharedSendErrorMessage,
     transferState,
   }
 }

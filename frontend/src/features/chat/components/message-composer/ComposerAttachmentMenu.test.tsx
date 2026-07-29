@@ -26,6 +26,11 @@ describe('ComposerAttachmentMenu', () => {
     expect(cameraInput).not.toHaveAttribute('multiple')
     expect(fileInput).toHaveAttribute('multiple')
 
+    for (const input of [mediaInput, cameraInput, fileInput]) {
+      expect(input).toHaveAttribute('aria-hidden', 'true')
+      expect(input).toHaveAttribute('tabindex', '-1')
+    }
+
     await user.click(screen.getByRole('button', { name: 'Прикрепить файл' }))
     await user.click(screen.getByRole('button', { name: 'Фото и видео' }))
     expect(mediaInputClick).toHaveBeenCalledTimes(1)

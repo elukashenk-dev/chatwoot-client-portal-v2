@@ -208,6 +208,14 @@ describe('useChatAttachmentSend', () => {
       await waitFor(() => {
         expect(result.current.isSending).toBe(false)
       })
+
+      act(() => {
+        result.current.setSendErrorMessage(null)
+      })
+      expect(result.current.transferState).toEqual({
+        percent: null,
+        stage: 'idle',
+      })
     },
   )
 })

@@ -64,6 +64,11 @@ execution-plan детали здесь не хранятся.
 - Attachment upload admission runs before multipart body reads: each user has
   five starts per minute across chats, each backend process holds at most two
   active uploads, and complete request receipt is limited to five minutes.
+- Attachment batch and universal input UX is implemented: one message can
+  contain up to five ordered files within 40 MiB, while picker, clipboard,
+  file-only drag-and-drop and mobile photo/camera/file controls share one local
+  draft; aggregate upload progress, upload-only cancellation and manual
+  draft-preserving retry remain online-only.
 - Group member avatars render in group info and transcript when backend can map
   a participant/contact; unknown group authors keep initials fallback.
 - Support messages in group transcripts are visually marked with compact
