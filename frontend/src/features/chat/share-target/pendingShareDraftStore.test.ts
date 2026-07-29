@@ -34,7 +34,7 @@ function createStoredFile(
 }
 
 function createFile(
-  parts: BlobPart[],
+  parts: Array<string | Uint8Array<ArrayBuffer>>,
   fileName: string,
   options: FilePropertyBag,
 ) {

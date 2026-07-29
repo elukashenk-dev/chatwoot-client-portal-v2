@@ -727,6 +727,33 @@ describe('MessageComposer', () => {
     )
   })
 
+  it('reports immutable remaining attachment items after explicit remove and clear', async () => {
+    const user = userEvent.setup()
+    const onAttachmentDraftItemsChange = vi.fn()
+    const first = new File(['first'], 'first.png', { type: 'image/png' })
+    const second = new File(['second'], 'second.jpg', { type: 'image/jpeg' })
+
+    renderComposer({ onAttachmentDraftItemsChange })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), [first, second])
+    await user.click(
+      screen.getByRole('button', { name: 'Убрать файл first.png' }),
+    )
+
+    expect(onAttachmentDraftItemsChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        file: second,
+        source: 'picker',
+      }),
+    ])
+
+    await user.click(screen.getByRole('button', { name: 'Очистить файлы' }))
+    expect(onAttachmentDraftItemsChange).toHaveBeenLastCalledWith([])
+    expect(onAttachmentDraftItemsChange.mock.calls[0]?.[0]).not.toBe(
+      onAttachmentDraftItemsChange.mock.calls[1]?.[0],
+    )
+  })
+
   it('creates a new client message key after changing the caption', async () => {
     const user = userEvent.setup()
     const onSendAttachmentBatch = createAttachmentSendMock(false)

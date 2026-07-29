@@ -13,6 +13,8 @@ import { ChatTranscript } from '../components/ChatTranscript'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
 import { useAttachmentDraft } from '../components/message-composer/useAttachmentDraft'
 import { toComposerReplyTarget } from '../lib/chatSnapshot'
+import { PwaShareDestinationDialog } from '../share-target/PwaShareDestinationDialog'
+import { usePwaShareTargetDraft } from '../share-target/usePwaShareTargetDraft'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
 import {
@@ -130,6 +132,10 @@ export function ChatPage() {
       markChatOffline,
       refreshSession,
     })
+  const pwaShareTarget = usePwaShareTargetDraft({
+    addFiles: attachmentDraft.addFiles, canImport: canUseBackend,
+    pageStatus: pageState.status, selectedThreadId: pageState.selectedThreadId, threads: pageState.threads,
+  })
   const {
     clearHistoryFragment,
     clearSearchResultOpenError,
@@ -150,6 +156,7 @@ export function ChatPage() {
   const { cancelAttachmentUpload, clearSendError, handleSendAttachmentBatch,
     isSending, sendErrorMessage, setSendErrorMessage, transferState } =
     useChatAttachmentSend({
+    afterCanonicalAttachmentBatchSend: pwaShareTarget.afterCanonicalAttachmentBatchSend,
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
     isBrowserOnline: canUseBackend,
@@ -234,7 +241,6 @@ export function ChatPage() {
     const bootstrapTimerId = window.setTimeout(() => {
       void loadInitialChatRef.current()
     }, 0)
-
     return () => {
       window.clearTimeout(bootstrapTimerId)
       isMountedRef.current = false
@@ -389,7 +395,6 @@ export function ChatPage() {
     ) {
       return
     }
-
     clearHighlightedMessage()
     clearHistoryFragment()
     void handleSelectThread(requestedThreadId)
@@ -404,6 +409,7 @@ export function ChatPage() {
   ])
   return (
     <>
+      <PwaShareDestinationDialog controller={pwaShareTarget} threads={pageState.threads} />
       <ChatHeader
         activeThread={headerThread}
         canShowInstallApp={shouldRenderTranscript}
@@ -433,7 +439,6 @@ export function ChatPage() {
         resyncStatus={resyncStatus}
       />
       {shouldRenderTranscript ? <PwaInstallBanner /> : null}
-
       <ChatAttachmentDropZone
         disabled={!shouldRenderTranscript || !canUseBackend || isSending}
         onFiles={(files) => attachmentDraft.addFiles(files, 'drop')}
@@ -445,7 +450,6 @@ export function ChatPage() {
             reason={pageState.errorReason}
           />
         ) : null}
-
         {shouldRenderNotReadyState ? (
           <ChatNotReadyState
             isUnavailable={snapshot?.result === 'unavailable'}
@@ -453,9 +457,7 @@ export function ChatPage() {
             reason={snapshot?.reason ?? 'chatwoot_unavailable'}
           />
         ) : null}
-
         {shouldRenderLoadingState ? <ChatLoadingState /> : null}
-
         {shouldRenderTranscript ? (
           <ChatTranscript
             activeThreadType={snapshot?.activeThread?.type ?? null}
@@ -486,7 +488,6 @@ export function ChatPage() {
           isVisible={shouldRenderTranscript && isAgentTypingVisible}
           shouldAnimatePresence={isTranscriptAtLatestEdge}
         />
-
         {shouldRenderTranscript ? (
           <ChatComposerDock
             attachmentDraft={attachmentDraft}
@@ -498,6 +499,7 @@ export function ChatPage() {
             isBrowserOnline={canUseBackend}
             isSending={isSending}
             onCancelReply={() => setReplyTarget(null)}
+            onAttachmentDraftItemsChange={pwaShareTarget.syncRemainingShareDraftItems}
             replyTarget={replyTarget}
             sendErrorMessage={sendErrorMessage}
             selectedThreadId={pageState.selectedThreadId}

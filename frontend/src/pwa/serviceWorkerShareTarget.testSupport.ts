@@ -72,7 +72,7 @@ export async function createShareTargetNavigationRequest({
   url?: string
 }): Promise<Request> {
   const boundary = '----portal-share-target-test-boundary'
-  const bodyParts: Array<string | Uint8Array> = []
+  const bodyParts: Array<string | Uint8Array<ArrayBuffer>> = []
 
   for (const [fieldName, value] of formData.entries()) {
     const safeFieldName = fieldName.replaceAll('"', '%22')
@@ -97,7 +97,7 @@ export async function createShareTargetNavigationRequest({
   bodyParts.push(`--${boundary}--\r\n`)
 
   const request = new Request(url, {
-    body: new NodeBlob(bodyParts),
+    body: new NodeBlob(bodyParts) as unknown as Blob,
     headers: {
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     },
@@ -121,7 +121,9 @@ export async function createShareTargetNavigationRequest({
   })
 }
 
-async function readTestFileBytes(file: File): Promise<Uint8Array> {
+async function readTestFileBytes(
+  file: File,
+): Promise<Uint8Array<ArrayBuffer>> {
   if (typeof file.arrayBuffer === 'function') {
     return new Uint8Array(await file.arrayBuffer())
   }

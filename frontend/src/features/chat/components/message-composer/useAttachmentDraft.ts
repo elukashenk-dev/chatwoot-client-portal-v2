@@ -74,6 +74,8 @@ export function useAttachmentDraft() {
     setPreviewUrls(nextPreviewUrls)
     setItems(nextItems)
     setErrorMessage(null)
+
+    return nextItems
   }, [])
 
   const clearItems = useCallback(() => {
@@ -84,10 +86,14 @@ export function useAttachmentDraft() {
     const nextPreviewUrls = new Map<string, string>()
 
     previewUrlsRef.current = nextPreviewUrls
-    itemsRef.current = []
+    const nextItems: AttachmentDraftItem[] = []
+
+    itemsRef.current = nextItems
     setPreviewUrls(nextPreviewUrls)
-    setItems([])
+    setItems(nextItems)
     setErrorMessage(null)
+
+    return nextItems
   }, [])
 
   useEffect(

@@ -48,6 +48,9 @@ type MessageComposerProps = {
   isSending: boolean
   onCancelAttachmentUpload: () => void
   onCancelReply: () => void
+  onAttachmentDraftItemsChange?: (
+    items: readonly AttachmentDraftItem[],
+  ) => Promise<void> | void
   onDraftTypingChange?: (draft: string) => void
   onSend: (input: SendMessageInput) => Promise<boolean>
   onSendAttachmentBatch: (input: SendAttachmentBatchInput) => Promise<boolean>
@@ -64,6 +67,7 @@ export function MessageComposer({
   isSending,
   onCancelAttachmentUpload,
   onCancelReply,
+  onAttachmentDraftItemsChange,
   onDraftTypingChange,
   onSend,
   onSendAttachmentBatch,
@@ -371,14 +375,20 @@ export function MessageComposer({
       setPendingVoiceItem(null)
       attachmentDraft.clearItems()
     } else {
-      attachmentDraft.removeItem(itemId)
+      const nextItems = attachmentDraft.removeItem(itemId)
+      void Promise.resolve(onAttachmentDraftItemsChange?.(nextItems)).catch(
+        () => undefined,
+      )
     }
   }
 
   function clearAttachments() {
     attachmentSendRetryKey.clear()
     setPendingVoiceItem(null)
-    attachmentDraft.clearItems()
+    const nextItems = attachmentDraft.clearItems()
+    void Promise.resolve(onAttachmentDraftItemsChange?.(nextItems)).catch(
+      () => undefined,
+    )
   }
 
   function updateDraft(nextDraft: string) {

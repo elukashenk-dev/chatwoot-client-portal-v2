@@ -52,12 +52,19 @@ function createInput(): SendAttachmentBatchInput {
   }
 }
 
-function renderAttachmentSendHook() {
+function renderAttachmentSendHook({
+  afterCanonicalAttachmentBatchSend,
+}: {
+  afterCanonicalAttachmentBatchSend?: (
+    items: SendAttachmentBatchInput['items'],
+  ) => Promise<void>
+} = {}) {
   const handleConnectionUnavailableError = vi.fn(() => false)
   const handleUnauthorizedChatError = vi.fn(async () => false)
 
   const hook = renderHook(() =>
     useChatAttachmentSend({
+      afterCanonicalAttachmentBatchSend,
       handleConnectionUnavailableError,
       handleUnauthorizedChatError,
       isBrowserOnline: true,
@@ -72,6 +79,30 @@ function renderAttachmentSendHook() {
     ...hook,
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
+  }
+}
+
+function createCanonicalSendResult() {
+  return {
+    activeThread: {
+      id: 'private:me' as const,
+      subtitle: 'Вы и поддержка',
+      title: 'Личный чат',
+      type: 'private' as const,
+    },
+    reason: 'none' as const,
+    result: 'ready' as const,
+    sentMessage: {
+      attachments: [],
+      authorName: 'Вы',
+      authorRole: 'current_user' as const,
+      content: null,
+      contentType: 'text',
+      createdAt: '2026-07-29T10:00:00.000Z',
+      direction: 'outgoing' as const,
+      id: 601,
+      status: 'sent',
+    },
   }
 }
 
@@ -218,4 +249,49 @@ describe('useChatAttachmentSend', () => {
       })
     },
   )
+
+  it('keeps the submitted item snapshot through canonical success and ignores local cleanup failure', async () => {
+    const afterCanonicalAttachmentBatchSend = vi.fn(async () => {
+      throw new Error('IndexedDB is unavailable.')
+    })
+    const input = createInput()
+    const sharedItem = {
+      file: new File(['screen'], 'screen.png', { type: 'image/png' }),
+      id: 'shared-screen',
+      source: 'share-target' as const,
+    }
+
+    input.items = [...input.items, sharedItem]
+    sendChatAttachmentsMock.mockResolvedValueOnce(createCanonicalSendResult())
+    const { result } = renderAttachmentSendHook({
+      afterCanonicalAttachmentBatchSend,
+    })
+    const sendPromise = result.current.handleSendAttachmentBatch(input)
+
+    input.items = [
+      ...input.items,
+      {
+        file: new File(['later'], 'later.png', { type: 'image/png' }),
+        id: 'added-after-send',
+        source: 'picker',
+      },
+    ]
+
+    await expect(sendPromise).resolves.toBe(true)
+    expect(sendChatAttachmentsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          expect.objectContaining({ name: 'invoice.pdf' }),
+          expect.objectContaining({ name: 'screen.png' }),
+        ],
+      }),
+    )
+    expect(afterCanonicalAttachmentBatchSend).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'invoice', source: 'picker' }),
+      expect.objectContaining({
+        id: 'shared-screen',
+        source: 'share-target',
+      }),
+    ])
+  })
 })

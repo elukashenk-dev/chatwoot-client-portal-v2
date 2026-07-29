@@ -40,6 +40,9 @@ function getAttachmentSendErrorMessage(error: unknown) {
 }
 
 type UseChatAttachmentSendOptions = {
+  afterCanonicalAttachmentBatchSend?: (
+    items: SendAttachmentBatchInput['items'],
+  ) => Promise<void>
   handleConnectionUnavailableError: (error: unknown) => boolean
   handleUnauthorizedChatError: (error: unknown) => Promise<boolean>
   isBrowserOnline: boolean
@@ -51,6 +54,7 @@ type UseChatAttachmentSendOptions = {
 }
 
 export function useChatAttachmentSend({
+  afterCanonicalAttachmentBatchSend,
   handleConnectionUnavailableError,
   handleUnauthorizedChatError,
   isBrowserOnline,
@@ -130,6 +134,7 @@ export function useChatAttachmentSend({
       }
 
       const threadId = pageState.selectedThreadId
+      const submittedItems = [...items]
       const abortController = new AbortController()
 
       activeAbortControllerRef.current = abortController
@@ -140,7 +145,7 @@ export function useChatAttachmentSend({
 
       try {
         const sendResult = await sendChatAttachments({
-          attachments: items.map(({ file }) => file),
+          attachments: submittedItems.map(({ file }) => file),
           clientMessageKey,
           content,
           onTransferStateChange: (nextTransferState) => {
@@ -192,6 +197,12 @@ export function useChatAttachmentSend({
           }
         })
 
+        try {
+          await afterCanonicalAttachmentBatchSend?.(submittedItems)
+        } catch {
+          // The server result is canonical; bounded local cleanup can retry/expire.
+        }
+
         return true
       } catch (error) {
         if (abortController.signal.aborted) {
@@ -227,6 +238,7 @@ export function useChatAttachmentSend({
       }
     },
     [
+      afterCanonicalAttachmentBatchSend,
       handleConnectionUnavailableError,
       handleUnauthorizedChatError,
       isBrowserOnline,

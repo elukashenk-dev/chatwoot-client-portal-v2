@@ -6,6 +6,7 @@ import type {
   SendMessageInput,
 } from '../components/message-composer/types'
 import type { useAttachmentDraft } from '../components/message-composer/useAttachmentDraft'
+import type { AttachmentDraftItem } from '../lib/attachmentDraft'
 import { setChatThreadTyping } from '../api/chatClient'
 import { useChatTypingSync } from './useChatTypingSync'
 
@@ -21,6 +22,9 @@ type ChatComposerDockProps = {
   isBrowserOnline: boolean
   isSending: boolean
   onCancelReply: () => void
+  onAttachmentDraftItemsChange: (
+    items: readonly AttachmentDraftItem[],
+  ) => void
   replyTarget: MessageComposerReplyTarget | null
   sendErrorMessage: string | null
   selectedThreadId: string | null
@@ -36,6 +40,7 @@ export function ChatComposerDock({
   isBrowserOnline,
   isSending,
   onCancelReply,
+  onAttachmentDraftItemsChange,
   replyTarget,
   sendErrorMessage,
   selectedThreadId,
@@ -58,6 +63,7 @@ export function ChatComposerDock({
       errorMessage={sendErrorMessage}
       isSending={isSending}
       onCancelAttachmentUpload={cancelAttachmentUpload}
+      onAttachmentDraftItemsChange={onAttachmentDraftItemsChange}
       onCancelReply={() => {
         sendTypingOff()
         onCancelReply()

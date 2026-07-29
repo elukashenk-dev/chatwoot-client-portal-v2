@@ -34,7 +34,12 @@ function createImageFile(
     type?: string
   } = {},
 ) {
-  return new File([bytes], name, { type })
+  const contents =
+    typeof bytes === 'string'
+      ? bytes
+      : Uint8Array.from(bytes).buffer
+
+  return new File([contents], name, { type })
 }
 
 async function createShareRequest(files: File[]) {
@@ -50,7 +55,7 @@ async function createShareRequest(files: File[]) {
 async function dispatchFetch(
   listener: ServiceWorkerTestListener,
   request: Request,
-) {
+): Promise<Response | null> {
   let responsePromise: Promise<Response> | null = null
 
   listener({
@@ -60,7 +65,7 @@ async function dispatchFetch(
     },
   })
 
-  return responsePromise ? await responsePromise : null
+  return responsePromise as Promise<Response> | null
 }
 
 function getShareError(response: Response) {
