@@ -58,9 +58,7 @@ type TestMessageComposerProps = Omit<
 function MessageComposer(props: TestMessageComposerProps) {
   const attachmentDraft = useAttachmentDraft()
 
-  return (
-    <MessageComposerView attachmentDraft={attachmentDraft} {...props} />
-  )
+  return <MessageComposerView attachmentDraft={attachmentDraft} {...props} />
 }
 
 function renderComposer(
@@ -258,6 +256,56 @@ describe('MessageComposer', () => {
     expect(onDraftTypingChange).toHaveBeenLastCalledWith('Hi')
   })
 
+  it('keeps browser-native text-only paste behavior', async () => {
+    const user = userEvent.setup()
+
+    renderComposer()
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+
+    await user.click(textarea)
+    await user.paste('Текст из буфера')
+
+    expect(textarea).toHaveValue('Текст из буфера')
+  })
+
+  it('consumes a pasted screenshot without inserting alternate text or sending it', () => {
+    const onSendAttachmentBatch = createAttachmentSendMock(true)
+    const screenshot = new File(['pixels'], 'image.png', {
+      type: 'image/png',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    const textarea = screen.getByRole('textbox', { name: 'Сообщение' })
+    const pasteWasNotCancelled = fireEvent.paste(textarea, {
+      clipboardData: {
+        items: [
+          {
+            getAsFile: () => screenshot,
+            kind: 'file',
+            type: 'image/png',
+          },
+          {
+            getAsFile: () => null,
+            kind: 'string',
+            type: 'text/html',
+          },
+          {
+            getAsFile: () => null,
+            kind: 'string',
+            type: 'text/plain',
+          },
+        ],
+      },
+    })
+
+    expect(pasteWasNotCancelled).toBe(false)
+    expect(screen.getByText(/screenshot-\d{8}-\d{6}\.png/)).toBeInTheDocument()
+    expect(textarea).toHaveValue('')
+    expect(onSendAttachmentBatch).not.toHaveBeenCalled()
+  })
+
   it('reports an empty draft after an accepted text send', async () => {
     const user = userEvent.setup()
     const onDraftTypingChange = vi.fn()
@@ -306,11 +354,7 @@ describe('MessageComposer', () => {
       screen.getByText(
         'Сообщение слишком длинное: 4005 из 4000. Сократите на 5 символов или отправьте частями.',
       ),
-    ).toHaveClass(
-      'border-rose-200/70',
-      'bg-rose-50/80',
-      'backdrop-blur-md',
-    )
+    ).toHaveClass('border-rose-200/70', 'bg-rose-50/80', 'backdrop-blur-md')
 
     fireEvent.click(sendButton)
 
@@ -366,9 +410,9 @@ describe('MessageComposer', () => {
     )
     expect(screen.getByText('Предыдущее сообщение')).toBeInTheDocument()
     expect(
-      screen.getByText('Предыдущее сообщение').closest(
-        '[data-composer-panel="reply"]',
-      ),
+      screen
+        .getByText('Предыдущее сообщение')
+        .closest('[data-composer-panel="reply"]'),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
     expect(onCancelReply).not.toHaveBeenCalled()
   })
@@ -680,9 +724,9 @@ describe('MessageComposer', () => {
     await user.upload(screen.getByLabelText('Файл вложения'), attachment)
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
     expect(
-      screen.getByText('invoice.pdf').closest(
-        '[data-composer-panel="attachments"]',
-      ),
+      screen
+        .getByText('invoice.pdf')
+        .closest('[data-composer-panel="attachments"]'),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
 
     rerender(
@@ -703,9 +747,9 @@ describe('MessageComposer', () => {
     expect(onSendAttachment).not.toHaveBeenCalled()
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
     expect(
-      screen.getByText('invoice.pdf').closest(
-        '[data-composer-panel="attachments"]',
-      ),
+      screen
+        .getByText('invoice.pdf')
+        .closest('[data-composer-panel="attachments"]'),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
 
@@ -760,9 +804,7 @@ describe('MessageComposer', () => {
     expect(onSendAttachment).not.toHaveBeenCalled()
     expect(screen.getByText('Голосом нельзя без сети')).toBeInTheDocument()
     expect(
-      screen.getByText('Запись 00:00').closest(
-        '[data-composer-panel="voice"]',
-      ),
+      screen.getByText('Запись 00:00').closest('[data-composer-panel="voice"]'),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
 

@@ -1,11 +1,14 @@
 import type { RefObject } from 'react'
 
+import { normalizePastedScreenshotFile } from '../../lib/attachmentDraft'
+
 type ComposerTextareaProps = {
   ariaDescribedBy?: string
   disabled: boolean
   draft: string
   isInvalid?: boolean
   onDraftChange: (value: string) => void
+  onPasteFiles?: (files: readonly File[]) => boolean
   onSubmit: () => void
   placeholder: string
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -17,6 +20,7 @@ export function ComposerTextarea({
   draft,
   isInvalid = false,
   onDraftChange,
+  onPasteFiles,
   onSubmit,
   placeholder,
   textareaRef,
@@ -35,6 +39,18 @@ export function ComposerTextarea({
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault()
           onSubmit()
+        }
+      }}
+      onPaste={(event) => {
+        const now = new Date()
+        const files = Array.from(event.clipboardData.items)
+          .filter((item) => item.kind === 'file')
+          .map((item) => item.getAsFile())
+          .filter((file): file is File => file !== null)
+          .map((file) => normalizePastedScreenshotFile(file, now))
+
+        if (files.length > 0 && onPasteFiles?.(files)) {
+          event.preventDefault()
         }
       }}
       placeholder={placeholder}

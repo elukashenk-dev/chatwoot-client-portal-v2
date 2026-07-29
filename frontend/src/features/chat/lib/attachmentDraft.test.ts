@@ -5,6 +5,7 @@ import {
   admitAttachmentFiles,
   createAttachmentBatchSignature,
   normalizeAttachmentFile,
+  normalizePastedScreenshotFile,
   type AttachmentDraftItem,
 } from './attachmentDraft'
 
@@ -245,6 +246,28 @@ describe('attachment draft admission', () => {
     expect(emptyType.type).toBe('application/pdf')
     expect(genericType.type).toBe('text/plain')
     expect(explicitType.type).toBe('application/x-msdownload')
+  })
+
+  it('gives generic pasted images a readable timestamp without renaming real file names', () => {
+    const genericImage = createFile({
+      bytes: 'screenshot',
+      lastModified: 123,
+      name: 'image.png',
+      type: 'image/png',
+    })
+    const namedImage = createFile({
+      name: 'contract-scan.png',
+      type: 'image/png',
+    })
+    const now = new Date(2026, 6, 29, 14, 30, 52)
+
+    const normalized = normalizePastedScreenshotFile(genericImage, now)
+
+    expect(normalized.name).toBe('screenshot-20260729-143052.png')
+    expect(normalized.lastModified).toBe(123)
+    expect(normalized.size).toBe(genericImage.size)
+    expect(normalized.type).toBe('image/png')
+    expect(normalizePastedScreenshotFile(namedImage, now)).toBe(namedImage)
   })
 
   it('creates an order-sensitive signature from normalized file identity', () => {

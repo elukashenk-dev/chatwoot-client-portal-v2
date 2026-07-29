@@ -15,6 +15,7 @@ import {
 } from '../lib/messageContentLimits'
 import {
   normalizeAttachmentFile,
+  type AttachmentDraftSource,
   type AttachmentDraftItem,
   validateAttachmentFile,
 } from '../lib/attachmentDraft'
@@ -46,9 +47,7 @@ type MessageComposerProps = {
   onCancelReply: () => void
   onDraftTypingChange?: (draft: string) => void
   onSend: (input: SendMessageInput) => Promise<boolean>
-  onSendAttachmentBatch: (
-    input: SendAttachmentBatchInput,
-  ) => Promise<boolean>
+  onSendAttachmentBatch: (input: SendAttachmentBatchInput) => Promise<boolean>
   replyTarget: MessageComposerReplyTarget | null
   voiceDisabled?: boolean
 }
@@ -190,14 +189,7 @@ export function MessageComposer({
 
     shouldRestoreFocusRef.current = false
     focusTextarea()
-  }, [
-    attachmentCount,
-    disabled,
-    draft,
-    focusTextarea,
-    isSending,
-    replyTarget,
-  ])
+  }, [attachmentCount, disabled, draft, focusTextarea, isSending, replyTarget])
 
   function resetPendingTextSendIfPayloadChanged(
     nextDraft: string,
@@ -351,16 +343,21 @@ export function MessageComposer({
       textareaRef,
     })
 
-  function addAttachmentFiles(files: readonly File[]) {
+  function addAttachmentFiles(
+    files: readonly File[],
+    source: AttachmentDraftSource = 'picker',
+  ) {
     clearVoiceErrorMessage()
     setVoiceValidationErrorMessage(null)
 
-    const admission = attachmentDraft.addFiles(files, 'picker')
+    const admission = attachmentDraft.addFiles(files, source)
 
     if (admission.accepted.length > 0) {
       setPendingVoiceItem(null)
       attachmentSendRetryKey.clear()
     }
+
+    return admission.accepted.length > 0
   }
 
   function removeAttachment(itemId: string) {
@@ -456,6 +453,7 @@ export function MessageComposer({
           isVoiceRecorderStarting={voiceRecorderStatus === 'starting'}
           onDraftChange={updateDraft}
           onFilesSelect={addAttachmentFiles}
+          onPasteFiles={(files) => addAttachmentFiles(files, 'clipboard')}
           onSendButtonClick={() => {
             if (!shouldSkipClickAfterTouchSend()) {
               void submitCurrentDraft()

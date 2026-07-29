@@ -22,6 +22,7 @@ type ComposerInputRowProps = {
   isVoiceRecorderStarting: boolean
   onDraftChange: (value: string) => void
   onFilesSelect: (files: readonly File[]) => void
+  onPasteFiles: (files: readonly File[]) => boolean
   onSendButtonClick: () => void
   onSendButtonPointerDown: (event: PointerEvent<HTMLButtonElement>) => void
   onStartVoiceRecording: () => void
@@ -47,6 +48,7 @@ export function ComposerInputRow({
   isVoiceRecorderStarting,
   onDraftChange,
   onFilesSelect,
+  onPasteFiles,
   onSendButtonClick,
   onSendButtonPointerDown,
   onStartVoiceRecording,
@@ -97,12 +99,16 @@ export function ComposerInputRow({
         draft={draft}
         isInvalid={isTextDraftTooLong}
         onDraftChange={onDraftChange}
+        onPasteFiles={onPasteFiles}
         onSubmit={onSubmit}
         placeholder={placeholder}
         textareaRef={textareaRef}
       />
 
-      <ComposerSideControl control="voice" isCollapsed={shouldPrioritizeTextDraft}>
+      <ComposerSideControl
+        control="voice"
+        isCollapsed={shouldPrioritizeTextDraft}
+      >
         <ComposerSideButton
           ariaLabel="Голосовое сообщение"
           disabled={!canStartVoiceRecording}
@@ -113,9 +119,7 @@ export function ComposerInputRow({
         >
           <MicrophoneIcon
             className={
-              isVoiceRecorderStarting
-                ? 'h-5 w-5 animate-pulse'
-                : 'h-5 w-5'
+              isVoiceRecorderStarting ? 'h-5 w-5 animate-pulse' : 'h-5 w-5'
             }
           />
         </ComposerSideButton>

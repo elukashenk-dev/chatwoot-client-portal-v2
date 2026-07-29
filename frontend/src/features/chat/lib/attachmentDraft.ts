@@ -109,6 +109,24 @@ function inferMimeType(fileName: string) {
   return MIME_TYPE_BY_EXTENSION.get(getFileExtension(fileName)) ?? ''
 }
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0')
+}
+
+function getPastedImageExtension(file: File) {
+  const fileExtension = getFileExtension(file.name).slice(1)
+
+  if (/^[a-z0-9]{1,10}$/iu.test(fileExtension)) {
+    return fileExtension.toLowerCase()
+  }
+
+  const mimeSubtype = file.type.split('/')[1]?.split('+')[0] ?? ''
+
+  return /^[a-z0-9]{1,10}$/iu.test(mimeSubtype)
+    ? mimeSubtype.toLowerCase()
+    : 'png'
+}
+
 function isAllowedMimeType(mimeType: string) {
   return (
     mimeType.startsWith('image/') ||
@@ -160,6 +178,40 @@ export function normalizeAttachmentFile(file: File) {
     lastModified: file.lastModified,
     type: mimeType,
   })
+}
+
+export function normalizePastedScreenshotFile(
+  file: File,
+  now: Date = new Date(),
+) {
+  const fileName = file.name.trim()
+
+  if (
+    !file.type.toLowerCase().startsWith('image/') ||
+    (fileName && !/^image(?:\.[a-z0-9]{1,10})?$/iu.test(fileName))
+  ) {
+    return file
+  }
+
+  const datePart = [
+    now.getFullYear(),
+    padDatePart(now.getMonth() + 1),
+    padDatePart(now.getDate()),
+  ].join('')
+  const timePart = [
+    padDatePart(now.getHours()),
+    padDatePart(now.getMinutes()),
+    padDatePart(now.getSeconds()),
+  ].join('')
+
+  return new File(
+    [file],
+    `screenshot-${datePart}-${timePart}.${getPastedImageExtension(file)}`,
+    {
+      lastModified: file.lastModified,
+      type: file.type,
+    },
+  )
 }
 
 export function validateAttachmentFile(
@@ -227,10 +279,7 @@ export function admitAttachmentFiles({
   const identities = new Set(
     currentItems.map((item) => getAttachmentIdentity(item.file)),
   )
-  let totalBytes = currentItems.reduce(
-    (sum, item) => sum + item.file.size,
-    0,
-  )
+  let totalBytes = currentItems.reduce((sum, item) => sum + item.file.size, 0)
 
   for (const inputFile of files) {
     const file = normalizeAttachmentFile(inputFile)

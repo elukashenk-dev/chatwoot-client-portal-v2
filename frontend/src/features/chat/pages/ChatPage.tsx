@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { markChatThreadRead } from '../api/chatClient'
 import { PRIVATE_CHAT_THREAD_ID } from '../types'
 import { AgentTypingIndicator } from '../components/AgentTypingIndicator'
+import { ChatAttachmentDropZone } from '../components/ChatAttachmentDropZone'
 import { ChatHeader } from '../components/ChatHeader'
 import { ChatLoadingState } from '../components/ChatLoadingState'
 import { ChatNotReadyState } from '../components/ChatNotReadyState'
@@ -129,7 +130,6 @@ export function ChatPage() {
       markChatOffline,
       refreshSession,
     })
-
   const {
     clearHistoryFragment,
     clearSearchResultOpenError,
@@ -294,7 +294,6 @@ export function ChatPage() {
     setPageState,
     threadId: realtimeThreadId,
   })
-
   const {
     handleOutboxSendSucceeded,
     handleRetryTextMessage,
@@ -385,7 +384,6 @@ export function ChatPage() {
     markRead: markChatThreadRead,
     selectedThreadId: pageState.selectedThreadId,
   })
-
   useEffect(() => {
     if (
       !requestedThreadId ||
@@ -408,7 +406,6 @@ export function ChatPage() {
     pageState.threads,
     requestedThreadId,
   ])
-
   return (
     <>
       <ChatHeader
@@ -441,7 +438,10 @@ export function ChatPage() {
       />
       {shouldRenderTranscript ? <PwaInstallBanner /> : null}
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-transparent">
+      <ChatAttachmentDropZone
+        disabled={!shouldRenderTranscript || !canUseBackend || isSending}
+        onFiles={(files) => attachmentDraft.addFiles(files, 'drop')}
+      >
         {pageState.status === 'error' ? (
           <ChatNotReadyState
             isUnavailable={pageState.errorReason === 'chatwoot_unavailable'}
@@ -505,7 +505,7 @@ export function ChatPage() {
             selectedThreadId={pageState.selectedThreadId}
           />
         ) : null}
-      </div>
+      </ChatAttachmentDropZone>
       <ChatAuxiliaryPages
         activeThread={headerThread}
         chatInfoPanel={chatInfoPanel}
