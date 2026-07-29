@@ -38,6 +38,7 @@ import {
   isClientVisibleMessage,
   mapPortalMessage,
 } from './messageMapping.js'
+import { createUserScopedChatwootSourceId } from './messageSourceId.js'
 import type { ChatMessagesRepository } from './repository.js'
 import { createOrReplayCanonicalMessage } from './sendLedger.js'
 import { sendWithDeletedConversationRecovery } from './sendRecovery.js'
@@ -857,6 +858,10 @@ export function createChatMessagesService({
       })
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
+      const chatwootSourceId = createUserScopedChatwootSourceId({
+        clientMessageKey: normalizedClientMessageKey,
+        userId,
+      })
       const normalizedReplyToMessageId =
         normalizeReplyToMessageId(replyToMessageId)
       const conversationId = context.chatwootConversation.id
@@ -870,12 +875,13 @@ export function createChatMessagesService({
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
+          chatwootSourceId,
           createChatwootMessage: () =>
             chatwootClient.createConversationIncomingMessage({
               content: outboundContent,
               conversationId: sendConversationId,
               replyToMessageId: normalizedReplyToMessageId,
-              sourceId: normalizedClientMessageKey,
+              sourceId: chatwootSourceId,
             }),
           messageKind: SEND_LEDGER_MESSAGE_KIND_TEXT,
           now,
@@ -1000,6 +1006,10 @@ export function createChatMessagesService({
       })
       const normalizedClientMessageKey =
         normalizeClientMessageKey(clientMessageKey)
+      const chatwootSourceId = createUserScopedChatwootSourceId({
+        clientMessageKey: normalizedClientMessageKey,
+        userId,
+      })
       const normalizedReplyToMessageId =
         normalizeReplyToMessageId(replyToMessageId)
       const conversationId = context.chatwootConversation.id
@@ -1013,13 +1023,14 @@ export function createChatMessagesService({
           chatMessagesRepository,
           chatwootClient,
           clientMessageKey: normalizedClientMessageKey,
+          chatwootSourceId,
           createChatwootMessage: () =>
             chatwootClient.createConversationIncomingAttachmentMessage({
               attachment: normalizedAttachment,
               content: outboundContent,
               conversationId: sendConversationId,
               replyToMessageId: normalizedReplyToMessageId,
-              sourceId: normalizedClientMessageKey,
+              sourceId: chatwootSourceId,
             }),
           messageKind: SEND_LEDGER_MESSAGE_KIND_ATTACHMENT,
           now,

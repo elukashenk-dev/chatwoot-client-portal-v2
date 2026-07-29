@@ -54,6 +54,8 @@ execution-plan детали здесь не хранятся.
   boundary, а Chatwoot conversation IDs не являются browser authority.
 - Group send добавляет Chatwoot-visible Markdown author prefix; portal transcript
   показывает authors через structured metadata.
+- Chatwoot recovery source IDs are scoped by portal user, so equal browser
+  message keys from different group members cannot alias messages or authors.
 - Chat info, media/files, search, bounded history context, support availability
   and working hours работают как chat-adjacent full-screen pages/flows через
   backend authority.

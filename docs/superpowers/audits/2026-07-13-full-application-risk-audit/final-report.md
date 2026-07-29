@@ -219,7 +219,7 @@ Docker CLI, локальный MinIO и локальный Chatwoot в dynamic s
 | [F-AUTH-006](../../../findings/F-AUTH-006-frontend-session-expiry.md)        | `fix/auth-`     | frontend state unit + Playwright expiry/logout     | Все открытые routes/state переходят в signed-out без stale protected UI.                               |
 | [F-DATA-001](../../../findings/F-DATA-001-admin-auth-retention.md)           | `fix/data-`     | cleanup unit/integration + indexed batch plan      | Expired challenges/sessions очищаются bounded batches; audit retention следует утверждённой политике.  |
 | [F-LEGAL-001](../../../findings/F-LEGAL-001-acceptance-version-binding.md)   | `fix/legal-`    | backend acceptance integration                     | Acceptance относится к точной активной версии; concurrent publish не подменяет согласованный документ. |
-| [F-CHAT-009](../../../findings/F-CHAT-009-group-message-key-scope.md)        | `fix/chat-`     | two-user group send integration                    | Одинаковый client key у разных users не alias-ит message и не меняет attribution.                      |
+| `F-CHAT-009` (закрыт 2026-07-29)                                             | `fix/chat-`     | two-user group send integration                    | Одинаковый client key у разных users не alias-ит message и не меняет attribution.                      |
 | [F-DB-001](../../../findings/F-DB-001-drizzle-snapshot-lineage.md)           | `fix/db-`       | clean migration, replay, journal/snapshot checks   | Fresh DB и supported upgrade path дают одну schema без drift или destructive surprise.                 |
 
 ### 3. Medium message delivery, integrations and operations

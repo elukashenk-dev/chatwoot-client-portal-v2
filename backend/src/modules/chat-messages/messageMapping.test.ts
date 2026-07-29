@@ -147,6 +147,105 @@ describe('mapPortalMessage', () => {
     })
   })
 
+  it('hides the user scope from a current portal-send source id', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: 'Привет',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 1142,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 33,
+          name: 'Alex',
+          type: 'contact',
+        },
+        sourceId: 'portal-user-send:v1:13:portal-send:browser-key',
+        status: 'failed',
+      },
+      {
+        currentUserId: 13,
+        threadId: 'private:me',
+        threadType: 'private',
+      },
+    )
+
+    expect(message).toMatchObject({
+      clientMessageKey: 'portal-send:browser-key',
+      direction: 'outgoing',
+      status: 'sent',
+    })
+  })
+
+  it('keeps a legacy portal-send key that begins with the old v2-looking prefix', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: 'Привет',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 1143,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 33,
+          name: 'Alex',
+          type: 'contact',
+        },
+        sourceId: 'portal-send:v2:13:portal-send:historical-key',
+        status: 'failed',
+      },
+      {
+        currentUserId: 13,
+        threadId: 'private:me',
+        threadType: 'private',
+      },
+    )
+
+    expect(message).toMatchObject({
+      clientMessageKey: 'portal-send:v2:13:portal-send:historical-key',
+      direction: 'outgoing',
+      status: 'sent',
+    })
+  })
+
+  it('does not accept a non-canonical user scope in a current source id', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [],
+        content: 'Привет',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 1144,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 33,
+          name: 'Alex',
+          type: 'contact',
+        },
+        sourceId: 'portal-user-send:v1:1e2:portal-send:browser-key',
+        status: 'failed',
+      },
+      {
+        currentUserId: 13,
+        threadId: 'private:me',
+        threadType: 'private',
+      },
+    )
+
+    expect(message).toMatchObject({
+      clientMessageKey: null,
+      direction: 'outgoing',
+      status: 'failed',
+    })
+  })
+
   it('maps ledger-known group member avatars to portal participant avatar URLs', () => {
     const message = mapPortalMessage(
       {

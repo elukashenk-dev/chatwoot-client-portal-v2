@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { ChatwootInvalidHistoryCursorError } from '../../integrations/chatwoot/client.js'
+import {
+  ChatwootInvalidHistoryCursorError,
+  type ChatwootClient,
+  type ChatwootMessage,
+} from '../../integrations/chatwoot/client.js'
 import type { CurrentUserChatThreadContext } from '../chat-threads/types.js'
 import { createChatMessagesService } from './service.js'
 import {
@@ -521,7 +525,7 @@ describe('createChatMessagesService', () => {
       content: 'Portal text',
       conversationId: 101,
       replyToMessageId: null,
-      sourceId: 'portal-send:test-key',
+      sourceId: 'portal-user-send:v1:7:portal-send:test-key',
     })
     expect(
       chatMessagesRepository.markSendLedgerEntryConfirmed,
@@ -531,6 +535,126 @@ describe('createChatMessagesService', () => {
         clientMessageKey: 'portal-send:test-key',
         portalChatThreadId: 1,
         userId: 7,
+      }),
+    )
+  })
+
+  it('keeps the same client message key separate for two group users', async () => {
+    const messagesBySourceId = new Map<string, ChatwootMessage>()
+    const createConversationIncomingMessage = vi.fn<
+      ChatwootClient['createConversationIncomingMessage']
+    >(async ({ content, sourceId }) => {
+      if (!sourceId) {
+        throw new Error('Expected a Chatwoot source id.')
+      }
+
+      const message = {
+        ...sentChatwootMessage,
+        content,
+        id: 501 + messagesBySourceId.size,
+        sourceId,
+      }
+
+      messagesBySourceId.set(sourceId, message)
+      return message
+    })
+    const findConversationMessageBySourceId = vi.fn<
+      ChatwootClient['findConversationMessageBySourceId']
+    >(async (_conversationId, sourceId) => {
+      return messagesBySourceId.get(sourceId) ?? null
+    })
+    const chatThreadsService = createChatThreadsServiceStub()
+
+    chatThreadsService.ensureCurrentUserWritableThreadContext.mockImplementation(
+      async ({ userId }) =>
+        ({
+          activeThread: {
+            id: 'group:154',
+            subtitle: 'Групповой чат',
+            title: 'ООО Ромашка',
+            type: 'group',
+          },
+          chatwootContactSourceId: 'group-contact-source',
+          chatwootConversation: {
+            assigneeName: 'Анна Смирнова',
+            id: 101,
+            inboxId: 9,
+            lastActivityAt: 300,
+            status: 'open',
+          },
+          currentUserEmail: `user-${userId}@example.test`,
+          currentUserName: userId === 7 ? 'Мария' : 'Иван',
+          linkedContactId: userId === 7 ? 44 : 45,
+          portalChatThreadId: 1,
+          reason: 'none',
+          result: 'ready',
+          targetChatwootContactId: 154,
+          threadType: 'group',
+        }) satisfies CurrentUserChatThreadContext,
+    )
+
+    const chatMessagesRepository = createChatMessagesRepositoryStub()
+    const service = createChatMessagesService({
+      chatThreadsRepository: createChatThreadsRepositoryStub(),
+      chatThreadsService,
+      chatMessagesRepository,
+      chatwootClient: createChatwootClientStub({
+        createConversationIncomingMessage,
+        findConversationMessageBySourceId,
+      }),
+    })
+    const clientMessageKey = 'portal-send:shared-group-key'
+
+    const firstResult = await service.sendCurrentUserTextMessage({
+      clientMessageKey,
+      content: 'Сообщение Марии',
+      threadId: 'group:154',
+      userId: 7,
+    })
+    const secondResult = await service.sendCurrentUserTextMessage({
+      clientMessageKey,
+      content: 'Сообщение Ивана',
+      threadId: 'group:154',
+      userId: 8,
+    })
+
+    expect(firstResult).toMatchObject({
+      sentMessage: {
+        content: 'Сообщение Марии',
+        id: 501,
+      },
+    })
+    expect(secondResult).toMatchObject({
+      sentMessage: {
+        content: 'Сообщение Ивана',
+        id: 502,
+      },
+    })
+    expect(createConversationIncomingMessage).toHaveBeenCalledTimes(2)
+
+    const sourceIds = createConversationIncomingMessage.mock.calls.map(
+      ([input]) => input.sourceId,
+    )
+
+    expect(sourceIds[0]).not.toBe(sourceIds[1])
+    expect(
+      chatMessagesRepository.markSendLedgerEntryConfirmed,
+    ).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        chatwootMessageId: 501,
+        clientMessageKey,
+        userId: 7,
+      }),
+    )
+    expect(
+      chatMessagesRepository.markSendLedgerEntryConfirmed,
+    ).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        chatwootMessageId: 502,
+        clientMessageKey,
+        userId: 8,
       }),
     )
   })
@@ -599,7 +723,7 @@ describe('createChatMessagesService', () => {
       content: 'Portal text',
       conversationId: 101,
       replyToMessageId: 21,
-      sourceId: 'portal-send:test-key',
+      sourceId: 'portal-user-send:v1:7:portal-send:test-key',
     })
     expect(findConversationMessageById).toHaveBeenCalledWith(101, 21)
   })
@@ -711,6 +835,16 @@ describe('createChatMessagesService', () => {
       },
     })
     expect(findConversationMessageBySourceId).toHaveBeenCalledTimes(2)
+    expect(findConversationMessageBySourceId).toHaveBeenNthCalledWith(
+      1,
+      101,
+      'portal-user-send:v1:7:portal-send:test-key',
+    )
+    expect(findConversationMessageBySourceId).toHaveBeenNthCalledWith(
+      2,
+      101,
+      'portal-user-send:v1:7:portal-send:test-key',
+    )
     expect(
       chatMessagesRepository.markSendLedgerEntryConfirmed,
     ).toHaveBeenCalledWith(
@@ -782,7 +916,7 @@ describe('createChatMessagesService', () => {
         size: data.byteLength,
       },
       content: 'Подпись к файлу',
-      sourceId: 'portal-send:attachment-key',
+      sourceId: 'portal-user-send:v1:7:portal-send:attachment-key',
     })
     expect(
       Buffer.compare(createArgs?.attachment.data ?? Buffer.alloc(0), data),
@@ -854,7 +988,7 @@ describe('createChatMessagesService', () => {
           mimeType: 'audio/webm;codecs=opus',
           size: data.byteLength,
         }),
-        sourceId: 'portal-send:voice-key',
+        sourceId: 'portal-user-send:v1:7:portal-send:voice-key',
       }),
     )
   })

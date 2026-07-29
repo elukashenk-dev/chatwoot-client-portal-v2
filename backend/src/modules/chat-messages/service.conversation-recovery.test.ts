@@ -79,7 +79,7 @@ const sentChatwootMessage = {
     name: 'Portal User',
     type: 'contact',
   },
-  sourceId: 'portal-send:test-key',
+  sourceId: 'portal-user-send:v1:7:portal-send:test-key',
   status: 'sent',
 }
 
@@ -108,7 +108,7 @@ const sentAttachmentChatwootMessage = {
     name: 'ООО "Ромашка"',
     type: 'contact',
   },
-  sourceId: 'portal-send:attachment-recovery-key',
+  sourceId: 'portal-user-send:v1:7:portal-send:attachment-recovery-key',
   status: 'sent',
 }
 
@@ -199,13 +199,13 @@ describe('createChatMessagesService deleted conversation recovery', () => {
       content: 'Portal text',
       conversationId: 101,
       replyToMessageId: null,
-      sourceId: 'portal-send:test-key',
+      sourceId: 'portal-user-send:v1:7:portal-send:test-key',
     })
     expect(createConversationIncomingMessage).toHaveBeenNthCalledWith(2, {
       content: 'Portal text',
       conversationId: 202,
       replyToMessageId: null,
-      sourceId: 'portal-send:test-key',
+      sourceId: 'portal-user-send:v1:7:portal-send:test-key',
     })
     expect(
       chatMessagesRepository.markSendLedgerEntryFailed,
@@ -294,14 +294,14 @@ describe('createChatMessagesService deleted conversation recovery', () => {
       1,
       expect.objectContaining({
         conversationId: 301,
-        sourceId: 'portal-send:attachment-recovery-key',
+        sourceId: 'portal-user-send:v1:7:portal-send:attachment-recovery-key',
       }),
     )
     expect(createConversationIncomingAttachmentMessage).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         conversationId: 302,
-        sourceId: 'portal-send:attachment-recovery-key',
+        sourceId: 'portal-user-send:v1:7:portal-send:attachment-recovery-key',
       }),
     )
     expect(

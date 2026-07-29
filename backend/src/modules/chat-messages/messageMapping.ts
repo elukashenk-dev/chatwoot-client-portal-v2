@@ -4,6 +4,7 @@ import type {
 } from '../../integrations/chatwoot/client.js'
 import { buildPortalGroupParticipantAvatarUrl } from '../chat-threads/types.js'
 import { parseGroupThreadContent } from './authorFormatting.js'
+import { readClientMessageKeyFromChatwootSourceId } from './messageSourceId.js'
 import type {
   PortalChatMessage,
   PortalChatMessageAuthorRole,
@@ -195,17 +196,13 @@ function buildReplyPreview(
   }
 }
 
-function isPortalSendSourceId(sourceId: string | null) {
-  return sourceId?.startsWith('portal-send:') ?? false
-}
-
 function normalizePortalMessageStatus(
   message: ChatwootMessage,
   presentation: Pick<ReturnType<typeof mapMessagePresentation>, 'direction'>,
 ) {
   if (
     presentation.direction === 'outgoing' &&
-    isPortalSendSourceId(message.sourceId)
+    readClientMessageKeyFromChatwootSourceId(message.sourceId) !== null
   ) {
     return 'sent'
   }
@@ -245,6 +242,9 @@ export function mapPortalMessage(
       ? null
       : context.replyTargetsById?.get(replyToMessageId)
   const presentation = mapMessagePresentation(message, context)
+  const clientMessageKey = readClientMessageKeyFromChatwootSourceId(
+    message.sourceId,
+  )
 
   return {
     attachments: message.attachments.map((attachment) => ({
@@ -269,9 +269,7 @@ export function mapPortalMessage(
     authorAvatarUrl: presentation.authorAvatarUrl,
     authorName: presentation.authorName,
     authorRole: presentation.authorRole,
-    clientMessageKey: isPortalSendSourceId(message.sourceId)
-      ? message.sourceId
-      : null,
+    clientMessageKey,
     content: presentation.content,
     contentType: message.contentType,
     createdAt: toIsoTimestamp(message.createdAt),
