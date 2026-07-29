@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
@@ -13,6 +13,10 @@ import type {
   PushSubscriptionRecord,
   UserNotificationSettings,
 } from './types.js'
+import {
+  createPushSubscriptionRegistrationRepository,
+  MAX_ACTIVE_PUSH_SUBSCRIPTIONS,
+} from './pushSubscriptionRegistrationRepository.js'
 
 type TenantRepositoryScope = {
   tenantId: number
@@ -69,58 +73,7 @@ export function createChatNotificationsRepository(
   { tenantId }: TenantRepositoryScope,
 ) {
   return {
-    async disableOtherPushSubscriptionsForDevice({
-      deviceId,
-      endpoint,
-      now,
-      portalUserId,
-    }: {
-      deviceId: string
-      endpoint: string
-      now: Date
-      portalUserId: number
-    }) {
-      await db
-        .update(portalPushSubscriptions)
-        .set({
-          status: 'disabled',
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(portalPushSubscriptions.tenantId, tenantId),
-            eq(portalPushSubscriptions.portalUserId, portalUserId),
-            eq(portalPushSubscriptions.deviceId, deviceId),
-            eq(portalPushSubscriptions.status, 'active'),
-            ne(portalPushSubscriptions.endpoint, endpoint),
-          ),
-        )
-    },
-
-    async disableOtherPushSubscriptionsForEndpoint({
-      endpoint,
-      now,
-      portalUserId,
-    }: {
-      endpoint: string
-      now: Date
-      portalUserId: number
-    }) {
-      await db
-        .update(portalPushSubscriptions)
-        .set({
-          status: 'disabled',
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(portalPushSubscriptions.tenantId, tenantId),
-            eq(portalPushSubscriptions.endpoint, endpoint),
-            eq(portalPushSubscriptions.status, 'active'),
-            ne(portalPushSubscriptions.portalUserId, portalUserId),
-          ),
-        )
-    },
+    ...createPushSubscriptionRegistrationRepository(db, { tenantId }),
 
     async disablePushSubscription({
       endpoint,
@@ -172,6 +125,11 @@ export function createChatNotificationsRepository(
             eq(portalPushSubscriptions.status, 'active'),
           ),
         )
+        .orderBy(
+          desc(portalPushSubscriptions.updatedAt),
+          desc(portalPushSubscriptions.id),
+        )
+        .limit(MAX_ACTIVE_PUSH_SUBSCRIPTIONS)
 
       return rows satisfies PushSubscriptionRecord[]
     },
@@ -283,61 +241,6 @@ export function createChatNotificationsRepository(
             eq(portalPushSubscriptions.id, subscriptionId),
           ),
         )
-    },
-
-    async upsertPushSubscription({
-      auth,
-      deviceId,
-      endpoint,
-      now,
-      p256dh,
-      portalUserId,
-      userAgent,
-      vapidKeyId,
-      vapidPublicKeyFingerprint,
-    }: {
-      auth: string
-      deviceId: string
-      endpoint: string
-      now: Date
-      p256dh: string
-      portalUserId: number
-      userAgent: string | null
-      vapidKeyId: string
-      vapidPublicKeyFingerprint: string
-    }) {
-      await db
-        .insert(portalPushSubscriptions)
-        .values({
-          auth,
-          deviceId,
-          endpoint,
-          p256dh,
-          portalUserId,
-          status: 'active',
-          tenantId,
-          updatedAt: now,
-          userAgent,
-          vapidKeyId,
-          vapidPublicKeyFingerprint,
-        })
-        .onConflictDoUpdate({
-          set: {
-            auth,
-            deviceId,
-            p256dh,
-            status: 'active',
-            updatedAt: now,
-            userAgent,
-            vapidKeyId,
-            vapidPublicKeyFingerprint,
-          },
-          target: [
-            portalPushSubscriptions.tenantId,
-            portalPushSubscriptions.portalUserId,
-            portalPushSubscriptions.endpoint,
-          ],
-        })
     },
 
     async findChatOverrides({

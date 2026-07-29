@@ -69,6 +69,9 @@ execution-plan детали здесь не хранятся.
 - Chat notifications are tenant/user/thread scoped: global settings,
   chat-level overrides, sound, Web Push subscription lifecycle, safe push
   routing metadata, backend-owned unread counts and app badge updates.
+- Push registration keeps at most five recent active subscriptions per user,
+  preserves one active owner per endpoint under concurrency and bounds each
+  message delivery to five subscriptions.
 - Offline-first PWA MVP is implemented: app shell cache, scoped IndexedDB
   tenant/auth/chat snapshots, durable text outbox, foreground drain,
   Background Sync progressive enhancement and unified startup/connection UX.

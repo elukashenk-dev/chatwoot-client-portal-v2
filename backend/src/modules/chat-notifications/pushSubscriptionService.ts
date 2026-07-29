@@ -1,4 +1,5 @@
 import { ApiError } from '../../lib/errors.js'
+import { PushSubscriptionRegistrationBusyError } from './pushSubscriptionRegistrationRepository.js'
 import type { ChatNotificationsRepository } from './repository.js'
 import type {
   BrowserPushSubscriptionInput,
@@ -10,10 +11,7 @@ type CreatePushSubscriptionServiceOptions = {
   now?: () => Date
   repository: Pick<
     ChatNotificationsRepository,
-    | 'disableOtherPushSubscriptionsForDevice'
-    | 'disableOtherPushSubscriptionsForEndpoint'
-    | 'disablePushSubscription'
-    | 'upsertPushSubscription'
+    'disablePushSubscription' | 'savePushSubscription'
   >
   vapidConfig: VapidConfig | null
 }
@@ -55,28 +53,29 @@ export function createPushSubscriptionService({
       }
       const currentTime = now()
 
-      await repository.disableOtherPushSubscriptionsForDevice({
-        deviceId: subscription.deviceId,
-        endpoint: subscription.endpoint,
-        now: currentTime,
-        portalUserId,
-      })
-      await repository.upsertPushSubscription({
-        auth: subscription.keys.auth,
-        deviceId: subscription.deviceId,
-        endpoint: subscription.endpoint,
-        now: currentTime,
-        p256dh: subscription.keys.p256dh,
-        portalUserId,
-        userAgent: subscription.userAgent,
-        vapidKeyId: vapidConfig.keyId,
-        vapidPublicKeyFingerprint: vapidConfig.publicKeyFingerprint,
-      })
-      await repository.disableOtherPushSubscriptionsForEndpoint({
-        endpoint: subscription.endpoint,
-        now: currentTime,
-        portalUserId,
-      })
+      try {
+        await repository.savePushSubscription({
+          auth: subscription.keys.auth,
+          deviceId: subscription.deviceId,
+          endpoint: subscription.endpoint,
+          now: currentTime,
+          p256dh: subscription.keys.p256dh,
+          portalUserId,
+          userAgent: subscription.userAgent,
+          vapidKeyId: vapidConfig.keyId,
+          vapidPublicKeyFingerprint: vapidConfig.publicKeyFingerprint,
+        })
+      } catch (error) {
+        if (error instanceof PushSubscriptionRegistrationBusyError) {
+          throw new ApiError(
+            503,
+            'push_subscription_busy',
+            'Не удалось подключить push-уведомления. Повторите попытку.',
+          )
+        }
+
+        throw error
+      }
     },
 
     async disableSubscription({
