@@ -21,9 +21,14 @@ type ChatSendRateLimitConfig = {
 }
 
 type ChatSendRateLimitInput = {
-  kind: ChatSendRateLimitKind
+  kind: 'text'
   tenantId: number
   threadId: string
+  userId: number
+}
+
+type AttachmentUploadRateLimitInput = {
+  tenantId: number
   userId: number
 }
 
@@ -69,6 +74,10 @@ function buildSubjectKey({
   userId: number
 }) {
   return `user:${userId}:thread:${threadId}`
+}
+
+function buildUserSubjectKey(userId: number) {
+  return `user:${userId}`
 }
 
 function calculateRetryAfterSeconds({
@@ -131,31 +140,58 @@ export function createChatSendRateLimiter({
   now = () => new Date(),
   repository,
 }: CreateChatSendRateLimiterOptions) {
+  async function consumeLimit({
+    config,
+    scope,
+    subjectKey,
+    tenantId,
+  }: {
+    config: ChatSendRateLimitConfig
+    scope: string
+    subjectKey: string
+    tenantId: number
+  }) {
+    const currentTime = now()
+    const bucket = await repository.consumeFixedWindow({
+      now: currentTime,
+      scope,
+      subjectKey,
+      tenantId,
+      windowMs: config.windowMs,
+    })
+
+    if (bucket.count <= config.maxRequests) {
+      return {
+        status: 'allowed' as const,
+      }
+    }
+
+    return {
+      retryAfterSeconds: calculateRetryAfterSeconds({
+        now: currentTime,
+        resetAt: bucket.resetAt,
+      }),
+      status: 'limited' as const,
+    }
+  }
+
   return {
     async consume(input: ChatSendRateLimitInput) {
-      const currentTime = now()
-      const config = getLimitConfig(input.kind)
-      const bucket = await repository.consumeFixedWindow({
-        now: currentTime,
+      return consumeLimit({
+        config: getLimitConfig(input.kind),
         scope: buildScope(input.kind),
         subjectKey: buildSubjectKey(input),
         tenantId: input.tenantId,
-        windowMs: config.windowMs,
       })
+    },
 
-      if (bucket.count <= config.maxRequests) {
-        return {
-          status: 'allowed' as const,
-        }
-      }
-
-      return {
-        retryAfterSeconds: calculateRetryAfterSeconds({
-          now: currentTime,
-          resetAt: bucket.resetAt,
-        }),
-        status: 'limited' as const,
-      }
+    async consumeAttachmentUpload(input: AttachmentUploadRateLimitInput) {
+      return consumeLimit({
+        config: CHAT_ATTACHMENT_SEND_RATE_LIMIT,
+        scope: buildScope('attachment'),
+        subjectKey: buildUserSubjectKey(input.userId),
+        tenantId: input.tenantId,
+      })
     },
   }
 }

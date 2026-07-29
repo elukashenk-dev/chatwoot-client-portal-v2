@@ -9,6 +9,10 @@ import { resolveAuthenticatedPortalUser } from '../auth/currentUser.js'
 import type { AuthService } from '../auth/service.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 import { requireTenantContext } from '../tenants/routes.js'
+import {
+  createChatAttachmentUploadAdmission,
+  type ChatAttachmentUploadAdmission,
+} from './attachmentUploadAdmission.js'
 import { registerChatAttachmentProxyRoutes } from './attachmentProxyRoutes.js'
 import { registerChatAvatarProxyRoutes } from './avatarProxyRoutes.js'
 import { registerChatMessageContextRoutes } from './contextRoutes.js'
@@ -71,22 +75,45 @@ type AttachmentMultipartFields = {
 }
 
 type RegisterChatMessagesRoutesOptions = {
+  attachmentUploadAdmission?: ChatAttachmentUploadAdmission
   authService: AuthService
   chatSendRateLimiter: ChatSendRateLimiter
   createChatMessagesService: (request: FastifyRequest) => ChatMessagesService
   env: AppEnv
 }
 
-async function enforceChatSendRateLimit({
+function acquireAttachmentUploadAdmission({
+  attachmentUploadAdmission,
+  reply,
+}: {
+  attachmentUploadAdmission: ChatAttachmentUploadAdmission
+  reply: {
+    header: (name: string, value: string) => unknown
+  }
+}) {
+  const release = attachmentUploadAdmission.tryAcquire()
+
+  if (release) {
+    return release
+  }
+
+  reply.header('Retry-After', '1')
+
+  throw new ApiError(
+    503,
+    'CHAT_ATTACHMENT_UPLOAD_BUSY',
+    'Сервер занят загрузкой файлов. Попробуйте ещё раз.',
+  )
+}
+
+async function enforceTextSendRateLimit({
   chatSendRateLimiter,
-  kind,
   reply,
   request,
   threadId,
   userId,
 }: {
   chatSendRateLimiter: ChatSendRateLimiter
-  kind: 'attachment' | 'text'
   reply: {
     header: (name: string, value: string) => unknown
   }
@@ -96,9 +123,41 @@ async function enforceChatSendRateLimit({
 }) {
   const tenant = requireTenantContext(request)
   const rateLimit = await chatSendRateLimiter.consume({
-    kind,
+    kind: 'text',
     tenantId: tenant.id,
     threadId,
+    userId,
+  })
+
+  if (rateLimit.status === 'allowed') {
+    return
+  }
+
+  reply.header('Retry-After', String(rateLimit.retryAfterSeconds))
+
+  throw new ApiError(
+    429,
+    'CHAT_SEND_RATE_LIMITED',
+    'Слишком много сообщений. Попробуйте позже.',
+  )
+}
+
+async function enforceAttachmentUploadRateLimit({
+  chatSendRateLimiter,
+  reply,
+  request,
+  userId,
+}: {
+  chatSendRateLimiter: ChatSendRateLimiter
+  reply: {
+    header: (name: string, value: string) => unknown
+  }
+  request: FastifyRequest
+  userId: number
+}) {
+  const tenant = requireTenantContext(request)
+  const rateLimit = await chatSendRateLimiter.consumeAttachmentUpload({
+    tenantId: tenant.id,
     userId,
   })
 
@@ -288,6 +347,7 @@ async function parseAttachmentUpload(
 export function registerChatMessagesRoutes(
   app: FastifyInstance,
   {
+    attachmentUploadAdmission = createChatAttachmentUploadAdmission(),
     authService,
     chatSendRateLimiter,
     createChatMessagesService,
@@ -374,9 +434,8 @@ export function registerChatMessagesRoutes(
     })
     const body = sendChatMessageBodySchema.parse(request.body)
 
-    await enforceChatSendRateLimit({
+    await enforceTextSendRateLimit({
       chatSendRateLimiter,
-      kind: 'text',
       reply,
       request,
       threadId: body.threadId,
@@ -406,27 +465,34 @@ export function registerChatMessagesRoutes(
         reply,
         request,
       })
-      const upload = await parseAttachmentUpload(app, request)
-
-      await enforceChatSendRateLimit({
-        chatSendRateLimiter,
-        kind: 'attachment',
+      const releaseUploadAdmission = acquireAttachmentUploadAdmission({
+        attachmentUploadAdmission,
         reply,
-        request,
-        threadId: upload.threadId,
-        userId: user.id,
       })
 
-      return createChatMessagesService(
-        request,
-      ).sendCurrentUserAttachmentMessage({
-        attachment: upload.attachment,
-        clientMessageKey: upload.clientMessageKey,
-        content: upload.content,
-        replyToMessageId: upload.replyToMessageId,
-        threadId: upload.threadId,
-        userId: user.id,
-      })
+      try {
+        await enforceAttachmentUploadRateLimit({
+          chatSendRateLimiter,
+          reply,
+          request,
+          userId: user.id,
+        })
+
+        const upload = await parseAttachmentUpload(app, request)
+
+        return await createChatMessagesService(
+          request,
+        ).sendCurrentUserAttachmentMessage({
+          attachment: upload.attachment,
+          clientMessageKey: upload.clientMessageKey,
+          content: upload.content,
+          replyToMessageId: upload.replyToMessageId,
+          threadId: upload.threadId,
+          userId: user.id,
+        })
+      } finally {
+        releaseUploadAdmission()
+      }
     },
   )
 }

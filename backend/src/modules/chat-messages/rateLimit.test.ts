@@ -100,40 +100,43 @@ describe('createChatSendRateLimiter', () => {
     })
   })
 
-  it('uses a stricter independent budget for attachment sends', async () => {
+  it('uses a user-wide attachment upload budget across chats', async () => {
     const limiter = createLimiter()
 
     expect(CHAT_ATTACHMENT_SEND_RATE_LIMIT.maxRequests).toBeLessThan(
       CHAT_TEXT_SEND_RATE_LIMIT.maxRequests,
     )
 
-    for (
-      let index = 0;
-      index < CHAT_ATTACHMENT_SEND_RATE_LIMIT.maxRequests;
-      index += 1
-    ) {
-      await expect(
-        limiter.consume({
-          kind: 'attachment',
-          tenantId,
-          threadId: 'private:me',
-          userId: 7,
-        }),
-      ).resolves.toEqual({
-        status: 'allowed',
-      })
-    }
+    const concurrentAttempts = await Promise.all(
+      Array.from(
+        { length: CHAT_ATTACHMENT_SEND_RATE_LIMIT.maxRequests + 1 },
+        () =>
+          limiter.consumeAttachmentUpload({
+            tenantId,
+            userId: 7,
+          }),
+      ),
+    )
+
+    expect(
+      concurrentAttempts.filter(({ status }) => status === 'allowed'),
+    ).toHaveLength(CHAT_ATTACHMENT_SEND_RATE_LIMIT.maxRequests)
+    expect(
+      concurrentAttempts.filter(({ status }) => status === 'limited'),
+    ).toEqual([
+      {
+        retryAfterSeconds: 60,
+        status: 'limited',
+      },
+    ])
 
     await expect(
-      limiter.consume({
-        kind: 'attachment',
+      limiter.consumeAttachmentUpload({
         tenantId,
-        threadId: 'private:me',
-        userId: 7,
+        userId: 8,
       }),
     ).resolves.toEqual({
-      retryAfterSeconds: 60,
-      status: 'limited',
+      status: 'allowed',
     })
 
     await expect(

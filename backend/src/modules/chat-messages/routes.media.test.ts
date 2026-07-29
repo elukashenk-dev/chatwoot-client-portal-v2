@@ -86,6 +86,7 @@ async function buildMediaRoutesTestApp({
     authService,
     chatSendRateLimiter: {
       consume: vi.fn(),
+      consumeAttachmentUpload: vi.fn(),
     },
     createChatMessagesService: () =>
       ({

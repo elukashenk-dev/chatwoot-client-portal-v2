@@ -5,7 +5,10 @@ import Fastify, { type FastifyRequest } from 'fastify'
 import type { AppEnv } from './config/env.js'
 import type { DatabaseClient } from './db/client.js'
 import { createChatwootAdminAgentsClient } from './integrations/chatwoot/adminAgents.js'
-import { createSmtpEmailDelivery, type SmtpEmailDelivery } from './integrations/email/smtp.js'
+import {
+  createSmtpEmailDelivery,
+  type SmtpEmailDelivery,
+} from './integrations/email/smtp.js'
 import {
   createBrandingObjectStorageFromEnv,
   type BrandingObjectStorage,
@@ -69,13 +72,22 @@ import { registerTenantAdminAuthRoutes } from './modules/tenant-admin/adminAuthR
 import { createTenantAdminAuthService } from './modules/tenant-admin/adminAuthService.js'
 import { createTenantAdminVerificationService } from './modules/tenant-admin/adminVerification.js'
 import { createTenantsRepository } from './modules/tenants/repository.js'
-import { requireTenantContext, registerTenantContext, registerTenantRoutes } from './modules/tenants/routes.js'
+import {
+  requireTenantContext,
+  registerTenantContext,
+  registerTenantRoutes,
+} from './modules/tenants/routes.js'
 import { createTenantsService } from './modules/tenants/service.js'
 import { createTenantPwaBrandingReader } from './modules/tenants/pwaBrandingReader.js'
 import { createTenantPwaIconReader } from './modules/tenants/pwaIconReader.js'
-import { createRuntimeChatwootClientFactory, getAttachmentProxyAllowedOrigins } from './runtimeChatwootClientFactory.js'
+import {
+  createRuntimeChatwootClientFactory,
+  getAttachmentProxyAllowedOrigins,
+} from './runtimeChatwootClientFactory.js'
 
 export { createRuntimeChatwootClientFactory } from './runtimeChatwootClientFactory.js'
+
+const PORTAL_REQUEST_TIMEOUT_MS = 5 * 60_000
 
 type BuildAppOptions = {
   brandingObjectStorage?: BrandingObjectStorage
@@ -103,6 +115,7 @@ export function buildApp({
         : {
             level: env.NODE_ENV === 'development' ? 'info' : 'warn',
           },
+    requestTimeout: PORTAL_REQUEST_TIMEOUT_MS,
     trustProxy: env.PORTAL_TRUST_PROXY,
   })
 

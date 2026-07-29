@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+
 import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 import Fastify from 'fastify'
@@ -10,6 +12,10 @@ import {
 } from '../../test/appTestHelpers.js'
 import type { AuthService } from '../auth/service.js'
 import type { TenantRequestContext } from '../tenants/service.js'
+import {
+  createChatAttachmentUploadAdmission,
+  type ChatAttachmentUploadAdmission,
+} from './attachmentUploadAdmission.js'
 import { registerChatMessagesRoutes } from './routes.js'
 
 const tenant: TenantRequestContext = {
@@ -35,8 +41,10 @@ function createAuthorizedCookie(app: ReturnType<typeof Fastify>) {
 }
 
 async function buildMessagesRoutesTestApp({
+  attachmentUploadAdmission,
   rateLimitResult,
 }: {
+  attachmentUploadAdmission?: ChatAttachmentUploadAdmission
   rateLimitResult:
     | {
         status: 'allowed'
@@ -49,6 +57,7 @@ async function buildMessagesRoutesTestApp({
   const app = Fastify({ logger: false })
   const chatSendRateLimiter = {
     consume: vi.fn().mockResolvedValue(rateLimitResult),
+    consumeAttachmentUpload: vi.fn().mockResolvedValue(rateLimitResult),
   }
   const chatMessagesService = {
     getCurrentUserChatAttachment: vi.fn(),
@@ -123,6 +132,7 @@ async function buildMessagesRoutesTestApp({
   })
   registerApiErrorHandler(app)
   registerChatMessagesRoutes(app, {
+    ...(attachmentUploadAdmission ? { attachmentUploadAdmission } : {}),
     authService,
     chatSendRateLimiter,
     createChatMessagesService: () => chatMessagesService,
@@ -134,6 +144,28 @@ async function buildMessagesRoutesTestApp({
     app,
     chatMessagesService,
     chatSendRateLimiter,
+  }
+}
+
+function createDeferredAttachmentResult() {
+  let resolve!: (value: {
+    activeThread: null
+    reason: 'thread_access_denied'
+    result: 'not_ready'
+    sentMessage: null
+  }) => void
+  const promise = new Promise<{
+    activeThread: null
+    reason: 'thread_access_denied'
+    result: 'not_ready'
+    sentMessage: null
+  }>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+
+  return {
+    promise,
+    resolve,
   }
 }
 
@@ -364,16 +396,191 @@ describe('registerChatMessagesRoutes', () => {
 
       expect(response.statusCode).toBe(429)
       expect(response.headers['retry-after']).toBe('60')
-      expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
-        kind: 'attachment',
+      expect(chatSendRateLimiter.consumeAttachmentUpload).toHaveBeenCalledWith({
         tenantId: tenant.id,
-        threadId: 'private:me',
         userId: 7,
       })
       expect(
         chatMessagesService.sendCurrentUserAttachmentMessage,
       ).not.toHaveBeenCalled()
     } finally {
+      await app.close()
+    }
+  })
+
+  it('returns 429 without reading a limited attachment request body', async () => {
+    const { app, chatMessagesService, chatSendRateLimiter } =
+      await buildMessagesRoutesTestApp({
+        rateLimitResult: {
+          retryAfterSeconds: 60,
+          status: 'limited',
+        },
+      })
+    let bodyReadCount = 0
+    const unreadableBody = new Readable({
+      read() {
+        bodyReadCount += 1
+        this.destroy(new Error('Attachment request body was read.'))
+      },
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          'content-type':
+            'multipart/form-data; boundary=----portal-unreadable-boundary',
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: unreadableBody,
+        url: '/api/chat/messages/attachment',
+      })
+
+      expect(response.statusCode).toBe(429)
+      expect(response.headers['retry-after']).toBe('60')
+      expect(bodyReadCount).toBe(0)
+      expect(chatSendRateLimiter.consumeAttachmentUpload).toHaveBeenCalledWith({
+        tenantId: tenant.id,
+        userId: 7,
+      })
+      expect(
+        chatMessagesService.sendCurrentUserAttachmentMessage,
+      ).not.toHaveBeenCalled()
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('rejects excess active uploads without reading them and releases capacity', async () => {
+    const attachmentUploadAdmission = createChatAttachmentUploadAdmission({
+      maxActiveUploads: 2,
+    })
+    const { app, chatMessagesService } = await buildMessagesRoutesTestApp({
+      attachmentUploadAdmission,
+      rateLimitResult: {
+        status: 'allowed',
+      },
+    })
+    const firstSend = createDeferredAttachmentResult()
+    const secondSend = createDeferredAttachmentResult()
+    chatMessagesService.sendCurrentUserAttachmentMessage
+      .mockImplementationOnce(() => firstSend.promise)
+      .mockImplementationOnce(() => secondSend.promise)
+    const firstMultipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:first-active-upload',
+      fileContent: Buffer.from('%PDF-1.7\nfirst'),
+      fileName: 'first.pdf',
+      mimeType: 'application/pdf',
+      threadId: 'private:me',
+    })
+    const secondMultipart = createMultipartAttachmentPayload({
+      clientMessageKey: 'portal-send:second-active-upload',
+      fileContent: Buffer.from('%PDF-1.7\nsecond'),
+      fileName: 'second.pdf',
+      mimeType: 'application/pdf',
+      threadId: 'private:me',
+    })
+    const firstResponsePromise = app.inject({
+      headers: {
+        'content-type': firstMultipart.contentType,
+        cookie: createAuthorizedCookie(app),
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: firstMultipart.payload,
+      url: '/api/chat/messages/attachment',
+    })
+    const secondResponsePromise = app.inject({
+      headers: {
+        'content-type': secondMultipart.contentType,
+        cookie: createAuthorizedCookie(app),
+        origin: testEnv.APP_ORIGIN,
+      },
+      method: 'POST',
+      payload: secondMultipart.payload,
+      url: '/api/chat/messages/attachment',
+    })
+
+    try {
+      await vi.waitFor(() => {
+        expect(
+          chatMessagesService.sendCurrentUserAttachmentMessage,
+        ).toHaveBeenCalledTimes(2)
+      })
+
+      let rejectedBodyReadCount = 0
+      const unreadableBody = new Readable({
+        read() {
+          rejectedBodyReadCount += 1
+          this.destroy(new Error('Rejected attachment body was read.'))
+        },
+      })
+      const rejectedResponse = await app.inject({
+        headers: {
+          'content-type':
+            'multipart/form-data; boundary=----portal-busy-boundary',
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: unreadableBody,
+        url: '/api/chat/messages/attachment',
+      })
+
+      expect(rejectedResponse.statusCode).toBe(503)
+      expect(rejectedResponse.headers['retry-after']).toBe('1')
+      expect(rejectedBodyReadCount).toBe(0)
+
+      const completedResult = {
+        activeThread: null,
+        reason: 'thread_access_denied' as const,
+        result: 'not_ready' as const,
+        sentMessage: null,
+      }
+      firstSend.resolve(completedResult)
+      secondSend.resolve(completedResult)
+
+      const [firstResponse, secondResponse] = await Promise.all([
+        firstResponsePromise,
+        secondResponsePromise,
+      ])
+
+      expect(firstResponse.statusCode).toBe(200)
+      expect(secondResponse.statusCode).toBe(200)
+
+      const nextMultipart = createMultipartAttachmentPayload({
+        clientMessageKey: 'portal-send:next-upload-after-release',
+        fileContent: Buffer.from('%PDF-1.7\nnext'),
+        fileName: 'next.pdf',
+        mimeType: 'application/pdf',
+        threadId: 'private:me',
+      })
+      const nextResponse = await app.inject({
+        headers: {
+          'content-type': nextMultipart.contentType,
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: nextMultipart.payload,
+        url: '/api/chat/messages/attachment',
+      })
+
+      expect(nextResponse.statusCode).toBe(200)
+    } finally {
+      firstSend.resolve({
+        activeThread: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+        sentMessage: null,
+      })
+      secondSend.resolve({
+        activeThread: null,
+        reason: 'thread_access_denied',
+        result: 'not_ready',
+        sentMessage: null,
+      })
       await app.close()
     }
   })
@@ -407,6 +614,10 @@ describe('registerChatMessagesRoutes', () => {
 
       expect(response.statusCode).toBe(400)
       expect(chatSendRateLimiter.consume).not.toHaveBeenCalled()
+      expect(chatSendRateLimiter.consumeAttachmentUpload).toHaveBeenCalledWith({
+        tenantId: tenant.id,
+        userId: 7,
+      })
       expect(
         chatMessagesService.sendCurrentUserAttachmentMessage,
       ).not.toHaveBeenCalled()
@@ -449,10 +660,8 @@ describe('registerChatMessagesRoutes', () => {
         result: 'not_ready',
         sentMessage: null,
       })
-      expect(chatSendRateLimiter.consume).toHaveBeenCalledWith({
-        kind: 'attachment',
+      expect(chatSendRateLimiter.consumeAttachmentUpload).toHaveBeenCalledWith({
         tenantId: tenant.id,
-        threadId: 'group:154',
         userId: 7,
       })
       expect(

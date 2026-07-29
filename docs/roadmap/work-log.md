@@ -59,6 +59,9 @@ execution-plan детали здесь не хранятся.
   backend authority.
 - Attachment, thread, message and participant avatars are exposed only through
   portal-owned proxy URLs; browser does not receive direct Chatwoot asset URLs.
+- Attachment upload admission runs before multipart body reads: each user has
+  five starts per minute across chats, each backend process holds at most two
+  active uploads, and complete request receipt is limited to five minutes.
 - Group member avatars render in group info and transcript when backend can map
   a participant/contact; unknown group authors keep initials fallback.
 - Support messages in group transcripts are visually marked with compact

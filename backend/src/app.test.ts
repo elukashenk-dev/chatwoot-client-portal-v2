@@ -68,6 +68,10 @@ describe('buildApp', () => {
     })
   })
 
+  it('bounds the time allowed to receive a complete request', () => {
+    expect(app.server.requestTimeout).toBe(300_000)
+  })
+
   it('returns controlled chat read states for an authenticated user without a Chatwoot contact link', async () => {
     await database.db.insert(portalUsers).values({
       email: 'Name@Company.RU',
