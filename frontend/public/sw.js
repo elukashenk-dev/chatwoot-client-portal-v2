@@ -10,6 +10,19 @@ const PORTAL_OFFLINE_DATABASE_VERSION = 3
 const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
 const PWA_SHARE_DRAFT_IDENTITY_INDEX = 'by_identity'
 const PWA_SHARE_DRAFT_EXPIRY_INDEX = 'by_expiry'
+const PWA_SHARE_DRAFT_MAX_FILES = 5
+const PWA_SHARE_DRAFT_MAX_BYTES = 40 * 1024 * 1024
+const PWA_SHARE_DRAFT_RAW_OVERHEAD_BYTES = 256 * 1024
+const PWA_SHARE_DRAFT_RAW_MAX_BYTES =
+  PWA_SHARE_DRAFT_MAX_BYTES + PWA_SHARE_DRAFT_RAW_OVERHEAD_BYTES
+const PWA_SHARE_DRAFT_FILE_NAME_MAX_LENGTH = 255
+const PWA_SHARE_DRAFT_PRUNE_LIMIT = 25
+const PWA_SHARE_DRAFT_TTL_MS = 15 * 60 * 1000
+const PWA_SHARE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
 const TEXT_OUTBOX_BACKGROUND_SYNC_TAG = 'portal-text-outbox-drain'
 const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
 const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
@@ -66,6 +79,7 @@ const APP_SHELL_URLS = [
 const PUSH_READY_CLIENT_IDS = new Set()
 const PUSH_READY_CLIENT_THREAD_IDS = new Map()
 let appBadgeMutationQueue = Promise.resolve()
+let shareReceptionActive = false
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -178,12 +192,25 @@ self.addEventListener('notificationclick', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event
+  const requestUrl = new URL(request.url)
+  const isPwaShareTargetNavigation =
+    request.method === 'POST' &&
+    requestUrl.origin === self.location.origin &&
+    requestUrl.pathname === '/pwa/share-target' &&
+    request.mode === 'navigate' &&
+    request.destination === 'document'
 
-  if (request.method !== 'GET') {
+  if (isPwaShareTargetNavigation) {
+    event.respondWith(handlePwaShareTargetNavigation(request))
     return
   }
 
-  const requestUrl = new URL(request.url)
+  if (
+    requestUrl.pathname === '/pwa/share-target' ||
+    request.method !== 'GET'
+  ) {
+    return
+  }
 
   if (requestUrl.origin !== self.location.origin) {
     return
@@ -212,6 +239,353 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(handleStaticRequest(request))
 })
+
+async function handlePwaShareTargetNavigation(request) {
+  if (shareReceptionActive) {
+    return createPwaShareErrorRedirect('busy')
+  }
+
+  shareReceptionActive = true
+
+  try {
+    return await receivePwaShareTarget(request)
+  } catch {
+    return createPwaShareErrorRedirect('storage_unavailable')
+  } finally {
+    shareReceptionActive = false
+  }
+}
+
+async function receivePwaShareTarget(request) {
+  const host = getServiceWorkerHost()
+
+  if (!host) {
+    return createPwaShareErrorRedirect('session_required')
+  }
+
+  const identity = await readLastActiveIdentityForHost(host)
+
+  if (!identity || (await hasLocalDeviceSignout(host, identity))) {
+    return createPwaShareErrorRedirect('session_required')
+  }
+
+  const boundedFormData = await readBoundedPwaShareFormData(request)
+
+  if (!boundedFormData.formData) {
+    return createPwaShareErrorRedirect(boundedFormData.errorCode)
+  }
+
+  const validatedFiles = validatePwaShareFiles(
+    boundedFormData.formData.getAll('attachments'),
+  )
+
+  if (!validatedFiles.files) {
+    return createPwaShareErrorRedirect(validatedFiles.errorCode)
+  }
+
+  const stageResult = await stagePwaShareDraft({
+    files: validatedFiles.files,
+    host,
+    identity,
+    now: new Date(),
+  })
+
+  return stageResult.draftId
+    ? createPwaShareDraftRedirect(stageResult.draftId)
+    : createPwaShareErrorRedirect(stageResult.errorCode)
+}
+
+async function readBoundedPwaShareFormData(request) {
+  const contentType = request.headers?.get('Content-Type')
+
+  if (
+    !request.body ||
+    typeof request.body.getReader !== 'function' ||
+    typeof contentType !== 'string' ||
+    !contentType.toLowerCase().startsWith('multipart/form-data;')
+  ) {
+    return { errorCode: 'body_unavailable', formData: null }
+  }
+
+  const reader = request.body.getReader()
+  const chunks = []
+  let receivedBytes = 0
+
+  try {
+    while (true) {
+      const chunk = await reader.read()
+
+      if (chunk.done) {
+        break
+      }
+
+      receivedBytes += chunk.value.byteLength
+
+      if (receivedBytes > PWA_SHARE_DRAFT_RAW_MAX_BYTES) {
+        await reader.cancel()
+        return { errorCode: 'batch_too_large', formData: null }
+      }
+
+      chunks.push(chunk.value)
+    }
+  } catch {
+    try {
+      await reader.cancel()
+    } catch {
+      // The original body read error remains the controlled failure reason.
+    }
+
+    return { errorCode: 'body_unavailable', formData: null }
+  }
+
+  try {
+    const boundedRequest = new Request(request.url, {
+      body: new Blob(chunks, { type: contentType }),
+      headers: { 'Content-Type': contentType },
+      method: 'POST',
+    })
+
+    return {
+      errorCode: null,
+      formData: await boundedRequest.formData(),
+    }
+  } catch {
+    return { errorCode: 'body_unavailable', formData: null }
+  }
+}
+
+function validatePwaShareFiles(values) {
+  if (values.length === 0) {
+    return { errorCode: 'file_required', files: null }
+  }
+
+  if (values.length > PWA_SHARE_DRAFT_MAX_FILES) {
+    return { errorCode: 'count_exceeded', files: null }
+  }
+
+  const files = []
+  let totalBytes = 0
+
+  for (const value of values) {
+    if (!isPwaShareFile(value)) {
+      return { errorCode: 'type_not_allowed', files: null }
+    }
+
+    if (
+      !PWA_SHARE_MIME_TYPES.has(value.type) ||
+      typeof value.name !== 'string'
+    ) {
+      return { errorCode: 'type_not_allowed', files: null }
+    }
+
+    if (
+      value.name.length === 0 ||
+      value.name.length > PWA_SHARE_DRAFT_FILE_NAME_MAX_LENGTH
+    ) {
+      return { errorCode: 'file_name_invalid', files: null }
+    }
+
+    if (value.size <= 0) {
+      return { errorCode: 'file_empty', files: null }
+    }
+
+    totalBytes += value.size
+
+    if (totalBytes > PWA_SHARE_DRAFT_MAX_BYTES) {
+      return { errorCode: 'batch_too_large', files: null }
+    }
+
+    files.push(value)
+  }
+
+  return { errorCode: null, files }
+}
+
+function isPwaShareFile(value) {
+  return (
+    isObject(value) &&
+    typeof value.name === 'string' &&
+    typeof value.size === 'number' &&
+    Number.isFinite(value.size) &&
+    typeof value.slice === 'function' &&
+    typeof value.type === 'string'
+  )
+}
+
+async function stagePwaShareDraft({ files, host, identity, now }) {
+  const database = await openPortalOfflineDatabase()
+  const transaction = database.transaction(
+    'pending_share_drafts',
+    'readwrite',
+  )
+  const store = transaction.objectStore('pending_share_drafts')
+
+  try {
+    await pruneExpiredPwaShareDraftKeys(store, now)
+
+    const existingRecord = await idbRequestToPromise(
+      store
+        .index(PWA_SHARE_DRAFT_IDENTITY_INDEX)
+        .get([host, identity.tenantSlug, identity.userId]),
+    )
+    const storedFiles = files.map(toStoredPwaShareFile)
+
+    if (
+      isPwaShareDraftRecord(existingRecord) &&
+      existingRecord.expiresAt > now.toISOString()
+    ) {
+      const combinedFiles = [...existingRecord.files, ...storedFiles]
+
+      if (combinedFiles.length > PWA_SHARE_DRAFT_MAX_FILES) {
+        await idbTransactionDone(transaction)
+        return { draftId: null, errorCode: 'count_exceeded' }
+      }
+
+      if (
+        combinedFiles.reduce((total, file) => total + file.blob.size, 0) >
+        PWA_SHARE_DRAFT_MAX_BYTES
+      ) {
+        await idbTransactionDone(transaction)
+        return { draftId: null, errorCode: 'batch_too_large' }
+      }
+
+      await idbRequestToPromise(
+        store.put({
+          ...existingRecord,
+          files: combinedFiles,
+        }),
+      )
+      await idbTransactionDone(transaction)
+      return { draftId: existingRecord.draftId, errorCode: null }
+    }
+
+    if (
+      isObject(existingRecord) &&
+      typeof existingRecord.draftId === 'string'
+    ) {
+      await idbRequestToPromise(store.delete(existingRecord.draftId))
+    }
+
+    const draftId = createPwaShareDraftId()
+
+    if (!draftId) {
+      await idbTransactionDone(transaction)
+      return { draftId: null, errorCode: 'storage_unavailable' }
+    }
+
+    const createdAt = now.toISOString()
+
+    await idbRequestToPromise(
+      store.put({
+        createdAt,
+        draftId,
+        expiresAt: new Date(
+          now.getTime() + PWA_SHARE_DRAFT_TTL_MS,
+        ).toISOString(),
+        files: storedFiles,
+        host,
+        tenantSlug: identity.tenantSlug,
+        userId: identity.userId,
+      }),
+    )
+    await idbTransactionDone(transaction)
+
+    return { draftId, errorCode: null }
+  } finally {
+    database.close()
+  }
+}
+
+async function pruneExpiredPwaShareDraftKeys(store, now) {
+  const index = store.index(PWA_SHARE_DRAFT_EXPIRY_INDEX)
+  let cursor = await idbRequestToPromise(
+    index.openKeyCursor(IDBKeyRange.upperBound(now.toISOString())),
+  )
+  let deletedCount = 0
+
+  while (cursor && deletedCount < PWA_SHARE_DRAFT_PRUNE_LIMIT) {
+    await idbRequestToPromise(store.delete(cursor.primaryKey))
+    deletedCount += 1
+    cursor = await idbCursorContinue(cursor)
+  }
+}
+
+function idbCursorContinue(cursor) {
+  const request = cursor.request
+
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error('IndexedDB cursor failed.'))
+    }
+    cursor.continue()
+  })
+}
+
+function toStoredPwaShareFile(file) {
+  return {
+    blob: file.slice(0, file.size, file.type),
+    fileName: file.name,
+    lastModified: Number.isFinite(file.lastModified)
+      ? file.lastModified
+      : Date.now(),
+    mimeType: file.type,
+  }
+}
+
+function isPwaShareDraftRecord(value) {
+  return (
+    isObject(value) &&
+    typeof value.createdAt === 'string' &&
+    typeof value.draftId === 'string' &&
+    typeof value.expiresAt === 'string' &&
+    Array.isArray(value.files) &&
+    value.files.length > 0 &&
+    value.files.length <= PWA_SHARE_DRAFT_MAX_FILES &&
+    value.files.every(
+      (file) =>
+        isObject(file) &&
+        isObject(file.blob) &&
+        Number.isFinite(file.blob.size) &&
+        typeof file.fileName === 'string' &&
+        Number.isFinite(file.lastModified) &&
+        PWA_SHARE_MIME_TYPES.has(file.mimeType),
+    ) &&
+    typeof value.host === 'string' &&
+    typeof value.tenantSlug === 'string' &&
+    Number.isFinite(value.userId)
+  )
+}
+
+function createPwaShareDraftId() {
+  return typeof self.crypto?.randomUUID === 'function'
+    ? self.crypto.randomUUID()
+    : null
+}
+
+function createPwaShareDraftRedirect(draftId) {
+  return createPwaShareRedirect(
+    `/app/chat?shareDraft=${encodeURIComponent(draftId)}`,
+  )
+}
+
+function createPwaShareErrorRedirect(errorCode) {
+  return createPwaShareRedirect(
+    `/app/chat?shareError=${encodeURIComponent(errorCode)}`,
+  )
+}
+
+function createPwaShareRedirect(location) {
+  return new Response(null, {
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: location,
+    },
+    status: 303,
+  })
+}
 
 function shouldHandleStaticRequest(request) {
   const requestUrl = new URL(request.url)

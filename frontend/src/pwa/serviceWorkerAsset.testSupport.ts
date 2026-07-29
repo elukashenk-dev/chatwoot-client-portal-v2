@@ -1,7 +1,13 @@
+import { Blob as NodeBlob } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { vi } from 'vitest'
+
+import { ServiceWorkerTestRequest } from './serviceWorkerShareTarget.testSupport'
+
+export { createServiceWorkerIndexedDbFake } from './serviceWorkerIndexedDb.testSupport'
+export { createShareTargetNavigationRequest } from './serviceWorkerShareTarget.testSupport'
 
 const APP_BADGE_DATABASE_NAME = 'provgroup-portal-app-badge'
 
@@ -16,149 +22,6 @@ export type ServiceWorkerTestListener = (event: {
   source?: { id?: string }
   waitUntil?: (promise: Promise<unknown>) => void
 }) => void
-
-type IndexedDbPutCall = {
-  key: IDBValidKey
-  storeName: string
-  value: unknown
-}
-
-type IndexedDbCreatedIndex = {
-  keyPath: string | string[]
-  name: string
-  options?: IDBIndexParameters
-  storeName: string
-}
-
-export function createServiceWorkerIndexedDbFake({
-  failOpen = false,
-  failPut = false,
-  records = {},
-}: {
-  failOpen?: boolean
-  failPut?: boolean
-  records?: Record<string, Record<string, unknown>>
-} = {}) {
-  const putCalls: IndexedDbPutCall[] = []
-  const createdStores = new Set<string>()
-  const createdStoreOptions = new Map<
-    string,
-    IDBObjectStoreParameters | undefined
-  >()
-  const createdIndexes: IndexedDbCreatedIndex[] = []
-  const storeRecords = new Map(
-    Object.entries(records).map(([storeName, values]) => [
-      storeName,
-      new Map(Object.entries(values)),
-    ]),
-  )
-  const indexedDB = {
-    open: vi.fn(() => {
-      const database = {
-        close: vi.fn(),
-        createObjectStore: vi.fn(
-          (storeName: string, options?: IDBObjectStoreParameters) => {
-            createdStores.add(storeName)
-            createdStoreOptions.set(storeName, options)
-
-            return {
-              createIndex: (
-                name: string,
-                keyPath: string | string[],
-                indexOptions?: IDBIndexParameters,
-              ) => {
-                createdIndexes.push({
-                  keyPath,
-                  name,
-                  options: indexOptions,
-                  storeName,
-                })
-              },
-            }
-          },
-        ),
-        objectStoreNames: {
-          contains: (storeName: string) => createdStores.has(storeName),
-        },
-        transaction: vi.fn((storeName: string) => {
-          const recordsForStore =
-            storeRecords.get(storeName) ?? new Map<string, unknown>()
-          storeRecords.set(storeName, recordsForStore)
-
-          const transaction = {
-            error: null as Error | null,
-            objectStore: () => ({
-              get: (key: IDBValidKey) => {
-                const request = {
-                  error: null as Error | null,
-                  result: undefined as unknown,
-                  onerror: null as (() => void) | null,
-                  onsuccess: null as (() => void) | null,
-                }
-
-                queueMicrotask(() => {
-                  request.result = recordsForStore.get(String(key))
-                  request.onsuccess?.()
-                  setTimeout(() => {
-                    transaction.oncomplete?.()
-                  }, 0)
-                })
-
-                return request
-              },
-              put: (value: unknown, key: IDBValidKey) => {
-                putCalls.push({ key, storeName, value })
-                recordsForStore.set(String(key), value)
-                queueMicrotask(() => {
-                  if (failPut) {
-                    transaction.error = new Error('put failed')
-                    transaction.onerror?.()
-                    return
-                  }
-
-                  transaction.oncomplete?.()
-                })
-              },
-            }),
-            onabort: null as (() => void) | null,
-            oncomplete: null as (() => void) | null,
-            onerror: null as (() => void) | null,
-          }
-
-          return transaction
-        }),
-      }
-      const request = {
-        error: null as Error | null,
-        result: database,
-        onerror: null as (() => void) | null,
-        onsuccess: null as (() => void) | null,
-        onupgradeneeded: null as (() => void) | null,
-      }
-
-      queueMicrotask(() => {
-        if (failOpen) {
-          request.error = new Error('open failed')
-          request.onerror?.()
-          return
-        }
-
-        request.onupgradeneeded?.()
-        request.onsuccess?.()
-      })
-
-      return request
-    }),
-  }
-
-  return {
-    createdIndexes,
-    createdStoreOptions,
-    createdStores,
-    indexedDB,
-    putCalls,
-  }
-}
 
 export function loadServiceWorker({
   appBadge = {},
@@ -214,6 +77,9 @@ export function loadServiceWorker({
     location: {
       origin: 'https://lk.provgroup.ru',
     },
+    crypto: {
+      randomUUID: () => globalThis.crypto.randomUUID(),
+    },
     registration: {
       getNotifications: vi.fn(async () => notifications),
       showNotification,
@@ -230,6 +96,8 @@ export function loadServiceWorker({
     'clients',
     'navigator',
     'indexedDB',
+    'Blob',
+    'Request',
     'Response',
     'URL',
     'fetch',
@@ -240,6 +108,8 @@ export function loadServiceWorker({
     clientsScope,
     appBadge,
     indexedDB,
+    NodeBlob,
+    ServiceWorkerTestRequest,
     Response,
     URL,
     fetch,
