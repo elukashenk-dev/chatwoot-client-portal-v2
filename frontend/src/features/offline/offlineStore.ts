@@ -26,15 +26,16 @@ import {
   deleteStartupAuthSession,
   deleteStartupChatFallback,
 } from './startupCache'
-import type {
-  OfflineAuthSnapshotRecord,
-  OfflineChatMessagePageRecord,
-  OfflineChatMessageSnapshotRecord,
-  OfflineChatThreadListRecord,
-  OfflineLastActiveIdentityRecord,
-  OfflineLocalDeviceSignoutRecord,
-  OfflinePushStaleMarkerRecord,
-  OfflineTenantContextRecord,
+import {
+  PWA_SHARE_DRAFT_IDENTITY_INDEX,
+  type OfflineAuthSnapshotRecord,
+  type OfflineChatMessagePageRecord,
+  type OfflineChatMessageSnapshotRecord,
+  type OfflineChatThreadListRecord,
+  type OfflineLastActiveIdentityRecord,
+  type OfflineLocalDeviceSignoutRecord,
+  type OfflinePushStaleMarkerRecord,
+  type OfflineTenantContextRecord,
 } from './types'
 
 export { clearRejectedAuthSnapshot } from './offlineAuthCleanup'
@@ -312,7 +313,6 @@ async function clearCurrentUserOfflineDataWithOptions(
   const userKey = scopedUserKey(tenantSlug, userId)
   const userPrefix = `${userKey}:`
   let database: Awaited<ReturnType<typeof openOfflineDatabase>> | null = null
-
   try {
     database = await openOfflineDatabase()
     const transaction = database.transaction(
@@ -326,14 +326,18 @@ async function clearCurrentUserOfflineDataWithOptions(
         'chat_text_outbox',
         'push_stale_markers',
         'sync_leases',
+        'pending_share_drafts',
       ],
       'readwrite',
     )
     const identities = transaction.objectStore('last_active_identities')
     const signouts = transaction.objectStore('local_device_signouts')
+    const pendingShareDrafts = transaction.objectStore('pending_share_drafts')
     const identity = await identities.get(host)
     const signout = await signouts.get(host)
-
+    const pendingShareDraftKey = await pendingShareDrafts
+      .index(PWA_SHARE_DRAFT_IDENTITY_INDEX)
+      .getKey([host, tenantSlug, userId])
     if (
       isLastActiveIdentityRecord(identity) &&
       identity.tenantSlug === tenantSlug &&
@@ -341,7 +345,6 @@ async function clearCurrentUserOfflineDataWithOptions(
     ) {
       await identities.delete(host)
     }
-
     if (
       !preserveLocalDeviceSignout &&
       isLocalDeviceSignoutRecord(signout) &&
@@ -350,13 +353,14 @@ async function clearCurrentUserOfflineDataWithOptions(
     ) {
       await signouts.delete(host)
     }
-
+    if (pendingShareDraftKey !== undefined) {
+      await pendingShareDrafts.delete(pendingShareDraftKey)
+    }
     await transaction.objectStore('auth_snapshots').delete(userKey)
     await transaction.objectStore('chat_thread_lists').delete(userKey)
     await transaction
       .objectStore('sync_leases')
       .delete(`portal-outbox:${userKey}`)
-
     for (const storeName of [
       'chat_message_snapshots',
       'chat_message_pages',
@@ -364,12 +368,10 @@ async function clearCurrentUserOfflineDataWithOptions(
       'push_stale_markers',
     ] as const) {
       let cursor = await transaction.objectStore(storeName).openCursor()
-
       while (cursor) {
         if (String(cursor.key).startsWith(userPrefix)) {
           await cursor.delete()
         }
-
         cursor = await cursor.continue()
       }
     }

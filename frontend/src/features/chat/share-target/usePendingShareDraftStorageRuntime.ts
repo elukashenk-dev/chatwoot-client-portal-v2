@@ -1,14 +1,19 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import type { PendingShareDraftScope } from '../../offline/types'
+import { pruneExpiredPendingShareDrafts } from './pendingShareDraftStore'
 import type { LiveShareIdentity } from './pwaShareTargetModel'
 
-export function usePwaShareDraftMutationQueue(
+export function usePendingShareDraftStorageRuntime(
   liveIdentity: LiveShareIdentity | null,
 ) {
   const liveIdentityRef = useRef(liveIdentity)
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   liveIdentityRef.current = liveIdentity
+
+  useEffect(() => {
+    void pruneExpiredPendingShareDrafts().catch(() => undefined)
+  }, [])
 
   const queueDraftMutation = useCallback(
     (

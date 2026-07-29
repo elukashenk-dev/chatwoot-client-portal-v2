@@ -26,6 +26,8 @@ export type ServiceWorkerTestListener = (event: {
 export function loadServiceWorker({
   appBadge = {},
   cacheStorage = {
+    delete: vi.fn(async () => true),
+    keys: vi.fn(async () => []),
     open: vi.fn(),
   },
   clientsList = [],
@@ -38,7 +40,8 @@ export function loadServiceWorker({
     clearAppBadge?: () => Promise<void>
     setAppBadge?: (contents?: number) => Promise<void>
   }
-  cacheStorage?: Pick<CacheStorage, 'open'>
+  cacheStorage?: Pick<CacheStorage, 'open'> &
+    Partial<Pick<CacheStorage, 'delete' | 'keys'>>
   clientsList?: Array<{
     focused?: boolean
     focus?: () => Promise<unknown>
@@ -65,6 +68,12 @@ export function loadServiceWorker({
       void options
     },
   )
+  const claimClients = vi.fn(async () => undefined)
+  const clientsScope = {
+    claim: claimClients,
+    matchAll: vi.fn(async () => clientsList),
+    openWindow: openWindow ?? vi.fn(async () => null),
+  }
   const serviceWorkerScope = {
     addEventListener: vi.fn(
       (eventName: string, listener: ServiceWorkerTestListener) => {
@@ -80,14 +89,16 @@ export function loadServiceWorker({
     crypto: {
       randomUUID: () => globalThis.crypto.randomUUID(),
     },
+    clients: clientsScope,
     registration: {
       getNotifications: vi.fn(async () => notifications),
       showNotification,
     },
   }
-  const clientsScope = {
-    matchAll: vi.fn(async () => clientsList),
-    openWindow: openWindow ?? vi.fn(async () => null),
+  const cacheStorageScope = {
+    delete: cacheStorage.delete ?? vi.fn(async () => true),
+    keys: cacheStorage.keys ?? vi.fn(async () => []),
+    open: cacheStorage.open,
   }
 
   new Function(
@@ -104,7 +115,7 @@ export function loadServiceWorker({
     source,
   )(
     serviceWorkerScope,
-    cacheStorage,
+    cacheStorageScope,
     clientsScope,
     appBadge,
     indexedDB,
@@ -116,6 +127,7 @@ export function loadServiceWorker({
   )
 
   return {
+    claimClients,
     listeners,
     showNotification,
   }

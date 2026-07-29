@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   ChatMessagesSnapshot,
@@ -21,6 +21,7 @@ import {
   OFFLINE_DATABASE_NAME,
   OFFLINE_DATABASE_VERSION,
   type OfflineChatMessagePageRecord,
+  type OfflinePendingShareDraftRecord,
   type OfflineTextOutboxRecord,
 } from './types'
 
@@ -75,6 +76,37 @@ function createQueuedOutboxRecord(
     updatedAt: '2026-05-27T10:00:00.000Z',
     userId: 7,
     ...overrides,
+  }
+}
+
+function createPendingShareDraft(
+  userId: number,
+): OfflinePendingShareDraftRecord {
+  return {
+    createdAt: '2026-05-27T10:00:00.000Z',
+    draftId: `draft-${userId}`,
+    expiresAt: '2099-05-27T10:15:00.000Z',
+    files: [
+      {
+        blob: new Blob([`private-image-${userId}`], { type: 'image/png' }),
+        fileName: `screen-${userId}.png`,
+        lastModified: 1_800_000_000_000,
+        mimeType: 'image/png',
+      },
+    ],
+    host: 'lk.buhfirma.ru',
+    tenantSlug: 'buhfirma',
+    userId,
+  }
+}
+
+async function putPendingShareDraft(record: OfflinePendingShareDraftRecord) {
+  const database = await openOfflineDatabase()
+
+  try {
+    await database.put('pending_share_drafts', record)
+  } finally {
+    database.close()
   }
 }
 
@@ -545,6 +577,54 @@ describe('offline store database', () => {
     await expect(
       offlineStore.readLastActiveIdentity('lk.buhfirma.ru'),
     ).resolves.toMatchObject({ tenantSlug: 'buhfirma', userId: 8 })
+  })
+
+  it('deletes only the exact current user pending share draft by identity index', async () => {
+    await putPendingShareDraft(createPendingShareDraft(7))
+    await putPendingShareDraft(createPendingShareDraft(8))
+    const indexGetKey = vi.spyOn(IDBIndex.prototype, 'getKey')
+
+    await clearCurrentUserOfflineData({
+      host: 'lk.buhfirma.ru',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    expect(indexGetKey).toHaveBeenCalledWith([
+      'lk.buhfirma.ru',
+      'buhfirma',
+      7,
+    ])
+    await expect(
+      readRawRecord('pending_share_drafts', 'draft-7'),
+    ).resolves.toBeUndefined()
+    await expect(
+      readRawRecord<OfflinePendingShareDraftRecord>(
+        'pending_share_drafts',
+        'draft-8',
+      ),
+    ).resolves.toMatchObject({ userId: 8 })
+  })
+
+  it('keeps only the signout marker and removes the signed-out users shared blobs', async () => {
+    await putPendingShareDraft(createPendingShareDraft(7))
+
+    await removeLocalDeviceDataAndBlockCachedOpen({
+      host: 'lk.buhfirma.ru',
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+
+    await expect(
+      readRawRecord('pending_share_drafts', 'draft-7'),
+    ).resolves.toBeUndefined()
+    await expect(
+      offlineStore.readLocalDeviceSignout(
+        'lk.buhfirma.ru',
+        'buhfirma',
+        7,
+      ),
+    ).resolves.toMatchObject({ tenantSlug: 'buhfirma', userId: 7 })
   })
 
   it('filters local device signout reads by every provided scope field', async () => {

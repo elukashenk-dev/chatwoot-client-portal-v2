@@ -202,6 +202,17 @@ describe('usePwaShareTargetDraft', () => {
     replacePendingShareDraftFilesMock.mockResolvedValue()
   })
 
+  it('prunes expired draft keys once per mounted chat runtime', async () => {
+    const hook = renderShareTargetHook({ entry: '/app/chat' })
+
+    await waitFor(() =>
+      expect(pruneExpiredPendingShareDraftsMock).toHaveBeenCalledTimes(1),
+    )
+    hook.setAuth(createAuthValue({ userId: 8 }))
+    await waitFor(() => expect(hook.result.current.controller).toBeDefined())
+    expect(pruneExpiredPendingShareDraftsMock).toHaveBeenCalledTimes(1)
+  })
+
   it('requires a live session before reading file metadata', async () => {
     const refreshSession = vi.fn(async () => {})
     readPendingShareDraftMock.mockResolvedValue(createDraft())

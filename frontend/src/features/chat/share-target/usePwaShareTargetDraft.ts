@@ -26,7 +26,7 @@ import {
   type PwaShareTargetStatus,
   type UsePwaShareTargetDraftOptions,
 } from './pwaShareTargetModel'
-import { usePwaShareDraftMutationQueue } from './usePwaShareDraftMutationQueue'
+import { usePendingShareDraftStorageRuntime } from './usePendingShareDraftStorageRuntime'
 
 export type { PwaShareTargetController } from './pwaShareTargetModel'
 
@@ -71,7 +71,7 @@ export function usePwaShareTargetDraft({
   const persistedShareItemIdsRef = useRef<readonly string[]>([])
   const refreshAttemptedDraftIdRef = useRef<string | null>(null)
   const { liveIdentityRef, queueDraftMutation } =
-    usePwaShareDraftMutationQueue(liveIdentity)
+    usePendingShareDraftStorageRuntime(liveIdentity)
   const locationRef = useRef(location)
   const optionsRef = useRef({
     canImport,

@@ -68,6 +68,17 @@ async function dispatchFetch(
   return responsePromise as Promise<Response> | null
 }
 
+async function dispatchWaitUntil(listener: ServiceWorkerTestListener) {
+  const promises: Promise<unknown>[] = []
+
+  listener({
+    waitUntil(promise) {
+      promises.push(promise)
+    },
+  })
+  await Promise.all(promises)
+}
+
 function getShareError(response: Response) {
   const location = response.headers.get('Location')
 
@@ -83,7 +94,7 @@ function loadShareWorker({
 } = {}) {
   const fetch = vi.fn<typeof globalThis.fetch>()
   const indexedDbFake = createServiceWorkerIndexedDbFake({ records })
-  const { listeners } = loadServiceWorker({
+  const { claimClients, listeners } = loadServiceWorker({
     fetch,
     indexedDB: indexedDbFake.indexedDB,
   })
@@ -92,6 +103,8 @@ function loadShareWorker({
   expect(fetchListener).toBeDefined()
 
   return {
+    activateListener: listeners.get('activate')?.[0],
+    claimClients,
     fetch,
     fetchListener: fetchListener!,
     indexedDbFake,
@@ -475,5 +488,44 @@ describe('service worker PWA share target', () => {
         .get('pending_share_drafts')
         ?.get(existingDraft.draftId),
     ).toEqual(existingDraft)
+  })
+
+  it('prunes at most 25 expired keys before claiming clients on activation', async () => {
+    const expiredDrafts = Object.fromEntries(
+      Array.from({ length: 26 }, (_, index) => [
+        `expired-${index}`,
+        {
+          createdAt: '2026-07-28T10:00:00.000Z',
+          draftId: `expired-${index}`,
+          expiresAt: '2026-07-28T10:15:00.000Z',
+          files: [
+            {
+              blob: new NodeBlob(['private-image'], { type: 'image/png' }),
+              fileName: `screen-${index}.png`,
+              lastModified: index,
+              mimeType: 'image/png',
+            },
+          ],
+          host: HOST,
+          tenantSlug: TENANT_SLUG,
+          userId: index + 1,
+        },
+      ]),
+    )
+    const { activateListener, claimClients, indexedDbFake } = loadShareWorker({
+      records: { pending_share_drafts: expiredDrafts },
+    })
+
+    expect(activateListener).toBeDefined()
+    await dispatchWaitUntil(activateListener!)
+
+    expect(indexedDbFake.deleteCalls).toHaveLength(25)
+    expect(indexedDbFake.getAllCalls).toEqual([])
+    expect(indexedDbFake.primaryCursorCalls).toEqual([])
+    expect(claimClients).toHaveBeenCalledTimes(1)
+
+    await dispatchWaitUntil(activateListener!)
+    expect(indexedDbFake.deleteCalls).toHaveLength(26)
+    expect(claimClients).toHaveBeenCalledTimes(2)
   })
 })

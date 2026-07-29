@@ -98,6 +98,9 @@ self.addEventListener('activate', (event) => {
             .map((key) => caches.delete(key)),
         ),
       )
+      .then(() =>
+        pruneExpiredPwaShareDraftsOnActivation().catch(() => undefined),
+      )
       .then(() => self.clients.claim()),
   )
 })
@@ -507,6 +510,25 @@ async function pruneExpiredPwaShareDraftKeys(store, now) {
     await idbRequestToPromise(store.delete(cursor.primaryKey))
     deletedCount += 1
     cursor = await idbCursorContinue(cursor)
+  }
+}
+
+async function pruneExpiredPwaShareDraftsOnActivation() {
+  const database = await openPortalOfflineDatabase()
+
+  try {
+    const transaction = database.transaction(
+      'pending_share_drafts',
+      'readwrite',
+    )
+
+    await pruneExpiredPwaShareDraftKeys(
+      transaction.objectStore('pending_share_drafts'),
+      new Date(),
+    )
+    await idbTransactionDone(transaction)
+  } finally {
+    database.close()
   }
 }
 

@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProtectedRoute } from '../../../app/layouts/ProtectedRoute'
 import { routePaths } from '../../../app/routePaths'
 import { BOOT_ONLINE_REQUIRED_MS } from '../../offline/bootCoordinator'
-import { clearOfflineDatabaseForTests } from '../../offline/offlineDatabase'
+import {
+  clearOfflineDatabaseForTests,
+  openOfflineDatabase,
+} from '../../offline/offlineDatabase'
 import {
   offlineStore,
   removeLocalDeviceDataAndBlockCachedOpen,
@@ -167,6 +170,44 @@ function saveStartupAuthSnapshot({
       version: 1,
     }),
   )
+}
+
+async function savePendingShareDraftForCurrentUser() {
+  const database = await openOfflineDatabase()
+
+  try {
+    await database.put('pending_share_drafts', {
+      createdAt: '2026-05-27T10:00:00.000Z',
+      draftId: 'draft-before-signout',
+      expiresAt: '2099-05-27T10:15:00.000Z',
+      files: [
+        {
+          blob: new Blob(['private-image'], { type: 'image/png' }),
+          fileName: 'screen.png',
+          lastModified: 1_800_000_000_000,
+          mimeType: 'image/png',
+        },
+      ],
+      host: window.location.host,
+      tenantSlug: 'buhfirma',
+      userId: 7,
+    })
+  } finally {
+    database.close()
+  }
+}
+
+async function readPendingShareDraftAfterSignout() {
+  const database = await openOfflineDatabase()
+
+  try {
+    return await database.get(
+      'pending_share_drafts',
+      'draft-before-signout',
+    )
+  } finally {
+    database.close()
+  }
 }
 
 function AuthProbe() {
@@ -624,6 +665,7 @@ describe('AuthSessionProvider offline startup', () => {
 
   it('blocks cached chat writes after explicit sign out', async () => {
     await saveTenantAndCachedAuth()
+    await savePendingShareDraftForCurrentUser()
     await offlineStore.saveThreadList({
       activeThreadId: 'private:me',
       savedAt: '2026-05-27T09:55:00.000Z',
@@ -666,6 +708,7 @@ describe('AuthSessionProvider offline startup', () => {
       offlineStore.readAuthSnapshot('buhfirma', 7),
     ).resolves.toBeNull()
     await expect(offlineStore.readThreadList('buhfirma', 7)).resolves.toBeNull()
+    await expect(readPendingShareDraftAfterSignout()).resolves.toBeUndefined()
     await expect(
       offlineStore.readLocalDeviceSignout(window.location.host, 'buhfirma', 7),
     ).resolves.toMatchObject({
