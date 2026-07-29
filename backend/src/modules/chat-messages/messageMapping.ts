@@ -38,6 +38,7 @@ function normalizePortalMessageContent(content: string | null) {
     .replace(/\\n/g, '\n')
     .replace(/\\r/g, '\n')
     .replace(/\\(\r\n|\n|\r)/g, '$1')
+    .replace(/\r\n?/g, '\n')
 }
 
 function getAgentAuthorName(message: ChatwootMessage) {

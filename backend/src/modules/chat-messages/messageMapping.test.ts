@@ -246,6 +246,60 @@ describe('mapPortalMessage', () => {
     })
   })
 
+  it('strips a CRLF group author prefix from a current-user attachment caption', () => {
+    const message = mapPortalMessage(
+      {
+        attachments: [
+          {
+            extension: 'jpg',
+            fileSize: 479_232,
+            fileType: 'image',
+            id: 92,
+            messageId: 703,
+            name: 'shared-image.jpg',
+            thumbUrl: '',
+            url: 'https://chatwoot.test/rails/active_storage/file',
+          },
+        ],
+        content: '**Эдуард**\r\nПроверка',
+        contentAttributes: {},
+        contentType: 'text',
+        createdAt: 1_779_107_173,
+        id: 703,
+        messageType: 0,
+        private: false,
+        sender: {
+          id: 154,
+          name: 'ООО "Ромашка"',
+          type: 'contact',
+        },
+        sourceId: 'portal-user-send:v1:7:portal-send:attachment-key',
+        status: 'sent',
+      },
+      {
+        currentUserId: 7,
+        ledgerAuthorsByMessageId: new Map([
+          [
+            703,
+            {
+              authorDisplayName: 'Эдуард',
+              userId: 7,
+            },
+          ],
+        ]),
+        threadId: 'group:154',
+        threadType: 'group',
+      },
+    )
+
+    expect(message).toMatchObject({
+      authorName: 'Вы',
+      authorRole: 'current_user',
+      content: 'Проверка',
+      direction: 'outgoing',
+    })
+  })
+
   it('maps ledger-known group member avatars to portal participant avatar URLs', () => {
     const message = mapPortalMessage(
       {

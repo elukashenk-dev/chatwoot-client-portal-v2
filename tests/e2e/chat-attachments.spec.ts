@@ -687,6 +687,16 @@ test('keeps five previews and all attachment sources usable on a narrow screen',
   await expect(menu.getByRole('button', { name: 'Фото и видео' })).toBeVisible()
   await expect(menu.getByRole('button', { name: 'Камера' })).toBeVisible()
   await expect(menu.getByRole('button', { name: 'Файл' })).toBeVisible()
+  await expect(
+    menu.getByRole('button', { name: 'Закрыть меню вложений' }),
+  ).toBeVisible()
+
+  await page.mouse.click(195, 200)
+  await expect(menu).toBeHidden()
+
+  await page.getByRole('button', { name: 'Прикрепить файл' }).click()
+  await menu.getByRole('button', { name: 'Закрыть меню вложений' }).click()
+  await expect(menu).toBeHidden()
 
   const composerBox = await page.locator('footer').boundingBox()
 

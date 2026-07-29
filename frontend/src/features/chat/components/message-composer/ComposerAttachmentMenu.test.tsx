@@ -69,6 +69,48 @@ describe('ComposerAttachmentMenu', () => {
     expect(trigger).toHaveFocus()
   })
 
+  it('closes when the user taps outside the attachment dialog', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <>
+        <button type="button">Область чата</button>
+        <ComposerAttachmentMenu disabled={false} onFilesSelected={vi.fn()} />
+      </>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Прикрепить файл' }))
+    expect(
+      screen.getByRole('dialog', { name: 'Добавить вложение' }),
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Область чата' }))
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Добавить вложение' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers an explicit close action and restores focus to the paperclip', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <ComposerAttachmentMenu disabled={false} onFilesSelected={vi.fn()} />,
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Прикрепить файл' })
+
+    await user.click(trigger)
+    await user.click(
+      screen.getByRole('button', { name: 'Закрыть меню вложений' }),
+    )
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Добавить вложение' }),
+    ).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
   it('routes media and files through picker admission and camera through camera admission', async () => {
     const user = userEvent.setup()
     const onFilesSelected = vi.fn()

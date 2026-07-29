@@ -5,7 +5,7 @@ import {
   useState,
 } from 'react'
 
-import { PaperclipIcon } from '../../../../shared/ui/icons'
+import { PaperclipIcon, XIcon } from '../../../../shared/ui/icons'
 import {
   COMPOSER_ATTACHMENT_ACCEPT,
   type AttachmentDraftSource,
@@ -37,6 +37,32 @@ export function ComposerAttachmentMenu({
   useEffect(() => {
     if (isOpen) {
       firstActionRef.current?.focus({ preventScroll: true })
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    function handleDocumentPointerDown(event: PointerEvent) {
+      const target = event.target
+
+      if (
+        !(target instanceof Node) ||
+        dialogRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      ) {
+        return
+      }
+
+      setIsOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handleDocumentPointerDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown)
     }
   }, [isOpen])
 
@@ -152,7 +178,6 @@ export function ComposerAttachmentMenu({
           <div
             aria-hidden="true"
             className="fixed inset-0 z-[70] bg-slate-950/35 sm:bg-transparent"
-            onPointerDown={closeMenu}
           />
           <section
             aria-labelledby="composer-attachment-menu-title"
@@ -162,12 +187,22 @@ export function ComposerAttachmentMenu({
             ref={dialogRef}
             role="dialog"
           >
-            <h2
-              className="px-2 pb-2 text-sm font-semibold text-slate-700"
-              id="composer-attachment-menu-title"
-            >
-              Добавить вложение
-            </h2>
+            <div className="flex items-center justify-between gap-3 px-2 pb-2">
+              <h2
+                className="text-sm font-semibold text-slate-700"
+                id="composer-attachment-menu-title"
+              >
+                Добавить вложение
+              </h2>
+              <button
+                aria-label="Закрыть меню вложений"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
+                onClick={closeMenu}
+                type="button"
+              >
+                <XIcon className="h-5 w-5" />
+              </button>
+            </div>
             <div className="grid gap-1">
               <button
                 className="min-h-11 rounded-lg px-3 text-left text-sm font-medium transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100"
