@@ -293,6 +293,29 @@ describe('tenant routes and request context', () => {
         start_url: '/',
         theme_color: '#112540',
       })
+      expect(defaultResponse.json().share_target).toEqual({
+        action: '/pwa/share-target',
+        enctype: 'multipart/form-data',
+        method: 'POST',
+        params: {
+          files: [
+            {
+              accept: [
+                'image/png',
+                'image/jpeg',
+                'image/webp',
+                '.png',
+                '.jpg',
+                '.jpeg',
+                '.webp',
+              ],
+              name: 'attachments',
+            },
+          ],
+          text: 'text',
+          title: 'title',
+        },
+      })
       expect(defaultResponse.json().icons).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -313,6 +336,9 @@ describe('tenant routes and request context', () => {
         name: 'Second Tenant Личный кабинет',
         short_name: 'Second Tenant',
       })
+      expect(secondResponse.json().share_target).toEqual(
+        defaultResponse.json().share_target,
+      )
       expect(secondResponse.json().icons).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

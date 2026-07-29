@@ -7,9 +7,12 @@ import type { AuthenticatedPortalUser } from '../auth/types'
 import type { PublicTenantContext } from '../tenant/api/tenantClient'
 
 export const OFFLINE_DATABASE_NAME = 'portal-offline'
-export const OFFLINE_DATABASE_VERSION = 2
+export const OFFLINE_DATABASE_VERSION = 3
 export const OFFLINE_LOW_QUOTA_USAGE_RATIO = 0.9
 export const OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
+export const PWA_SHARE_DRAFT_IDENTITY_INDEX = 'by_identity'
+export const PWA_SHARE_DRAFT_EXPIRY_INDEX = 'by_expiry'
+export const PWA_SHARE_DRAFT_PRUNE_LIMIT = 25
 
 export type OfflineScopedUserKey = `${string}:${number}`
 
@@ -28,6 +31,30 @@ export type OfflineLastActiveIdentityRecord = {
 
 export type OfflineLocalDeviceSignoutRecord = {
   createdAt: string
+  host: string
+  tenantSlug: string
+  userId: number
+}
+
+export type OfflinePendingShareFile = {
+  blob: Blob
+  fileName: string
+  lastModified: number
+  mimeType: string
+}
+
+export type OfflinePendingShareDraftRecord = {
+  createdAt: string
+  draftId: string
+  expiresAt: string
+  files: OfflinePendingShareFile[]
+  host: string
+  tenantSlug: string
+  userId: number
+}
+
+export type PendingShareDraftScope = {
+  draftId: string
   host: string
   tenantSlug: string
   userId: number

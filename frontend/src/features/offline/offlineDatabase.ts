@@ -3,12 +3,15 @@ import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import {
   OFFLINE_DATABASE_NAME,
   OFFLINE_DATABASE_VERSION,
+  PWA_SHARE_DRAFT_EXPIRY_INDEX,
+  PWA_SHARE_DRAFT_IDENTITY_INDEX,
   type OfflineAuthSnapshotRecord,
   type OfflineChatMessagePageRecord,
   type OfflineChatMessageSnapshotRecord,
   type OfflineChatThreadListRecord,
   type OfflineLastActiveIdentityRecord,
   type OfflineLocalDeviceSignoutRecord,
+  type OfflinePendingShareDraftRecord,
   type OfflinePushStaleMarkerRecord,
   type OfflineSyncLeaseRecord,
   type OfflineTenantContextRecord,
@@ -26,6 +29,7 @@ export const OFFLINE_STORES = [
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
+  'pending_share_drafts',
 ] as const
 
 export type OfflineStoreName = (typeof OFFLINE_STORES)[number]
@@ -59,6 +63,14 @@ export interface PortalOfflineDatabase extends DBSchema {
     key: string
     value: OfflineLocalDeviceSignoutRecord
   }
+  pending_share_drafts: {
+    indexes: {
+      by_expiry: string
+      by_identity: [string, string, number]
+    }
+    key: string
+    value: OfflinePendingShareDraftRecord
+  }
   push_stale_markers: {
     key: string
     value: OfflinePushStaleMarkerRecord
@@ -86,9 +98,25 @@ export async function openOfflineDatabase(): Promise<OfflineDatabase> {
     {
       upgrade(database) {
         for (const storeName of OFFLINE_STORES) {
-          if (!database.objectStoreNames.contains(storeName)) {
-            database.createObjectStore(storeName)
+          if (database.objectStoreNames.contains(storeName)) {
+            continue
           }
+
+          if (storeName === 'pending_share_drafts') {
+            const store = database.createObjectStore(storeName, {
+              keyPath: 'draftId',
+            })
+
+            store.createIndex(
+              PWA_SHARE_DRAFT_IDENTITY_INDEX,
+              ['host', 'tenantSlug', 'userId'],
+              { unique: true },
+            )
+            store.createIndex(PWA_SHARE_DRAFT_EXPIRY_INDEX, 'expiresAt')
+            continue
+          }
+
+          database.createObjectStore(storeName)
         }
       },
       blocking() {

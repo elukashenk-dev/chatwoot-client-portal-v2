@@ -132,6 +132,29 @@ function getTenantPwaManifest(
     lang: 'ru',
     name: `${tenant.displayName} Личный кабинет`,
     scope: '/',
+    share_target: {
+      action: '/pwa/share-target',
+      enctype: 'multipart/form-data',
+      method: 'POST',
+      params: {
+        files: [
+          {
+            accept: [
+              'image/png',
+              'image/jpeg',
+              'image/webp',
+              '.png',
+              '.jpg',
+              '.jpeg',
+              '.webp',
+            ],
+            name: 'attachments',
+          },
+        ],
+        text: 'text',
+        title: 'title',
+      },
+    },
     short_name: tenant.displayName,
     start_url: '/',
     theme_color: branding?.themeColor ?? tenantPwaThemeColor,

@@ -45,8 +45,28 @@ describe('service worker push stale markers', () => {
         'chat_text_outbox',
         'sync_leases',
         'push_stale_markers',
+        'pending_share_drafts',
       ]),
     )
+    expect(
+      indexedDbFake.createdStoreOptions.get('pending_share_drafts'),
+    ).toEqual({
+      keyPath: 'draftId',
+    })
+    expect(indexedDbFake.createdIndexes).toEqual([
+      {
+        keyPath: ['host', 'tenantSlug', 'userId'],
+        name: 'by_identity',
+        options: { unique: true },
+        storeName: 'pending_share_drafts',
+      },
+      {
+        keyPath: 'expiresAt',
+        name: 'by_expiry',
+        options: undefined,
+        storeName: 'pending_share_drafts',
+      },
+    ])
     expect(indexedDbFake.putCalls).toEqual([
       {
         key: 'default:7:private:me:9101',

@@ -83,7 +83,7 @@ describe('offline store database', () => {
     await clearOfflineDatabaseForTests()
   })
 
-  it('opens stable portal-offline database with schema version 2', async () => {
+  it('opens stable portal-offline database with schema version 3', async () => {
     const database = await openOfflineDatabase()
 
     expect(database.name).toBe(OFFLINE_DATABASE_NAME)
@@ -96,11 +96,27 @@ describe('offline store database', () => {
       'chat_thread_lists',
       'last_active_identities',
       'local_device_signouts',
+      'pending_share_drafts',
       'push_stale_markers',
       'sync_leases',
       'tenant_contexts',
     ])
 
+    const transaction = database.transaction(
+      'pending_share_drafts',
+      'readonly',
+    )
+    const store = transaction.objectStore('pending_share_drafts')
+
+    expect(store.keyPath).toBe('draftId')
+    expect(Array.from(store.indexNames).sort()).toEqual([
+      'by_expiry',
+      'by_identity',
+    ])
+    expect(store.index('by_identity').unique).toBe(true)
+    expect(store.index('by_expiry').unique).toBe(false)
+
+    await transaction.done
     database.close()
   })
 

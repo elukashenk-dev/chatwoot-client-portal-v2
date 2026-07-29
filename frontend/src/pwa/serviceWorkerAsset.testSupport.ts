@@ -23,6 +23,13 @@ type IndexedDbPutCall = {
   value: unknown
 }
 
+type IndexedDbCreatedIndex = {
+  keyPath: string | string[]
+  name: string
+  options?: IDBIndexParameters
+  storeName: string
+}
+
 export function createServiceWorkerIndexedDbFake({
   failOpen = false,
   failPut = false,
@@ -34,6 +41,11 @@ export function createServiceWorkerIndexedDbFake({
 } = {}) {
   const putCalls: IndexedDbPutCall[] = []
   const createdStores = new Set<string>()
+  const createdStoreOptions = new Map<
+    string,
+    IDBObjectStoreParameters | undefined
+  >()
+  const createdIndexes: IndexedDbCreatedIndex[] = []
   const storeRecords = new Map(
     Object.entries(records).map(([storeName, values]) => [
       storeName,
@@ -44,9 +56,27 @@ export function createServiceWorkerIndexedDbFake({
     open: vi.fn(() => {
       const database = {
         close: vi.fn(),
-        createObjectStore: vi.fn((storeName: string) => {
-          createdStores.add(storeName)
-        }),
+        createObjectStore: vi.fn(
+          (storeName: string, options?: IDBObjectStoreParameters) => {
+            createdStores.add(storeName)
+            createdStoreOptions.set(storeName, options)
+
+            return {
+              createIndex: (
+                name: string,
+                keyPath: string | string[],
+                indexOptions?: IDBIndexParameters,
+              ) => {
+                createdIndexes.push({
+                  keyPath,
+                  name,
+                  options: indexOptions,
+                  storeName,
+                })
+              },
+            }
+          },
+        ),
         objectStoreNames: {
           contains: (storeName: string) => createdStores.has(storeName),
         },
@@ -121,7 +151,13 @@ export function createServiceWorkerIndexedDbFake({
     }),
   }
 
-  return { createdStores, indexedDB, putCalls }
+  return {
+    createdIndexes,
+    createdStoreOptions,
+    createdStores,
+    indexedDB,
+    putCalls,
+  }
 }
 
 export function loadServiceWorker({

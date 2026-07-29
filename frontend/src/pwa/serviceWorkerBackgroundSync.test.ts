@@ -5,7 +5,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
-const PORTAL_OFFLINE_DATABASE_VERSION = 2
+const PORTAL_OFFLINE_DATABASE_VERSION = 3
 const PORTAL_OFFLINE_STORES = [
   'tenant_contexts',
   'last_active_identities',
@@ -17,6 +17,7 @@ const PORTAL_OFFLINE_STORES = [
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
+  'pending_share_drafts',
 ] as const
 
 type Listener = (event: {
@@ -122,6 +123,20 @@ async function openPortalOfflineDatabaseForTests() {
     request.onupgradeneeded = () => {
       for (const storeName of PORTAL_OFFLINE_STORES) {
         if (!request.result.objectStoreNames.contains(storeName)) {
+          if (storeName === 'pending_share_drafts') {
+            const store = request.result.createObjectStore(storeName, {
+              keyPath: 'draftId',
+            })
+
+            store.createIndex(
+              'by_identity',
+              ['host', 'tenantSlug', 'userId'],
+              { unique: true },
+            )
+            store.createIndex('by_expiry', 'expiresAt')
+            continue
+          }
+
           request.result.createObjectStore(storeName)
         }
       }

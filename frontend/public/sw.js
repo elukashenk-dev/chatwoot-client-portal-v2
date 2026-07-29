@@ -6,8 +6,10 @@ const APP_BADGE_STORE_NAME = 'state'
 const APP_BADGE_COUNT_KEY = 'chat_push_count'
 const APP_BADGE_MAX_COUNT = 9999
 const PORTAL_OFFLINE_DATABASE_NAME = 'portal-offline'
-const PORTAL_OFFLINE_DATABASE_VERSION = 2
+const PORTAL_OFFLINE_DATABASE_VERSION = 3
 const PORTAL_OFFLINE_MESSAGE_SNAPSHOT_LIMIT = 50
+const PWA_SHARE_DRAFT_IDENTITY_INDEX = 'by_identity'
+const PWA_SHARE_DRAFT_EXPIRY_INDEX = 'by_expiry'
 const TEXT_OUTBOX_BACKGROUND_SYNC_TAG = 'portal-text-outbox-drain'
 const TEXT_OUTBOX_SEND_LEASE_MS = 30_000
 const TEXT_OUTBOX_DRAIN_LEASE_MS = 30_000
@@ -45,6 +47,7 @@ const PORTAL_OFFLINE_STORES = [
   'chat_text_outbox',
   'sync_leases',
   'push_stale_markers',
+  'pending_share_drafts',
 ]
 const BUILD_ASSET_URLS = parseBuildAssetUrls(
   '__PORTAL_SERVICE_WORKER_ASSETS_JSON__',
@@ -1403,9 +1406,25 @@ function openPortalOfflineDatabase() {
       const database = request.result
 
       for (const storeName of PORTAL_OFFLINE_STORES) {
-        if (!database.objectStoreNames.contains(storeName)) {
-          database.createObjectStore(storeName)
+        if (database.objectStoreNames.contains(storeName)) {
+          continue
         }
+
+        if (storeName === 'pending_share_drafts') {
+          const store = database.createObjectStore(storeName, {
+            keyPath: 'draftId',
+          })
+
+          store.createIndex(
+            PWA_SHARE_DRAFT_IDENTITY_INDEX,
+            ['host', 'tenantSlug', 'userId'],
+            { unique: true },
+          )
+          store.createIndex(PWA_SHARE_DRAFT_EXPIRY_INDEX, 'expiresAt')
+          continue
+        }
+
+        database.createObjectStore(storeName)
       }
     }
     request.onsuccess = () => {
