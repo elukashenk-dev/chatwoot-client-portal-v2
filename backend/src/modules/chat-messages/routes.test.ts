@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { registerApiErrorHandler } from '../../lib/errors.js'
 import {
-  createMultipartAttachmentPayload,
+  createMultipartAttachmentsPayload,
   testEnv,
 } from '../../test/appTestHelpers.js'
 import type { AuthService } from '../auth/service.js'
@@ -374,11 +374,15 @@ describe('registerChatMessagesRoutes', () => {
           status: 'limited',
         },
       })
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\n'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:limited-attachment',
-      fileContent: Buffer.from('%PDF-1.7\n'),
-      fileName: 'invoice.pdf',
-      mimeType: 'application/pdf',
       threadId: 'private:me',
     })
 
@@ -391,7 +395,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: multipart.payload,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(response.statusCode).toBe(429)
@@ -407,6 +411,120 @@ describe('registerChatMessagesRoutes', () => {
       await app.close()
     }
   })
+
+  it.each([
+    {
+      code: 'attachment_required',
+      createMultipart: () =>
+        createMultipartAttachmentsPayload({
+          attachments: [],
+          clientMessageKey: 'portal-send:no-attachments',
+          threadId: 'private:me',
+        }),
+      name: 'zero files',
+      statusCode: 400,
+    },
+    {
+      code: 'attachment_count_exceeded',
+      createMultipart: () =>
+        createMultipartAttachmentsPayload({
+          attachments: Array.from({ length: 6 }, (_, index) => ({
+            fileContent: Buffer.from(`file-${index}`),
+            fileName: `file-${index}.txt`,
+            mimeType: 'text/plain',
+          })),
+          clientMessageKey: 'portal-send:too-many-attachments',
+          threadId: 'private:me',
+        }),
+      name: 'six files',
+      statusCode: 400,
+    },
+    {
+      code: 'attachment_batch_too_large',
+      createMultipart: () =>
+        createMultipartAttachmentsPayload({
+          attachments: [
+            {
+              fileContent: Buffer.alloc(40 * 1024 * 1024),
+              fileName: 'large.zip',
+              mimeType: 'application/zip',
+            },
+            {
+              fileContent: Buffer.alloc(1),
+              fileName: 'overflow.txt',
+              mimeType: 'text/plain',
+            },
+          ],
+          clientMessageKey: 'portal-send:aggregate-overflow',
+          threadId: 'private:me',
+        }),
+      name: 'more than 40 MiB in aggregate',
+      statusCode: 413,
+    },
+    {
+      code: 'attachment_field_required',
+      createMultipart: () => {
+        const multipart = createMultipartAttachmentsPayload({
+          attachments: [
+            {
+              fileContent: Buffer.from('file'),
+              fileName: 'file.txt',
+              mimeType: 'text/plain',
+            },
+          ],
+          clientMessageKey: 'portal-send:wrong-file-field',
+          threadId: 'private:me',
+        })
+
+        return {
+          ...multipart,
+          payload: Buffer.from(
+            multipart.payload
+              .toString('latin1')
+              .replace('name="attachments"', 'name="attachment"'),
+            'latin1',
+          ),
+        }
+      },
+      name: 'the singular file field',
+      statusCode: 400,
+    },
+  ])(
+    'rejects $name with a controlled attachment error',
+    async ({ code, createMultipart, statusCode }) => {
+      const { app, chatMessagesService } = await buildMessagesRoutesTestApp({
+        rateLimitResult: {
+          status: 'allowed',
+        },
+      })
+      const multipart = createMultipart()
+
+      try {
+        const response = await app.inject({
+          headers: {
+            'content-type': multipart.contentType,
+            cookie: createAuthorizedCookie(app),
+            origin: testEnv.APP_ORIGIN,
+          },
+          method: 'POST',
+          payload: multipart.payload,
+          url: '/api/chat/messages/attachments',
+        })
+
+        expect(response.statusCode).toBe(statusCode)
+        expect(response.json()).toMatchObject({
+          error: {
+            code,
+          },
+        })
+        expect(
+          chatMessagesService.sendCurrentUserAttachmentMessage,
+        ).not.toHaveBeenCalled()
+      } finally {
+        await app.close()
+      }
+    },
+  )
 
   it('returns 429 without reading a limited attachment request body', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
@@ -434,7 +552,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: unreadableBody,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(response.statusCode).toBe(429)
@@ -467,18 +585,26 @@ describe('registerChatMessagesRoutes', () => {
     chatMessagesService.sendCurrentUserAttachmentMessage
       .mockImplementationOnce(() => firstSend.promise)
       .mockImplementationOnce(() => secondSend.promise)
-    const firstMultipart = createMultipartAttachmentPayload({
+    const firstMultipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\nfirst'),
+          fileName: 'first.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:first-active-upload',
-      fileContent: Buffer.from('%PDF-1.7\nfirst'),
-      fileName: 'first.pdf',
-      mimeType: 'application/pdf',
       threadId: 'private:me',
     })
-    const secondMultipart = createMultipartAttachmentPayload({
+    const secondMultipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\nsecond'),
+          fileName: 'second.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:second-active-upload',
-      fileContent: Buffer.from('%PDF-1.7\nsecond'),
-      fileName: 'second.pdf',
-      mimeType: 'application/pdf',
       threadId: 'private:me',
     })
     const firstResponsePromise = app.inject({
@@ -489,7 +615,7 @@ describe('registerChatMessagesRoutes', () => {
       },
       method: 'POST',
       payload: firstMultipart.payload,
-      url: '/api/chat/messages/attachment',
+      url: '/api/chat/messages/attachments',
     })
     const secondResponsePromise = app.inject({
       headers: {
@@ -499,7 +625,7 @@ describe('registerChatMessagesRoutes', () => {
       },
       method: 'POST',
       payload: secondMultipart.payload,
-      url: '/api/chat/messages/attachment',
+      url: '/api/chat/messages/attachments',
     })
 
     try {
@@ -525,7 +651,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: unreadableBody,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(rejectedResponse.statusCode).toBe(503)
@@ -549,11 +675,15 @@ describe('registerChatMessagesRoutes', () => {
       expect(firstResponse.statusCode).toBe(200)
       expect(secondResponse.statusCode).toBe(200)
 
-      const nextMultipart = createMultipartAttachmentPayload({
+      const nextMultipart = createMultipartAttachmentsPayload({
+        attachments: [
+          {
+            fileContent: Buffer.from('%PDF-1.7\nnext'),
+            fileName: 'next.pdf',
+            mimeType: 'application/pdf',
+          },
+        ],
         clientMessageKey: 'portal-send:next-upload-after-release',
-        fileContent: Buffer.from('%PDF-1.7\nnext'),
-        fileName: 'next.pdf',
-        mimeType: 'application/pdf',
         threadId: 'private:me',
       })
       const nextResponse = await app.inject({
@@ -564,7 +694,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: nextMultipart.payload,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(nextResponse.statusCode).toBe(200)
@@ -585,6 +715,81 @@ describe('registerChatMessagesRoutes', () => {
     }
   })
 
+  it('releases upload admission after an aborted multipart stream', async () => {
+    const attachmentUploadAdmission = createChatAttachmentUploadAdmission({
+      maxActiveUploads: 1,
+    })
+    const { app } = await buildMessagesRoutesTestApp({
+      attachmentUploadAdmission,
+      rateLimitResult: {
+        status: 'allowed',
+      },
+    })
+    let bodyReadCount = 0
+    const abortedBody = new Readable({
+      read() {
+        bodyReadCount += 1
+        this.push(
+          Buffer.from(
+            '------portal-aborted-boundary\r\nContent-Disposition: form-data; name="attachments"; filename="partial.txt"\r\nContent-Type: text/plain\r\n\r\npartial',
+          ),
+        )
+        this.destroy(new Error('Simulated attachment upload abort.'))
+      },
+    })
+
+    try {
+      await app
+        .inject({
+          headers: {
+            'content-type':
+              'multipart/form-data; boundary=----portal-aborted-boundary',
+            cookie: createAuthorizedCookie(app),
+            origin: testEnv.APP_ORIGIN,
+          },
+          method: 'POST',
+          payload: abortedBody,
+          url: '/api/chat/messages/attachments',
+        })
+        .catch(() => undefined)
+
+      expect(bodyReadCount).toBeGreaterThan(0)
+
+      await vi.waitFor(() => {
+        const releaseProbe = attachmentUploadAdmission.tryAcquire()
+
+        expect(releaseProbe).toBeTypeOf('function')
+        releaseProbe?.()
+      })
+
+      const nextMultipart = createMultipartAttachmentsPayload({
+        attachments: [
+          {
+            fileContent: Buffer.from('next'),
+            fileName: 'next.txt',
+            mimeType: 'text/plain',
+          },
+        ],
+        clientMessageKey: 'portal-send:after-abort',
+        threadId: 'private:me',
+      })
+      const nextResponse = await app.inject({
+        headers: {
+          'content-type': nextMultipart.contentType,
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: nextMultipart.payload,
+        url: '/api/chat/messages/attachments',
+      })
+
+      expect(nextResponse.statusCode).toBe(200)
+    } finally {
+      await app.close()
+    }
+  })
+
   it('requires threadId for attachment sends', async () => {
     const { app, chatMessagesService, chatSendRateLimiter } =
       await buildMessagesRoutesTestApp({
@@ -592,11 +797,15 @@ describe('registerChatMessagesRoutes', () => {
           status: 'allowed',
         },
       })
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\n'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:missing-thread-attachment',
-      fileContent: Buffer.from('%PDF-1.7\n'),
-      fileName: 'invoice.pdf',
-      mimeType: 'application/pdf',
       threadId: '',
     })
 
@@ -609,7 +818,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: multipart.payload,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(response.statusCode).toBe(400)
@@ -633,11 +842,20 @@ describe('registerChatMessagesRoutes', () => {
           status: 'allowed',
         },
       })
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\n'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+        {
+          fileContent: Buffer.from('notes'),
+          fileName: 'notes.txt',
+          mimeType: 'text/plain',
+        },
+      ],
       clientMessageKey: 'portal-send:group-attachment',
-      fileContent: Buffer.from('%PDF-1.7\n'),
-      fileName: 'invoice.pdf',
-      mimeType: 'application/pdf',
       threadId: 'group:154',
     })
 
@@ -650,7 +868,7 @@ describe('registerChatMessagesRoutes', () => {
         },
         method: 'POST',
         payload: multipart.payload,
-        url: '/api/chat/messages/attachment',
+        url: '/api/chat/messages/attachments',
       })
 
       expect(response.statusCode).toBe(200)
@@ -668,6 +886,10 @@ describe('registerChatMessagesRoutes', () => {
         chatMessagesService.sendCurrentUserAttachmentMessage,
       ).toHaveBeenCalledWith(
         expect.objectContaining({
+          attachments: [
+            expect.objectContaining({ fileName: 'invoice.pdf' }),
+            expect.objectContaining({ fileName: 'notes.txt' }),
+          ],
           clientMessageKey: 'portal-send:group-attachment',
           content: null,
           replyToMessageId: null,
@@ -675,6 +897,42 @@ describe('registerChatMessagesRoutes', () => {
           userId: 7,
         }),
       )
+    } finally {
+      await app.close()
+    }
+  })
+
+  it('does not retain the old singular attachment route', async () => {
+    const { app } = await buildMessagesRoutesTestApp({
+      rateLimitResult: {
+        status: 'allowed',
+      },
+    })
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('file'),
+          fileName: 'file.txt',
+          mimeType: 'text/plain',
+        },
+      ],
+      clientMessageKey: 'portal-send:old-route',
+      threadId: 'private:me',
+    })
+
+    try {
+      const response = await app.inject({
+        headers: {
+          'content-type': multipart.contentType,
+          cookie: createAuthorizedCookie(app),
+          origin: testEnv.APP_ORIGIN,
+        },
+        method: 'POST',
+        payload: multipart.payload,
+        url: '/api/chat/messages/attachment',
+      })
+
+      expect(response.statusCode).toBe(404)
     } finally {
       await app.close()
     }

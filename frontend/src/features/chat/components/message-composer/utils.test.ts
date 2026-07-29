@@ -28,6 +28,7 @@ import {
   COMPOSER_TEXTAREA_MAX_HEIGHT_PX,
   COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
   createVoiceAttachmentFile,
+  formatSelectedAttachmentSize,
   resizeComposerTextarea,
 } from './utils'
 
@@ -97,6 +98,16 @@ describe('resizeComposerTextarea', () => {
 
     expect(textarea.style.height).toBe(`${COMPOSER_TEXTAREA_MAX_HEIGHT_PX}px`)
     expect(textarea.style.overflowY).toBe('auto')
+  })
+})
+
+describe('formatSelectedAttachmentSize', () => {
+  it('formats bytes and localized one-decimal larger units', () => {
+    expect(formatSelectedAttachmentSize(22)).toBe('22 Б')
+    expect(formatSelectedAttachmentSize(1536)).toBe('1,5 КБ')
+    expect(
+      formatSelectedAttachmentSize(Math.round(18.4 * 1024 * 1024)),
+    ).toBe('18,4 МБ')
   })
 })
 

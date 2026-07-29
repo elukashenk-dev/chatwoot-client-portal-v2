@@ -27,10 +27,6 @@ export function createClientMessageKey() {
     .slice(2)}`
 }
 
-export function createAttachmentSignature(file: File) {
-  return [file.name, file.type, file.size, file.lastModified].join(':')
-}
-
 function createVoiceAttachmentFileName(mimeType: string, nowMs: number) {
   const now = new Date(nowMs)
   const timestamp = [
@@ -243,11 +239,19 @@ export async function createVoiceAttachmentFile({
 }
 
 export function formatSelectedAttachmentSize(fileSize: number) {
-  if (fileSize >= 1024 * 1024) {
-    return `${(fileSize / 1024 / 1024).toFixed(1)} МБ`
+  if (fileSize < 1024) {
+    return `${Math.max(0, Math.round(fileSize))} Б`
   }
 
-  return `${Math.max(1, Math.round(fileSize / 1024))} КБ`
+  if (fileSize >= 1024 * 1024) {
+    return `${formatAttachmentDecimal(fileSize / 1024 / 1024)} МБ`
+  }
+
+  return `${formatAttachmentDecimal(fileSize / 1024)} КБ`
+}
+
+function formatAttachmentDecimal(value: number) {
+  return value.toFixed(1).replace(/\.0$/, '').replace('.', ',')
 }
 
 export function formatRecordingDuration(elapsedMs: number) {

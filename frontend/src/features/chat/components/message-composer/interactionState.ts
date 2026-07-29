@@ -1,4 +1,5 @@
 type ComposerInteractionStateInput = {
+  attachmentCount: number
   disabled: boolean
   isAttachmentSendDisabled: boolean
   isSending: boolean
@@ -7,11 +8,11 @@ type ComposerInteractionStateInput = {
   isVoiceRecorderBusy: boolean
   isVoiceSendDisabled: boolean
   normalizedDraftLength: number
-  selectedAttachment: File | null
   shouldPrioritizeTextDraft: boolean
 }
 
 export function getComposerInteractionState({
+  attachmentCount,
   disabled,
   isAttachmentSendDisabled,
   isSending,
@@ -20,7 +21,6 @@ export function getComposerInteractionState({
   isVoiceRecorderBusy,
   isVoiceSendDisabled,
   normalizedDraftLength,
-  selectedAttachment,
   shouldPrioritizeTextDraft,
 }: ComposerInteractionStateInput) {
   const canSendText =
@@ -31,7 +31,7 @@ export function getComposerInteractionState({
     !isTextSendPending &&
     !isVoiceRecorderBusy
   const canSendAttachment =
-    selectedAttachment !== null &&
+    attachmentCount > 0 &&
     !isTextDraftTooLong &&
     !isAttachmentSendDisabled &&
     !disabled &&
@@ -47,7 +47,7 @@ export function getComposerInteractionState({
       !disabled &&
       !isSending &&
       !isVoiceRecorderBusy &&
-      selectedAttachment === null &&
+      attachmentCount === 0 &&
       !shouldPrioritizeTextDraft,
     isAttachmentControlDisabled:
       isAttachmentSendDisabled ||

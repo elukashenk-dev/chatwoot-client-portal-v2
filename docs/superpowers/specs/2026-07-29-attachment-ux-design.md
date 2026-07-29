@@ -8,6 +8,16 @@ design for review before an implementation plan is created.
 The feature is a confirmed chat follow-up, not a silent expansion of the
 current operations roadmap.
 
+## Implementation Status
+
+Slice 1 was implemented, independently reviewed and verified on `2026-07-29`.
+It established the ordered five-file/40 MiB batch boundary, plural portal API,
+compact composer tray, early browser validation and one canonical Chatwoot
+message per batch. It also closed `F-CHAT-005`.
+
+Slices 2–3 remain planned. The `Current Baseline` section below preserves the
+pre-implementation state that motivated this design.
+
 ## Goal
 
 Make attachment sending in the customer portal feel natural on desktop and
@@ -82,17 +92,11 @@ The existing security baseline must remain:
 - one current request can materialize at most 40 MiB of attachment data;
 - Chatwoot remains system of record for sent message binaries.
 
-## Related Finding
+## Closed Finding
 
-The first implementation slice is responsible for closing:
-
-```text
-docs/findings/F-CHAT-005-frontend-attachment-validation.md
-```
-
-It requires local validation for empty files, the 40 MiB limit, file-name
-length and unsupported types, including voice files. Backend validation remains
-authoritative.
+Attachment UX Slice 1 closed `F-CHAT-005`: the browser now validates empty
+files, the 40 MiB limit, file-name length and unsupported types before upload,
+including voice files. Backend validation remains authoritative.
 
 These unrelated deferred findings remain out of scope:
 
@@ -893,8 +897,8 @@ After actual runtime completion:
   exception is implemented;
 - update `docs/roadmap/work-log.md` once per stable completed attachment UX
   baseline, not for every test or intermediate slice;
-- delete `docs/findings/F-CHAT-005-frontend-attachment-validation.md` only after
-  its implementation, review and verification are complete;
+- `F-CHAT-005` was deleted after its implementation, review and verification
+  were complete;
 - update the preservation status in
   `docs/superpowers/specs/2026-06-02-chat-message-reliability-design.md` when
   `F-CHAT-005` is removed, so it does not retain a stale finding link;

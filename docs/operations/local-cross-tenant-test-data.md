@@ -487,9 +487,11 @@ For each tenant:
 1. Login as the tenant-specific test user.
 2. Send text:
    `LCT <RUN_ID> <tenant> text`.
-3. Send one safe attachment:
-   `/tmp/portal-lct-<tenant>-<RUN_ID>.txt`.
-4. Verify transcript shows both.
+3. Send one safe two-file attachment batch:
+   `/tmp/portal-lct-<tenant>-<RUN_ID>-1.txt` and
+   `/tmp/portal-lct-<tenant>-<RUN_ID>-2.txt`.
+4. Verify the transcript shows the text message and one attachment message with
+   both files.
 5. Verify Chatwoot has messages in the expected account/inbox.
 
 Rails verification:
@@ -531,6 +533,7 @@ Expected routing:
 - buhfirma messages -> account `3`, inbox `6`;
 - stroyfirma messages -> account `5`, inbox `9`;
 - zubi messages -> account `1`, inbox `8`;
+- each attachment-batch message has `attachments_count = 2`;
 - attachment names include the tenant slug and `RUN_ID`.
 
 ## Mutating Group Chat Checks

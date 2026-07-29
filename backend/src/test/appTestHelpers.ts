@@ -80,20 +80,20 @@ export async function seedDefaultTenant(database: DatabaseClient) {
   return tenant.id
 }
 
-export function createMultipartAttachmentPayload({
+export function createMultipartAttachmentsPayload({
+  attachments,
   clientMessageKey,
   content,
-  fileContent,
-  fileName,
-  mimeType,
   replyToMessageId,
   threadId,
 }: {
+  attachments: Array<{
+    fileContent: Buffer
+    fileName: string
+    mimeType: string
+  }>
   clientMessageKey: string
   content?: string
-  fileContent: Buffer
-  fileName: string
-  mimeType: string
   replyToMessageId?: number
   threadId: string
 }) {
@@ -119,13 +119,17 @@ export function createMultipartAttachmentPayload({
     appendField('replyToMessageId', String(replyToMessageId))
   }
 
-  chunks.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="attachment"; filename="${fileName}"\r\nContent-Type: ${mimeType}\r\n\r\n`,
-    ),
-  )
-  chunks.push(fileContent)
-  chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`))
+  for (const attachment of attachments) {
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="attachments"; filename="${attachment.fileName}"\r\nContent-Type: ${attachment.mimeType}\r\n\r\n`,
+      ),
+      attachment.fileContent,
+      Buffer.from('\r\n'),
+    )
+  }
+
+  chunks.push(Buffer.from(`--${boundary}--\r\n`))
 
   return {
     contentType: `multipart/form-data; boundary=${boundary}`,

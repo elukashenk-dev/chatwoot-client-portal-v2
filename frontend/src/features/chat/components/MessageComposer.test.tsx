@@ -9,9 +9,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  MessageComposer,
+  MessageComposer as MessageComposerView,
   type MessageComposerReplyTarget,
 } from './MessageComposer'
+import type { SendAttachmentBatchInput } from './message-composer/types'
+import { useAttachmentDraft } from './message-composer/useAttachmentDraft'
 
 const voiceRecorderState = vi.hoisted(() => ({
   cancelVoiceRecording: vi.fn(),
@@ -48,6 +50,19 @@ vi.mock('./message-composer/useVoiceRecorder', () => ({
   ),
 }))
 
+type TestMessageComposerProps = Omit<
+  Parameters<typeof MessageComposerView>[0],
+  'attachmentDraft'
+>
+
+function MessageComposer(props: TestMessageComposerProps) {
+  const attachmentDraft = useAttachmentDraft()
+
+  return (
+    <MessageComposerView attachmentDraft={attachmentDraft} {...props} />
+  )
+}
+
 function renderComposer(
   overrides: Partial<Parameters<typeof MessageComposer>[0]> = {},
 ) {
@@ -58,7 +73,7 @@ function renderComposer(
       isSending={false}
       onCancelReply={vi.fn()}
       onSend={vi.fn(async () => true)}
-      onSendAttachment={vi.fn(async () => true)}
+      onSendAttachmentBatch={vi.fn(async () => true)}
       replyTarget={null}
       {...overrides}
     />,
@@ -90,6 +105,12 @@ function createDeferredValue<TValue>() {
     promise,
     resolve: resolveValue,
   }
+}
+
+function createAttachmentSendMock(result: boolean) {
+  return vi.fn<(input: SendAttachmentBatchInput) => Promise<boolean>>(
+    async () => result,
+  )
 }
 
 describe('MessageComposer', () => {
@@ -263,7 +284,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={onSend}
-        onSendAttachment={vi.fn(async () => true)}
+        onSendAttachmentBatch={vi.fn(async () => true)}
         replyTarget={null}
       />,
     )
@@ -329,7 +350,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={onCancelReply}
         onSend={onSend}
-        onSendAttachment={vi.fn(async () => true)}
+        onSendAttachmentBatch={vi.fn(async () => true)}
         replyTarget={replyTarget}
       />,
     )
@@ -364,7 +385,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={onSend}
-        onSendAttachment={vi.fn(async () => true)}
+        onSendAttachmentBatch={vi.fn(async () => true)}
         replyTarget={null}
       />,
     )
@@ -418,7 +439,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={onSend}
-        onSendAttachment={vi.fn(async () => true)}
+        onSendAttachmentBatch={vi.fn(async () => true)}
         replyTarget={null}
       />,
     )
@@ -446,6 +467,196 @@ describe('MessageComposer', () => {
     expect(textarea).toHaveFocus()
   })
 
+  it('keeps selected file order, removes one item and submits one immutable batch', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(true)
+    const first = new File(['1234567890'], 'first.pdf', {
+      type: 'application/pdf',
+    })
+    const second = new File(['12345'], 'second.txt', {
+      type: 'text/plain',
+    })
+    const third = new File(['1234567'], 'third.txt', {
+      type: 'text/plain',
+    })
+    const replyTarget = {
+      attachmentName: null,
+      authorName: 'Поддержка',
+      content: 'Пришлите документы',
+      direction: 'incoming',
+      id: 77,
+    } satisfies MessageComposerReplyTarget
+
+    renderComposer({
+      onSendAttachmentBatch,
+      replyTarget,
+    })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), [
+      first,
+      second,
+      third,
+    ])
+
+    expect(screen.getByText('3/5 · 22 Б')).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Убрать файл second.txt' }),
+    )
+
+    expect(screen.getByText('2/5 · 17 Б')).toBeInTheDocument()
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Подпись',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch).toHaveBeenCalledWith({
+      clientMessageKey: expect.stringMatching(/^portal-send:/),
+      content: 'Подпись',
+      items: [
+        expect.objectContaining({ file: first, source: 'picker' }),
+        expect.objectContaining({ file: third, source: 'picker' }),
+      ],
+      replyToMessageId: 77,
+    })
+  })
+
+  it('reuses one client message key while an unchanged batch retry fails', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const file = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch).toHaveBeenCalledTimes(2)
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('creates a new client message key after removing and re-adding a file', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const file = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Убрать файл invoice.pdf' }),
+    )
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).not.toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('creates a new client message key after selecting the files in a new order', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const first = new File(['first'], 'first.pdf', {
+      type: 'application/pdf',
+    })
+    const second = new File(['second'], 'second.txt', {
+      type: 'text/plain',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), [first, second])
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    await user.click(screen.getByRole('button', { name: 'Очистить файлы' }))
+    await user.upload(screen.getByLabelText('Файл вложения'), [second, first])
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).not.toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('creates a new client message key after changing the caption', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const file = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    await user.type(
+      screen.getByRole('textbox', { name: 'Сообщение' }),
+      'Новая подпись',
+    )
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).not.toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('creates a new client message key after cancelling the reply target', async () => {
+    const user = userEvent.setup()
+    const onCancelReply = vi.fn()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const file = new File(['invoice'], 'invoice.pdf', {
+      type: 'application/pdf',
+    })
+
+    const { rerender } = render(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={onCancelReply}
+        onSend={vi.fn(async () => true)}
+        onSendAttachmentBatch={onSendAttachmentBatch}
+        replyTarget={{
+          authorName: 'Поддержка',
+          content: 'Ответьте сюда',
+          direction: 'incoming',
+          id: 77,
+        }}
+      />,
+    )
+
+    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+    await user.click(screen.getByRole('button', { name: 'Отменить ответ' }))
+
+    rerender(
+      <MessageComposer
+        disabled={false}
+        errorMessage={null}
+        isSending={false}
+        onCancelReply={onCancelReply}
+        onSend={vi.fn(async () => true)}
+        onSendAttachmentBatch={onSendAttachmentBatch}
+        replyTarget={null}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).not.toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
   it('does not submit an already selected attachment after attachment send is disabled', async () => {
     const user = userEvent.setup()
     const onSendAttachment = vi.fn(async () => true)
@@ -461,7 +672,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={vi.fn(async () => true)}
-        onSendAttachment={onSendAttachment}
+        onSendAttachmentBatch={onSendAttachment}
         replyTarget={null}
       />,
     )
@@ -470,7 +681,7 @@ describe('MessageComposer', () => {
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
     expect(
       screen.getByText('invoice.pdf').closest(
-        '[data-composer-panel="attachment"]',
+        '[data-composer-panel="attachments"]',
       ),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
 
@@ -482,7 +693,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={vi.fn(async () => true)}
-        onSendAttachment={onSendAttachment}
+        onSendAttachmentBatch={onSendAttachment}
         replyTarget={null}
       />,
     )
@@ -493,7 +704,7 @@ describe('MessageComposer', () => {
     expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
     expect(
       screen.getByText('invoice.pdf').closest(
-        '[data-composer-panel="attachment"]',
+        '[data-composer-panel="attachments"]',
       ),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
   })
@@ -523,7 +734,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={vi.fn(async () => true)}
-        onSendAttachment={onSendAttachment}
+        onSendAttachmentBatch={onSendAttachment}
         replyTarget={replyTarget}
         voiceDisabled={false}
       />,
@@ -536,7 +747,7 @@ describe('MessageComposer', () => {
         isSending={false}
         onCancelReply={vi.fn()}
         onSend={vi.fn(async () => true)}
-        onSendAttachment={onSendAttachment}
+        onSendAttachmentBatch={onSendAttachment}
         replyTarget={replyTarget}
         voiceDisabled
       />,
@@ -553,5 +764,72 @@ describe('MessageComposer', () => {
         '[data-composer-panel="voice"]',
       ),
     ).toHaveClass('border-white/65', 'bg-white/60', 'backdrop-blur-md')
+  })
+
+  it('keeps a failed voice file and reuses its key for an unchanged retry', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(false)
+    const voiceFile = new File(['voice'], 'voice.webm', {
+      lastModified: 1_777_000_000_000,
+      type: 'audio/webm',
+    })
+    const props = {
+      disabled: false,
+      errorMessage: null,
+      isSending: false,
+      onCancelReply: vi.fn(),
+      onSend: vi.fn(async () => true),
+      onSendAttachmentBatch,
+      replyTarget: null,
+    }
+
+    voiceRecorderState.status = 'recording'
+    voiceRecorderState.finishVoiceRecording.mockImplementation(() => {
+      void voiceRecorderState.lastOptions?.onSendVoiceAttachment(voiceFile)
+    })
+
+    const { rerender } = render(<MessageComposer {...props} />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Отправить голосовое' }),
+    )
+    await waitFor(() => {
+      expect(onSendAttachmentBatch).toHaveBeenCalledTimes(1)
+    })
+
+    voiceRecorderState.status = 'idle'
+    rerender(<MessageComposer {...props} />)
+
+    expect(screen.getByText('voice.webm')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
+
+    expect(onSendAttachmentBatch).toHaveBeenCalledTimes(2)
+    expect(onSendAttachmentBatch.mock.calls[1]?.[0].clientMessageKey).toBe(
+      onSendAttachmentBatch.mock.calls[0]?.[0].clientMessageKey,
+    )
+  })
+
+  it('rejects an invalid voice file locally before the batch send callback', async () => {
+    const user = userEvent.setup()
+    const onSendAttachmentBatch = createAttachmentSendMock(true)
+
+    voiceRecorderState.status = 'recording'
+    voiceRecorderState.finishVoiceRecording.mockImplementation(() => {
+      void voiceRecorderState.lastOptions?.onSendVoiceAttachment(
+        new File([], 'voice.webm', { type: 'audio/webm' }),
+      )
+    })
+
+    renderComposer({ onSendAttachmentBatch })
+
+    await user.click(
+      screen.getByRole('button', { name: 'Отправить голосовое' }),
+    )
+
+    expect(
+      await screen.findByText('Файл «voice.webm» пустой.'),
+    ).toBeInTheDocument()
+    expect(onSendAttachmentBatch).not.toHaveBeenCalled()
   })
 })

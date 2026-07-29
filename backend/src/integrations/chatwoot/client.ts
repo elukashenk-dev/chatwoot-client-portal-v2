@@ -112,6 +112,8 @@ export type ChatwootAttachmentUpload = {
   mimeType: string
 }
 
+const CHATWOOT_ATTACHMENT_MAX_FILES = 5
+
 export type ChatwootContactInbox = {
   inboxId: number
   sourceId: string
@@ -769,13 +771,13 @@ export function createChatwootClient({
   }
 
   async function requestConversationAttachmentMessageCreate({
-    attachment,
+    attachments,
     content = null,
     conversationId,
     replyToMessageId = null,
     sourceId,
   }: {
-    attachment: ChatwootAttachmentUpload
+    attachments: readonly ChatwootAttachmentUpload[]
     content?: string | null
     conversationId: number
     replyToMessageId?: number | null
@@ -801,11 +803,13 @@ export function createChatwootClient({
       formData.append('source_id', sourceId)
     }
 
-    formData.append(
-      'attachments[]',
-      createAttachmentBlob(attachment),
-      attachment.fileName,
-    )
+    for (const attachment of attachments) {
+      formData.append(
+        'attachments[]',
+        createAttachmentBlob(attachment),
+        attachment.fileName,
+      )
+    }
 
     const request = await fetchChatwoot(
       requestUrl,
@@ -1445,13 +1449,13 @@ export function createChatwootClient({
     },
 
     async createConversationIncomingAttachmentMessage({
-      attachment,
+      attachments,
       content = null,
       conversationId,
       replyToMessageId = null,
       sourceId = null,
     }: {
-      attachment: ChatwootAttachmentUpload
+      attachments: readonly ChatwootAttachmentUpload[]
       content?: string | null
       conversationId: number
       replyToMessageId?: number | null
@@ -1465,24 +1469,40 @@ export function createChatwootClient({
         )
       }
 
-      if (!attachment.fileName.trim()) {
+      if (
+        attachments.length < 1 ||
+        attachments.length > CHATWOOT_ATTACHMENT_MAX_FILES
+      ) {
         throw new ChatwootClientRequestError(
-          'Chatwoot attachment send requires a file name.',
+          'Chatwoot attachment send requires between one and five files.',
         )
       }
 
-      if (!attachment.mimeType.trim()) {
-        throw new ChatwootClientRequestError(
-          'Chatwoot attachment send requires a file type.',
-        )
-      }
+      const normalizedAttachments = attachments.map((attachment) => {
+        if (!attachment.fileName.trim()) {
+          throw new ChatwootClientRequestError(
+            'Chatwoot attachment send requires a file name.',
+          )
+        }
 
-      if (attachment.data.byteLength <= 0) {
-        throw new ChatwootClientRequestError(
-          'Chatwoot attachment send requires file data.',
-        )
-      }
+        if (!attachment.mimeType.trim()) {
+          throw new ChatwootClientRequestError(
+            'Chatwoot attachment send requires a file type.',
+          )
+        }
 
+        if (attachment.data.byteLength <= 0) {
+          throw new ChatwootClientRequestError(
+            'Chatwoot attachment send requires file data.',
+          )
+        }
+
+        return {
+          data: attachment.data,
+          fileName: attachment.fileName.trim(),
+          mimeType: attachment.mimeType.trim().toLowerCase(),
+        }
+      })
       const normalizedContent = content?.trim() || null
 
       if (
@@ -1495,11 +1515,7 @@ export function createChatwootClient({
       }
 
       return requestConversationAttachmentMessageCreate({
-        attachment: {
-          data: attachment.data,
-          fileName: attachment.fileName.trim(),
-          mimeType: attachment.mimeType.trim().toLowerCase(),
-        },
+        attachments: normalizedAttachments,
         content: normalizedContent,
         conversationId,
         replyToMessageId,

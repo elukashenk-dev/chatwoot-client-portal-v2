@@ -11,7 +11,7 @@ import {
 } from './db/schema.js'
 import { hashPassword } from './lib/password.js'
 import {
-  createMultipartAttachmentPayload,
+  createMultipartAttachmentsPayload,
   seedDefaultTenant,
   testEnv,
 } from './test/appTestHelpers.js'
@@ -186,12 +186,16 @@ describe('buildApp', () => {
       (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
     )
     const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\n'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:attachment-key',
       content: 'Подпись к файлу',
-      fileContent: Buffer.from('%PDF-1.7\n'),
-      fileName: 'invoice.pdf',
-      mimeType: 'application/pdf',
       replyToMessageId: 10,
       threadId: 'private:me',
     })
@@ -204,7 +208,7 @@ describe('buildApp', () => {
       },
       method: 'POST',
       payload: multipart.payload,
-      url: '/api/chat/messages/attachment',
+      url: '/api/chat/messages/attachments',
     })
 
     expect(response.statusCode).toBe(200)
@@ -302,11 +306,15 @@ describe('buildApp', () => {
       (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
     )
     const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.alloc(1024 * 1024 + 64 * 1024, 0x25),
+          fileName: 'large-invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:large-attachment-key',
-      fileContent: Buffer.alloc(1024 * 1024 + 64 * 1024, 0x25),
-      fileName: 'large-invoice.pdf',
-      mimeType: 'application/pdf',
       threadId: 'private:me',
     })
 
@@ -318,7 +326,7 @@ describe('buildApp', () => {
       },
       method: 'POST',
       payload: multipart.payload,
-      url: '/api/chat/messages/attachment',
+      url: '/api/chat/messages/attachments',
     })
 
     expect(response.statusCode).toBe(200)
@@ -352,12 +360,16 @@ describe('buildApp', () => {
       (cookie) => cookie.name === testEnv.SESSION_COOKIE_NAME,
     )
     const cookieHeader = `${testEnv.SESSION_COOKIE_NAME}=${sessionCookie?.value ?? ''}`
-    const multipart = createMultipartAttachmentPayload({
+    const multipart = createMultipartAttachmentsPayload({
+      attachments: [
+        {
+          fileContent: Buffer.from('%PDF-1.7\n'),
+          fileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        },
+      ],
       clientMessageKey: 'portal-send:large-caption-key',
       content: 'x'.repeat(17_000),
-      fileContent: Buffer.from('%PDF-1.7\n'),
-      fileName: 'invoice.pdf',
-      mimeType: 'application/pdf',
       threadId: 'private:me',
     })
 
@@ -369,7 +381,7 @@ describe('buildApp', () => {
       },
       method: 'POST',
       payload: multipart.payload,
-      url: '/api/chat/messages/attachment',
+      url: '/api/chat/messages/attachments',
     })
 
     expect(response.statusCode).toBe(400)

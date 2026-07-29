@@ -688,7 +688,7 @@ describe('ChatPage search context regressions', () => {
         return createJsonResponse(createContextResponse())
       }
 
-      if (url === '/api/chat/messages/attachment') {
+      if (url === '/api/chat/messages/attachments') {
         return attachmentResponse.promise
       }
 

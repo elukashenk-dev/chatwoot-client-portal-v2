@@ -5,9 +5,9 @@ import type { PortalAttachmentUpload } from './types.js'
 
 export const SEND_LEDGER_MESSAGE_KIND_TEXT = 'text'
 export const SEND_LEDGER_MESSAGE_KIND_ATTACHMENT = 'attachment'
+export const CHAT_ATTACHMENT_MAX_FILES = 5
 export const CHAT_ATTACHMENT_MAX_BYTES = 40 * 1024 * 1024
-
-const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
+export const CHAT_ATTACHMENT_FILE_NAME_MAX_LENGTH = 255
 const CHAT_ATTACHMENT_ALLOWED_MIME_TYPES = new Set([
   'application/json',
   'application/msword',
@@ -36,7 +36,7 @@ function isAllowedAttachmentMimeType(mimeType: string) {
   )
 }
 
-export function normalizeAttachmentUpload(
+function normalizeAttachmentUpload(
   attachment: PortalAttachmentUpload,
 ): PortalAttachmentUpload {
   const fileName = attachment.fileName.trim()
@@ -88,6 +88,38 @@ export function normalizeAttachmentUpload(
   }
 }
 
+export function normalizeAttachmentUploads(
+  attachments: readonly PortalAttachmentUpload[],
+) {
+  if (attachments.length < 1) {
+    throw new ApiError(400, 'attachment_required', 'Прикрепите файл.')
+  }
+
+  if (attachments.length > CHAT_ATTACHMENT_MAX_FILES) {
+    throw new ApiError(
+      400,
+      'attachment_count_exceeded',
+      'Можно добавить не больше 5 файлов.',
+    )
+  }
+
+  const normalized = attachments.map(normalizeAttachmentUpload)
+  const totalBytes = normalized.reduce(
+    (sum, attachment) => sum + attachment.size,
+    0,
+  )
+
+  if (totalBytes > CHAT_ATTACHMENT_MAX_BYTES) {
+    throw new ApiError(
+      413,
+      'attachment_batch_too_large',
+      'Общий размер файлов не должен превышать 40 МБ.',
+    )
+  }
+
+  return normalized
+}
+
 export function createTextPayloadSha256(
   content: string,
   replyToMessageId: number | null,
@@ -100,14 +132,22 @@ export function createTextPayloadSha256(
 }
 
 export function createAttachmentPayloadSha256(
-  attachment: PortalAttachmentUpload,
+  attachments: readonly PortalAttachmentUpload[],
   content: string | null,
   replyToMessageId: number | null,
 ) {
-  return createHash('sha256')
-    .update(
-      `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0${content ?? ''}\0${replyToMessageId ?? ''}\0`,
-    )
-    .update(attachment.data)
-    .digest('hex')
+  const hash = createHash('sha256').update(
+    `${SEND_LEDGER_MESSAGE_KIND_ATTACHMENT}\0${content ?? ''}\0${replyToMessageId ?? ''}\0`,
+  )
+
+  attachments.forEach((attachment, index) => {
+    hash
+      .update(
+        `${index}\0${attachment.fileName}\0${attachment.mimeType}\0${attachment.size}\0`,
+      )
+      .update(attachment.data)
+      .update('\0')
+  })
+
+  return hash.digest('hex')
 }

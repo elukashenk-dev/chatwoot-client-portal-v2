@@ -51,7 +51,9 @@ Tenant владеет:
   пользователя, который вошел без пароля;
 - пользователь открывает защищенную клиентскую зону;
 - пользователь видит личный чат и, при наличии доступа, групповые чаты;
-- backend загружает историю сообщений, отправляет текст, отправляет один файл и доставляет realtime-обновления;
+- backend загружает историю сообщений, отправляет текст, отправляет
+  упорядоченную пачку до пяти файлов одним сообщением и доставляет
+  realtime-обновления;
 - пользователь может открыть установленный PWA при плохой связи после
   предыдущего online входа, видеть сохраненный чат и ставить текстовые
   сообщения в локальную durable outbox;
@@ -448,7 +450,7 @@ API `v2` остается простым и явным:
 - `/api/chat/threads`;
 - `/api/chat/threads/:threadId/info`;
 - `/api/chat/messages`;
-- `/api/chat/messages/attachment`;
+- `/api/chat/messages/attachments`;
 - `/api/chat/threads/:threadId/attachments/:messageId/:attachmentId`;
 - `/api/chat/threads/:threadId/attachments/:messageId/:attachmentId/thumb`;
 - `/api/chat/threads/:threadId/avatar`;

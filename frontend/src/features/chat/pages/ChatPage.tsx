@@ -10,6 +10,7 @@ import { ChatNotReadyState } from '../components/ChatNotReadyState'
 import { ChatRuntimeAlerts } from '../components/ChatRuntimeAlerts'
 import { ChatTranscript } from '../components/ChatTranscript'
 import type { MessageComposerReplyTarget } from '../components/MessageComposer'
+import { useAttachmentDraft } from '../components/message-composer/useAttachmentDraft'
 import { toComposerReplyTarget } from '../lib/chatSnapshot'
 import { useChatResumeResync } from '../lib/useChatResumeResync'
 import { useBrowserConnectionState } from '../lib/useBrowserConnectionState'
@@ -56,6 +57,7 @@ import { useOptimisticTextSend } from './useOptimisticTextSend'
 import { useTranscriptEdgeState } from './useTranscriptEdgeState'
 
 export function ChatPage() {
+  const attachmentDraft = useAttachmentDraft()
   const isMountedRef = useRef(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -147,7 +149,7 @@ export function ChatPage() {
   })
   const {
     clearSendError,
-    handleSendAttachment,
+    handleSendAttachmentBatch,
     isSending,
     sendErrorMessage,
     setSendErrorMessage,
@@ -228,11 +230,9 @@ export function ChatPage() {
     tenantSlug,
     userId,
   })
-
   useEffect(() => {
     loadInitialChatRef.current = loadInitialChat
   }, [loadInitialChat])
-
   useEffect(() => {
     isMountedRef.current = true
     const bootstrapTimerId = window.setTimeout(() => {
@@ -244,7 +244,6 @@ export function ChatPage() {
       isMountedRef.current = false
     }
   }, [])
-
   const refreshChatSnapshot = useChatSnapshotRefresh({
     handleConnectionUnavailableError,
     handleUnauthorizedChatError,
@@ -494,8 +493,9 @@ export function ChatPage() {
 
         {shouldRenderTranscript ? (
           <ChatComposerDock
+            attachmentDraft={attachmentDraft}
             canSend={canSend}
-            handleSendAttachment={handleSendAttachment}
+            handleSendAttachmentBatch={handleSendAttachmentBatch}
             handleSendMessage={handleSendMessage}
             isBrowserOnline={canUseBackend}
             isSending={isSending}

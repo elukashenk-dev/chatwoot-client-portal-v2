@@ -183,7 +183,7 @@ describe('ChatPage', () => {
   function getAttachmentPostCalls() {
     return fetchMock.mock.calls.filter(
       ([url, options]) =>
-        String(url) === '/api/chat/messages/attachment' &&
+        String(url) === '/api/chat/messages/attachments' &&
         options?.method === 'POST',
     )
   }
@@ -546,7 +546,7 @@ describe('ChatPage', () => {
     )
   })
 
-  it('sends one attachment with a text caption through multipart', async () => {
+  it('sends one ordered attachment batch with a text caption through multipart', async () => {
     const user = userEvent.setup()
 
     mockInitialReadyChatResponses()
@@ -565,6 +565,14 @@ describe('ChatPage', () => {
                 name: 'signed-act.pdf',
                 thumbUrl: '',
                 url: '/api/chat/threads/private%3Ame/attachments/601/77',
+              },
+              {
+                fileSize: 512,
+                fileType: 'file',
+                id: 78,
+                name: 'notes.txt',
+                thumbUrl: '',
+                url: '/api/chat/threads/private%3Ame/attachments/601/78',
               },
             ],
             authorName: 'Вы',
@@ -591,12 +599,25 @@ describe('ChatPage', () => {
     const file = new File(['pdf-content'], 'signed-act.pdf', {
       type: 'application/pdf',
     })
+    const secondFile = new File(['notes'], 'notes.txt', {
+      type: 'text/plain',
+    })
 
-    await user.upload(screen.getByLabelText('Файл вложения'), file)
+    await user.upload(screen.getByLabelText('Файл вложения'), [
+      file,
+      secondFile,
+    ])
     await user.type(textarea, 'Черновик остается')
     await user.click(screen.getByRole('button', { name: 'Отправить файл' }))
 
-    expect(await screen.findByText('signed-act.pdf')).toBeInTheDocument()
+    const firstAttachment = await screen.findByText('signed-act.pdf')
+    const secondAttachment = screen.getByText('notes.txt')
+
+    expect(firstAttachment).toBeInTheDocument()
+    expect(secondAttachment).toBeInTheDocument()
+    expect(firstAttachment.closest('[data-message-id="601"]')).toBe(
+      secondAttachment.closest('[data-message-id="601"]'),
+    )
     expect(screen.getByText('Черновик остается')).toBeInTheDocument()
     expect(textarea).toHaveValue('')
     await waitFor(() => {
@@ -605,10 +626,10 @@ describe('ChatPage', () => {
 
     const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
     const formData = requestOptions?.body as FormData
-    const attachment = formData.get('attachment') as File
+    const attachments = formData.getAll('attachments') as File[]
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat/messages/attachment',
+      '/api/chat/messages/attachments',
       expect.objectContaining({
         credentials: 'include',
         method: 'POST',
@@ -620,8 +641,14 @@ describe('ChatPage', () => {
     )
     expect(formData.get('content')).toBe('Черновик остается')
     expect(formData.get('threadId')).toBe('private:me')
-    expect(attachment.name).toBe('signed-act.pdf')
-    expect(attachment.type).toBe('application/pdf')
+    expect(attachments.map((attachment) => attachment.name)).toEqual([
+      'signed-act.pdf',
+      'notes.txt',
+    ])
+    expect(attachments.map((attachment) => attachment.type)).toEqual([
+      'application/pdf',
+      'text/plain',
+    ])
   })
 
   it('times out a hanging attachment send without queueing it in the text outbox', async () => {
@@ -652,7 +679,7 @@ describe('ChatPage', () => {
       }
 
       if (
-        url === '/api/chat/messages/attachment' &&
+        url === '/api/chat/messages/attachments' &&
         options?.method === 'POST'
       ) {
         attachmentSignal = options.signal ?? undefined
@@ -762,10 +789,10 @@ describe('ChatPage', () => {
 
     const [, requestOptions] = getAttachmentPostCalls()[0] ?? []
     const formData = requestOptions?.body as FormData
-    const attachment = formData.get('attachment') as File
+    const [attachment] = formData.getAll('attachments') as File[]
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/chat/messages/attachment',
+      '/api/chat/messages/attachments',
       expect.objectContaining({
         credentials: 'include',
         method: 'POST',
@@ -775,8 +802,8 @@ describe('ChatPage', () => {
       expect.stringMatching(/^portal-send:/),
     )
     expect(formData.get('threadId')).toBe('private:me')
-    expect(attachment.name).toMatch(/^voice-message-\d{8}-\d{6}\.webm$/)
-    expect(attachment.type).toContain('audio/webm')
+    expect(attachment?.name).toMatch(/^voice-message-\d{8}-\d{6}\.webm$/)
+    expect(attachment?.type).toContain('audio/webm')
   })
 
   it('does not let a voice recording error mask the next failed text send state', async () => {

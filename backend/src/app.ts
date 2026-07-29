@@ -23,16 +23,14 @@ import { registerBrandingRoutes } from './modules/branding/routes.js'
 import { createBrandingAssetService } from './modules/branding/assetService.js'
 import { createBrandingServiceForTenantRequest } from './modules/branding/serviceFactory.js'
 import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
+import { CHAT_ATTACHMENT_MULTIPART_LIMITS } from './modules/chat-messages/attachmentMultipart.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
 import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import {
   createChatSendRateLimiter,
   createChatSendRateLimitRepository,
 } from './modules/chat-messages/rateLimit.js'
-import {
-  CHAT_ATTACHMENT_MAX_BYTES,
-  createChatMessagesService,
-} from './modules/chat-messages/service.js'
+import { createChatMessagesService } from './modules/chat-messages/service.js'
 import { registerChatNotificationRoutes } from './modules/chat-notifications/routes.js'
 import { createChatNotificationsRepository } from './modules/chat-notifications/repository.js'
 import { createChatNotificationRecipientResolver } from './modules/chat-notifications/recipientResolver.js'
@@ -124,12 +122,7 @@ export function buildApp({
     secret: env.SESSION_SECRET,
   })
   app.register(multipart, {
-    limits: {
-      fields: 4,
-      fileSize: CHAT_ATTACHMENT_MAX_BYTES,
-      files: 1,
-      parts: 5,
-    },
+    limits: CHAT_ATTACHMENT_MULTIPART_LIMITS,
   })
 
   app.addHook('onClose', async () => {

@@ -6,7 +6,8 @@ import {
   useState,
 } from 'react'
 
-import { sendChatAttachment } from '../api/chatClient'
+import { sendChatAttachments } from '../api/chatClient'
+import type { SendAttachmentBatchInput } from '../components/message-composer/types'
 import { buildSnapshotFromSendResult } from '../lib/chatSnapshot'
 import {
   ONLINE_CHAT_PAGE_CACHE_STATE,
@@ -23,13 +24,6 @@ type UseChatAttachmentSendOptions = {
   onAttachmentSendStarted?: () => void
   pageState: ChatPageState
   setPageState: Dispatch<SetStateAction<ChatPageState>>
-}
-
-type SendAttachmentInput = {
-  clientMessageKey: string
-  content?: string | null
-  file: File
-  replyToMessageId?: number | null
 }
 
 export function useChatAttachmentSend({
@@ -49,13 +43,13 @@ export function useChatAttachmentSend({
     setSendErrorMessage(null)
   }, [])
 
-  const handleSendAttachment = useCallback(
+  const handleSendAttachmentBatch = useCallback(
     async ({
       clientMessageKey,
       content,
-      file,
+      items,
       replyToMessageId,
-    }: SendAttachmentInput) => {
+    }: SendAttachmentBatchInput) => {
       if (
         !isBrowserOnline ||
         pageState.status !== 'ready' ||
@@ -72,10 +66,10 @@ export function useChatAttachmentSend({
 
       try {
         const sendResult = await withChatRecoveryRequestTimeout((signal) =>
-          sendChatAttachment({
+          sendChatAttachments({
+            attachments: items.map(({ file }) => file),
             clientMessageKey,
             content,
-            file,
             replyToMessageId,
             signal,
             threadId,
@@ -158,7 +152,7 @@ export function useChatAttachmentSend({
 
   return {
     clearSendError,
-    handleSendAttachment,
+    handleSendAttachmentBatch,
     isSending,
     sendErrorMessage,
     setSendErrorMessage,

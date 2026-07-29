@@ -1,13 +1,11 @@
 import type { PointerEvent, RefObject } from 'react'
 
 import { MicrophoneIcon, PaperclipIcon } from '../../../../shared/ui/icons'
+import { COMPOSER_ATTACHMENT_ACCEPT } from '../../lib/attachmentDraft'
 import { ComposerSendButton } from './ComposerSendButton'
 import { ComposerSideButton } from './ComposerSideButton'
 import { ComposerSideControl } from './ComposerSideControl'
 import { ComposerTextarea } from './ComposerTextarea'
-
-const COMPOSER_ATTACHMENT_ACCEPT =
-  'image/*,video/*,audio/*,.csv,.doc,.docx,.json,.pdf,.ppt,.pptx,.rtf,.txt,.xls,.xlsx,.zip,.7z'
 
 type ComposerInputRowProps = {
   ariaDescribedBy?: string
@@ -23,7 +21,7 @@ type ComposerInputRowProps = {
   isVoiceRecorderBusy: boolean
   isVoiceRecorderStarting: boolean
   onDraftChange: (value: string) => void
-  onFileSelect: (file: File | null) => void
+  onFilesSelect: (files: readonly File[]) => void
   onSendButtonClick: () => void
   onSendButtonPointerDown: (event: PointerEvent<HTMLButtonElement>) => void
   onStartVoiceRecording: () => void
@@ -48,7 +46,7 @@ export function ComposerInputRow({
   isVoiceRecorderBusy,
   isVoiceRecorderStarting,
   onDraftChange,
-  onFileSelect,
+  onFilesSelect,
   onSendButtonClick,
   onSendButtonPointerDown,
   onStartVoiceRecording,
@@ -66,8 +64,12 @@ export function ComposerInputRow({
         className="sr-only"
         disabled={isAttachmentControlDisabled}
         onChange={(event) => {
-          onFileSelect(event.target.files?.[0] ?? null)
+          const files = Array.from(event.currentTarget.files ?? [])
+
+          event.currentTarget.value = ''
+          onFilesSelect(files)
         }}
+        multiple
         ref={fileInputRef}
         type="file"
       />

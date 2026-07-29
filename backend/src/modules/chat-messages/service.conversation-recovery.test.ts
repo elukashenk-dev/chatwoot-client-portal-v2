@@ -257,12 +257,14 @@ describe('createChatMessagesService deleted conversation recovery', () => {
 
     await expect(
       service.sendCurrentUserAttachmentMessage({
-        attachment: {
-          data,
-          fileName: 'invoice.pdf',
-          mimeType: 'application/pdf',
-          size: data.byteLength,
-        },
+        attachments: [
+          {
+            data,
+            fileName: 'invoice.pdf',
+            mimeType: 'application/pdf',
+            size: data.byteLength,
+          },
+        ],
         clientMessageKey: 'portal-send:attachment-recovery-key',
         threadId: 'group:154',
         userId: 7,

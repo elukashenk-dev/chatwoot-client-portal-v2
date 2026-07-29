@@ -21,7 +21,7 @@ import {
 import {
   createAttachmentPayloadSha256,
   createTextPayloadSha256,
-  normalizeAttachmentUpload,
+  normalizeAttachmentUploads,
   SEND_LEDGER_MESSAGE_KIND_ATTACHMENT,
   SEND_LEDGER_MESSAGE_KIND_TEXT,
 } from './attachmentSend.js'
@@ -67,8 +67,6 @@ export type {
   PortalChatReplyPreview,
   PortalChatSearchResult,
 } from './types.js'
-
-export { CHAT_ATTACHMENT_MAX_BYTES } from './attachmentSend.js'
 
 const CLIENT_MESSAGE_KEY_MAX_LENGTH = 200
 const CHAT_MEDIA_MAX_SCANNED_PAGES = 8
@@ -970,14 +968,14 @@ export function createChatMessagesService({
     },
 
     async sendCurrentUserAttachmentMessage({
-      attachment,
+      attachments,
       clientMessageKey,
       content = null,
       replyToMessageId = null,
       threadId,
       userId,
     }: {
-      attachment: PortalAttachmentUpload
+      attachments: readonly PortalAttachmentUpload[]
       clientMessageKey: string
       content?: string | null
       replyToMessageId?: number | null
@@ -994,7 +992,7 @@ export function createChatMessagesService({
         return buildSendResult(context)
       }
 
-      const normalizedAttachment = normalizeAttachmentUpload(attachment)
+      const normalizedAttachments = normalizeAttachmentUploads(attachments)
       const normalizedContent = normalizeOptionalContent(content)
       const outboundContent = formatOutboundContentForThread({
         content: normalizedContent,
@@ -1026,7 +1024,7 @@ export function createChatMessagesService({
           chatwootSourceId,
           createChatwootMessage: () =>
             chatwootClient.createConversationIncomingAttachmentMessage({
-              attachment: normalizedAttachment,
+              attachments: normalizedAttachments,
               content: outboundContent,
               conversationId: sendConversationId,
               replyToMessageId: normalizedReplyToMessageId,
@@ -1037,7 +1035,7 @@ export function createChatMessagesService({
           payloadMismatchMessage:
             'Повторная отправка использует другой файл или подпись для того же ключа.',
           payloadSha256: createAttachmentPayloadSha256(
-            normalizedAttachment,
+            normalizedAttachments,
             outboundContent,
             normalizedReplyToMessageId,
           ),

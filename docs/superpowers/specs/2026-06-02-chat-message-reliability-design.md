@@ -2,13 +2,13 @@
 
 ## Current Preservation Status
 
-Status: partially implemented, preserved for the active attachment-validation
-follow-up.
+Status: preserved historical design. The attachment-validation follow-up was
+completed by Attachment UX Slice 1 on `2026-07-29`.
 
 Most reliability baseline work is now in stable code and docs. Keep this design
-only as context for the still-open attachment validation and media-send UX
-follow-up tracked in
-`docs/findings/F-CHAT-005-frontend-attachment-validation.md`.
+only as context for the remaining media-send UX. The current attachment batch
+baseline and its planned follow-up slices are documented in
+`docs/superpowers/specs/2026-07-29-attachment-ux-design.md`.
 
 ## Scope
 

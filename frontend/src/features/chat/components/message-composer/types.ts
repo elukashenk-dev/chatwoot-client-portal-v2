@@ -1,13 +1,15 @@
+import type { AttachmentDraftItem } from '../../lib/attachmentDraft'
+
 export type SendMessageInput = {
   clientMessageKey: string
   content: string
   replyToMessageId?: number | null
 }
 
-export type SendAttachmentInput = {
+export type SendAttachmentBatchInput = {
   clientMessageKey: string
   content?: string | null
-  file: File
+  items: readonly AttachmentDraftItem[]
   replyToMessageId?: number | null
 }
 

@@ -1,15 +1,19 @@
 import { MessageComposer } from '../components/MessageComposer'
 import type {
   MessageComposerReplyTarget,
-  SendAttachmentInput,
+  SendAttachmentBatchInput,
   SendMessageInput,
 } from '../components/message-composer/types'
+import type { useAttachmentDraft } from '../components/message-composer/useAttachmentDraft'
 import { setChatThreadTyping } from '../api/chatClient'
 import { useChatTypingSync } from './useChatTypingSync'
 
 type ChatComposerDockProps = {
+  attachmentDraft: ReturnType<typeof useAttachmentDraft>
   canSend: boolean
-  handleSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
+  handleSendAttachmentBatch: (
+    input: SendAttachmentBatchInput,
+  ) => Promise<boolean>
   handleSendMessage: (input: SendMessageInput) => Promise<boolean>
   isBrowserOnline: boolean
   isSending: boolean
@@ -20,8 +24,9 @@ type ChatComposerDockProps = {
 }
 
 export function ChatComposerDock({
+  attachmentDraft,
   canSend,
-  handleSendAttachment,
+  handleSendAttachmentBatch,
   handleSendMessage,
   isBrowserOnline,
   isSending,
@@ -41,6 +46,7 @@ export function ChatComposerDock({
 
   return (
     <MessageComposer
+      attachmentDraft={attachmentDraft}
       attachmentDisabled={!isBrowserOnline}
       disabled={!canSend}
       errorMessage={sendErrorMessage}
@@ -51,7 +57,7 @@ export function ChatComposerDock({
       }}
       onDraftTypingChange={handleComposerDraftTypingChanged}
       onSend={handleSendMessage}
-      onSendAttachment={handleSendAttachment}
+      onSendAttachmentBatch={handleSendAttachmentBatch}
       replyTarget={replyTarget}
       voiceDisabled={!isBrowserOnline}
     />

@@ -797,7 +797,7 @@ test('selects a message as reply target and sends reply metadata through the bac
   })
 })
 
-test('sends an attachment through the backend chat contract and renders the canonical response', async ({
+test('sends an attachment batch through the backend chat contract and renders one canonical response', async ({
   page,
 }) => {
   const chatMessageRequests: Array<{
@@ -821,7 +821,7 @@ test('sends an attachment through the backend chat contract and renders the cano
       path,
     })
 
-    if (method === 'POST' && requestUrl.pathname.endsWith('/attachment')) {
+    if (method === 'POST' && requestUrl.pathname.endsWith('/attachments')) {
       await route.fulfill({
         body: JSON.stringify({
           activeThread: privateThread,
@@ -836,6 +836,14 @@ test('sends an attachment through the backend chat contract and renders the cano
                 name: 'signed-act.pdf',
                 thumbUrl: '',
                 url: '/api/chat/threads/private%3Ame/attachments/601/77',
+              },
+              {
+                fileSize: 6,
+                fileType: 'file',
+                id: 78,
+                name: 'notes.txt',
+                thumbUrl: '',
+                url: '/api/chat/threads/private%3Ame/attachments/601/78',
               },
             ],
             authorName: 'Вы',
@@ -870,15 +878,36 @@ test('sends an attachment through the backend chat contract and renders the cano
   await loginPortalUser(page)
 
   await expect(page).toHaveURL(/\/app\/chat/)
-  await page.locator('input[type="file"]').setInputFiles({
-    buffer: Buffer.from('%PDF-1.7\n'),
-    mimeType: 'application/pdf',
-    name: 'signed-act.pdf',
-  })
+  await page.locator('input[type="file"]').setInputFiles([
+    {
+      buffer: Buffer.from('%PDF-1.7\n'),
+      mimeType: 'application/pdf',
+      name: 'signed-act.pdf',
+    },
+    {
+      buffer: Buffer.from('second'),
+      mimeType: 'text/plain',
+      name: 'notes.txt',
+    },
+  ])
   await page.getByRole('button', { name: 'Отправить файл' }).click()
 
   await expect.poll(() => chatMessageRequests.length).toBe(2)
-  await expect(page.getByText('signed-act.pdf')).toBeVisible()
+  const firstAttachment = page.getByText('signed-act.pdf')
+  const secondAttachment = page.getByText('notes.txt')
+
+  await expect(firstAttachment).toBeVisible()
+  await expect(secondAttachment).toBeVisible()
+  expect(
+    await firstAttachment.evaluate((element) =>
+      element.closest('[data-message-id]')?.getAttribute('data-message-id'),
+    ),
+  ).toBe('601')
+  expect(
+    await secondAttachment.evaluate((element) =>
+      element.closest('[data-message-id]')?.getAttribute('data-message-id'),
+    ),
+  ).toBe('601')
   expect(chatMessageRequests).toEqual([
     {
       contentType: null,
@@ -888,7 +917,7 @@ test('sends an attachment through the backend chat contract and renders the cano
     {
       contentType: expect.stringContaining('multipart/form-data'),
       method: 'POST',
-      path: '/api/chat/messages/attachment',
+      path: '/api/chat/messages/attachments',
     },
   ])
 })

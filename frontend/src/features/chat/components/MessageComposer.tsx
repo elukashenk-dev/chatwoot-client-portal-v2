@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
 import { cn } from '../../../shared/lib/cn'
-import { ComposerAttachmentPreview } from './message-composer/ComposerAttachmentPreview'
+import { ComposerAttachmentTray } from './message-composer/ComposerAttachmentTray'
 import {
   ComposerFeedback,
   TEXT_LENGTH_FEEDBACK_ID,
@@ -13,18 +13,24 @@ import {
   getTextMessageLengthErrorMessage,
   shouldShowTextMessageLengthCounter,
 } from '../lib/messageContentLimits'
+import {
+  normalizeAttachmentFile,
+  type AttachmentDraftItem,
+  validateAttachmentFile,
+} from '../lib/attachmentDraft'
 import type {
   MessageComposerReplyTarget,
-  SendAttachmentInput,
+  SendAttachmentBatchInput,
   SendMessageInput,
 } from './message-composer/types'
+import type { useAttachmentDraft } from './message-composer/useAttachmentDraft'
 import { useComposerTextarea } from './message-composer/useComposerTextarea'
+import { useAttachmentSendRetryKey } from './message-composer/useAttachmentSendRetryKey'
 import { useSendButtonFocusGuard } from './message-composer/useSendButtonFocusGuard'
 import { useVisualViewportKeyboardOpen } from './message-composer/useVisualViewportKeyboardOpen'
 import { useVoiceRecorder } from './message-composer/useVoiceRecorder'
 import { getComposerInteractionState } from './message-composer/interactionState'
 import {
-  createAttachmentSignature,
   createClientMessageKey,
   formatRecordingDuration,
 } from './message-composer/utils'
@@ -32,6 +38,7 @@ import {
 export type { MessageComposerReplyTarget } from './message-composer/types'
 
 type MessageComposerProps = {
+  attachmentDraft: ReturnType<typeof useAttachmentDraft>
   attachmentDisabled?: boolean
   disabled: boolean
   errorMessage: string | null
@@ -39,12 +46,15 @@ type MessageComposerProps = {
   onCancelReply: () => void
   onDraftTypingChange?: (draft: string) => void
   onSend: (input: SendMessageInput) => Promise<boolean>
-  onSendAttachment: (input: SendAttachmentInput) => Promise<boolean>
+  onSendAttachmentBatch: (
+    input: SendAttachmentBatchInput,
+  ) => Promise<boolean>
   replyTarget: MessageComposerReplyTarget | null
   voiceDisabled?: boolean
 }
 
 export function MessageComposer({
+  attachmentDraft,
   attachmentDisabled = false,
   disabled,
   errorMessage,
@@ -52,22 +62,20 @@ export function MessageComposer({
   onCancelReply,
   onDraftTypingChange,
   onSend,
-  onSendAttachment,
+  onSendAttachmentBatch,
   replyTarget,
   voiceDisabled = false,
 }: MessageComposerProps) {
   const [draft, setDraft] = useState('')
   const [isTextSendPending, setIsTextSendPending] = useState(false)
-  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(
-    null,
-  )
+  const [pendingVoiceItem, setPendingVoiceItem] =
+    useState<AttachmentDraftItem | null>(null)
+  const [voiceValidationErrorMessage, setVoiceValidationErrorMessage] =
+    useState<string | null>(null)
   const isVisualKeyboardOpen = useVisualViewportKeyboardOpen()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { focusTextarea, resizeTextarea, textareaRef } = useComposerTextarea()
-  const pendingAttachmentClientMessageKeyRef = useRef<string | null>(null)
-  const pendingAttachmentContentRef = useRef<string | null>(null)
-  const pendingAttachmentReplyToMessageIdRef = useRef<number | null>(null)
-  const pendingAttachmentSignatureRef = useRef<string | null>(null)
+  const attachmentSendRetryKey = useAttachmentSendRetryKey()
   const pendingClientMessageKeyRef = useRef<string | null>(null)
   const pendingContentRef = useRef<string | null>(null)
   const pendingReplyToMessageIdRef = useRef<number | null>(null)
@@ -87,6 +95,10 @@ export function MessageComposer({
   const shouldPrioritizeTextDraft = normalizedDraft.length > 0
   const isAttachmentSendDisabled = Boolean(attachmentDisabled)
   const isVoiceSendDisabled = Boolean(voiceDisabled)
+  const currentAttachmentItems = pendingVoiceItem
+    ? [pendingVoiceItem]
+    : attachmentDraft.items
+  const attachmentCount = currentAttachmentItems.length
 
   const {
     cancelVoiceRecording,
@@ -101,12 +113,30 @@ export function MessageComposer({
       !isVoiceSendDisabled &&
       !disabled &&
       !isSending &&
-      selectedAttachment === null &&
+      attachmentCount === 0 &&
       !shouldPrioritizeTextDraft,
     onSendVoiceAttachment: async (voiceFile) => {
-      setSelectedAttachment(voiceFile)
+      const rejection = validateAttachmentFile(voiceFile)
 
-      return submitAttachmentFile(voiceFile, { allowVoiceRecorderBusy: true })
+      if (rejection) {
+        setVoiceValidationErrorMessage(rejection.message)
+        return false
+      }
+
+      const normalizedVoiceFile = normalizeAttachmentFile(voiceFile)
+      const voiceItem: AttachmentDraftItem = {
+        file: normalizedVoiceFile,
+        id: `voice:${normalizedVoiceFile.name}:${normalizedVoiceFile.lastModified}`,
+        source: 'camera',
+      }
+
+      attachmentDraft.clearItems()
+      setPendingVoiceItem(voiceItem)
+
+      return submitAttachmentItems([voiceItem], {
+        allowVoiceRecorderBusy: true,
+        isVoiceAttachment: true,
+      })
     },
   })
 
@@ -118,6 +148,7 @@ export function MessageComposer({
     canStartVoiceRecording,
     isAttachmentControlDisabled,
   } = getComposerInteractionState({
+    attachmentCount,
     disabled,
     isAttachmentSendDisabled,
     isSending,
@@ -126,11 +157,14 @@ export function MessageComposer({
     isVoiceRecorderBusy,
     isVoiceSendDisabled,
     normalizedDraftLength,
-    selectedAttachment,
     shouldPrioritizeTextDraft,
   })
   const composerErrorMessage =
-    voiceErrorMessage ?? textLengthErrorMessage ?? errorMessage
+    voiceValidationErrorMessage ??
+    attachmentDraft.errorMessage ??
+    voiceErrorMessage ??
+    textLengthErrorMessage ??
+    errorMessage
   const recordingDuration = formatRecordingDuration(recordingElapsedMs)
 
   useLayoutEffect(() => {
@@ -156,7 +190,14 @@ export function MessageComposer({
 
     shouldRestoreFocusRef.current = false
     focusTextarea()
-  }, [disabled, draft, focusTextarea, isSending, replyTarget, selectedAttachment])
+  }, [
+    attachmentCount,
+    disabled,
+    draft,
+    focusTextarea,
+    isSending,
+    replyTarget,
+  ])
 
   function resetPendingTextSendIfPayloadChanged(
     nextDraft: string,
@@ -177,10 +218,7 @@ export function MessageComposer({
     pendingClientMessageKeyRef.current = null
     pendingContentRef.current = null
     pendingReplyToMessageIdRef.current = null
-    pendingAttachmentClientMessageKeyRef.current = null
-    pendingAttachmentContentRef.current = null
-    pendingAttachmentReplyToMessageIdRef.current = null
-    pendingAttachmentSignatureRef.current = null
+    attachmentSendRetryKey.clear()
     onCancelReply()
   }
 
@@ -222,14 +260,18 @@ export function MessageComposer({
     }
   }
 
-  async function submitAttachmentFile(
-    file: File,
+  async function submitAttachmentItems(
+    items: readonly AttachmentDraftItem[],
     {
       allowVoiceRecorderBusy = false,
       content = null,
-    }: { allowVoiceRecorderBusy?: boolean; content?: string | null } = {},
+      isVoiceAttachment = false,
+    }: {
+      allowVoiceRecorderBusy?: boolean
+      content?: string | null
+      isVoiceAttachment?: boolean
+    } = {},
   ) {
-    const isVoiceAttachment = allowVoiceRecorderBusy
     const isMediaSendDisabled = isVoiceAttachment
       ? isVoiceSendDisabled
       : isAttachmentSendDisabled
@@ -238,74 +280,61 @@ export function MessageComposer({
       isMediaSendDisabled ||
       disabled ||
       isSending ||
+      items.length === 0 ||
       (!allowVoiceRecorderBusy && isVoiceRecorderBusy)
     ) {
       return false
     }
 
-    const attachmentSignature = createAttachmentSignature(file)
+    const submittedItems = [...items]
     const normalizedAttachmentContent = content?.trim() || null
     const currentReplyToMessageId = replyToMessageIdRef.current
-
-    if (
-      pendingAttachmentClientMessageKeyRef.current &&
-      (pendingAttachmentReplyToMessageIdRef.current !==
-        currentReplyToMessageId ||
-        pendingAttachmentContentRef.current !== normalizedAttachmentContent ||
-        pendingAttachmentSignatureRef.current !== attachmentSignature)
-    ) {
-      pendingAttachmentClientMessageKeyRef.current = null
-      pendingAttachmentContentRef.current = null
-      pendingAttachmentReplyToMessageIdRef.current = null
-      pendingAttachmentSignatureRef.current = null
-    }
-
-    const clientMessageKey =
-      pendingAttachmentClientMessageKeyRef.current ?? createClientMessageKey()
+    const clientMessageKey = attachmentSendRetryKey.getOrCreateKey({
+      content: normalizedAttachmentContent,
+      items: submittedItems,
+      replyToMessageId: currentReplyToMessageId,
+    })
 
     clearVoiceErrorMessage()
-    pendingAttachmentClientMessageKeyRef.current = clientMessageKey
-    pendingAttachmentContentRef.current = normalizedAttachmentContent
-    pendingAttachmentReplyToMessageIdRef.current = currentReplyToMessageId
-    pendingAttachmentSignatureRef.current = attachmentSignature
+    setVoiceValidationErrorMessage(null)
 
-    const wasSent = await onSendAttachment({
+    const wasSent = await onSendAttachmentBatch({
       clientMessageKey,
       content: normalizedAttachmentContent,
-      file,
+      items: submittedItems,
       replyToMessageId: currentReplyToMessageId,
     })
 
     if (wasSent) {
-      pendingAttachmentClientMessageKeyRef.current = null
-      pendingAttachmentContentRef.current = null
-      pendingAttachmentReplyToMessageIdRef.current = null
-      pendingAttachmentSignatureRef.current = null
+      attachmentSendRetryKey.clear()
       shouldRestoreFocusRef.current = true
       onCancelReply()
-      setSelectedAttachment(null)
-      updateDraft('')
 
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
+      if (isVoiceAttachment) {
+        setPendingVoiceItem(null)
+      } else {
+        attachmentDraft.clearItems()
       }
+
+      updateDraft('')
     }
 
     return wasSent
   }
 
   async function submitAttachment() {
-    if (!canSendAttachment || !selectedAttachment) {
+    if (!canSendAttachment) {
       return
     }
 
-    await submitAttachmentFile(selectedAttachment, {
+    await submitAttachmentItems(currentAttachmentItems, {
       content: normalizedDraft,
+      isVoiceAttachment: pendingVoiceItem !== null,
     })
   }
 
   async function submitCurrentDraft() {
-    if (selectedAttachment) {
+    if (attachmentCount > 0) {
       await submitAttachment()
       return
     }
@@ -322,32 +351,44 @@ export function MessageComposer({
       textareaRef,
     })
 
-  function selectAttachment(file: File | null) {
-    if (!file) {
-      setSelectedAttachment(null)
-      pendingAttachmentClientMessageKeyRef.current = null
-      pendingAttachmentContentRef.current = null
-      pendingAttachmentReplyToMessageIdRef.current = null
-      pendingAttachmentSignatureRef.current = null
-      return
-    }
-
+  function addAttachmentFiles(files: readonly File[]) {
     clearVoiceErrorMessage()
-    const nextSignature = createAttachmentSignature(file)
+    setVoiceValidationErrorMessage(null)
 
-    if (pendingAttachmentSignatureRef.current !== nextSignature) {
-      pendingAttachmentClientMessageKeyRef.current = null
-      pendingAttachmentContentRef.current = null
-      pendingAttachmentReplyToMessageIdRef.current = null
-      pendingAttachmentSignatureRef.current = null
+    const admission = attachmentDraft.addFiles(files, 'picker')
+
+    if (admission.accepted.length > 0) {
+      setPendingVoiceItem(null)
+      attachmentSendRetryKey.clear()
     }
+  }
 
-    setSelectedAttachment(file)
+  function removeAttachment(itemId: string) {
+    attachmentSendRetryKey.clear()
+
+    if (pendingVoiceItem?.id === itemId) {
+      setPendingVoiceItem(null)
+      attachmentDraft.clearItems()
+    } else {
+      attachmentDraft.removeItem(itemId)
+    }
+  }
+
+  function clearAttachments() {
+    attachmentSendRetryKey.clear()
+    setPendingVoiceItem(null)
+    attachmentDraft.clearItems()
   }
 
   function updateDraft(nextDraft: string) {
     clearVoiceErrorMessage()
+    setVoiceValidationErrorMessage(null)
     resetPendingTextSendIfPayloadChanged(nextDraft, replyToMessageId)
+    attachmentSendRetryKey.clearIfPayloadChanged({
+      content: nextDraft.trim() || null,
+      items: currentAttachmentItems,
+      replyToMessageId,
+    })
     setDraft(nextDraft)
     onDraftTypingChange?.(nextDraft)
   }
@@ -373,19 +414,21 @@ export function MessageComposer({
           />
         ) : null}
 
-        {selectedAttachment ? (
-          <ComposerAttachmentPreview
-            disabled={isSending || isVoiceRecorderBusy}
-            file={selectedAttachment}
-            onRemove={() => {
-              selectAttachment(null)
-
-              if (fileInputRef.current) {
-                fileInputRef.current.value = ''
-              }
-            }}
-          />
-        ) : null}
+        <ComposerAttachmentTray
+          disabled={isSending || isVoiceRecorderBusy}
+          items={
+            pendingVoiceItem
+              ? [{ ...pendingVoiceItem, previewUrl: null }]
+              : attachmentDraft.viewItems
+          }
+          onClear={clearAttachments}
+          onRemove={removeAttachment}
+          totalBytes={
+            pendingVoiceItem
+              ? pendingVoiceItem.file.size
+              : attachmentDraft.totalBytes
+          }
+        />
 
         <VoiceRecordingPanel
           durationLabel={recordingDuration}
@@ -406,13 +449,13 @@ export function MessageComposer({
           draft={draft}
           fileInputRef={fileInputRef}
           isAttachmentControlDisabled={isAttachmentControlDisabled}
-          isAttachmentSelected={selectedAttachment !== null}
+          isAttachmentSelected={attachmentCount > 0}
           isSending={isSending}
           isTextDraftTooLong={isTextDraftTooLong}
           isVoiceRecorderBusy={isVoiceRecorderBusy}
           isVoiceRecorderStarting={voiceRecorderStatus === 'starting'}
           onDraftChange={updateDraft}
-          onFileSelect={selectAttachment}
+          onFilesSelect={addAttachmentFiles}
           onSendButtonClick={() => {
             if (!shouldSkipClickAfterTouchSend()) {
               void submitCurrentDraft()

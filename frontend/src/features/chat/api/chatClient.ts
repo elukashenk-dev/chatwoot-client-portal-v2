@@ -396,17 +396,17 @@ export async function sendChatMessage({
   })
 }
 
-export async function sendChatAttachment({
+export async function sendChatAttachments({
+  attachments,
   clientMessageKey,
   content,
-  file,
   replyToMessageId,
   signal,
   threadId,
 }: {
+  attachments: readonly File[]
   clientMessageKey: string
   content?: string | null
-  file: File
   replyToMessageId?: number | null
   signal?: AbortSignal
   threadId: string
@@ -426,12 +426,15 @@ export async function sendChatAttachment({
     formData.append('replyToMessageId', String(replyToMessageId))
   }
 
-  formData.append('attachment', file, file.name)
+  for (const file of attachments) {
+    formData.append('attachments', file, file.name)
+  }
 
-  return request<ChatSendResult>('/chat/messages/attachment', {
+  return request<ChatSendResult>('/chat/messages/attachments', {
     formData,
     method: 'POST',
-    networkErrorMessage: 'Не удалось отправить файл. Попробуйте еще раз.',
+    networkErrorMessage:
+      'Не удалось загрузить файлы. Они остались в сообщении — попробуйте ещё раз.',
     signal,
   })
 }
