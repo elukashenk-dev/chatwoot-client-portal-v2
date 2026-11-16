@@ -66,6 +66,15 @@ stable docs.
 
 ## Current Roadmap
 
+### Contact Profile Refresh (Confirmed Follow-Up)
+
+User-approved correction to the existing read-only profile/chat baseline:
+current contact name/phone in the profile, current names in group info, and
+preserved historical message authors. Login email and account identity remain
+unchanged. Scope, load model, verification and release handoff are recorded in
+`docs/roadmap/contact-profile-refresh-plan.md`; production update requires
+separate approval.
+
 ### MT-9. Tenant Admin And Branding Rebuild (Completed)
 
 Status: completed. The section records the closed tenant-owned admin/branding

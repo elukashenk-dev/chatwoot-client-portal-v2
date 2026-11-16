@@ -104,7 +104,6 @@ describe('createChatThreadContactRepository', () => {
       {
         chatwootContactId: 44,
         email: 'ivan@example.test',
-        fullName: 'Иван Петров',
         userId: activeUser.id,
       },
     ])

@@ -40,7 +40,7 @@ describe('buildApp profile routes', () => {
     }
   })
 
-  it('returns controlled profile data for an authenticated user without a Chatwoot contact link', async () => {
+  it('returns an unavailable profile without the stale registration name when no Chatwoot contact is linked', async () => {
     await database.db.insert(portalUsers).values({
       email: 'Name@Company.RU',
       fullName: 'Portal User',
@@ -76,7 +76,7 @@ describe('buildApp profile routes', () => {
     expect(profileResponse.json()).toEqual({
       avatarUrl: null,
       email: 'name@company.ru',
-      fullName: 'Portal User',
+      fullName: null,
       phoneNumber: null,
       reason: 'contact_unavailable',
       result: 'unavailable',

@@ -323,9 +323,17 @@ execution-plan детали здесь не хранятся.
 - Staged activation now retains bounded, non-secret Compose-readiness evidence
   (exit code plus candidate service image, running, health and restart state)
   before automatic rollback removes failed candidate artifacts.
+- Profile name, phone and avatar and group participant names use the current
+  linked Chatwoot contact; the corporate login email stays portal-owned.
+  Historical group author snapshots and prefixes remain unchanged, and missing
+  contact names no longer fall back to a previous employee's registration name.
 
 ## Recommended Next Step
 
+- Complete the approved portal-only release and baseline-recovery scope
+  (`F-OPS-008`) before requesting production preparation for the contact-profile
+  update. Telegram bridge remains disabled; production recovery, preparation
+  and activation each require explicit approval.
 - After explicit approval, merge the verified PWA share-target branch into
   `main`, then complete the real-device platform smoke from `F-PWA-006` before
   advertising or rolling out system sharing in production.

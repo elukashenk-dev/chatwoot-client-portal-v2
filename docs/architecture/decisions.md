@@ -403,14 +403,19 @@
 - дата: `2026-06-05`
 - решение:
   customer profile is a protected portal route, not a Chatwoot browser surface.
-  The page exposes read-only `Имя`, `Email` and `Телефон` from portal user plus
-  linked Chatwoot contact data. Avatar upload goes through portal backend,
+  The page exposes read-only `Имя` and `Телефон` from the current linked
+  Chatwoot contact; `Email` stays the portal user's login address. Contact data
+  refreshes on page load without writing a synchronized name into portal DB.
+  Missing/unavailable contact names are not replaced by the registration name.
+  Group participant lists use current contact names, while historical group
+  messages keep their send-time author snapshot/prefix. Own messages remain
+  `Вы`. Avatar upload goes through portal backend,
   validates image type and size, updates only the current linked Chatwoot
   contact, and returns a portal-owned `/api/profile/avatar` URL. Browser never
   receives Chatwoot tokens or direct Chatwoot avatar URLs.
 - причина:
   profile is a customer-facing product area, but Chatwoot contact remains the
-  system of record for contact-side phone/avatar data. Portal backend must keep
+  system of record for contact-side name/phone/avatar data. Portal backend must keep
   the same authority boundary as chat: session, tenant and contact link are
   checked before reading or updating anything in Chatwoot.
 

@@ -89,6 +89,36 @@ describe('UserProfilePage', () => {
     vi.clearAllMocks()
   })
 
+  it('renders the current contact name and phone instead of the stale auth name', async () => {
+    getCurrentUserProfileMock.mockResolvedValueOnce({
+      avatarUrl: null,
+      email: 'ivan@example.com',
+      fullName: 'Анна Сидорова',
+      phoneNumber: '+79002222222',
+      result: 'ready',
+    })
+    renderPage()
+    expect(await screen.findByText('Анна Сидорова')).toBeInTheDocument()
+    expect(screen.getByText('+79002222222')).toBeInTheDocument()
+    expect(screen.queryByText('Иван Петров')).not.toBeInTheDocument()
+  })
+
+  it.each(['ready', 'unavailable'] as const)(
+    'renders a missing current name safely when profile is %s',
+    async (result) => {
+      getCurrentUserProfileMock.mockResolvedValueOnce({
+        avatarUrl: null,
+        email: 'ivan@example.com',
+        fullName: null,
+        phoneNumber: null,
+        result,
+      })
+      renderPage()
+      expect(await screen.findByText('Не указано')).toBeInTheDocument()
+      expect(screen.queryByText('Иван Петров')).not.toBeInTheDocument()
+    },
+  )
+
   it('renders readonly profile fields and the replace avatar action', async () => {
     getCurrentUserProfileMock.mockResolvedValueOnce({
       avatarUrl: '/api/profile/avatar',

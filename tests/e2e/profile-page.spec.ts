@@ -220,3 +220,56 @@ test('opens profile from the right chat menu and uploads an avatar through porta
   expect(profileRequests.every((method) => method === 'GET')).toBe(true)
   expect(avatarRequests).toContain('POST')
 })
+
+test('refreshes contact identity on profile reopen while the authenticated account stays the same', async ({
+  page,
+}) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  let currentName: string | null = 'Иван Петров'
+  let currentPhone: string | null = '+79001111111'
+  let profileReads = 0
+  await routeChatShell(page)
+  await page.route('**/api/profile', async (route) => {
+    profileReads += 1
+    await route.fulfill({
+      json: {
+        avatarUrl: null,
+        email: 'office@example.test',
+        fullName: currentName,
+        phoneNumber: currentPhone,
+        result: 'ready',
+      },
+    })
+  })
+  await loginPortalUser(page)
+  const openProfile = async () => {
+    await page.getByRole('button', { name: 'Открыть меню чата' }).click()
+    await page.getByRole('menuitem', { name: 'Профиль' }).click()
+    await expect(
+      page.getByRole('heading', { name: 'Профиль', exact: true }),
+    ).toBeVisible()
+  }
+  await openProfile()
+  await expect(page.getByText('Иван Петров', { exact: true })).toBeVisible()
+  await expect(page.getByText('+79001111111', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Вернуться к чату' }).click()
+  currentName = 'Анна Сидорова'
+  currentPhone = '+79002222222'
+  await openProfile()
+  await expect(page.getByText('Анна Сидорова', { exact: true })).toBeVisible()
+  await expect(page.getByText('+79002222222', { exact: true })).toBeVisible()
+  await expect(page.getByText('Иван Петров', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('+79001111111', { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByText('office@example.test', { exact: true }),
+  ).toBeVisible()
+  currentName = null
+  currentPhone = null
+  await page.reload()
+  await expect(page.getByText('Не указано', { exact: true })).toBeVisible()
+  await expect(page.getByText('Не указан', { exact: true })).toBeVisible()
+  await expect(page.getByText('Анна Сидорова', { exact: true })).toHaveCount(0)
+  expect(profileReads).toBeGreaterThanOrEqual(3)
+  expect(pageErrors).toEqual([])
+})

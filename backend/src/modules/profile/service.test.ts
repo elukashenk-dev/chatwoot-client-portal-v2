@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { ChatwootClientRequestError } from '../../integrations/chatwoot/client.js'
 import { createProfileService } from './service.js'
 
 function createService() {
@@ -41,7 +42,7 @@ function createService() {
 }
 
 describe('profile service', () => {
-  it('returns portal user fields and Chatwoot phone through a portal avatar URL', async () => {
+  it('returns current Chatwoot name and phone with portal login email and avatar URL', async () => {
     const { service } = createService()
 
     await expect(
@@ -56,11 +57,103 @@ describe('profile service', () => {
     ).resolves.toEqual({
       avatarUrl: '/api/profile/avatar',
       email: 'user@example.test',
-      fullName: 'Portal User',
+      fullName: 'Chatwoot Contact',
       phoneNumber: '+79001234567',
       result: 'ready',
     })
   })
+
+  it('refreshes contact name and phone without changing the portal identity or adding calls', async () => {
+    const { service, chatwootClient, contactRepository } = createService()
+    const user = {
+      email: 'office@example.test',
+      fullName: 'Иван Петров',
+      id: 7,
+      passwordConfigured: true,
+    }
+    const contact = await chatwootClient.findContactById()
+    chatwootClient.findContactById.mockClear()
+    chatwootClient.findContactById
+      .mockResolvedValueOnce({
+        ...contact,
+        name: 'Иван Петров',
+        phoneNumber: '+79001111111',
+      })
+      .mockResolvedValueOnce({
+        ...contact,
+        name: '  Анна Сидорова  ',
+        phoneNumber: '+79002222222',
+      })
+
+    expect(await service.getCurrentUserProfile({ user })).toMatchObject({
+      fullName: 'Иван Петров',
+      phoneNumber: '+79001111111',
+    })
+    expect(await service.getCurrentUserProfile({ user })).toEqual({
+      avatarUrl: '/api/profile/avatar',
+      email: user.email,
+      fullName: 'Анна Сидорова',
+      phoneNumber: '+79002222222',
+      result: 'ready',
+    })
+    expect(user.fullName).toBe('Иван Петров')
+    expect(contactRepository.findContactLinkByUserId.mock.calls).toEqual([
+      [7],
+      [7],
+    ])
+    expect(chatwootClient.findContactById.mock.calls).toEqual([[44], [44]])
+  })
+
+  it.each([null, '', '   '])(
+    'does not revive the old name when the current name is %s',
+    async (name) => {
+      const { service, chatwootClient } = createService()
+      chatwootClient.findContactById.mockResolvedValue({
+        id: 44,
+        name,
+        phoneNumber: null,
+        avatarUrl: null,
+      })
+      expect(
+        await service.getCurrentUserProfile({
+          user: {
+            email: 'office@example.test',
+            fullName: 'Old Employee',
+            id: 7,
+            passwordConfigured: true,
+          },
+        }),
+      ).toMatchObject({ fullName: null, phoneNumber: null, result: 'ready' })
+    },
+  )
+
+  it.each(['missing', 'unavailable'])(
+    'does not expose the old name when the contact is %s',
+    async (failure) => {
+      const { service, chatwootClient } = createService()
+      if (failure === 'missing') {
+        chatwootClient.findContactById.mockResolvedValue(null)
+      } else {
+        chatwootClient.findContactById.mockRejectedValue(
+          new ChatwootClientRequestError('Contact unavailable'),
+        )
+      }
+      expect(
+        await service.getCurrentUserProfile({
+          user: {
+            email: 'office@example.test',
+            fullName: 'Old Employee',
+            id: 7,
+            passwordConfigured: true,
+          },
+        }),
+      ).toMatchObject({
+        fullName: null,
+        phoneNumber: null,
+        result: 'unavailable',
+      })
+    },
+  )
 
   it('does not expose direct Chatwoot avatar URLs in profile data', async () => {
     const { service } = createService()

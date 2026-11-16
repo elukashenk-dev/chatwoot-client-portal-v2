@@ -16,7 +16,7 @@ type ProfileRequestOptions = {
 export type UserProfile = {
   avatarUrl: string | null
   email: string
-  fullName: string
+  fullName: string | null
   phoneNumber: string | null
   reason?: 'contact_unavailable'
   result: 'ready' | 'unavailable'

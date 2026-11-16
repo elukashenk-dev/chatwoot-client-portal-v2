@@ -168,7 +168,10 @@ export function UserProfilePage() {
   const avatarActionLabel = profile?.avatarUrl
     ? 'Заменить аватар'
     : 'Загрузить аватар'
-  const monogram = profile ? createTenantMonogram(profile.fullName) : 'ЛК'
+  const profileName = profile?.fullName?.trim() || 'Не указано'
+  const monogram = profile?.fullName
+    ? createTenantMonogram(profile.fullName)
+    : 'ЛК'
   const isUnavailable = !isLoading && profile === null
 
   return (
@@ -192,10 +195,10 @@ export function UserProfilePage() {
               className={`flex items-center gap-4 border-b ${GLASS_ROW_BORDER_CLASS} px-4 py-4`}
             >
               <ChatAvatar
-                alt={profile.fullName}
+                alt={profileName}
                 avatarUrl={profile.avatarUrl}
                 className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-brand-900 text-base font-semibold text-white"
-                title={profile.fullName}
+                title={profileName}
               >
                 {monogram}
               </ChatAvatar>
@@ -226,7 +229,7 @@ export function UserProfilePage() {
             </div>
 
             <dl>
-              <DetailRow label="Имя" value={profile.fullName} />
+              <DetailRow label="Имя" value={profileName} />
               <DetailRow label="Email" value={profile.email} />
               <DetailRow
                 label="Телефон"

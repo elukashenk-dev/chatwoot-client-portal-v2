@@ -13,7 +13,11 @@ docs/operations/mt-10-deployment-runbooks.md
 
 ## Текущее Production Окружение
 
-- Есть Yandex Cloud VM с уже работающим production Chatwoot.
+- Production Chatwoot и портал работают на Timeweb VM `5.129.253.99`.
+- Актуальная инфраструктурная inventory и installed-state evidence хранятся
+  в соседнем `lancora-production-infrastructure/inventory/servers.yaml`.
+- Прежняя Yandex VM `93.77.166.238` — остановленный rollback-сервер, не цель
+  обычного portal deploy.
 - Chatwoot используется реальными production users.
 - Chatwoot core, база Chatwoot и application files Chatwoot не должны
   изменяться в рамках работы над portal v2.
@@ -77,16 +81,16 @@ lk.<client-domain>
 Известные VM данные:
 
 ```text
-hostname: chatwoot-vm
-ssh user: ubuntu
-home: /home/ubuntu
-public IPv4: 93.77.166.238
+hostname: lancora-support-01
+ssh user: lancora
+home: /home/lancora
+public IPv4: 5.129.253.99
 ```
 
 SSH из WSL был настроен через добавление local public key в:
 
 ```text
-/home/ubuntu/.ssh/authorized_keys
+/home/lancora/.ssh/authorized_keys
 ```
 
 Перед deploy нужно заново проверить актуальность SSH-доступа и IP.
@@ -118,7 +122,7 @@ cd /opt/chatwoot-client-portal-v2
 sudo scripts/configure-tenant-domain-ingress.sh \
   --domain=lk.<client-domain> \
   --letsencrypt-email=no-reply@lancora.ru \
-  --expected-ip=93.77.166.238
+  --expected-ip=5.129.253.99
 ```
 
 Changed Nginx files are backed up under:

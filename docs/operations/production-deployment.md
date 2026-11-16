@@ -18,7 +18,21 @@ Routine code releases do not have a dirty/WIP preview mode, a bridge-only
 deployment path, or a local production-authority bypass. Review a device build
 in local development or in a separately designed non-production environment.
 
+Current VM access and installed-state evidence are maintained in the sibling
+`lancora-production-infrastructure` repository (`inventory/servers.yaml`).
+The active portal VM is Timeweb `lancora@5.129.253.99`; the former Yandex
+`ubuntu@93.77.166.238` is stopped rollback infrastructure, not a release target.
+Confirm access metadata against that inventory and the server before each release.
+Identity/known-hosts paths below are examples; use the operator's existing trusted
+files, without replacing SSH host trust.
+
 ## Routine Staged Release
+
+Current release blocker: [F-OPS-008](../findings/F-OPS-008-staged-release-disabled-telegram-bridge.md).
+The Timeweb runtime intentionally excludes Telegram bridge, while the staged
+script still requires it for release evidence and activation. Do not run the
+commands below until a separately approved release-contract change resolves
+that mismatch. Starting the disabled bridge is not a profile-release prerequisite.
 
 Before either command, obtain approval for the exact production operation and
 complete the slice checks. The script itself requires clean local `main`, a
@@ -28,7 +42,7 @@ fresh `origin/main` match and a full lowercase SHA contained in that history.
 commit="$(git rev-parse HEAD)"
 
 scripts/deploy-production-staged.sh prepare \
-  --host=ubuntu@93.77.166.238 \
+  --host=lancora@5.129.253.99 \
   --ssh-port=22 \
   --identity-file="$HOME/.ssh/production_deploy_key" \
   --app-path=/opt/chatwoot-client-portal-v2 \
@@ -60,7 +74,7 @@ Only after a separate approval, activate that exact prepared SHA:
 
 ```bash
 scripts/deploy-production-staged.sh activate \
-  --host=ubuntu@93.77.166.238 \
+  --host=lancora@5.129.253.99 \
   --ssh-port=22 \
   --identity-file="$HOME/.ssh/production_deploy_key" \
   --app-path=/opt/chatwoot-client-portal-v2 \

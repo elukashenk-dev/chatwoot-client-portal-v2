@@ -83,7 +83,6 @@ export function createChatThreadContactRepository(
         .select({
           chatwootContactId: portalUserContactLinks.chatwootContactId,
           email: portalUsers.email,
-          fullName: portalUsers.fullName,
           userId: portalUsers.id,
         })
         .from(portalUserContactLinks)

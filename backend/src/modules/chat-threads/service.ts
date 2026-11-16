@@ -221,7 +221,7 @@ export function createChatThreadsService({
 
       participantRows.push({
         avatarUrl,
-        displayName: row.fullName,
+        displayName: contact.name,
         email: row.email,
         isCurrentUser: row.userId === currentUserId,
         userId: row.userId,

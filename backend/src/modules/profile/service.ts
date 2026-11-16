@@ -34,7 +34,7 @@ function createProfileUnavailable(user: PublicPortalUser): PublicUserProfile {
   return {
     avatarUrl: null,
     email: user.email,
-    fullName: user.fullName,
+    fullName: null,
     phoneNumber: null,
     reason: 'contact_unavailable',
     result: 'unavailable',
@@ -108,7 +108,7 @@ export function createProfileService({
         return {
           avatarUrl: buildProfileAvatarUrl(Boolean(contact.avatarUrl?.trim())),
           email: user.email,
-          fullName: user.fullName,
+          fullName: contact.name?.trim() || null,
           phoneNumber: contact.phoneNumber,
           result: 'ready',
         }

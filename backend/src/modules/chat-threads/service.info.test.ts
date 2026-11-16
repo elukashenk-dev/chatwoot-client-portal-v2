@@ -365,4 +365,52 @@ describe('chat thread info service', () => {
     })
     expect(chatwootClient.createConversation).not.toHaveBeenCalled()
   })
+  it('refreshes participant names from already fetched contacts, never from the registration name', async () => {
+    const chatwootClient = createChatwootClientStub()
+    const findContact = createChatwootClientStub().findContactById
+    let currentName: string | null = 'Иван Петров'
+    chatwootClient.findContactById.mockImplementation(async (id: number) => {
+      const contact = await findContact(id)
+      return id === 44 ? { ...contact, name: currentName } : contact
+    })
+    const service = createService({
+      chatwootClient,
+      repository: createRepositoryStub({
+        listActivePortalUserContactLinks: vi.fn().mockResolvedValue([
+          {
+            chatwootContactId: 44,
+            email: 'office@example.test',
+            fullName: 'Old Registration Name',
+            userId: 7,
+          },
+        ]),
+      }),
+    })
+    for (const [name, expected] of [
+      ['Иван Петров', 'Иван Петров'],
+      ['  Анна Сидорова  ', 'Анна Сидорова'],
+      [null, 'office@example.test'],
+      ['   ', 'office@example.test'],
+    ]) {
+      currentName = name ?? null
+      chatwootClient.findContactById.mockClear()
+      expect(
+        await service.getCurrentUserThreadInfo({
+          threadId: 'group:154',
+          userId: 7,
+        }),
+      ).toMatchObject({
+        participants: [
+          { displayName: expected, id: 'portal-user:7', isCurrentUser: true },
+        ],
+      })
+      // Existing actor, group authorization, group info and participant lookups.
+      expect(chatwootClient.findContactById.mock.calls).toEqual([
+        [44],
+        [154],
+        [154],
+        [44],
+      ])
+    }
+  })
 })
