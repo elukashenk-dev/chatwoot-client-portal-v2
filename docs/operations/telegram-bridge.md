@@ -48,13 +48,12 @@ tenant bridge config created by the admin UI or CLI fallback.
 
 ## Bridge Release Boundary
 
-Every bridge code release is part of the same three-service staged candidate as
-`portal-backend` and `portal-web`. Use only the canonical `prepare` followed by
-a separately approved `activate` procedure in
-`docs/operations/production-deployment.md`; do not rebuild or activate
-`telegram-bridge` independently. This holds even when the reviewed diff appears
-limited to bridge files, because candidate provenance, image evidence, health,
-tenant smoke and rollback cover the complete portal runtime.
+Telegram bridge is currently disabled on Timeweb. Protocol 2 routine releases
+manage only `portal-backend` and `portal-web`; they do not start, stop or rebuild
+bridge containers. Bridge code remains in the repository for a separate future
+product decision. Re-enabling bridge requires a reviewed release-contract change;
+there is no independent bridge deployment shortcut. The canonical authority is
+`docs/operations/production-deployment.md`.
 
 Telegram webhook configuration remains a separate tenant operator operation.
 It is not an activation flag and a release cannot use it to bypass the staged

@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 readonly REMOTE_APP_NAME='chatwoot-client-portal-v2'
 readonly REMOTE_APP_PATH='/opt/chatwoot-client-portal-v2'
-readonly REMOTE_PROTOCOL_VERSION='1'
+readonly REMOTE_PROTOCOL_VERSION='2'
 readonly REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS=360
 readonly REMOTE_SERVICE_READINESS_POLL_SECONDS=2
 
@@ -68,25 +68,19 @@ REMOTE_SERVICE_READINESS_CAPTURE_FAILED='false'
 REMOTE_COMPOSE_WAIT_EXIT_CODE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
-REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE='unavailable'
-REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_STOP_CLASSIFICATION='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB_STOP_CLASSIFICATION='unavailable'
-REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_STOP_CLASSIFICATION='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED='unavailable'
-REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL='unavailable'
 REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL='unavailable'
-REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL='unavailable'
 REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS=()
 REMOTE_RESOLVED_CONTAINER_ID=''
 REMOTE_SUPERSEDED_ARCHIVE_SHA=''
 REMOTE_SUPERSEDED_BACKEND_ID=''
 REMOTE_SUPERSEDED_WEB_ID=''
-REMOTE_SUPERSEDED_TELEGRAM_ID=''
 REMOTE_VISIBLE_SUCCESS_OUTCOME_PATH=''
 REMOTE_VISIBLE_SUCCESS_OUTCOME_STARTED=''
 
@@ -669,7 +663,6 @@ remote_release_tag() {
   case "$service" in
     portal-backend) printf '%s-portal-backend:%s\n' "$REMOTE_APP_NAME" "$commit" ;;
     portal-web) printf '%s-portal-web:%s\n' "$REMOTE_APP_NAME" "$commit" ;;
-    telegram-bridge) printf '%s-telegram-bridge:%s\n' "$REMOTE_APP_NAME" "$commit" ;;
     *) return 1 ;;
   esac
 }
@@ -727,6 +720,68 @@ remote_remove_exact_tag() {
   ! remote_image_id "$reference" >/dev/null 2>&1
 }
 
+remote_validate_host_gateway() {
+  local host="$1"
+  [[ "$host" == 'none' ]] && return 0
+  (( ${#host} <= 253 )) || return 1
+  [[ "$host" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]]
+}
+
+remote_override_bytes() {
+  local commit="$1" host="$2"
+  release_record_is_sha "$commit" && remote_validate_host_gateway "$host" || return 1
+  printf 'services:\n  portal-backend:\n    image: %s\n' "$(remote_release_tag portal-backend "$commit")"
+  if [[ "$host" != 'none' ]]; then
+    printf '    extra_hosts:\n      - "%s:host-gateway"\n' "$host"
+  fi
+  printf '  portal-web:\n    image: %s\n' "$(remote_release_tag portal-web "$commit")"
+}
+
+remote_validate_manifest_runtime() {
+  local manifest="$1" release_dir="$2" commit="$3" host checksum actual
+  host="$(release_record_get_unique "$manifest" backend_host_gateway)" || return 1
+  checksum="$(release_record_get_unique "$manifest" compose_override_sha256)" || return 1
+  remote_validate_host_gateway "$host" && release_record_is_checksum "$checksum" || return 1
+  release_record_require_private_file "$release_dir/compose.release.yaml" || return 1
+  actual="$(sha256sum "$release_dir/compose.release.yaml" | awk '{print $1}')" || return 1
+  [[ "$actual" == "$checksum" ]] || return 1
+  cmp -s "$release_dir/compose.release.yaml" <(remote_override_bytes "$commit" "$host")
+}
+
+REMOTE_COMPOSE_HOST_GATEWAY='none'
+remote_validate_live_gateway() {
+  local service="$1" container="$2" value expected='[]'
+  if [[ "$service" == 'portal-backend' && "$REMOTE_COMPOSE_HOST_GATEWAY" != 'none' ]]; then
+    expected="[\"$REMOTE_COMPOSE_HOST_GATEWAY:host-gateway\"]"
+  fi
+  if [[ -n "$REMOTE_SERVICE_READINESS_DEADLINE_SECONDS" ]]; then
+    value="$(remote_run_with_readiness_deadline "${REMOTE_DOCKER[@]}" inspect --format '{{json .HostConfig.ExtraHosts}}' "$container" 2>/dev/null)" || return $?
+  else
+    value="$("${REMOTE_DOCKER[@]}" inspect --format '{{json .HostConfig.ExtraHosts}}' "$container" 2>/dev/null)" || return 1
+  fi
+  [[ "$value" == "$expected" || ( "$expected" == '[]' && "$value" == 'null' ) ]]
+}
+
+remote_validate_rendered_runtime() {
+  "${REMOTE_COMPOSE[@]}" config --format json portal-backend portal-web 2>/dev/null |
+    "$REMOTE_PYTHON_BIN" -c '
+import json, sys
+model = json.load(sys.stdin)
+host = sys.argv[1]
+services = model["services"]
+if set(services) - {"portal-backend", "portal-web", "portal-db", "portal-object-storage", "portal-object-storage-init"}:
+    raise SystemExit(1)
+for name in ("portal-backend", "portal-web"):
+    expected = {host: "host-gateway"} if name == "portal-backend" and host != "none" else {}
+    actual = services[name].get("extra_hosts", {})
+    if isinstance(actual, list):
+        if len(actual) != len(set(actual)) or any("=" not in entry for entry in actual): raise SystemExit(1)
+        actual = dict(entry.split("=", 1) for entry in actual)
+    if actual != expected:
+        raise SystemExit(1)
+' "$REMOTE_COMPOSE_HOST_GATEWAY"
+}
+
 remote_write_release_override() {
   local release_dir="$1"
   local commit="$2"
@@ -734,13 +789,9 @@ remote_write_release_override() {
 
   release_record_is_sha "$commit" || return 1
   [[ -d "$release_dir" && ! -L "$release_dir" && ! -e "$path" && ! -L "$path" ]] || return 1
+  local host="${3:-none}"
   umask 077
-  {
-    printf 'services:\n'
-    printf '  portal-backend:\n    image: %s\n' "$(remote_release_tag portal-backend "$commit")"
-    printf '  portal-web:\n    image: %s\n' "$(remote_release_tag portal-web "$commit")"
-    printf '  telegram-bridge:\n    image: %s\n' "$(remote_release_tag telegram-bridge "$commit")"
-  } >"$path"
+  remote_override_bytes "$commit" "$host" >"$path" || return 1
   chmod 0600 "$path"
 }
 
@@ -750,24 +801,7 @@ remote_validate_release_override() {
   local path="$release_dir/compose.release.yaml"
 
   release_record_is_sha "$commit" || return 1
-  release_record_require_private_file "$path" || return 1
-  "$REMOTE_PYTHON_BIN" - "$path" "$REMOTE_APP_NAME" "$commit" <<'PY'
-import pathlib
-import sys
-
-path, app, commit = sys.argv[1:]
-expected = (
-    "services:\n"
-    "  portal-backend:\n"
-    f"    image: {app}-portal-backend:{commit}\n"
-    "  portal-web:\n"
-    f"    image: {app}-portal-web:{commit}\n"
-    "  telegram-bridge:\n"
-    f"    image: {app}-telegram-bridge:{commit}\n"
-).encode()
-if pathlib.Path(path).read_bytes() != expected:
-    raise SystemExit(1)
-PY
+  remote_validate_manifest_runtime "$release_dir/manifest.txt" "$release_dir" "$commit"
 }
 
 remote_validate_compose_images() {
@@ -790,7 +824,6 @@ except (KeyError, ValueError):
 expected = {
     fields.get("backend_image_tag", ""),
     fields.get("web_image_tag", ""),
-    fields.get("telegram_image_tag", ""),
 }
 for index in range(1, external_count + 1):
     expected.add(fields.get(f"external_image_{index:03d}_ref", ""))
@@ -810,6 +843,10 @@ remote_configure_compose() {
   [[ -f "$app_path/.env.production" && ! -L "$app_path/.env.production" ]] || return 1
   [[ -f "$release_dir/source/infra/production/compose.yaml" &&
     -f "$release_dir/compose.release.yaml" ]] || return 1
+  if [[ -f "$release_dir/manifest.txt" ]]; then
+    REMOTE_COMPOSE_HOST_GATEWAY="$(release_record_get_unique "$release_dir/manifest.txt" backend_host_gateway)" || return 1
+  fi
+  remote_validate_host_gateway "$REMOTE_COMPOSE_HOST_GATEWAY" || return 1
   REMOTE_COMPOSE=(
     "${REMOTE_DOCKER[@]}" compose
     --project-name "$REMOTE_APP_NAME"
@@ -850,7 +887,7 @@ remote_validate_imported_manifest() {
   release_record_validate_keys "$path" \
     protocol_version record_kind release_commit archive_sha256 imported_at_utc \
     backend_image_tag backend_image_id web_image_tag web_image_id \
-    telegram_image_tag telegram_image_id || return 1
+    service_set backend_host_gateway compose_override_sha256 || return 1
   protocol="$(release_record_get_unique "$path" protocol_version)"
   kind="$(release_record_get_unique "$path" record_kind)"
   commit="$(release_record_get_unique "$path" release_commit)"
@@ -858,15 +895,16 @@ remote_validate_imported_manifest() {
   timestamp="$(release_record_get_unique "$path" imported_at_utc)"
   [[ "$protocol" == "$REMOTE_PROTOCOL_VERSION" && "$kind" == 'imported_release' &&
     "$commit" == "$expected_commit" ]] || return 1
+  [[ "$(release_record_get_unique "$path" service_set)" == 'portal-backend,portal-web' ]] || return 1
+  remote_validate_manifest_runtime "$path" "$(dirname -- "$path")" "$commit" || return 1
   release_record_is_checksum "$checksum" || return 1
   release_record_is_timestamp "$timestamp" || return 1
-  for service in backend web telegram; do
+  for service in backend web; do
     tag="$(release_record_get_unique "$path" "${service}_image_tag")"
     image_id="$(release_record_get_unique "$path" "${service}_image_id")"
     case "$service" in
       backend) [[ "$tag" == "$(remote_release_tag portal-backend "$commit")" ]] || return 1 ;;
       web) [[ "$tag" == "$(remote_release_tag portal-web "$commit")" ]] || return 1 ;;
-      telegram) [[ "$tag" == "$(remote_release_tag telegram-bridge "$commit")" ]] || return 1 ;;
     esac
     [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   done
@@ -879,20 +917,21 @@ remote_write_imported_manifest() {
   local timestamp="$4"
   local backend_id="$5"
   local web_id="$6"
-  local telegram_id="$7"
+  local host="${7:-none}"
 
   printf '%s\n' \
     "protocol_version=$REMOTE_PROTOCOL_VERSION" \
     'record_kind=imported_release' \
+    'service_set=portal-backend,portal-web' \
+    "backend_host_gateway=$host" \
+    "compose_override_sha256=$(sha256sum "$(dirname -- "$path")/compose.release.yaml" | awk '{print $1}')" \
     "release_commit=$commit" \
     "archive_sha256=$archive_checksum" \
     "imported_at_utc=$timestamp" \
     "backend_image_tag=$(remote_release_tag portal-backend "$commit")" \
     "backend_image_id=$backend_id" \
     "web_image_tag=$(remote_release_tag portal-web "$commit")" \
-    "web_image_id=$web_id" \
-    "telegram_image_tag=$(remote_release_tag telegram-bridge "$commit")" \
-    "telegram_image_id=$telegram_id" |
+    "web_image_id=$web_id" |
     release_record_write_atomic create "$path" || return 1
   remote_validate_imported_manifest "$path" "$commit"
 }
@@ -992,6 +1031,7 @@ remote_validate_prepared_manifest() {
   local expected_candidate="${2:-}"
 
   release_record_validate_structure "$path" || return 1
+  remote_validate_manifest_runtime "$path" "$(dirname -- "$path")" "$expected_candidate" || return 1
   "$REMOTE_PYTHON_BIN" - "$path" "$expected_candidate" "$REMOTE_APP_NAME" <<'PY'
 import datetime
 import pathlib
@@ -1007,14 +1047,14 @@ for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
     fields[key] = value
 
 base = {
-    "protocol_version", "record_kind", "orchestrator_commit", "orchestrator_protocol_version",
+    "protocol_version", "record_kind", "service_set", "backend_host_gateway", "compose_override_sha256", "orchestrator_commit", "orchestrator_protocol_version",
     "candidate_commit", "candidate_archive_sha256", "rollback_commit", "rollback_archive_sha256",
     "prepared_at_utc", "prepared_at_epoch", "expires_at_utc", "expires_at_epoch",
     "observed_current_commit", "production_env_sha256", "migration_classification",
     "backend_image_tag", "backend_image_id", "web_image_tag", "web_image_id",
-    "telegram_image_tag", "telegram_image_id", "rollback_backend_image_tag",
+    "rollback_backend_image_tag",
     "rollback_backend_image_id", "rollback_web_image_tag", "rollback_web_image_id",
-    "rollback_telegram_image_tag", "rollback_telegram_image_id", "tenant_count",
+    "tenant_count",
     "tenant_matrix_sha256", "external_image_count",
 }
 if not base.issubset(fields):
@@ -1023,9 +1063,11 @@ sha = re.compile(r"[0-9a-f]{40}\Z")
 checksum = re.compile(r"[0-9a-f]{64}\Z")
 image = re.compile(r"sha256:[0-9a-f]{64}\Z")
 timestamp = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
-if fields["protocol_version"] != "1" or fields["record_kind"] != "prepared_release":
+if fields["service_set"] != "portal-backend,portal-web":
     raise SystemExit(1)
-if fields["orchestrator_protocol_version"] != "1":
+if fields["protocol_version"] != "2" or fields["record_kind"] != "prepared_release":
+    raise SystemExit(1)
+if fields["orchestrator_protocol_version"] != "2":
     raise SystemExit(1)
 for key in ("orchestrator_commit", "candidate_commit", "rollback_commit", "observed_current_commit"):
     if not sha.fullmatch(fields[key]):
@@ -1060,17 +1102,15 @@ rollback = fields["rollback_commit"]
 expected_tags = {
     "backend_image_tag": f"{app}-portal-backend:{candidate}",
     "web_image_tag": f"{app}-portal-web:{candidate}",
-    "telegram_image_tag": f"{app}-telegram-bridge:{candidate}",
     "rollback_backend_image_tag": f"{app}-portal-backend:{rollback}",
     "rollback_web_image_tag": f"{app}-portal-web:{rollback}",
-    "rollback_telegram_image_tag": f"{app}-telegram-bridge:{rollback}",
 }
 for key, value in expected_tags.items():
     if fields[key] != value:
         raise SystemExit(1)
 for key in (
-    "backend_image_id", "web_image_id", "telegram_image_id",
-    "rollback_backend_image_id", "rollback_web_image_id", "rollback_telegram_image_id",
+    "backend_image_id", "web_image_id",
+    "rollback_backend_image_id", "rollback_web_image_id",
 ):
     if not image.fullmatch(fields[key]):
         raise SystemExit(1)
@@ -1093,7 +1133,6 @@ PY
 REMOTE_ROLLBACK_ARCHIVE_SHA=''
 REMOTE_ROLLBACK_BACKEND_ID=''
 REMOTE_ROLLBACK_WEB_ID=''
-REMOTE_ROLLBACK_TELEGRAM_ID=''
 remote_load_release_evidence() {
   local release_dir="$1"
   local commit="$2"
@@ -1106,13 +1145,11 @@ remote_load_release_evidence() {
     REMOTE_ROLLBACK_ARCHIVE_SHA="$(release_record_get_unique "$manifest" archive_sha256)"
     REMOTE_ROLLBACK_BACKEND_ID="$(release_record_get_unique "$manifest" backend_image_id)"
     REMOTE_ROLLBACK_WEB_ID="$(release_record_get_unique "$manifest" web_image_id)"
-    REMOTE_ROLLBACK_TELEGRAM_ID="$(release_record_get_unique "$manifest" telegram_image_id)"
   elif [[ "$kind" == 'prepared_release' ]]; then
     remote_validate_prepared_manifest "$manifest" "$commit" || return 1
     REMOTE_ROLLBACK_ARCHIVE_SHA="$(release_record_get_unique "$manifest" candidate_archive_sha256)"
     REMOTE_ROLLBACK_BACKEND_ID="$(release_record_get_unique "$manifest" backend_image_id)"
     REMOTE_ROLLBACK_WEB_ID="$(release_record_get_unique "$manifest" web_image_id)"
-    REMOTE_ROLLBACK_TELEGRAM_ID="$(release_record_get_unique "$manifest" telegram_image_id)"
   else
     return 1
   fi
@@ -1146,6 +1183,7 @@ remote_validate_state_layout() {
     name="$(basename -- "$entry")"
     case "$name" in
       deploy.lock|adoption|current|previous|prepared|transaction) [[ -f "$entry" && ! -L "$entry" ]] || return 1 ;;
+      recovery) remote_recovery_validate_completed "$entry" || return 1 ;;
       decisions|history) remote_require_private_directory "$entry" || return 1 ;;
       *) return 1 ;;
     esac
@@ -1370,7 +1408,7 @@ remote_validate_disk_budget() {
   shift
   local image_id size current_bytes=0 required_bytes available_bytes available_kb
 
-  (( $# == 3 )) || return 1
+  (( $# == 2 )) || return 1
   for image_id in "$@"; do
     size="$("${REMOTE_DOCKER[@]}" image inspect --format '{{.Size}}' "$image_id" 2>/dev/null)" || return 1
     [[ "$size" =~ ^[0-9]+$ && "$size" != '0' ]] || return 1
@@ -1427,7 +1465,6 @@ remote_resolve_external_images() {
   local -a all_refs=() built_refs=(
     "$(remote_release_tag portal-backend "$candidate_commit")"
     "$(remote_release_tag portal-web "$candidate_commit")"
-    "$(remote_release_tag telegram-bridge "$candidate_commit")"
   )
 
   mapfile -t all_refs < <(LC_ALL=C sort -u <<<"$images_output")
@@ -1436,8 +1473,7 @@ remote_resolve_external_images() {
   for reference in "${all_refs[@]}"; do
     [[ -n "$reference" ]] || return 1
     remote_validate_image_reference "$reference" || return 1
-    if [[ "$reference" == "${built_refs[0]}" || "$reference" == "${built_refs[1]}" ||
-      "$reference" == "${built_refs[2]}" ]]; then
+    if [[ "$reference" == "${built_refs[0]}" || "$reference" == "${built_refs[1]}" ]]; then
       continue
     fi
     REMOTE_EXTERNAL_REFS+=("$reference")
@@ -1458,15 +1494,12 @@ remote_revalidate_all_images() {
   local rollback_commit="$2"
   local candidate_backend_id="$3"
   local candidate_web_id="$4"
-  local candidate_telegram_id="$5"
   local index
 
   [[ "$(remote_image_id "$(remote_release_tag portal-backend "$candidate_commit")")" == "$candidate_backend_id" ]] || return 1
   [[ "$(remote_image_id "$(remote_release_tag portal-web "$candidate_commit")")" == "$candidate_web_id" ]] || return 1
-  [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$candidate_commit")")" == "$candidate_telegram_id" ]] || return 1
   [[ "$(remote_image_id "$(remote_release_tag portal-backend "$rollback_commit")")" == "$REMOTE_ROLLBACK_BACKEND_ID" ]] || return 1
   [[ "$(remote_image_id "$(remote_release_tag portal-web "$rollback_commit")")" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1
-  [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$rollback_commit")")" == "$REMOTE_ROLLBACK_TELEGRAM_ID" ]] || return 1
   for index in "${!REMOTE_EXTERNAL_REFS[@]}"; do
     [[ "$(remote_image_id "${REMOTE_EXTERNAL_REFS[$index]}")" == "${REMOTE_EXTERNAL_IDS[$index]}" ]] || return 1
   done
@@ -1649,7 +1682,7 @@ remote_collect_exact_prepared_candidate_images() {
   REMOTE_PREPARED_CANDIDATE_TAGS=()
   REMOTE_PREPARED_CANDIDATE_IMAGE_IDS=()
   REMOTE_PREPARED_CANDIDATE_TAG_STATES=()
-  for service in backend web telegram; do
+  for service in backend web; do
     tag="$(release_record_get_unique "$manifest" "${service}_image_tag")" || return 1
     image_id="$(release_record_get_unique "$manifest" "${service}_image_id")" || return 1
     if actual_id="$(remote_image_id "$tag" 2>/dev/null)"; then
@@ -1696,23 +1729,23 @@ remote_validate_retry_active_runtime() {
   remote_validate_release_override "$current_dir" "$current_commit" || return 1
   remote_select_activation_tools || return 1
   remote_verify_root_source "$app_path" "$current_dir" || return 1
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     tag="$(remote_release_tag "$service" "$current_commit")" || return 1
     actual_id="$(remote_image_id "$tag")" || return 1
     case "$service" in
       portal-backend) [[ "$actual_id" == "$REMOTE_ROLLBACK_BACKEND_ID" ]] || return 1 ;;
       portal-web) [[ "$actual_id" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1 ;;
-      telegram-bridge) [[ "$actual_id" == "$REMOTE_ROLLBACK_TELEGRAM_ID" ]] || return 1 ;;
     esac
   done
   tenant_count="$(release_record_get_unique "$candidate_manifest" tenant_count)" || return 1
   [[ "$tenant_count" =~ ^[0-9]+$ && "$tenant_count" -ge 1 && "$tenant_count" -le 100 ]] || return 1
   remote_configure_compose "$app_path" "$current_dir" || return 1
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  remote_validate_rendered_runtime || return 1
   REMOTE_ACTIVATION_CANDIDATE_IDS=(
     "$REMOTE_ROLLBACK_BACKEND_ID"
     "$REMOTE_ROLLBACK_WEB_ID"
-    "$REMOTE_ROLLBACK_TELEGRAM_ID"
+
   )
   remote_capture_candidate_services || return 1
   remote_run_tenant_smoke "$candidate_dir/tenants.tsv" "$tenant_count" || return 1
@@ -1737,7 +1770,7 @@ remote_remove_retryable_candidate() {
     approval="$(release_record_get_unique "$decision" approval_ref)" || return 1
     remote_validate_activation_decision "$decision" "$candidate" "$policy" "$approval" || return 1
   fi
-  for index in 0 1 2; do
+  for index in 0 1; do
     [[ "${REMOTE_PREPARED_CANDIDATE_TAG_STATES[$index]}" == 'absent' ]] && continue
     remote_remove_exact_tag "${REMOTE_PREPARED_CANDIDATE_TAGS[$index]}" \
       "${REMOTE_PREPARED_CANDIDATE_IMAGE_IDS[$index]}" || return 1
@@ -1837,7 +1870,7 @@ remote_import_or_validate_current_release() {
   local releases_dir="$app_path/.releases"
   local release_dir="$releases_dir/$current_commit"
   local pointer_kind='' pointer current_checksum service container_id running_id tag
-  local backend_id='' web_id='' telegram_id=''
+  local backend_id='' web_id=''
 
   if [[ -e "$state_dir/current" || -L "$state_dir/current" ]]; then
     pointer_kind='current'
@@ -1861,7 +1894,6 @@ remote_import_or_validate_current_release() {
     remote_validate_archive "$current_archive" || return 1
     [[ "$(remote_image_id "$(remote_release_tag portal-backend "$current_commit")")" == "$REMOTE_ROLLBACK_BACKEND_ID" ]] || return 1
     [[ "$(remote_image_id "$(remote_release_tag portal-web "$current_commit")")" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1
-    [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$current_commit")")" == "$REMOTE_ROLLBACK_TELEGRAM_ID" ]] || return 1
     [[ "$pointer_kind" != 'adoption' ]] || REMOTE_PREPARE_ADOPTION_VERIFIED='true'
     return 0
   fi
@@ -1872,7 +1904,7 @@ remote_import_or_validate_current_release() {
   remote_write_release_override "$release_dir" "$current_commit" || return 1
   remote_configure_compose "$app_path" "$release_dir" || return 1
 
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     container_id="$("${REMOTE_COMPOSE[@]}" ps -q "$service")" || return 1
     [[ "$container_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]*$ ]] || return 1
     running_id="$("${REMOTE_DOCKER[@]}" inspect --format '{{.Image}}' "$container_id" 2>/dev/null)" || return 1
@@ -1883,17 +1915,15 @@ remote_import_or_validate_current_release() {
     case "$service" in
       portal-backend) backend_id="$running_id" ;;
       portal-web) web_id="$running_id" ;;
-      telegram-bridge) telegram_id="$running_id" ;;
     esac
   done
   remote_write_imported_manifest \
     "$release_dir/manifest.txt" "$current_commit" "$current_archive_sha" "$now_utc" \
-    "$backend_id" "$web_id" "$telegram_id" || return 1
+    "$backend_id" "$web_id" || return 1
   remote_pointer_write create "$state_dir/adoption" "$current_commit" || return 1
   REMOTE_ROLLBACK_ARCHIVE_SHA="$current_archive_sha"
   REMOTE_ROLLBACK_BACKEND_ID="$backend_id"
   REMOTE_ROLLBACK_WEB_ID="$web_id"
-  REMOTE_ROLLBACK_TELEGRAM_ID="$telegram_id"
   REMOTE_PREPARE_ADOPTION_VERIFIED='true'
   REMOTE_PREPARE_ADOPTION_DIR=''
 }
@@ -1910,13 +1940,15 @@ remote_manifest_write_prepared() {
   local expires_utc="$9"
   local candidate_backend_id="${10}"
   local candidate_web_id="${11}"
-  local candidate_telegram_id="${12}"
   local index key_index
 
   {
     printf '%s\n' \
       "protocol_version=$REMOTE_PROTOCOL_VERSION" \
       'record_kind=prepared_release' \
+      'service_set=portal-backend,portal-web' \
+      "backend_host_gateway=$REMOTE_COMPOSE_HOST_GATEWAY" \
+      "compose_override_sha256=$(sha256sum "$(dirname -- "$path")/compose.release.yaml" | awk '{print $1}')" \
       "orchestrator_commit=$orchestrator_commit" \
       "orchestrator_protocol_version=$REMOTE_PROTOCOL_VERSION" \
       "candidate_commit=$candidate_commit" \
@@ -1934,14 +1966,10 @@ remote_manifest_write_prepared() {
       "backend_image_id=$candidate_backend_id" \
       "web_image_tag=$(remote_release_tag portal-web "$candidate_commit")" \
       "web_image_id=$candidate_web_id" \
-      "telegram_image_tag=$(remote_release_tag telegram-bridge "$candidate_commit")" \
-      "telegram_image_id=$candidate_telegram_id" \
       "rollback_backend_image_tag=$(remote_release_tag portal-backend "$rollback_commit")" \
       "rollback_backend_image_id=$REMOTE_ROLLBACK_BACKEND_ID" \
       "rollback_web_image_tag=$(remote_release_tag portal-web "$rollback_commit")" \
       "rollback_web_image_id=$REMOTE_ROLLBACK_WEB_ID" \
-      "rollback_telegram_image_tag=$(remote_release_tag telegram-bridge "$rollback_commit")" \
-      "rollback_telegram_image_id=$REMOTE_ROLLBACK_TELEGRAM_ID" \
       "tenant_count=$REMOTE_TENANT_COUNT" \
       "tenant_matrix_sha256=$REMOTE_TENANT_MATRIX_SHA" \
       "external_image_count=${#REMOTE_EXTERNAL_REFS[@]}"
@@ -1969,7 +1997,7 @@ remote_locked_prepare() {
   local candidate_dir="$releases_dir/$candidate_commit"
   local current_dir="$releases_dir/$current_commit"
   local now_epoch now_utc expires_epoch expires_utc release_count service tag image_id
-  local candidate_backend_id='' candidate_web_id='' candidate_telegram_id=''
+  local candidate_backend_id='' candidate_web_id=''
   local help_output images_output raw_tenants real_env_sha_after
   local -a retained_releases=()
 
@@ -2012,6 +2040,12 @@ remote_locked_prepare() {
   remote_import_or_validate_current_release \
     "$app_path" "$current_archive" "$current_archive_sha" "$current_commit" "$now_utc" ||
     remote_prepare_abort 'Exact rollback release evidence could not be established.'
+  REMOTE_COMPOSE_HOST_GATEWAY="$(release_record_get_unique "$current_dir/manifest.txt" backend_host_gateway)" || remote_prepare_abort 'Runtime evidence missing.'
+  remote_configure_compose "$app_path" "$current_dir" || remote_prepare_abort 'Current Compose inputs invalid.'
+  for service in portal-backend portal-web; do
+    remote_resolve_single_service_container "$service" || remote_prepare_abort 'Current service missing.'
+    remote_validate_live_gateway "$service" "$REMOTE_RESOLVED_CONTAINER_ID" || remote_prepare_abort 'Current networking drifted.'
+  done
   [[ -d "$current_dir" && ! -L "$current_dir" ]] || remote_prepare_abort 'Rollback release directory is missing.'
 
   remote_find_paths retained_releases "$releases_dir" -mindepth 1 -maxdepth 1 -type d ||
@@ -2022,7 +2056,7 @@ remote_locked_prepare() {
   REMOTE_PREPARE_CANDIDATE_DIR="$candidate_dir"
   remote_extract_release_archive "$candidate_archive" "$candidate_archive_sha" "$candidate_dir" ||
     remote_prepare_abort 'Candidate archive validation or extraction failed.'
-  remote_write_release_override "$candidate_dir" "$candidate_commit" ||
+  remote_write_release_override "$candidate_dir" "$candidate_commit" "$REMOTE_COMPOSE_HOST_GATEWAY" ||
     remote_prepare_abort 'Candidate Compose override could not be written.'
 
   remote_validate_production_env_copy "$app_path" "$candidate_dir" ||
@@ -2033,6 +2067,7 @@ remote_locked_prepare() {
     remote_prepare_abort 'Candidate Compose inputs are incomplete.'
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 ||
     remote_prepare_abort 'Candidate Compose config validation failed.'
+  remote_validate_rendered_runtime || remote_prepare_abort 'Rendered runtime configuration differs.'
   help_output="$("${REMOTE_COMPOSE[@]}" up --help 2>/dev/null)" ||
     remote_prepare_abort 'Docker Compose up help is unavailable.'
   for required in --no-build --pull; do
@@ -2040,25 +2075,24 @@ remote_locked_prepare() {
       remote_prepare_abort "Docker Compose lacks required activation flag: $required"
   done
   remote_validate_disk_budget \
-    "$releases_dir" "$REMOTE_ROLLBACK_BACKEND_ID" "$REMOTE_ROLLBACK_WEB_ID" "$REMOTE_ROLLBACK_TELEGRAM_ID" ||
+    "$releases_dir" "$REMOTE_ROLLBACK_BACKEND_ID" "$REMOTE_ROLLBACK_WEB_ID" ||
     remote_prepare_abort 'Available disk space is below the staged-release budget.'
 
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     tag="$(remote_release_tag "$service" "$candidate_commit")"
     if remote_image_id "$tag" >/dev/null 2>&1; then
       remote_prepare_abort 'A candidate full-SHA image tag already exists.'
     fi
   done
-  "${REMOTE_COMPOSE[@]}" build portal-backend portal-web telegram-bridge >/dev/null 2>&1 ||
+  "${REMOTE_COMPOSE[@]}" build portal-backend portal-web >/dev/null 2>&1 ||
     remote_prepare_abort 'Candidate portal image build failed.'
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     tag="$(remote_release_tag "$service" "$candidate_commit")"
     image_id="$(remote_image_id "$tag")" || remote_prepare_abort 'A built candidate image ID is unavailable.'
     REMOTE_PREPARE_CREATED_TAGS+=("$tag=$image_id")
     case "$service" in
       portal-backend) candidate_backend_id="$image_id" ;;
       portal-web) candidate_web_id="$image_id" ;;
-      telegram-bridge) candidate_telegram_id="$image_id" ;;
     esac
   done
 
@@ -2066,10 +2100,8 @@ remote_locked_prepare() {
     remote_prepare_abort 'Rollback backend tag changed during candidate build.'
   [[ "$(remote_image_id "$(remote_release_tag portal-web "$current_commit")")" == "$REMOTE_ROLLBACK_WEB_ID" ]] ||
     remote_prepare_abort 'Rollback web tag changed during candidate build.'
-  [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$current_commit")")" == "$REMOTE_ROLLBACK_TELEGRAM_ID" ]] ||
-    remote_prepare_abort 'Rollback Telegram tag changed during candidate build.'
 
-  images_output="$("${REMOTE_COMPOSE[@]}" config --images 2>/dev/null)" ||
+  images_output="$("${REMOTE_COMPOSE[@]}" config --images portal-backend portal-web 2>/dev/null)" ||
     remote_prepare_abort 'Candidate Compose image list is unavailable.'
   remote_resolve_external_images "$candidate_commit" "$images_output" ||
     remote_prepare_abort 'External image references are invalid or unavailable.'
@@ -2092,7 +2124,7 @@ remote_locked_prepare() {
     remote_prepare_abort 'Active release changed during preparation.'
   remote_revalidate_all_images \
     "$candidate_commit" "$current_commit" \
-    "$candidate_backend_id" "$candidate_web_id" "$candidate_telegram_id" ||
+    "$candidate_backend_id" "$candidate_web_id" ||
     remote_prepare_abort 'Prepared image identity changed before manifest publication.'
 
   expires_epoch="$("$REMOTE_PYTHON_BIN" - "$now_epoch" <<'PY'
@@ -2104,7 +2136,7 @@ PY
   remote_manifest_write_prepared \
     "$candidate_dir/manifest.txt" "$orchestrator_commit" "$candidate_commit" "$candidate_archive_sha" \
     "$current_commit" "$now_epoch" "$now_utc" "$expires_epoch" "$expires_utc" \
-    "$candidate_backend_id" "$candidate_web_id" "$candidate_telegram_id" ||
+    "$candidate_backend_id" "$candidate_web_id" ||
     remote_prepare_abort 'Immutable prepared manifest publication failed.'
   remote_pointer_write create "$state_dir/prepared" "$candidate_commit" ||
     remote_prepare_abort 'Prepared pointer publication failed.'
@@ -2114,8 +2146,8 @@ PY
   printf 'Observed current release: %s\n' "$current_commit"
   printf 'Migration classification: %s\n' "$REMOTE_MIGRATION_CLASSIFICATION"
   printf 'Prepared candidate expires: %s\n' "$expires_utc"
-  printf 'Candidate portal image IDs: %s %s %s\n' \
-    "$candidate_backend_id" "$candidate_web_id" "$candidate_telegram_id"
+  printf 'Candidate portal image IDs: %s %s\n' \
+    "$candidate_backend_id" "$candidate_web_id"
   remote_emit_status prepared
 }
 
@@ -2147,7 +2179,7 @@ remote_run_prepare_with_lock() {
 remote_validate_release_source_snapshot() {
   local release_dir="$1"
   local expected_checksum="$2"
-  local archive="$release_dir/source.tar.gz"
+  local archive="${3:-$release_dir/source.tar.gz}"
   local source_dir="$release_dir/source"
   local actual_checksum
 
@@ -2360,6 +2392,16 @@ remote_activation_preflight() {
       remote_activation_refuse 'First activation legacy marker changed.'
   fi
 
+  [[ "$(release_record_get_unique "$manifest" backend_host_gateway)" == \
+    "$(release_record_get_unique "$rollback_dir/manifest.txt" backend_host_gateway)" ]] ||
+    remote_activation_refuse 'Candidate runtime networking differs from rollback baseline.'
+  remote_configure_compose "$app_path" "$rollback_dir" || remote_activation_refuse 'Current Compose inputs missing.'
+  for service in portal-backend portal-web; do
+    remote_resolve_single_service_container "$service" || remote_activation_refuse 'Current service missing.'
+    remote_validate_live_gateway "$service" "$REMOTE_RESOLVED_CONTAINER_ID" || remote_activation_refuse 'Current networking changed.'
+  done
+  remote_configure_compose "$app_path" "$candidate_dir" || remote_activation_refuse 'Candidate Compose inputs missing.'
+
   remote_validate_release_source_snapshot "$candidate_dir" "$REMOTE_ACTIVATION_CANDIDATE_ARCHIVE_SHA" ||
     remote_activation_refuse 'Candidate source no longer matches its exact archive.'
   remote_validate_release_source_snapshot "$rollback_dir" "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" ||
@@ -2380,18 +2422,17 @@ remote_activation_preflight() {
     remote_activation_refuse 'Candidate Compose override changed after preparation.'
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 ||
     remote_activation_refuse 'Candidate Compose config is no longer valid.'
-  images_output="$("${REMOTE_COMPOSE[@]}" config --images 2>/dev/null)" ||
+  images_output="$("${REMOTE_COMPOSE[@]}" config --images portal-backend portal-web 2>/dev/null)" ||
     remote_activation_refuse 'Candidate Compose image list is unavailable.'
   remote_validate_compose_images "$manifest" "$images_output" ||
     remote_activation_refuse 'Candidate Compose image set changed after preparation.'
 
   REMOTE_ACTIVATION_CANDIDATE_IDS=()
   REMOTE_ACTIVATION_PREVIOUS_IDS=()
-  for service in backend web telegram; do
+  for service in backend web; do
     case "$service" in
       backend) key_prefix='backend'; expected_rollback_id="$REMOTE_ROLLBACK_BACKEND_ID" ;;
       web) key_prefix='web'; expected_rollback_id="$REMOTE_ROLLBACK_WEB_ID" ;;
-      telegram) key_prefix='telegram'; expected_rollback_id="$REMOTE_ROLLBACK_TELEGRAM_ID" ;;
     esac
     manifest_tag="$(release_record_get_unique "$manifest" "${key_prefix}_image_tag")" ||
       remote_activation_refuse 'Candidate image tag evidence is missing.'
@@ -2505,7 +2546,7 @@ remote_revalidate_activation_cutover_inputs() {
   local candidate_dir="$app_path/.releases/$candidate_commit"
   local actual_env_sha actual_tenant_sha images_output
 
-  (( ${#REMOTE_ACTIVATION_CANDIDATE_IDS[@]} == 3 )) || return 1
+  (( ${#REMOTE_ACTIVATION_CANDIDATE_IDS[@]} == 2 )) || return 1
   release_record_require_private_file "$app_path/.env.production" || return 1
   actual_env_sha="$(sha256sum "$app_path/.env.production" | awk '{print $1}')" || return 1
   [[ "$actual_env_sha" == "$REMOTE_ACTIVATION_ENV_SHA" ]] || return 1
@@ -2515,13 +2556,13 @@ remote_revalidate_activation_cutover_inputs() {
   [[ "$actual_tenant_sha" == "$REMOTE_ACTIVATION_TENANT_SHA" ]] || return 1
   remote_validate_release_override "$candidate_dir" "$candidate_commit" || return 1
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
-  images_output="$("${REMOTE_COMPOSE[@]}" config --images 2>/dev/null)" || return 1
+  remote_validate_rendered_runtime || return 1
+  images_output="$("${REMOTE_COMPOSE[@]}" config --images portal-backend portal-web 2>/dev/null)" || return 1
   remote_validate_compose_images "$candidate_dir/manifest.txt" "$images_output" || return 1
   remote_revalidate_all_images \
     "$candidate_commit" "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" \
     "${REMOTE_ACTIVATION_CANDIDATE_IDS[0]}" \
-    "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]}" \
-    "${REMOTE_ACTIVATION_CANDIDATE_IDS[2]}"
+    "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]}"
 }
 
 remote_validate_transaction() {
@@ -2655,7 +2696,7 @@ remote_capture_candidate_services() {
   REMOTE_ACTIVATION_CONTAINER_RESTARTS=()
   REMOTE_ACTIVATION_CONTAINER_STARTED=()
   index=0
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     if remote_resolve_single_service_container "$service"; then
       :
     else
@@ -2663,6 +2704,7 @@ remote_capture_candidate_services() {
       return "$resolve_exit"
     fi
     container_id="$REMOTE_RESOLVED_CONTAINER_ID"
+    remote_validate_live_gateway "$service" "$container_id" || return 1
     if [[ -n "$REMOTE_SERVICE_READINESS_DEADLINE_SECONDS" ]]; then
       if details="$(remote_run_with_readiness_deadline "${REMOTE_DOCKER[@]}" inspect --format \
         '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
@@ -2711,14 +2753,15 @@ remote_start_and_wait_for_services() {
   local -a expected_ids=("$@")
   local -a original_expected_ids=("${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}")
 
-  (( ${#expected_ids[@]} == 3 )) || return 1
+  (( ${#expected_ids[@]} == 2 )) || return 1
   REMOTE_SERVICE_READINESS_CAPTURE_FAILED='false'
   for expected_id in "${expected_ids[@]}"; do
     [[ "$expected_id" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   done
+  remote_validate_rendered_runtime || return 1
   deadline=$((SECONDS + REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS))
   "$REMOTE_TIMEOUT_BIN" --kill-after=5 "$REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS" \
-    "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never >/dev/null 2>&1 || {
+    "${REMOTE_COMPOSE[@]}" up -d --no-build --pull never portal-backend portal-web >/dev/null 2>&1 || {
     compose_exit=$?
     return "$compose_exit"
   }
@@ -2770,16 +2813,16 @@ remote_recheck_candidate_services() (
   local index service container_id details image running health restarts started
 
   REMOTE_SERVICE_READINESS_DEADLINE_SECONDS=$((SECONDS + REMOTE_SERVICE_READINESS_TIMEOUT_SECONDS))
-  (( ${#REMOTE_ACTIVATION_CONTAINER_IDS[@]} == 3 )) || return 1
-  for index in 0 1 2; do
+  (( ${#REMOTE_ACTIVATION_CONTAINER_IDS[@]} == 2 )) || return 1
+  for index in 0 1; do
     case "$index" in
       0) service='portal-backend' ;;
       1) service='portal-web' ;;
-      2) service='telegram-bridge' ;;
     esac
     container_id="${REMOTE_ACTIVATION_CONTAINER_IDS[$index]}"
     remote_resolve_single_service_container "$service" || return 1
     [[ "$REMOTE_RESOLVED_CONTAINER_ID" == "$container_id" ]] || return 1
+    remote_validate_live_gateway "$service" "$container_id" || return 1
     details="$(remote_run_with_readiness_deadline "${REMOTE_DOCKER[@]}" inspect --format \
       '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
       "$container_id" 2>/dev/null)" || return $?
@@ -3167,20 +3210,19 @@ remote_validate_outcome() {
   local expected_started="${5:-}"
   local protocol kind candidate previous status stage started timestamp epoch key
   local compose_wait_key_count=0 compose_wait_extended_key_count=0 compose_wait_stop_classification_key_count=0 compose_wait_exit_code
-  local compose_wait_portal_backend compose_wait_portal_web compose_wait_telegram_bridge
+  local compose_wait_portal_backend compose_wait_portal_web
   local service compose_wait_service_exit_code compose_wait_service_oom_killed
   local compose_wait_service_log_tail compose_wait_service_stop_classification expected_stop_classification
 
   release_record_validate_keys "$path" protocol_version record_kind candidate_commit previous_commit \
     status failure_stage transaction_started_at_utc recorded_at_utc recorded_at_epoch \
     compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web \
-    compose_wait_telegram_bridge compose_wait_portal_backend_exit_code \
-    compose_wait_portal_web_exit_code compose_wait_telegram_bridge_exit_code \
+    compose_wait_portal_backend_exit_code \
+    compose_wait_portal_web_exit_code \
     compose_wait_portal_backend_stop_classification compose_wait_portal_web_stop_classification \
-    compose_wait_telegram_bridge_stop_classification \
     compose_wait_portal_backend_oom_killed compose_wait_portal_web_oom_killed \
-    compose_wait_telegram_bridge_oom_killed compose_wait_portal_backend_log_tail \
-    compose_wait_portal_web_log_tail compose_wait_telegram_bridge_log_tail || return 1
+    compose_wait_portal_backend_log_tail \
+    compose_wait_portal_web_log_tail || return 1
   protocol="$(release_record_get_unique "$path" protocol_version)" || return 1
   kind="$(release_record_get_unique "$path" record_kind)" || return 1
   candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
@@ -3212,23 +3254,20 @@ remote_validate_outcome() {
   [[ "$started" > "$timestamp" ]] && return 1
   [[ "$epoch" =~ ^[0-9]+$ && "$epoch" -ge 1 ]] || return 1
 
-  for key in compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web \
-    compose_wait_telegram_bridge; do
+  for key in compose_wait_exit_code compose_wait_portal_backend compose_wait_portal_web; do
     if grep -Eq "^${key}=" "$path"; then
       compose_wait_key_count=$((compose_wait_key_count + 1))
     fi
   done
   for key in compose_wait_portal_backend_exit_code compose_wait_portal_web_exit_code \
-    compose_wait_telegram_bridge_exit_code compose_wait_portal_backend_oom_killed \
-    compose_wait_portal_web_oom_killed compose_wait_telegram_bridge_oom_killed \
-    compose_wait_portal_backend_log_tail compose_wait_portal_web_log_tail \
-    compose_wait_telegram_bridge_log_tail; do
+    compose_wait_portal_backend_oom_killed \
+    compose_wait_portal_web_oom_killed \
+    compose_wait_portal_backend_log_tail compose_wait_portal_web_log_tail; do
     if grep -Eq "^${key}=" "$path"; then
       compose_wait_extended_key_count=$((compose_wait_extended_key_count + 1))
     fi
   done
-  for key in compose_wait_portal_backend_stop_classification compose_wait_portal_web_stop_classification \
-    compose_wait_telegram_bridge_stop_classification; do
+  for key in compose_wait_portal_backend_stop_classification compose_wait_portal_web_stop_classification; do
     if grep -Eq "^${key}=" "$path"; then
       compose_wait_stop_classification_key_count=$((compose_wait_stop_classification_key_count + 1))
     fi
@@ -3238,24 +3277,22 @@ remote_validate_outcome() {
       compose_wait_stop_classification_key_count == 0 )) || return 1
     return 0
   fi
-  (( compose_wait_key_count == 0 || compose_wait_key_count == 4 )) || return 1
+  (( compose_wait_key_count == 0 || compose_wait_key_count == 3 )) || return 1
   if (( compose_wait_key_count == 0 )); then
     (( compose_wait_extended_key_count == 0 && compose_wait_stop_classification_key_count == 0 )) || return 1
     return 0
   fi
-  (( compose_wait_extended_key_count == 0 || compose_wait_extended_key_count == 9 )) || return 1
-  (( compose_wait_extended_key_count == 9 || compose_wait_stop_classification_key_count == 0 )) || return 1
-  (( compose_wait_stop_classification_key_count == 0 || compose_wait_stop_classification_key_count == 3 )) || return 1
+  (( compose_wait_extended_key_count == 0 || compose_wait_extended_key_count == 6 )) || return 1
+  (( compose_wait_extended_key_count == 6 || compose_wait_stop_classification_key_count == 0 )) || return 1
+  (( compose_wait_stop_classification_key_count == 0 || compose_wait_stop_classification_key_count == 2 )) || return 1
   compose_wait_exit_code="$(release_record_get_unique "$path" compose_wait_exit_code)" || return 1
   compose_wait_portal_backend="$(release_record_get_unique "$path" compose_wait_portal_backend)" || return 1
   compose_wait_portal_web="$(release_record_get_unique "$path" compose_wait_portal_web)" || return 1
-  compose_wait_telegram_bridge="$(release_record_get_unique "$path" compose_wait_telegram_bridge)" || return 1
   [[ "$compose_wait_exit_code" =~ ^[1-9][0-9]*$ ]] || return 1
   remote_compose_wait_snapshot_is_safe "$compose_wait_portal_backend" || return 1
   remote_compose_wait_snapshot_is_safe "$compose_wait_portal_web" || return 1
-  remote_compose_wait_snapshot_is_safe "$compose_wait_telegram_bridge" || return 1
   (( compose_wait_extended_key_count == 0 )) && return 0
-  for service in portal_backend portal_web telegram_bridge; do
+  for service in portal_backend portal_web; do
     compose_wait_service_exit_code="$(release_record_get_unique \
       "$path" "compose_wait_${service}_exit_code")" || return 1
     compose_wait_service_oom_killed="$(release_record_get_unique \
@@ -3265,7 +3302,7 @@ remote_validate_outcome() {
     remote_compose_wait_container_exit_code_is_safe "$compose_wait_service_exit_code" || return 1
     remote_compose_wait_container_oom_killed_is_safe "$compose_wait_service_oom_killed" || return 1
     remote_compose_wait_log_tail_is_safe "$compose_wait_service_log_tail" || return 1
-    if (( compose_wait_stop_classification_key_count == 3 )); then
+    if (( compose_wait_stop_classification_key_count == 2 )); then
       compose_wait_service_stop_classification="$(release_record_get_unique \
         "$path" "compose_wait_${service}_stop_classification")" || return 1
       remote_compose_wait_stop_classification_is_safe "$compose_wait_service_stop_classification" || return 1
@@ -3365,10 +3402,9 @@ remote_cleanup_superseded_release() {
   tags=(
     "$(remote_release_tag portal-backend "$superseded")"
     "$(remote_release_tag portal-web "$superseded")"
-    "$(remote_release_tag telegram-bridge "$superseded")"
   )
-  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID" "$REMOTE_SUPERSEDED_TELEGRAM_ID")
-  for index in 0 1 2; do
+  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID")
+  for index in 0 1; do
     remote_remove_exact_tag "${tags[$index]}" "${ids[$index]}" || return 1
   done
   rm -rf -- "$release_dir"
@@ -3380,7 +3416,7 @@ remote_validate_superseded_release_cleanup() {
   local current="$3"
   local previous="$4"
   local release_dir="$app_path/.releases/$superseded"
-  local saved_archive saved_backend saved_web saved_telegram actual_id index
+  local saved_archive saved_backend saved_web actual_id index
   local -a tags=() ids=()
 
   [[ -n "$superseded" ]] || return 0
@@ -3390,30 +3426,25 @@ remote_validate_superseded_release_cleanup() {
   saved_archive="$REMOTE_ROLLBACK_ARCHIVE_SHA"
   saved_backend="$REMOTE_ROLLBACK_BACKEND_ID"
   saved_web="$REMOTE_ROLLBACK_WEB_ID"
-  saved_telegram="$REMOTE_ROLLBACK_TELEGRAM_ID"
   if ! remote_load_release_evidence "$release_dir" "$superseded"; then
     REMOTE_ROLLBACK_ARCHIVE_SHA="$saved_archive"
     REMOTE_ROLLBACK_BACKEND_ID="$saved_backend"
     REMOTE_ROLLBACK_WEB_ID="$saved_web"
-    REMOTE_ROLLBACK_TELEGRAM_ID="$saved_telegram"
     return 1
   fi
   REMOTE_SUPERSEDED_ARCHIVE_SHA="$REMOTE_ROLLBACK_ARCHIVE_SHA"
   REMOTE_SUPERSEDED_BACKEND_ID="$REMOTE_ROLLBACK_BACKEND_ID"
   REMOTE_SUPERSEDED_WEB_ID="$REMOTE_ROLLBACK_WEB_ID"
-  REMOTE_SUPERSEDED_TELEGRAM_ID="$REMOTE_ROLLBACK_TELEGRAM_ID"
   REMOTE_ROLLBACK_ARCHIVE_SHA="$saved_archive"
   REMOTE_ROLLBACK_BACKEND_ID="$saved_backend"
   REMOTE_ROLLBACK_WEB_ID="$saved_web"
-  REMOTE_ROLLBACK_TELEGRAM_ID="$saved_telegram"
   remote_validate_release_source_snapshot "$release_dir" "$REMOTE_SUPERSEDED_ARCHIVE_SHA" || return 1
   tags=(
     "$(remote_release_tag portal-backend "$superseded")"
     "$(remote_release_tag portal-web "$superseded")"
-    "$(remote_release_tag telegram-bridge "$superseded")"
   )
-  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID" "$REMOTE_SUPERSEDED_TELEGRAM_ID")
-  for index in 0 1 2; do
+  ids=("$REMOTE_SUPERSEDED_BACKEND_ID" "$REMOTE_SUPERSEDED_WEB_ID")
+  for index in 0 1; do
     actual_id="$(remote_image_id "${tags[$index]}")" || return 1
     [[ "$actual_id" == "${ids[$index]}" ]] || return 1
   done
@@ -3477,19 +3508,14 @@ remote_write_failure_outcome() {
         "compose_wait_exit_code=$REMOTE_COMPOSE_WAIT_EXIT_CODE" \
         "compose_wait_portal_backend=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND" \
         "compose_wait_portal_web=$REMOTE_COMPOSE_WAIT_PORTAL_WEB" \
-        "compose_wait_telegram_bridge=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE" \
         "compose_wait_portal_backend_exit_code=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE" \
         "compose_wait_portal_web_exit_code=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE" \
-        "compose_wait_telegram_bridge_exit_code=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE" \
         "compose_wait_portal_backend_stop_classification=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_STOP_CLASSIFICATION" \
         "compose_wait_portal_web_stop_classification=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_STOP_CLASSIFICATION" \
-        "compose_wait_telegram_bridge_stop_classification=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_STOP_CLASSIFICATION" \
         "compose_wait_portal_backend_oom_killed=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED" \
         "compose_wait_portal_web_oom_killed=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED" \
-        "compose_wait_telegram_bridge_oom_killed=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED" \
         "compose_wait_portal_backend_log_tail=$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL" \
-        "compose_wait_portal_web_log_tail=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL" \
-        "compose_wait_telegram_bridge_log_tail=$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL"
+        "compose_wait_portal_web_log_tail=$REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL"
     fi
   } |
     release_record_write_atomic create "$path" || return 1
@@ -3609,6 +3635,9 @@ remote_block_on_critical_state() {
   local prepared_valid='true' transaction_present='false' transaction_valid='false'
 
   [[ "$operation" == 'prepare' || "$operation" == 'activate' ]] || return 2
+  if [[ -e "$state_dir/recovery" || -L "$state_dir/recovery" ]]; then
+    remote_recovery_validate_completed "$state_dir/recovery" || return 1
+  fi
   if [[ -e "$state_dir/prepared" || -L "$state_dir/prepared" ]]; then
     if prepared_candidate="$(remote_pointer_read "$state_dir/prepared" 2>/dev/null)"; then
       candidate="$prepared_candidate"
@@ -3692,26 +3721,20 @@ remote_print_candidate_evidence() {
   printf 'previous_commit=%s\n' "$previous"
   printf 'candidate_backend_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-unavailable}"
   printf 'candidate_web_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-unavailable}"
-  printf 'candidate_telegram_image_id=%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[2]:-unavailable}"
   if [[ "$stage" == 'compose_wait' ]]; then
     printf 'compose_wait_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_EXIT_CODE"
     printf 'compose_wait_portal_backend=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND"
     printf 'compose_wait_portal_web=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB"
-    printf 'compose_wait_telegram_bridge=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE"
     printf 'compose_wait_portal_backend_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE"
     printf 'compose_wait_portal_web_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE"
-    printf 'compose_wait_telegram_bridge_exit_code=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE"
     printf 'compose_wait_portal_backend_stop_classification=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_STOP_CLASSIFICATION"
     printf 'compose_wait_portal_web_stop_classification=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_STOP_CLASSIFICATION"
-    printf 'compose_wait_telegram_bridge_stop_classification=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_STOP_CLASSIFICATION"
     printf 'compose_wait_portal_backend_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED"
     printf 'compose_wait_portal_web_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED"
-    printf 'compose_wait_telegram_bridge_oom_killed=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED"
     printf 'compose_wait_portal_backend_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL"
     printf 'compose_wait_portal_web_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL"
-    printf 'compose_wait_telegram_bridge_log_tail=%s\n' "$REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL"
   fi
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     if remote_resolve_single_service_container "$service" 2>/dev/null; then
       details="$("${REMOTE_DOCKER[@]}" inspect --format \
         '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}|{{.State.StartedAt}}' \
@@ -3856,7 +3879,7 @@ remote_capture_pre_cutover_service_container_ids() {
   local service
 
   REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS=()
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     if remote_resolve_single_service_container "$service" 2>/dev/null; then
       REMOTE_COMPOSE_WAIT_PRE_CUTOVER_CONTAINER_IDS+=("$REMOTE_RESOLVED_CONTAINER_ID")
     fi
@@ -3870,19 +3893,14 @@ remote_reset_compose_wait_failure_evidence() {
   [[ "$exit_code" =~ ^[1-9][0-9]*$ ]] && REMOTE_COMPOSE_WAIT_EXIT_CODE="$exit_code"
   REMOTE_COMPOSE_WAIT_PORTAL_BACKEND='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_WEB='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_EXIT_CODE='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_WEB_EXIT_CODE='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_STOP_CLASSIFICATION='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_WEB_STOP_CLASSIFICATION='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_STOP_CLASSIFICATION='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_OOM_KILLED='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_BACKEND_LOG_TAIL='unavailable'
   REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL='unavailable'
-  REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL='unavailable'
 }
 
 remote_capture_compose_wait_failure_evidence() {
@@ -3894,7 +3912,7 @@ remote_capture_compose_wait_failure_evidence() {
     return 1
   fi
 
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     details='unavailable'
     REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE='unavailable'
     REMOTE_COMPOSE_WAIT_CAPTURED_STOP_CLASSIFICATION='unavailable'
@@ -3903,10 +3921,10 @@ remote_capture_compose_wait_failure_evidence() {
     case "$service" in
       portal-backend) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[0]:-}" ;;
       portal-web) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[1]:-}" ;;
-      telegram-bridge) expected_image="${REMOTE_ACTIVATION_CANDIDATE_IDS[2]:-}" ;;
     esac
     if remote_resolve_single_service_container "$service" true 2>/dev/null; then
       container_id="$REMOTE_RESOLVED_CONTAINER_ID"
+      remote_validate_live_gateway "$service" "$container_id" || return 1
       details="$("${REMOTE_DOCKER[@]}" inspect --format \
         '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}' \
         "$container_id" 2>/dev/null || printf unavailable)"
@@ -3937,13 +3955,6 @@ remote_capture_compose_wait_failure_evidence() {
         REMOTE_COMPOSE_WAIT_PORTAL_WEB_STOP_CLASSIFICATION="$REMOTE_COMPOSE_WAIT_CAPTURED_STOP_CLASSIFICATION"
         REMOTE_COMPOSE_WAIT_PORTAL_WEB_OOM_KILLED="$REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED"
         REMOTE_COMPOSE_WAIT_PORTAL_WEB_LOG_TAIL="$REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL"
-        ;;
-      telegram-bridge)
-        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE="$details"
-        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_EXIT_CODE="$REMOTE_COMPOSE_WAIT_CAPTURED_EXIT_CODE"
-        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_STOP_CLASSIFICATION="$REMOTE_COMPOSE_WAIT_CAPTURED_STOP_CLASSIFICATION"
-        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_OOM_KILLED="$REMOTE_COMPOSE_WAIT_CAPTURED_OOM_KILLED"
-        REMOTE_COMPOSE_WAIT_TELEGRAM_BRIDGE_LOG_TAIL="$REMOTE_COMPOSE_WAIT_CAPTURED_LOG_TAIL"
         ;;
     esac
   done
@@ -4055,15 +4066,14 @@ remote_run_exact_rollback() {
   remote_load_release_evidence "$previous_dir" "$previous_commit" || return 1
   [[ "$REMOTE_ROLLBACK_ARCHIVE_SHA" == "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" &&
     "$REMOTE_ROLLBACK_BACKEND_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[0]}" &&
-    "$REMOTE_ROLLBACK_WEB_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[1]}" &&
-    "$REMOTE_ROLLBACK_TELEGRAM_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[2]}" ]] || return 1
+    "$REMOTE_ROLLBACK_WEB_ID" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[1]}" ]] || return 1
   remote_validate_release_source_snapshot "$previous_dir" "$REMOTE_ACTIVATION_PREVIOUS_ARCHIVE_SHA" || return 1
   remote_validate_release_override "$previous_dir" "$previous_commit" || return 1
   [[ "$(remote_image_id "$(remote_release_tag portal-backend "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[0]}" ]] || return 1
   [[ "$(remote_image_id "$(remote_release_tag portal-web "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[1]}" ]] || return 1
-  [[ "$(remote_image_id "$(remote_release_tag telegram-bridge "$previous_commit")")" == "${REMOTE_ACTIVATION_PREVIOUS_IDS[2]}" ]] || return 1
   remote_configure_compose "$app_path" "$previous_dir" || return 1
   "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  remote_validate_rendered_runtime || return 1
   remote_start_and_wait_for_services "${REMOTE_ACTIVATION_PREVIOUS_IDS[@]}" || return 1
 
   saved_candidate_ids="$(printf '%s\n' "${REMOTE_ACTIVATION_CANDIDATE_IDS[@]}")"
@@ -4103,7 +4113,7 @@ remote_cleanup_failed_candidate() {
     "$release_dir" == "$app_path/.releases/"* && -d "$release_dir" && ! -L "$release_dir" ]] || return 1
   [[ "$(remote_pointer_read "$state_dir/prepared")" == "$candidate" ]] || return 1
   remote_validate_prepared_manifest "$manifest" "$candidate" || return 1
-  for service in backend web telegram; do
+  for service in backend web; do
     tag="$(release_record_get_unique "$manifest" "${service}_image_tag")" || return 1
     image_id="$(release_record_get_unique "$manifest" "${service}_image_id")" || return 1
     [[ "$(remote_image_id "$tag")" == "$image_id" ]] || return 1
@@ -4112,7 +4122,7 @@ remote_cleanup_failed_candidate() {
   done
   remote_update_transaction "$transaction" "$candidate" \
     "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" rollback_cleanup_started || return 1
-  for index in 0 1 2; do
+  for index in 0 1; do
     if ! remote_remove_exact_tag "${tags[$index]}" "${ids[$index]}"; then
       while (( removed_count > 0 )); do
         removed_count=$((removed_count - 1))
@@ -4124,20 +4134,20 @@ remote_cleanup_failed_candidate() {
   done
   if ! remote_update_transaction "$transaction" "$candidate" \
     "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_tags_removed; then
-    for index in 0 1 2; do
+    for index in 0 1; do
       remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
     done
     return 1
   fi
   if ! remote_update_transaction "$transaction" "$candidate" \
     "$REMOTE_ACTIVATION_PREVIOUS_COMMIT" "$REMOTE_ACTIVATION_POLICY" candidate_artifact_removal_started; then
-    for index in 0 1 2; do
+    for index in 0 1; do
       remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
     done
     return 1
   fi
   if ! rm -rf -- "$release_dir"; then
-    for index in 0 1 2; do
+    for index in 0 1; do
       remote_tag_exact_image "${ids[$index]}" "${tags[$index]}" || true
     done
     return 1
@@ -4692,12 +4702,237 @@ remote_parse_options() {
   fi
 }
 
+# Recovery is explicit, create-only and independent from prepare. No runtime writes.
+remote_recovery_put() {
+  local source="$1" target="$2"
+  "$REMOTE_PYTHON_BIN" - "$source" "$target" <<'PY'
+import os, pathlib, stat, sys, tempfile
+source, target = map(pathlib.Path, sys.argv[1:])
+if source.is_symlink() or not source.is_file() or target.is_symlink():
+    raise SystemExit(1)
+if target.exists():
+    if not target.is_file() or target.read_bytes() != source.read_bytes() or stat.S_IMODE(target.stat().st_mode) != 0o600:
+        raise SystemExit(1)
+else:
+    fd, name = tempfile.mkstemp(prefix='.recovery-write.', dir=target.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(source.read_bytes()); stream.flush(); os.fsync(stream.fileno())
+        os.link(name, target)  # Never replaces existing evidence.
+    finally:
+        os.unlink(name)
+fd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+try: os.fsync(fd)
+finally: os.close(fd)
+PY
+}
+
+remote_recovery_validate_completed() {
+  local directory="$1" journal="$1/journal.txt" completed="$1/completed.txt" key value
+  remote_require_private_directory "$directory" || return 1
+  release_record_validate_keys "$journal" protocol_version record_kind release_commit archive_sha256 \
+    retired_previous backend_host_gateway backend_image_id web_image_id approval_ref recorded_at_utc || return 1
+  [[ "$(release_record_get_unique "$journal" protocol_version)" == "$REMOTE_PROTOCOL_VERSION" &&
+    "$(release_record_get_unique "$journal" record_kind)" == baseline_recovery ]] || return 1
+  for key in release_commit retired_previous; do
+    value="$(release_record_get_unique "$journal" "$key")" || return 1
+    release_record_is_sha "$value" || return 1
+  done
+  release_record_is_checksum "$(release_record_get_unique "$journal" archive_sha256)" || return 1
+  remote_validate_host_gateway "$(release_record_get_unique "$journal" backend_host_gateway)" || return 1
+  for key in backend_image_id web_image_id; do
+    value="$(release_record_get_unique "$journal" "$key")" || return 1
+    [[ "$value" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+  done
+  release_record_is_approval_ref "$(release_record_get_unique "$journal" approval_ref)" || return 1
+  release_record_is_timestamp "$(release_record_get_unique "$journal" recorded_at_utc)" || return 1
+  release_record_require_private_file "$completed" && cmp -s "$journal" "$completed"
+}
+
+remote_recovery_validate_root_subset() {
+  local app="$1" source="$2"
+  local -a rsync_arguments=()
+  remote_root_rsync_arguments rsync_arguments
+  "$REMOTE_PYTHON_BIN" - "$app" "$source" "${rsync_arguments[@]}" <<'PY'
+import fnmatch, os, pathlib, sys
+app, source = map(pathlib.Path, sys.argv[1:3])
+protected = [argument.removeprefix('--exclude=/') for argument in sys.argv[3:] if argument.startswith('--exclude=/')]
+def is_protected(name):
+    return any(fnmatch.fnmatchcase(name, pattern) for pattern in protected)
+for root, directories, files in os.walk(app, followlinks=False):
+    root=pathlib.Path(root)
+    if root == app:
+        directories[:] = [x for x in directories if not is_protected(x)]
+        files = [x for x in files if not is_protected(x)]
+    for name in directories + files:
+        path=root/name; expected=source/path.relative_to(app)
+        if path.is_symlink() or expected.is_symlink(): raise SystemExit(1)
+        if path.is_dir():
+            if not expected.is_dir(): raise SystemExit(1)
+        elif path.is_file() and expected.is_file():
+            if path.read_bytes() != expected.read_bytes(): raise SystemExit(1)
+            if bool(path.stat().st_mode & 0o111) != bool(expected.stat().st_mode & 0o111): raise SystemExit(1)
+        else: raise SystemExit(1)
+PY
+}
+
+remote_recovery_runtime() {
+  local app="$1" release="$2" backend="$3" web="$4" service expected details
+  remote_configure_compose "$app" "$release" || return 1
+  remote_validate_rendered_runtime || return 1
+  for service in portal-backend portal-web; do
+    expected="$backend"
+    [[ "$service" != portal-web ]] || expected="$web"
+    [[ "$(remote_image_id "$(remote_release_tag "$service" "${release##*/}")")" == "$expected" ]] || return 1
+    remote_resolve_single_service_container "$service" || return 1
+    details="$("${REMOTE_DOCKER[@]}" inspect --format '{{.Image}}|{{.State.Running}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.RestartCount}}' "$REMOTE_RESOLVED_CONTAINER_ID")" || return 1
+    [[ "$details" == "$expected|true|healthy|"* || "$details" == "$expected|true|none|"* ]] || return 1
+    remote_validate_live_gateway "$service" "$REMOTE_RESOLVED_CONTAINER_ID" || return 1
+  done
+}
+
+remote_recovery_require_owned_directory() {
+  local path="$1" mode
+  [[ -d "$path" && ! -L "$path" && "$(stat -c '%u' "$path")" == "$(id -u)" ]] || return 1
+  mode="$(stat -c '%a' "$path")" || return 1
+  case "$mode" in 700|750|755) ;; *) return 1 ;; esac
+}
+
+remote_locked_recover_baseline() {
+  local app="$1" archive="$2" checksum="$3" commit="$4" retired="$5" host="$6" backend="$7" web="$8" approval="$9"
+  local state="$app/.release-state" release="$app/.releases/$commit" recovery="$app/.release-state/recovery"
+  local timestamp temp name entry
+  local -a entries=() links=()
+  REMOTE_PYTHON_BIN="$(remote_select_python)" || return 1
+  remote_select_docker && remote_select_activation_tools || return 1
+  remote_require_private_directory "$state" && remote_recovery_require_owned_directory "$app/.releases" &&
+    remote_recovery_require_owned_directory "$release" && remote_recovery_require_owned_directory "$release/source" || return 1
+  release_record_require_private_file "$app/.env.production" || return 1
+  [[ "$(remote_pointer_read "$state/current")" == "$commit" ]] || return 1
+  [[ "$retired" != "$commit" && ! -e "$app/.releases/$retired" && ! -L "$app/.releases/$retired" ]] || return 1
+  remote_find_paths links "$state" "$app/.releases" -type l || return 1
+  (( ${#links[@]} == 0 )) || return 1
+  remote_find_paths entries "$app/.releases" -mindepth 1 -maxdepth 1 || return 1
+  (( ${#entries[@]} == 1 )) || return 1
+  remote_find_paths entries "$state" -mindepth 1 -maxdepth 1 || return 1
+  for entry in "${entries[@]}"; do
+    name="${entry##*/}"
+    case "$name" in current|previous|deploy.lock|recovery|history|decisions) ;; *) return 1 ;; esac
+  done
+  for name in history decisions; do
+    if [[ -e "$state/$name" ]]; then
+      remote_require_private_directory "$state/$name" || return 1
+      remote_find_paths entries "$state/$name" -mindepth 1 || return 1
+      (( ${#entries[@]} == 0 )) || return 1
+    fi
+  done
+  if [[ -e "$state/previous" ]]; then
+    [[ "$(remote_pointer_read "$state/previous")" == "$retired" ]] || return 1
+  else
+    # Missing pointer is resumable only after the exact durable journal exists.
+    release_record_require_private_file "$recovery/journal.txt" || return 1
+    [[ "$(release_record_get_unique "$recovery/journal.txt" retired_previous)" == "$retired" ]] || return 1
+  fi
+  remote_validate_release_source_snapshot "$release" "$checksum" "$archive" || return 1
+  remote_recovery_validate_root_subset "$app" "$release/source" || return 1
+  [[ -f "$release/compose.release.yaml" && ! -L "$release/compose.release.yaml" ]] || return 1
+  cmp -s "$release/compose.release.yaml" <(remote_override_bytes "$commit" "$host") || return 1
+  REMOTE_COMPOSE_HOST_GATEWAY="$host"
+  remote_recovery_runtime "$app" "$release" "$backend" "$web" || return 1
+  if [[ -e "$recovery/journal.txt" ]]; then
+    timestamp="$(release_record_get_unique "$recovery/journal.txt" recorded_at_utc)" || return 1
+    release_record_is_timestamp "$timestamp" || return 1
+  else
+    timestamp="$(remote_epoch_to_utc "$(remote_now_epoch)")" || return 1
+  fi
+  temp="$(mktemp -d /tmp/chatwoot-client-portal-v2-recovery.XXXXXX)" || return 1
+  # Keep staging under a subshell trap; durable evidence lives exclusively in recovery/.
+  (
+    trap 'rm -rf -- "$temp"' EXIT
+    umask 077
+    printf '%s\n' "protocol_version=$REMOTE_PROTOCOL_VERSION" 'record_kind=baseline_recovery' \
+      "release_commit=$commit" "archive_sha256=$checksum" "retired_previous=$retired" \
+      "backend_host_gateway=$host" "backend_image_id=$backend" "web_image_id=$web" \
+      "approval_ref=$approval" "recorded_at_utc=$timestamp" >"$temp/journal.txt"
+    if [[ ! -e "$recovery" ]]; then mkdir -m 0700 "$recovery" || exit 1; fi
+    remote_require_private_directory "$recovery" || exit 1
+    remote_recovery_put "$temp/journal.txt" "$recovery/journal.txt" || exit 1
+    # All following changes can resume only with this identical journal.
+    chmod 0700 "$app/.releases" "$release" "$release/source" || exit 1
+    remote_fsync_path_and_parent "$recovery" || exit 1
+    remote_recovery_put "$archive" "$release/source.tar.gz" || exit 1
+    chmod 0600 "$release/compose.release.yaml" || exit 1
+    cp "$release/compose.release.yaml" "$temp/compose.release.yaml" || exit 1
+    remote_write_imported_manifest "$temp/manifest.txt" "$commit" "$checksum" "$timestamp" "$backend" "$web" "$host" || exit 1
+    remote_recovery_put "$temp/manifest.txt" "$release/manifest.txt" || exit 1
+    for name in history decisions; do
+      [[ -d "$state/$name" ]] || mkdir -m 0700 "$state/$name" || exit 1
+    done
+    remote_sync_root_source "$app" "$release" && remote_verify_root_source "$app" "$release" || exit 1
+    remote_validate_release_source_snapshot "$release" "$checksum" || exit 1
+    remote_recovery_runtime "$app" "$release" "$backend" "$web" || exit 1
+    printf '%s\n' "protocol_version=$REMOTE_PROTOCOL_VERSION" 'record_kind=active_source' \
+      "app=$REMOTE_APP_NAME" "source_commit=$commit" "archive_sha256=$checksum" \
+      "activated_at_utc=$timestamp" >"$temp/marker.txt"
+    release_marker_validate_active "$temp/marker.txt" || exit 1
+    remote_recovery_put "$temp/marker.txt" "$app/DEPLOY_SOURCE.txt" || exit 1
+    [[ "$(remote_pointer_read "$state/current")" == "$commit" ]] || exit 1
+    if [[ -e "$state/previous" ]]; then
+      [[ "$(remote_pointer_read "$state/previous")" == "$retired" ]] || exit 1
+      rm -- "$state/previous" || exit 1
+      remote_fsync_path_and_parent "$state" || exit 1
+    fi
+    remote_recovery_put "$recovery/journal.txt" "$recovery/completed.txt" || exit 1
+    remote_validate_state_layout "$app" && remote_inspect_current "$app" || exit 1
+  ) || return 1
+  printf 'Recovered baseline: %s\nRetired missing previous: %s\n' "$commit" "$retired"
+  remote_emit_status baseline_recovered
+}
+
+remote_parse_recovery_options() {
+  local locked="$1"; shift
+  local app_path='' archive='' checksum='' commit='' retired='' host='' backend='' web='' approval='' name value argument
+  local -A seen=()
+  for argument in "$@"; do
+    [[ "$argument" == --*=* ]] || return 2
+    name="${argument%%=*}"; value="${argument#*=}"
+    [[ -n "$value" && -z "${seen[$name]:-}" ]] || return 2
+    seen[$name]=true
+    case "$name" in
+      --app-path) app_path="$value" ;; --archive-path) archive="$value" ;;
+      --archive-sha256) checksum="$value" ;; --commit) commit="$value" ;;
+      --retire-missing-previous) retired="$value" ;; --backend-host-gateway) host="$value" ;;
+      --backend-image-id) backend="$value" ;; --web-image-id) web="$value" ;;
+      --approval-ref) approval="$value" ;; *) return 2 ;;
+    esac
+  done
+  [[ "$app_path" == "$REMOTE_APP_PATH" && "$archive" =~ ^/tmp/chatwoot-client-portal-v2-staged\.[A-Za-z0-9]+/source\.tar\.gz$ ]] || return 2
+  release_record_is_sha "$commit" && release_record_is_sha "$retired" && release_record_is_checksum "$checksum" &&
+    release_record_is_approval_ref "$approval" && remote_validate_host_gateway "$host" || return 2
+  [[ "$backend" =~ ^sha256:[0-9a-f]{64}$ && "$web" =~ ^sha256:[0-9a-f]{64}$ ]] || return 2
+  REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app_path")" || return 2
+  if [[ "$locked" == true ]]; then
+    remote_locked_recover_baseline "$REMOTE_EFFECTIVE_APP_PATH" "$archive" "$checksum" "$commit" "$retired" "$host" "$backend" "$web" "$approval"
+  else
+    remote_require_private_directory "$REMOTE_EFFECTIVE_APP_PATH/.release-state" || return 1
+    remote_lock_file_is_safe "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" || return 1
+    flock --nonblock --close --conflict-exit-code 75 "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" \
+      "$SELF_PATH" __locked-recover-baseline "$@"
+  fi
+}
+
 remote_main() {
   local phase="${1:-}"
   local parse_exit
   shift || true
 
   case "$phase" in
+    recover-baseline|__locked-recover-baseline)
+      REMOTE_FAILURE_STATUS='baseline_recovery_failed'
+      local locked=false
+      [[ "$phase" != __locked-recover-baseline ]] || locked=true
+      remote_parse_recovery_options "$locked" "$@" || remote_fail 'Baseline recovery refused or interrupted; journal retained for verified resume.' baseline_recovery_failed
+      ;;
     bootstrap)
       if remote_parse_options public "$@"; then
         :

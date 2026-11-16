@@ -234,9 +234,10 @@ authorizes activation. The staged release reports status and completes
 all-tenant public smoke before success; do not replace it with direct service
 rebuild/restart commands or a tenant spot check.
 
-Telegram bridge code is part of the same three-service staged candidate. Its
-webhook setup remains a separate tenant operator operation and is not an
-activation option.
+Protocol 2 releases manage only `portal-backend` and `portal-web`. Telegram
+bridge is intentionally disabled on Timeweb and remains outside the release
+lifecycle. Re-enabling it requires a separate reviewed contract change. Migrated
+baseline recovery is an explicit operation in the canonical deployment guide.
 
 ## Clean Reinstall Or Reconfigure
 

@@ -128,7 +128,10 @@ execution-plan детали здесь не хранятся.
 - Production code deployment tooling now has one exact-commit staged authority
   for local operators and GitHub Actions: prepare is non-cutover, activate uses
   prebuilt images, bounded all-tenant smoke, a pre-cutover journal and
-  policy-aware exact rollback.
+  policy-aware exact rollback. Protocol 2 releases only backend/web and binds
+  canonical host-gateway configuration to immutable release evidence. Migrated
+  baselines have an explicit journaled recovery operation that restores source
+  evidence without starting containers or changing the database.
 - Clean reinstall source delivery uses a separately approved empty-root
   bootstrap that cannot configure or start production. The staged tooling is
   locally verified with fake runtime coverage; no real staged production
@@ -330,10 +333,11 @@ execution-plan детали здесь не хранятся.
 
 ## Recommended Next Step
 
-- Complete the approved portal-only release and baseline-recovery scope
-  (`F-OPS-008`) before requesting production preparation for the contact-profile
-  update. Telegram bridge remains disabled; production recovery, preparation
-  and activation each require explicit approval.
+- Publish the verified portal-only release tooling, then perform the separately
+  approved Timeweb baseline recovery, preparation and activation for the contact
+  profile update. Exact recovery inputs and closure evidence are in
+  [portal-only-release-plan.md](./portal-only-release-plan.md). Telegram bridge
+  remains disabled.
 - After explicit approval, merge the verified PWA share-target branch into
   `main`, then complete the real-device platform smoke from `F-PWA-006` before
   advertising or rolling out system sharing in production.

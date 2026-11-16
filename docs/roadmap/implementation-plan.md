@@ -66,6 +66,14 @@ stable docs.
 
 ## Current Roadmap
 
+### Confirmed Follow-Up: Portal-Only Release
+
+Пользователь согласовал закрытие `F-OPS-008`: выпуск backend/web без запуска
+неиспользуемого Telegram bridge и проверяемое восстановление migrated baseline.
+Реализация и independent review завершены; production rollout ожидает согласования.
+Scope и evidence: [portal-only-release-plan.md](./portal-only-release-plan.md).
+Production recovery, prepare и activate сохраняют отдельные approval boundaries.
+
 ### Contact Profile Refresh (Confirmed Follow-Up)
 
 User-approved correction to the existing read-only profile/chat baseline:

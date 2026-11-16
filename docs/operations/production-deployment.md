@@ -28,11 +28,16 @@ files, without replacing SSH host trust.
 
 ## Routine Staged Release
 
-Current release blocker: [F-OPS-008](../findings/F-OPS-008-staged-release-disabled-telegram-bridge.md).
-The Timeweb runtime intentionally excludes Telegram bridge, while the staged
-script still requires it for release evidence and activation. Do not run the
-commands below until a separately approved release-contract change resolves
-that mismatch. Starting the disabled bridge is not a profile-release prerequisite.
+Protocol 2 has the fixed service set `portal-backend,portal-web`. Prepare,
+activation, diagnostics, image cleanup and rollback operate only on these two
+application services and their existing Compose dependencies. Telegram bridge
+is intentionally disabled on Timeweb; this release neither starts nor stops it.
+Re-enabling it requires a separate reviewed release-contract change.
+
+Each manifest binds the canonical Compose override checksum and the backend
+host-gateway setting. The value is inherited from verified current evidence;
+rendered Compose and live Docker must agree. An arbitrary live override cannot
+be imported. Protocol 1 records cannot authorize protocol 2 activation.
 
 Before either command, obtain approval for the exact production operation and
 complete the slice checks. The script itself requires clean local `main`, a
@@ -101,7 +106,7 @@ automatically restores the exact previous release and still exits non-zero with
 `activation_failed_publication`. The clean-install-only phase reports
 `bootstrap_completed`, `bootstrap_refused_nonempty` or `bootstrap_failed`.
 Every status other than `prepared`, `activation_succeeded` and
-`bootstrap_completed` exits non-zero.
+`bootstrap_completed` and `baseline_recovered` exits non-zero.
 
 Preparation records non-secret source, checksum, migration, image and active
 tenant evidence in `.release-state/` and `.releases/`. Retention is bounded to
@@ -121,6 +126,51 @@ The active source marker is a `key=value` record. For staged runtime, read
 `source_commit=` from `DEPLOY_SOURCE.txt` and confirm it agrees with the
 `.release-state/current` pointer; the legacy marker format is only transitional
 adoption evidence until a first staged activation establishes this state.
+
+Changes to the release protocol or Compose configuration additionally require
+`bash scripts/test-production-runtime-compose.sh`. This read-only integration
+uses the installed Docker Compose CLI to verify the real template's service
+selection and gateway rendering; it never starts containers.
+
+## Explicit Recovery Of A Migrated Baseline
+
+A migrated installation with current source/containers but missing archive,
+manifest or root marker cannot use ordinary prepare. The operator first reviews
+exact current SHA, both live image IDs, complete source-tree equality, canonical
+network settings and the missing previous release. Only then approve
+`recover-baseline` for that evidence:
+
+```bash
+scripts/deploy-production-staged.sh recover-baseline \
+  --host=lancora@5.129.253.99 --ssh-port=22 \
+  --identity-file="$HOME/.ssh/production_deploy_key" \
+  --known-hosts-file="$HOME/.ssh/production_known_hosts" \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --commit=<VERIFIED_CURRENT_FULL_SHA> \
+  --retire-missing-previous=<VERIFIED_MISSING_PREVIOUS_FULL_SHA> \
+  --backend-host-gateway=app.lancora.ru \
+  --backend-image-id=sha256:<VERIFIED_BACKEND_IMAGE_ID> \
+  --web-image-id=sha256:<VERIFIED_WEB_IMAGE_ID> \
+  --approval-ref=<APPROVAL_REFERENCE>
+```
+
+The command uses the same clean-main, fresh-origin, trusted SSH and deploy-lock
+boundaries. It compares the complete release source (including executable modes,
+extra files and symlinks) to the exact Git archive before writing. Recovery
+creates archive, manifest, root source mirror and source marker without build,
+pull, migration or container changes. Existing conflicting files block recovery;
+protected runtime paths and environment remain intact. The canonical override
+is preserved byte-for-byte and made mode 0600.
+
+`.release-state/recovery/journal.txt` durably records exact inputs before writes.
+The explicit previous SHA retires only a pointer whose release directory is
+absent; its value remains in the journal. Repeating the identical command resumes
+verified writes. Changed inputs or conflicts require operator investigation;
+never remove the journal to force preparation. Until identical `completed.txt`
+evidence exists, prepare and activate remain blocked. `baseline_recovered` is
+the only successful recovery status; `baseline_recovery_failed` exits nonzero.
+Recovery is not release activation. Review the recovered baseline, then use the
+normal prepare/activate procedure above.
 
 ## SSH Host Authentication And GitHub
 

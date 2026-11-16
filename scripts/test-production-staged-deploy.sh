@@ -61,13 +61,11 @@ FAKE_NOW_EPOCH='1784203200'
 
 readonly CURRENT_BACKEND_ID="sha256:$(printf '1%.0s' {1..64})"
 readonly CURRENT_WEB_ID="sha256:$(printf '2%.0s' {1..64})"
-readonly CURRENT_TELEGRAM_ID="sha256:$(printf '3%.0s' {1..64})"
 readonly CANDIDATE_BACKEND_ID="sha256:$(printf '4%.0s' {1..64})"
 readonly CANDIDATE_WEB_ID="sha256:$(printf '5%.0s' {1..64})"
-readonly CANDIDATE_TELEGRAM_ID="sha256:$(printf '6%.0s' {1..64})"
 readonly EXTERNAL_POSTGRES_ID="sha256:$(printf '7%.0s' {1..64})"
-export CURRENT_BACKEND_ID CURRENT_WEB_ID CURRENT_TELEGRAM_ID
-export CANDIDATE_BACKEND_ID CANDIDATE_WEB_ID CANDIDATE_TELEGRAM_ID EXTERNAL_POSTGRES_ID
+export CURRENT_BACKEND_ID CURRENT_WEB_ID
+export CANDIDATE_BACKEND_ID CANDIDATE_WEB_ID EXTERNAL_POSTGRES_ID
 
 fake_release_image_id() {
   local commit="$1"
@@ -214,7 +212,6 @@ initialize_containers() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     container-backend portal-backend "$CURRENT_BACKEND_ID" true healthy 0 2026-07-16T12:00:00Z \
     container-web portal-web "$CURRENT_WEB_ID" true healthy 0 2026-07-16T12:00:00Z \
-    container-telegram telegram-bridge "$CURRENT_TELEGRAM_ID" true none 0 2026-07-16T12:00:00Z \
     >"$container_file"
 }
 
@@ -227,7 +224,6 @@ release_image_id() {
     case "$service" in
       portal-backend) printf '%s\n' "$CURRENT_BACKEND_ID" ;;
       portal-web) printf '%s\n' "$CURRENT_WEB_ID" ;;
-      telegram-bridge) printf '%s\n' "$CURRENT_TELEGRAM_ID" ;;
       *) exit 78 ;;
     esac
     return
@@ -260,14 +256,13 @@ set_release_containers() {
 
   [[ "$release_commit" != "$FAKE_CANDIDATE_COMMIT" ]] || candidate='true'
   : >"$container_file.tmp"
-  for service in portal-backend portal-web telegram-bridge; do
+  for service in portal-backend portal-web; do
     running=true
     if [[ "$service" == "${FAKE_SERVICE_NOT_RUNNING:-}" ||
       ( "$candidate" == 'true' && "$service" == "${FAKE_CANDIDATE_SERVICE_NOT_RUNNING:-}" ) ]]; then
       running=false
     fi
     health=healthy
-    [[ "$service" != 'telegram-bridge' ]] || health=none
     [[ "$service" != "${FAKE_SERVICE_WITHOUT_HEALTHCHECK:-}" ]] || health=none
     [[ "$service" != "${FAKE_SERVICE_UNHEALTHY:-}" ]] || health=unhealthy
     if [[ "$candidate" == 'true' && "$service" == "${FAKE_CANDIDATE_SERVICE_UNHEALTHY:-}" ]]; then
@@ -286,10 +281,6 @@ set_release_containers() {
       portal-web)
         key='web_image_id'
         container_id='container-web'
-        ;;
-      telegram-bridge)
-        key='telegram_image_id'
-        container_id='container-telegram'
         ;;
     esac
     if [[ "$candidate" == 'true' &&
@@ -321,8 +312,8 @@ tag_lookup() {
   local value
 
   case "$reference" in
-    "$CURRENT_BACKEND_ID"|"$CURRENT_WEB_ID"|"$CURRENT_TELEGRAM_ID"|\
-      "$CANDIDATE_BACKEND_ID"|"$CANDIDATE_WEB_ID"|"$CANDIDATE_TELEGRAM_ID"|\
+    "$CURRENT_BACKEND_ID"|"$CURRENT_WEB_ID"|\
+      "$CANDIDATE_BACKEND_ID"|"$CANDIDATE_WEB_ID"|\
       "$EXTERNAL_POSTGRES_ID")
       printf '%s\n' "$reference"
       return
@@ -387,6 +378,11 @@ case "${1:-}" in
     format="${3:-}"
     target="${@: -1}"
     case "$format" in
+      '{{json .HostConfig.ExtraHosts}}')
+        if [[ "$(container_field "$target" service)" == 'portal-backend' && "${FAKE_LIVE_GATEWAY:-none}" != 'none' ]]; then
+          printf '["%s:host-gateway"]\n' "$FAKE_LIVE_GATEWAY"
+        else printf '[]\n'; fi
+        ;;
       '{{.Image}}') container_image "$target" ;;
       '{{.State.Running}}') container_field "$target" running ;;
       '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}') container_field "$target" health ;;
@@ -487,6 +483,14 @@ case "${1:-}" in
     shift || true
     case "$compose_command" in
       config)
+        if [[ "$*" == '--format json portal-backend portal-web' ]]; then
+          python3 - "${FAKE_RENDERED_GATEWAY:-none}" <<'PYJSON'
+import json, sys
+host=sys.argv[1]
+print(json.dumps({"services": {"portal-backend": {"extra_hosts": {host: "host-gateway"} if host != "none" else {}}, "portal-web": {}}}))
+PYJSON
+          exit 0
+        fi
         if [[ "${1:-}" == '--quiet' ]]; then
           [[ "${FAKE_COMPOSE_CONFIG_FAIL:-false}" != 'true' ]] || exit 80
           exit 0
@@ -495,8 +499,7 @@ case "${1:-}" in
           [[ "${FAKE_COMPOSE_CONFIG_IMAGES_FAIL:-false}" != 'true' ]] || exit 80
           printf '%s\n' \
             "chatwoot-client-portal-v2-portal-backend:$release_commit" \
-            "chatwoot-client-portal-v2-portal-web:$release_commit" \
-            "chatwoot-client-portal-v2-telegram-bridge:$release_commit"
+            "chatwoot-client-portal-v2-portal-web:$release_commit"
           if [[ -n "${FAKE_EXTERNAL_IMAGES:-}" ]]; then
             printf '%s\n' "$FAKE_EXTERNAL_IMAGES"
           fi
@@ -505,7 +508,7 @@ case "${1:-}" in
         exit 78
         ;;
       build)
-        [[ "$*" == 'portal-backend portal-web telegram-bridge' ]] || exit 78
+        [[ "$*" == 'portal-backend portal-web' ]] || exit 78
         [[ "${FAKE_COMPOSE_BUILD_FAIL:-false}" != 'true' ]] || exit 81
         tag_set "chatwoot-client-portal-v2-portal-backend:$FAKE_CANDIDATE_COMMIT" \
           "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-backend)"
@@ -516,8 +519,6 @@ case "${1:-}" in
         [[ "${FAKE_COMPOSE_BUILD_FAIL_AFTER_BACKEND:-false}" != 'true' ]] || exit 81
         tag_set "chatwoot-client-portal-v2-portal-web:$FAKE_CANDIDATE_COMMIT" \
           "$(release_image_id "$FAKE_CANDIDATE_COMMIT" portal-web)"
-        tag_set "chatwoot-client-portal-v2-telegram-bridge:$FAKE_CANDIDATE_COMMIT" \
-          "$(release_image_id "$FAKE_CANDIDATE_COMMIT" telegram-bridge)"
         ;;
       ps)
         include_stopped='false'
@@ -541,7 +542,6 @@ case "${1:-}" in
         case "$service" in
           portal-backend) container_id='container-backend' ;;
           portal-web) container_id='container-web' ;;
-          telegram-bridge) container_id='container-telegram' ;;
           *) exit 1 ;;
         esac
         if [[ "${FAKE_CANDIDATE_RECREATES_CONTAINERS:-false}" == 'true' &&
@@ -551,6 +551,8 @@ case "${1:-}" in
         printf '%s\n' "$container_id"
         [[ "$service" != "${FAKE_COMPOSE_PS_FAIL_SERVICE:-}" ]] || exit 87
         if [[ "$service" == "${FAKE_DUPLICATE_SERVICE_CONTAINER:-}" ||
+          ( "$service" == "${FAKE_DUPLICATE_CANDIDATE_SERVICE_CONTAINER:-}" &&
+            "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$FAKE_CANDIDATE_COMMIT" ) ||
           ( "$service" == "${FAKE_SCALE_SERVICE_AFTER_CURL:-}" &&
             -e "$FAKE_CURL_STATE_DIR/scale-triggered" ) ]]; then
           printf '%s\n' "$container_id-duplicate"
@@ -577,8 +579,8 @@ case "${1:-}" in
           fi
           exit 0
         fi
-        [[ "$*" == '-d --no-build --pull never' ||
-          "$*" == '-d --no-build --pull never --wait --wait-timeout 120' ]] || exit 82
+        [[ "$*" == '-d --no-build --pull never portal-backend portal-web' ||
+          "$*" == '-d --no-build --pull never portal-backend portal-web --wait --wait-timeout 120' ]] || exit 82
         "$FAKE_BIN/record-event" compose_up "$*"
         "$FAKE_BIN/record-event" compose_release "$release_commit"
         if [[ "$release_commit" == "$FAKE_CANDIDATE_COMMIT" &&
@@ -1197,7 +1199,7 @@ cutovers = [record for record in records if "compose" in record and "up" in reco
 if len(cutovers) != 1:
     raise SystemExit(f"expected one compose cutover, got {cutovers}")
 record = cutovers[0]
-expected_tail = ["up", "-d", "--no-build", "--pull", "never"]
+expected_tail = ["up", "-d", "--no-build", "--pull", "never", "portal-backend", "portal-web"]
 if record[-len(expected_tail):] != expected_tail:
     raise SystemExit(f"compose cutover tail mismatch: {record}")
 for record in records:
@@ -1600,7 +1602,6 @@ prepare_imports_clean_legacy_current_once() {
   grep -Fxq 'record_kind=imported_release' "$manifest" || fail 'imported release manifest is missing'
   grep -Fxq "backend_image_id=$CURRENT_BACKEND_ID" "$manifest" || fail 'imported backend image ID mismatch'
   grep -Fxq "web_image_id=$CURRENT_WEB_ID" "$manifest" || fail 'imported web image ID mismatch'
-  grep -Fxq "telegram_image_id=$CURRENT_TELEGRAM_ID" "$manifest" || fail 'imported Telegram image ID mismatch'
   grep -Fxq 'Activation command:' "$output" || fail 'prepare did not print a separate activation command'
   grep -Fq -- "--commit=$FIXTURE_COMMIT" "$output" || fail 'activation command does not identify the prepared commit'
   assert_remote_delivery_cleaned
@@ -1730,7 +1731,7 @@ prepare_rejects_dirty_preview_or_post_staged_legacy_marker() {
   chmod 0600 "$state/current" "$state/previous"
   wrong_checksum="$(printf '0%.0s' {1..64})"
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=active_source' \
     'app=chatwoot-client-portal-v2' \
     "source_commit=$first_candidate" \
@@ -1851,8 +1852,8 @@ prepare_classifies_each_migration_sensitive_path() {
   done
 }
 
-prepare_builds_three_full_sha_tags_and_records_exact_ids() {
-  local output manifest tags candidate_backend_id candidate_web_id candidate_telegram_id partial_backend_id
+prepare_builds_two_full_sha_tags_and_records_exact_ids() {
+  local output manifest tags candidate_backend_id candidate_web_id partial_backend_id
   setup_prepare_fixture "$FUNCNAME"
   output="$CASE_ROOT/output"
   deploy_command prepare >"$output" 2>&1
@@ -1860,13 +1861,13 @@ prepare_builds_three_full_sha_tags_and_records_exact_ids() {
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
   candidate_backend_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-backend)"
   candidate_web_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-web)"
-  candidate_telegram_id="$(fake_release_image_id "$FIXTURE_COMMIT" telegram-bridge)"
 
   grep -Fxq "backend_image_tag=chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT" "$manifest" ||
     fail 'candidate backend full-SHA tag is missing'
   grep -Fxq "backend_image_id=$candidate_backend_id" "$manifest" || fail 'candidate backend ID mismatch'
   grep -Fxq "web_image_id=$candidate_web_id" "$manifest" || fail 'candidate web ID mismatch'
-  grep -Fxq "telegram_image_id=$candidate_telegram_id" "$manifest" || fail 'candidate Telegram ID mismatch'
+  grep -Fxq 'service_set=portal-backend,portal-web' "$manifest" || fail 'explicit portal service set missing'
+  if grep -qi telegram "$manifest"; then fail 'bridge leaked into release manifest'; fi
   grep -Fqx "chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT"$'\t'"$CURRENT_BACKEND_ID" "$tags" ||
     fail 'rollback backend tag does not map to the running image ID'
   grep -Fqx "chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"$'\t'"$candidate_backend_id" "$tags" ||
@@ -1910,18 +1911,16 @@ prepare_abort_preserves_raced_unproven_candidate_tag() {
 }
 
 prepare_abort_cleanup_preserves_ref_retagged_after_exact_check() {
-  local output tags candidate_backend_tag candidate_web_tag candidate_telegram_tag
-  local candidate_backend_id candidate_web_id candidate_telegram_id
+  local output tags candidate_backend_tag candidate_web_tag
+  local candidate_backend_id candidate_web_id
 
   setup_prepare_fixture "$FUNCNAME"
   output="$CASE_ROOT/output"
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
   candidate_backend_tag="chatwoot-client-portal-v2-portal-backend:$FIXTURE_COMMIT"
   candidate_web_tag="chatwoot-client-portal-v2-portal-web:$FIXTURE_COMMIT"
-  candidate_telegram_tag="chatwoot-client-portal-v2-telegram-bridge:$FIXTURE_COMMIT"
   candidate_backend_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-backend)"
   candidate_web_id="$(fake_release_image_id "$FIXTURE_COMMIT" portal-web)"
-  candidate_telegram_id="$(fake_release_image_id "$FIXTURE_COMMIT" telegram-bridge)"
   export FAKE_COMPOSE_CONFIG_IMAGES_FAIL=true
   export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$candidate_backend_tag"
   assert_prepare_failure "$output"
@@ -1931,10 +1930,8 @@ prepare_abort_cleanup_preserves_ref_retagged_after_exact_check() {
     fail 'prepare cleanup removed a candidate ref retagged after its exact-ID check'
   ! grep -Fq "$candidate_web_tag" "$tags" ||
     fail 'prepare cleanup retained a proven web candidate tag'
-  ! grep -Fq "$candidate_telegram_tag" "$tags" ||
-    fail 'prepare cleanup retained a proven Telegram candidate tag'
   python3 - "$FAKE_COMMAND_LOG" \
-    "$candidate_backend_tag" "$candidate_backend_id" "$candidate_web_id" "$candidate_telegram_id" <<'PY'
+    "$candidate_backend_tag" "$candidate_backend_id" "$candidate_web_id" <<'PY'
 import pathlib
 import sys
 
@@ -1960,7 +1957,7 @@ prepare_abort_cleanup_preserves_unverified_adoption_ref_retagged_after_check() {
   tags="$FAKE_DOCKER_STATE_DIR/tags.tsv"
   adoption_backend_tag="chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT"
   adoption_web_tag="chatwoot-client-portal-v2-portal-web:$CURRENT_COMMIT"
-  export FAKE_MISSING_RUNNING_SERVICE=telegram-bridge
+  export FAKE_MISSING_RUNNING_SERVICE=portal-web
   export FAKE_IMAGE_RM_RETAG_CANDIDATE_REF="$adoption_backend_tag"
   export FAKE_IMAGE_RM_RETAG_IMAGE_ID="$CANDIDATE_BACKEND_ID"
   assert_prepare_failure "$output"
@@ -1974,7 +1971,7 @@ prepare_abort_cleanup_preserves_unverified_adoption_ref_retagged_after_check() {
   [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/adoption" ]] ||
     fail 'prepare published an unverified adoption pointer'
   python3 - "$FAKE_COMMAND_LOG" \
-    "$adoption_backend_tag" "$CURRENT_BACKEND_ID" "$CURRENT_WEB_ID" <<'PY'
+    "$adoption_backend_tag" "$CURRENT_BACKEND_ID" <<'PY'
 import pathlib
 import sys
 
@@ -2491,7 +2488,7 @@ activate_rejects_incompatible_orchestrator_protocol() {
 
   setup_activation_fixture "$FUNCNAME"
   sed -i \
-    "s/readonly STAGED_PROTOCOL_VERSION='1'/readonly STAGED_PROTOCOL_VERSION='2'/" \
+    "s/readonly STAGED_PROTOCOL_VERSION='2'/readonly STAGED_PROTOCOL_VERSION='3'/" \
     "$FIXTURE_REPO/scripts/deploy-production-staged.sh"
   git -C "$FIXTURE_REPO" add scripts/deploy-production-staged.sh
   git -C "$FIXTURE_REPO" commit -q -m 'incompatible activation orchestrator protocol'
@@ -2539,7 +2536,7 @@ activate_rejects_unresolved_transaction_before_compose() {
   output="$CASE_ROOT/output"
   transaction="$REMOTE_TEST_ROOT/app/.release-state/transaction"
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=activation_transaction' \
     "candidate_commit=$PREPARED_COMMIT" \
     "previous_commit=$CURRENT_COMMIT" \
@@ -2669,7 +2666,7 @@ activate_writes_cutover_journal_before_compose_up() {
   grep -Fxq 'migration_policy=automatic' "$transaction" || fail 'transaction automatic policy missing'
   grep -Fxq 'phase=cutover_started' "$transaction" || fail 'transaction cutover phase mismatch'
   [[ "$(stat -c '%a' "$transaction")" == '600' ]] || fail 'transaction is not private'
-  assert_events_in_order 'journal_write|cutover_started' 'compose_up|-d --no-build --pull never'
+  assert_events_in_order 'journal_write|cutover_started' 'compose_up|-d --no-build --pull never portal-backend portal-web'
   [[ -f "$REMOTE_TEST_ROOT/app/.release-state/prepared" ]] ||
     fail 'post-journal failure removed the prepared pointer'
 }
@@ -2717,7 +2714,7 @@ readiness = [
 if len(readiness) != 1:
     raise SystemExit(f"expected one bounded Compose readiness timeout, got {readiness}")
 record = readiness[0]
-expected_tail = ["up", "-d", "--no-build", "--pull", "never"]
+expected_tail = ["up", "-d", "--no-build", "--pull", "never", "portal-backend", "portal-web"]
 if "compose" not in record or record[-len(expected_tail):] != expected_tail:
     raise SystemExit(f"unexpected bounded Compose command: {record}")
 PY
@@ -2741,7 +2738,7 @@ events = [line.split("\t", 3) for line in pathlib.Path(path).read_text(encoding=
 compose_up = [fields[3] for fields in events if len(fields) == 4 and fields[2] == "compose_up"]
 compose_releases = [fields[3] for fields in events if len(fields) == 4 and fields[2] == "compose_release"]
 
-if compose_up != ["-d --no-build --pull never", "-d --no-build --pull never"]:
+if compose_up != ["-d --no-build --pull never portal-backend portal-web", "-d --no-build --pull never portal-backend portal-web"]:
     raise SystemExit(f"unexpected compose starts: {compose_up}")
 if compose_releases != [candidate, previous]:
     raise SystemExit(f"unexpected compose release order: {compose_releases}")
@@ -2851,11 +2848,22 @@ activate_checks_built_service_running_health_and_restart_state() {
 
   setup_activation_fixture "$FUNCNAME-duplicate"
   output="$CASE_ROOT/output"
-  export FAKE_DUPLICATE_SERVICE_CONTAINER=telegram-bridge
+  export FAKE_DUPLICATE_SERVICE_CONTAINER=portal-web
   assert_activation_failure "$output"
   unset FAKE_DUPLICATE_SERVICE_CONTAINER
-  [[ -f "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
-    fail 'duplicate service container failure lost its transaction'
+  assert_status_once "$output" activation_refused_state_changed
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'duplicate active service reached cutover'
+  assert_no_compose_cutover
+
+  setup_activation_fixture "$FUNCNAME-duplicate-candidate"
+  output="$CASE_ROOT/output"
+  export FAKE_DUPLICATE_CANDIDATE_SERVICE_CONTAINER=portal-web
+  assert_activation_failure "$output"
+  unset FAKE_DUPLICATE_CANDIDATE_SERVICE_CONTAINER
+  assert_status_once "$output" candidate_failed_rollback_succeeded
+  [[ ! -e "$REMOTE_TEST_ROOT/app/.release-state/transaction" ]] ||
+    fail 'duplicate candidate rollback retained transaction'
 
   setup_activation_fixture "$FUNCNAME-restarted-at-capture"
   output="$CASE_ROOT/output"
@@ -3107,7 +3115,7 @@ successful_publication_advances_journal_and_writes_markers_last() {
   assert_activation_success "$output"
   assert_events_in_order \
     'journal_write|cutover_started' \
-    'compose_up|-d --no-build --pull never' \
+    'compose_up|-d --no-build --pull never portal-backend portal-web' \
     'curl_success|https://alpha.example.test/api/health' \
     'curl_success|https://alpha.example.test/api/tenant' \
     'journal_write|candidate_healthy' \
@@ -3150,7 +3158,7 @@ successful_activation_records_outcome_then_clears_journal() {
     utc="$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
     printf -v other_sha '%040x' "$index"
     printf '%s\n' \
-      'protocol_version=1' \
+      'protocol_version=2' \
       'record_kind=deployment_outcome' \
       "candidate_commit=$other_sha" \
       'previous_commit=none' \
@@ -3170,7 +3178,7 @@ successful_activation_records_outcome_then_clears_journal() {
   (( ${#outcomes[@]} == 1 )) || fail 'successful activation outcome count mismatch'
   outcome="${outcomes[0]}"
   [[ "$(stat -c '%a' "$outcome")" == '600' ]] || fail 'activation outcome is not private'
-  grep -Fxq 'protocol_version=1' "$outcome" || fail 'outcome protocol mismatch'
+  grep -Fxq 'protocol_version=2' "$outcome" || fail 'outcome protocol mismatch'
   grep -Fxq 'record_kind=deployment_outcome' "$outcome" || fail 'outcome kind mismatch'
   grep -Fxq "candidate_commit=$PREPARED_COMMIT" "$outcome" || fail 'outcome candidate mismatch'
   grep -Fxq "previous_commit=$CURRENT_COMMIT" "$outcome" || fail 'outcome previous mismatch'
@@ -3501,7 +3509,7 @@ task5_write_decision_fixture() {
 
   path="$(task5_decision_path)"
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=activation_decision' \
     "candidate_commit=$PREPARED_COMMIT" \
     "migration_policy=$policy" \
@@ -3535,7 +3543,7 @@ task5_setup_staged_candidate() {
   ROLLBACK_TARGET_COMMIT="$PREPARED_COMMIT"
   assert_activation_success "$CASE_ROOT/first-activation-output"
   task5_prepare_next_candidate "$classification"
-  for service in backend web telegram; do
+  for service in backend web; do
     key="${service}_image_id"
     rollback_id="$(release_record_get_unique \
       "$REMOTE_TEST_ROOT/app/.releases/$ROLLBACK_TARGET_COMMIT/manifest.txt" "$key")"
@@ -3553,11 +3561,10 @@ task5_assert_runtime_release() {
 
   [[ "$(<"$FAKE_RUNTIME_COMMIT_FILE")" == "$commit" ]] ||
     fail "runtime commit is not exact release $commit"
-  for service in backend web telegram; do
+  for service in backend web; do
     case "$service" in
       backend) key='backend_image_id'; container='container-backend' ;;
       web) key='web_image_id'; container='container-web' ;;
-      telegram) key='telegram_image_id'; container='container-telegram' ;;
     esac
     expected="$(release_record_get_unique "$release_dir/manifest.txt" "$key")" ||
       fail "missing $service image evidence for $commit"
@@ -3581,7 +3588,7 @@ setup_retryable_rollback_fixture() {
   [[ -f "$state/current" && ! -e "$state/transaction" ]] ||
     fail 'retry fixture did not establish a settled staged runtime'
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=deployment_outcome' \
     "candidate_commit=$PREPARED_COMMIT" \
     "previous_commit=$ROLLBACK_TARGET_COMMIT" \
@@ -3829,7 +3836,7 @@ migration_decision_is_immutable_and_precedes_cutover() {
   decision="$(task5_decision_path)"
   [[ -f "$decision" && ! -L "$decision" && "$(stat -c '%a' "$decision")" == '600' ]] ||
     fail 'activation decision is missing or not private'
-  grep -Fxq 'protocol_version=1' "$decision" || fail 'decision protocol mismatch'
+  grep -Fxq 'protocol_version=2' "$decision" || fail 'decision protocol mismatch'
   grep -Fxq 'record_kind=activation_decision' "$decision" || fail 'decision kind mismatch'
   grep -Fxq "candidate_commit=$PREPARED_COMMIT" "$decision" || fail 'decision candidate mismatch'
   grep -Fxq 'migration_policy=forward-only' "$decision" || fail 'decision policy mismatch'
@@ -3955,7 +3962,7 @@ repeated_decision_must_match_existing_policy_and_approval() {
   old_utc="$(date -u -d "@$old_epoch" +%Y-%m-%dT%H:%M:%SZ)"
   old_started="$(date -u -d "@$((old_epoch - 30))" +%Y-%m-%dT%H:%M:%SZ)"
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=deployment_outcome' \
     "candidate_commit=$PREPARED_COMMIT" \
     "previous_commit=$CURRENT_COMMIT" \
@@ -4140,8 +4147,7 @@ successful_rollback_records_candidate_failed_rollback_succeeded() {
     fail 'successful rollback retained failed candidate artifacts'
   for candidate_tag in \
     "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"; do
     ! grep -Fq "$candidate_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
       fail 'normal rollback cleanup retained a proven candidate tag'
   done
@@ -4162,8 +4168,7 @@ successful_rollback_records_candidate_failed_rollback_succeeded() {
     fail 'interrupted rollback cleanup destroyed candidate evidence'
   for candidate_tag in \
     "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"; do
     grep -Fq "$candidate_tag" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ||
       fail 'interrupted rollback cleanup did not compensate removed candidate tags'
   done
@@ -4191,7 +4196,7 @@ successful_rollback_records_candidate_failed_rollback_succeeded() {
 }
 
 compose_wait_failure_persists_safe_diagnostics() {
-  local output state history outcome candidate_backend_id candidate_web_id candidate_telegram_id
+  local output state history outcome candidate_backend_id candidate_web_id
   local -a outcomes=()
 
   setup_activation_fixture "$FUNCNAME"
@@ -4202,8 +4207,6 @@ compose_wait_failure_persists_safe_diagnostics() {
     "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" backend_image_id)"
   candidate_web_id="$(release_record_get_unique \
     "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" web_image_id)"
-  candidate_telegram_id="$(release_record_get_unique \
-    "$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt" telegram_image_id)"
   export FAKE_CANDIDATE_SERVICE_UNHEALTHY=portal-backend
   export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-backend
   export FAKE_CANDIDATE_COMPOSE_UP_FAIL_AFTER_MUTATION=true
@@ -4232,16 +4235,12 @@ compose_wait_failure_persists_safe_diagnostics() {
     fail 'compose-wait backend snapshot was not printed'
   grep -Fxq "compose_wait_portal_web=$candidate_web_id|true|healthy|0" "$output" ||
     fail 'compose-wait web snapshot was not printed'
-  grep -Fxq "compose_wait_telegram_bridge=$candidate_telegram_id|true|none|0" "$output" ||
-    fail 'compose-wait telegram snapshot was not printed'
   grep -Fxq 'compose_wait_exit_code=82' "$outcome" ||
     fail 'compose-wait exit code was not retained'
   grep -Fxq "compose_wait_portal_backend=$candidate_backend_id|false|unhealthy|0" "$outcome" ||
     fail 'compose-wait backend snapshot was not retained'
   grep -Fxq "compose_wait_portal_web=$candidate_web_id|true|healthy|0" "$outcome" ||
     fail 'compose-wait web snapshot was not retained'
-  grep -Fxq "compose_wait_telegram_bridge=$candidate_telegram_id|true|none|0" "$outcome" ||
-    fail 'compose-wait telegram snapshot was not retained'
   ! grep -Fq 'do-not-leak-compose-output' "$output" ||
     fail 'compose-wait output leaked raw Compose stderr'
   ! grep -Fq 'do-not-leak-compose-output' "$outcome" ||
@@ -4271,7 +4270,7 @@ compose_wait_early_failure_rejects_previous_service_snapshot() {
   outcome="${outcomes[0]}"
   grep -Fxq 'failure_stage=compose_wait' "$outcome" ||
     fail 'early compose-wait failure stage was not retained'
-  for service in portal_backend portal_web telegram_bridge; do
+  for service in portal_backend portal_web; do
     grep -Fxq "compose_wait_${service}=unavailable" "$output" ||
       fail "early compose-wait ${service} snapshot was not unavailable in output"
     grep -Fxq "compose_wait_${service}=unavailable" "$outcome" ||
@@ -4360,7 +4359,7 @@ compose_wait_diagnostic_capture_failure_still_rolls_back() {
     -name "*-$PREPARED_COMMIT-candidate_failed_rollback_succeeded.txt")
   (( ${#outcomes[@]} == 1 )) || fail 'diagnostic-capture failure outcome count mismatch'
   outcome="${outcomes[0]}"
-  for service in portal_backend portal_web telegram_bridge; do
+  for service in portal_backend portal_web; do
     grep -Fxq "compose_wait_${service}_exit_code=unavailable" "$outcome" ||
       fail 'failed diagnostic capture retained a container exit code'
     grep -Fxq "compose_wait_${service}_oom_killed=unavailable" "$outcome" ||
@@ -4532,8 +4531,7 @@ rollback_cleanup_retains_evidence_when_foreign_tag_shares_candidate_id() {
     fail 'foreign tag collision discarded candidate cleanup evidence'
   for candidate_tag in \
     "chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT" \
-    "chatwoot-client-portal-v2-telegram-bridge:$PREPARED_COMMIT"; do
+    "chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"; do
     grep -Fq "$candidate_tag" "$tags" ||
       fail 'foreign tag collision removed a candidate tag without safe proof'
   done
@@ -4684,6 +4682,136 @@ run_case() {
   printf 'PASS %s\n' "$name"
 }
 
+portal_only_contract_rejects_service_and_network_drift() {
+  local variant output manifest
+  for variant in service protocol live rendered; do
+    setup_activation_fixture "$FUNCNAME-$variant"
+    output="$CASE_ROOT/output"; manifest="$(prepare_manifest_path)"
+    case "$variant" in
+      service) sed -i 's/service_set=portal-backend,portal-web/service_set=portal-backend,portal-web,telegram-bridge/' "$manifest" ;;
+      protocol) sed -i 's/protocol_version=2/protocol_version=1/' "$manifest" ;;
+      live) export FAKE_LIVE_GATEWAY=unexpected.example.test ;;
+      rendered) export FAKE_RENDERED_GATEWAY=unexpected.example.test ;;
+    esac
+    if deploy_command activate >"$output" 2>&1; then fail "activation accepted $variant drift"; fi
+    if grep -q $'\tcompose_up\t' "$FAKE_EVENT_LOG"; then fail "cutover started with $variant drift"; fi
+    unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+  done
+}
+
+recovered_gateway_survives_activation_and_exact_rollback() {
+  setup_recovery_fixture "$FUNCNAME"
+  local output="$CASE_ROOT/output" manifest
+  recover_command >"$output" 2>&1 || { cat "$output"; fail 'recovery failed'; }
+  complete_activation_fixture_prepare
+  export FAKE_CANDIDATE_SERVICE_NOT_RUNNING=portal-web
+  task5_assert_candidate_failure "$output" candidate_failed_rollback_succeeded
+  unset FAKE_CANDIDATE_SERVICE_NOT_RUNNING
+  task5_assert_runtime_release "$CURRENT_COMMIT"
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib,sys
+for record in pathlib.Path(sys.argv[1]).read_bytes().split(b'\0\0'):
+    fields=record.decode().split('\0')
+    if any('telegram' in x for x in fields): raise SystemExit('release lifecycle touched bridge')
+    if fields[0:1] == ['docker'] and 'up' in fields and '--help' not in fields:
+        if fields[-2:] != ['portal-backend','portal-web']: raise SystemExit(f'unbounded service start: {fields}')
+PY
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+setup_recovery_fixture() {
+  setup_prepare_fixture "$1"
+  local app="$REMOTE_TEST_ROOT/app" release="$REMOTE_TEST_ROOT/app/.releases/$CURRENT_COMMIT" entry
+  mkdir -m 0755 "$app/.releases" "$release" "$release/source"
+  mkdir -m 0700 "$app/.release-state"
+  git -C "$FIXTURE_REPO" archive "$CURRENT_COMMIT" | tar -x -C "$release/source"
+  # Simulate the migrated server: runtime source only; no root mirror, archive or manifest.
+  for entry in "$app"/* "$app"/.[!.]*; do
+    [[ -e "$entry" ]] || continue
+    case "${entry##*/}" in .env.production|.releases|.release-state) ;; *) rm -rf -- "$entry" ;; esac
+  done
+  printf '%s\n' "$CURRENT_COMMIT" >"$app/.release-state/current"
+  printf '%040d\n' 7 >"$app/.release-state/previous"
+  chmod 0600 "$app/.release-state/"*
+  printf 'services:\n  portal-backend:\n    image: chatwoot-client-portal-v2-portal-backend:%s\n    extra_hosts:\n      - "app.lancora.ru:host-gateway"\n  portal-web:\n    image: chatwoot-client-portal-v2-portal-web:%s\n' "$CURRENT_COMMIT" "$CURRENT_COMMIT" >"$release/compose.release.yaml"
+  chmod 0640 "$release/compose.release.yaml"
+  mkdir -p "$FAKE_DOCKER_STATE_DIR"
+  printf '%s\t%s\n' "chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT" "$CURRENT_BACKEND_ID" \
+    "chatwoot-client-portal-v2-portal-web:$CURRENT_COMMIT" "$CURRENT_WEB_ID" >"$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  export FAKE_LIVE_GATEWAY=app.lancora.ru FAKE_RENDERED_GATEWAY=app.lancora.ru
+}
+
+recover_command() {
+  DEPLOY_COMMIT_OVERRIDE="$CURRENT_COMMIT" deploy_command recover-baseline \
+    "--retire-missing-previous=$(printf '%040d' 7)" --backend-host-gateway=app.lancora.ru \
+    "--backend-image-id=$CURRENT_BACKEND_ID" "--web-image-id=$CURRENT_WEB_ID" --approval-ref=test-recovery "$@"
+}
+
+recovery_restores_verified_baseline_without_runtime_mutation() {
+  setup_recovery_fixture "$FUNCNAME"
+  local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/output" before name
+  before="$(sha256sum "$app/.env.production")"
+  mkdir -p "$app/logs" "$app/backups" "$app/.codex" "$app/.git" "$app/.install"
+  for name in .env .env.production.backup.test BOOTSTRAP_SOURCE.txt logs/keep backups/keep .codex/keep .git/keep .install/keep; do
+    printf 'protected-value\n' >"$app/$name"
+  done
+  recover_command >"$output" 2>&1 || { cat "$output"; fail 'recovery failed'; }
+  grep -Fxq status=baseline_recovered "$output" || fail 'recovery status missing'
+  for name in .env .env.production.backup.test BOOTSTRAP_SOURCE.txt logs/keep backups/keep .codex/keep .git/keep .install/keep; do
+    grep -Fxq protected-value "$app/$name" || fail "recovery changed protected path $name"
+  done
+  [[ "$(sha256sum "$app/.env.production")" == "$before" ]] || fail 'env changed'
+  [[ ! -e "$app/.release-state/previous" && -f "$app/DEPLOY_SOURCE.txt" && -f "$app/package.json" ]] || fail 'recovery incomplete'
+  cmp "$app/.release-state/recovery/journal.txt" "$app/.release-state/recovery/completed.txt" || fail 'completion mismatch'
+  recover_command >"$output" 2>&1 || { cat "$output"; fail 'exact recovery repeat failed'; }
+  python3 - "$FAKE_COMMAND_LOG" <<'PY'
+import pathlib,sys
+for record in pathlib.Path(sys.argv[1]).read_bytes().split(b'\0\0'):
+    fields=record.decode().split('\0')
+    if fields[0:1] == ['docker'] and any(x in fields for x in ['build','up','pull','tag','rm','exec','stop','restart']):
+        raise SystemExit(f'recovery mutated runtime: {fields}')
+    if any('telegram' in x for x in fields): raise SystemExit('recovery touched bridge')
+PY
+  deploy_command prepare >"$output" 2>&1 || { cat "$output"; fail 'recovered baseline cannot prepare'; }
+  grep -Fxq 'backend_host_gateway=app.lancora.ru' "$(prepare_manifest_path)" || fail 'candidate lost gateway'
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+recovery_rejects_source_runtime_and_pointer_drift() {
+  local variant app release output
+  for variant in source extra symlink root-extra overlay image live rendered previous manifest; do
+    setup_recovery_fixture "$FUNCNAME-$variant"
+    app="$REMOTE_TEST_ROOT/app"; release="$app/.releases/$CURRENT_COMMIT"; output="$CASE_ROOT/output"
+    case "$variant" in
+      source) printf drift >>"$release/source/package.json" ;;
+      extra) touch "$release/source/untracked" ;;
+      symlink) ln -s /tmp "$release/source/link" ;;
+      root-extra) touch "$app/unknown" ;;
+      overlay) printf '\n' >>"$release/compose.release.yaml" ;;
+      image) sed -i "s/$CURRENT_BACKEND_ID/$CANDIDATE_BACKEND_ID/g" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ;;
+      live) export FAKE_LIVE_GATEWAY=wrong.example.test ;;
+      rendered) export FAKE_RENDERED_GATEWAY=wrong.example.test ;;
+      previous) printf '%040d\n' 8 >"$app/.release-state/previous" ;;
+      manifest) printf conflict >"$release/manifest.txt"; chmod 0600 "$release/manifest.txt" ;;
+    esac
+    if recover_command >"$output" 2>&1; then fail "recovery accepted $variant drift"; fi
+    [[ ! -e "$app/.release-state/recovery/completed.txt" && -e "$app/.release-state/previous" && ! -e "$app/DEPLOY_SOURCE.txt" ]] || fail "recovery published on $variant drift"
+  done
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+recovery_resumes_after_root_sync_failure_and_blocks_prepare() {
+  setup_recovery_fixture "$FUNCNAME"
+  local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/output"
+  export STAGED_TEST_FAIL_PUBLICATION_AT=root_sync
+  if recover_command >"$output" 2>&1; then fail 'recovery fault ignored'; fi
+  unset STAGED_TEST_FAIL_PUBLICATION_AT
+  [[ -f "$app/.release-state/recovery/journal.txt" && ! -e "$app/.release-state/recovery/completed.txt" ]] || { cat "$output"; fail 'recovery journal not retained'; }
+  if deploy_command prepare >"$output" 2>&1; then fail 'prepare accepted incomplete recovery'; fi
+  recover_command >"$output" 2>&1 || { cat "$output"; fail 'recovery resume failed'; }
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
 run_bootstrap_cases() {
   run_case rejects_dirty_tree_before_transport
   run_case rejects_non_main_branch_before_transport
@@ -4703,6 +4831,11 @@ run_bootstrap_cases() {
 }
 
 run_prepare_cases() {
+  run_case portal_only_contract_rejects_service_and_network_drift
+  run_case recovered_gateway_survives_activation_and_exact_rollback
+  run_case recovery_restores_verified_baseline_without_runtime_mutation
+  run_case recovery_rejects_source_runtime_and_pointer_drift
+  run_case recovery_resumes_after_root_sync_failure_and_blocks_prepare
   run_case github_and_local_cli_use_the_same_contract
   run_case prepare_imports_clean_legacy_current_once
   run_case first_prepare_uses_adoption_pointer_without_publishing_current
@@ -4713,7 +4846,7 @@ run_prepare_cases() {
   run_case prepare_rejects_compose_config_error_and_low_disk
   run_case prepare_rejects_compose_without_required_activation_flags
   run_case prepare_classifies_each_migration_sensitive_path
-  run_case prepare_builds_three_full_sha_tags_and_records_exact_ids
+  run_case prepare_builds_two_full_sha_tags_and_records_exact_ids
   run_case prepare_abort_preserves_raced_unproven_candidate_tag
   run_case prepare_abort_cleanup_preserves_ref_retagged_after_exact_check
   run_case prepare_abort_cleanup_preserves_unverified_adoption_ref_retagged_after_check

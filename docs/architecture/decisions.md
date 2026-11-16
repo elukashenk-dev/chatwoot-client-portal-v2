@@ -547,7 +547,11 @@
   from already-built images with bounded all-tenant smoke, a pre-cutover
   transaction journal and policy-aware exact rollback. Clean reinstall source
   delivery is a separately approved empty-root bootstrap that cannot start the
-  portal.
+  portal. Protocol 2 fixes the application service set to backend/web, preserving
+  a canonical backend host-gateway override verified against live Docker and
+  rendered Compose. A separately approved, journaled baseline recovery may
+  reconstruct exact source/image evidence after migration and retire an explicitly
+  acknowledged missing previous pointer; it cannot start containers or migrate DB.
 - граница:
   This decision does not authorize a real production rehearsal or deploy. The
   temporary pre-staged source-marker reader remains tracked by `F-OPS-007`;

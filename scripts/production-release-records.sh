@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly RELEASE_APP_NAME='chatwoot-client-portal-v2'
-readonly RELEASE_PROTOCOL_VERSION='1'
+readonly RELEASE_PROTOCOL_VERSION='2'
 readonly RELEASE_RECORD_MAX_BYTES='65536'
 
 release_record_is_sha() {

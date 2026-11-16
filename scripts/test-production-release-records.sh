@@ -159,7 +159,7 @@ promotion_refuses_to_replace_an_existing_active_marker() {
   release_marker_write_bootstrap \
     "$bootstrap" "$VALID_COMMIT" "$VALID_CHECKSUM" "$VALID_TIMESTAMP" "$VALID_APPROVAL"
   printf '%s\n' \
-    'protocol_version=1' \
+    'protocol_version=2' \
     'record_kind=active_source' \
     'app=chatwoot-client-portal-v2' \
     "source_commit=$existing_commit" \
