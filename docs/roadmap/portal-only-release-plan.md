@@ -107,3 +107,76 @@ polling, фоновых jobs или запросов в Chatwoot DB. Runtime н�
 - Следующий operational шаг использует те же exact current/previous SHA,
   image IDs и `app.lancora.ru` gateway. Согласование восстановления и prepare
   действует; activate требует отдельного согласования подготовленного релиза.
+
+## Production handoff — 2026-11-16
+
+- Repair commit `48d226064f991616519a8f7a6108e9443b435f11` merged/pushed.
+- `recover-baseline` завершен с `status=baseline_recovered`. Journal совпадает
+  с completed; восемь старых outcomes сохранены в recovery archive; отсутствующий
+  previous pointer снят. Current/source marker остаются `4cf719e`; точные image IDs
+  прежние, оба контейнера работают с прежним StartedAt, public health HTTP 200.
+- `prepare` для `48d2260` отказал: `Candidate portal image build failed`.
+  На сервере отсутствует Docker Buildx (`docker: unknown command: docker buildx`).
+  Candidate удален штатным cleanup; prepared pointer отсутствует, active runtime
+  не переключался. Build и image evidence нового релиза пока не готовы.
+- `apt-get --simulate --no-install-recommends install docker-buildx` предлагает
+  только `docker-buildx=0.30.1-0ubuntu1~24.04.1`, zero upgrades/removals.
+  Пользователь разрешил установку и повтор prepare, отдельно попросил не
+  повторять полный test suite. Buildx 0.30.1 установлен с `--no-upgrade`,
+  `--no-remove`, `--no-install-recommends`, `NEEDRESTART_MODE=l`; установлен
+  один пакет, upgrades/removals отсутствуют. CLI version подтверждена, image IDs
+  и StartedAt контейнеров прежние. Повторный prepare `48d2260` завершился
+  с `status=prepared`; прежний green gate применен без повторного запуска. Activate требует отдельного
+  согласования exact prepared SHA.
+- Дополнительная read-only проверка: `lk.provgroup.ru/api/health` отвечает 200,
+  `lk.pronalogi.pro` не разрешается через DNS ни локально, ни с Timeweb (curl
+  exit 6). В portal DB оба tenant имеют status=active и эти public_base_url.
+  До activate нужно выяснить и устранить DNS/readiness blocker; нельзя исключать
+  активного tenant из обязательного smoke или менять его статус без решения
+  владельца. Это обнаружено до переключения; DNS и tenant data не менялись.
+  Google public DNS также возвращает NXDOMAIN для `lk.pronalogi.pro` A и
+  `pronalogi.pro` NS; `lk.provgroup.ru` A указывает на Timeweb. Пользователю
+  отправлен вопрос об актуальности кабинета и домена.
+
+- Успешная подготовка `48d2260`: migration classification `none`, expiry
+  `2026-11-17T13:00:14Z`, backend image
+  `sha256:c3a4811e57f0aafa3ccec1ca31f83b1c564cbd01818d4dc4a6fc692b979847c6`,
+  web image
+  `sha256:c6189f0999d6d9bec7329ad4da2909d01c81d4d45938de03324917f1f9f9d2ec`.
+  Manifest успел зафиксировать оба active tenants до ответа пользователя.
+- Пользователь подтвердил, что `pronalogi` больше не используется, и разрешил
+  убрать кабинет. Выбран archive-only через существующий deprovision service:
+  без удаления portal rows, Chatwoot account, миграций или перезапуска сервисов.
+  После изменения статуса нужен новый prepare: immutable tenant matrix старого
+  candidate нельзя редактировать или обходить при activation. CLI не имеет
+  cancel unexpired candidate; разовая безопасная отмена требует конкретного
+  operational review и согласования вместо подмены expiry/rollback evidence.
+
+- Archive-only `pronalogi` выполнен под существующим deploy lock через reviewed
+  `/tmp/portal-archive-pronalogi-20261116.mjs`: tenant id 3, active → archived,
+  `chatwootDeleteRequested=false`; `provgroup` остался active. Никаких миграций,
+  удаления строк или Chatwoot calls. Проверка HTTPS с explicit DNS resolution
+  на Timeweb: `/api/tenant` возвращает 503 `TENANT_RUNTIME_DISABLED`;
+  `https://lk.provgroup.ru/api/health` — 200. Независимый review wrapper не нашел
+  Critical/Important; reviewer permissions unrestricted, voluntary read-only.
+- Operational blocker: prepared manifest остается неизменным с двумя tenants.
+  Activate не запускался. Existing CLI может убрать candidate только после
+  настоящего expiry либо доказанного rollback; rollback не происходил.
+  Independent review отклонил ad-hoc relocation/удаление pointer как неполную
+  замену cancellation protocol (включая image tag conflicts при same-SHA prepare).
+  Existing safe path: после `2026-11-17T13:00:14Z` повторить уже согласованный
+  обычный prepare, который очистит expired candidate и снимет новую matrix.
+  Для ускорения требуется отдельно согласованный bounded cancellation slice:
+  exact-SHA acknowledgement, deploy lock, revalidation current/runtime/manifest,
+  durable audit evidence до retirement, доказательство отсутствия live users
+  candidate images, exact tag cleanup, interruption/resume и fault tests.
+  Нельзя подменять expiry, activation validators или rollback outcomes.
+  Полные tests повторно не запускались; runtime остается `4cf719e`.
+
+- Пользователь согласовал доработку безопасной отмены подготовленного выпуска.
+  Реализация и review закрыты на ветке `fix/ops-cancel-prepared`; окончательные
+  проверки механизма выпуска прошли. Дальнейший handoff, точные inputs отмены и
+  её verification evidence перенесены в
+  [cancel-prepared-release-plan.md](./cancel-prepared-release-plan.md). Этот
+  документ сохраняет исходные recovery и production handoff records. Отмена
+  старой подготовки и переключение runtime пока не выполнялись.

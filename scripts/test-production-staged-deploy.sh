@@ -972,7 +972,7 @@ setup_fixture() {
     "$FIXTURE_REPO/infra/production" \
     "$FIXTURE_REPO/backend/drizzle" \
     "$FIXTURE_REPO/backend/src/db"
-  cp "$PUBLIC_SCRIPT" "$REMOTE_SCRIPT" "$RECORDS_SCRIPT" "$FIXTURE_REPO/scripts/"
+  cp "$PUBLIC_SCRIPT" "$REMOTE_SCRIPT" "$RECORDS_SCRIPT" "$SOURCE_ROOT/scripts/production-release-cancellation.py" "$FIXTURE_REPO/scripts/"
   cp "$SOURCE_ROOT/scripts/install-production.sh" "$FIXTURE_REPO/scripts/install-production.sh"
   cp "$SOURCE_ROOT/scripts/ensure-production-object-storage-env.sh" "$FIXTURE_REPO/scripts/ensure-production-object-storage-env.sh"
   printf '%s\n' '{"name":"staged-fixture","private":true}' >"$FIXTURE_REPO/package.json"
@@ -4935,6 +4935,134 @@ recovery_resumes_after_root_sync_failure_and_blocks_prepare() {
   unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
 }
 
+cancel_command() {
+  local manifest="$REMOTE_TEST_ROOT/app/.releases/$PREPARED_COMMIT/manifest.txt"
+  local checksum="${CANCEL_MANIFEST_SHA:-$(sha256sum "$manifest" | awk '{print $1}')}"
+  DEPLOY_COMMIT_OVERRIDE="$PREPARED_COMMIT" deploy_command cancel-prepared \
+    "--manifest-sha256=$checksum" --approval-ref=cancel-test
+}
+
+cancel_preserves_runtime_archives_candidate_and_allows_reprepare() {
+  setup_activation_fixture "$FUNCNAME"
+  local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/cancel-output"
+  CANCEL_MANIFEST_SHA="$(sha256sum "$app/.releases/$PREPARED_COMMIT/manifest.txt" | awk '{print $1}')"
+  local current_before
+  current_before="$(cat "$FAKE_CONTAINER_STATE_FILE")"
+  printf 'alpha\thttps://alpha.example.test\n' >"$FAKE_TENANTS_FILE"
+  cancel_command >"$output" 2>&1 || { cat "$output"; fail 'cancel failed'; }
+  assert_status_once "$output" preparation_cancelled
+  [[ ! -e "$app/.release-state/prepared" && ! -e "$app/.releases/$PREPARED_COMMIT" ]] || fail 'candidate not retired'
+  [[ -f "$app/.release-state/cancellations/$CANCEL_MANIFEST_SHA/release/manifest.txt" ]] || fail 'archive missing'
+  [[ "$(cat "$FAKE_CONTAINER_STATE_FILE")" == "$current_before" ]] || fail 'cancel changed containers'
+  cancel_command >"$output" 2>&1 || fail 'idempotent cancel failed'
+  FAKE_NOW_EPOCH=$((FAKE_NOW_EPOCH + 1))
+  deploy_command prepare >"$output" 2>&1 || { cat "$output"; fail 'reprepare failed'; }
+  assert_status_once "$output" prepared
+  if cancel_command >"$output" 2>&1; then fail 'stale cancellation cancelled new same-SHA preparation'; fi
+  [[ -f "$app/.release-state/prepared" ]] || fail 'stale cancellation removed new pointer'
+  unset CANCEL_MANIFEST_SHA
+}
+
+cancel_resumes_each_fault_and_blocks_other_release_actions() {
+  local boundary output app
+  for boundary in intent move before-untag-0 tag-0 tag-1 before-finish after-pointer completed; do
+    setup_activation_fixture "$FUNCNAME-$boundary"
+    app="$REMOTE_TEST_ROOT/app"; output="$CASE_ROOT/cancel-output"
+    CANCEL_MANIFEST_SHA="$(sha256sum "$app/.releases/$PREPARED_COMMIT/manifest.txt" | awk '{print $1}')"
+    export STAGED_TEST_CANCEL_FAIL_AT="$boundary"
+    if cancel_command >"$output" 2>&1; then fail "ignored cancel fault $boundary"; fi
+    assert_status_once "$output" preparation_cancel_failed
+    unset STAGED_TEST_CANCEL_FAIL_AT
+    if [[ "$boundary" != completed ]]; then
+      if deploy_command prepare >"$output" 2>&1; then fail 'prepare ignored pending cancellation'; fi
+      if activate_command >"$output" 2>&1; then fail 'activate ignored pending cancellation'; fi
+    fi
+    cancel_command >"$output" 2>&1 || { cat "$output"; fail "resume failed at $boundary"; }
+    assert_status_once "$output" preparation_cancelled
+    [[ -f "$app/.release-state/cancellations/$CANCEL_MANIFEST_SHA/completed" && ! -e "$app/.release-state/prepared" ]] || fail 'resume did not finish'
+    unset CANCEL_MANIFEST_SHA
+  done
+}
+
+cancel_rejects_wrong_identity_or_changed_evidence() {
+  local variant output app manifest
+  for variant in checksum source override matrix transaction decision tag missing-tag runtime pending-approval pending-missing-tag archived-tamper completed-tamper; do
+    setup_activation_fixture "$FUNCNAME-$variant"
+    app="$REMOTE_TEST_ROOT/app"; output="$CASE_ROOT/cancel-output"
+    manifest="$app/.releases/$PREPARED_COMMIT/manifest.txt"
+    CANCEL_MANIFEST_SHA="$(sha256sum "$manifest" | awk '{print $1}')"
+    case "$variant" in
+      checksum) CANCEL_MANIFEST_SHA="$(printf '0%.0s' {1..64})" ;;
+      source) printf 'tamper' >>"$app/.releases/$PREPARED_COMMIT/source/release-content.txt" ;;
+      override) printf 'tamper' >>"$app/.releases/$PREPARED_COMMIT/compose.release.yaml" ;;
+      matrix) printf 'tamper' >>"$app/.releases/$PREPARED_COMMIT/tenants.tsv" ;;
+      transaction) printf 'unknown' >"$app/.release-state/transaction" ;;
+      decision) printf 'unknown' >"$app/.release-state/decisions/$PREPARED_COMMIT.txt" ;;
+      tag) printf 'chatwoot-client-portal-v2-portal-backend:%s\t%s\n' "$PREPARED_COMMIT" "$CURRENT_BACKEND_ID" >>"$FAKE_DOCKER_STATE_DIR/tags.tsv" ;;
+      missing-tag) sed -i "/chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT/d" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ;;
+      pending-missing-tag)
+        export STAGED_TEST_CANCEL_FAIL_AT=intent
+        cancel_command >"$output" 2>&1 && fail 'intent fault ignored'
+        unset STAGED_TEST_CANCEL_FAIL_AT
+        sed -i "/chatwoot-client-portal-v2-portal-backend:$PREPARED_COMMIT/d" "$FAKE_DOCKER_STATE_DIR/tags.tsv" ;;
+      runtime) sed -i "s/$CURRENT_BACKEND_ID/$CANDIDATE_BACKEND_ID/" "$FAKE_CONTAINER_STATE_FILE" ;;
+      pending-approval|archived-tamper)
+        export STAGED_TEST_CANCEL_FAIL_AT=move
+        cancel_command >"$output" 2>&1 && fail 'move fault ignored'
+        unset STAGED_TEST_CANCEL_FAIL_AT
+        if [[ "$variant" == pending-approval ]]; then
+          sed -i 's/cancel-test/different-approval/' "$app/.release-state/cancellations/$CANCEL_MANIFEST_SHA/intent.json"
+        else
+          printf 'tamper' >>"$app/.release-state/cancellations/$CANCEL_MANIFEST_SHA/release/source/release-content.txt"
+        fi ;;
+      completed-tamper)
+        cancel_command >"$output" 2>&1 || fail 'setup cancel failed'
+        printf 'tamper' >>"$app/.release-state/cancellations/$CANCEL_MANIFEST_SHA/completed"
+        if deploy_command prepare >"$output" 2>&1; then fail 'prepare ignored completed audit corruption'; fi ;;
+    esac
+    if cancel_command >"$output" 2>&1; then fail "cancellation accepted $variant"; fi
+    assert_status_once "$output" preparation_cancel_failed
+    unset CANCEL_MANIFEST_SHA
+  done
+}
+
+cancel_tag_failure_is_resumable_and_shared_current_image_is_safe() {
+  setup_activation_fixture "$FUNCNAME"
+  local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/cancel-output" manifest
+  manifest="$app/.releases/$PREPARED_COMMIT/manifest.txt"
+  # An unchanged backend may have exactly the same content-addressed image.
+  local old_id
+  old_id="$(release_record_get_unique "$manifest" backend_image_id)"
+  sed -i "s/^backend_image_id=.*/backend_image_id=$CURRENT_BACKEND_ID/" "$manifest"
+  sed -i "s/$old_id/$CURRENT_BACKEND_ID/g" "$FAKE_DOCKER_STATE_DIR/tags.tsv"
+  CANCEL_MANIFEST_SHA="$(sha256sum "$manifest" | awk '{print $1}')"
+  export FAKE_IMAGE_RM_FAIL_TARGET="chatwoot-client-portal-v2-portal-web:$PREPARED_COMMIT"
+  if cancel_command >"$output" 2>&1; then fail 'tag failure ignored'; fi
+  [[ -f "$app/.release-state/prepared" ]] || fail 'pointer removed before tag retirement'
+  unset FAKE_IMAGE_RM_FAIL_TARGET
+  cancel_command >"$output" 2>&1 || { cat "$output"; fail 'tag failure resume failed'; }
+  grep -Fq "chatwoot-client-portal-v2-portal-backend:$CURRENT_COMMIT" "$FAKE_DOCKER_STATE_DIR/tags.tsv" || fail 'current tag removed'
+  grep -Fq "$CURRENT_BACKEND_ID" "$FAKE_CONTAINER_STATE_FILE" || fail 'current image changed'
+  python3 - "$FAKE_COMMAND_LOG" "$PREPARED_COMMIT" <<'PYCANCEL'
+import pathlib, sys
+expected = {f'chatwoot-client-portal-v2-portal-{service}:{sys.argv[2]}' for service in ('backend', 'web')}
+for raw in pathlib.Path(sys.argv[1]).read_bytes().split(b'\0\0'):
+    args = [part.decode() for part in raw.split(b'\0') if part]
+    if args[:3] == ['docker', 'image', 'rm']:
+        assert len(args) == 4 and args[3] in expected, args
+    assert not any(part in {'prune', 'down', 'up'} for part in args), args
+PYCANCEL
+  unset CANCEL_MANIFEST_SHA
+}
+
+run_cancel_cases() {
+  PYTHONDONTWRITEBYTECODE=1 python3 "$SOURCE_ROOT/scripts/test-production-release-cancellation.py" >"$TMP_DIR/cancel-filesystem.log" 2>&1 || { cat "$TMP_DIR/cancel-filesystem.log"; fail 'cancellation filesystem tests'; }
+  run_case cancel_preserves_runtime_archives_candidate_and_allows_reprepare
+  run_case cancel_resumes_each_fault_and_blocks_other_release_actions
+  run_case cancel_rejects_wrong_identity_or_changed_evidence
+  run_case cancel_tag_failure_is_resumable_and_shared_current_image_is_safe
+}
+
 run_bootstrap_cases() {
   run_case rejects_dirty_tree_before_transport
   run_case rejects_non_main_branch_before_transport
@@ -5060,6 +5188,10 @@ case "$FILTER" in
     run_prepare_cases
     run_activate_success_cases
     run_rollback_cases
+    run_cancel_cases
+    ;;
+  cancel)
+    run_cancel_cases
     ;;
   bootstrap)
     run_bootstrap_cases

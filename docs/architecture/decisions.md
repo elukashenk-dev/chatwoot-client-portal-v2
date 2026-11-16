@@ -552,6 +552,13 @@
   rendered Compose. A separately approved, journaled baseline recovery may
   reconstruct exact source/image evidence after migration and retire an explicitly
   acknowledged missing previous pointer; it cannot start containers or migrate DB.
+  An explicitly approved `cancel-prepared` operation retires an unactivated
+  preparation by exact candidate SHA and manifest checksum under the same lock.
+  It preserves the complete release in a durable bounded cancellation archive,
+  journals each candidate tag retirement, and blocks normal release operations
+  while incomplete. It cannot activate code, change DB data or rewrite the
+  prepared tenant matrix. Fresh preparation and activation retain their separate
+  approval boundaries.
 - граница:
   This decision does not authorize a real production rehearsal or deploy. The
   temporary pre-staged source-marker reader remains tracked by `F-OPS-007`;

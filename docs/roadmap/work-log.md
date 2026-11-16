@@ -331,13 +331,18 @@ execution-plan детали здесь не хранятся.
   Historical group author snapshots and prefixes remain unchanged, and missing
   contact names no longer fall back to a previous employee's registration name.
 
+- Staged release tooling supports explicitly approved cancellation of an
+  unactivated preparation by exact SHA and manifest checksum, with durable
+  archived evidence, resumable tag retirement and unchanged running services.
+
 ## Recommended Next Step
 
-- Publish the verified portal-only release tooling, then perform the separately
-  approved Timeweb baseline recovery, preparation and activation for the contact
-  profile update. Exact recovery inputs and closure evidence are in
-  [portal-only-release-plan.md](./portal-only-release-plan.md). Telegram bridge
-  remains disabled.
+- Publish the verified cancellation slice, cancel the obsolete two-tenant
+  preparation after approval, and prepare the contact-profile release for the
+  remaining active Timeweb tenant. Exact cancellation inputs and closure evidence
+  are in [cancel-prepared-release-plan.md](./cancel-prepared-release-plan.md).
+  Activation requires separate approval after preparation; Telegram bridge remains
+  disabled.
 - After explicit approval, merge the verified PWA share-target branch into
   `main`, then complete the real-device platform smoke from `F-PWA-006` before
   advertising or rolling out system sharing in production.

@@ -1184,6 +1184,7 @@ remote_validate_state_layout() {
     case "$name" in
       deploy.lock|adoption|current|previous|prepared|transaction) [[ -f "$entry" && ! -L "$entry" ]] || return 1 ;;
       recovery) remote_recovery_validate_completed "$entry" || return 1 ;;
+      cancellations) remote_cancel_audit check "$app_path" || return 1 ;;
       decisions|history) remote_require_private_directory "$entry" || return 1 ;;
       *) return 1 ;;
     esac
@@ -2142,6 +2143,7 @@ PY
     remote_prepare_abort 'Prepared pointer publication failed.'
   REMOTE_PREPARE_PUBLISHED='true'
 
+  printf 'Prepared manifest SHA256: %s\n' "$(sha256sum "$candidate_dir/manifest.txt" | awk '{print $1}')"
   printf 'Prepared candidate: %s\n' "$candidate_commit"
   printf 'Observed current release: %s\n' "$current_commit"
   printf 'Migration classification: %s\n' "$REMOTE_MIGRATION_CLASSIFICATION"
@@ -3635,6 +3637,7 @@ remote_block_on_critical_state() {
   local prepared_valid='true' transaction_present='false' transaction_valid='false'
 
   [[ "$operation" == 'prepare' || "$operation" == 'activate' ]] || return 2
+  remote_cancel_check "$app_path" || return 1
   if [[ -e "$state_dir/recovery" || -L "$state_dir/recovery" ]]; then
     remote_recovery_validate_completed "$state_dir/recovery" || return 1
   fi
@@ -5034,12 +5037,185 @@ remote_parse_recovery_options() {
   fi
 }
 
+remote_cancel_audit() {
+  local action="$1" app="$2"
+  shift 2
+  local python
+  python="$(remote_select_python)" || return 1
+  "$python" "$(dirname -- "$SELF_PATH")/production-release-cancellation.py" "$action" "$app" "$@"
+}
+
+remote_cancel_check() {
+  local path="$1/.release-state/cancellations"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  remote_cancel_audit check "$1"
+}
+
+remote_cancel_checkpoint() {
+  remote_is_test_mode || return 0
+  [[ "${STAGED_TEST_CANCEL_FAIL_AT:-}" != "$1" ]]
+}
+
+remote_cancel_validate_runtime() {
+  local app="$1" candidate_dir="$2" current="$3"
+  local current_dir="$app/.releases/$current" service tag id
+  remote_inspect_current "$app" || return 1
+  [[ "$REMOTE_INSPECT_CURRENT" == "$current" ]] || return 1
+  remote_load_release_evidence "$current_dir" "$current" || return 1
+  remote_validate_release_source_snapshot "$current_dir" "$REMOTE_ROLLBACK_ARCHIVE_SHA" || return 1
+  remote_validate_release_override "$current_dir" "$current" || return 1
+  remote_select_activation_tools || return 1
+  remote_verify_root_source "$app" "$current_dir" || return 1
+  [[ "$(release_record_get_unique "$candidate_dir/manifest.txt" rollback_archive_sha256)" == "$REMOTE_ROLLBACK_ARCHIVE_SHA" &&
+    "$(release_record_get_unique "$candidate_dir/manifest.txt" rollback_backend_image_id)" == "$REMOTE_ROLLBACK_BACKEND_ID" &&
+    "$(release_record_get_unique "$candidate_dir/manifest.txt" rollback_web_image_id)" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1
+  for service in portal-backend portal-web; do
+    tag="$(remote_release_tag "$service" "$current")" || return 1
+    id="$(remote_image_id "$tag")" || return 1
+    case "$service" in
+      portal-backend) [[ "$id" == "$REMOTE_ROLLBACK_BACKEND_ID" ]] || return 1 ;;
+      portal-web) [[ "$id" == "$REMOTE_ROLLBACK_WEB_ID" ]] || return 1 ;;
+    esac
+  done
+  remote_configure_compose "$app" "$current_dir" || return 1
+  "${REMOTE_COMPOSE[@]}" config --quiet >/dev/null 2>&1 || return 1
+  remote_validate_rendered_runtime || return 1
+  REMOTE_ACTIVATION_CANDIDATE_IDS=("$REMOTE_ROLLBACK_BACKEND_ID" "$REMOTE_ROLLBACK_WEB_ID")
+  remote_capture_candidate_services
+}
+
+remote_locked_cancel() {
+  local app="$1" candidate="$2" manifest_sha="$3" approval="$4"
+  local state="$app/.release-state" entry="$app/.release-state/cancellations/$manifest_sha"
+  local release="$app/.releases/$candidate" manifest current checksum pointer value path record_candidate
+  local epoch index status actual tag id allow_absent=false
+  remote_select_docker || return 1
+  REMOTE_PYTHON_BIN="$(remote_select_python)" || return 1
+  [[ ! -e "$state/transaction" && ! -L "$state/transaction" ]] || return 1
+  remote_require_private_directory "$state" || return 1
+  remote_require_private_directory "$app/.releases" || return 1
+  remote_require_private_directory "$state/decisions" || return 1
+  remote_require_private_directory "$state/history" || return 1
+  [[ ! -e "$state/decisions/$candidate.txt" && ! -L "$state/decisions/$candidate.txt" ]] || return 1
+  for path in "$state/history"/*; do
+    [[ -e "$path" || -L "$path" ]] || continue
+    record_candidate="$(release_record_get_unique "$path" candidate_commit)" || return 1
+    [[ "$record_candidate" != "$candidate" ]] || return 1
+  done
+  for pointer in current previous adoption; do
+    if [[ -e "$state/$pointer" || -L "$state/$pointer" ]]; then
+      value="$(remote_pointer_read "$state/$pointer")" || return 1
+      [[ "$value" != "$candidate" ]] || return 1
+    fi
+  done
+  if [[ -e "$entry/intent.json" ]]; then
+    allow_absent=true
+    status="$(remote_cancel_audit verify "$app" "$candidate" "$manifest_sha" "$approval" 1)" || return 1
+    if [[ "$status" == completed ]]; then
+      printf 'Cancellation already completed: %s\n' "$manifest_sha"
+      remote_emit_status preparation_cancelled
+      return 0
+    fi
+    [[ ! -d "$entry/release" ]] || release="$entry/release"
+  else
+    remote_block_on_critical_state "$app" prepare || return 1
+    remote_validate_state_layout "$app" || return 1
+    [[ "$(remote_pointer_read "$state/prepared")" == "$candidate" ]] || return 1
+  fi
+  manifest="$release/manifest.txt"
+  remote_validate_prepared_manifest "$manifest" "$candidate" || return 1
+  [[ "$(sha256sum "$manifest" | awk '{print $1}')" == "$manifest_sha" ]] || return 1
+  current="$(release_record_get_unique "$manifest" observed_current_commit)" || return 1
+  [[ "$(release_record_get_unique "$manifest" rollback_commit)" == "$current" ]] || return 1
+  checksum="$(release_record_get_unique "$manifest" candidate_archive_sha256)" || return 1
+  remote_validate_release_source_snapshot "$release" "$checksum" || return 1
+  remote_validate_release_override "$release" "$candidate" || return 1
+  remote_validate_retry_candidate_tenant_matrix "$release" "$candidate" || return 1
+  remote_cancel_validate_runtime "$app" "$release" "$current" || return 1
+  remote_collect_exact_prepared_candidate_images "$manifest" "$candidate" "$allow_absent" || return 1
+  for index in 0 1; do
+    [[ "${REMOTE_PREPARED_CANDIDATE_TAG_STATES[$index]}" != absent || -f "$entry/untag-$index" ]] || return 1
+  done
+  epoch="$(remote_now_epoch)" || return 1
+  remote_cancel_audit begin "$app" "$candidate" "$manifest_sha" "$approval" "$epoch" >/dev/null || return 1
+  remote_cancel_checkpoint intent || return 1
+  remote_cancel_audit move "$app" "$candidate" "$manifest_sha" "$approval" "$epoch" >/dev/null || return 1
+  remote_cancel_checkpoint move || return 1
+  release="$entry/release"
+  manifest="$release/manifest.txt"
+  for index in 0 1; do
+    remote_collect_exact_prepared_candidate_images "$manifest" "$candidate" true || return 1
+    if [[ "${REMOTE_PREPARED_CANDIDATE_TAG_STATES[$index]}" == exact ]]; then
+      tag="${REMOTE_PREPARED_CANDIDATE_TAGS[$index]}"
+      id="${REMOTE_PREPARED_CANDIDATE_IMAGE_IDS[$index]}"
+      [[ "$(remote_image_id "$tag")" == "$id" ]] || return 1
+      remote_cancel_audit "untag-$index" "$app" "$candidate" "$manifest_sha" "$approval" "$epoch" >/dev/null || return 1
+      remote_cancel_checkpoint "before-untag-$index" || return 1
+      [[ "$(remote_image_id "$tag")" == "$id" ]] || return 1
+      # Remove the candidate reference, never an image ID shared by current.
+      "${REMOTE_DOCKER[@]}" image rm "$tag" >/dev/null || return 1
+      remote_image_tag_is_confirmed_absent "$tag" || return 1
+    else
+      [[ -f "$entry/untag-$index" ]] || return 1
+    fi
+    remote_recheck_candidate_services || return 1
+    remote_cancel_validate_runtime "$app" "$release" "$current" || return 1
+    remote_cancel_checkpoint "tag-$index" || return 1
+  done
+  remote_cancel_validate_runtime "$app" "$release" "$current" || return 1
+  remote_cancel_checkpoint before-finish || return 1
+  remote_cancel_audit finish "$app" "$candidate" "$manifest_sha" "$approval" "$epoch" >/dev/null || return 1
+  remote_cancel_checkpoint completed || return 1
+  remote_validate_state_layout "$app" || return 1
+  printf 'Cancelled preparation: %s\nCancellation audit: %s\n' "$candidate" "$entry"
+  remote_emit_status preparation_cancelled
+}
+
+remote_parse_cancel_options() {
+  local locked="$1"; shift
+  local app='' candidate='' manifest='' approval='' argument name value code
+  local -A seen=()
+  for argument in "$@"; do
+    [[ "$argument" == --*=* ]] || return 2
+    name="${argument%%=*}"; value="${argument#*=}"
+    [[ -n "$value" && -z "${seen[$name]:-}" ]] || return 2
+    seen[$name]=true
+    case "$name" in
+      --app-path) app="$value" ;; --commit) candidate="$value" ;;
+      --manifest-sha256) manifest="$value" ;; --approval-ref) approval="$value" ;; *) return 2 ;;
+    esac
+  done
+  [[ "$app" == "$REMOTE_APP_PATH" ]] && release_record_is_sha "$candidate" &&
+    release_record_is_checksum "$manifest" && release_record_is_approval_ref "$approval" || return 2
+  REMOTE_EFFECTIVE_APP_PATH="$(remote_resolve_app_path "$app")" || return 2
+  if [[ "$locked" == true ]]; then
+    remote_locked_cancel "$REMOTE_EFFECTIVE_APP_PATH" "$candidate" "$manifest" "$approval"
+  else
+    remote_require_private_directory "$REMOTE_EFFECTIVE_APP_PATH/.release-state" || return 1
+    remote_lock_file_is_safe "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" || return 1
+    if flock --nonblock --close --conflict-exit-code 75 "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" \
+      "$SELF_PATH" __locked-cancel-prepared "$@"; then
+      REMOTE_STATUS_EMITTED=true
+    else
+      code=$?
+      [[ "$code" == 75 ]] || REMOTE_STATUS_EMITTED=true
+      return "$code"
+    fi
+  fi
+}
+
 remote_main() {
   local phase="${1:-}"
   local parse_exit
   shift || true
 
   case "$phase" in
+    cancel-prepared|__locked-cancel-prepared)
+      REMOTE_FAILURE_STATUS='preparation_cancel_failed'
+      local locked=false
+      [[ "$phase" != __locked-cancel-prepared ]] || locked=true
+      remote_parse_cancel_options "$locked" "$@" || remote_fail 'Cancellation refused or interrupted; resume only with the same SHA, manifest checksum and approval.' preparation_cancel_failed
+      ;;
     recover-baseline|__locked-recover-baseline)
       REMOTE_FAILURE_STATUS='baseline_recovery_failed'
       local locked=false

@@ -106,7 +106,7 @@ automatically restores the exact previous release and still exits non-zero with
 `activation_failed_publication`. The clean-install-only phase reports
 `bootstrap_completed`, `bootstrap_refused_nonempty` or `bootstrap_failed`.
 Every status other than `prepared`, `activation_succeeded` and
-`bootstrap_completed` and `baseline_recovered` exits non-zero.
+`bootstrap_completed`, `baseline_recovered` and `preparation_cancelled` exits non-zero.
 
 Preparation records non-secret source, checksum, migration, image and active
 tenant evidence in `.release-state/` and `.releases/`. Retention is bounded to
@@ -131,6 +131,61 @@ Changes to the release protocol or Compose configuration additionally require
 `bash scripts/test-production-runtime-compose.sh`. This read-only integration
 uses the installed Docker Compose CLI to verify the real template's service
 selection and gateway rendering; it never starts containers.
+
+## Cancel An Unactivated Preparation
+
+If an approved operational change invalidates a preparation (for example,
+archiving an unused tenant changes the active smoke matrix), obtain approval to
+cancel that exact preparation. Do not change its expiry or edit the manifest.
+Use the full candidate SHA and the original manifest SHA256 printed by prepare;
+for older preparations, read the checksum of that exact server manifest first.
+
+```bash
+scripts/deploy-production-staged.sh cancel-prepared \
+  --host=lancora@5.129.253.99 --ssh-port=22 \
+  --identity-file="$HOME/.ssh/production_deploy_key" \
+  --known-hosts-file="$HOME/.ssh/production_known_hosts" \
+  --app-path=/opt/chatwoot-client-portal-v2 \
+  --commit=<FULL_CANDIDATE_SHA> \
+  --manifest-sha256=<ORIGINAL_MANIFEST_SHA256> \
+  --approval-ref=<APPROVED_CANCELLATION_REFERENCE>
+```
+
+`status=preparation_cancelled` means the preparation is retired; the running
+portal has not been updated or restarted. The command uses the deployment lock,
+verifies current source, tags, Compose and live container identities, and rejects
+activation transactions, decisions or outcomes for the candidate. An intent and
+complete inventory precede an atomic move of the entire candidate release into
+`.release-state/cancellations/<manifest-sha256>/release`. The archive preserves
+source, manifest, override and original tenant evidence. No env, tenant rows,
+Chatwoot account, volume or container is deleted. The two exact candidate tag
+names are removed without force; current/rollback image tags are retained even
+when their content-addressed image IDs match a candidate image.
+
+The prepared pointer is retired after archive durability and tag retirement.
+A pending or invalid cancellation blocks ordinary prepare and activate. On
+`status=preparation_cancel_failed`, inspect the error and resume **the same
+command with the same SHA, manifest checksum and approval ref**. Do not manually
+remove pointers, audits or tags. A completed cancellation is idempotent, but an
+old cancellation command cannot retire a later preparation of the same SHA.
+After cancellation, run the separately approved ordinary `prepare`; activation
+still requires approval of that fresh preparation. Expiry/rollback cleanup are
+unchanged and cannot be used to impersonate cancellation.
+
+Audit storage is private and immutable by protocol, not protected from its
+owner. Each tree is bounded to 10,000 entries / 512 MiB; at most 20 cancellations
+are retained without automatic deletion. Audit integrity is checked before
+ordinary release actions. The temporary intent publication and state must share
+a filesystem; archive movement also checks this invariant. A retention or
+filesystem refusal needs an explicit operator remediation, not a bypass.
+
+All portal Docker tag writers must hold the same deployment lock. Docker has no
+atomic compare-and-delete operation for a tag. Cancellation checks exact IDs
+immediately before untagging and rechecks retained tags and live containers
+after each removal; an out-of-protocol deployment-user/root tag writer is not
+covered by this exclusive operator contract. Each tag retirement has a durable
+journal-bound intent before the Docker call, so a lost acknowledgement is
+resumable without accepting unexplained tag disappearance.
 
 ## Explicit Recovery Of A Migrated Baseline
 

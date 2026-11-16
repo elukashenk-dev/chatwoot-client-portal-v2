@@ -27,6 +27,7 @@ STAGED_PREPARED_MIGRATION=''
 staged_usage() {
   cat <<'EOF'
 Usage:
+  scripts/deploy-production-staged.sh cancel-prepared [SSH options] --commit=FULL_SHA --manifest-sha256=SHA256 --approval-ref=REFERENCE
   scripts/deploy-production-staged.sh recover-baseline [SSH options] --commit=CURRENT_FULL_SHA --retire-missing-previous=FULL_SHA --backend-host-gateway=HOST_OR_none --backend-image-id=sha256:ID --web-image-id=sha256:ID --approval-ref=REFERENCE
   scripts/deploy-production-staged.sh prepare --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH [--retry-after-rollback=FULL_SHA]
   scripts/deploy-production-staged.sh activate --host=user@host --ssh-port=22 --identity-file=PATH --app-path=/opt/chatwoot-client-portal-v2 --commit=FULL_SHA --known-hosts-file=PATH [--migration-policy=backward-compatible|forward-only --approval-ref=REFERENCE]
@@ -284,7 +285,7 @@ staged_main() {
   shift || true
   local repo_root script_dir
   local ssh_target='' ssh_port='' identity_file='' app_path='' commit=''
-  local retired='' gateway='' backend_id='' web_id=''
+  local retired='' gateway='' backend_id='' web_id='' manifest_sha='' cancellation_script=''
   local known_hosts_file='' migration_policy='' approval_ref='' retry_after_rollback=''
   local argument name value host lookup archive_path archive_sha archive_name
   local current_archive_path current_archive_sha orchestrator_commit inspection_output inspection_exit
@@ -294,6 +295,7 @@ staged_main() {
   local -A seen=()
 
   case "$phase" in
+    cancel-prepared) STAGED_FAILURE_STATUS='preparation_cancel_failed' ;;
     recover-baseline) STAGED_FAILURE_STATUS='baseline_recovery_failed' ;;
     prepare)
       STAGED_FAILURE_STATUS='prepare_failed'
@@ -319,6 +321,7 @@ staged_main() {
     [[ -z "${seen[$name]:-}" ]] || staged_fail "Duplicate option: --$name" 2
     seen[$name]='true'
     case "$name" in
+      manifest-sha256) manifest_sha="$value" ;;
       retire-missing-previous) retired="$value" ;;
       backend-host-gateway) gateway="$value" ;;
       backend-image-id) backend_id="$value" ;;
@@ -339,10 +342,14 @@ staged_main() {
   [[ -n "$ssh_target" && -n "$ssh_port" && -n "$identity_file" && -n "$app_path" &&
     -n "$commit" && -n "$known_hosts_file" ]] || staged_fail 'Required deployment options are missing.' 2
 
+  [[ "$phase" == cancel-prepared || -z "$manifest_sha" ]] || staged_fail 'Manifest checksum is only for cancellation.' 2
   if [[ "$phase" != recover-baseline ]]; then
     [[ -z "$retired$gateway$backend_id$web_id" ]] || staged_fail 'Recovery options require recover-baseline.' 2
   fi
-  if [[ "$phase" == recover-baseline ]]; then
+  if [[ "$phase" == cancel-prepared ]]; then
+    [[ "$manifest_sha" =~ ^[0-9a-f]{64}$ && -n "$approval_ref" && -z "$migration_policy$retry_after_rollback" ]] ||
+      staged_fail 'Cancellation needs exact manifest SHA256 and approval reference.' 2
+  elif [[ "$phase" == recover-baseline ]]; then
     [[ -z "$migration_policy$retry_after_rollback" && -n "$approval_ref" &&
       "$retired" =~ ^[0-9a-f]{40}$ && "$retired" != "$commit" &&
       "$backend_id" =~ ^sha256:[0-9a-f]{64}$ && "$web_id" =~ ^sha256:[0-9a-f]{64}$ ]] ||
@@ -430,7 +437,7 @@ staged_main() {
 
   umask 077
   STAGED_LOCAL_TEMP="$(mktemp -d /tmp/chatwoot-client-portal-v2-local.XXXXXX)"
-  if [[ "$phase" != 'activate' ]]; then
+  if [[ "$phase" != activate && "$phase" != cancel-prepared ]]; then
     archive_name='candidate.tar.gz'
     [[ "$phase" != 'bootstrap' && "$phase" != recover-baseline ]] || archive_name='source.tar.gz'
     archive_path="$STAGED_LOCAL_TEMP/$archive_name"
@@ -450,11 +457,12 @@ staged_main() {
 
   remote_script="$script_dir/production-staged-release-remote.sh"
   records_script="$script_dir/production-release-records.sh"
+  cancellation_script="$script_dir/production-release-cancellation.py"
 
   if [[ "$phase" == 'prepare' ]]; then
     "$STAGED_SCP_BIN_RESOLVED" \
       "${STAGED_SCP_OPTIONS[@]}" \
-      "$remote_script" "$records_script" \
+      "$remote_script" "$records_script" "$cancellation_script" \
       "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged inspection helpers.'
 
     staged_shell_join remote_command \
@@ -503,8 +511,13 @@ staged_main() {
     [[ -z "$retry_after_rollback" ]] ||
       prepare_arguments+=("--retry-after-rollback=$retry_after_rollback")
     staged_shell_join remote_command "${prepare_arguments[@]}"
+  elif [[ "$phase" == cancel-prepared ]]; then
+    "$STAGED_SCP_BIN_RESOLVED" "${STAGED_SCP_OPTIONS[@]}" "$remote_script" "$records_script" "$cancellation_script" \
+      "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload cancellation helpers.'
+    staged_shell_join remote_command "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" cancel-prepared \
+      "--app-path=$app_path" "--commit=$commit" "--manifest-sha256=$manifest_sha" "--approval-ref=$approval_ref"
   elif [[ "$phase" == recover-baseline ]]; then
-    "$STAGED_SCP_BIN_RESOLVED" "${STAGED_SCP_OPTIONS[@]}" "$archive_path" "$remote_script" "$records_script" \
+    "$STAGED_SCP_BIN_RESOLVED" "${STAGED_SCP_OPTIONS[@]}" "$archive_path" "$remote_script" "$records_script" "$cancellation_script" \
       "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload recovery inputs.'
     staged_shell_join remote_command "$STAGED_REMOTE_TEMP/production-staged-release-remote.sh" recover-baseline \
       "--app-path=$app_path" "--archive-path=$STAGED_REMOTE_TEMP/source.tar.gz" "--archive-sha256=$archive_sha" \
@@ -513,7 +526,7 @@ staged_main() {
   elif [[ "$phase" == 'bootstrap' ]]; then
     "$STAGED_SCP_BIN_RESOLVED" \
       "${STAGED_SCP_OPTIONS[@]}" \
-      "$archive_path" "$remote_script" "$records_script" \
+      "$archive_path" "$remote_script" "$records_script" "$cancellation_script" \
       "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged release inputs.'
 
     staged_shell_join remote_command \
@@ -527,7 +540,7 @@ staged_main() {
   else
     "$STAGED_SCP_BIN_RESOLVED" \
       "${STAGED_SCP_OPTIONS[@]}" \
-      "$remote_script" "$records_script" \
+      "$remote_script" "$records_script" "$cancellation_script" \
       "$STAGED_SSH_TARGET:$STAGED_REMOTE_TEMP/" || staged_fail 'Unable to upload staged activation helpers.'
 
     staged_shell_join remote_command \
@@ -610,6 +623,7 @@ staged_main() {
   fi
 
   if (( remote_exit == 0 )) && {
+    [[ "$phase" == cancel-prepared && "$remote_status" == preparation_cancelled ]] ||
     [[ "$phase" == recover-baseline && "$remote_status" == baseline_recovered ]] ||
     [[ "$phase" == 'bootstrap' && "$remote_status" == 'bootstrap_completed' ]] ||
       [[ "$phase" == 'prepare' && "$remote_status" == 'prepared' ]] ||
