@@ -4731,7 +4731,7 @@ remote_recovery_validate_completed() {
   local directory="$1" journal="$1/journal.txt" completed="$1/completed.txt" key value
   remote_require_private_directory "$directory" || return 1
   release_record_validate_keys "$journal" protocol_version record_kind release_commit archive_sha256 \
-    retired_previous backend_host_gateway backend_image_id web_image_id approval_ref recorded_at_utc || return 1
+    retired_previous backend_host_gateway backend_image_id web_image_id approval_ref recorded_at_utc history_inventory_sha256 || return 1
   [[ "$(release_record_get_unique "$journal" protocol_version)" == "$REMOTE_PROTOCOL_VERSION" &&
     "$(release_record_get_unique "$journal" record_kind)" == baseline_recovery ]] || return 1
   for key in release_commit retired_previous; do
@@ -4746,7 +4746,106 @@ remote_recovery_validate_completed() {
   done
   release_record_is_approval_ref "$(release_record_get_unique "$journal" approval_ref)" || return 1
   release_record_is_timestamp "$(release_record_get_unique "$journal" recorded_at_utc)" || return 1
+  value="$(release_record_get_unique "$journal" history_inventory_sha256)" || return 1
+  release_record_is_checksum "$value" || return 1
+  release_record_require_private_file "$directory/history-inventory.json" || return 1
+  [[ "$(sha256sum "$directory/history-inventory.json" | awk '{print $1}')" == "$value" ]] || return 1
+  remote_recovery_history verify "$directory/../history" "$directory" "$directory/history-inventory.json" || return 1
   release_record_require_private_file "$completed" && cmp -s "$journal" "$completed"
+}
+
+# Archival eligibility only: protocol-1 records never enter protocol-2 authority.
+remote_recovery_history() {
+  local action="$1" history="$2" recovery="$3" inventory="$4"
+  "${REMOTE_PYTHON_BIN:-python3}" - "$action" "$history" "$recovery" "$inventory" <<'PY'
+import datetime, hashlib, json, os, pathlib, re, stat, sys, tempfile
+action, history, recovery, inventory = sys.argv[1:]
+history, recovery, inventory = map(pathlib.Path, (history, recovery, inventory))
+archive = recovery / 'history'
+def require(condition):
+    if not condition: raise SystemExit(1)
+def inspect(path, directory=False):
+    info = path.lstat()
+    require(info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == (0o700 if directory else 0o600))
+    require(stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and 0 < info.st_size <= 16384)
+def scan(folder):
+    if not folder.exists():
+        require(not folder.is_symlink())
+        return {}
+    inspect(folder, True)
+    result = {}
+    for path in folder.iterdir():
+        require(len(result) < 20)
+        inspect(path)
+        name = re.fullmatch(r'([0-9]+)-([0-9a-f]{40})-(activation_succeeded|candidate_failed_rollback_succeeded)\.txt', path.name)
+        require(name is not None)
+        body = path.read_bytes()
+        require(body.endswith(b'\n') and all(byte == 10 or 32 <= byte <= 126 for byte in body))
+        fields = {}
+        required = {'protocol_version', 'record_kind', 'candidate_commit', 'previous_commit', 'status', 'failure_stage', 'transaction_started_at_utc', 'recorded_at_utc', 'recorded_at_epoch'}
+        optional = {'compose_wait_exit_code'} | {'compose_wait_' + service + suffix for service in ('portal_backend', 'portal_web', 'telegram_bridge') for suffix in ('', '_exit_code', '_oom_killed', '_log_tail', '_stop_classification')}
+        for line in body.decode('ascii').splitlines():
+            key, sep, value = line.partition('=')
+            require(sep and key in required | optional and key not in fields)
+            fields[key] = value
+        require(required <= fields.keys() and fields['protocol_version'] == '1' and fields['record_kind'] == 'deployment_outcome')
+        require(fields['candidate_commit'] == name[2] and fields['status'] == name[3] and fields['recorded_at_epoch'] == name[1])
+        require(re.fullmatch(r'[0-9a-f]{40}|none', fields['previous_commit']) is not None)
+        require(fields['failure_stage'] == 'none' if name[3] == 'activation_succeeded' else fields['failure_stage'] in ('compose_wait', 'service_state', 'tenant_smoke', 'root_sync', 'marker_publish'))
+        dates = []
+        for key in ('transaction_started_at_utc', 'recorded_at_utc'):
+            require(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', fields[key]) is not None)
+            dates.append(datetime.datetime.strptime(fields[key], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc))
+        require(dates[0] <= dates[1] and int(dates[1].timestamp()) == int(name[1]))
+        result[path.name] = hashlib.sha256(body).hexdigest()
+    return result
+archived = scan(archive)
+active = {} if action == 'verify' else scan(history)
+require(all(name not in archived or archived[name] == checksum for name, checksum in active.items()))
+combined = archived | active
+require(len(combined) <= 20)
+encoded = (json.dumps(combined, sort_keys=True, separators=(',', ':')) + '\n').encode()
+if action == 'snapshot':
+    inventory.write_bytes(encoded)
+    inventory.chmod(0o600)
+else:
+    inspect(inventory)
+    require(inventory.read_bytes() == encoded)
+    if action == 'archive':
+        archive.mkdir(mode=0o700, exist_ok=True)
+        inspect(archive, True)
+        def sync(path):
+            fd = os.open(path, os.O_RDONLY)
+            try: os.fsync(fd)
+            finally: os.close(fd)
+        sync(recovery)
+        for name in sorted(active):
+            source, target = history / name, archive / name
+            if name not in archived:
+                fd, temporary = tempfile.mkstemp(prefix='.history-copy.', dir=recovery)
+                try:
+                    with os.fdopen(fd, 'wb') as output:
+                        body = source.read_bytes()
+                        require(hashlib.sha256(body).hexdigest() == active[name])
+                        output.write(body)
+                        output.flush()
+                        os.fsync(output.fileno())
+                    # A raced destination must never replace historical evidence.
+                    os.link(temporary, target)
+                finally:
+                    if os.path.exists(temporary): os.unlink(temporary)
+            sync(target)
+            sync(archive)
+            inspect(target)
+            inspect(source)
+            require(hashlib.sha256(target.read_bytes()).hexdigest() == active[name])
+            require(hashlib.sha256(source.read_bytes()).hexdigest() == active[name])
+            source.unlink()
+            sync(history)
+        require(scan(archive) == combined and not scan(history))
+    else:
+        require(action == 'verify')
+PY
 }
 
 remote_recovery_validate_root_subset() {
@@ -4801,7 +4900,7 @@ remote_recovery_require_owned_directory() {
 remote_locked_recover_baseline() {
   local app="$1" archive="$2" checksum="$3" commit="$4" retired="$5" host="$6" backend="$7" web="$8" approval="$9"
   local state="$app/.release-state" release="$app/.releases/$commit" recovery="$app/.release-state/recovery"
-  local timestamp temp name entry
+  local timestamp temp name entry history_checksum
   local -a entries=() links=()
   REMOTE_PYTHON_BIN="$(remote_select_python)" || return 1
   remote_select_docker && remote_select_activation_tools || return 1
@@ -4822,8 +4921,10 @@ remote_locked_recover_baseline() {
   for name in history decisions; do
     if [[ -e "$state/$name" ]]; then
       remote_require_private_directory "$state/$name" || return 1
-      remote_find_paths entries "$state/$name" -mindepth 1 || return 1
-      (( ${#entries[@]} == 0 )) || return 1
+      if [[ "$name" == decisions ]]; then
+        remote_find_paths entries "$state/$name" -mindepth 1 || return 1
+        (( ${#entries[@]} == 0 )) || return 1
+      fi
     fi
   done
   if [[ -e "$state/previous" ]]; then
@@ -4850,13 +4951,17 @@ remote_locked_recover_baseline() {
   (
     trap 'rm -rf -- "$temp"' EXIT
     umask 077
+    remote_recovery_history snapshot "$state/history" "$recovery" "$temp/history-inventory.json" || exit 1
+    history_checksum="$(sha256sum "$temp/history-inventory.json" | awk '{print $1}')" || exit 1
     printf '%s\n' "protocol_version=$REMOTE_PROTOCOL_VERSION" 'record_kind=baseline_recovery' \
       "release_commit=$commit" "archive_sha256=$checksum" "retired_previous=$retired" \
       "backend_host_gateway=$host" "backend_image_id=$backend" "web_image_id=$web" \
-      "approval_ref=$approval" "recorded_at_utc=$timestamp" >"$temp/journal.txt"
+      "approval_ref=$approval" "recorded_at_utc=$timestamp" "history_inventory_sha256=$history_checksum" >"$temp/journal.txt"
     if [[ ! -e "$recovery" ]]; then mkdir -m 0700 "$recovery" || exit 1; fi
     remote_require_private_directory "$recovery" || exit 1
     remote_recovery_put "$temp/journal.txt" "$recovery/journal.txt" || exit 1
+    remote_recovery_put "$temp/history-inventory.json" "$recovery/history-inventory.json" || exit 1
+    remote_recovery_history archive "$state/history" "$recovery" "$recovery/history-inventory.json" || exit 1
     # All following changes can resume only with this identical journal.
     chmod 0700 "$app/.releases" "$release" "$release/source" || exit 1
     remote_fsync_path_and_parent "$recovery" || exit 1
@@ -4916,8 +5021,16 @@ remote_parse_recovery_options() {
   else
     remote_require_private_directory "$REMOTE_EFFECTIVE_APP_PATH/.release-state" || return 1
     remote_lock_file_is_safe "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" || return 1
-    flock --nonblock --close --conflict-exit-code 75 "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" \
-      "$SELF_PATH" __locked-recover-baseline "$@"
+    local lock_exit
+    if flock --nonblock --close --conflict-exit-code 75 "$REMOTE_EFFECTIVE_APP_PATH/.release-state/deploy.lock" \
+      "$SELF_PATH" __locked-recover-baseline "$@"; then
+      REMOTE_STATUS_EMITTED=true
+    else
+      lock_exit=$?
+      # The child already reports failures. Lock contention never ran a child.
+      [[ "$lock_exit" == 75 ]] || REMOTE_STATUS_EMITTED=true
+      return "$lock_exit"
+    fi
   fi
 }
 

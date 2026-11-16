@@ -163,6 +163,13 @@ protected runtime paths and environment remain intact. The canonical override
 is preserved byte-for-byte and made mode 0600.
 
 `.release-state/recovery/journal.txt` durably records exact inputs before writes.
+Closed protocol-1 outcome records are preserved byte-for-byte under
+`recovery/history/`, outside active protocol-2 history readers. A bounded
+inventory (at most 20 private records, 16 KiB each) is bound to the journal by
+checksum before archival. Each archived copy becomes durable before its active
+original is removed. Unknown, critical or malformed outcomes and nonempty
+decisions refuse recovery. Resume checks the exact inventory, and completed
+recovery checks archived names and checksums before subsequent operations.
 The explicit previous SHA retires only a pointer whose release directory is
 absent; its value remains in the journal. Repeating the identical command resumes
 verified writes. Changed inputs or conflicts require operator investigation;

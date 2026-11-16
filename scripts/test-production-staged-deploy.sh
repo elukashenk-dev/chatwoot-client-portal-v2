@@ -4733,6 +4733,17 @@ setup_recovery_fixture() {
   printf '%s\n' "$CURRENT_COMMIT" >"$app/.release-state/current"
   printf '%040d\n' 7 >"$app/.release-state/previous"
   chmod 0600 "$app/.release-state/"*
+  mkdir -m 0700 "$app/.release-state/history" "$app/.release-state/decisions"
+  local old_status old_stage
+  for old_status in activation_succeeded candidate_failed_rollback_succeeded; do
+    old_stage=none
+    [[ "$old_status" != candidate_failed_rollback_succeeded ]] || old_stage=tenant_smoke
+    printf '%s\n' protocol_version=1 record_kind=deployment_outcome "candidate_commit=$CURRENT_COMMIT" \
+      previous_commit=none "status=$old_status" "failure_stage=$old_stage" \
+      transaction_started_at_utc=2026-01-01T00:00:00Z recorded_at_utc=2026-01-01T00:00:01Z \
+      recorded_at_epoch=1767225601 >"$app/.release-state/history/1767225601-$CURRENT_COMMIT-$old_status.txt"
+  done
+  chmod 0600 "$app/.release-state/history/"*
   printf 'services:\n  portal-backend:\n    image: chatwoot-client-portal-v2-portal-backend:%s\n    extra_hosts:\n      - "app.lancora.ru:host-gateway"\n  portal-web:\n    image: chatwoot-client-portal-v2-portal-web:%s\n' "$CURRENT_COMMIT" "$CURRENT_COMMIT" >"$release/compose.release.yaml"
   chmod 0640 "$release/compose.release.yaml"
   mkdir -p "$FAKE_DOCKER_STATE_DIR"
@@ -4751,6 +4762,7 @@ recovery_restores_verified_baseline_without_runtime_mutation() {
   setup_recovery_fixture "$FUNCNAME"
   local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/output" before name
   before="$(sha256sum "$app/.env.production")"
+  (cd "$app/.release-state/history" && sha256sum ./*) >"$CASE_ROOT/history-before"
   mkdir -p "$app/logs" "$app/backups" "$app/.codex" "$app/.git" "$app/.install"
   for name in .env .env.production.backup.test BOOTSTRAP_SOURCE.txt logs/keep backups/keep .codex/keep .git/keep .install/keep; do
     printf 'protected-value\n' >"$app/$name"
@@ -4763,6 +4775,9 @@ recovery_restores_verified_baseline_without_runtime_mutation() {
   [[ "$(sha256sum "$app/.env.production")" == "$before" ]] || fail 'env changed'
   [[ ! -e "$app/.release-state/previous" && -f "$app/DEPLOY_SOURCE.txt" && -f "$app/package.json" ]] || fail 'recovery incomplete'
   cmp "$app/.release-state/recovery/journal.txt" "$app/.release-state/recovery/completed.txt" || fail 'completion mismatch'
+  (cd "$app/.release-state/recovery/history" && sha256sum ./*) >"$CASE_ROOT/history-after"
+  cmp "$CASE_ROOT/history-before" "$CASE_ROOT/history-after" || fail 'historical audit bytes changed'
+  [[ -z "$(ls -A "$app/.release-state/history")" ]] || fail 'old history remained active'
   recover_command >"$output" 2>&1 || { cat "$output"; fail 'exact recovery repeat failed'; }
   python3 - "$FAKE_COMMAND_LOG" <<'PY'
 import pathlib,sys
@@ -4774,6 +4789,111 @@ for record in pathlib.Path(sys.argv[1]).read_bytes().split(b'\0\0'):
 PY
   deploy_command prepare >"$output" 2>&1 || { cat "$output"; fail 'recovered baseline cannot prepare'; }
   grep -Fxq 'backend_host_gateway=app.lancora.ru' "$(prepare_manifest_path)" || fail 'candidate lost gateway'
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+recovery_rejects_unsafe_history_and_validates_archived_evidence() {
+  local variant app output old_file archive_file
+  for variant in critical malformed symlink mode directory decisions excess; do
+    setup_recovery_fixture "$FUNCNAME-$variant"
+    app="$REMOTE_TEST_ROOT/app"; output="$CASE_ROOT/output"
+    old_file="$app/.release-state/history/1767225601-$CURRENT_COMMIT-activation_succeeded.txt"
+    case "$variant" in
+      critical) sed -i 's/status=activation_succeeded/status=candidate_failed_forward_only/' "$old_file" ;;
+      malformed) printf 'status=activation_succeeded\n' >>"$old_file" ;;
+      symlink) rm "$old_file"; ln -s "$app/.env.production" "$old_file" ;;
+      mode) chmod 0644 "$old_file" ;;
+      directory) mkdir "$app/.release-state/history/extra" ;;
+      decisions) touch "$app/.release-state/decisions/pending" ;;
+      excess) for ((i=0;i<21;i++)); do cp "$old_file" "$app/.release-state/history/extra-$i"; done ;;
+    esac
+    if recover_command >"$output" 2>&1; then fail "accepted $variant history"; fi
+    [[ "$(grep -c '^status=' "$output")" == 1 ]] || fail 'failure status duplicated'
+    [[ ! -e "$app/.release-state/recovery/journal.txt" && -f "$app/.release-state/previous" ]] || fail 'unsafe history mutated baseline'
+  done
+  setup_recovery_fixture "$FUNCNAME-resume"
+  app="$REMOTE_TEST_ROOT/app"; output="$CASE_ROOT/output"
+  export STAGED_TEST_FAIL_PUBLICATION_AT=root_sync
+  if recover_command >"$output" 2>&1; then fail 'ignored root-sync fault'; fi
+  unset STAGED_TEST_FAIL_PUBLICATION_AT
+  [[ "$(grep -c '^status=' "$output")" == 1 ]] || fail 'post-journal failure status duplicated'
+  archive_file="$app/.release-state/recovery/history/1767225601-$CURRENT_COMMIT-activation_succeeded.txt"
+  # Both an interrupted copy and a partially completed archive must resume exactly.
+  cp "$archive_file" "$app/.release-state/history/"
+  mv "$app/.release-state/recovery/history/1767225601-$CURRENT_COMMIT-candidate_failed_rollback_succeeded.txt" "$app/.release-state/history/"
+  recover_command >"$output" 2>&1 || { cat "$output"; fail 'partial history resume failed'; }
+  printf 'changed\n' >>"$archive_file"
+  if deploy_command prepare >"$output" 2>&1; then fail 'prepare ignored archive tampering'; fi
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+recovery_lock_contention_reports_one_failure() {
+  setup_recovery_fixture "$FUNCNAME"
+  local app="$REMOTE_TEST_ROOT/app" output="$CASE_ROOT/output" lock_fd
+  : >"$app/.release-state/deploy.lock"
+  chmod 0600 "$app/.release-state/deploy.lock"
+  exec {lock_fd}>"$app/.release-state/deploy.lock"
+  flock --nonblock "$lock_fd"
+  if recover_command >"$output" 2>&1; then fail 'recovery ignored deploy lock'; fi
+  flock --unlock "$lock_fd"
+  exec {lock_fd}>&-
+  [[ "$(grep -c '^status=' "$output")" == 1 ]] || fail 'lock failure status missing or duplicated'
+  grep -Fxq status=baseline_recovery_failed "$output" || fail 'wrong lock failure status'
+  [[ ! -e "$app/.release-state/recovery" ]] || fail 'lock refusal wrote recovery evidence'
+  unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
+}
+
+recovery_archive_races_preserve_source_evidence() {
+  setup_recovery_fixture "$FUNCNAME"
+  python3 - "$REMOTE_SCRIPT" "$REMOTE_TEST_ROOT/app/.release-state/history" "$CASE_ROOT" <<'PY'
+import hashlib, json, pathlib, shutil, sys
+from unittest.mock import patch
+script, fixture, root = map(pathlib.Path, sys.argv[1:])
+code = script.read_text().split('remote_recovery_history() {', 1)[1].split("<<'PY'\n", 1)[1].split('\nPY\n}', 1)[0]
+original_read = pathlib.Path.read_bytes
+for scenario in ('destination-race', 'source-copy-race', 'source-unlink-race'):
+    directory = root / scenario
+    history, recovery = directory / 'history', directory / 'recovery'
+    history.mkdir(parents=True, mode=0o700)
+    recovery.mkdir(mode=0o700)
+    source = history / sorted(fixture.iterdir())[0].name
+    shutil.copy2(sorted(fixture.iterdir())[0], source)
+    original = original_read(source)
+    inventory = recovery / 'history-inventory.json'
+    inventory.write_text(json.dumps({source.name: hashlib.sha256(original).hexdigest()}, sort_keys=True, separators=(',', ':')) + '\n')
+    inventory.chmod(0o600)
+    target = recovery / 'history' / source.name
+    reads = 0
+    def raced_read(path):
+        global reads
+        if path == source:
+            reads += 1
+            trigger = 2 if scenario == 'source-copy-race' else 3
+            if scenario.startswith('source-') and reads == trigger:
+                source.write_bytes(original + b'changed\n')
+        return original_read(path)
+    def raced_link(temporary, destination):
+        pathlib.Path(destination).write_bytes(b'external-evidence\n')
+        pathlib.Path(destination).chmod(0o600)
+        raise FileExistsError(destination)
+    sys.argv = ['history-helper', 'archive', str(history), str(recovery), str(inventory)]
+    try:
+        with patch.object(pathlib.Path, 'read_bytes', raced_read):
+            if scenario == 'destination-race':
+                with patch('os.link', raced_link): exec(compile(code, str(script), 'exec'), {})
+            else:
+                exec(compile(code, str(script), 'exec'), {})
+    except (SystemExit, FileExistsError):
+        pass
+    else:
+        raise AssertionError('archival race accepted: ' + scenario)
+    assert source.exists(), 'source removed on ' + scenario
+    if scenario == 'destination-race':
+        assert original_read(target) == b'external-evidence\n'
+        assert original_read(source) == original
+    else:
+        assert original_read(source) == original + b'changed\n'
+PY
   unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
 }
 
@@ -4795,6 +4915,9 @@ recovery_rejects_source_runtime_and_pointer_drift() {
       manifest) printf conflict >"$release/manifest.txt"; chmod 0600 "$release/manifest.txt" ;;
     esac
     if recover_command >"$output" 2>&1; then fail "recovery accepted $variant drift"; fi
+    [[ "$(grep -c '^status=' "$output")" == 1 ]] || fail 'recovery emitted multiple statuses'
+    grep -Fxq status=baseline_recovery_failed "$output" || fail 'recovery failure status missing'
+    grep -Fq 'Baseline recovery refused or interrupted' "$output" || fail 'recovery diagnostic hidden'
     [[ ! -e "$app/.release-state/recovery/completed.txt" && -e "$app/.release-state/previous" && ! -e "$app/DEPLOY_SOURCE.txt" ]] || fail "recovery published on $variant drift"
   done
   unset FAKE_LIVE_GATEWAY FAKE_RENDERED_GATEWAY
@@ -4834,6 +4957,9 @@ run_prepare_cases() {
   run_case portal_only_contract_rejects_service_and_network_drift
   run_case recovered_gateway_survives_activation_and_exact_rollback
   run_case recovery_restores_verified_baseline_without_runtime_mutation
+  run_case recovery_rejects_unsafe_history_and_validates_archived_evidence
+  run_case recovery_lock_contention_reports_one_failure
+  run_case recovery_archive_races_preserve_source_evidence
   run_case recovery_rejects_source_runtime_and_pointer_drift
   run_case recovery_resumes_after_root_sync_failure_and_blocks_prepare
   run_case github_and_local_cli_use_the_same_contract

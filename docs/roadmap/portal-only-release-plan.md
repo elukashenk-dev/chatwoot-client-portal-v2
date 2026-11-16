@@ -87,7 +87,23 @@ polling, фоновых jobs или запросов в Chatwoot DB. Runtime н�
 - Текущие image IDs: backend
   `sha256:e1312dde56eccadd8e4ba279367c1a1a4004c780b33b56400ebc968a7f04896c`, web
   `sha256:36c25d7b0d6ec770d0878468060994763c3921ad4b913cfceb5953c3b9ceda8f`.
-- Production mutations еще не выполнялись. Конкретный recovery handoff использует
-  эти IDs, current/previous SHA выше и `app.lancora.ru` gateway. После closure
-  требуется согласовать новый ops commit/merge/push и этот recovery; prepare и
-  activate остаются последовательными отдельными операциями.
+- Пользователь согласовал git → восстановление → prepare. Ops commit `18a07a8`
+  merged/pushed. Recovery отказал до создания journal: мигрированный сервер
+  сохранил восемь protocol-1 outcome records, а первая реализация требовала
+  пустой history. Current/previous, контейнеры и runtime остались прежними.
+- Bounded repair сохраняет закрытые старые outcomes в `recovery/history/` с
+  checksum inventory в journal; активные protocol-2 readers их не используют.
+  Decisions остаются пустыми; поврежденные/critical records блокируют recovery.
+  Запись архива create-only, durable до удаления исходника; checksum повторно
+  проверяется перед удалением. Частичное архивирование возобновляется точно.
+  Independent review R1 принят и исправлен; full-diff re-review не оставил
+  Critical/Important findings. Targeted preservation/resume/tamper/race/lock
+  checks прошли; реальная read-only проверка приняла все восемь server records,
+  root source subset, canonical override и текущие container image IDs.
+  Полный gate: 107 staged scenarios на frozen final scripts, env-upgrade,
+  records, deploy/docs contracts, real Compose render, Node 24.22.1 lint/build,
+  formatting и diff checks завершены успешно. F-OPS-010 закрыт; требования
+  сохранены в этом плане и canonical production runbook.
+- Следующий operational шаг использует те же exact current/previous SHA,
+  image IDs и `app.lancora.ru` gateway. Согласование восстановления и prepare
+  действует; activate требует отдельного согласования подготовленного релиза.
