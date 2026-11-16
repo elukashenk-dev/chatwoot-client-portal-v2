@@ -1,5 +1,11 @@
 # Safe cancellation of an unactivated preparation
 
+Current status: completed and deployed as `ddbe936` on 2026-11-16, then
+superseded in production by `4f83429`. The sections below preserve chronological
+approvals, temporary blockers and execution evidence; none is a current release
+blocker. See [webhook-durable-ack-plan.md](./webhook-durable-ack-plan.md) for the
+latest portal release.
+
 Approved scope (2026-11-16): cancel the obsolete two-tenant preparation so the
 profile release can be prepared with only active `provgroup`. `pronalogi` has
 already been archived by explicit user approval. Production activation remains
@@ -123,3 +129,80 @@ fault checks and re-review. The resolved temporary finding file is removed;
 this plan and the canonical deployment runbook retain its requirements. Git
 publication, production cancellation and fresh preparation are the next handoff;
 production activation still awaits approval of that fresh preparation.
+
+## Production execution handoff — 2026-11-16 13:49 UTC
+
+The user approved publication, exact cancellation and fresh preparation. Commit
+`ddbe936560e5246d966f7037b740259d6e76b8cc` was fast-forwarded into `main` and
+pushed to `origin/main`. The clean deployment checkout remains at this SHA.
+
+Cancellation of `48d226064f991616519a8f7a6108e9443b435f11` completed with
+`status=preparation_cancelled`, using the manifest and approval reference above.
+The completed audit and archived release are present. Production current remains
+`4cf719e41b07a009214ea51504265c10648dafda`; backend/web images and September 28
+StartedAt values are unchanged. Public `provgroup` health returned status `ok`.
+
+Fresh preparation of `ddbe936` failed twice at image build, including one bounded
+retry. Buildx history shows Docker Hub HTTP 429 for `node:24-alpine` and
+`caddy:2-alpine`. A read-only registry HEAD probe confirmed
+`ratelimit-limit=100;w=3600`, `ratelimit-remaining=0;w=3600`, with no Retry-After.
+Neither the root nor lancora Docker config contains registry authentication.
+No new prepared pointer remains; the failed candidate was cleaned by the normal
+prepare failure path. No activation was attempted and no application tests rerun.
+
+Next step: resume the already approved preparation after Docker Hub quota returns,
+or after separately authorized registry authentication. Do not alter the release
+protocol or use a manual image-tag substitution to bypass this blocker. Activation
+still requires separate approval after successful preparation.
+
+Local command evidence: `/tmp/portal-production-cancel-48d2260.log`,
+`/tmp/portal-production-prepare-ddbe936.log`, and
+`/tmp/portal-production-prepare-ddbe936-retry.log`. This execution handoff is an
+uncommitted documentation update on the implementation branch; the published
+clean-main candidate stays unchanged.
+
+## Production activation completed — 2026-11-16 13:57 UTC
+
+The user's subsequent explicit urgent instruction to update production authorized
+cutover of the published corrected version after successful standard preparation.
+No additional permission prompt or application test rerun was required.
+
+Docker Hub's exhausted anonymous quota was resolved by seeding the daemon cache
+with official immutable base images, pulled locally by exactly the digests in the
+previous successful Buildx provenance (linux/amd64):
+
+- node: `sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5`;
+- caddy: `sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0`;
+- transferred archive SHA256:
+  `4cbb4f72569582012161d8b2eb198385c744eb2cf0661eda307aaa1598b2667d`.
+
+Under the existing deployment lock, the operation verified the daemon-backed
+`docker` builder, absent canonical base tags, archive checksum and exact loaded
+image IDs/platform. It changed only base-cache references; running portal image
+IDs and StartedAt were identical before/after. Focused independent review's
+builder precondition was accepted, verified and closed. No portal release tags,
+release protocol or runtime configuration were substituted.
+
+Unchanged standard preparation then returned `status=prepared` for
+`ddbe936560e5246d966f7037b740259d6e76b8cc`, migration classification `none`,
+tenant matrix containing only `provgroup`, and manifest SHA256
+`17aabd02b8900ff9e3436f5116973ee3ab9c9bdb76c060d002490646e808c612`.
+Standard activation returned `status=activation_succeeded`:
+
+- activated at `2026-11-16T13:56:44Z`;
+- active source marker and current pointer both match `ddbe936`;
+- previous rollback release is `4cf719e41b07a009214ea51504265c10648dafda`;
+- backend image:
+  `sha256:fb11584ced0bff8e3b9dc80e00fde99fae211edaaf8cd500c0353a92b2d485f4`;
+- web image:
+  `sha256:4f8ca70f969dc18d1ed55c6c0dfddbcff272b5d345d1606be7bb12f87f276528`;
+- backend is healthy; both application containers are running;
+- public health is `ok`, public tenant resolves to `provgroup`, login is HTTP 200;
+- no prepared pointer remains; Postgres/object-storage were not restarted;
+- Telegram bridge remains disabled and `pronalogi` remains archived.
+
+Logs: `/tmp/portal-base-cache-seed.log`,
+`/tmp/portal-production-prepare-ddbe936-cached.log`, and
+`/tmp/portal-production-activate-ddbe936.log`. These completed deployment records
+supersede earlier pending-approval and Docker Hub blocker handoffs. No production
+contact was renamed merely to test the deployment.

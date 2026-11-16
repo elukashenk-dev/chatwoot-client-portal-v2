@@ -60,4 +60,9 @@ are not rewritten or backfilled into the queue. Before production migration,
 check unread-table size and allow for its transactional backfill/index rebuild.
 The 0024 Drizzle snapshot id chain was repaired to permit generation; its SQL is
 unchanged. Before a future deployment, review the local diff and migration and
-obtain production authorization. The current task ends after local validation.
+obtain production authorization. Production activation of `4f83429` completed
+on 2026-11-16 with forward-only migration policy; exact evidence and the protected
+backup reference are in
+[webhook-durable-ack-plan.md](../roadmap/webhook-durable-ack-plan.md).
+The previous code must not be restarted against this migrated schema. A failed
+forward-only release needs a separate recovery decision, preserving new data.

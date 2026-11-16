@@ -1,5 +1,9 @@
 # Durable Chatwoot webhook acknowledgement
 
+Current status: implemented, reviewed and deployed as `4f83429` on 2026-11-16.
+The local-only restriction and pending-release statements below are historical;
+the subsequent production authorization and completed activation supersede them.
+
 User approved implementation and local validation only (2026-11-16). No message
 resend, Chatwoot mutation, commit, push or deployment belongs to this task.
 
@@ -148,3 +152,59 @@ provenance, protected backup validity, migration policy review, standard prepare
 manifest/image/tenant validation, bounded Compose/all-active-tenant smoke and
 post-release schema/queue/log readback. No unrelated application, ops-suite or
 production send tests will be repeated.
+
+## Production activation completed — 2026-11-16 15:36 UTC
+
+The user's production-update instruction authorized publication and cutover of
+the corrected version after the required preparation. The reviewed fix was
+committed as `4f834291a3cbb8b03c51329b6a4c32aa9703452d`, fast-forwarded to clean
+`main`, verified to have the identical Git tree, and pushed to `origin/main`.
+No runtime code changed after local closure; no application suite was rerun.
+Independent release/migration review found no Critical/Important blocker.
+
+Standard preparation returned `status=prepared`, with manifest SHA256
+`2a00a0adb5954bfffec15719e62354eca587f1a914de1b21fbcf52da56f148e4`.
+The fresh portal backup is protected as root:root/0700 at
+`/var/backups/lancora-portal/pre-4f83429-20261116T153446Z` (5195887 bytes), with
+DB custom archive, matching private environment, previous source archive, source
+marker, manifest and Compose evidence. SHA256SUMS digest:
+`b09de04ef9c5cda733618bbfc252045e89a8050fbbca034ba69c2f9ba09713ce`.
+Checksums and full `pg_restore --file=/dev/null` decoding passed. This validates
+archive readability; no restoration over a live database or full restore rehearsal
+was performed. The backup contains sensitive data and stays protected on the VM.
+
+Standard activation used `forward-only` and approval reference
+`user-20261116-webhook-production-update`, returning
+`status=activation_succeeded`. Verified live evidence:
+
+- Activated at `2026-11-16T15:36:32Z` (19:36 Samara). Source marker and current
+  pointer both match `4f83429`; previous release is `ddbe936`.
+- Source archive SHA256:
+  `40c95c2a32e62a225b8010b377c16b80c9764a8bceebe1d5182303403b809cbb`.
+- Backend image:
+  `sha256:91f0c501562673232d1e2821c0f14d125f8078202985a7cf881d80c40c35ce08`.
+- Web image:
+  `sha256:079a36afe5e98b4349d6524ae4e0bfcb093aecbc57b2627d7689d902cda6a193`.
+- Backend healthy, both app containers running, restart count zero. Database
+  and object-storage image IDs and September 28 StartedAt values are unchanged.
+- Orchestrator all-active-tenant smoke passed. Independent public health is
+  `ok`, tenant resolves to `provgroup`, login and Chatwoot root return HTTP 200.
+- 27 migrations applied (previously 25); all 707 unread rows preserved, no missing
+  or mismatched source keys, all queue/watermark/unread indexes present.
+- One read-only authenticated Chatwoot inbox GET from the new backend verified
+  Channel::Api, callback URL and single-conversation routing. No configuration
+  update, message resend or test message was made.
+- Queue initially empty (no naturally received post-cutover event at readback);
+  no pending/exhausted jobs or backend warning/error logs. This is startup
+  evidence, not a claim of a live end-to-end send/reply test.
+- No prepared pointer or open activation transaction remains. `pronalogi` stays
+  archived and Telegram bridge remains disabled. Existing false Chatwoot message
+  statuses were not edited. No automatic or manual rollback was required.
+
+Safe local command logs: `/tmp/portal-production-prepare-4f83429.log`,
+`/tmp/portal-production-backup-4f83429.log`,
+`/tmp/portal-production-activate-4f83429.log`,
+`/tmp/portal-production-schema-4f83429.log`,
+`/tmp/portal-production-chatwoot-readback-4f83429.log`,
+`/tmp/portal-production-logcheck-4f83429.log`. These execution records supersede
+the earlier local-only stop and pending production-release next step.

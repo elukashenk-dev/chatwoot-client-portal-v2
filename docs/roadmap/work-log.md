@@ -102,21 +102,21 @@ execution-plan детали здесь не хранятся.
 
 ## Production Baseline
 
-- Production Chatwoot CE is `v4.15.1`; portal webhook signing uses the tenant
-  API Channel `channel_api.secret`.
+- Production Chatwoot uses the existing 4.17.1-based deployment (source
+  `4feb653c44ffb7ad8e608f8f640630ac1c0652c1`, verified 2026-11-16); portal
+  webhook signing uses the tenant API Channel `channel_api.secret`.
 - Primary production Chatwoot admin/runtime URL is `https://app.lancora.ru`;
   no legacy Chatwoot host is part of the active production runtime baseline.
 - Production portal is deployed at `https://lk.provgroup.ru` as tenant-aware
   install for `provgroup`, using Chatwoot base URL `https://app.lancora.ru`.
-- `https://lk.pronalogi.pro` is provisioned as the first customer tenant:
-  portal tenant `pronalogi` is active, uses Chatwoot account `2`, API Channel
-  inbox `6`, Chatwoot base URL `https://app.lancora.ru`, and has its tenant
-  webhook configured.
-- `MT-10` production tenant smoke is complete for the first two customer
-  tenants: `pronalogi` (`https://lk.pronalogi.pro`, Chatwoot account `2`, API
+- `pronalogi` was archived on 2026-11-16 at the owner's request; its data
+  is preserved. `provgroup` is the only active portal tenant. Telegram bridge
+  remains disabled.
+- Historical `MT-10` production tenant smoke completed for the first two
+  customer tenants: `pronalogi` (`https://lk.pronalogi.pro`, Chatwoot account `2`, API
   inbox `6`) and `provgroup` (`https://lk.provgroup.ru`, Chatwoot account `1`,
-  API inbox `5`) both resolve by tenant host, pass Chatwoot connection
-  verification and support customer login plus portal-to-Chatwoot messaging
+  API inbox `5`) both resolved by tenant host, passed Chatwoot connection
+  verification and supported customer login plus portal-to-Chatwoot messaging
   through `https://app.lancora.ru`.
 - Production service mail sender is `Lancora <no-reply@lancora.ru>` through
   Yandex 360 SMTP for both portal verification emails and Chatwoot service
@@ -134,9 +134,11 @@ execution-plan детали здесь не хранятся.
   evidence without starting containers or changing the database.
 - Clean reinstall source delivery uses a separately approved empty-root
   bootstrap that cannot configure or start production. The staged tooling is
-  locally verified with fake runtime coverage; no real staged production
-  rehearsal has yet been performed.
-- `F-CHAT-012` production rollout is complete for both active tenants: ordinary
+  verified with fake runtime coverage and used for the completed November 16
+  production releases. Release evidence is preserved in
+  [cancel-prepared-release-plan.md](./cancel-prepared-release-plan.md) and
+  [webhook-durable-ack-plan.md](./webhook-durable-ack-plan.md).
+- Historical `F-CHAT-012` production rollout completed for both then-active tenants: ordinary
   portal contacts no longer require a manually selected type, while group
   contacts require the explicit `portal_is_group` checkbox. Operator smoke
   confirmed the ordinary and group chat paths. The unused legacy Chatwoot
@@ -338,16 +340,16 @@ execution-plan детали здесь не хранятся.
 - Chatwoot message webhooks now commit dedupe and durable bounded work before
   acknowledgement; background processing recovers after restart and preserves
   unread/read ordering with source-scoped message-ID watermarks. This baseline
-  is implemented and validated locally; it has not been deployed. See
+  runs on Timeweb production as `4f83429`; `provgroup` is the active tenant,
+  `pronalogi` stays archived and Telegram bridge stays disabled. See
   [webhook-processing.md](../operations/webhook-processing.md).
 
 ## Recommended Next Step
 
-- Deploy the locally verified webhook fix following the subsequent production
-  authorization. Use the standard staged release, a protected database backup
-  and reviewed forward-only migration policy. Evidence and review dispositions
-  are in
+- Observe ordinary webhook processing after the completed production release.
+  No message resend or old Chatwoot status repair is part of the fix. Release
+  evidence and the forward-only recovery boundary are in
   [webhook-durable-ack-plan.md](./webhook-durable-ack-plan.md).
-- After explicit approval, merge the verified PWA share-target branch into
-  `main`, then complete the real-device platform smoke from `F-PWA-006` before
-  advertising or rolling out system sharing in production.
+- PWA share-target code is already in `main`;
+  complete the real-device platform smoke from `F-PWA-006` before advertising
+  system sharing support.
