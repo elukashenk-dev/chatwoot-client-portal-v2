@@ -1,10 +1,15 @@
-import { and, count, eq, inArray } from 'drizzle-orm'
+import { and, count, eq, inArray, lte, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
-import { portalChatUnreadMessages } from '../../db/schema.js'
+import { lockReadWatermark } from './readWatermark.js'
+import {
+  portalChatReadWatermarks,
+  portalChatUnreadMessages,
+} from '../../db/schema.js'
 
 type TenantRepositoryScope = {
   tenantId: number
+  sourceKey: string
 }
 
 export type InsertUnreadMessageInput = {
@@ -21,7 +26,7 @@ function toCount(value: unknown) {
 
 export function createChatUnreadRepository(
   db: AppDatabase,
-  { tenantId }: TenantRepositoryScope,
+  { tenantId, sourceKey }: TenantRepositoryScope,
 ) {
   async function countUnreadByThread({
     portalUserId,
@@ -45,6 +50,7 @@ export function createChatUnreadRepository(
       .where(
         and(
           eq(portalChatUnreadMessages.tenantId, tenantId),
+          eq(portalChatUnreadMessages.sourceKey, sourceKey),
           eq(portalChatUnreadMessages.portalUserId, portalUserId),
           inArray(portalChatUnreadMessages.threadId, threadIds),
         ),
@@ -73,6 +79,7 @@ export function createChatUnreadRepository(
             portalChatThreadId: row.portalChatThreadId,
             portalUserId: row.portalUserId,
             tenantId,
+            sourceKey,
             threadId: row.threadId,
           })),
         )
@@ -99,20 +106,36 @@ export function createChatUnreadRepository(
     async clearThreadUnreadAndCountVisible({
       portalUserId,
       threadId,
+      throughMessageId,
       visibleThreadIds,
     }: {
       portalUserId: number
       threadId: string
+      throughMessageId: number
       visibleThreadIds: string[]
     }) {
       return db.transaction(async (tx) => {
+        const watermark = await lockReadWatermark(tx, {
+          tenantId,
+          sourceKey,
+          portalUserId,
+          threadId,
+        })
+        await tx
+          .update(portalChatReadWatermarks)
+          .set({
+            lastReadMessageId: sql`greatest(${portalChatReadWatermarks.lastReadMessageId}, ${throughMessageId})`,
+          })
+          .where(eq(portalChatReadWatermarks.id, watermark.id))
         await tx
           .delete(portalChatUnreadMessages)
           .where(
             and(
               eq(portalChatUnreadMessages.tenantId, tenantId),
+              eq(portalChatUnreadMessages.sourceKey, sourceKey),
               eq(portalChatUnreadMessages.portalUserId, portalUserId),
               eq(portalChatUnreadMessages.threadId, threadId),
+              lte(portalChatUnreadMessages.chatwootMessageId, throughMessageId),
             ),
           )
 
@@ -128,6 +151,7 @@ export function createChatUnreadRepository(
           .where(
             and(
               eq(portalChatUnreadMessages.tenantId, tenantId),
+              eq(portalChatUnreadMessages.sourceKey, sourceKey),
               eq(portalChatUnreadMessages.portalUserId, portalUserId),
               inArray(portalChatUnreadMessages.threadId, visibleThreadIds),
             ),

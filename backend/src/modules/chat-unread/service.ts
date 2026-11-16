@@ -73,15 +73,18 @@ export function createChatUnreadService({
     async clearOpenedThreadUnread({
       portalUserId,
       threadId,
+      throughMessageId,
       visibleThreadIds,
     }: {
       portalUserId: number
       threadId: string
+      throughMessageId: number
       visibleThreadIds: string[]
     }) {
       const clearResult = await repository.clearThreadUnreadAndCountVisible({
         portalUserId,
         threadId,
+        throughMessageId,
         visibleThreadIds,
       })
 

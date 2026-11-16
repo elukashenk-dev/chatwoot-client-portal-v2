@@ -1,3 +1,4 @@
+import { createWebhookSourceKey } from '../chatwoot-webhooks/sourceKey.js'
 import { describe, expect, it } from 'vitest'
 
 import { buildApp } from '../../app.js'
@@ -199,6 +200,11 @@ describe('chat threads app wiring', () => {
           portalChatThreadId: privateThread.id,
           portalUserId: portalUser.id,
           tenantId,
+          sourceKey: createWebhookSourceKey({
+            baseUrl: 'https://chatwoot.example.test',
+            accountId: 1,
+            inboxId: 1,
+          }),
           threadId: 'private:me',
         },
         {
@@ -206,6 +212,11 @@ describe('chat threads app wiring', () => {
           portalChatThreadId: groupThread.id,
           portalUserId: portalUser.id,
           tenantId,
+          sourceKey: createWebhookSourceKey({
+            baseUrl: 'https://chatwoot.example.test',
+            accountId: 1,
+            inboxId: 1,
+          }),
           threadId: 'group:154',
         },
         {
@@ -213,6 +224,11 @@ describe('chat threads app wiring', () => {
           portalChatThreadId: groupThread.id,
           portalUserId: portalUser.id,
           tenantId,
+          sourceKey: createWebhookSourceKey({
+            baseUrl: 'https://chatwoot.example.test',
+            accountId: 1,
+            inboxId: 1,
+          }),
           threadId: 'group:154',
         },
       ])

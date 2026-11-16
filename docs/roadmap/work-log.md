@@ -335,14 +335,19 @@ execution-plan детали здесь не хранятся.
   unactivated preparation by exact SHA and manifest checksum, with durable
   archived evidence, resumable tag retirement and unchanged running services.
 
+- Chatwoot message webhooks now commit dedupe and durable bounded work before
+  acknowledgement; background processing recovers after restart and preserves
+  unread/read ordering with source-scoped message-ID watermarks. This baseline
+  is implemented and validated locally; it has not been deployed. See
+  [webhook-processing.md](../operations/webhook-processing.md).
+
 ## Recommended Next Step
 
-- Publish the verified cancellation slice, cancel the obsolete two-tenant
-  preparation after approval, and prepare the contact-profile release for the
-  remaining active Timeweb tenant. Exact cancellation inputs and closure evidence
-  are in [cancel-prepared-release-plan.md](./cancel-prepared-release-plan.md).
-  Activation requires separate approval after preparation; Telegram bridge remains
-  disabled.
+- Deploy the locally verified webhook fix following the subsequent production
+  authorization. Use the standard staged release, a protected database backup
+  and reviewed forward-only migration policy. Evidence and review dispositions
+  are in
+  [webhook-durable-ack-plan.md](./webhook-durable-ack-plan.md).
 - After explicit approval, merge the verified PWA share-target branch into
   `main`, then complete the real-device platform smoke from `F-PWA-006` before
   advertising or rolling out system sharing in production.

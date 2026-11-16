@@ -1,3 +1,4 @@
+import { createWebhookSourceKey } from '../chatwoot-webhooks/sourceKey.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { DatabaseClient } from '../../db/client.js'
@@ -63,6 +64,11 @@ describe('createChatUnreadRepository', () => {
   it('deduplicates unread rows by user/thread/message and counts per thread', async () => {
     const repository = createChatUnreadRepository(seeded.database.db, {
       tenantId: seeded.tenantId,
+      sourceKey: createWebhookSourceKey({
+        baseUrl: 'https://chatwoot.example.test',
+        accountId: 1,
+        inboxId: 1,
+      }),
     })
 
     await repository.insertUnreadMessages([
@@ -106,6 +112,11 @@ describe('createChatUnreadRepository', () => {
   it('clears the opened thread and returns visible total without counting hidden threads', async () => {
     const repository = createChatUnreadRepository(seeded.database.db, {
       tenantId: seeded.tenantId,
+      sourceKey: createWebhookSourceKey({
+        baseUrl: 'https://chatwoot.example.test',
+        accountId: 1,
+        inboxId: 1,
+      }),
     })
 
     await repository.insertUnreadMessages([
@@ -136,6 +147,7 @@ describe('createChatUnreadRepository', () => {
       repository.clearThreadUnreadAndCountVisible({
         portalUserId: seeded.userId,
         threadId: 'group:154',
+        throughMessageId: 10000,
         visibleThreadIds: ['private:me', 'group:154'],
       }),
     ).resolves.toEqual({
@@ -154,5 +166,41 @@ describe('createChatUnreadRepository', () => {
         ['group:203', 1],
       ]),
     )
+  })
+  it('clears only messages included in the displayed snapshot and never moves the read cursor backward', async () => {
+    const repository = createChatUnreadRepository(seeded.database.db, {
+      tenantId: seeded.tenantId,
+      sourceKey: createWebhookSourceKey({
+        baseUrl: 'https://chatwoot.example.test',
+        accountId: 1,
+        inboxId: 1,
+      }),
+    })
+    await repository.insertUnreadMessages(
+      [501, 502].map((chatwootMessageId) => ({
+        chatwootMessageId,
+        now: new Date(),
+        portalChatThreadId: seeded.privateThreadId,
+        portalUserId: seeded.userId,
+        threadId: 'private:me',
+      })),
+    )
+    const clear = {
+      portalUserId: seeded.userId,
+      threadId: 'private:me',
+      visibleThreadIds: ['private:me'],
+    }
+    expect(
+      await repository.clearThreadUnreadAndCountVisible({
+        ...clear,
+        throughMessageId: 501,
+      }),
+    ).toEqual({ totalUnreadCount: 1 })
+    expect(
+      await repository.clearThreadUnreadAndCountVisible({
+        ...clear,
+        throughMessageId: 400,
+      }),
+    ).toEqual({ totalUnreadCount: 1 })
   })
 })

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ChatNotificationPushDeliveryService } from '../chat-notifications/pushDeliveryService.js'
+import type { ChatUnreadService } from '../chat-unread/service.js'
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import { createChatwootWebhookService } from './service.js'
 import { chatwootWebhookTestInternals } from './service.js'
@@ -7,22 +9,22 @@ import { chatwootWebhookTestInternals } from './service.js'
 type CreateChatwootWebhookServiceOptions = Parameters<
   typeof createChatwootWebhookService
 >[0]
-type DeliverMessageCreated = NonNullable<
-  CreateChatwootWebhookServiceOptions['pushDeliveryService']
->['deliverMessageCreated']
+type DeliverMessageCreated =
+  ChatNotificationPushDeliveryService['deliverMessageCreated']
 type FindConversationMapping =
   CreateChatwootWebhookServiceOptions['webhookRepository']['findConversationMappingByChatwootConversationId']
-type GetCurrentUserChatMessages =
-  CreateChatwootWebhookServiceOptions['chatMessagesService']['getCurrentUserChatMessages']
+type GetCurrentUserChatMessages = (input: {
+  userId: number
+  threadId?: string
+}) => Promise<ChatMessagesSnapshot>
 type PublishThreadMessages =
   CreateChatwootWebhookServiceOptions['realtimeHub']['publishThreadMessages']
 type PublishThreadTyping =
   CreateChatwootWebhookServiceOptions['realtimeHub']['publishThreadTyping']
 type RecordDelivery =
   CreateChatwootWebhookServiceOptions['webhookRepository']['recordDelivery']
-type RecordMessageCreatedUnread = NonNullable<
-  CreateChatwootWebhookServiceOptions['chatUnreadService']
->['recordMessageCreatedUnread']
+type RecordMessageCreatedUnread =
+  ChatUnreadService['recordMessageCreatedUnread']
 
 const webhookSecret = 'test-webhook-secret'
 const now = new Date('2026-04-21T12:00:00.000Z')
@@ -93,10 +95,13 @@ function createService(
   overrides: {
     findConversationMappingByChatwootConversationId?: FindConversationMapping
     getCurrentUserChatMessages?: GetCurrentUserChatMessages
-    chatUnreadService?: CreateChatwootWebhookServiceOptions['chatUnreadService']
+    chatUnreadService?: Pick<ChatUnreadService, 'recordMessageCreatedUnread'>
     publishThreadMessages?: PublishThreadMessages
     publishThreadTyping?: PublishThreadTyping
-    pushDeliveryService?: CreateChatwootWebhookServiceOptions['pushDeliveryService']
+    pushDeliveryService?: Pick<
+      ChatNotificationPushDeliveryService,
+      'deliverMessageCreated'
+    >
     recordDelivery?: RecordDelivery
   } = {},
 ) {
@@ -104,6 +109,7 @@ function createService(
     overrides.findConversationMappingByChatwootConversationId ??
     vi.fn<FindConversationMapping>().mockResolvedValue({
       chatwootConversationId: 101,
+      chatwootInboxId: 9,
       portalChatThreadId: 1,
       threadId: 'private:me',
       threadType: 'private',
@@ -121,24 +127,17 @@ function createService(
   const recordDelivery =
     overrides.recordDelivery ??
     vi.fn<RecordDelivery>().mockResolvedValue('recorded')
-  const chatUnreadService = overrides.chatUnreadService
-  const pushDeliveryService = overrides.pushDeliveryService
   const service = createChatwootWebhookService({
-    chatMessagesService: {
-      getCurrentUserChatMessages,
-    },
-    ...(chatUnreadService ? { chatUnreadService } : {}),
     chatwootAccountId: 3,
+    chatwootBaseUrl: 'https://chatwoot.example.test',
     chatwootPortalInboxId: 9,
     now: () => now,
-    ...(pushDeliveryService ? { pushDeliveryService } : {}),
     realtimeHub: {
       publishThreadMessages,
       publishThreadTyping,
       subscribe: vi.fn(),
     },
     tenantId: 1,
-    tenantSlug: 'default',
     webhookRepository: {
       findConversationMappingByChatwootConversationId,
       recordDelivery,

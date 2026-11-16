@@ -11,6 +11,7 @@ type RealtimeSubscription = {
 }
 
 export const CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY = 5
+export const CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD = 500
 
 type RealtimeSubscribeResult =
   | {
@@ -270,6 +271,15 @@ export function createChatRealtimeHub({
       if (subscriptions.size >= CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY) {
         return {
           limit: CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
+          status: 'limit_exceeded',
+        }
+      }
+
+      if (
+        threadSubscriptions.size >= CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD
+      ) {
+        return {
+          limit: CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD,
           status: 'limit_exceeded',
         }
       }

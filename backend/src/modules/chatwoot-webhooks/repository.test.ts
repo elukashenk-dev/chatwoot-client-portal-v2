@@ -47,7 +47,7 @@ describe('createChatwootWebhookRepository', () => {
       .values({
         chatwootContactId: 44,
         chatwootConversationId: 101,
-        chatwootInboxId: 9,
+        chatwootInboxId: 1,
         portalUserId: userId,
         tenantId,
         threadType: 'private',
@@ -69,6 +69,7 @@ describe('createChatwootWebhookRepository', () => {
     ).resolves.toEqual({
       chatwootConversationId: 101,
       portalChatThreadId: thread.id,
+      chatwootInboxId: 1,
       threadId: 'private:me',
       threadType: 'private',
       userId,
@@ -81,7 +82,7 @@ describe('createChatwootWebhookRepository', () => {
       .values({
         chatwootContactId: 154,
         chatwootConversationId: 301,
-        chatwootInboxId: 9,
+        chatwootInboxId: 1,
         portalUserId: null,
         tenantId,
         threadType: 'group',
@@ -103,6 +104,7 @@ describe('createChatwootWebhookRepository', () => {
     ).resolves.toEqual({
       chatwootConversationId: 301,
       portalChatThreadId: thread.id,
+      chatwootInboxId: 1,
       threadId: 'group:154',
       threadType: 'group',
       userId: null,
@@ -110,6 +112,14 @@ describe('createChatwootWebhookRepository', () => {
   })
 
   it('records each Chatwoot delivery key only once', async () => {
+    await database.db.insert(portalChatThreads).values({
+      tenantId,
+      portalUserId: userId,
+      chatwootContactId: 44,
+      chatwootConversationId: 101,
+      chatwootInboxId: 1,
+      threadType: 'private',
+    })
     const repository = createChatwootWebhookRepository(database.db, {
       tenantId,
     })
@@ -124,6 +134,11 @@ describe('createChatwootWebhookRepository', () => {
         now,
         payloadSha256: 'payload-hash',
         status: 'accepted',
+        source: {
+          accountId: 1,
+          inboxId: 1,
+          baseUrl: 'https://chatwoot.example.test',
+        },
       }),
     ).resolves.toBe('recorded')
     await expect(
@@ -135,6 +150,11 @@ describe('createChatwootWebhookRepository', () => {
         now,
         payloadSha256: 'payload-hash',
         status: 'accepted',
+        source: {
+          accountId: 1,
+          inboxId: 1,
+          baseUrl: 'https://chatwoot.example.test',
+        },
       }),
     ).resolves.toBe('duplicate')
 
@@ -161,6 +181,16 @@ describe('createChatwootWebhookRepository', () => {
       })
     ).id
     const now = new Date('2026-04-21T12:00:00.000Z')
+    await database.db.insert(portalChatThreads).values(
+      [tenantId, otherTenantId].map((id) => ({
+        tenantId: id,
+        portalUserId: null,
+        chatwootContactId: 44,
+        chatwootConversationId: 101,
+        chatwootInboxId: 1,
+        threadType: 'group',
+      })),
+    )
     const input = {
       chatwootConversationId: 101,
       chatwootMessageId: 501,
@@ -169,6 +199,11 @@ describe('createChatwootWebhookRepository', () => {
       now,
       payloadSha256: 'payload-hash',
       status: 'accepted' as const,
+      source: {
+        accountId: 1,
+        inboxId: 1,
+        baseUrl: 'https://chatwoot.example.test',
+      },
     }
 
     await expect(

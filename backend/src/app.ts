@@ -1,3 +1,10 @@
+import { withWebhookWorkBudget } from './modules/chatwoot-webhooks/workBudget.js'
+import { eq } from 'drizzle-orm'
+import { portalTenants } from './db/schema.js'
+import { createTenantChatRuntimeFactory } from './modules/chatwoot-webhooks/chatRuntime.js'
+import { createWebhookWorker } from './modules/chatwoot-webhooks/worker.js'
+import { createWebhookWorkRepository } from './modules/chatwoot-webhooks/workRepository.js'
+import { createWebhookWorkProcessor } from './modules/chatwoot-webhooks/workProcessor.js'
 import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 import Fastify, { type FastifyRequest } from 'fastify'
@@ -25,16 +32,12 @@ import { createBrandingServiceForTenantRequest } from './modules/branding/servic
 import { createAttachmentProxyFetcher } from './modules/chat-messages/attachmentProxy.js'
 import { CHAT_ATTACHMENT_MULTIPART_LIMITS } from './modules/chat-messages/attachmentMultipart.js'
 import { registerChatMessagesRoutes } from './modules/chat-messages/routes.js'
-import { createChatMessagesRepository } from './modules/chat-messages/repository.js'
 import {
   createChatSendRateLimiter,
   createChatSendRateLimitRepository,
 } from './modules/chat-messages/rateLimit.js'
-import { createChatMessagesService } from './modules/chat-messages/service.js'
 import { registerChatNotificationRoutes } from './modules/chat-notifications/routes.js'
 import { createChatNotificationsRepository } from './modules/chat-notifications/repository.js'
-import { createChatNotificationRecipientResolver } from './modules/chat-notifications/recipientResolver.js'
-import { createChatNotificationPushDeliveryService } from './modules/chat-notifications/pushDeliveryService.js'
 import { createPushSubscriptionService } from './modules/chat-notifications/pushSubscriptionService.js'
 import { createChatNotificationsService } from './modules/chat-notifications/service.js'
 import { createWebPushTransport } from './modules/chat-notifications/pushTransport.js'
@@ -48,9 +51,6 @@ import { createChatSupportAvailabilityService } from './modules/chat-support/ser
 import { createChatThreadContactRepository } from './modules/chat-threads/contactRepository.js'
 import { createChatThreadsRepository } from './modules/chat-threads/repository.js'
 import { registerChatThreadsRoutes } from './modules/chat-threads/routes.js'
-import { createChatThreadsService } from './modules/chat-threads/service.js'
-import { createChatUnreadRepository } from './modules/chat-unread/repository.js'
-import { createChatUnreadService } from './modules/chat-unread/service.js'
 import { createChatwootWebhookRepository } from './modules/chatwoot-webhooks/repository.js'
 import { registerChatwootWebhookRoutes } from './modules/chatwoot-webhooks/routes.js'
 import { createChatwootWebhookService } from './modules/chatwoot-webhooks/service.js'
@@ -125,10 +125,6 @@ export function buildApp({
     limits: CHAT_ATTACHMENT_MULTIPART_LIMITS,
   })
 
-  app.addHook('onClose', async () => {
-    await database.close()
-  })
-
   registerApiErrorHandler(app)
 
   const authService = createAuthService({
@@ -137,7 +133,7 @@ export function buildApp({
     ...(now ? { now } : {}),
   })
   const chatwootClientFactory = createRuntimeChatwootClientFactory({
-    chatwootFetchFn,
+    chatwootFetchFn: withWebhookWorkBudget(chatwootFetchFn ?? fetch),
     env,
   })
   const chatRealtimeHub = createChatRealtimeHub({
@@ -161,72 +157,17 @@ export function buildApp({
     emailDelivery ?? createSmtpEmailDelivery({ env })
   const createChatwootClientForRequest = (request: FastifyRequest) =>
     chatwootClientFactory.forTenant(requireTenantContext(request).chatwoot)
-  const createChatNotificationRecipientResolverForRequest = (
-    request: FastifyRequest,
-  ) => {
-    const tenant = requireTenantContext(request)
 
-    return createChatNotificationRecipientResolver({
-      chatThreadsRepository: createChatThreadsRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatwootClient: createChatwootClientForRequest(request),
-      contactRepository: createChatThreadContactRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-    })
-  }
-  const createChatUnreadServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
-
-    return createChatUnreadService({
-      recipientResolver:
-        createChatNotificationRecipientResolverForRequest(request),
-      repository: createChatUnreadRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-    })
-  }
-  const createChatThreadsServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
-
-    return createChatThreadsService({
-      chatUnreadService: createChatUnreadServiceForRequest(request),
-      contactRepository: createChatThreadContactRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatThreadsRepository: createChatThreadsRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatwootClient: createChatwootClientForRequest(request),
-      portalInboxId: tenant.chatwoot.portalInboxId,
-      supportLabel: `Команда ${tenant.displayName}`,
-    })
-  }
-  const createChatMessagesServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
-
-    return createChatMessagesService({
-      attachmentAllowedOrigins: getAttachmentProxyAllowedOrigins({
-        env,
-        tenantChatwootBaseUrl: tenant.chatwoot.baseUrl,
-      }),
-      attachmentAllowPrivateNetwork: env.NODE_ENV !== 'production',
-      attachmentRequestTimeoutMs: env.CHATWOOT_REQUEST_TIMEOUT_MS,
-      chatThreadsRepository: createChatThreadsRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      contactRepository: createChatThreadContactRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatThreadsService: createChatThreadsServiceForRequest(request),
-      chatUnreadService: createChatUnreadServiceForRequest(request),
-      chatMessagesRepository: createChatMessagesRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      chatwootClient: createChatwootClientForRequest(request),
-    })
-  }
+  const createTenantChatRuntime = createTenantChatRuntimeFactory({
+    database,
+    env,
+    chatwootClientFactory,
+    pushTransport,
+  })
+  const createChatThreadsServiceForRequest = (request: FastifyRequest) =>
+    createTenantChatRuntime(requireTenantContext(request)).threadsService
+  const createChatMessagesServiceForRequest = (request: FastifyRequest) =>
+    createTenantChatRuntime(requireTenantContext(request)).messagesService
   const createProfileServiceForRequest = (request: FastifyRequest) => {
     const tenant = requireTenantContext(request)
 
@@ -290,19 +231,7 @@ export function buildApp({
       }),
       vapidConfig,
     })
-  const createPushDeliveryServiceForRequest = (request: FastifyRequest) => {
-    const tenant = requireTenantContext(request)
 
-    return createChatNotificationPushDeliveryService({
-      chatThreadsService: createChatThreadsServiceForRequest(request),
-      recipientResolver:
-        createChatNotificationRecipientResolverForRequest(request),
-      repository: createChatNotificationsRepository(database.db, {
-        tenantId: tenant.id,
-      }),
-      transport: pushTransport,
-    })
-  }
   const createLegalDocumentsServiceForRequest = (request: FastifyRequest) =>
     createLegalDocumentsServiceForTenantRequest({
       database,
@@ -373,20 +302,53 @@ export function buildApp({
     const tenant = requireTenantContext(request)
 
     return createChatwootWebhookService({
-      chatMessagesService: createChatMessagesServiceForRequest(request),
-      chatUnreadService: createChatUnreadServiceForRequest(request),
       chatwootAccountId: tenant.chatwoot.accountId,
+      chatwootBaseUrl: tenant.chatwoot.baseUrl,
+      notifyAccepted: () => webhookWorker.wake(),
       chatwootPortalInboxId: tenant.chatwoot.portalInboxId,
-      pushDeliveryService: createPushDeliveryServiceForRequest(request),
       realtimeHub: chatRealtimeHub,
       tenantId: tenant.id,
-      tenantSlug: tenant.slug,
       webhookRepository: createChatwootWebhookRepository(database.db, {
         tenantId: tenant.id,
       }),
       webhookSecret: tenant.chatwoot.webhookSecret,
     })
   }
+
+  const workRepository = createWebhookWorkRepository(database.db)
+  const webhookWorker = createWebhookWorker({
+    repository: workRepository,
+    reportError: (event, jobId) =>
+      app.log.warn({ event, jobId }, 'Webhook processing requires attention'),
+    process: createWebhookWorkProcessor({
+      repository: workRepository,
+      realtimeHub: chatRealtimeHub,
+      resolveRuntime: async (tenantId) => {
+        const [row] = await database.db
+          .select({ primaryDomain: portalTenants.primaryDomain })
+          .from(portalTenants)
+          .where(eq(portalTenants.id, tenantId))
+        if (!row) throw new Error('Webhook tenant missing')
+        const tenant = await tenantsService.resolveTenantByHost({
+          host: row.primaryDomain,
+        })
+        return {
+          tenant,
+          webhookRepository: createChatwootWebhookRepository(database.db, {
+            tenantId,
+          }),
+          ...createTenantChatRuntime(tenant),
+        }
+      },
+    }),
+  })
+  app.addHook('onListen', async () => {
+    webhookWorker.start()
+  })
+  app.addHook('onClose', async () => {
+    await webhookWorker.stop()
+    await database.close()
+  })
 
   registerHealthRoutes(app, { env })
   registerTenantContext(app, { tenantsService })

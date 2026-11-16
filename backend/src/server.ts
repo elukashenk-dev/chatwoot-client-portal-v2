@@ -33,3 +33,12 @@ try {
 
   process.exit(1)
 }
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    void app?.close().catch((error: unknown) => {
+      console.error(error)
+      process.exitCode = 1
+    })
+  })
+}

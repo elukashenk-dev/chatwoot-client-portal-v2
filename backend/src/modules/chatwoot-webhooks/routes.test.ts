@@ -16,7 +16,6 @@ describe('registerChatwootWebhookRoutes', () => {
     handleWebhook = vi
       .fn<ChatwootWebhookService['handleWebhook']>()
       .mockResolvedValue({
-        deliveredClients: 0,
         result: 'accepted',
       })
 
@@ -53,7 +52,6 @@ describe('registerChatwootWebhookRoutes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toEqual({
-      deliveredClients: 0,
       result: 'accepted',
     })
     expect(handleWebhook).toHaveBeenCalledWith({

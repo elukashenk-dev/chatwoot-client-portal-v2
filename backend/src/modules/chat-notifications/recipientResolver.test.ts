@@ -303,4 +303,55 @@ describe('chat notification recipient resolver', () => {
       }),
     ).resolves.toEqual([])
   })
+  it('rejects recipient overflow before external per-user calls and retries transient lookup failures', async () => {
+    const findContactById = vi.fn(async (id: number) => {
+      if (id === 154) return groupContact(154)
+      throw new Error('temporary Chatwoot outage')
+    })
+    const listActivePortalUserContactLinks = vi.fn<
+      (
+        limit?: number,
+      ) => Promise<
+        Array<{ chatwootContactId: number; email: string; userId: number }>
+      >
+    >(async () => [
+      { chatwootContactId: 101, email: 'one@example.test', userId: 1 },
+      { chatwootContactId: 102, email: 'two@example.test', userId: 2 },
+    ])
+    const options = {
+      chatThreadsRepository: {
+        findSendLedgerAuthorsByMessageIds: vi.fn(async () => new Map()),
+      },
+      chatwootClient: { findContactById },
+      contactRepository: {
+        findPortalUserById: vi.fn(),
+        listActivePortalUserContactLinks,
+      },
+      strict: true,
+    }
+    const input = {
+      chatwootMessageId: 9001,
+      threadMapping: {
+        chatwootConversationId: 11,
+        portalChatThreadId: 22,
+        threadId: 'group:154' as const,
+        threadType: 'group' as const,
+        userId: null,
+      },
+    }
+    await expect(
+      createChatNotificationRecipientResolver({
+        ...options,
+        maxContactLinks: 1,
+      }).resolveRecipients(input),
+    ).rejects.toThrow('budget exceeded')
+    expect(listActivePortalUserContactLinks).toHaveBeenCalledWith(2)
+    expect(findContactById).toHaveBeenCalledTimes(1)
+    await expect(
+      createChatNotificationRecipientResolver({
+        ...options,
+        maxContactLinks: 2,
+      }).resolveRecipients(input),
+    ).rejects.toThrow('temporary Chatwoot outage')
+  })
 })

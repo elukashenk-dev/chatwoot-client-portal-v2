@@ -4,6 +4,7 @@ import { REALTIME_SESSION_AUTHORITY_BATCH_SIZE } from '../auth/realtimeSessionAu
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
 import {
   CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_KEY,
+  CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD,
   createChatRealtimeHub,
 } from './hub.js'
 
@@ -457,5 +458,36 @@ describe('createChatRealtimeHub', () => {
     })
 
     expect(afterCleanup.status).toBe('subscribed')
+  })
+  it('bounds subscriptions across users per tenant/thread without consuming another tenant budget', () => {
+    const hub = createAuthorizedRealtimeHub()
+    const subscription = {
+      tenantId: 1,
+      threadId: 'group:154',
+      userId: 0,
+      sessionId: 0,
+      send: vi.fn(),
+      close: vi.fn(),
+    }
+    let last: ReturnType<typeof hub.subscribe> | undefined
+    for (
+      let userId = 0;
+      userId < CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD;
+      userId++
+    ) {
+      last = hub.subscribe({ ...subscription, userId, sessionId: userId })
+      expect(last.status).toBe('subscribed')
+    }
+    expect(hub.subscribe({ ...subscription, userId: 9999 })).toEqual({
+      status: 'limit_exceeded',
+      limit: CHAT_REALTIME_MAX_SUBSCRIPTIONS_PER_THREAD,
+    })
+    expect(hub.subscribe({ ...subscription, tenantId: 2 }).status).toBe(
+      'subscribed',
+    )
+    if (last?.status === 'subscribed') last.unsubscribe()
+    expect(hub.subscribe({ ...subscription, userId: 9999 }).status).toBe(
+      'subscribed',
+    )
   })
 })

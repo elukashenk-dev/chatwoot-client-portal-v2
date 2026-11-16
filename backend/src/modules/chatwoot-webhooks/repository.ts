@@ -1,10 +1,11 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import type { AppDatabase } from '../../db/client.js'
 import {
   chatwootWebhookDeliveries,
   portalChatThreads,
 } from '../../db/schema.js'
+import { enqueueWebhookWork } from './workAcceptance.js'
 import { PRIVATE_CHAT_THREAD_ID } from '../chat-threads/privateThread.js'
 
 export type ChatwootWebhookDeliveryStatus =
@@ -22,6 +23,7 @@ type RecordDeliveryInput = {
   now: Date
   payloadSha256: string
   status: ChatwootWebhookDeliveryStatus
+  source?: { accountId: number; inboxId: number; baseUrl: string }
 }
 
 type TenantRepositoryScope = {
@@ -55,6 +57,7 @@ export function createChatwootWebhookRepository(
       const [mapping] = await db
         .select({
           chatwootContactId: portalChatThreads.chatwootContactId,
+          chatwootInboxId: portalChatThreads.chatwootInboxId,
           chatwootConversationId: portalChatThreads.chatwootConversationId,
           id: portalChatThreads.id,
           threadType: portalChatThreads.threadType,
@@ -80,6 +83,7 @@ export function createChatwootWebhookRepository(
 
       return {
         chatwootConversationId: mapping.chatwootConversationId,
+        chatwootInboxId: mapping.chatwootInboxId,
         portalChatThreadId: mapping.id,
         threadId:
           threadType === 'private'
@@ -87,29 +91,38 @@ export function createChatwootWebhookRepository(
             : `group:${mapping.chatwootContactId}`,
         threadType,
         userId: mapping.userId,
-      } satisfies ChatwootConversationThreadMapping
+      } satisfies ChatwootConversationThreadMapping & {
+        chatwootInboxId: number
+      }
     },
 
     async recordDelivery(input: RecordDeliveryInput) {
-      const [delivery] = await db
-        .insert(chatwootWebhookDeliveries)
-        .values({
-          chatwootConversationId: input.chatwootConversationId,
-          chatwootMessageId: input.chatwootMessageId,
-          deliveryKey: input.deliveryKey,
-          eventName: input.eventName,
-          payloadSha256: input.payloadSha256,
-          processedAt: input.now,
-          receivedAt: input.now,
-          status: input.status,
-          tenantId,
-        })
-        .onConflictDoNothing()
-        .returning({
-          deliveryKey: chatwootWebhookDeliveries.deliveryKey,
-        })
+      return db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '500ms'`)
+        await tx.execute(sql`set local statement_timeout = '1500ms'`)
+        const [delivery] = await tx
+          .insert(chatwootWebhookDeliveries)
+          .values({
+            chatwootConversationId: input.chatwootConversationId,
+            chatwootMessageId: input.chatwootMessageId,
+            deliveryKey: input.deliveryKey,
+            eventName: input.eventName,
+            payloadSha256: input.payloadSha256,
+            processedAt: input.now,
+            receivedAt: input.now,
+            status: input.status,
+            tenantId,
+          })
+          .onConflictDoNothing()
+          .returning({
+            deliveryKey: chatwootWebhookDeliveries.deliveryKey,
+          })
 
-      return delivery ? 'recorded' : 'duplicate'
+        if (delivery && input.status === 'accepted') {
+          await enqueueWebhookWork(tx, { ...input, tenantId })
+        }
+        return delivery ? ('recorded' as const) : ('duplicate' as const)
+      })
     },
   }
 }

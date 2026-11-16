@@ -107,6 +107,7 @@ describe('createChatUnreadService', () => {
       service.clearOpenedThreadUnread({
         portalUserId: 7,
         threadId: 'group:154',
+        throughMessageId: 10000,
         visibleThreadIds: ['private:me', 'group:154'],
       }),
     ).resolves.toEqual({
@@ -116,6 +117,7 @@ describe('createChatUnreadService', () => {
     expect(repository.clearThreadUnreadAndCountVisible).toHaveBeenCalledWith({
       portalUserId: 7,
       threadId: 'group:154',
+      throughMessageId: 10000,
       visibleThreadIds: ['private:me', 'group:154'],
     })
   })

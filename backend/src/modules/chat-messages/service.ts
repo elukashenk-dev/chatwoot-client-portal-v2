@@ -374,9 +374,14 @@ export function createChatMessagesService({
       return snapshot
     }
 
+    const throughMessageId = snapshot.messages.reduce(
+      (max, message) => Math.max(max, message.id),
+      0,
+    )
     const unreadClear = await chatUnreadService.clearOpenedThreadUnread({
       portalUserId: userId,
       threadId,
+      throughMessageId,
       visibleThreadIds,
     })
 

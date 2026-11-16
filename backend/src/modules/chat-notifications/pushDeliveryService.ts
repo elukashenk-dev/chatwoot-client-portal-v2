@@ -1,3 +1,4 @@
+import { assertWebhookWorkActive } from '../chatwoot-webhooks/workBudget.js'
 import type { ChatThreadsService } from '../chat-threads/service.js'
 import { defaultUserNotificationSettings } from './settings.js'
 import { resolveEffectiveChatNotificationSettings } from './settings.js'
@@ -141,6 +142,7 @@ export function createChatNotificationPushDeliveryService({
       summary.recipients = recipients.length
 
       for (const recipient of recipients) {
+        assertWebhookWorkActive()
         const global =
           (await repository.findUserSettings(recipient.portalUserId)) ??
           defaultUserNotificationSettings
@@ -201,6 +203,7 @@ export function createChatNotificationPushDeliveryService({
           totalUnreadCount: visibleThreads.totalUnreadCount,
         })
         for (const subscription of subscriptions) {
+          assertWebhookWorkActive()
           const deliveryId = await repository.recordPushDeliveryAttempt({
             chatwootMessageId: input.chatwootMessageId,
             now: now(),

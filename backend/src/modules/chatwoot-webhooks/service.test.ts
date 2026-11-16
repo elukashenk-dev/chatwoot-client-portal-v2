@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
-import { createChatRealtimeHub } from '../chat-realtime/hub.js'
 import { createChatwootWebhookService } from './service.js'
 import { chatwootWebhookTestInternals } from './service.js'
 
@@ -10,18 +9,14 @@ type CreateChatwootWebhookServiceOptions = Parameters<
 >[0]
 type FindConversationMapping =
   CreateChatwootWebhookServiceOptions['webhookRepository']['findConversationMappingByChatwootConversationId']
-type GetCurrentUserChatMessages =
-  CreateChatwootWebhookServiceOptions['chatMessagesService']['getCurrentUserChatMessages']
+type GetCurrentUserChatMessages = (input: {
+  userId: number
+  threadId?: string
+}) => Promise<ChatMessagesSnapshot>
 type PublishThreadMessages =
   CreateChatwootWebhookServiceOptions['realtimeHub']['publishThreadMessages']
 type RecordDelivery =
   CreateChatwootWebhookServiceOptions['webhookRepository']['recordDelivery']
-type DeliverMessageCreated = NonNullable<
-  CreateChatwootWebhookServiceOptions['pushDeliveryService']
->['deliverMessageCreated']
-type RecordMessageCreatedUnread = NonNullable<
-  CreateChatwootWebhookServiceOptions['chatUnreadService']
->['recordMessageCreatedUnread']
 
 const webhookSecret = 'test-webhook-secret'
 const now = new Date('2026-04-21T12:00:00.000Z')
@@ -77,9 +72,7 @@ function createService(
   overrides: {
     findConversationMappingByChatwootConversationId?: FindConversationMapping
     getCurrentUserChatMessages?: GetCurrentUserChatMessages
-    chatUnreadService?: CreateChatwootWebhookServiceOptions['chatUnreadService']
     publishThreadMessages?: PublishThreadMessages
-    pushDeliveryService?: CreateChatwootWebhookServiceOptions['pushDeliveryService']
     realtimeHub?: CreateChatwootWebhookServiceOptions['realtimeHub']
     recordDelivery?: RecordDelivery
   } = {},
@@ -88,6 +81,7 @@ function createService(
     overrides.findConversationMappingByChatwootConversationId ??
     vi.fn<FindConversationMapping>().mockResolvedValue({
       chatwootConversationId: 101,
+      chatwootInboxId: 9,
       portalChatThreadId: 1,
       threadId: 'private:me',
       threadType: 'private',
@@ -106,8 +100,6 @@ function createService(
   const recordDelivery =
     overrides.recordDelivery ??
     vi.fn<RecordDelivery>().mockResolvedValue('recorded')
-  const pushDeliveryService = overrides.pushDeliveryService
-  const chatUnreadService = overrides.chatUnreadService
   const realtimeHub =
     overrides.realtimeHub ??
     ({
@@ -119,17 +111,12 @@ function createService(
         >(),
     } satisfies CreateChatwootWebhookServiceOptions['realtimeHub'])
   const service = createChatwootWebhookService({
-    chatMessagesService: {
-      getCurrentUserChatMessages,
-    },
-    ...(chatUnreadService ? { chatUnreadService } : {}),
     chatwootAccountId: 3,
+    chatwootBaseUrl: 'https://chatwoot.example.test',
     chatwootPortalInboxId: 9,
     now: () => now,
-    ...(pushDeliveryService ? { pushDeliveryService } : {}),
     realtimeHub,
     tenantId: 1,
-    tenantSlug: 'default',
     webhookRepository: {
       findConversationMappingByChatwootConversationId,
       recordDelivery,
@@ -140,9 +127,7 @@ function createService(
   return {
     findConversationMappingByChatwootConversationId,
     getCurrentUserChatMessages,
-    chatUnreadService,
     publishThreadMessages,
-    pushDeliveryService,
     recordDelivery,
     realtimeHub,
     service,
@@ -211,7 +196,6 @@ describe('createChatwootWebhookService', () => {
         rawBody,
       }),
     ).resolves.toEqual({
-      deliveredClients: 2,
       result: 'accepted',
     })
   })
@@ -332,485 +316,39 @@ describe('createChatwootWebhookService', () => {
     expect(publishThreadMessages).not.toHaveBeenCalled()
   })
 
-  it('publishes the canonical latest snapshot for a mapped message event', async () => {
-    const {
-      getCurrentUserChatMessages,
-      publishThreadMessages,
-      recordDelivery,
-      service,
-    } = createService()
-    const webhook = createSignedWebhook({
-      account: {
-        id: '3',
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_updated',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(recordDelivery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        chatwootConversationId: 101,
-        chatwootMessageId: 501,
-        deliveryKey: 'delivery-1',
-        eventName: 'message_updated',
-        status: 'accepted',
-      }),
+  it('acknowledges durably accepted work without waiting for snapshot delivery', async () => {
+    const publishThreadMessages = vi.fn<PublishThreadMessages>(
+      () => new Promise(() => {}),
     )
-    expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      threadId: 'private:me',
-      userId: 7,
-    })
-    expect(publishThreadMessages).toHaveBeenCalledWith({
-      createSnapshotForUser: expect.any(Function),
-      tenantId: 1,
-      threadId: 'private:me',
-    })
-  })
-
-  it('triggers push delivery for accepted message_created events', async () => {
-    const deliverMessageCreated = vi
-      .fn<DeliverMessageCreated>()
-      .mockResolvedValue({
-        expired: 0,
-        failed: 0,
-        recipients: 1,
-        sent: 1,
-        skipped: 0,
-        subscriptions: 1,
-      })
-    const { service } = createService({
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(deliverMessageCreated).toHaveBeenCalledWith({
-      chatwootMessageId: 501,
-      tenantSlug: 'default',
-      threadMapping: {
-        chatwootConversationId: 101,
-        portalChatThreadId: 1,
-        threadId: 'private:me',
-        threadType: 'private',
-        userId: 7,
-      },
-    })
-  })
-
-  it('records unread before push delivery for accepted message_created events', async () => {
-    const calls: string[] = []
-    const recordMessageCreatedUnread = vi
-      .fn<RecordMessageCreatedUnread>()
-      .mockImplementation(async () => {
-        calls.push('unread')
-
-        return { recipients: 1 }
-      })
-    const deliverMessageCreated = vi
-      .fn<DeliverMessageCreated>()
-      .mockImplementation(async () => {
-        calls.push('push')
-
-        return {
-          expired: 0,
-          failed: 0,
-          recipients: 1,
-          sent: 1,
-          skipped: 0,
-          subscriptions: 1,
-        }
-      })
-    const { service } = createService({
-      chatUnreadService: {
-        recordMessageCreatedUnread,
-      },
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(recordMessageCreatedUnread).toHaveBeenCalledWith({
-      chatwootMessageId: 501,
-      threadMapping: {
-        chatwootConversationId: 101,
-        portalChatThreadId: 1,
-        threadId: 'private:me',
-        threadType: 'private',
-        userId: 7,
-      },
-    })
-    expect(calls).toEqual(['unread', 'push'])
-  })
-
-  it('does not trigger push delivery for message_updated events', async () => {
-    const deliverMessageCreated = vi.fn<DeliverMessageCreated>()
-    const { service } = createService({
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_updated',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(deliverMessageCreated).not.toHaveBeenCalled()
-  })
-
-  it('does not record unread for message_updated events', async () => {
-    const recordMessageCreatedUnread = vi.fn<RecordMessageCreatedUnread>()
-    const { service } = createService({
-      chatUnreadService: {
-        recordMessageCreatedUnread,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_updated',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(recordMessageCreatedUnread).not.toHaveBeenCalled()
-  })
-
-  it('does not mark a webhook accepted when unread write fails', async () => {
-    const recordDelivery = vi.fn<RecordDelivery>().mockResolvedValue('recorded')
-    const recordMessageCreatedUnread = vi
-      .fn<RecordMessageCreatedUnread>()
-      .mockRejectedValue(new Error('unread db unavailable'))
-    const { service } = createService({
-      chatUnreadService: {
-        recordMessageCreatedUnread,
-      },
-      recordDelivery,
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).rejects.toThrow(
-      'unread db unavailable',
-    )
-    expect(recordDelivery).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'accepted',
-      }),
-    )
-  })
-
-  it('keeps webhook accepted when push delivery fails', async () => {
-    const deliverMessageCreated = vi
-      .fn<DeliverMessageCreated>()
-      .mockRejectedValue(new Error('Push transport unavailable.'))
-    const { service } = createService({
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-  })
-
-  it('keeps webhook response independent from pending push delivery', async () => {
-    const deliverMessageCreated = vi
-      .fn<DeliverMessageCreated>()
-      .mockReturnValue(new Promise(() => {}))
-    const { service } = createService({
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    const result = await Promise.race([
-      service.handleWebhook(webhook),
-      new Promise((resolve) => {
-        setTimeout(() => resolve('waiting_for_push'), 20)
-      }),
-    ])
-
-    expect(result).toEqual({
-      deliveredClients: 2,
-      result: 'accepted',
-    })
-    expect(deliverMessageCreated).toHaveBeenCalled()
-  })
-
-  it('keeps webhook accepted and still triggers push delivery when realtime fanout fails', async () => {
-    const deliverMessageCreated = vi
-      .fn<DeliverMessageCreated>()
-      .mockResolvedValue({
-        expired: 0,
-        failed: 0,
-        recipients: 1,
-        sent: 1,
-        skipped: 0,
-        subscriptions: 1,
-      })
-    const { service } = createService({
-      publishThreadMessages: vi
-        .fn<PublishThreadMessages>()
-        .mockRejectedValue(new Error('Realtime snapshot failed.')),
-      pushDeliveryService: {
-        deliverMessageCreated,
-      },
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 101,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 501,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
-
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 0,
-      result: 'accepted',
-    })
-    expect(deliverMessageCreated).toHaveBeenCalledWith({
-      chatwootMessageId: 501,
-      tenantSlug: 'default',
-      threadMapping: {
-        chatwootConversationId: 101,
-        portalChatThreadId: 1,
-        threadId: 'private:me',
-        threadType: 'private',
-        userId: 7,
-      },
-    })
-  })
-
-  it('fans out a group webhook only to active subscribers whose thread access is still ready', async () => {
-    const realtimeHub = createChatRealtimeHub({
-      resolveActiveSessions: async ({ candidates }) => candidates,
-    })
-    const firstSend = vi.fn()
-    const secondSend = vi.fn()
-    realtimeHub.subscribe({
-      close: vi.fn(),
-      send: firstSend,
-      sessionId: 71,
-      tenantId: 1,
-      threadId: 'group:154',
-      userId: 7,
-    })
-    realtimeHub.subscribe({
-      close: vi.fn(),
-      send: secondSend,
-      sessionId: 81,
-      tenantId: 1,
-      threadId: 'group:154',
-      userId: 8,
-    })
-    const readyGroupSnapshot: ChatMessagesSnapshot = {
-      ...readySnapshot,
-      activeThread: {
-        id: 'group:154',
-        subtitle: 'Групповой чат',
-        title: 'ООО "Ромашка"',
-        type: 'group',
-      },
-    }
-    const revokedSnapshot: ChatMessagesSnapshot = {
-      activeThread: null,
-      hasMoreOlder: false,
-      messages: [],
-      nextOlderCursor: null,
-      reason: 'thread_access_denied',
-      result: 'not_ready',
-    }
-    const getCurrentUserChatMessages = vi.fn<GetCurrentUserChatMessages>(
-      async ({ userId }) =>
-        userId === 7 ? revokedSnapshot : readyGroupSnapshot,
-    )
-    const { service } = createService({
-      findConversationMappingByChatwootConversationId: vi
-        .fn<FindConversationMapping>()
-        .mockResolvedValue({
-          chatwootConversationId: 301,
-          portalChatThreadId: 2,
-          threadId: 'group:154',
-          threadType: 'group',
-          userId: null,
+    const { service, recordDelivery } = createService({ publishThreadMessages })
+    await expect(
+      service.handleWebhook(
+        createSignedWebhook({
+          conversation: { id: 101 },
+          event: 'message_created',
+          id: 501,
         }),
-      getCurrentUserChatMessages,
-      realtimeHub,
-    })
-    const webhook = createSignedWebhook({
-      account: {
-        id: 3,
-      },
-      conversation: {
-        account_id: 3,
-        id: 301,
-        inbox_id: 9,
-      },
-      event: 'message_created',
-      id: 801,
-      inbox: {
-        id: 9,
-      },
-      private: false,
-    })
+      ),
+    ).resolves.toEqual({ result: 'accepted' })
+    expect(recordDelivery).toHaveBeenCalledOnce()
+    expect(publishThreadMessages).not.toHaveBeenCalled()
+  })
 
-    await expect(service.handleWebhook(webhook)).resolves.toEqual({
-      deliveredClients: 1,
-      result: 'accepted',
+  it('does not acknowledge a failed durable acceptance', async () => {
+    const { service } = createService({
+      recordDelivery: vi
+        .fn()
+        .mockRejectedValue(new Error('database unavailable')),
     })
-    expect(getCurrentUserChatMessages).toHaveBeenCalledTimes(2)
-    expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      threadId: 'group:154',
-      userId: 7,
-    })
-    expect(getCurrentUserChatMessages).toHaveBeenCalledWith({
-      threadId: 'group:154',
-      userId: 8,
-    })
-    expect(firstSend).not.toHaveBeenCalled()
-    expect(secondSend).toHaveBeenCalledWith({
-      data: readyGroupSnapshot,
-      type: 'messages',
-    })
+    await expect(
+      service.handleWebhook(
+        createSignedWebhook({
+          conversation: { id: 101 },
+          event: 'message_created',
+          id: 501,
+        }),
+      ),
+    ).rejects.toThrow('database unavailable')
   })
 
   it('keeps an unmapped Chatwoot conversation unroutable without recovery from contact validity alone', async () => {

@@ -78,7 +78,7 @@ export function createChatThreadContactRepository(
       return link ?? null
     },
 
-    async listActivePortalUserContactLinks() {
+    async listActivePortalUserContactLinks(limit = 2_147_483_647) {
       return db
         .select({
           chatwootContactId: portalUserContactLinks.chatwootContactId,
@@ -97,6 +97,7 @@ export function createChatThreadContactRepository(
             eq(portalUsers.isActive, true),
           ),
         )
+        .limit(limit)
     },
 
     async findPortalUserById(userId: number) {

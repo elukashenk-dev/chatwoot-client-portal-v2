@@ -1,10 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http'
 
 import { ApiError } from '../../lib/errors.js'
-import type { ChatMessagesSnapshot } from '../chat-messages/service.js'
-import type { ChatNotificationPushDeliveryService } from '../chat-notifications/pushDeliveryService.js'
 import type { ChatRealtimeHub } from '../chat-realtime/hub.js'
-import type { ChatUnreadService } from '../chat-unread/service.js'
 import type {
   ChatwootWebhookDeliveryStatus,
   ChatwootWebhookRepository,
@@ -24,32 +21,14 @@ import {
 
 const SUPPORTED_MESSAGE_EVENTS = new Set(['message_created', 'message_updated'])
 
-type ChatwootWebhookMapping = NonNullable<
-  Awaited<
-    ReturnType<
-      ChatwootWebhookRepository['findConversationMappingByChatwootConversationId']
-    >
-  >
->
-
 type CreateChatwootWebhookServiceOptions = {
-  chatMessagesService: {
-    getCurrentUserChatMessages: (input: {
-      threadId?: string
-      userId: number
-    }) => Promise<ChatMessagesSnapshot>
-  }
-  chatUnreadService?: Pick<ChatUnreadService, 'recordMessageCreatedUnread'>
   chatwootAccountId: number
+  chatwootBaseUrl: string
   chatwootPortalInboxId: number
   now?: () => Date
-  pushDeliveryService?: Pick<
-    ChatNotificationPushDeliveryService,
-    'deliverMessageCreated'
-  >
+  notifyAccepted?: () => void
   realtimeHub: ChatRealtimeHub
   tenantId: number
-  tenantSlug: string
   webhookSecret: string
   webhookRepository: ChatwootWebhookRepository
 }
@@ -63,6 +42,7 @@ type HandleChatwootWebhookInput = {
 type IgnoredWebhookReason =
   | 'contact_typing'
   | 'missing_conversation'
+  | 'missing_message'
   | 'private_message'
   | 'unmapped_conversation'
   | 'unsupported_event'
@@ -70,7 +50,6 @@ type IgnoredWebhookReason =
 type HandleChatwootWebhookResult =
   | {
       result: 'accepted'
-      deliveredClients: number
     }
   | {
       reason: IgnoredWebhookReason
@@ -158,6 +137,7 @@ async function recordDeliveryOrReturnDuplicate({
   now,
   payloadSha256,
   status,
+  source,
   webhookRepository,
 }: {
   chatwootConversationId: number | null
@@ -167,6 +147,7 @@ async function recordDeliveryOrReturnDuplicate({
   now: Date
   payloadSha256: string
   status: ChatwootWebhookDeliveryStatus
+  source?: { accountId: number; inboxId: number; baseUrl: string }
   webhookRepository: ChatwootWebhookRepository
 }) {
   const outcome = await webhookRepository.recordDelivery({
@@ -177,43 +158,20 @@ async function recordDeliveryOrReturnDuplicate({
     now,
     payloadSha256,
     status,
+    ...(source ? { source } : {}),
   })
 
   return outcome === 'duplicate'
 }
 
-async function publishCurrentSnapshot({
-  chatMessagesService,
-  mapping,
-  realtimeHub,
-  tenantId,
-}: {
-  chatMessagesService: CreateChatwootWebhookServiceOptions['chatMessagesService']
-  mapping: ChatwootWebhookMapping
-  realtimeHub: ChatRealtimeHub
-  tenantId: number
-}) {
-  return realtimeHub.publishThreadMessages({
-    createSnapshotForUser: (userId) =>
-      chatMessagesService.getCurrentUserChatMessages({
-        threadId: mapping.threadId,
-        userId,
-      }),
-    tenantId,
-    threadId: mapping.threadId,
-  })
-}
-
 export function createChatwootWebhookService({
-  chatMessagesService,
-  chatUnreadService,
   chatwootAccountId,
+  chatwootBaseUrl,
   chatwootPortalInboxId,
   now = () => new Date(),
-  pushDeliveryService,
+  notifyAccepted = () => {},
   realtimeHub,
   tenantId,
-  tenantSlug,
   webhookSecret,
   webhookRepository,
 }: CreateChatwootWebhookServiceOptions) {
@@ -349,6 +307,25 @@ export function createChatwootWebhookService({
           : buildIgnoredResult('missing_conversation')
       }
 
+      if (
+        eventName === 'message_created' &&
+        (!chatwootMessageId || chatwootMessageId < 1)
+      ) {
+        const duplicate = await recordDeliveryOrReturnDuplicate({
+          chatwootConversationId,
+          chatwootMessageId,
+          deliveryKey,
+          eventName,
+          now: currentTime,
+          payloadSha256,
+          status: 'unroutable',
+          webhookRepository,
+        })
+        return duplicate
+          ? { result: 'duplicate' }
+          : buildIgnoredResult('missing_message')
+      }
+
       const mapping =
         await webhookRepository.findConversationMappingByChatwootConversationId(
           chatwootConversationId,
@@ -371,13 +348,6 @@ export function createChatwootWebhookService({
           : buildIgnoredResult('unmapped_conversation')
       }
 
-      if (eventName === 'message_created' && chatUnreadService) {
-        await chatUnreadService.recordMessageCreatedUnread({
-          chatwootMessageId,
-          threadMapping: mapping,
-        })
-      }
-
       const isDuplicate = await recordDeliveryOrReturnDuplicate({
         chatwootConversationId,
         chatwootMessageId,
@@ -386,6 +356,11 @@ export function createChatwootWebhookService({
         now: currentTime,
         payloadSha256,
         status: 'accepted',
+        source: {
+          accountId: chatwootAccountId,
+          inboxId: chatwootPortalInboxId,
+          baseUrl: chatwootBaseUrl,
+        },
         webhookRepository,
       })
 
@@ -395,33 +370,12 @@ export function createChatwootWebhookService({
         }
       }
 
-      let deliveredClients = 0
-
       try {
-        deliveredClients = await publishCurrentSnapshot({
-          chatMessagesService,
-          mapping,
-          realtimeHub,
-          tenantId,
-        })
+        notifyAccepted()
       } catch {
-        // Realtime fanout is best-effort after the webhook is accepted; push delivery must still run.
+        /* Durable polling recovers a missed wakeup. */
       }
-
-      if (eventName === 'message_created' && pushDeliveryService) {
-        void pushDeliveryService
-          .deliverMessageCreated({
-            chatwootMessageId,
-            tenantSlug,
-            threadMapping: mapping,
-          })
-          .catch(() => {
-            // Push is best-effort and must not break Chatwoot webhook acceptance.
-          })
-      }
-
       return {
-        deliveredClients,
         result: 'accepted',
       }
     },

@@ -225,6 +225,7 @@ export const portalChatUnreadMessages = pgTable(
       },
     ),
     threadId: text('thread_id').notNull(),
+    sourceKey: text('source_key').notNull(),
     chatwootMessageId: integer('chatwoot_message_id').notNull(),
     createdAt: timestamp('created_at', timestampWithTimezone)
       .notNull()
@@ -233,17 +234,20 @@ export const portalChatUnreadMessages = pgTable(
   (table) => [
     uniqueIndex('portal_chat_unread_messages_message_unique').on(
       table.tenantId,
+      table.sourceKey,
       table.portalUserId,
       table.threadId,
       table.chatwootMessageId,
     ),
     index('portal_chat_unread_messages_tenant_user_thread_idx').on(
       table.tenantId,
+      table.sourceKey,
       table.portalUserId,
       table.threadId,
     ),
     index('portal_chat_unread_messages_tenant_user_created_at_idx').on(
       table.tenantId,
+      table.sourceKey,
       table.portalUserId,
       table.createdAt,
     ),

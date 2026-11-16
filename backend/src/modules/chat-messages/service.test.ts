@@ -235,6 +235,7 @@ describe('createChatMessagesService', () => {
     expect(clearOpenedThreadUnread).toHaveBeenCalledWith({
       portalUserId: 7,
       threadId: 'private:me',
+      throughMessageId: 0,
       visibleThreadIds: ['private:me'],
     })
     expect(chatThreadsService.listCurrentUserThreads).toHaveBeenCalledWith({
@@ -945,8 +946,8 @@ describe('createChatMessagesService', () => {
         secondData,
       ),
     ).toBe(0)
-    const acquireArgs =
-      vi.mocked(chatMessagesRepository.acquireSendLedgerEntry).mock.calls[0]?.[0]
+    const acquireArgs = vi.mocked(chatMessagesRepository.acquireSendLedgerEntry)
+      .mock.calls[0]?.[0]
 
     expect(acquireArgs).toEqual(
       expect.objectContaining({
@@ -970,5 +971,4 @@ describe('createChatMessagesService', () => {
       }),
     )
   })
-
 })

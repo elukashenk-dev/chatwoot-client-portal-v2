@@ -19,6 +19,7 @@ const timestampWithTimezone = {
   withTimezone: true,
 } as const
 export { portalTenants } from './tenantSchema.js'
+export * from './webhookWorkSchema.js'
 
 export const portalUsers = pgTable(
   'portal_users',

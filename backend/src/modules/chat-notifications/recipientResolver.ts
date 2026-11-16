@@ -1,3 +1,4 @@
+import { assertWebhookWorkActive } from '../chatwoot-webhooks/workBudget.js'
 import type {
   ChatwootClient,
   ChatwootContact,
@@ -37,6 +38,8 @@ type CreateChatNotificationRecipientResolverOptions = {
   chatThreadsRepository: RecipientResolverThreadRepository
   chatwootClient: RecipientResolverChatwootClient
   contactRepository: RecipientResolverContactRepository
+  strict?: boolean
+  maxContactLinks?: number
 }
 
 function readGroupContactId(threadId: string) {
@@ -57,6 +60,7 @@ async function mapWithConcurrencyLimit<TInput, TOutput>(
   const results: TOutput[] = []
 
   for (let index = 0; index < items.length; index += batchSize) {
+    assertWebhookWorkActive()
     const batch = items.slice(index, index + batchSize)
     results.push(...(await Promise.all(batch.map(mapper))))
   }
@@ -90,6 +94,8 @@ export function createChatNotificationRecipientResolver({
   chatThreadsRepository,
   chatwootClient,
   contactRepository,
+  strict = false,
+  maxContactLinks,
 }: CreateChatNotificationRecipientResolverOptions) {
   return {
     async resolveRecipients({
@@ -151,7 +157,11 @@ export function createChatNotificationRecipientResolver({
       }
 
       const groupThreadTitle = buildGroupPushThreadTitle(groupContact)
-      const links = await contactRepository.listActivePortalUserContactLinks()
+      const links = await contactRepository.listActivePortalUserContactLinks(
+        maxContactLinks === undefined ? undefined : maxContactLinks + 1,
+      )
+      if (maxContactLinks !== undefined && links.length > maxContactLinks)
+        throw new Error('Webhook recipient budget exceeded')
       const recipients = await mapWithConcurrencyLimit(
         links,
         GROUP_RECIPIENT_LOOKUP_BATCH_SIZE,
@@ -166,7 +176,8 @@ export function createChatNotificationRecipientResolver({
             contact = await chatwootClient.findContactById(
               link.chatwootContactId,
             )
-          } catch {
+          } catch (error) {
+            if (strict) throw error
             return null
           }
 
